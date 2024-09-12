@@ -61,6 +61,7 @@ public class UpdateDataObjectRequestTests {
         assertEquals(testDataObject, request.dataObject());
         assertNull(request.ifSeqNo());
         assertNull(request.ifPrimaryTerm());
+        assertEquals(0, request.retryOnConflict());
     }
 
     @Test
@@ -92,6 +93,7 @@ public class UpdateDataObjectRequestTests {
             .dataObject(testDataObject)
             .ifSeqNo(testSeqNo)
             .ifPrimaryTerm(testPrimaryTerm)
+            .retryOnConflict(3)
             .build();
 
         assertEquals(testIndex, request.index());
@@ -100,6 +102,7 @@ public class UpdateDataObjectRequestTests {
         assertEquals(testDataObject, request.dataObject());
         assertEquals(testSeqNo, request.ifSeqNo());
         assertEquals(testPrimaryTerm, request.ifPrimaryTerm());
+        assertEquals(3, request.retryOnConflict());
 
         final Builder badSeqNoBuilder = UpdateDataObjectRequest.builder();
         assertThrows(IllegalArgumentException.class, () -> badSeqNoBuilder.ifSeqNo(-99));

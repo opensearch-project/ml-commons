@@ -22,6 +22,7 @@ public class UpdateDataObjectRequest {
     private final String tenantId;
     private final Long ifSeqNo;
     private final Long ifPrimaryTerm;
+    private final int retryOnConflict;
     private final ToXContentObject dataObject;
 
     /**
@@ -33,14 +34,24 @@ public class UpdateDataObjectRequest {
      * @param tenantId the tenant id
      * @param ifSeqNo the sequence number to match or null if not required
      * @param ifPrimaryTerm the primary term to match or null if not required
+     * @param retryOnConflict number of times to retry an update if a version conflict exists
      * @param dataObject the data object
      */
-    public UpdateDataObjectRequest(String index, String id, String tenantId, Long ifSeqNo, Long ifPrimaryTerm, ToXContentObject dataObject) {
+    public UpdateDataObjectRequest(
+        String index,
+        String id,
+        String tenantId,
+        Long ifSeqNo,
+        Long ifPrimaryTerm,
+        int retryOnConflict,
+        ToXContentObject dataObject
+    ) {
         this.index = index;
         this.id = id;
         this.tenantId = tenantId;
         this.ifSeqNo = ifSeqNo;
         this.ifPrimaryTerm = ifPrimaryTerm;
+        this.retryOnConflict = retryOnConflict;
         this.dataObject = dataObject;
     }
 
@@ -85,6 +96,14 @@ public class UpdateDataObjectRequest {
     }
 
     /**
+     * Returns the number of retries on version conflict
+     * @return the number of retries
+     */
+    public int retryOnConflict() {
+        return retryOnConflict;
+    }
+    
+    /**
      * Returns the data object
      * @return the data object
      */
@@ -109,6 +128,7 @@ public class UpdateDataObjectRequest {
         private String tenantId = null;
         private Long ifSeqNo = null;
         private Long ifPrimaryTerm = null;
+        private int retryOnConflict = 0;
         private ToXContentObject dataObject = null;
 
         /**
@@ -175,6 +195,16 @@ public class UpdateDataObjectRequest {
         }
 
         /**
+         * Retry the update request on a version conflict exception.
+         * @param retries Number of times to retry, if positive, otherwise will not retry
+         * @return the updated builder
+         */
+        public Builder retryOnConflict(int retries) {
+            this.retryOnConflict = retries;
+            return this;
+        }
+
+        /**
          * Add a data object to this builder
          * @param dataObject the data object
          * @return the updated builder
@@ -194,7 +224,8 @@ public class UpdateDataObjectRequest {
                 @Override
                 public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
                     return builder.map(dataObjectMap);
-                }};
+                }
+            };
             return this;
         }
 
@@ -206,7 +237,15 @@ public class UpdateDataObjectRequest {
             if ((ifSeqNo == null) != (ifPrimaryTerm == null)) {
                 throw new IllegalArgumentException("Either ifSeqNo and ifPrimaryTerm must both be null or both must be non-null.");
             }
-            return new UpdateDataObjectRequest(this.index, this.id, this.tenantId, this.ifSeqNo, this.ifPrimaryTerm, this.dataObject);
+            return new UpdateDataObjectRequest(
+                this.index,
+                this.id,
+                this.tenantId,
+                this.ifSeqNo,
+                this.ifPrimaryTerm,
+                this.retryOnConflict,
+                this.dataObject
+            );
         }
     }
 }

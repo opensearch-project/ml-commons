@@ -255,13 +255,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
                     .expressionAttributeNames(expressionAttributeNames)
                     .expressionAttributeValues(expressionAttributeValues);
                 UpdateItemRequest updateItemRequest = updateItemRequestBuilder.build();
-                UpdateItemResponse updateItemResponse = dynamoDbClient.updateItem(updateItemRequest);
-                Long sequenceNumber = null;
-                if (updateItemResponse != null
-                    && updateItemResponse.attributes() != null
-                    && updateItemResponse.attributes().containsKey(SEQ_NO_KEY)) {
-                    sequenceNumber = Long.parseLong(updateItemResponse.attributes().get(SEQ_NO_KEY).n());
-                }
+                Long sequenceNumber = updateItemWithRetryOnConflict(updateItemRequest, request);
                 String simulatedUpdateResponse = simulateOpenSearchResponse(
                     request.index(),
                     request.id(),
@@ -270,13 +264,6 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
                     Map.of("result", "updated")
                 );
                 return UpdateDataObjectResponse.builder().id(request.id()).parser(createParser(simulatedUpdateResponse)).build();
-            } catch (ConditionalCheckFailedException ccfe) {
-                log.error("Document version conflict updating {} in {}: {}", request.id(), request.index(), ccfe.getMessage(), ccfe);
-                // Rethrow
-                throw new OpenSearchStatusException(
-                    "Document version conflict updating " + request.id() + " in index " + request.index(),
-                    RestStatus.CONFLICT
-                );
             } catch (IOException e) {
                 log.error("Error updating {} in {}: {}", request.id(), request.index(), e.getMessage(), e);
                 // Rethrow unchecked exception on update IOException
@@ -286,6 +273,28 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
                 );
             }
         }), executor);
+    }
+
+    private Long updateItemWithRetryOnConflict(UpdateItemRequest updateItemRequest, UpdateDataObjectRequest request) {
+        int retriesRemaining = request.retryOnConflict();
+        do {
+            try {
+                UpdateItemResponse updateItemResponse = dynamoDbClient.updateItem(updateItemRequest);
+                if (updateItemResponse != null
+                    && updateItemResponse.attributes() != null
+                    && updateItemResponse.attributes().containsKey(SEQ_NO_KEY)) {
+                    return Long.parseLong(updateItemResponse.attributes().get(SEQ_NO_KEY).n());
+                }
+            } catch (ConditionalCheckFailedException ccfe) {
+                if (retriesRemaining < 1) {
+                    // Throw exception if retries exhausted
+                    String message = "Document version conflict updating " + request.id() + " in index " + request.index();
+                    log.error(message + ": {}", ccfe.getMessage(), ccfe);
+                    throw new OpenSearchStatusException(message, RestStatus.CONFLICT);
+                }
+            }
+        } while (retriesRemaining-- > 0);
+        return null; // Should never get here
     }
 
     /**

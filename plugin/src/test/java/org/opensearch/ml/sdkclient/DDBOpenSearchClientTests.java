@@ -436,6 +436,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
             .id(TEST_ID)
             .index(TEST_INDEX)
             .tenantId(TENANT_ID)
+            .retryOnConflict(1)
             .dataObject(testDataObject)
             .build();
         Mockito.when(dynamoDbClient.updateItem(updateItemRequestArgumentCaptor.capture())).thenReturn(UpdateItemResponse.builder().build());
@@ -514,6 +515,63 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
 
         ConditionalCheckFailedException conflictException = ConditionalCheckFailedException.builder().build();
         when(dynamoDbClient.updateItem(updateItemRequestArgumentCaptor.capture())).thenThrow(conflictException);
+
+        CompletableFuture<UpdateDataObjectResponse> future = sdkClient
+            .updateDataObjectAsync(updateRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture();
+
+        CompletionException ce = assertThrows(CompletionException.class, () -> future.join());
+        Throwable cause = ce.getCause();
+        assertEquals(OpenSearchStatusException.class, cause.getClass());
+        assertEquals(RestStatus.CONFLICT, ((OpenSearchStatusException) cause).status());
+    }
+
+    @Test
+    public void updateDataObjectAsync_VersionCheckRetrySuccess() {
+        UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
+            .builder()
+            .id(TEST_ID)
+            .index(TEST_INDEX)
+            .tenantId(TENANT_ID)
+            .retryOnConflict(1)
+            .dataObject(testDataObject)
+            .build();
+        ConditionalCheckFailedException conflictException = ConditionalCheckFailedException.builder().build();
+        // throw conflict exception on first time, return on second time
+        Mockito
+            .when(dynamoDbClient.updateItem(updateItemRequestArgumentCaptor.capture()))
+            .thenThrow(conflictException)
+            .thenReturn(UpdateItemResponse.builder().build());
+        UpdateDataObjectResponse updateResponse = sdkClient
+            .updateDataObjectAsync(updateRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture()
+            .join();
+        assertEquals(TEST_ID, updateResponse.id());
+        UpdateItemRequest updateItemRequest = updateItemRequestArgumentCaptor.getValue();
+        assertEquals(TEST_ID, updateRequest.id());
+        assertEquals(TEST_INDEX, updateItemRequest.tableName());
+        assertEquals(TEST_ID, updateItemRequest.key().get(RANGE_KEY).s());
+        assertEquals(TENANT_ID, updateItemRequest.key().get(HASH_KEY).s());
+        assertEquals("foo", updateItemRequest.expressionAttributeValues().get(":source").m().get("data").s());
+    }
+
+    @Test
+    public void updateDataObjectAsync_VersionCheckRetryFailure() {
+        UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
+            .builder()
+            .id(TEST_ID)
+            .index(TEST_INDEX)
+            .tenantId(TENANT_ID)
+            .retryOnConflict(1)
+            .dataObject(testDataObject)
+            .build();
+        ConditionalCheckFailedException conflictException = ConditionalCheckFailedException.builder().build();
+        // throw conflict exception on first two times, return on third time (that never executes)
+        Mockito
+            .when(dynamoDbClient.updateItem(updateItemRequestArgumentCaptor.capture()))
+            .thenThrow(conflictException)
+            .thenThrow(conflictException)
+            .thenReturn(UpdateItemResponse.builder().build());
 
         CompletableFuture<UpdateDataObjectResponse> future = sdkClient
             .updateDataObjectAsync(updateRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
