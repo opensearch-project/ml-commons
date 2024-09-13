@@ -5,6 +5,7 @@
 package org.opensearch.ml.processor;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.utils.StringUtils.toJson;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.INPUT_MAP;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.MAX_PREDICTION_TASKS;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.MODEL_CONFIG;
@@ -46,6 +47,7 @@ import org.opensearch.search.pipeline.SearchRequestProcessor;
 import com.jayway.jsonpath.Configuration;
 import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.Option;
+import com.jayway.jsonpath.PathNotFoundException;
 import com.jayway.jsonpath.ReadContext;
 
 /**
@@ -149,8 +151,7 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
             }
 
             String queryString = request.source().toString();
-
-            rewriteQueryString(request, queryString, requestListener);
+            rewriteQueryString(request, queryString, requestListener, requestContext);
 
         } catch (Exception e) {
             if (ignoreFailure) {
@@ -164,13 +165,18 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
     /**
      * Rewrites the query string based on the input and output mappings and the ML model output.
      *
-     * @param request        the {@link SearchRequest} to be rewritten
-     * @param queryString    the original query string
+     * @param request         the {@link SearchRequest} to be rewritten
+     * @param queryString     the original query string
      * @param requestListener the {@link ActionListener} to be notified when the rewriting is complete
+     * @param requestContext
      * @throws IOException if an I/O error occurs during the rewriting process
      */
-    private void rewriteQueryString(SearchRequest request, String queryString, ActionListener<SearchRequest> requestListener)
-        throws IOException {
+    private void rewriteQueryString(
+        SearchRequest request,
+        String queryString,
+        ActionListener<SearchRequest> requestListener,
+        PipelineProcessingContext requestContext
+    ) throws IOException {
         List<Map<String, String>> processInputMap = inferenceProcessorAttributes.getInputMaps();
         List<Map<String, String>> processOutputMap = inferenceProcessorAttributes.getOutputMaps();
         int inputMapSize = (processInputMap != null) ? processInputMap.size() : 0;
@@ -198,7 +204,8 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
             request,
             queryString,
             requestListener,
-            processOutputMap
+            processOutputMap,
+            requestContext
         );
         GroupedActionListener<Map<Integer, MLOutput>> batchPredictionListener = createBatchPredictionListener(
             rewriteRequestListener,
@@ -219,13 +226,15 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
      * @param queryString      the original query string
      * @param requestListener  the {@link ActionListener} to be notified when the query string or query template is updated
      * @param processOutputMap the list of output mappings
+     * @param requestContext
      * @return an {@link ActionListener} that handles the response from the ML model inference
      */
     private ActionListener<Map<Integer, MLOutput>> createRewriteRequestListener(
         SearchRequest request,
         String queryString,
         ActionListener<SearchRequest> requestListener,
-        List<Map<String, String>> processOutputMap
+        List<Map<String, String>> processOutputMap,
+        PipelineProcessingContext requestContext
     ) {
         return new ActionListener<>() {
             @Override
@@ -237,12 +246,10 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
                     try {
                         if (queryTemplate == null) {
                             Object incomeQueryObject = JsonPath.parse(queryString).read("$");
-                            updateIncomeQueryObject(incomeQueryObject, outputMapping, mlOutput);
-                            SearchSourceBuilder searchSourceBuilder = getSearchSourceBuilder(
-                                xContentRegistry,
-                                StringUtils.toJson(incomeQueryObject)
-                            );
+                            updateIncomeQueryObject(incomeQueryObject, outputMapping, mlOutput, requestContext);
+                            SearchSourceBuilder searchSourceBuilder = getSearchSourceBuilder(xContentRegistry, toJson(incomeQueryObject));
                             request.source(searchSourceBuilder);
+
                             requestListener.onResponse(request);
                         } else {
                             String newQueryString = updateQueryTemplate(queryTemplate, outputMapping, mlOutput);
@@ -273,13 +280,52 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
                 }
             }
 
-            private void updateIncomeQueryObject(Object incomeQueryObject, Map<String, String> outputMapping, MLOutput mlOutput) {
+            /**
+             * Updates the income query object with values from the ML output based on the provided output mapping.
+             *
+             * This method iterates through the output mapping, retrieves corresponding values from the ML output,
+             * and updates the income query object accordingly. It also handles nested JSON structures and updates
+             * the request context with the new values.
+             *
+             * @param incomeQueryObject The object representing the income query to be updated.
+             * @param outputMapping A map containing the mapping between new query fields and model output field names.
+             * @param mlOutput The MLOutput object containing the results from the machine learning model.
+             * @param requestContext The context object for the current pipeline processing request.
+             *
+             * @throws IllegalArgumentException If a specified JSON path cannot be found in the query string.
+             *
+             * @implNote This method uses JsonPath for JSON manipulation and supports both regular and extended (ext) fields.
+             *           For extended fields, it creates nested structures if they don't exist.
+             *           The method also updates the request context with new field values for further processing.
+             *
+             * @see JsonPath
+             * @see PipelineProcessingContext
+             * @see MLOutput
+             */
+            private void updateIncomeQueryObject(
+                Object incomeQueryObject,
+                Map<String, String> outputMapping,
+                MLOutput mlOutput,
+                PipelineProcessingContext requestContext
+            ) {
                 for (Map.Entry<String, String> outputMapEntry : outputMapping.entrySet()) {
-                    String newQueryField = outputMapEntry.getKey();
-                    String modelOutputFieldName = outputMapEntry.getValue();
-                    Object modelOutputValue = getModelOutputValue(mlOutput, modelOutputFieldName, ignoreMissing, fullResponsePath);
-                    String jsonPathExpression = "$." + newQueryField;
-                    JsonPath.parse(incomeQueryObject).set(jsonPathExpression, modelOutputValue);
+                    String newQueryField = null;
+                    try {
+                        newQueryField = outputMapEntry.getKey();
+                        String modelOutputFieldName = outputMapEntry.getValue();
+                        Object modelOutputValue = getModelOutputValue(mlOutput, modelOutputFieldName, ignoreMissing, fullResponsePath);
+
+                        if (newQueryField.startsWith("$.ext.") || newQueryField.startsWith("ext.")) {
+                            incomeQueryObject = StringUtils.prepareNestedStructures(incomeQueryObject, newQueryField);
+                        }
+
+                        JsonPath.using(suppressExceptionConfiguration).parse(incomeQueryObject).set(newQueryField, modelOutputValue);
+
+                        requestContext.setAttribute(newQueryField, modelOutputValue);
+
+                    } catch (PathNotFoundException e) {
+                        throw new IllegalArgumentException("can not find path " + newQueryField + "in query string");
+                    }
                 }
             }
 
@@ -300,12 +346,12 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
     /**
      * Creates a {@link GroupedActionListener} that collects the responses from multiple ML model inferences.
      *
-     * @param rewriteRequestListner the {@link ActionListener} to be notified when all ML model inferences are complete
+     * @param rewriteRequestListener the {@link ActionListener} to be notified when all ML model inferences are complete
      * @param inputMapSize  the number of input mappings
      * @return a {@link GroupedActionListener} that handles the responses from multiple ML model inferences
      */
     private GroupedActionListener<Map<Integer, MLOutput>> createBatchPredictionListener(
-        ActionListener<Map<Integer, MLOutput>> rewriteRequestListner,
+        ActionListener<Map<Integer, MLOutput>> rewriteRequestListener,
         int inputMapSize
     ) {
         return new GroupedActionListener<>(new ActionListener<>() {
@@ -315,13 +361,13 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
                 for (Map<Integer, MLOutput> mlOutputMap : mlOutputMapCollection) {
                     mlOutputMaps.putAll(mlOutputMap);
                 }
-                rewriteRequestListner.onResponse(mlOutputMaps);
+                rewriteRequestListener.onResponse(mlOutputMaps);
             }
 
             @Override
             public void onFailure(Exception e) {
                 logger.error("Prediction Failed:", e);
-                rewriteRequestListner.onFailure(e);
+                rewriteRequestListener.onFailure(e);
             }
         }, Math.max(inputMapSize, 1));
     }
@@ -358,11 +404,12 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
             for (Map<String, String> outputMap : processOutputMap) {
                 for (Map.Entry<String, String> entry : outputMap.entrySet()) {
                     String queryField = entry.getKey();
-                    Object pathData = jsonData.read(queryField);
-                    if (pathData == null) {
-                        throw new IllegalArgumentException(
-                            "cannot find field: " + queryField + " in query string: " + jsonData.jsonString()
-                        );
+                    // output writing to search extension can be new field
+                    if (!queryField.startsWith("ext.") && !queryField.startsWith("$.ext.")) {
+                        Object pathData = jsonData.read(queryField);
+                        if (pathData == null) {
+                            throw new IllegalArgumentException();
+                        }
                     }
                 }
             }
@@ -402,7 +449,7 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
                 // model field as key, query field name as value
                 String modelInputFieldName = entry.getKey();
                 String queryFieldName = entry.getValue();
-                String queryFieldValue = StringUtils.toJson(JsonPath.parse(newQuery).read(queryFieldName));
+                String queryFieldValue = toJson(JsonPath.parse(newQuery).read(queryFieldName));
                 modelParameters.put(modelInputFieldName, queryFieldValue);
             }
         }
@@ -446,14 +493,20 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
     /**
      * Creates a SearchSourceBuilder instance from the given query string.
      *
+     * This method parses the provided query string, substitutes parameters, and constructs
+     * a SearchSourceBuilder object. It handles JSON content and performs variable substitution
+     * using a StringSubstitutor.
+     *
      * @param xContentRegistry the XContentRegistry instance to be used for parsing
-     * @param queryString    the query template string to be parsed
+     * @param queryString      the query template string to be parsed
      * @return a SearchSourceBuilder instance created from the query string
-     * @throws IOException if an I/O error occurs during parsing
+     * @throws IOException if an I/O error occurs during parsing or content creation
      */
     private static SearchSourceBuilder getSearchSourceBuilder(NamedXContentRegistry xContentRegistry, String queryString)
         throws IOException {
+        // MLInferenceRequestParametersExtBuilder mlInferenceExtBuilder = new MLInferenceRequestParametersExtBuilder();
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        // SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().ext(List.of(mlInferenceExtBuilder));
 
         XContentParser queryParser = XContentType.JSON
             .xContent()
@@ -461,7 +514,9 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
         ensureExpectedToken(XContentParser.Token.START_OBJECT, queryParser.nextToken(), queryParser);
 
         searchSourceBuilder.parseXContent(queryParser);
+
         return searchSourceBuilder;
+
     }
 
     /**

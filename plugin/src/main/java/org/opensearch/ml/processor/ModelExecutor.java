@@ -105,11 +105,11 @@ public interface ModelExecutor {
      * Retrieves the model output value from the given ModelTensorOutput for the specified modelOutputFieldName.
      * It handles cases where the output contains a single tensor or multiple tensors.
      *
-     * @param modelTensorOutput          the ModelTensorOutput containing the model output
-     * @param modelOutputFieldName       the name of the field in the model output to retrieve the value for
-     * @param ignoreMissing              a flag indicating whether to ignore missing fields or throw an exception
+     * @param modelTensorOutput    the ModelTensorOutput containing the model output
+     * @param modelOutputFieldName the name of the field in the model output to retrieve the value for
+     * @param ignoreMissing        a flag indicating whether to ignore missing fields or throw an exception
      * @return the model output value as an Object
-     * @throws RuntimeException          if there is an error retrieving the model output value
+     * @throws RuntimeException if there is an error retrieving the model output value
      */
     default Object getModelOutputValue(ModelTensorOutput modelTensorOutput, String modelOutputFieldName, boolean ignoreMissing) {
         Object modelOutputValue;
@@ -298,6 +298,7 @@ public interface ModelExecutor {
      * Writes a new dot path for a nested object within the given JSON object.
      * This method is useful when dealing with arrays or nested objects in the JSON structure.
      * for example foo.*.bar.*.quk to be [foo.0.bar.0.quk, foo.0.bar.1.quk..]
+     *
      * @param json    the JSON object containing the nested object
      * @param dotPath the dot path representing the location of the nested object
      * @return a list of dot paths representing the new locations of the nested object
