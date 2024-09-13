@@ -24,4 +24,7 @@ grant {
 
     // Circuit Breaker
     permission java.lang.RuntimePermission "getFileSystemAttributes";
+
+    // AWS credentials needed for clients
+    permission java.io.FilePermission "${user.home}/.aws/-", "read";
 };

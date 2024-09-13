@@ -241,6 +241,11 @@ integTest {
 }
 
 testClusters.integTest {
+    // Replicate credential environment variables to cluster nodes    
+    environment "AWS_ACCESS_KEY_ID", System.getenv("AWS_ACCESS_KEY_ID");
+    environment "AWS_SECRET_ACCESS_KEY", System.getenv("AWS_SECRET_ACCESS_KEY");
+    environment "AWS_SESSION_TOKEN", System.getenv("AWS_SESSION_TOKEN");
+
     testDistribution = "ARCHIVE"
     // Cluster shrink exception thrown if we try to set numberOfNodes to 1, so only apply if > 1
     if (_numNodes > 1) numberOfNodes = _numNodes
@@ -352,9 +357,7 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.helper.ModelAccessControlHelper',
         'org.opensearch.ml.action.models.DeleteModelTransportAction.2',
         'org.opensearch.ml.model.MLModelCacheHelper',
-        'org.opensearch.ml.model.MLModelCacheHelper.1',
-        'org.opensearch.ml.sdkclient.SdkClientFactory',
-        'org.opensearch.ml.sdkclient.SdkClientFactory.SocketAccess'
+        'org.opensearch.ml.model.MLModelCacheHelper.1'
 ]
 
 jacocoTestCoverageVerification {

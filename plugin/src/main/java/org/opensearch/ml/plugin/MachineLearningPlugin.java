@@ -949,7 +949,8 @@ public class MachineLearningPlugin extends Plugin
                 // Settings for SdkClient
                 SdkClientSettings.REMOTE_METADATA_TYPE,
                 SdkClientSettings.REMOTE_METADATA_ENDPOINT,
-                SdkClientSettings.REMOTE_METADATA_REGION
+                SdkClientSettings.REMOTE_METADATA_REGION,
+                SdkClientSettings.REMOTE_METADATA_SERVICE_NAME
             );
     }
 

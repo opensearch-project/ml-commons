@@ -47,6 +47,7 @@ public class SdkClientFactoryTests extends OpenSearchTestCase {
             .put(SdkClientSettings.REMOTE_METADATA_TYPE_KEY, SdkClientSettings.AWS_OPENSEARCH_SERVICE)
             .put(SdkClientSettings.REMOTE_METADATA_ENDPOINT_KEY, "example.org")
             .put(SdkClientSettings.REMOTE_METADATA_REGION_KEY, "eu-west-3")
+            .put(SdkClientSettings.REMOTE_METADATA_SERVICE_NAME_KEY, "es")
             .build();
         SdkClient sdkClient = SdkClientFactory.createSdkClient(mock(Client.class), NamedXContentRegistry.EMPTY, settings);
         assertTrue(sdkClient.getDelegate() instanceof RemoteClusterIndicesClient);
@@ -56,8 +57,9 @@ public class SdkClientFactoryTests extends OpenSearchTestCase {
         Settings settings = Settings
             .builder()
             .put(SdkClientSettings.REMOTE_METADATA_TYPE_KEY, SdkClientSettings.AWS_DYNAMO_DB)
-            .put(SdkClientSettings.REMOTE_METADATA_ENDPOINT_KEY, "http://example.org")
+            .put(SdkClientSettings.REMOTE_METADATA_ENDPOINT_KEY, "example.org")
             .put(SdkClientSettings.REMOTE_METADATA_REGION_KEY, "eu-west-3")
+            .put(SdkClientSettings.REMOTE_METADATA_SERVICE_NAME_KEY, "aoss")
             .build();
         SdkClient sdkClient = SdkClientFactory.createSdkClient(mock(Client.class), NamedXContentRegistry.EMPTY, settings);
         assertTrue(sdkClient.getDelegate() instanceof DDBOpenSearchClient);
@@ -80,6 +82,17 @@ public class SdkClientFactoryTests extends OpenSearchTestCase {
             OpenSearchException.class,
             () -> SdkClientFactory.createSdkClient(mock(Client.class), NamedXContentRegistry.EMPTY, settings)
         );
+        Settings settings2 = Settings
+            .builder()
+            .put(SdkClientSettings.REMOTE_METADATA_TYPE_KEY, SdkClientSettings.AWS_OPENSEARCH_SERVICE)
+            .put(SdkClientSettings.REMOTE_METADATA_ENDPOINT_KEY, "example.org")
+            .put(SdkClientSettings.REMOTE_METADATA_REGION_KEY, "eu-west-3")
+            .put(SdkClientSettings.REMOTE_METADATA_SERVICE_NAME_KEY, "invalid")
+            .build();
+        assertThrows(
+            OpenSearchException.class,
+            () -> SdkClientFactory.createSdkClient(mock(Client.class), NamedXContentRegistry.EMPTY, settings2)
+        );
     }
 
     public void testDDBBindingException() {
@@ -87,6 +100,17 @@ public class SdkClientFactoryTests extends OpenSearchTestCase {
         assertThrows(
             OpenSearchException.class,
             () -> SdkClientFactory.createSdkClient(mock(Client.class), NamedXContentRegistry.EMPTY, settings)
+        );
+        Settings settingss = Settings
+            .builder()
+            .put(SdkClientSettings.REMOTE_METADATA_TYPE_KEY, SdkClientSettings.AWS_DYNAMO_DB)
+            .put(SdkClientSettings.REMOTE_METADATA_ENDPOINT_KEY, "example.org")
+            .put(SdkClientSettings.REMOTE_METADATA_REGION_KEY, "eu-west-3")
+            .put(SdkClientSettings.REMOTE_METADATA_SERVICE_NAME_KEY, "invalid")
+            .build();
+        assertThrows(
+            OpenSearchException.class,
+            () -> SdkClientFactory.createSdkClient(mock(Client.class), NamedXContentRegistry.EMPTY, settingss)
         );
     }
 }
