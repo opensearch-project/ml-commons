@@ -34,7 +34,11 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
+import com.jayway.jsonpath.Configuration;
+import com.jayway.jsonpath.InvalidJsonException;
 import com.jayway.jsonpath.JsonPath;
+import com.jayway.jsonpath.Option;
+import com.jayway.jsonpath.PathNotFoundException;
 import com.networknt.schema.JsonSchema;
 import com.networknt.schema.JsonSchemaFactory;
 import com.networknt.schema.SpecVersion;
@@ -345,6 +349,94 @@ public class StringUtils {
         }
 
         return JsonParser.parseString(jsonString).getAsJsonObject();
+    }
+
+    /**
+     * Checks if a specified JSON path exists within a given JSON object.
+     *
+     * This method attempts to read the value at the specified path in the JSON object.
+     * If the path exists, it returns true. If a PathNotFoundException is thrown,
+     * indicating that the path does not exist, it returns false.
+     *
+     * @param json The JSON object to check. This can be a Map, List, or any object
+     *             that JsonPath can parse.
+     * @param path The JSON path to check for existence. This should be a valid
+     *             JsonPath expression (e.g., "$.store.book[0].title").
+     * @return true if the path exists in the JSON object, false otherwise.
+     * @throws IllegalArgumentException if the json object is null or if the path is null or empty.
+     * @throws PathNotFoundException if there's an error in parsing the JSON or the path.
+     */
+    public static boolean pathExists(Object json, String path) {
+        if (json == null) {
+            throw new IllegalArgumentException("JSON object cannot be null");
+        }
+        if (path == null || path.isEmpty()) {
+            throw new IllegalArgumentException("Path cannot be null or empty");
+        }
+        if (!isValidJSONPath(path)) {
+            throw new IllegalArgumentException("the field path is not a valid json path: " + path);
+        }
+        try {
+            JsonPath.read(json, path);
+            return true;
+        } catch (PathNotFoundException e) {
+            return false;
+        } catch (InvalidJsonException e) {
+            throw new IllegalArgumentException("Invalid JSON input", e);
+        }
+    }
+
+    /**
+     * Prepares nested structures in a JSON object based on the given field path.
+     *
+     * This method ensures that all intermediate nested objects exist in the JSON object
+     * for a given field path. If any part of the path doesn't exist, it creates new empty objects
+     * (HashMaps) for those parts.
+     *
+     * @param jsonObject The JSON object to be updated.
+     * @param fieldPath The full path of the field, potentially including nested structures.
+     * @return The updated JSON object with necessary nested structures in place.
+     *
+     * @throws IllegalArgumentException If there's an issue with JSON parsing or path manipulation.
+     *
+     * @implNote This method uses JsonPath for JSON manipulation and StringUtils for path existence checks.
+     *           It handles paths both with and without a leading "$." notation.
+     *           Each non-existent intermediate object in the path is created as an empty HashMap.
+     *
+     * @see JsonPath
+     * @see StringUtils
+     */
+    public static Object prepareNestedStructures(Object jsonObject, String fieldPath) {
+
+        if (fieldPath == null) {
+            throw new IllegalArgumentException("the field path is null");
+        }
+        if (!isValidJSONPath(fieldPath)) {
+            throw new IllegalArgumentException("the field path is not a valid json path: " + fieldPath);
+        }
+        String path = fieldPath.startsWith("$.") ? fieldPath.substring(2) : fieldPath;
+        String[] pathParts = path.split("\\.");
+        Configuration suppressExceptionConfiguration = Configuration
+            .builder()
+            .options(Option.SUPPRESS_EXCEPTIONS, Option.DEFAULT_PATH_LEAF_TO_NULL)
+            .build();
+        StringBuilder currentPath = new StringBuilder("$");
+
+        for (int i = 0; i < pathParts.length - 1; i++) {
+            currentPath.append(".").append(pathParts[i]);
+            if (!StringUtils.pathExists(jsonObject, currentPath.toString())) {
+                try {
+                    jsonObject = JsonPath
+                        .using(suppressExceptionConfiguration)
+                        .parse(jsonObject)
+                        .set(currentPath.toString(), new java.util.HashMap<>())
+                        .json();
+                } catch (Exception e) {
+                    throw new IllegalArgumentException("Error creating nested structure for path: " + currentPath, e);
+                }
+            }
+        }
+        return jsonObject;
     }
 
     public static void validateSchema(String schemaString, String instanceString) {
