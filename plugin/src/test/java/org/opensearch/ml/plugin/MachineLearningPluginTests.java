@@ -40,6 +40,7 @@ import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.tools.MLModelTool;
 import org.opensearch.ml.processor.MLInferenceSearchRequestProcessor;
 import org.opensearch.ml.processor.MLInferenceSearchResponseProcessor;
+import org.opensearch.ml.searchext.MLInferenceRequestParametersExtBuilder;
 import org.opensearch.plugins.ExtensiblePlugin;
 import org.opensearch.plugins.SearchPipelinePlugin;
 import org.opensearch.plugins.SearchPlugin;
@@ -66,9 +67,11 @@ public class MachineLearningPluginTests {
     @Test
     public void testGetSearchExts() {
         List<SearchPlugin.SearchExtSpec<?>> searchExts = plugin.getSearchExts();
-        assertEquals(1, searchExts.size());
-        SearchPlugin.SearchExtSpec<?> spec = searchExts.get(0);
-        assertEquals(GenerativeQAParamExtBuilder.PARAMETER_NAME, spec.getName().getPreferredName());
+        assertEquals(2, searchExts.size());
+        SearchPlugin.SearchExtSpec<?> spec1 = searchExts.get(0);
+        assertEquals(GenerativeQAParamExtBuilder.PARAMETER_NAME, spec1.getName().getPreferredName());
+        SearchPlugin.SearchExtSpec<?> spec2 = searchExts.get(1);
+        assertEquals(MLInferenceRequestParametersExtBuilder.NAME, spec2.getName().getPreferredName());
     }
 
     @Test
