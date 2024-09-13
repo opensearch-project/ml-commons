@@ -508,7 +508,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
         Map<String, String> outputMapping;
         if (processOutputMap == null || processOutputMap.size() == 0) {
             outputMapping = new HashMap<>();
-            outputMapping.put(DEFAULT_OUTPUT_FIELD_NAME, "$." + DEFAULT_OUTPUT_FIELD_NAME);
+            outputMapping.put(DEFAULT_OUTPUT_FIELD_NAME, null);
         } else {
             outputMapping = processOutputMap.get(mappingIndex);
         }
