@@ -28,8 +28,11 @@ public class SdkClientSettings {
     public static final String REMOTE_METADATA_ENDPOINT_KEY = "plugins.ml_commons.remote_metadata_endpoint";
     /** The key for remote metadata region, applicable to AWS remote clusters or DynamoDB. */
     public static final String REMOTE_METADATA_REGION_KEY = "plugins.ml_commons.remote_metadata_region";
+    /** The key for remote metadata AWS service, either "es" for cluster or "aoss" for OpenSearch Serverless */
+    public static final String REMOTE_METADATA_SERVICE_NAME_KEY = "plugins.ml_commons.remote_metadata_service_name";
     
     public static final Setting<String> REMOTE_METADATA_TYPE = Setting.simpleString(REMOTE_METADATA_TYPE_KEY, Property.NodeScope, Property.Final);
     public static final Setting<String> REMOTE_METADATA_ENDPOINT = Setting.simpleString(REMOTE_METADATA_ENDPOINT_KEY, Property.NodeScope, Property.Final);
     public static final Setting<String> REMOTE_METADATA_REGION = Setting.simpleString(REMOTE_METADATA_REGION_KEY, Property.NodeScope, Property.Final);
+    public static final Setting<String> REMOTE_METADATA_SERVICE_NAME = Setting.simpleString(REMOTE_METADATA_SERVICE_NAME_KEY, Property.NodeScope, Property.Final);
 }

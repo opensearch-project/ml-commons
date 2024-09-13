@@ -75,6 +75,7 @@ public class SdkClientFactory {
         String remoteMetadataType = SdkClientSettings.REMOTE_METADATA_TYPE.get(settings);
         String remoteMetadataEndpoint = SdkClientSettings.REMOTE_METADATA_ENDPOINT.get(settings);
         String region = SdkClientSettings.REMOTE_METADATA_REGION.get(settings);
+        String serviceName = SdkClientSettings.REMOTE_METADATA_SERVICE_NAME.get(settings);
 
         switch (remoteMetadataType) {
             case SdkClientSettings.REMOTE_OPENSEARCH:
@@ -84,29 +85,32 @@ public class SdkClientFactory {
                 log.info("Using remote opensearch cluster as metadata store");
                 return new SdkClient(new RemoteClusterIndicesClient(createOpenSearchClient(remoteMetadataEndpoint)));
             case SdkClientSettings.AWS_OPENSEARCH_SERVICE:
-                if (Strings.isBlank(remoteMetadataEndpoint) || Strings.isBlank(region)) {
-                    throw new OpenSearchException("AWS Opensearch Service client requires a metadata endpoint and region.");
-                }
+                validateAwsParams(remoteMetadataType, remoteMetadataEndpoint, region, serviceName);
                 log.info("Using remote AWS Opensearch Service cluster as metadata store");
                 return new SdkClient(
-                    new RemoteClusterIndicesClient(createAwsOpenSearchServiceClient(remoteMetadataEndpoint, region, "es"))
+                    new RemoteClusterIndicesClient(createAwsOpenSearchServiceClient(remoteMetadataEndpoint, region, serviceName))
                 );
             case SdkClientSettings.AWS_DYNAMO_DB:
-                if (Strings.isBlank(remoteMetadataEndpoint) || Strings.isBlank(region)) {
-                    throw new OpenSearchException(
-                        "AWS DynamoDB and Opensearch Serverless Service client requires a metadata endpoint and region."
-                    );
-                }
+                validateAwsParams(remoteMetadataType, remoteMetadataEndpoint, region, serviceName);
                 log.info("Using dynamo DB as metadata store");
                 return new SdkClient(
                     new DDBOpenSearchClient(
                         createDynamoDbClient(region),
-                        new RemoteClusterIndicesClient(createAwsOpenSearchServiceClient(remoteMetadataEndpoint, region, "aoss"))
+                        new RemoteClusterIndicesClient(createAwsOpenSearchServiceClient(remoteMetadataEndpoint, region, serviceName))
                     )
                 );
             default:
                 log.info("Using local opensearch cluster as metadata store");
                 return new SdkClient(new LocalClusterIndicesClient(client, xContentRegistry));
+        }
+    }
+
+    private static void validateAwsParams(String clientType, String remoteMetadataEndpoint, String region, String serviceName) {
+        if (Strings.isBlank(remoteMetadataEndpoint) || Strings.isBlank(region)) {
+            throw new OpenSearchException(clientType + " client requires a metadata endpoint and region.");
+        }
+        if (!"es".equals(serviceName) && !"aoss".equals(serviceName)) {
+            throw new OpenSearchException(clientType + " client requires a signing service of 'es' or 'aoss'.");
         }
     }
 

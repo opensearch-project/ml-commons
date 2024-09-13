@@ -179,7 +179,7 @@ integTest {
     dependsOn "bundlePlugin"
     systemProperty 'tests.security.manager', 'false'
     systemProperty 'java.io.tmpdir', opensearch_tmp_dir.absolutePath
-    
+
     systemProperty "https", System.getProperty("https")
     systemProperty "user", System.getProperty("user")
     systemProperty "password", System.getProperty("password")
@@ -357,9 +357,7 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.helper.ModelAccessControlHelper',
         'org.opensearch.ml.action.models.DeleteModelTransportAction.2',
         'org.opensearch.ml.model.MLModelCacheHelper',
-        'org.opensearch.ml.model.MLModelCacheHelper.1',
-        'org.opensearch.ml.sdkclient.SdkClientFactory',
-        'org.opensearch.ml.sdkclient.SdkClientFactory.SocketAccess'
+        'org.opensearch.ml.model.MLModelCacheHelper.1'
 ]
 
 jacocoTestCoverageVerification {
