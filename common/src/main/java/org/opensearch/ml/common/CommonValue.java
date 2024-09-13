@@ -391,11 +391,10 @@ public class CommonValue {
         + "      \""
         + MLTask.IS_ASYNC_TASK_FIELD
         + "\" : {\"type\" : \"boolean\"}, \n"
-        + USER_FIELD_MAPPING
-        + "    }\n"
-        + "}"
+        + "      \""
         + MLTask.REMOTE_JOB_FIELD
-        + "\" : {\"type\": \"flat_object\"}\n"
+        + "\" : {\"type\": \"flat_object\"}, \n"
+        + USER_FIELD_MAPPING
         + "    }\n"
         + "}";
 
