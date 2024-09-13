@@ -8,6 +8,15 @@
  */
 package org.opensearch.ml.sdkclient;
 
+import static org.opensearch.sdk.SdkClientSettings.AWS_DYNAMO_DB;
+import static org.opensearch.sdk.SdkClientSettings.AWS_OPENSEARCH_SERVICE;
+import static org.opensearch.sdk.SdkClientSettings.REMOTE_METADATA_ENDPOINT;
+import static org.opensearch.sdk.SdkClientSettings.REMOTE_METADATA_REGION;
+import static org.opensearch.sdk.SdkClientSettings.REMOTE_METADATA_SERVICE_NAME;
+import static org.opensearch.sdk.SdkClientSettings.REMOTE_METADATA_TYPE;
+import static org.opensearch.sdk.SdkClientSettings.REMOTE_OPENSEARCH;
+import static org.opensearch.sdk.SdkClientSettings.VALID_AWS_OPENSEARCH_SERVICE_NAMES;
+
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.Map;
@@ -39,7 +48,6 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.sdk.SdkClientDelegate;
-import org.opensearch.sdk.SdkClientSettings;
 import org.opensearch.sdk.client.LocalClusterIndicesClient;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -72,25 +80,25 @@ public class SdkClientFactory {
      * @return An instance of SdkClient which delegates to an implementation based on Remote Metadata Type
      */
     public static SdkClient createSdkClient(Client client, NamedXContentRegistry xContentRegistry, Settings settings) {
-        String remoteMetadataType = SdkClientSettings.REMOTE_METADATA_TYPE.get(settings);
-        String remoteMetadataEndpoint = SdkClientSettings.REMOTE_METADATA_ENDPOINT.get(settings);
-        String region = SdkClientSettings.REMOTE_METADATA_REGION.get(settings);
-        String serviceName = SdkClientSettings.REMOTE_METADATA_SERVICE_NAME.get(settings);
+        String remoteMetadataType = REMOTE_METADATA_TYPE.get(settings);
+        String remoteMetadataEndpoint = REMOTE_METADATA_ENDPOINT.get(settings);
+        String region = REMOTE_METADATA_REGION.get(settings);
+        String serviceName = REMOTE_METADATA_SERVICE_NAME.get(settings);
 
         switch (remoteMetadataType) {
-            case SdkClientSettings.REMOTE_OPENSEARCH:
+            case REMOTE_OPENSEARCH:
                 if (Strings.isBlank(remoteMetadataEndpoint)) {
                     throw new OpenSearchException("Remote Opensearch client requires a metadata endpoint.");
                 }
                 log.info("Using remote opensearch cluster as metadata store");
                 return new SdkClient(new RemoteClusterIndicesClient(createOpenSearchClient(remoteMetadataEndpoint)));
-            case SdkClientSettings.AWS_OPENSEARCH_SERVICE:
+            case AWS_OPENSEARCH_SERVICE:
                 validateAwsParams(remoteMetadataType, remoteMetadataEndpoint, region, serviceName);
                 log.info("Using remote AWS Opensearch Service cluster as metadata store");
                 return new SdkClient(
                     new RemoteClusterIndicesClient(createAwsOpenSearchServiceClient(remoteMetadataEndpoint, region, serviceName))
                 );
-            case SdkClientSettings.AWS_DYNAMO_DB:
+            case AWS_DYNAMO_DB:
                 validateAwsParams(remoteMetadataType, remoteMetadataEndpoint, region, serviceName);
                 log.info("Using dynamo DB as metadata store");
                 return new SdkClient(
@@ -109,8 +117,8 @@ public class SdkClientFactory {
         if (Strings.isBlank(remoteMetadataEndpoint) || Strings.isBlank(region)) {
             throw new OpenSearchException(clientType + " client requires a metadata endpoint and region.");
         }
-        if (!"es".equals(serviceName) && !"aoss".equals(serviceName)) {
-            throw new OpenSearchException(clientType + " client requires a signing service of 'es' or 'aoss'.");
+        if (!VALID_AWS_OPENSEARCH_SERVICE_NAMES.contains(serviceName)) {
+            throw new OpenSearchException(clientType + " client only supports service names " + VALID_AWS_OPENSEARCH_SERVICE_NAMES);
         }
     }
 
