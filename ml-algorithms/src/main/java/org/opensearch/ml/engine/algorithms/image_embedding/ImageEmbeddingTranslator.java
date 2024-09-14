@@ -10,14 +10,13 @@ import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDe
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 
-import org.json.JSONObject;
+import org.opensearch.ml.common.model.ImageEmbeddingPreprocessorConfig;
 import org.opensearch.ml.common.output.model.MLResultDataType;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -33,10 +32,8 @@ import ai.djl.ndarray.types.DataType;
 import ai.djl.translate.ServingTranslator;
 import ai.djl.translate.TranslatorContext;
 
-// TODO: Add image preprocessing options: resample, rescale, rescale factor, normalization. There is no hugging face JNI for image preprocessing.
 public class ImageEmbeddingTranslator implements ServingTranslator {
-    private Integer imageHeightSize;
-    private Integer imageWidthSize;
+    private ImageEmbeddingPreprocessorConfig preprocessorConfig;
 
     @Override
     public NDList processInput(TranslatorContext ctx, Input input) throws IOException {
@@ -48,7 +45,7 @@ public class ImageEmbeddingTranslator implements ServingTranslator {
         Image inputImage = ImageFactory
             .getInstance()
             .fromInputStream(new ByteArrayInputStream(imageBytes))
-            .resize(imageWidthSize, imageHeightSize, false);
+            .resize(preprocessorConfig.imageWidthSize, preprocessorConfig.imageHeightSize, false);
 
         NDArray arrayImage = inputImage.toNDArray(manager);
         arrayImage = arrayImage.transpose(2, 0, 1).toType(DataType.FLOAT32, true); // array format must be (channels, height, width)
@@ -87,39 +84,7 @@ public class ImageEmbeddingTranslator implements ServingTranslator {
     @Override
     public void prepare(TranslatorContext ctx) throws IOException {
         Path path = ctx.getModel().getModelPath();
-        String jsonString = new String(Files.readAllBytes(path.resolve(IMAGE_PREPROCESSOR_CONFIG_FILE_NAME)));
-        JSONObject jsonObject = new JSONObject(jsonString);
-
-        if (jsonObject.has("size")) {
-            Object size = jsonObject.get("size");
-            if (size instanceof Integer) {
-                this.imageHeightSize = (Integer) size;
-                this.imageWidthSize = (Integer) size;
-            } else if (size instanceof JSONObject) {
-                JSONObject sizeObject = (JSONObject) size;
-                if (sizeObject.has("height") && sizeObject.has("width")) {
-                    this.imageHeightSize = sizeObject.getInt("height");
-                    this.imageWidthSize = sizeObject.getInt("width");
-                } else {
-                    throw new IllegalArgumentException(
-                        String
-                            .format("Invalid %s structure: size object must contain height and width", IMAGE_PREPROCESSOR_CONFIG_FILE_NAME)
-                    );
-                }
-            } else {
-                throw new IllegalArgumentException(
-                    String
-                        .format(
-                            "Invalid %s structure: size must be an integer or an object containing height and width",
-                            IMAGE_PREPROCESSOR_CONFIG_FILE_NAME
-                        )
-                );
-            }
-        } else {
-            throw new IllegalArgumentException(
-                String.format("Invalid %s structure: missing size field", IMAGE_PREPROCESSOR_CONFIG_FILE_NAME)
-            );
-        }
+        this.preprocessorConfig = new ImageEmbeddingPreprocessorConfig(path.resolve(IMAGE_PREPROCESSOR_CONFIG_FILE_NAME));
     }
 
     @Override

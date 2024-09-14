@@ -73,8 +73,8 @@ public class MLInput implements Input {
     // Input context in question answering model
     public static final String CONTEXT_FIELD = "context";
 
-    // Input image in base64 format for image embedding model
-    public static final String IMAGE_FIELD = "image";
+    // Input images in base64 format for image embedding model
+    public static final String IMAGE_FIELD = "images";
 
     // Algorithm name
     protected FunctionName algorithm;
@@ -206,8 +206,8 @@ public class MLInput implements Input {
                     break;
                 case IMAGE_EMBEDDING:
                     ImageEmbeddingInputDataSet imageInputDataset = (ImageEmbeddingInputDataSet) this.inputDataset;
-                    String base64Image = imageInputDataset.getBase64Image();
-                    builder.field(IMAGE_FIELD, base64Image);
+                    List<String> base64Images = imageInputDataset.getBase64Images();
+                    builder.field(IMAGE_FIELD, base64Images);
                     break;
                 default:
                     break;
@@ -252,7 +252,7 @@ public class MLInput implements Input {
         String queryText = null;
         String question = null;
         String context = null;
-        String base64Image = null;
+        List<String> base64Images = new ArrayList<>();
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -310,7 +310,10 @@ public class MLInput implements Input {
                     context = parser.text();
                     break;
                 case IMAGE_FIELD:
-                    base64Image = parser.text();
+                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                        base64Images.add(parser.text());
+                    }
                     break;
                 default:
                     parser.skipChildren();
@@ -326,7 +329,7 @@ public class MLInput implements Input {
         } else if (algorithm == FunctionName.QUESTION_ANSWERING) {
             inputDataSet = new QuestionAnsweringInputDataSet(question, context);
         } else if (algorithm == FunctionName.IMAGE_EMBEDDING) {
-            inputDataSet = new ImageEmbeddingInputDataSet(base64Image);
+            inputDataSet = new ImageEmbeddingInputDataSet(base64Images);
         }
         return new MLInput(algorithm, mlParameters, searchSourceBuilder, sourceIndices, dataFrame, inputDataSet);
     }

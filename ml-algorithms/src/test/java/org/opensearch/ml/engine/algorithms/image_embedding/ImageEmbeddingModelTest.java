@@ -52,6 +52,7 @@ public class ImageEmbeddingModelTest {
     private ImageEmbeddingModel imageEmbeddingModel;
     private Path mlCachePath;
     private ImageEmbeddingInputDataSet inputDataSet;
+    private ImageEmbeddingInputDataSet listInputDataSet;
     private MLEngine mlEngine;
     private Encryptor encryptor;
 
@@ -80,8 +81,28 @@ public class ImageEmbeddingModelTest {
 
         inputDataSet = ImageEmbeddingInputDataSet
             .builder()
-            .base64Image(
-                new String(Base64.getEncoder().encode(Files.readAllBytes(Path.of(getClass().getResource("opensearch_logo.jpg").toURI()))))
+            .base64Images(
+                List
+                    .of(
+                        new String(
+                            Base64.getEncoder().encode(Files.readAllBytes(Path.of(getClass().getResource("opensearch_logo.jpg").toURI())))
+                        )
+                    )
+            )
+            .build();
+
+        listInputDataSet = ImageEmbeddingInputDataSet
+            .builder()
+            .base64Images(
+                List
+                    .of(
+                        new String(
+                            Base64.getEncoder().encode(Files.readAllBytes(Path.of(getClass().getResource("opensearch_logo.jpg").toURI())))
+                        ),
+                        new String(
+                            Base64.getEncoder().encode(Files.readAllBytes(Path.of(getClass().getResource("opensearch_logo.jpg").toURI())))
+                        )
+                    )
             )
             .build();
     }
@@ -93,6 +114,22 @@ public class ImageEmbeddingModelTest {
         ModelTensorOutput output = (ModelTensorOutput) imageEmbeddingModel.predict(mlInput);
         List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
         assertEquals(1, mlModelOutputs.size());
+        for (int i = 0; i < mlModelOutputs.size(); i++) {
+            ModelTensors tensors = mlModelOutputs.get(i);
+            List<ModelTensor> mlModelTensors = tensors.getMlModelTensors();
+            ;
+            assertEquals(1, mlModelTensors.size());
+        }
+        imageEmbeddingModel.close();
+    }
+
+    @Test
+    public void initModel_predict_list_TorchScript_ImageEmbedding() throws URISyntaxException {
+        imageEmbeddingModel.initModel(model, params, encryptor);
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.IMAGE_EMBEDDING).inputDataset(listInputDataSet).build();
+        ModelTensorOutput output = (ModelTensorOutput) imageEmbeddingModel.predict(mlInput);
+        List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
+        assertEquals(2, mlModelOutputs.size());
         for (int i = 0; i < mlModelOutputs.size(); i++) {
             ModelTensors tensors = mlModelOutputs.get(i);
             List<ModelTensor> mlModelTensors = tensors.getMlModelTensors();

@@ -55,12 +55,13 @@ public class ImageEmbeddingModel extends DLModel {
         MLInputDataset inputDataSet = mlInput.getInputDataset();
         List<ModelTensors> tensorOutputs = new ArrayList<>();
         Output output;
-        ImageEmbeddingInputDataSet qaInputDataSet = (ImageEmbeddingInputDataSet) inputDataSet;
-        String base64Image = qaInputDataSet.getBase64Image();
-        Input input = new Input();
-        input.add(base64Image);
-        output = getPredictor().predict(input);
-        tensorOutputs.add(parseModelTensorOutput(output, null));
+        ImageEmbeddingInputDataSet imageEmbeddingInputDataSet = (ImageEmbeddingInputDataSet) inputDataSet;
+        for (String base64Image : imageEmbeddingInputDataSet.getBase64Images()) {
+            Input input = new Input();
+            input.add(base64Image);
+            output = getPredictor().predict(input);
+            tensorOutputs.add(parseModelTensorOutput(output, null));
+        }
         return new ModelTensorOutput(tensorOutputs);
     }
 

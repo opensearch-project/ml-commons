@@ -84,7 +84,7 @@ public class ModelHelper {
                 String modelZipFileUrl = mlEngine.getPrebuiltModelPath(modelName, version, modelFormat);
                 DownloadUtils.download(configFileUrl, configCacheFilePath, new ProgressBar());
 
-                Map<?, ?> config = null;
+                Map<String, ?> config = null;
                 try (JsonReader reader = new JsonReader(new FileReader(configCacheFilePath))) {
                     config = gson.fromJson(reader, Map.class);
                 }
@@ -120,7 +120,7 @@ public class ModelHelper {
                             if (FunctionName.QUESTION_ANSWERING.equals(algorithm)) {
                                 QuestionAnsweringModelConfig.QuestionAnsweringModelConfigBuilder configBuilder =
                                     QuestionAnsweringModelConfig.builder();
-                                Map<?, ?> configMap = (Map<?, ?>) entry.getValue();
+                                Map<String, ?> configMap = (Map<String, ?>) entry.getValue();
                                 for (Map.Entry<?, ?> configEntry : configMap.entrySet()) {
                                     switch (configEntry.getKey().toString()) {
                                         case MLModelConfig.MODEL_TYPE_FIELD:
@@ -143,7 +143,7 @@ public class ModelHelper {
                             } else if (FunctionName.IMAGE_EMBEDDING.equals(algorithm)) {
                                 ImageEmbeddingModelConfig.ImageEmbeddingModelConfigBuilder configBuilder = ImageEmbeddingModelConfig
                                     .builder();
-                                Map<?, ?> configMap = (Map<?, ?>) entry.getValue();
+                                Map<String, ?> configMap = (Map<String, ?>) entry.getValue();
                                 for (Map.Entry<?, ?> configEntry : configMap.entrySet()) {
                                     switch (configEntry.getKey().toString()) {
                                         case MLModelConfig.MODEL_TYPE_FIELD:
@@ -162,7 +162,7 @@ public class ModelHelper {
                                 builder.modelConfig(configBuilder.build());
                             } else {
                                 TextEmbeddingModelConfig.TextEmbeddingModelConfigBuilder configBuilder = TextEmbeddingModelConfig.builder();
-                                Map<?, ?> configMap = (Map<?, ?>) entry.getValue();
+                                Map<String, ?> configMap = (Map<String, ?>) entry.getValue();
                                 for (Map.Entry<?, ?> configEntry : configMap.entrySet()) {
                                     switch (configEntry.getKey().toString()) {
                                         case MLModelConfig.MODEL_TYPE_FIELD:
