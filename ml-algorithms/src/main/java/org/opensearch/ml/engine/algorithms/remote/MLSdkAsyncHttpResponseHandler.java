@@ -8,6 +8,7 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.opensearch.ml.common.CommonValue.REMOTE_SERVICE_ERROR;
+import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.CANCEL_BATCH_PREDICT;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processOutput;
 
 import java.nio.ByteBuffer;
@@ -169,13 +170,14 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
     }
 
     private void response() {
+        String body = responseBody.toString();
+
         if (exceptionHolder.get() != null) {
             actionListener.onFailure(exceptionHolder.get());
             return;
         }
 
-        String body = responseBody.toString();
-        if (Strings.isBlank(body)) {
+        if (Strings.isBlank(body) && !action.equals(CANCEL_BATCH_PREDICT.toString())) {
             log.error("Remote model response body is empty!");
             actionListener.onFailure(new OpenSearchStatusException("No response from model", RestStatus.BAD_REQUEST));
             return;
@@ -184,6 +186,13 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         if (statusCode < HttpStatus.SC_OK || statusCode > HttpStatus.SC_MULTIPLE_CHOICES) {
             log.error("Remote server returned error code: {}", statusCode);
             actionListener.onFailure(new OpenSearchStatusException(REMOTE_SERVICE_ERROR + body, RestStatus.fromCode(statusCode)));
+            return;
+        }
+
+        if (action.equals(CANCEL_BATCH_PREDICT.toString())) {
+            ModelTensors tensors = ModelTensors.builder().statusCode(statusCode).build();
+            tensors.setStatusCode(statusCode);
+            actionListener.onResponse(new Tuple<>(executionContext.getSequence(), tensors));
             return;
         }
 

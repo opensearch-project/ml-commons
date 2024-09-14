@@ -5,27 +5,10 @@
 
 package org.opensearch.ml.common;
 
-import lombok.Builder;
-import lombok.Getter;
-import lombok.Setter;
-import org.opensearch.core.common.io.stream.StreamInput;
-import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.commons.authuser.User;
-import org.opensearch.core.xcontent.ToXContent;
-import org.opensearch.core.xcontent.ToXContentObject;
-import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.connector.Connector;
-import org.opensearch.ml.common.model.Guardrails;
-import org.opensearch.ml.common.model.MLDeploySetting;
-import org.opensearch.ml.common.model.MLModelConfig;
-import org.opensearch.ml.common.model.MLModelFormat;
-import org.opensearch.ml.common.model.MLModelState;
-import org.opensearch.ml.common.model.QuestionAnsweringModelConfig;
-import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
-import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
-import org.opensearch.ml.common.model.ImageEmbeddingModelConfig;
-import org.opensearch.ml.common.controller.MLRateLimiter;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.USER;
+import static org.opensearch.ml.common.connector.Connector.createConnector;
+import static org.opensearch.ml.common.utils.StringUtils.filteredParameterMap;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -37,10 +20,28 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.USER;
-import static org.opensearch.ml.common.connector.Connector.createConnector;
-import static org.opensearch.ml.common.utils.StringUtils.filteredParameterMap;
+import org.opensearch.commons.authuser.User;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.ToXContentObject;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.controller.MLRateLimiter;
+import org.opensearch.ml.common.model.Guardrails;
+import org.opensearch.ml.common.model.ImageEmbeddingModelConfig;
+import org.opensearch.ml.common.model.MLDeploySetting;
+import org.opensearch.ml.common.model.MLModelConfig;
+import org.opensearch.ml.common.model.MLModelFormat;
+import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
+import org.opensearch.ml.common.model.QuestionAnsweringModelConfig;
+import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
+
+import lombok.Builder;
+import lombok.Getter;
+import lombok.Setter;
 
 @Getter
 public class MLModel implements ToXContentObject {
@@ -174,39 +175,42 @@ public class MLModel implements ToXContentObject {
     private Map<String, String> modelInterface;
 
     @Builder(toBuilder = true)
-    public MLModel(String name,
-            String modelGroupId,
-            FunctionName algorithm,
-            String version,
-            String content,
-            User user,
-            String description,
-            MLModelFormat modelFormat,
-            MLModelState modelState,
-            Long modelContentSizeInBytes,
-            String modelContentHash,
-            Boolean isEnabled,
-            Boolean isControllerEnabled,
-            MLRateLimiter rateLimiter,
-            MLModelConfig modelConfig,
-            MLDeploySetting deploySetting,
-            Instant createdTime,
-            Instant lastUpdateTime,
-            Instant lastRegisteredTime,
-            Instant lastDeployedTime,
-            Instant lastUndeployedTime,
-            Integer autoRedeployRetryTimes,
-            String modelId, Integer chunkNumber,
-            Integer totalChunks,
-            Integer planningWorkerNodeCount,
-            Integer currentWorkerNodeCount,
-            String[] planningWorkerNodes,
-            boolean deployToAllNodes,
-            Boolean isHidden,
-            Connector connector,
-            String connectorId,
-            Guardrails guardrails,
-            Map<String, String> modelInterface) {
+    public MLModel(
+        String name,
+        String modelGroupId,
+        FunctionName algorithm,
+        String version,
+        String content,
+        User user,
+        String description,
+        MLModelFormat modelFormat,
+        MLModelState modelState,
+        Long modelContentSizeInBytes,
+        String modelContentHash,
+        Boolean isEnabled,
+        Boolean isControllerEnabled,
+        MLRateLimiter rateLimiter,
+        MLModelConfig modelConfig,
+        MLDeploySetting deploySetting,
+        Instant createdTime,
+        Instant lastUpdateTime,
+        Instant lastRegisteredTime,
+        Instant lastDeployedTime,
+        Instant lastUndeployedTime,
+        Integer autoRedeployRetryTimes,
+        String modelId,
+        Integer chunkNumber,
+        Integer totalChunks,
+        Integer planningWorkerNodeCount,
+        Integer currentWorkerNodeCount,
+        String[] planningWorkerNodes,
+        boolean deployToAllNodes,
+        Boolean isHidden,
+        Connector connector,
+        String connectorId,
+        Guardrails guardrails,
+        Map<String, String> modelInterface
+    ) {
         this.name = name;
         this.modelGroupId = modelGroupId;
         this.algorithm = algorithm;
@@ -270,7 +274,7 @@ public class MLModel implements ToXContentObject {
                     modelConfig = new QuestionAnsweringModelConfig(input);
                 } else if (algorithm.equals(FunctionName.IMAGE_EMBEDDING)) {
                     modelConfig = new ImageEmbeddingModelConfig(input);
-                }else {
+                } else {
                     modelConfig = new TextEmbeddingModelConfig(input);
                 }
             }
@@ -683,42 +687,43 @@ public class MLModel implements ToXContentObject {
                     break;
             }
         }
-        return MLModel.builder()
-                .name(name)
-                .modelGroupId(modelGroupId)
-                .algorithm(algorithm)
-                .version(version == null ? oldVersion + "" : version)
-                .content(content == null ? oldContent : content)
-                .user(user)
-                .description(description)
-                .modelFormat(modelFormat)
-                .modelState(modelState)
-                .modelContentSizeInBytes(modelContentSizeInBytes)
-                .modelContentHash(modelContentHash)
-                .modelConfig(modelConfig)
-                .deploySetting(deploySetting)
-                .isEnabled(isEnabled)
-                .isControllerEnabled(isControllerEnabled)
-                .rateLimiter(rateLimiter)
-                .createdTime(createdTime)
-                .lastUpdateTime(lastUpdateTime)
-                .lastRegisteredTime(lastRegisteredTime == null ? lastUploadedTime : lastRegisteredTime)
-                .lastDeployedTime(lastDeployedTime == null ? lastLoadedTime : lastDeployedTime)
-                .lastUndeployedTime(lastUndeployedTime == null ? lastUnloadedTime : lastUndeployedTime)
-                .modelId(modelId)
-                .autoRedeployRetryTimes(autoRedeployRetryTimes)
-                .chunkNumber(chunkNumber)
-                .totalChunks(totalChunks)
-                .planningWorkerNodeCount(planningWorkerNodeCount)
-                .currentWorkerNodeCount(currentWorkerNodeCount)
-                .planningWorkerNodes(planningWorkerNodes.toArray(new String[0]))
-                .deployToAllNodes(deployToAllNodes)
-                .isHidden(isHidden)
-                .connector(connector)
-                .connectorId(connectorId)
-                .guardrails(guardrails)
-                .modelInterface(modelInterface)
-                .build();
+        return MLModel
+            .builder()
+            .name(name)
+            .modelGroupId(modelGroupId)
+            .algorithm(algorithm)
+            .version(version == null ? oldVersion + "" : version)
+            .content(content == null ? oldContent : content)
+            .user(user)
+            .description(description)
+            .modelFormat(modelFormat)
+            .modelState(modelState)
+            .modelContentSizeInBytes(modelContentSizeInBytes)
+            .modelContentHash(modelContentHash)
+            .modelConfig(modelConfig)
+            .deploySetting(deploySetting)
+            .isEnabled(isEnabled)
+            .isControllerEnabled(isControllerEnabled)
+            .rateLimiter(rateLimiter)
+            .createdTime(createdTime)
+            .lastUpdateTime(lastUpdateTime)
+            .lastRegisteredTime(lastRegisteredTime == null ? lastUploadedTime : lastRegisteredTime)
+            .lastDeployedTime(lastDeployedTime == null ? lastLoadedTime : lastDeployedTime)
+            .lastUndeployedTime(lastUndeployedTime == null ? lastUnloadedTime : lastUndeployedTime)
+            .modelId(modelId)
+            .autoRedeployRetryTimes(autoRedeployRetryTimes)
+            .chunkNumber(chunkNumber)
+            .totalChunks(totalChunks)
+            .planningWorkerNodeCount(planningWorkerNodeCount)
+            .currentWorkerNodeCount(currentWorkerNodeCount)
+            .planningWorkerNodes(planningWorkerNodes.toArray(new String[0]))
+            .deployToAllNodes(deployToAllNodes)
+            .isHidden(isHidden)
+            .connector(connector)
+            .connectorId(connectorId)
+            .guardrails(guardrails)
+            .modelInterface(modelInterface)
+            .build();
     }
 
     public static MLModel fromStream(StreamInput in) throws IOException {

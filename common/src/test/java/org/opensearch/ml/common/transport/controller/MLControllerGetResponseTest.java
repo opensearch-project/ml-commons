@@ -10,7 +10,6 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -37,18 +36,12 @@ public class MLControllerGetResponseTest {
 
     @Before
     public void setUp() {
-        MLRateLimiter rateLimiter = MLRateLimiter.builder()
-                .limit("1")
-                .unit(TimeUnit.MILLISECONDS)
-                .build();
-        controller = MLController.builder()
-                .modelId("testModelId")
-                .userRateLimiter(new HashMap<>() {
-                    {
-                        put("testUser", rateLimiter);
-                    }
-                })
-                .build();
+        MLRateLimiter rateLimiter = MLRateLimiter.builder().limit("1").unit(TimeUnit.MILLISECONDS).build();
+        controller = MLController.builder().modelId("testModelId").userRateLimiter(new HashMap<>() {
+            {
+                put("testUser", rateLimiter);
+            }
+        }).build();
         response = MLControllerGetResponse.builder().controller(controller).build();
     }
 
@@ -56,14 +49,17 @@ public class MLControllerGetResponseTest {
     public void writeToSuccess() throws IOException {
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         response.writeTo(bytesStreamOutput);
-        MLControllerGetResponse parsedResponse = new MLControllerGetResponse(
-                bytesStreamOutput.bytes().streamInput());
+        MLControllerGetResponse parsedResponse = new MLControllerGetResponse(bytesStreamOutput.bytes().streamInput());
         assertNotEquals(response.getController(), parsedResponse.getController());
         assertEquals(response.getController().getModelId(), parsedResponse.getController().getModelId());
-        assertEquals(response.getController().getUserRateLimiter().get("testUser").getLimit(),
-                parsedResponse.getController().getUserRateLimiter().get("testUser").getLimit());
-        assertEquals(response.getController().getUserRateLimiter().get("testUser").getUnit(),
-                parsedResponse.getController().getUserRateLimiter().get("testUser").getUnit());
+        assertEquals(
+            response.getController().getUserRateLimiter().get("testUser").getLimit(),
+            parsedResponse.getController().getUserRateLimiter().get("testUser").getLimit()
+        );
+        assertEquals(
+            response.getController().getUserRateLimiter().get("testUser").getUnit(),
+            parsedResponse.getController().getUserRateLimiter().get("testUser").getUnit()
+        );
     }
 
     @Test
@@ -73,14 +69,14 @@ public class MLControllerGetResponseTest {
         assertNotNull(builder);
         String jsonStr = builder.toString();
         assertEquals(
-                "{\"model_id\":\"testModelId\",\"user_rate_limiter\":{\"testUser\":{\"limit\":\"1\",\"unit\":\"MILLISECONDS\"}}}",
-                jsonStr);
+            "{\"model_id\":\"testModelId\",\"user_rate_limiter\":{\"testUser\":{\"limit\":\"1\",\"unit\":\"MILLISECONDS\"}}}",
+            jsonStr
+        );
     }
 
     @Test
     public void fromActionResponseWithMLControllerGetResponseSuccess() {
-        MLControllerGetResponse responseFromActionResponse = MLControllerGetResponse
-                .fromActionResponse(response);
+        MLControllerGetResponse responseFromActionResponse = MLControllerGetResponse.fromActionResponse(response);
         assertSame(response, responseFromActionResponse);
         assertEquals(response.getController(), responseFromActionResponse.getController());
     }
@@ -93,8 +89,7 @@ public class MLControllerGetResponseTest {
                 response.writeTo(out);
             }
         };
-        MLControllerGetResponse responseFromActionResponse = MLControllerGetResponse
-                .fromActionResponse(actionResponse);
+        MLControllerGetResponse responseFromActionResponse = MLControllerGetResponse.fromActionResponse(actionResponse);
         assertNotSame(response, responseFromActionResponse);
         assertNotEquals(response.getController(), responseFromActionResponse.getController());
     }

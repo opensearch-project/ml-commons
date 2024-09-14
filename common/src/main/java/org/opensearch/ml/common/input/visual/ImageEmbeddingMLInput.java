@@ -4,6 +4,12 @@
  */
 package org.opensearch.ml.common.input.visual;
 
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -13,18 +19,11 @@ import org.opensearch.ml.common.dataset.ImageEmbeddingInputDataSet;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.input.MLInput;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-
-
 /**
  * MLInput which supports an image embedding algorithm
  * Inputs are images. Outputs are image embeddings
  */
-@org.opensearch.ml.common.annotation.MLInput(functionNames = {FunctionName.IMAGE_EMBEDDING})
+@org.opensearch.ml.common.annotation.MLInput(functionNames = { FunctionName.IMAGE_EMBEDDING })
 public class ImageEmbeddingMLInput extends MLInput {
 
     public ImageEmbeddingMLInput(FunctionName algorithm, MLInputDataset dataset) {
@@ -44,10 +43,10 @@ public class ImageEmbeddingMLInput extends MLInput {
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
         builder.field(ALGORITHM_FIELD, algorithm.name());
-        if(parameters != null) {
+        if (parameters != null) {
             builder.field(ML_PARAMETERS_FIELD, parameters);
         }
-        if(inputDataset != null) {
+        if (inputDataset != null) {
             ImageEmbeddingInputDataSet ds = (ImageEmbeddingInputDataSet) this.inputDataset;
             List<String> base64Image = ds.getBase64Images();
             builder.field(IMAGE_FIELD, base64Image);
@@ -82,7 +81,7 @@ public class ImageEmbeddingMLInput extends MLInput {
                     break;
             }
         }
-        if(base64Images.isEmpty()) {
+        if (base64Images.isEmpty()) {
             throw new IllegalArgumentException("Image in base64 is not provided");
         }
 

@@ -5,8 +5,13 @@
 
 package org.opensearch.ml.common.transport.task;
 
-import lombok.Builder;
-import lombok.Getter;
+import static org.opensearch.action.ValidateActions.addValidationError;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
@@ -14,12 +19,8 @@ import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.UncheckedIOException;
-
-import static org.opensearch.action.ValidateActions.addValidationError;
+import lombok.Builder;
+import lombok.Getter;
 
 public class MLTaskDeleteRequest extends ActionRequest {
     @Getter
@@ -54,11 +55,10 @@ public class MLTaskDeleteRequest extends ActionRequest {
 
     public static MLTaskDeleteRequest fromActionRequest(ActionRequest actionRequest) {
         if (actionRequest instanceof MLTaskDeleteRequest) {
-            return (MLTaskDeleteRequest)actionRequest;
+            return (MLTaskDeleteRequest) actionRequest;
         }
 
-        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
-             OutputStreamStreamOutput osso = new OutputStreamStreamOutput(baos)) {
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream(); OutputStreamStreamOutput osso = new OutputStreamStreamOutput(baos)) {
             actionRequest.writeTo(osso);
             try (StreamInput input = new InputStreamStreamInput(new ByteArrayInputStream(baos.toByteArray()))) {
                 return new MLTaskDeleteRequest(input);

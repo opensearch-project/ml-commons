@@ -17,6 +17,8 @@
  */
 package org.opensearch.ml.common.input.nlp;
 
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -30,15 +32,12 @@ import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextSimilarityInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-
-
 /**
  * MLInput which supports a text similarity algorithm
  * Inputs are a query and a list of texts. Outputs are real numbers
  * Use this for Cross Encoder models
  */
-@org.opensearch.ml.common.annotation.MLInput(functionNames = {FunctionName.TEXT_SIMILARITY})
+@org.opensearch.ml.common.annotation.MLInput(functionNames = { FunctionName.TEXT_SIMILARITY })
 public class TextSimilarityMLInput extends MLInput {
 
     public TextSimilarityMLInput(FunctionName algorithm, MLInputDataset dataset) {
@@ -58,17 +57,17 @@ public class TextSimilarityMLInput extends MLInput {
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
         builder.field(ALGORITHM_FIELD, algorithm.name());
-        if(parameters != null) {
+        if (parameters != null) {
             builder.field(ML_PARAMETERS_FIELD, parameters);
         }
-        if(inputDataset != null) {
+        if (inputDataset != null) {
             TextSimilarityInputDataSet ds = (TextSimilarityInputDataSet) this.inputDataset;
             List<String> docs = ds.getTextDocs();
             String queryText = ds.getQueryText();
             builder.field(QUERY_TEXT_FIELD, queryText);
             if (docs != null && !docs.isEmpty()) {
                 builder.startArray(TEXT_DOCS_FIELD);
-                for(String d : docs) {
+                for (String d : docs) {
                     builder.value(d);
                 }
                 builder.endArray();
@@ -97,18 +96,18 @@ public class TextSimilarityMLInput extends MLInput {
                         docs.add(context);
                     }
                     break;
-                case QUERY_TEXT_FIELD: 
+                case QUERY_TEXT_FIELD:
                     queryText = parser.text();
                     break;
                 default:
                     parser.skipChildren();
                     break;
             }
-        }        
-        if(docs.isEmpty()) {
+        }
+        if (docs.isEmpty()) {
             throw new IllegalArgumentException("No text documents were provided");
         }
-        if(queryText == null) {
+        if (queryText == null) {
             throw new IllegalArgumentException("No query text was provided");
         }
         inputDataset = new TextSimilarityInputDataSet(queryText, docs);

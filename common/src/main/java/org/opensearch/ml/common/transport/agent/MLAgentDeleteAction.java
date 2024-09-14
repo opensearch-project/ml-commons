@@ -12,5 +12,7 @@ public class MLAgentDeleteAction extends ActionType<DeleteResponse> {
     public static final MLAgentDeleteAction INSTANCE = new MLAgentDeleteAction();
     public static final String NAME = "cluster:admin/opensearch/ml/agents/delete";
 
-    private MLAgentDeleteAction() { super(NAME, DeleteResponse::new);}
+    private MLAgentDeleteAction() {
+        super(NAME, DeleteResponse::new);
+    }
 }

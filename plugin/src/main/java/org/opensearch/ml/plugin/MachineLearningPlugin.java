@@ -48,6 +48,7 @@ import org.opensearch.ml.action.agents.DeleteAgentTransportAction;
 import org.opensearch.ml.action.agents.GetAgentTransportAction;
 import org.opensearch.ml.action.agents.TransportRegisterAgentAction;
 import org.opensearch.ml.action.agents.TransportSearchAgentAction;
+import org.opensearch.ml.action.batch.TransportBatchIngestionAction;
 import org.opensearch.ml.action.config.GetConfigTransportAction;
 import org.opensearch.ml.action.connector.DeleteConnectorTransportAction;
 import org.opensearch.ml.action.connector.ExecuteConnectorTransportAction;
@@ -82,6 +83,7 @@ import org.opensearch.ml.action.register.TransportRegisterModelAction;
 import org.opensearch.ml.action.stats.MLStatsNodesAction;
 import org.opensearch.ml.action.stats.MLStatsNodesTransportAction;
 import org.opensearch.ml.action.syncup.TransportSyncUpOnNodeAction;
+import org.opensearch.ml.action.tasks.CancelBatchJobTransportAction;
 import org.opensearch.ml.action.tasks.DeleteTaskTransportAction;
 import org.opensearch.ml.action.tasks.GetTaskTransportAction;
 import org.opensearch.ml.action.tasks.SearchTaskTransportAction;
@@ -120,6 +122,7 @@ import org.opensearch.ml.common.transport.agent.MLAgentDeleteAction;
 import org.opensearch.ml.common.transport.agent.MLAgentGetAction;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentAction;
 import org.opensearch.ml.common.transport.agent.MLSearchAgentAction;
+import org.opensearch.ml.common.transport.batch.MLBatchIngestionAction;
 import org.opensearch.ml.common.transport.config.MLConfigGetAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetAction;
@@ -149,6 +152,7 @@ import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
+import org.opensearch.ml.common.transport.task.MLCancelBatchJobAction;
 import org.opensearch.ml.common.transport.task.MLTaskDeleteAction;
 import org.opensearch.ml.common.transport.task.MLTaskGetAction;
 import org.opensearch.ml.common.transport.task.MLTaskSearchAction;
@@ -216,6 +220,8 @@ import org.opensearch.ml.processor.MLInferenceIngestProcessor;
 import org.opensearch.ml.processor.MLInferenceSearchRequestProcessor;
 import org.opensearch.ml.processor.MLInferenceSearchResponseProcessor;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
+import org.opensearch.ml.rest.RestMLBatchIngestAction;
+import org.opensearch.ml.rest.RestMLCancelBatchJobAction;
 import org.opensearch.ml.rest.RestMLCreateConnectorAction;
 import org.opensearch.ml.rest.RestMLCreateControllerAction;
 import org.opensearch.ml.rest.RestMLDeleteAgentAction;
@@ -327,6 +333,7 @@ public class MachineLearningPlugin extends Plugin
     public static final String TRAIN_THREAD_POOL = "opensearch_ml_train";
     public static final String PREDICT_THREAD_POOL = "opensearch_ml_predict";
     public static final String REMOTE_PREDICT_THREAD_POOL = "opensearch_ml_predict_remote";
+    public static final String INGEST_THREAD_POOL = "opensearch_ml_ingest";
     public static final String REGISTER_THREAD_POOL = "opensearch_ml_register";
     public static final String DEPLOY_THREAD_POOL = "opensearch_ml_deploy";
     public static final String ML_BASE_URI = "/_plugins/_ml";
@@ -440,7 +447,9 @@ public class MachineLearningPlugin extends Plugin
                 new ActionHandler<>(GetTracesAction.INSTANCE, GetTracesTransportAction.class),
                 new ActionHandler<>(MLListToolsAction.INSTANCE, ListToolsTransportAction.class),
                 new ActionHandler<>(MLGetToolAction.INSTANCE, GetToolTransportAction.class),
-                new ActionHandler<>(MLConfigGetAction.INSTANCE, GetConfigTransportAction.class)
+                new ActionHandler<>(MLConfigGetAction.INSTANCE, GetConfigTransportAction.class),
+                new ActionHandler<>(MLBatchIngestionAction.INSTANCE, TransportBatchIngestionAction.class),
+                new ActionHandler<>(MLCancelBatchJobAction.INSTANCE, CancelBatchJobTransportAction.class)
             );
     }
 
@@ -759,6 +768,8 @@ public class MachineLearningPlugin extends Plugin
         RestMLListToolsAction restMLListToolsAction = new RestMLListToolsAction(toolFactories);
         RestMLGetToolAction restMLGetToolAction = new RestMLGetToolAction(toolFactories);
         RestMLGetConfigAction restMLGetConfigAction = new RestMLGetConfigAction();
+        RestMLBatchIngestAction restMLBatchIngestAction = new RestMLBatchIngestAction();
+        RestMLCancelBatchJobAction restMLCancelBatchJobAction = new RestMLCancelBatchJobAction();
         return ImmutableList
             .of(
                 restMLStatsAction,
@@ -811,7 +822,9 @@ public class MachineLearningPlugin extends Plugin
                 restMLSearchAgentAction,
                 restMLListToolsAction,
                 restMLGetToolAction,
-                restMLGetConfigAction
+                restMLGetConfigAction,
+                restMLBatchIngestAction,
+                restMLCancelBatchJobAction
             );
     }
 
@@ -873,6 +886,14 @@ public class MachineLearningPlugin extends Plugin
             ML_THREAD_POOL_PREFIX + REMOTE_PREDICT_THREAD_POOL,
             false
         );
+        FixedExecutorBuilder batchIngestThreadPool = new FixedExecutorBuilder(
+            settings,
+            INGEST_THREAD_POOL,
+            OpenSearchExecutors.allocatedProcessors(settings) * 4,
+            30,
+            ML_THREAD_POOL_PREFIX + INGEST_THREAD_POOL,
+            false
+        );
 
         return ImmutableList
             .of(
@@ -882,7 +903,8 @@ public class MachineLearningPlugin extends Plugin
                 executeThreadPool,
                 trainThreadPool,
                 predictThreadPool,
-                remotePredictThreadPool
+                remotePredictThreadPool,
+                batchIngestThreadPool
             );
     }
 

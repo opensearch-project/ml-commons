@@ -929,7 +929,7 @@ public class MLModelManager {
         // This checks if model group is created when registering the version. If yes,
         // model group is deleted since the version registration
         // had failed. Else model group latest version is decremented by 1
-        if (doesVersionCreateModelGroup) {
+        if (Boolean.TRUE.equals(doesVersionCreateModelGroup)) {
             DeleteRequest deleteModelGroupRequest = new DeleteRequest();
             deleteModelGroupRequest.index(ML_MODEL_GROUP_INDEX).id(modelGroupID).setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
             client.delete(deleteModelGroupRequest);

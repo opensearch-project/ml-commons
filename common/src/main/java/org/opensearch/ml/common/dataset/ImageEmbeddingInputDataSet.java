@@ -4,16 +4,17 @@
  */
 package org.opensearch.ml.common.dataset;
 
-import lombok.AccessLevel;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.experimental.FieldDefaults;
+import java.io.IOException;
+import java.util.List;
+
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.annotation.InputDataSet;
 
-import java.io.IOException;
-import java.util.List;
+import lombok.AccessLevel;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.experimental.FieldDefaults;
 
 @Getter
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
@@ -25,7 +26,7 @@ public class ImageEmbeddingInputDataSet extends MLInputDataset {
     @Builder(toBuilder = true)
     public ImageEmbeddingInputDataSet(List<String> base64Images) {
         super(MLInputDataType.IMAGE_EMBEDDING);
-        if(base64Images == null) {
+        if (base64Images == null) {
             throw new IllegalArgumentException("Image in base64 is not provided");
         }
         this.base64Images = base64Images;

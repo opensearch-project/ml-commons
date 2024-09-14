@@ -7,12 +7,21 @@ package org.opensearch.ml.processor;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.INPUT_MAP;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.MAX_PREDICTION_TASKS;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.MODEL_CONFIG;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.MODEL_ID;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.OUTPUT_MAP;
-import static org.opensearch.ml.processor.MLInferenceSearchResponseProcessor.*;
+import static org.opensearch.ml.processor.MLInferenceSearchResponseProcessor.DEFAULT_MAX_PREDICTION_TASKS;
+import static org.opensearch.ml.processor.MLInferenceSearchResponseProcessor.DEFAULT_OUTPUT_FIELD_NAME;
+import static org.opensearch.ml.processor.MLInferenceSearchResponseProcessor.FULL_RESPONSE_PATH;
+import static org.opensearch.ml.processor.MLInferenceSearchResponseProcessor.FUNCTION_NAME;
+import static org.opensearch.ml.processor.MLInferenceSearchResponseProcessor.MODEL_INPUT;
+import static org.opensearch.ml.processor.MLInferenceSearchResponseProcessor.TYPE;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -20,23 +29,28 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchParseException;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.SearchResponseSections;
 import org.opensearch.client.Client;
 import org.opensearch.common.document.DocumentField;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.unit.TimeValue;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesArray;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
+import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -52,10 +66,8 @@ import org.opensearch.test.AbstractBuilderTestCase;
 public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTestCase {
     @Mock
     private Client client;
-
     @Mock
     private PipelineProcessingContext responseContext;
-
     static public final NamedXContentRegistry TEST_XCONTENT_REGISTRY_FOR_QUERY = new NamedXContentRegistry(
         new SearchModule(Settings.EMPTY, List.of()).getNamedXContents()
     );
@@ -155,11 +167,349 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
     }
 
     /**
-     * Tests create processor with many_to_one is false
-     *
+     * Tests create processor with one_to_one is true
+     * with custom prompt
+     * with one to one prediction, 5 documents in hits are calling 5 prediction tasks
      * @throws Exception if an error occurs during the test
      */
-    public void testProcessResponseOneToOneException() throws Exception {
+    public void testProcessResponseOneToOneWithCustomPrompt() throws Exception {
+
+        String newDocumentField = "context";
+        String modelOutputField = "response";
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+        Map<String, String> modelConfig = new HashMap<>();
+        modelConfig
+            .put(
+                "prompt",
+                "\\n\\nHuman: You are a professional data analyst. You will always answer question based on the given context first. If the answer is not directly shown in the context, you will analyze the data and find the answer. If you don't know the answer, just say I don't know. Context: ${input_map.context}. \\n\\n Human: please summarize the documents \\n\\n Assistant:"
+            );
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            null,
+            outputMap,
+            modelConfig,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            false,
+            false,
+            "{ \"prompt\": \"${model_config.prompt}\"}",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            true
+        );
+
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(5, true, fieldName);
+
+        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "there is 1 value")).build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                assertEquals(newSearchResponse.getHits().getHits().length, 5);
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[0].getSourceAsMap().get(newDocumentField).toString(),
+                    "there is 1 value"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[1].getSourceAsMap().get(newDocumentField).toString(),
+                    "there is 1 value"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[2].getSourceAsMap().get(newDocumentField).toString(),
+                    "there is 1 value"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[3].getSourceAsMap().get(newDocumentField).toString(),
+                    "there is 1 value"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[4].getSourceAsMap().get(newDocumentField).toString(),
+                    "there is 1 value"
+                );
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException(e);
+            }
+
+        };
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+        verify(client, times(5)).execute(any(), any(), any());
+    }
+
+    /**
+     * Tests create processor with one_to_one is false
+     * with custom prompt
+     * with many to one prediction, 5 documents in hits are calling 1 prediction tasks
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseManyToOneWithCustomPrompt() throws Exception {
+
+        String documentField = "text";
+        String modelInputField = "context";
+        List<Map<String, String>> inputMap = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        input.put(modelInputField, documentField);
+        inputMap.add(input);
+
+        String newDocumentField = "llm_response";
+        String modelOutputField = "response";
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+        Map<String, String> modelConfig = new HashMap<>();
+        modelConfig
+            .put(
+                "prompt",
+                "\\n\\nHuman: You are a professional data analyst. You will always answer question based on the given context first. If the answer is not directly shown in the context, you will analyze the data and find the answer. If you don't know the answer, just say I don't know. Context: ${parameters.context}. \\n\\n Human: please summarize the documents \\n\\n Assistant:"
+            );
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            inputMap,
+            outputMap,
+            modelConfig,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            false
+        );
+
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(5, true, fieldName);
+
+        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "there are 5 values")).build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                assertEquals(newSearchResponse.getHits().getHits().length, 5);
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[0].getSourceAsMap().get(newDocumentField).toString(),
+                    "there are 5 values"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[1].getSourceAsMap().get(newDocumentField).toString(),
+                    "there are 5 values"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[2].getSourceAsMap().get(newDocumentField).toString(),
+                    "there are 5 values"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[3].getSourceAsMap().get(newDocumentField).toString(),
+                    "there are 5 values"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[4].getSourceAsMap().get(newDocumentField).toString(),
+                    "there are 5 values"
+                );
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException(e);
+            }
+
+        };
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+        verify(client, times(1)).execute(any(), any(), any());
+    }
+
+    /**
+     * Tests create processor with one_to_one is false
+     * with custom prompt
+     * with many to one prediction, 5 documents in hits are calling 1 prediction tasks
+     * with full response path false and no output mapping is provided
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseManyToOneWithCustomPromptFullResponsePathFalse() throws Exception {
+
+        String documentField = "text";
+        String modelInputField = "context";
+        List<Map<String, String>> inputMap = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        input.put(modelInputField, documentField);
+        inputMap.add(input);
+
+        Map<String, String> modelConfig = new HashMap<>();
+        modelConfig
+            .put(
+                "prompt",
+                "\\n\\nHuman: You are a professional data analyst. You will always answer question based on the given context first. If the answer is not directly shown in the context, you will analyze the data and find the answer. If you don't know the answer, just say I don't know. Context: ${parameters.context}. \\n\\n Human: please summarize the documents \\n\\n Assistant:"
+            );
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            inputMap,
+            null,
+            modelConfig,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            false
+        );
+
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(5, true, fieldName);
+        Map<String, Object> predictionResult = ImmutableMap.of("response", "here is a summary of the documents");
+
+        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(predictionResult).build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                assertEquals(newSearchResponse.getHits().getHits().length, 5);
+                assertEquals(newSearchResponse.getHits().getHits()[0].getSourceAsMap().get("inference_results"), predictionResult);
+                assertEquals(newSearchResponse.getHits().getHits()[1].getSourceAsMap().get("inference_results"), predictionResult);
+                assertEquals(newSearchResponse.getHits().getHits()[2].getSourceAsMap().get("inference_results"), predictionResult);
+                assertEquals(newSearchResponse.getHits().getHits()[3].getSourceAsMap().get("inference_results"), predictionResult);
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException(e);
+            }
+
+        };
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+        verify(client, times(1)).execute(any(), any(), any());
+    }
+
+    /**
+     * Tests create processor with one_to_one is false
+     * with custom prompt
+     * with many to one prediction, 5 documents in hits are calling 1 prediction tasks
+     * with full response path true and no output mapping is provided
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseManyToOneWithCustomPromptFullResponsePathTrue() throws Exception {
+
+        String documentField = "text";
+        String modelInputField = "context";
+        List<Map<String, String>> inputMap = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        input.put(modelInputField, documentField);
+        inputMap.add(input);
+
+        Map<String, String> modelConfig = new HashMap<>();
+        modelConfig
+            .put(
+                "prompt",
+                "\\n\\nHuman: You are a professional data analyst. You will always answer question based on the given context first. If the answer is not directly shown in the context, you will analyze the data and find the answer. If you don't know the answer, just say I don't know. Context: ${parameters.context}. \\n\\n Human: please summarize the documents \\n\\n Assistant:"
+            );
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            inputMap,
+            null,
+            modelConfig,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            true,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            false
+        );
+
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(5, true, fieldName);
+        Map<String, Object> predictionResult = ImmutableMap.of("response", "here is a summary of the documents");
+        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(predictionResult).build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+        Map<String, Object> fullPredictionResult = generateInferenceResult("here is a summary of the documents");
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                assertEquals(newSearchResponse.getHits().getHits().length, 5);
+                assertEquals(newSearchResponse.getHits().getHits()[0].getSourceAsMap().get("inference_results"), fullPredictionResult);
+                assertEquals(newSearchResponse.getHits().getHits()[1].getSourceAsMap().get("inference_results"), fullPredictionResult);
+                assertEquals(newSearchResponse.getHits().getHits()[2].getSourceAsMap().get("inference_results"), fullPredictionResult);
+                assertEquals(newSearchResponse.getHits().getHits()[3].getSourceAsMap().get("inference_results"), fullPredictionResult);
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException(e);
+            }
+
+        };
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+        verify(client, times(1)).execute(any(), any(), any());
+    }
+
+    /**
+     * Tests create processor with one_to_one is true
+     * with no mapping provided
+     * with one to one prediction, 5 documents in hits are calling 5 prediction tasks
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseOneToOneWithNoMappings() throws Exception {
 
         MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
             "model1",
@@ -200,17 +550,1451 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
         ActionListener<SearchResponse> listener = new ActionListener<>() {
             @Override
             public void onResponse(SearchResponse newSearchResponse) {
+                assertEquals(newSearchResponse.getHits().getHits().length, 5);
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[0].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[1].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[2].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[3].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[4].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
+                );
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException(e);
+            }
+
+        };
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+        verify(client, times(5)).execute(any(), any(), any());
+    }
+
+    /**
+     * Tests create processor with one_to_one is true
+     * with empty mapping provided
+     * with one to one prediction, 5 documents in hits are calling 5 prediction tasks
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseOneToOneWithEmptyMappings() throws Exception {
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        List<Map<String, String>> inputMap = new ArrayList<>();
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            inputMap,
+            outputMap,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            true,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            true
+        );
+
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(5, true, fieldName);
+
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .dataAsMap(ImmutableMap.of("response", Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)))
+            .build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                assertEquals(newSearchResponse.getHits().getHits().length, 5);
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[0].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[1].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[2].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[3].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[4].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
+                );
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException(e);
+            }
+
+        };
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+        verify(client, times(5)).execute(any(), any(), any());
+    }
+
+    /**
+     * Tests create processor with one_to_one is true
+     * with output_maps
+     * with one to one prediction, 5 documents in hits are calling 5 prediction tasks
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseOneToOneWithOutputMappings() throws Exception {
+
+        String newDocumentField = "text_embedding";
+        String modelOutputField = "response";
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            null,
+            outputMap,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            true
+        );
+
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(5, true, fieldName);
+
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .dataAsMap(ImmutableMap.of("response", Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)))
+            .build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                assertEquals(newSearchResponse.getHits().getHits().length, 5);
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[0].getSourceAsMap().get(newDocumentField).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[1].getSourceAsMap().get(newDocumentField).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[2].getSourceAsMap().get(newDocumentField).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[3].getSourceAsMap().get(newDocumentField).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[4].getSourceAsMap().get(newDocumentField).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException(e);
+            }
+
+        };
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+        verify(client, times(5)).execute(any(), any(), any());
+    }
+
+    /**
+     * Tests create processor with one_to_one is true
+     * with output_maps
+     * with one to one prediction, the only one prediction task onFailure
+     * expect to run one prediction task
+     * when there is one document, the combinedResponseListener calls onFailure
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseOneToOneWithOutputMappingsCombineResponseListenerFail() throws Exception {
+
+        String newDocumentField = "text_embedding";
+        String modelOutputField = "response";
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            null,
+            outputMap,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            true
+        );
+
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(1, true, fieldName);
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onFailure(new RuntimeException("Prediction Failed"));
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
                 throw new RuntimeException("error handling not properly");
             }
 
             @Override
             public void onFailure(Exception e) {
-                assertEquals("one to one prediction is not supported yet.", e.getMessage());
+                assertEquals("Prediction Failed", e.getMessage());
             }
 
         };
         responseProcessor.processResponseAsync(request, response, responseContext, listener);
+        verify(client, times(1)).execute(any(), any(), any());
+    }
 
+    /**
+     * Tests create processor with one_to_one is true
+     * with output_maps
+     * with one to one prediction, the only one prediction task throw Exceptions
+     * expect to run one prediction task
+     * when there is one document, the combinedResponseListener calls onFailure
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseOneToOneWithOutputMappingsCombineResponseListenerException() throws Exception {
+
+        String newDocumentField = "text_embedding";
+        String modelOutputField = "response";
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            null,
+            outputMap,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            true
+        );
+
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(1, true, fieldName);
+        when(client.execute(any(), any())).thenThrow(new RuntimeException("Prediction Failed"));
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                throw new RuntimeException("error handling not properly");
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                assertEquals("Failed to process response: Prediction Failed", e.getMessage());
+            }
+
+        };
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+        verify(client, times(1)).execute(any(), any(), any());
+    }
+
+    /**
+     * Tests create processor with one_to_one is true
+     * with output_maps
+     * with one to one prediction, the only one prediction task throw Exceptions
+     * expect to run one prediction task
+     * when there is one document and ignoreFailure, should return the original response
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseOneToOneWithOutputMappingsCombineResponseListenerExceptionIgnoreFailure() throws Exception {
+
+        String newDocumentField = "text_embedding";
+        String modelOutputField = "response";
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            null,
+            outputMap,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            true,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            true
+        );
+
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(1, true, fieldName);
+        when(client.execute(any(), any())).thenThrow(new RuntimeException("Prediction Failed"));
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                assertEquals(newSearchResponse.getHits().getHits(), response.getHits().getHits());
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException("error handling not properly");
+            }
+
+        };
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+        verify(client, times(1)).execute(any(), any(), any());
+    }
+
+    /**
+     * Tests create processor with one_to_one is true
+     * with output_maps
+     * createRewriteResponseListener throw Exceptions
+     * expect to run one prediction task
+     * when there is one document and ignoreFailure, should return the original response
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseCreateRewriteResponseListenerExceptionIgnoreFailure() throws Exception {
+
+        String newDocumentField = "text_embedding";
+        String modelOutputField = "response";
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            null,
+            outputMap,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            true,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            false
+        );
+
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(1, true, fieldName);
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .dataAsMap(ImmutableMap.of("response", Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)))
+            .build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        SearchResponse mockResponse = mock(SearchResponse.class);
+        SearchHits searchHits = response.getHits();
+        RuntimeException mockException = new RuntimeException("Mock exception");
+        AtomicInteger callCount = new AtomicInteger(0);
+        ;
+        when(mockResponse.getHits()).thenAnswer(invocation -> {
+
+            int count = callCount.getAndIncrement();
+
+            if (count == 2) {
+                // throw exception when it reaches createRewriteResponseListener
+                throw mockException;
+            } else {
+                return searchHits;
+            }
+        });
+
+        when(mockResponse.getTook()).thenReturn(TimeValue.timeValueNanos(10));
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                assertNotNull(newSearchResponse);
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException("error handling not properly");
+            }
+
+        };
+        responseProcessor.processResponseAsync(request, mockResponse, responseContext, listener);
+        verify(client, times(1)).execute(any(), any(), any());
+    }
+
+    /**
+     * Tests create processor with one_to_one is true
+     * with output_maps
+     * createRewriteResponseListener throw Exceptions
+     * expect to run one prediction task
+     * createRewriteResponseListener should reach on Failure
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseCreateRewriteResponseListenerException() throws Exception {
+
+        String newDocumentField = "text_embedding";
+        String modelOutputField = "response";
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            null,
+            outputMap,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            false
+        );
+
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(1, true, fieldName);
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .dataAsMap(ImmutableMap.of("response", Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)))
+            .build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        SearchResponse mockResponse = mock(SearchResponse.class);
+        SearchHits searchHits = response.getHits();
+        RuntimeException mockException = new RuntimeException("Mock exception");
+        AtomicInteger callCount = new AtomicInteger(0);
+        ;
+        when(mockResponse.getHits()).thenAnswer(invocation -> {
+
+            int count = callCount.getAndIncrement();
+
+            if (count == 2) {
+                // throw exception when it reaches createRewriteResponseListener
+                throw mockException;
+            } else {
+                return searchHits;
+            }
+        });
+
+        when(mockResponse.getTook()).thenReturn(TimeValue.timeValueNanos(10));
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                throw new RuntimeException("error handling not properly");
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                assertNotNull(e.getMessage());
+            }
+        };
+        responseProcessor.processResponseAsync(request, mockResponse, responseContext, listener);
+        verify(client, times(1)).execute(any(), any(), any());
+    }
+
+    /**
+     * Tests create processor with one_to_one is true
+     * with output_maps
+     * test throwing OpenSearchStatusException
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseOpenSearchStatusException() throws Exception {
+
+        String newDocumentField = "text_embedding";
+        String modelOutputField = "response";
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            null,
+            outputMap,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            false
+        );
+
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(1, true, fieldName);
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .dataAsMap(ImmutableMap.of("response", Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)))
+            .build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        SearchResponse mockResponse = mock(SearchResponse.class);
+        SearchHits searchHits = response.getHits();
+        RuntimeException mockException = new OpenSearchStatusException("Mock exception", RestStatus.BAD_REQUEST);
+        AtomicInteger callCount = new AtomicInteger(0);
+        ;
+        when(mockResponse.getHits()).thenAnswer(invocation -> {
+
+            int count = callCount.getAndIncrement();
+
+            if (count == 0) {
+                // throw exception when it reaches processResponseAsync
+                throw mockException;
+            } else {
+                return searchHits;
+            }
+        });
+
+        when(mockResponse.getTook()).thenReturn(TimeValue.timeValueNanos(10));
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                throw new RuntimeException("error handling not properly");
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                assertNotNull(e.getMessage());
+            }
+        };
+        responseProcessor.processResponseAsync(request, mockResponse, responseContext, listener);
+        verify(client, times(0)).execute(any(), any(), any());
+    }
+
+    /**
+     * Tests create processor with one_to_one is true
+     * with output_maps
+     * test throwing MLResourceNotFoundException
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseMLResourceNotFoundException() throws Exception {
+
+        String newDocumentField = "text_embedding";
+        String modelOutputField = "response";
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            null,
+            outputMap,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            false
+        );
+
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(1, true, fieldName);
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .dataAsMap(ImmutableMap.of("response", Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)))
+            .build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        SearchResponse mockResponse = mock(SearchResponse.class);
+        SearchHits searchHits = response.getHits();
+        RuntimeException mockException = new MLResourceNotFoundException("Mock exception");
+        AtomicInteger callCount = new AtomicInteger(0);
+        ;
+        when(mockResponse.getHits()).thenAnswer(invocation -> {
+
+            int count = callCount.getAndIncrement();
+
+            if (count == 0) {
+                // throw exception when it reaches processResponseAsync
+                throw mockException;
+            } else {
+                return searchHits;
+            }
+        });
+
+        when(mockResponse.getTook()).thenReturn(TimeValue.timeValueNanos(10));
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                throw new RuntimeException("error handling not properly");
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                assertNotNull(e.getMessage());
+            }
+        };
+        responseProcessor.processResponseAsync(request, mockResponse, responseContext, listener);
+        verify(client, times(0)).execute(any(), any(), any());
+    }
+
+    /**
+     * Tests create processor with one_to_one is true
+     * with output_maps
+     * with one to one prediction, the only one prediction task throw exception
+     * expect to run one prediction task
+     * when there is one document, the combinedResponseListener calls onFailure
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseOneToOneWithOutputMappingsIgnoreFailure() throws Exception {
+
+        String newDocumentField = "text_embedding";
+        String modelOutputField = "response";
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            null,
+            outputMap,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            true,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            true
+        );
+
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(1, true, fieldName);
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onFailure(new RuntimeException("Prediction Failed"));
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                assertEquals(newSearchResponse.getHits().getHits(), response.getHits().getHits());
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException("error handling not properly");
+            }
+
+        };
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+        verify(client, times(1)).execute(any(), any(), any());
+    }
+
+    /**
+     * Tests create processor with one_to_one is true
+     * with output_maps
+     * with one to one prediction, the only one prediction task throw exception
+     * expect to run one prediction task
+     * when there is one document, the combinedResponseListener calls onFailure
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseOneToOneWithOutputMappingsMLTaskResponseExceptionIgnoreFailure() throws Exception {
+
+        String newDocumentField = "text_embedding";
+        String modelOutputField = "response";
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            null,
+            outputMap,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            true,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            true
+        );
+
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        MLTaskResponse mockMLTaskResponse = mock(MLTaskResponse.class);
+        when(mockMLTaskResponse.getOutput()).thenThrow(new RuntimeException("get mlTaskResponse failed."));
+        SearchResponse response = getSearchResponse(1, true, fieldName);
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(mockMLTaskResponse);
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                assertEquals(newSearchResponse.getHits().getHits(), response.getHits().getHits());
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException("error handling not properly");
+            }
+
+        };
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+        verify(client, times(1)).execute(any(), any(), any());
+    }
+
+    /**
+     * Tests create processor with one_to_one is true
+     * with output_maps
+     * with one to one prediction, when one of 5 prediction tasks failed,
+     * expect to run one prediction task and the rest 4 predictions tasks are not created
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseOneToOneWithOutputMappingsPredictException() throws Exception {
+
+        String newDocumentField = "text_embedding";
+        String modelOutputField = "response";
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            null,
+            outputMap,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            true
+        );
+
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(5, true, fieldName);
+        when(client.execute(any(), any())).thenThrow(new RuntimeException("Prediction Failed"));
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                throw new RuntimeException("error handling not properly");
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+
+                assertEquals("Failed to process response: Prediction Failed", e.getMessage());
+            }
+
+        };
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+        verify(client, times(5)).execute(any(), any(), any());
+    }
+
+    /**
+     * Tests create processor with one_to_one is true
+     * with output_maps
+     * with one to one prediction, when one of 5 prediction tasks failed,
+     * expect to run one prediction task and the rest 4 predictions tasks are not created
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseOneToOneWithOutputMappingsPredictFail() throws Exception {
+
+        String newDocumentField = "text_embedding";
+        String modelOutputField = "response";
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            null,
+            outputMap,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            true
+        );
+
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(5, true, fieldName);
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onFailure(new RuntimeException("Prediction Failed"));
+            return null;
+        }).when(client).execute(any(), any(), any());
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                throw new RuntimeException("error handling not properly");
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+
+                assertEquals("Failed to process response: Prediction Failed", e.getMessage());
+            }
+
+        };
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+        verify(client, times(1)).execute(any(), any(), any());
+    }
+
+    /**
+     * Tests create processor with one_to_one is true
+     * with output_maps
+     * with one to one prediction, prediction tasks throw exception
+     * ignore Failure is true
+     * when ignoreFailure, will run all 5 prediction tasks
+     * then return original response
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseOneToOneWithOutputMappingsPredictFailIgnoreFailure() throws Exception {
+
+        String newDocumentField = "text_embedding";
+        String modelOutputField = "response";
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            null,
+            outputMap,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            true,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            true
+        );
+
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(5, true, fieldName);
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onFailure(new RuntimeException("Prediction Failed"));
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                assertEquals(newSearchResponse.getHits().getHits(), response.getHits().getHits());
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException("error handling not properly");
+            }
+
+        };
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+        verify(client, times(5)).execute(any(), any(), any());
+    }
+
+    /**
+     * Tests create processor with one_to_one is true
+     * with two rounds predictions for every document
+     * with one to one prediction, 5 documents in hits are calling 10 prediction tasks
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseOneToOneTwoRoundsPredictions() throws Exception {
+
+        String modelInputField = "inputs";
+        String modelOutputField = "response";
+
+        // document fields for first round of prediction
+        String originalDocumentField = "text";
+        String newDocumentField = "text_embedding";
+
+        // document fields for second round of prediction
+        String originalDocumentField1 = "image";
+        String newDocumentField1 = "image_embedding";
+
+        List<Map<String, String>> inputMap = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        input.put(modelInputField, originalDocumentField);
+        inputMap.add(input);
+
+        Map<String, String> input1 = new HashMap<>();
+        input1.put(modelInputField, originalDocumentField1);
+        inputMap.add(input1);
+
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+
+        Map<String, String> output2 = new HashMap<>();
+        output2.put(newDocumentField1, modelOutputField);
+        outputMap.add(output2);
+
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            inputMap,
+            outputMap,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            true
+        );
+
+        SearchRequest request = getSearchRequest();
+
+        SearchResponse response = getSearchResponseTwoFields(5, true, originalDocumentField, originalDocumentField1);
+
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .dataAsMap(ImmutableMap.of("response", Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)))
+            .build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                assertEquals(newSearchResponse.getHits().getHits().length, 5);
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[0].getSourceAsMap().get(newDocumentField).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[1].getSourceAsMap().get(newDocumentField).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[2].getSourceAsMap().get(newDocumentField).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[3].getSourceAsMap().get(newDocumentField).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[4].getSourceAsMap().get(newDocumentField).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[0].getSourceAsMap().get(newDocumentField1).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[1].getSourceAsMap().get(newDocumentField1).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[2].getSourceAsMap().get(newDocumentField1).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[3].getSourceAsMap().get(newDocumentField1).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[4].getSourceAsMap().get(newDocumentField1).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException(e);
+            }
+
+        };
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+        verify(client, times(10)).execute(any(), any(), any());
+    }
+
+    /**
+     * Tests create processor with one_to_one is true
+     * with two rounds predictions for every document
+     * failed in first round prediction when ignoreFailure is false
+     * expect to throw exception without further processing
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseOneToOneTwoRoundsPredictionsOneException() throws Exception {
+
+        String modelInputField = "inputs";
+        String modelOutputField = "response";
+
+        // document fields for first round of prediction
+        String originalDocumentField = "text";
+        String newDocumentField = "text_embedding";
+
+        // document fields for second round of prediction
+        String originalDocumentField1 = "image";
+        String newDocumentField1 = "image_embedding";
+
+        List<Map<String, String>> inputMap = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        input.put(modelInputField, originalDocumentField);
+        inputMap.add(input);
+
+        Map<String, String> input1 = new HashMap<>();
+        input1.put(modelInputField, originalDocumentField1);
+        inputMap.add(input1);
+
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+
+        Map<String, String> output2 = new HashMap<>();
+        output2.put(newDocumentField1, modelOutputField);
+        outputMap.add(output2);
+
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            inputMap,
+            outputMap,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            true
+        );
+
+        SearchRequest request = getSearchRequest();
+        // create a search response with a typo in the document field
+        SearchResponse response = getSearchResponseTwoFields(5, true, originalDocumentField + "typo", originalDocumentField1);
+
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .dataAsMap(ImmutableMap.of("response", Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)))
+            .build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                throw new RuntimeException("error handling not properly");
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                assertEquals(
+                    "cannot find all required input fields: [text] in hit:{\n"
+                        + "  \"_id\" : \"doc 0\",\n"
+                        + "  \"_score\" : 0.0,\n"
+                        + "  \"_source\" : {\n"
+                        + "    \"texttypo\" : \"value 0\",\n"
+                        + "    \"image\" : \"value 0\"\n"
+                        + "  }\n"
+                        + "}",
+                    e.getMessage()
+                );
+            }
+
+        };
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+        verify(client, times(0)).execute(any(), any(), any());
+    }
+
+    /**
+     * Tests create processor with one_to_one is true
+     * with two rounds predictions for every document
+     * failed in first round prediction when ignoreMissing is true
+     * expect to return document with second round prediction results
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseOneToOneTwoRoundsPredictionsOneExceptionIgnoreMissing() throws Exception {
+
+        String modelInputField = "inputs";
+        String modelOutputField = "response";
+
+        // document fields for first round of prediction
+        String originalDocumentField = "text";
+        String newDocumentField = "text_embedding";
+
+        // document fields for second round of prediction
+        String originalDocumentField1 = "image";
+        String newDocumentField1 = "image_embedding";
+
+        List<Map<String, String>> inputMap = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        input.put(modelInputField, originalDocumentField);
+        inputMap.add(input);
+
+        Map<String, String> input1 = new HashMap<>();
+        input1.put(modelInputField, originalDocumentField1);
+        inputMap.add(input1);
+
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+
+        Map<String, String> output2 = new HashMap<>();
+        output2.put(newDocumentField1, modelOutputField);
+        outputMap.add(output2);
+
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            inputMap,
+            outputMap,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            true,
+            "remote",
+            false,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            true
+        );
+
+        SearchRequest request = getSearchRequest();
+        // create a search response with a typo in the document field
+        SearchResponse response = getSearchResponseTwoFields(5, true, originalDocumentField + "typo", originalDocumentField1);
+
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .dataAsMap(ImmutableMap.of("response", Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)))
+            .build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                assertEquals(newSearchResponse.getHits().getHits().length, 5);
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[0].getSourceAsMap().get(newDocumentField1).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[1].getSourceAsMap().get(newDocumentField1).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[2].getSourceAsMap().get(newDocumentField1).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[3].getSourceAsMap().get(newDocumentField1).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[4].getSourceAsMap().get(newDocumentField1).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException(e);
+            }
+
+        };
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+        verify(client, times(10)).execute(any(), any(), any());
+    }
+
+    /**
+     * Tests create processor with one_to_one is true
+     * with two rounds predictions for every document
+     * failed in first round prediction when ignoreFailure is true
+     * expect to return document with second round prediction results
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseOneToOneTwoRoundsPredictionsOneExceptionIgnoreFailure() throws Exception {
+
+        String modelInputField = "inputs";
+        String modelOutputField = "response";
+
+        // document fields for first round of prediction
+        String originalDocumentField = "text";
+        String newDocumentField = "text_embedding";
+
+        // document fields for second round of prediction
+        String originalDocumentField1 = "image";
+        String newDocumentField1 = "image_embedding";
+
+        List<Map<String, String>> inputMap = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        input.put(modelInputField, originalDocumentField);
+        inputMap.add(input);
+
+        Map<String, String> input1 = new HashMap<>();
+        input1.put(modelInputField, originalDocumentField1);
+        inputMap.add(input1);
+
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+
+        Map<String, String> output2 = new HashMap<>();
+        output2.put(newDocumentField1, modelOutputField);
+        outputMap.add(output2);
+
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            inputMap,
+            outputMap,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            true,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            true
+        );
+
+        SearchRequest request = getSearchRequest();
+        // create a search response with a typo in the document field
+        SearchResponse response = getSearchResponseTwoFields(5, true, originalDocumentField + "typo", originalDocumentField1);
+
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .dataAsMap(ImmutableMap.of("response", Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)))
+            .build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                assertEquals(newSearchResponse.getHits().getHits().length, 5);
+                assertNull(newSearchResponse.getHits().getHits()[0].getSourceAsMap().get(newDocumentField1));
+                assertNull(newSearchResponse.getHits().getHits()[1].getSourceAsMap().get(newDocumentField1));
+                assertNull(newSearchResponse.getHits().getHits()[2].getSourceAsMap().get(newDocumentField1));
+                assertNull(newSearchResponse.getHits().getHits()[3].getSourceAsMap().get(newDocumentField1));
+                assertNull(newSearchResponse.getHits().getHits()[4].getSourceAsMap().get(newDocumentField1));
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException(e);
+            }
+
+        };
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+        verify(client, times(0)).execute(any(), any(), any());
     }
 
     /**
@@ -261,23 +2045,23 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
                 assertEquals(newSearchResponse.getHits().getHits().length, 5);
                 assertEquals(
                     newSearchResponse.getHits().getHits()[0].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[1].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[2].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[3].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[4].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
             }
 
@@ -341,23 +2125,23 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
                 assertEquals(newSearchResponse.getHits().getHits().length, 5);
                 assertEquals(
                     newSearchResponse.getHits().getHits()[0].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[1].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[2].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[3].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[4].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
             }
 
@@ -540,8 +2324,94 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
                 throw new RuntimeException(e);
             }
         };
-
         responseProcessor.processResponseAsync(request, response, responseContext, listener);
+    }
+
+    /**
+     * Tests the successful processing of a response where the existing document field is skipped.
+     *
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseOverrideSameFieldFalse() throws Exception {
+        /**
+         * sample response before inference
+         * {
+         * { "text" : "value 0" },
+         * { "text" : "value 1" },
+         * { "text" : "value 2" },
+         * { "text" : "value 3" },
+         * { "text" : "value 4" }
+         * }
+         *
+         * sample response after inference
+         *  { "text":[0.1, 0.2]},
+         *  { "text":[0.2, 0.2]},
+         *  { "text":[0.3, 0.2]},
+         *  { "text":[0.4, 0.2]},
+         *  { "text":[0.5, 0.2]}
+         */
+
+        String modelInputField = "inputs";
+        String originalDocumentField = "text";
+        String newDocumentField = "text";
+        String modelOutputField = "response";
+        MLInferenceSearchResponseProcessor responseProcessor = getMlInferenceSearchResponseProcessorSinglePairMapping(
+            modelOutputField,
+            modelInputField,
+            originalDocumentField,
+            newDocumentField,
+            false,
+            false,
+            false
+        );
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(5, true, fieldName);
+
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .dataAsMap(
+                ImmutableMap
+                    .of(
+                        "response",
+                        Arrays
+                            .asList(
+                                Arrays.asList(0.1, 0.2),
+                                Arrays.asList(0.2, 0.2),
+                                Arrays.asList(0.3, 0.2),
+                                Arrays.asList(0.4, 0.2),
+                                Arrays.asList(0.5, 0.2)
+                            )
+                    )
+            )
+            .build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                assertEquals(newSearchResponse.getHits().getHits().length, 5);
+                assertEquals(newSearchResponse.getHits().getHits()[0].getSourceAsMap().get("text"), "value 0");
+                assertEquals(newSearchResponse.getHits().getHits()[1].getSourceAsMap().get("text"), "value 1");
+                assertEquals(newSearchResponse.getHits().getHits()[2].getSourceAsMap().get("text"), "value 2");
+                assertEquals(newSearchResponse.getHits().getHits()[3].getSourceAsMap().get("text"), "value 3");
+                assertEquals(newSearchResponse.getHits().getHits()[4].getSourceAsMap().get("text"), "value 4");
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException(e);
+            }
+        };
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+
     }
 
     /**
@@ -627,7 +2497,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
     }
 
     /**
-     * Tests the case where one input field is missing, and an exception is expected
+     * Tests the case where one input field is missing, and an IllegalArgumentException is expected
      * when the `ignoreMissing` flag is set to false.
      *
      * @throws Exception if an error occurs during the test
@@ -923,6 +2793,51 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
         String fieldName = "text";
         SearchResponse response = getSearchResponse(5, true, fieldName);
 
+        when(client.execute(any(), any())).thenThrow(new RuntimeException("Prediction Failed"));
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                throw new RuntimeException("error handling not properly.");
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                assertEquals("Prediction Failed", e.getMessage());
+            }
+        };
+
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+    }
+
+    /**
+     * Tests the case where an onFailure occurs during prediction, and the `ignoreFailure` flag is set to false.
+     *
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponsePredictionFailed() throws Exception {
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            null,
+            null,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            true,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            false
+        );
+
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(5, true, fieldName);
+
         doAnswer(invocation -> {
             ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
             actionListener.onFailure(new RuntimeException("Prediction Failed"));
@@ -1038,11 +2953,278 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
         responseProcessor.processResponseAsync(request, response, responseContext, listener);
     }
 
+    /**
+     * Tests the case where there are no hits in the search response.
+     *
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseHitWithNoSource() throws Exception {
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            null,
+            null,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            true,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            false
+        );
+
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponseNoSource(0, true, fieldName);
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                assertEquals(response, newSearchResponse);
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException(e);
+            }
+        };
+
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+    }
+
+    /**
+     * Tests create processor with one_to_one is true
+     * with output_maps in one to one prediction
+     * Exceptions happen when replaceHits to be one Hit Response
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseOneToOneMadeOneHitResponseExceptions() throws Exception {
+
+        String newDocumentField = "text_embedding";
+        String modelOutputField = "response";
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            null,
+            outputMap,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            true
+        );
+
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(5, true, fieldName);
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                throw new RuntimeException("error handling not properly.");
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                assertEquals("Mock exception", e.getMessage());
+            }
+        };
+
+        SearchResponse mockResponse = mock(SearchResponse.class);
+        SearchHits searchHits = response.getHits();
+        when(mockResponse.getHits()).thenReturn(searchHits);
+        RuntimeException mockException = new RuntimeException("Mock exception");
+        AtomicInteger callCount = new AtomicInteger(0);
+        when(mockResponse.getAggregations()).thenAnswer(invocation -> {
+            int count = callCount.getAndIncrement();
+            if (count < 6) {
+                return null;
+            } else {
+                throw mockException;
+            }
+        });
+        when(mockResponse.getTook()).thenReturn(TimeValue.timeValueNanos(10));
+        responseProcessor.processResponseAsync(request, mockResponse, responseContext, listener);
+    }
+
+    /**
+     * Tests create processor with one_to_one is true
+     * with output_maps in one to one prediction
+     * Exceptions happen when replaceHits  and ignoreFailure return original response
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseOneToOneMadeOneHitResponseExceptionsIgnoreFailure() throws Exception {
+
+        String newDocumentField = "text_embedding";
+        String modelOutputField = "response";
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            null,
+            outputMap,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            true,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            true
+        );
+
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(5, true, fieldName);
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                assertEquals(newSearchResponse.getHits().getHits().length, 5);
+                assertEquals(newSearchResponse.getHits().getHits(), response.getHits().getHits());
+                assertNull(newSearchResponse.getHits().getHits()[0].getSourceAsMap().get(newDocumentField));
+                assertNull(newSearchResponse.getHits().getHits()[1].getSourceAsMap().get(newDocumentField));
+                assertNull(newSearchResponse.getHits().getHits()[2].getSourceAsMap().get(newDocumentField));
+                assertNull(newSearchResponse.getHits().getHits()[3].getSourceAsMap().get(newDocumentField));
+                assertNull(newSearchResponse.getHits().getHits()[4].getSourceAsMap().get(newDocumentField));
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException("error handling not properly.");
+            }
+
+        };
+
+        SearchResponse mockResponse = mock(SearchResponse.class);
+        SearchHits searchHits = response.getHits();
+        when(mockResponse.getHits()).thenReturn(searchHits);
+        RuntimeException mockException = new RuntimeException("Mock exception");
+        when(mockResponse.getAggregations()).thenThrow(mockException);
+
+        responseProcessor.processResponseAsync(request, mockResponse, responseContext, listener);
+    }
+
+    /**
+     * Tests create processor with one_to_one is true
+     * with output_maps in one to one prediction
+     * Exceptions happen when replaceHits
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseOneToOneCombinedHitsExceptions() throws Exception {
+
+        String newDocumentField = "text_embedding";
+        String modelOutputField = "response";
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            null,
+            outputMap,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            true
+        );
+
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(5, true, fieldName);
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                throw new RuntimeException("error handling not properly.");
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                assertEquals("Failed to process response: Mock exception", e.getMessage());
+            }
+        };
+
+        SearchResponse mockResponse = mock(SearchResponse.class);
+        SearchHits searchHits = response.getHits();
+        when(mockResponse.getHits()).thenReturn(searchHits);
+        RuntimeException mockException = new RuntimeException("Mock exception");
+        AtomicInteger callCount = new AtomicInteger(0);
+        when(mockResponse.getAggregations()).thenAnswer(invocation -> {
+            int count = callCount.getAndIncrement();
+            // every time getting one Hit Response will call get Aggregations two times ,
+            // the 12th time is used for combine hits
+            if (count < 12) {
+                return null;
+            } else {
+                throw mockException;
+            }
+        });
+        when(mockResponse.getTook()).thenReturn(TimeValue.timeValueNanos(10));
+        responseProcessor.processResponseAsync(request, mockResponse, responseContext, listener);
+    }
+
     private static SearchRequest getSearchRequest() {
         QueryBuilder incomingQuery = new TermQueryBuilder("text", "foo");
         SearchSourceBuilder source = new SearchSourceBuilder().query(incomingQuery);
         SearchRequest request = new SearchRequest().source(source);
         return request;
+    }
+
+    private static Map<String, Object> generateInferenceResult(String response) {
+        Map<String, Object> inferenceResult = new HashMap<>();
+        List<Map<String, Object>> inferenceResults = new ArrayList<>();
+
+        Map<String, Object> outputMap = new HashMap<>();
+        List<Map<String, Object>> outputs = new ArrayList<>();
+
+        Map<String, Object> responseOutput = new HashMap<>();
+        Map<String, String> dataAsMap = new HashMap<>();
+        dataAsMap.put("response", response);
+        responseOutput.put("dataAsMap", dataAsMap);
+
+        outputs.add(responseOutput);
+        outputMap.put("output", outputs);
+
+        inferenceResults.add(outputMap);
+        inferenceResult.put("inference_results", inferenceResults);
+
+        return inferenceResult;
     }
 
     /**
@@ -1108,6 +3290,23 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             searchHitFields.put(fieldName, new DocumentField("value " + i, Collections.emptyList()));
             hits[i] = new SearchHit(i, "doc " + i, searchHitFields, Collections.emptyMap());
             hits[i].sourceRef(new BytesArray("{ \"" + fieldName + "\" : \"value " + i + "\" }"));
+            hits[i].score(i);
+        }
+        SearchHits searchHits = new SearchHits(hits, new TotalHits(size * 2L, TotalHits.Relation.EQUAL_TO), size);
+        SearchResponseSections searchResponseSections = new SearchResponseSections(searchHits, null, null, false, false, null, 0);
+        return new SearchResponse(searchResponseSections, null, 1, 1, 0, 10, null, null);
+    }
+
+    private SearchResponse getSearchResponseNoSource(int size, boolean includeMapping, String fieldName) {
+        SearchHit[] hits = new SearchHit[size];
+        for (int i = 0; i < size; i++) {
+            Map<String, DocumentField> searchHitFields = new HashMap<>();
+            if (includeMapping) {
+                searchHitFields.put(fieldName, new DocumentField("value " + i, Collections.emptyList()));
+            }
+            searchHitFields.put(fieldName, new DocumentField("value " + i, Collections.emptyList()));
+            hits[i] = new SearchHit(i, "doc " + i, null, Collections.emptyMap());
+            hits[i].sourceRef(null);
             hits[i].score(i);
         }
         SearchHits searchHits = new SearchHits(hits, new TotalHits(size * 2L, TotalHits.Relation.EQUAL_TO), size);

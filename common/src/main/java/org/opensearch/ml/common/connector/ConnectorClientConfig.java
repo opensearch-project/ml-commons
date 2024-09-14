@@ -5,9 +5,12 @@
 
 package org.opensearch.ml.common.connector;
 
-import lombok.Builder;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+
+import java.io.IOException;
+import java.util.Locale;
+import java.util.Objects;
+
 import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -16,12 +19,9 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 
-import java.io.IOException;
-import java.util.List;
-import java.util.Locale;
-import java.util.Objects;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
 
 @Getter
 @EqualsAndHashCode
@@ -75,7 +75,7 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         this.maxConnections = input.readOptionalInt();
         this.connectionTimeout = input.readOptionalInt();
         this.readTimeout = input.readOptionalInt();
-        if(streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_RETRY)) {
+        if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_RETRY)) {
             this.retryBackoffMillis = input.readOptionalInt();
             this.retryTimeoutSeconds = input.readOptionalInt();
             this.maxRetryTimes = input.readOptionalInt();
@@ -101,7 +101,7 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
         out.writeOptionalInt(maxConnections);
         out.writeOptionalInt(connectionTimeout);
         out.writeOptionalInt(readTimeout);
-        if(streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_RETRY)){
+        if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_RETRY)) {
             out.writeOptionalInt(retryBackoffMillis);
             out.writeOptionalInt(retryTimeoutSeconds);
             out.writeOptionalInt(maxRetryTimes);
@@ -187,14 +187,15 @@ public class ConnectorClientConfig implements ToXContentObject, Writeable {
                     break;
             }
         }
-        return ConnectorClientConfig.builder()
-                .maxConnections(maxConnections)
-                .connectionTimeout(connectionTimeout)
-                .readTimeout(readTimeout)
-                .retryBackoffMillis(retryBackoffMillis)
-                .retryTimeoutSeconds(retryTimeoutSeconds)
-                .maxRetryTimes(maxRetryTimes)
-                .retryBackoffPolicy(retryBackoffPolicy)
-                .build();
+        return ConnectorClientConfig
+            .builder()
+            .maxConnections(maxConnections)
+            .connectionTimeout(connectionTimeout)
+            .readTimeout(readTimeout)
+            .retryBackoffMillis(retryBackoffMillis)
+            .retryTimeoutSeconds(retryTimeoutSeconds)
+            .maxRetryTimes(maxRetryTimes)
+            .retryBackoffPolicy(retryBackoffPolicy)
+            .build();
     }
 }

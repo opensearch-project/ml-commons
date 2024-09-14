@@ -1,10 +1,8 @@
 package org.opensearch.ml.common.output.model;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.opensearch.common.io.stream.BytesStreamOutput;
-import org.opensearch.core.common.io.stream.StreamInput;
-import org.opensearch.ml.common.output.MLOutputType;
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -13,9 +11,11 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.function.Consumer;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
+import org.junit.Before;
+import org.junit.Test;
+import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.ml.common.output.MLOutputType;
 
 public class ModelTensorOutputTest {
 
@@ -24,11 +24,16 @@ public class ModelTensorOutputTest {
 
     @Before
     public void setUp() throws Exception {
-        value = new Float[]{1.0f, 2.0f, 3.0f};
+        value = new Float[] { 1.0f, 2.0f, 3.0f };
         List<ModelTensors> outputs = new ArrayList<>();
-        ModelTensor tensor = ModelTensor.builder().data(value)
-                .name("test").shape(new long[]{1, 3}).dataType(MLResultDataType.FLOAT32)
-                .byteBuffer(ByteBuffer.wrap(new byte[]{0,1,0,1})).build();
+        ModelTensor tensor = ModelTensor
+            .builder()
+            .data(value)
+            .name("test")
+            .shape(new long[] { 1, 3 })
+            .dataType(MLResultDataType.FLOAT32)
+            .byteBuffer(ByteBuffer.wrap(new byte[] { 0, 1, 0, 1 }))
+            .build();
         List<ModelTensor> mlModelTensors = Arrays.asList(tensor);
         ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(mlModelTensors).build();
         outputs.add(modelTensors);

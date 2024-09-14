@@ -5,10 +5,10 @@
 
 package org.opensearch.ml.common;
 
-import lombok.Builder;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.Setter;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+
+import java.io.IOException;
+
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -16,9 +16,10 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 
-import java.io.IOException;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.Setter;
 
 @Getter
 @EqualsAndHashCode
@@ -30,9 +31,7 @@ public class Configuration implements ToXContentObject, Writeable {
     private String agentId;
 
     @Builder(toBuilder = true)
-    public Configuration(
-        String agentId
-    ) {
+    public Configuration(String agentId) {
         this.agentId = agentId;
     }
 
@@ -76,8 +75,6 @@ public class Configuration implements ToXContentObject, Writeable {
                     break;
             }
         }
-        return Configuration.builder()
-                .agentId(agentId)
-                .build();
+        return Configuration.builder().agentId(agentId).build();
     }
 }

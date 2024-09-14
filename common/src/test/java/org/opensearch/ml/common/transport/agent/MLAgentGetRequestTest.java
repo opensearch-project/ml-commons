@@ -4,17 +4,17 @@
  */
 package org.opensearch.ml.common.transport.agent;
 
+import static org.junit.Assert.assertEquals;
+import static org.opensearch.action.ValidateActions.addValidationError;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+
 import org.junit.Test;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamOutput;
-
-import java.io.IOException;
-import java.io.UncheckedIOException;
-
-import static org.junit.Assert.assertEquals;
-import static org.opensearch.action.ValidateActions.addValidationError;
 
 public class MLAgentGetRequestTest {
     String agentId;
@@ -23,8 +23,8 @@ public class MLAgentGetRequestTest {
     public void constructor_AgentId() {
         agentId = "test-abc";
         MLAgentGetRequest mLAgentGetRequest = new MLAgentGetRequest(agentId, true);
-        assertEquals(mLAgentGetRequest.getAgentId(),agentId);
-        assertEquals(mLAgentGetRequest.isUserInitiatedGetRequest(),true);
+        assertEquals(mLAgentGetRequest.getAgentId(), agentId);
+        assertEquals(mLAgentGetRequest.isUserInitiatedGetRequest(), true);
     }
 
     @Test
@@ -54,13 +54,14 @@ public class MLAgentGetRequestTest {
     public void validate_Failure() {
         agentId = null;
         MLAgentGetRequest mLAgentGetRequest = new MLAgentGetRequest(agentId, true);
-        assertEquals(null,mLAgentGetRequest.agentId);
+        assertEquals(null, mLAgentGetRequest.agentId);
 
         ActionRequestValidationException exception = addValidationError("ML agent id can't be null", null);
-        mLAgentGetRequest.validate().equals(exception) ;
+        mLAgentGetRequest.validate().equals(exception);
     }
+
     @Test
-    public void fromActionRequest_Success()  throws IOException {
+    public void fromActionRequest_Success() throws IOException {
         agentId = "test-lmn";
         MLAgentGetRequest mLAgentGetRequest = new MLAgentGetRequest(agentId, true);
         assertEquals(mLAgentGetRequest.fromActionRequest(mLAgentGetRequest), mLAgentGetRequest);
@@ -76,6 +77,7 @@ public class MLAgentGetRequestTest {
             public ActionRequestValidationException validate() {
                 return null;
             }
+
             @Override
             public void writeTo(StreamOutput out) throws IOException {
                 mLAgentGetRequest.writeTo(out);
@@ -103,5 +105,3 @@ public class MLAgentGetRequestTest {
         mLAgentGetRequest.fromActionRequest(actionRequest);
     }
 }
-
-

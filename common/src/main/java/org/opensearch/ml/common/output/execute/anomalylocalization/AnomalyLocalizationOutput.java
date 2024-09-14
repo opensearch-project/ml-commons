@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.common.output.execute.anomalylocalization;
 
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -15,25 +17,23 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.annotation.ExecuteOutput;
+import org.opensearch.ml.common.output.Output;
 
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.ToString;
-import org.opensearch.core.xcontent.ToXContent;
-import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.annotation.ExecuteOutput;
-import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.output.Output;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
 /**
  * Output of localized results.
  */
-@ExecuteOutput(algorithms={FunctionName.ANOMALY_LOCALIZATION})
+@ExecuteOutput(algorithms = { FunctionName.ANOMALY_LOCALIZATION })
 @Data
 @NoArgsConstructor
 public class AnomalyLocalizationOutput implements Output {
@@ -102,8 +102,8 @@ public class AnomalyLocalizationOutput implements Output {
      */
     @Data
     @NoArgsConstructor
-    @ToString(exclude = {"base", "counter", "completed"})
-    @EqualsAndHashCode(exclude = {"base", "counter", "completed"})
+    @ToString(exclude = { "base", "counter", "completed" })
+    @EqualsAndHashCode(exclude = { "base", "counter", "completed" })
     public static class Bucket implements Output {
 
         public static final String FIELD_START_TIME = "start_time";
@@ -134,7 +134,7 @@ public class AnomalyLocalizationOutput implements Output {
             out.writeLong(startTime);
             out.writeLong(endTime);
             out.writeDouble(overallAggValue);
-            if (entities ==  null) {
+            if (entities == null) {
                 out.writeBoolean(false);
             } else {
                 out.writeBoolean(true);

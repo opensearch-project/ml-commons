@@ -21,6 +21,7 @@ import java.util.Locale;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.input.Input;
@@ -132,7 +133,21 @@ public class RestMLExecuteAction extends BaseRestHandler {
 
     private void reportError(final RestChannel channel, final Exception e, final RestStatus status) {
         ErrorMessage errorMessage = ErrorMessageFactory.createErrorMessage(e, status.getStatus());
-        channel.sendResponse(new BytesRestResponse(RestStatus.fromCode(errorMessage.getStatus()), errorMessage.toString()));
+        try {
+            XContentBuilder builder = channel.newBuilder();
+            builder.startObject();
+            builder.field("status", errorMessage.getStatus());
+            builder.startObject("error");
+            builder.field("type", errorMessage.getType());
+            builder.field("reason", errorMessage.getReason());
+            builder.field("details", errorMessage.getDetails());
+            builder.endObject();
+            builder.endObject();
+            channel.sendResponse(new BytesRestResponse(RestStatus.fromCode(errorMessage.getStatus()), builder));
+        } catch (Exception exception) {
+            log.error("Failed to build xContent for an error response, so reply with a plain string.", exception);
+            channel.sendResponse(new BytesRestResponse(RestStatus.fromCode(errorMessage.getStatus()), errorMessage.toString()));
+        }
     }
 
     private boolean isClientError(Exception e) {

@@ -1,10 +1,10 @@
 package org.opensearch.ml.common.model;
 
-import org.json.JSONObject;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+
+import org.json.JSONObject;
 
 // TODO: Add image preprocessing options: resample, rescale, rescale factor, normalization. There is no hugging face JNI for image preprocessing.
 public class ImageEmbeddingPreprocessorConfig {
@@ -14,7 +14,6 @@ public class ImageEmbeddingPreprocessorConfig {
 
     public final int imageHeightSize;
     public final int imageWidthSize;
-
 
     public ImageEmbeddingPreprocessorConfig(Path configPath) throws IOException {
         String jsonString = new String(Files.readAllBytes(configPath));
@@ -32,23 +31,16 @@ public class ImageEmbeddingPreprocessorConfig {
                     this.imageWidthSize = sizeObject.getInt(WIDTH);
                 } else {
                     throw new IllegalArgumentException(
-                            String
-                                    .format("Invalid %s structure: size object must contain height and width", configPath)
+                        String.format("Invalid %s structure: size object must contain height and width", configPath)
                     );
                 }
             } else {
                 throw new IllegalArgumentException(
-                        String
-                                .format(
-                                        "Invalid %s structure: size must be an integer or an object containing height and width",
-                                        configPath
-                                )
+                    String.format("Invalid %s structure: size must be an integer or an object containing height and width", configPath)
                 );
             }
         } else {
-            throw new IllegalArgumentException(
-                    String.format("Invalid %s structure: missing size field", configPath)
-            );
+            throw new IllegalArgumentException(String.format("Invalid %s structure: missing size field", configPath));
         }
     }
 }

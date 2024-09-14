@@ -5,30 +5,31 @@
 
 package org.opensearch.ml.common.model;
 
-import lombok.Builder;
-import lombok.Getter;
-import lombok.Setter;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+
+import java.io.IOException;
+
+import org.opensearch.core.ParseField;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.core.ParseField;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 
-import java.io.IOException;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.Setter;
 
 @Setter
 @Getter
 public class ImageEmbeddingModelConfig extends MLModelConfig {
     public static final String PARSE_FIELD_NAME = FunctionName.IMAGE_EMBEDDING.name();
     public static final NamedXContentRegistry.Entry XCONTENT_REGISTRY = new NamedXContentRegistry.Entry(
-            ImageEmbeddingModelConfig.class,
-            new ParseField(PARSE_FIELD_NAME),
-            it -> parse(it)
+        ImageEmbeddingModelConfig.class,
+        new ParseField(PARSE_FIELD_NAME),
+        it -> parse(it)
     );
 
     public static final String EMBEDDING_DIMENSION_FIELD = "embedding_dimension";
@@ -55,10 +56,14 @@ public class ImageEmbeddingModelConfig extends MLModelConfig {
             parser.nextToken();
 
             switch (fieldName) {
-                case MODEL_TYPE_FIELD: modelType = parser.text();
-                case EMBEDDING_DIMENSION_FIELD: embeddingDimension = parser.intValue();
-                case ALL_CONFIG_FIELD: allConfig = parser.text();
-                default: parser.skipChildren();
+                case MODEL_TYPE_FIELD:
+                    modelType = parser.text();
+                case EMBEDDING_DIMENSION_FIELD:
+                    embeddingDimension = parser.intValue();
+                case ALL_CONFIG_FIELD:
+                    allConfig = parser.text();
+                default:
+                    parser.skipChildren();
             }
         }
         return new ImageEmbeddingModelConfig(modelType, embeddingDimension, allConfig);
@@ -69,7 +74,7 @@ public class ImageEmbeddingModelConfig extends MLModelConfig {
         return PARSE_FIELD_NAME;
     }
 
-    public ImageEmbeddingModelConfig(StreamInput in) throws IOException{
+    public ImageEmbeddingModelConfig(StreamInput in) throws IOException {
         super(in);
         embeddingDimension = in.readInt();
     }

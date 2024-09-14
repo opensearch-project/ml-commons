@@ -5,10 +5,10 @@
 
 package org.opensearch.ml.common.connector;
 
+import static org.opensearch.ml.common.connector.MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT;
+
 import org.junit.Assert;
 import org.junit.Test;
-
-import static org.opensearch.ml.common.connector.MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT;
 
 public class MLPreProcessFunctionTest {
 

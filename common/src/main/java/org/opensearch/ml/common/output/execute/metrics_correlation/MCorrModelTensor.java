@@ -5,15 +5,16 @@
 
 package org.opensearch.ml.common.output.execute.metrics_correlation;
 
-import lombok.Builder;
-import lombok.Data;
+import java.io.IOException;
+
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 
-import java.io.IOException;
+import lombok.Builder;
+import lombok.Data;
 
 @Data
 public class MCorrModelTensor implements Writeable, ToXContentObject {

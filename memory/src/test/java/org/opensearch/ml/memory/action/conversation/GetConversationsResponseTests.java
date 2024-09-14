@@ -46,9 +46,9 @@ public class GetConversationsResponseTests extends OpenSearchTestCase {
     public void setup() {
         conversations = List
             .of(
-                new ConversationMeta("0", Instant.now(), Instant.now(), "name0", "user0"),
-                new ConversationMeta("1", Instant.now(), Instant.now(), "name1", "user0"),
-                new ConversationMeta("2", Instant.now(), Instant.now(), "name2", "user2")
+                new ConversationMeta("0", Instant.now(), Instant.now(), "name0", "user0", null),
+                new ConversationMeta("1", Instant.now(), Instant.now(), "name1", "user0", null),
+                new ConversationMeta("2", Instant.now(), Instant.now(), "name2", "user2", null)
             );
     }
 

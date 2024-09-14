@@ -7,15 +7,15 @@
 
 package org.opensearch.ml.common.connector.functions.preprocess;
 
-import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
-import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
-import org.opensearch.ml.common.input.MLInput;
+import static org.opensearch.ml.common.utils.StringUtils.convertScriptStringToJsonString;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.opensearch.ml.common.utils.StringUtils.convertScriptStringToJsonString;
+import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
+import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
+import org.opensearch.ml.common.input.MLInput;
 
 /**
  * This class provides a pre-processing function for multi-modal input data.
@@ -53,7 +53,10 @@ public class MultiModalConnectorPreProcessFunction extends ConnectorPreProcessFu
         if (inputData.getDocs().size() > 1) {
             parametersMap.put("inputImage", inputData.getDocs().get(1));
         }
-        return RemoteInferenceInputDataSet.builder().parameters(convertScriptStringToJsonString(Map.of("parameters", parametersMap))).build();
-    
+        return RemoteInferenceInputDataSet
+            .builder()
+            .parameters(convertScriptStringToJsonString(Map.of("parameters", parametersMap)))
+            .build();
+
     }
 }

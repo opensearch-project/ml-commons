@@ -1,5 +1,11 @@
 package org.opensearch.ml.common.agent;
 
+import static org.junit.Assert.*;
+
+import java.io.IOException;
+import java.util.Collections;
+import java.util.Map;
+
 import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
@@ -12,14 +18,7 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.TestHelper;
-import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.search.SearchModule;
-
-import java.io.IOException;
-import java.util.Collections;
-import java.util.Map;
-
-import static org.junit.Assert.*;
 
 public class LLMSpecTest {
 
@@ -69,8 +68,13 @@ public class LLMSpecTest {
     @Test
     public void parse() throws IOException {
         String jsonStr = "{\"model_id\":\"test_model\",\"parameters\":{\"test_key\":\"test_value\"}}";
-        XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
-                Collections.emptyList()).getNamedXContents()), null, jsonStr);
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
         parser.nextToken();
         LLMSpec spec = LLMSpec.parse(parser);
 

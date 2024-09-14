@@ -5,8 +5,13 @@
 
 package org.opensearch.ml.common.transport.model_group;
 
-import lombok.Builder;
-import lombok.Data;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -15,23 +20,18 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import lombok.Builder;
+import lombok.Data;
 
 @Data
 public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
 
-    public static final String MODEL_GROUP_ID_FIELD = "model_group_id"; //mandatory
-    public static final String NAME_FIELD = "name"; //optional
-    public static final String DESCRIPTION_FIELD = "description"; //optional
-    public static final String BACKEND_ROLES_FIELD = "backend_roles"; //optional
-    public static final String MODEL_ACCESS_MODE = "access_mode"; //optional
-    public static final String ADD_ALL_BACKEND_ROLES_FIELD = "add_all_backend_roles"; //optional
-
+    public static final String MODEL_GROUP_ID_FIELD = "model_group_id"; // mandatory
+    public static final String NAME_FIELD = "name"; // optional
+    public static final String DESCRIPTION_FIELD = "description"; // optional
+    public static final String BACKEND_ROLES_FIELD = "backend_roles"; // optional
+    public static final String MODEL_ACCESS_MODE = "access_mode"; // optional
+    public static final String ADD_ALL_BACKEND_ROLES_FIELD = "add_all_backend_roles"; // optional
 
     private String modelGroupID;
     private String name;
@@ -41,7 +41,14 @@ public class MLUpdateModelGroupInput implements ToXContentObject, Writeable {
     private Boolean isAddAllBackendRoles;
 
     @Builder(toBuilder = true)
-    public MLUpdateModelGroupInput(String modelGroupID, String name, String description, List<String> backendRoles, AccessMode modelAccessMode, Boolean isAddAllBackendRoles) {
+    public MLUpdateModelGroupInput(
+        String modelGroupID,
+        String name,
+        String description,
+        List<String> backendRoles,
+        AccessMode modelAccessMode,
+        Boolean isAddAllBackendRoles
+    ) {
         this.modelGroupID = modelGroupID;
         this.name = name;
         this.description = description;

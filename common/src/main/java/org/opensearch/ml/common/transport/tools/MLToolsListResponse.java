@@ -4,9 +4,12 @@
  */
 package org.opensearch.ml.common.transport.tools;
 
-import lombok.Builder;
-import lombok.Getter;
-import lombok.ToString;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.util.List;
+
 import org.opensearch.core.action.ActionResponse;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
@@ -17,11 +20,9 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.ToolMetadata;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.util.List;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.ToString;
 
 @Getter
 @ToString
@@ -33,6 +34,7 @@ public class MLToolsListResponse extends ActionResponse implements ToXContentObj
     public MLToolsListResponse(List<ToolMetadata> toolMetadata) {
         this.toolMetadataList = toolMetadata;
     }
+
     public MLToolsListResponse(StreamInput in) throws IOException {
         super(in);
         this.toolMetadataList = in.readList(ToolMetadata::new);
@@ -51,7 +53,8 @@ public class MLToolsListResponse extends ActionResponse implements ToXContentObj
             xContentBuilder.field(ToolMetadata.TOOL_NAME_FIELD, toolMetadata.getName());
             xContentBuilder.field(ToolMetadata.TOOL_DESCRIPTION_FIELD, toolMetadata.getDescription());
             xContentBuilder.field(ToolMetadata.TOOL_TYPE_FIELD, toolMetadata.getType());
-            xContentBuilder.field(ToolMetadata.TOOL_VERSION_FIELD, toolMetadata.getVersion() != null ? toolMetadata.getVersion() : "undefined");
+            xContentBuilder
+                .field(ToolMetadata.TOOL_VERSION_FIELD, toolMetadata.getVersion() != null ? toolMetadata.getVersion() : "undefined");
             xContentBuilder.endObject();
         }
         xContentBuilder.endArray();
@@ -63,14 +66,12 @@ public class MLToolsListResponse extends ActionResponse implements ToXContentObj
             return (MLToolsListResponse) actionResponse;
         }
 
-        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
-             OutputStreamStreamOutput osso = new OutputStreamStreamOutput(baos)) {
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream(); OutputStreamStreamOutput osso = new OutputStreamStreamOutput(baos)) {
             actionResponse.writeTo(osso);
             try (StreamInput input = new InputStreamStreamInput(new ByteArrayInputStream(baos.toByteArray()))) {
                 return new MLToolsListResponse(input);
             }
-        }
-        catch (IOException e) {
+        } catch (IOException e) {
             throw new UncheckedIOException("failed to parse ActionResponse into MLToolsListResponse", e);
         }
     }

@@ -5,20 +5,21 @@
 
 package org.opensearch.ml.common.agent;
 
-import lombok.Builder;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
+
+import java.io.IOException;
+import java.util.Map;
+
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 
-import java.io.IOException;
-import java.util.Map;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
 
 @EqualsAndHashCode
 @Getter
@@ -35,13 +36,8 @@ public class MLToolSpec implements ToXContentObject {
     private Map<String, String> parameters;
     private boolean includeOutputInAgentResponse;
 
-
     @Builder(toBuilder = true)
-    public MLToolSpec(String type,
-                      String name,
-                      String description,
-                      Map<String, String> parameters,
-                      boolean includeOutputInAgentResponse) {
+    public MLToolSpec(String type, String name, String description, Map<String, String> parameters, boolean includeOutputInAgentResponse) {
         if (type == null) {
             throw new IllegalArgumentException("tool type is null");
         }
@@ -52,7 +48,7 @@ public class MLToolSpec implements ToXContentObject {
         this.includeOutputInAgentResponse = includeOutputInAgentResponse;
     }
 
-    public MLToolSpec(StreamInput input) throws IOException{
+    public MLToolSpec(StreamInput input) throws IOException {
         type = input.readString();
         name = input.readOptionalString();
         description = input.readOptionalString();
@@ -128,13 +124,14 @@ public class MLToolSpec implements ToXContentObject {
                     break;
             }
         }
-        return MLToolSpec.builder()
-                .type(type)
-                .name(name)
-                .description(description)
-                .parameters(parameters)
-                .includeOutputInAgentResponse(includeOutputInAgentResponse)
-                .build();
+        return MLToolSpec
+            .builder()
+            .type(type)
+            .name(name)
+            .description(description)
+            .parameters(parameters)
+            .includeOutputInAgentResponse(includeOutputInAgentResponse)
+            .build();
     }
 
     public static MLToolSpec fromStream(StreamInput in) throws IOException {

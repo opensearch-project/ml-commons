@@ -5,57 +5,52 @@
 
 package org.opensearch.ml.common.utils;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonParser;
-import com.google.gson.JsonSyntaxException;
-import lombok.extern.log4j.Log4j2;
-import org.apache.commons.lang3.BooleanUtils;
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-import org.opensearch.OpenSearchParseException;
-
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
-import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD;
-import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD;
+import org.apache.commons.lang3.BooleanUtils;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import com.google.gson.Gson;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
+import com.google.gson.JsonSyntaxException;
+
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class StringUtils {
 
-    public static final String DEFAULT_ESCAPE_FUNCTION = "\n    String escape(def input) { \n" +
-            "      if (input.contains(\"\\\\\")) {\n        input = input.replace(\"\\\\\", \"\\\\\\\\\");\n      }\n" +
-            "      if (input.contains(\"\\\"\")) {\n        input = input.replace(\"\\\"\", \"\\\\\\\"\");\n      }\n" +
-            "      if (input.contains('\r')) {\n        input = input = input.replace('\r', '\\\\r');\n      }\n" +
-            "      if (input.contains(\"\\\\t\")) {\n        input = input.replace(\"\\\\t\", \"\\\\\\\\\\\\t\");\n      }\n" +
-            "      if (input.contains('\n')) {\n        input = input.replace('\n', '\\\\n');\n      }\n" +
-            "      if (input.contains('\b')) {\n        input = input.replace('\b', '\\\\b');\n      }\n" +
-            "      if (input.contains('\f')) {\n        input = input.replace('\f', '\\\\f');\n      }\n" +
-            "      return input;" +
-            "\n    }\n";
+    public static final String DEFAULT_ESCAPE_FUNCTION = "\n    String escape(def input) { \n"
+        + "      if (input.contains(\"\\\\\")) {\n        input = input.replace(\"\\\\\", \"\\\\\\\\\");\n      }\n"
+        + "      if (input.contains(\"\\\"\")) {\n        input = input.replace(\"\\\"\", \"\\\\\\\"\");\n      }\n"
+        + "      if (input.contains('\r')) {\n        input = input = input.replace('\r', '\\\\r');\n      }\n"
+        + "      if (input.contains(\"\\\\t\")) {\n        input = input.replace(\"\\\\t\", \"\\\\\\\\\\\\t\");\n      }\n"
+        + "      if (input.contains('\n')) {\n        input = input.replace('\n', '\\\\n');\n      }\n"
+        + "      if (input.contains('\b')) {\n        input = input.replace('\b', '\\\\b');\n      }\n"
+        + "      if (input.contains('\f')) {\n        input = input.replace('\f', '\\\\f');\n      }\n"
+        + "      return input;"
+        + "\n    }\n";
 
     public static final Gson gson;
 
     static {
         gson = new Gson();
     }
+    public static final String TO_STRING_FUNCTION_NAME = ".toString()";
 
     public static boolean isValidJsonString(String Json) {
         try {
@@ -75,10 +70,10 @@ public class StringUtils {
             if (!isValidJsonString(json)) {
                 return false;
             }
-            //This is to cover such edge case "[]\""
+            // This is to cover such edge case "[]\""
             gson.fromJson(json, Object.class);
             return true;
-        } catch(JsonSyntaxException ex) {
+        } catch (JsonSyntaxException ex) {
             return false;
         }
     }
@@ -114,7 +109,7 @@ public class StringUtils {
             try {
                 AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
                     if (value instanceof String) {
-                        parameters.put(key, (String)value);
+                        parameters.put(key, (String) value);
                     } else {
                         parameters.put(key, gson.toJson(value));
                     }
@@ -135,7 +130,7 @@ public class StringUtils {
             try {
                 AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
                     if (value instanceof String) {
-                        parameters.put(key, (String)value);
+                        parameters.put(key, (String) value);
                     } else {
                         parameters.put(key, gson.toJson(value));
                     }
@@ -218,7 +213,7 @@ public class StringUtils {
     }
 
     public static boolean isEscapeUsed(String input) {
-        return patternExist(input,"(?<!\\bString\\s+)\\bescape\\s*\\(");
+        return patternExist(input, "(?<!\\bString\\s+)\\bescape\\s*\\(");
     }
 
     public static boolean containsEscapeMethod(String input) {
@@ -238,5 +233,64 @@ public class StringUtils {
         } else {
             return errorMessage + " Model ID: " + modelId;
         }
+    }
+
+    /**
+     * Collects the prefixes of the toString() method calls present in the values of the given map.
+     *
+     * @param map A map containing key-value pairs where the values may contain toString() method calls.
+     * @return A list of prefixes for the toString() method calls found in the map values.
+     */
+    public static List<String> collectToStringPrefixes(Map<String, String> map) {
+        List<String> prefixes = new ArrayList<>();
+        for (String key : map.keySet()) {
+            String value = map.get(key);
+            if (value != null) {
+                Pattern pattern = Pattern.compile("\\$\\{parameters\\.(.+?)\\.toString\\(\\)\\}");
+                Matcher matcher = pattern.matcher(value);
+                while (matcher.find()) {
+                    String prefix = matcher.group(1);
+                    prefixes.add(prefix);
+                }
+            }
+        }
+        return prefixes;
+    }
+
+    /**
+     * Parses the given parameters map and processes the values containing toString() method calls.
+     *
+     * @param parameters A map containing key-value pairs where the values may contain toString() method calls.
+     * @return A new map with the processed values for the toString() method calls.
+     */
+    public static Map<String, String> parseParameters(Map<String, String> parameters) {
+        if (parameters != null) {
+            List<String> toStringParametersPrefixes = collectToStringPrefixes(parameters);
+
+            if (!toStringParametersPrefixes.isEmpty()) {
+                for (String prefix : toStringParametersPrefixes) {
+                    String value = parameters.get(prefix);
+                    if (value != null) {
+                        parameters.put(prefix + TO_STRING_FUNCTION_NAME, processTextDoc(value));
+                    }
+                }
+            }
+        }
+        return parameters;
+    }
+
+    public static String obtainFieldNameFromJsonPath(String jsonPath) {
+        String[] parts = jsonPath.split("\\.");
+
+        // Get the last part which is the field name
+        return parts[parts.length - 1];
+    }
+
+    public static String getJsonPath(String jsonPathWithSource) {
+        // Find the index of the first occurrence of "$."
+        int startIndex = jsonPathWithSource.indexOf("$.");
+
+        // Extract the substring from the startIndex to the end of the input string
+        return (startIndex != -1) ? jsonPathWithSource.substring(startIndex) : jsonPathWithSource;
     }
 }

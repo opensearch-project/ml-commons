@@ -5,9 +5,13 @@
 
 package org.opensearch.ml.common.controller;
 
-import lombok.Builder;
-import lombok.Data;
-import lombok.Getter;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
+
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -19,14 +23,9 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Objects;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
+import lombok.Builder;
+import lombok.Data;
+import lombok.Getter;
 
 @Data
 public class MLController implements ToXContentObject, Writeable {
@@ -63,8 +62,9 @@ public class MLController implements ToXContentObject, Writeable {
                     Map<String, String> userRateLimiterStringMap = getParameterMap(parser.map());
                     userRateLimiterStringMap.forEach((user, rateLimiterString) -> {
                         try {
-                            XContentParser rateLimiterParser = XContentType.JSON.xContent().createParser(
-                                    NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, rateLimiterString);
+                            XContentParser rateLimiterParser = XContentType.JSON
+                                .xContent()
+                                .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, rateLimiterString);
                             rateLimiterParser.nextToken();
                             MLRateLimiter rateLimiter = MLRateLimiter.parse(rateLimiterParser);
                             if (!rateLimiter.isEmpty()) {
@@ -96,8 +96,7 @@ public class MLController implements ToXContentObject, Writeable {
         out.writeString(modelId);
         if (userRateLimiter != null) {
             out.writeBoolean(true);
-            out.writeMap(userRateLimiter, StreamOutput::writeString,
-                    (streamOutput, rateLimiter) -> rateLimiter.writeTo(streamOutput));
+            out.writeMap(userRateLimiter, StreamOutput::writeString, (streamOutput, rateLimiter) -> rateLimiter.writeTo(streamOutput));
         } else {
             out.writeBoolean(false);
         }
@@ -121,8 +120,7 @@ public class MLController implements ToXContentObject, Writeable {
      * @return True if a deployment is required, false otherwise.
      */
     public boolean isDeployRequiredAfterUpdate(MLController updateContent) {
-        if (updateContent != null && updateContent.getUserRateLimiter() != null
-                && !updateContent.getUserRateLimiter().isEmpty()) {
+        if (updateContent != null && updateContent.getUserRateLimiter() != null && !updateContent.getUserRateLimiter().isEmpty()) {
             Map<String, MLRateLimiter> updateUserRateLimiter = updateContent.getUserRateLimiter();
             for (Map.Entry<String, MLRateLimiter> entry : updateUserRateLimiter.entrySet()) {
                 String newUser = entry.getKey();

@@ -5,8 +5,18 @@
 
 package org.opensearch.ml.common.transport.register;
 
-import lombok.Builder;
-import lombok.Data;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.MLModel.allowedInterfaceFieldKeys;
+import static org.opensearch.ml.common.connector.Connector.createConnector;
+import static org.opensearch.ml.common.utils.StringUtils.filteredParameterMap;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+
 import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -19,26 +29,18 @@ import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.model.Guardrails;
-import org.opensearch.ml.common.model.MLModelConfig;
+import org.opensearch.ml.common.model.ImageEmbeddingModelConfig;
 import org.opensearch.ml.common.model.MLDeploySetting;
+import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
 import org.opensearch.ml.common.model.QuestionAnsweringModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
-import org.opensearch.ml.common.controller.MLRateLimiter;
-import org.opensearch.ml.common.model.ImageEmbeddingModelConfig;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Objects;
 
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.MLModel.allowedInterfaceFieldKeys;
-import static org.opensearch.ml.common.connector.Connector.createConnector;
-import static org.opensearch.ml.common.utils.StringUtils.filteredParameterMap;
+import lombok.Builder;
+import lombok.Data;
 
 /**
  * ML input data: algirithm name, parameters and input data set.
@@ -103,29 +105,31 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     private Map<String, String> modelInterface;
 
     @Builder(toBuilder = true)
-    public MLRegisterModelInput(FunctionName functionName,
-            String modelName,
-            String modelGroupId,
-            String version,
-            String description,
-            Boolean isEnabled,
-            MLRateLimiter rateLimiter,
-            String url,
-            String hashValue,
-            MLModelFormat modelFormat,
-            MLModelConfig modelConfig,
-            MLDeploySetting deploySetting,
-            boolean deployModel,
-            String[] modelNodeIds,
-            Connector connector,
-            String connectorId,
-            List<String> backendRoles,
-            Boolean addAllBackendRoles,
-            AccessMode accessMode,
-            Boolean doesVersionCreateModelGroup,
-            Boolean isHidden,
-            Guardrails guardrails,
-            Map<String, String> modelInterface) {
+    public MLRegisterModelInput(
+        FunctionName functionName,
+        String modelName,
+        String modelGroupId,
+        String version,
+        String description,
+        Boolean isEnabled,
+        MLRateLimiter rateLimiter,
+        String url,
+        String hashValue,
+        MLModelFormat modelFormat,
+        MLModelConfig modelConfig,
+        MLDeploySetting deploySetting,
+        boolean deployModel,
+        String[] modelNodeIds,
+        Connector connector,
+        String connectorId,
+        List<String> backendRoles,
+        Boolean addAllBackendRoles,
+        AccessMode accessMode,
+        Boolean doesVersionCreateModelGroup,
+        Boolean isHidden,
+        Guardrails guardrails,
+        Map<String, String> modelInterface
+    ) {
         this.functionName = Objects.requireNonNullElse(functionName, FunctionName.TEXT_EMBEDDING);
         if (modelName == null) {
             throw new IllegalArgumentException("model name is null");
@@ -134,11 +138,13 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
             if (modelFormat == null) {
                 throw new IllegalArgumentException("model format is null");
             }
-            if (url != null && modelConfig == null && functionName != FunctionName.SPARSE_TOKENIZE
-                    && functionName != FunctionName.SPARSE_ENCODING) { // The tokenize model doesn't require a model
-                                                                       // configuration. Currently, we only support one
-                                                                       // type of sparse model, which is pretrained, and
-                                                                       // it doesn't necessitate a model configuration.
+            if (url != null
+                && modelConfig == null
+                && functionName != FunctionName.SPARSE_TOKENIZE
+                && functionName != FunctionName.SPARSE_ENCODING) { // The tokenize model doesn't require a model
+                                                                   // configuration. Currently, we only support one
+                                                                   // type of sparse model, which is pretrained, and
+                                                                   // it doesn't necessitate a model configuration.
                 throw new IllegalArgumentException("model config is null");
             }
         }
@@ -378,8 +384,8 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         return builder;
     }
 
-    public static MLRegisterModelInput parse(XContentParser parser, String modelName, String version,
-            boolean deployModel) throws IOException {
+    public static MLRegisterModelInput parse(XContentParser parser, String modelName, String version, boolean deployModel)
+        throws IOException {
         FunctionName functionName = null;
         String modelGroupId = null;
         Boolean isEnabled = null;
@@ -433,8 +439,8 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                 case MODEL_CONFIG_FIELD:
                     if (FunctionName.QUESTION_ANSWERING.equals(functionName)) {
                         modelConfig = QuestionAnsweringModelConfig.parse(parser);
-                    } else if(FunctionName.IMAGE_EMBEDDING.equals(functionName)) {
-                      modelConfig = ImageEmbeddingModelConfig.parse(parser);
+                    } else if (FunctionName.IMAGE_EMBEDDING.equals(functionName)) {
+                        modelConfig = ImageEmbeddingModelConfig.parse(parser);
                     } else {
                         modelConfig = TextEmbeddingModelConfig.parse(parser);
                     }
@@ -483,10 +489,31 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     break;
             }
         }
-        return new MLRegisterModelInput(functionName, modelName, modelGroupId, version, description, isEnabled,
-                rateLimiter, url, hashValue, modelFormat, modelConfig, deploySetting, deployModel, modelNodeIds.toArray(new String[0]),
-                connector, connectorId, backendRoles, addAllBackendRoles, accessMode, doesVersionCreateModelGroup,
-                isHidden, guardrails, modelInterface);
+        return new MLRegisterModelInput(
+            functionName,
+            modelName,
+            modelGroupId,
+            version,
+            description,
+            isEnabled,
+            rateLimiter,
+            url,
+            hashValue,
+            modelFormat,
+            modelConfig,
+            deploySetting,
+            deployModel,
+            modelNodeIds.toArray(new String[0]),
+            connector,
+            connectorId,
+            backendRoles,
+            addAllBackendRoles,
+            accessMode,
+            doesVersionCreateModelGroup,
+            isHidden,
+            guardrails,
+            modelInterface
+        );
     }
 
     public static MLRegisterModelInput parse(XContentParser parser, boolean deployModel) throws IOException {
@@ -558,7 +585,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                 case MODEL_CONFIG_FIELD:
                     if (FunctionName.QUESTION_ANSWERING.equals(functionName)) {
                         modelConfig = QuestionAnsweringModelConfig.parse(parser);
-                    } else if( FunctionName.IMAGE_EMBEDDING.equals(functionName)) {
+                    } else if (FunctionName.IMAGE_EMBEDDING.equals(functionName)) {
                         modelConfig = ImageEmbeddingModelConfig.parse(parser);
                     } else {
                         modelConfig = TextEmbeddingModelConfig.parse(parser);
@@ -602,9 +629,30 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     break;
             }
         }
-        return new MLRegisterModelInput(functionName, name, modelGroupId, version, description, isEnabled, rateLimiter,
-                url, hashValue, modelFormat, modelConfig, deploySetting, deployModel, modelNodeIds.toArray(new String[0]),
-                connector, connectorId, backendRoles, addAllBackendRoles, accessMode, doesVersionCreateModelGroup,
-                isHidden, guardrails, modelInterface);
+        return new MLRegisterModelInput(
+            functionName,
+            name,
+            modelGroupId,
+            version,
+            description,
+            isEnabled,
+            rateLimiter,
+            url,
+            hashValue,
+            modelFormat,
+            modelConfig,
+            deploySetting,
+            deployModel,
+            modelNodeIds.toArray(new String[0]),
+            connector,
+            connectorId,
+            backendRoles,
+            addAllBackendRoles,
+            accessMode,
+            doesVersionCreateModelGroup,
+            isHidden,
+            guardrails,
+            modelInterface
+        );
     }
 }

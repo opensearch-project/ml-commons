@@ -5,20 +5,21 @@
 
 package org.opensearch.ml.common.model;
 
-import lombok.Builder;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+
+import java.io.IOException;
+import java.util.Map;
+import java.util.Set;
+
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 
-import java.io.IOException;
-import java.util.Map;
-import java.util.Set;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
 
 @EqualsAndHashCode
 @Getter
@@ -122,15 +123,19 @@ public class Guardrails implements ToXContentObject {
                     break;
             }
         }
+        if (type == null) {
+            type = "local_regex";
+        }
         if (!validateType(type)) {
             throw new IllegalArgumentException("The type of guardrails is required, can not be null.");
         }
 
-        return Guardrails.builder()
-                .type(type)
-                .inputGuardrail(createGuardrail(type, inputGuardrailMap))
-                .outputGuardrail(createGuardrail(type, outputGuardrailMap))
-                .build();
+        return Guardrails
+            .builder()
+            .type(type)
+            .inputGuardrail(createGuardrail(type, inputGuardrailMap))
+            .outputGuardrail(createGuardrail(type, outputGuardrailMap))
+            .build();
     }
 
     private static Boolean validateType(String type) {
