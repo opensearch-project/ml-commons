@@ -74,7 +74,7 @@ public class RestMLCancelBatchJobActionTests extends OpenSearchTestCase {
     public void testGetName() {
         String actionName = restMLCancelBatchJobAction.getName();
         assertFalse(Strings.isNullOrEmpty(actionName));
-        assertEquals("ml_cancel_batch_action", actionName);
+        assertEquals("ml_cancel_task_action", actionName);
     }
 
     public void testRoutes() {
@@ -83,7 +83,7 @@ public class RestMLCancelBatchJobActionTests extends OpenSearchTestCase {
         assertFalse(routes.isEmpty());
         RestHandler.Route route = routes.get(0);
         assertEquals(RestRequest.Method.POST, route.getMethod());
-        assertEquals("/_plugins/_ml/tasks/{task_id}/_cancel_batch", route.getPath());
+        assertEquals("/_plugins/_ml/tasks/{task_id}/_cancel", route.getPath());
     }
 
     public void test_PrepareRequest() throws Exception {
