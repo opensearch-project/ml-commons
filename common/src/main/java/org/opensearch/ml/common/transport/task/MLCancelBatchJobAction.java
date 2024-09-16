@@ -9,7 +9,7 @@ import org.opensearch.action.ActionType;
 
 public class MLCancelBatchJobAction extends ActionType<MLCancelBatchJobResponse> {
     public static final MLCancelBatchJobAction INSTANCE = new MLCancelBatchJobAction();
-    public static final String NAME = "cluster:admin/opensearch/ml/tasks/cancel_batch_job";
+    public static final String NAME = "cluster:admin/opensearch/ml/tasks/cancel";
 
     private MLCancelBatchJobAction() {
         super(NAME, MLCancelBatchJobResponse::new);
