@@ -20,7 +20,6 @@ import static org.opensearch.sdk.SdkClientSettings.VALID_AWS_OPENSEARCH_SERVICE_
 
 import java.security.AccessController;
 import java.security.PrivilegedAction;
-import java.net.URI;
 import java.util.Map;
 
 import javax.net.ssl.SSLContext;
@@ -60,7 +59,6 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 import lombok.extern.log4j.Log4j2;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
-import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProviderChain;
 import software.amazon.awssdk.auth.credentials.ContainerCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.EnvironmentVariableCredentialsProvider;
@@ -142,21 +140,6 @@ public class SdkClientFactory {
     private static DynamoDbClient createDynamoDbClient(String region) {
         if (region == null) {
             throw new IllegalStateException("REGION environment variable needs to be set!");
-        } else if (region.equals("local")) {
-            return PrivilegedAccess
-                .doPrivileged(
-                    (PrivilegedAction<DynamoDbClient>) () -> DynamoDbClient
-                        .builder()
-                        .overrideConfiguration(ClientOverrideConfiguration.builder().build())
-                        .endpointOverride(URI.create("http://localhost:8000"))
-                        .httpClient(UrlConnectionHttpClient.builder().build())
-                        .region(Region.US_WEST_2)
-                        // Demo only, these are not real credentials anywhere
-                        .credentialsProvider(
-                            StaticCredentialsProvider.create(AwsBasicCredentials.create("fakeAccessKeyId", "fakeSecretAccessKey"))
-                        )
-                        .build()
-                );
         }
         return PrivilegedAccess
             .doPrivileged(

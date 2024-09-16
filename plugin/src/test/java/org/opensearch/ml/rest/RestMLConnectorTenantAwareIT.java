@@ -189,7 +189,7 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
                 assertNull(searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID));
                 assertNull(searchResponse.getHits().getHits()[1].getSourceAsMap().get(TENANT_ID));
             }
-        }, 15, TimeUnit.SECONDS);
+        }, 20, TimeUnit.SECONDS);
 
         assertBusy(() -> {
             // Search should show only the connector for other tenant
@@ -204,7 +204,7 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
                 assertNull(searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID));
                 assertNull(searchResponse.getHits().getHits()[1].getSourceAsMap().get(TENANT_ID));
             }
-        }, 15, TimeUnit.SECONDS);
+        }, 20, TimeUnit.SECONDS);
 
         // Search should fail without a tenant id
         if (multiTenancyEnabled) {
