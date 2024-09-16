@@ -11,14 +11,25 @@ import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.common.MLTask.REMOTE_JOB_FIELD;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTaskState.CANCELLED;
+import static org.opensearch.ml.common.MLTaskState.CANCELLING;
 import static org.opensearch.ml.common.MLTaskState.COMPLETED;
+import static org.opensearch.ml.common.MLTaskState.EXPIRED;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.BATCH_PREDICT_STATUS;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_CANCELLED_REGEX;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_CANCELLING_REGEX;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_COMPLETED_REGEX;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_EXPIRED_REGEX;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_FIELD;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
@@ -30,6 +41,8 @@ import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.settings.Setting;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
@@ -80,6 +93,12 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
     MLTaskManager mlTaskManager;
     MLModelCacheHelper modelCacheHelper;
 
+    volatile List<String> remoteJobStatusFields;
+    volatile Pattern remoteJobCompletedStatusRegexPattern;
+    volatile Pattern remoteJobCancelledStatusRegexPattern;
+    volatile Pattern remoteJobCancellingStatusRegexPattern;
+    volatile Pattern remoteJobExpiredStatusRegexPattern;
+
     @Inject
     public GetTaskTransportAction(
         TransportService transportService,
@@ -91,7 +110,8 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         ConnectorAccessControlHelper connectorAccessControlHelper,
         EncryptorImpl encryptor,
         MLTaskManager mlTaskManager,
-        MLModelManager mlModelManager
+        MLModelManager mlModelManager,
+        Settings settings
     ) {
         super(MLTaskGetAction.NAME, transportService, actionFilters, MLTaskGetRequest::new);
         this.client = client;
@@ -102,6 +122,44 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         this.encryptor = encryptor;
         this.mlTaskManager = mlTaskManager;
         this.mlModelManager = mlModelManager;
+
+        remoteJobStatusFields = ML_COMMONS_REMOTE_JOB_STATUS_FIELD.get(settings);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_REMOTE_JOB_STATUS_FIELD, it -> remoteJobStatusFields = it);
+        initializeRegexPattern(
+            ML_COMMONS_REMOTE_JOB_STATUS_COMPLETED_REGEX,
+            settings,
+            clusterService,
+            (regex) -> remoteJobCompletedStatusRegexPattern = Pattern.compile(regex, Pattern.CASE_INSENSITIVE)
+        );
+        initializeRegexPattern(
+            ML_COMMONS_REMOTE_JOB_STATUS_CANCELLED_REGEX,
+            settings,
+            clusterService,
+            (regex) -> remoteJobCancelledStatusRegexPattern = Pattern.compile(regex, Pattern.CASE_INSENSITIVE)
+        );
+        initializeRegexPattern(
+            ML_COMMONS_REMOTE_JOB_STATUS_CANCELLING_REGEX,
+            settings,
+            clusterService,
+            (regex) -> remoteJobCancellingStatusRegexPattern = Pattern.compile(regex, Pattern.CASE_INSENSITIVE)
+        );
+        initializeRegexPattern(
+            ML_COMMONS_REMOTE_JOB_STATUS_EXPIRED_REGEX,
+            settings,
+            clusterService,
+            (regex) -> remoteJobExpiredStatusRegexPattern = Pattern.compile(regex, Pattern.CASE_INSENSITIVE)
+        );
+    }
+
+    private void initializeRegexPattern(
+        Setting<String> setting,
+        Settings settings,
+        ClusterService clusterService,
+        Consumer<String> patternInitializer
+    ) {
+        String regex = setting.get(settings);
+        patternInitializer.accept(regex);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(setting, it -> patternInitializer.accept(it));
     }
 
     @Override
@@ -210,7 +268,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         MLInput mlInput,
         String taskId,
         MLTask mlTask,
-        Map<String, Object> transformJob,
+        Map<String, Object> remoteJob,
         ActionListener<MLTaskGetResponse> actionListener
     ) {
         if (connectorAccessControlHelper.validateConnectorAccess(client, connector)) {
@@ -222,7 +280,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
             connectorExecutor.setClient(client);
             connectorExecutor.setXContentRegistry(xContentRegistry);
             connectorExecutor.executeAction(BATCH_PREDICT_STATUS.name(), mlInput, ActionListener.wrap(taskResponse -> {
-                processTaskResponse(mlTask, taskId, taskResponse, transformJob, actionListener);
+                processTaskResponse(mlTask, taskId, taskResponse, remoteJob, actionListener);
             }, e -> { actionListener.onFailure(e); }));
         } else {
             actionListener
@@ -230,7 +288,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         }
     }
 
-    private void processTaskResponse(
+    protected void processTaskResponse(
         MLTask mlTask,
         String taskId,
         MLTaskResponse taskResponse,
@@ -248,15 +306,11 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
                         Map<String, Object> updatedTask = new HashMap<>();
                         updatedTask.put(REMOTE_JOB_FIELD, remoteJob);
 
-                        if ((remoteJob.containsKey("status") && remoteJob.get("status").equals("completed"))
-                            || (remoteJob.containsKey("TransformJobStatus") && remoteJob.get("TransformJobStatus").equals("Completed"))) {
-                            updatedTask.put(STATE_FIELD, COMPLETED);
-                            mlTask.setState(COMPLETED);
-
-                        } else if ((remoteJob.containsKey("status") && remoteJob.get("status").equals("cancelled"))
-                            || (remoteJob.containsKey("TransformJobStatus") && remoteJob.get("TransformJobStatus").equals("Stopped"))) {
-                            updatedTask.put(STATE_FIELD, CANCELLED);
-                            mlTask.setState(CANCELLED);
+                        for (String statusField : remoteJobStatusFields) {
+                            String statusValue = String.valueOf(remoteJob.get(statusField));
+                            if (remoteJob.containsKey(statusField)) {
+                                updateTaskState(updatedTask, mlTask, statusValue);
+                            }
                         }
                         mlTaskManager.updateMLTaskDirectly(taskId, updatedTask, ActionListener.wrap(response -> {
                             actionListener.onResponse(MLTaskGetResponse.builder().mlTask(mlTask).build());
@@ -279,5 +333,26 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         } catch (Exception e) {
             log.error("Unable to fetch status for ml task ", e);
         }
+    }
+
+    private void updateTaskState(Map<String, Object> updatedTask, MLTask mlTask, String statusValue) {
+        if (matchesPattern(remoteJobCancellingStatusRegexPattern, statusValue)) {
+            updatedTask.put(STATE_FIELD, CANCELLING);
+            mlTask.setState(CANCELLING);
+        } else if (matchesPattern(remoteJobCancelledStatusRegexPattern, statusValue)) {
+            updatedTask.put(STATE_FIELD, CANCELLED);
+            mlTask.setState(CANCELLED);
+        } else if (matchesPattern(remoteJobCompletedStatusRegexPattern, statusValue)) {
+            updatedTask.put(STATE_FIELD, COMPLETED);
+            mlTask.setState(COMPLETED);
+        } else if (matchesPattern(remoteJobExpiredStatusRegexPattern, statusValue)) {
+            updatedTask.put(STATE_FIELD, EXPIRED);
+            mlTask.setState(EXPIRED);
+        }
+    }
+
+    private boolean matchesPattern(Pattern pattern, String input) {
+        Matcher matcher = pattern.matcher(input);
+        return matcher.find();
     }
 }
