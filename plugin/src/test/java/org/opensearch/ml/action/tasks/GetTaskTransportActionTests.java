@@ -15,12 +15,18 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_CANCELLED_REGEX;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_CANCELLING_REGEX;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_COMPLETED_REGEX;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_EXPIRED_REGEX;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_FIELD;
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.junit.Before;
 import org.junit.Ignore;
@@ -36,6 +42,7 @@ import org.opensearch.client.Client;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.metadata.Metadata;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
@@ -49,13 +56,16 @@ import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
+import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.HttpConnector;
+import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.task.MLTaskGetRequest;
 import org.opensearch.ml.common.transport.task.MLTaskGetResponse;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
@@ -118,7 +128,14 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         MockitoAnnotations.openMocks(this);
         mlTaskGetRequest = MLTaskGetRequest.builder().taskId("test_id").build();
 
-        Settings settings = Settings.builder().build();
+        Settings settings = Settings
+            .builder()
+            .putList(ML_COMMONS_REMOTE_JOB_STATUS_FIELD.getKey(), List.of("status", "TransformJobStatus"))
+            .put(ML_COMMONS_REMOTE_JOB_STATUS_COMPLETED_REGEX.getKey(), "(complete|completed)")
+            .put(ML_COMMONS_REMOTE_JOB_STATUS_CANCELLED_REGEX.getKey(), "(stopped|cancelled)")
+            .put(ML_COMMONS_REMOTE_JOB_STATUS_CANCELLING_REGEX.getKey(), "(stopping|cancelling)")
+            .put(ML_COMMONS_REMOTE_JOB_STATUS_EXPIRED_REGEX.getKey(), "(expired|timeout)")
+            .build();
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
@@ -127,6 +144,21 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         doReturn(metaData).when(clusterState).metadata();
 
         doReturn(true).when(metaData).hasIndex(anyString());
+        when(clusterService.getSettings()).thenReturn(settings);
+        when(this.clusterService.getClusterSettings())
+            .thenReturn(
+                new ClusterSettings(
+                    settings,
+                    Set
+                        .of(
+                            ML_COMMONS_REMOTE_JOB_STATUS_FIELD,
+                            ML_COMMONS_REMOTE_JOB_STATUS_COMPLETED_REGEX,
+                            ML_COMMONS_REMOTE_JOB_STATUS_CANCELLED_REGEX,
+                            ML_COMMONS_REMOTE_JOB_STATUS_CANCELLING_REGEX,
+                            ML_COMMONS_REMOTE_JOB_STATUS_EXPIRED_REGEX
+                        )
+                )
+            );
 
         getTaskTransportAction = spy(
             new GetTaskTransportAction(
@@ -139,7 +171,8 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
                 connectorAccessControlHelper,
                 encryptor,
                 mlTaskManager,
-                mlModelManager
+                mlModelManager,
+                settings
             )
         );
 
@@ -330,5 +363,62 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         GetResult getResult = new GetResult("indexName", "111", 111l, 111l, 111l, true, bytesReference, null, null);
         GetResponse getResponse = new GetResponse(getResult);
         return getResponse;
+    }
+
+    public void test_processTaskResponse_complete() {
+        processTaskResponse("TransformJobStatus", "complete", MLTaskState.COMPLETED);
+    }
+
+    public void test_processTaskResponse_cancelling() {
+        processTaskResponse("status", "cancelling", MLTaskState.CANCELLING);
+    }
+
+    public void test_processTaskResponse_cancelled() {
+        processTaskResponse("status", "cancelled", MLTaskState.CANCELLED);
+    }
+
+    public void test_processTaskResponse_expired() {
+        processTaskResponse("status", "expired", MLTaskState.EXPIRED);
+    }
+
+    public void test_processTaskResponse_WrongStatusField() {
+        processTaskResponse("wrong_status_field", "expired", null);
+    }
+
+    public void test_processTaskResponse_UnknownStatusField() {
+        processTaskResponse("status", "unkown_status", null);
+    }
+
+    private void processTaskResponse(String statusField, String remoteJobResponseStatus, MLTaskState taskState) {
+        String taskId = "testTaskId";
+        String remoteJobName = randomAlphaOfLength(5);
+        Map<String, Object> remoteJob = new HashMap();
+        remoteJob.put(statusField, "running");
+        remoteJob.put("name", remoteJobName);
+        MLTask mlTask = MLTask
+            .builder()
+            .taskId(taskId)
+            .taskType(MLTaskType.BATCH_PREDICTION)
+            .inputType(MLInputDataType.REMOTE)
+            .state(MLTaskState.RUNNING)
+            .remoteJob(remoteJob)
+            .build();
+        ModelTensor modelTensor = ModelTensor.builder().name("response").dataAsMap(Map.of(statusField, remoteJobResponseStatus)).build();
+        ModelTensorOutput modelTensorOutput = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(List.of(ModelTensors.builder().mlModelTensors(List.of(modelTensor)).build()))
+            .build();
+        MLTaskResponse taskResponse = MLTaskResponse.builder().output(modelTensorOutput).build();
+        ActionListener<MLTaskGetResponse> actionListener = mock(ActionListener.class);
+        ArgumentCaptor<Map<String, Object>> updatedTaskCaptor = ArgumentCaptor.forClass(Map.class);
+
+        getTaskTransportAction.processTaskResponse(mlTask, taskId, taskResponse, mlTask.getRemoteJob(), actionListener);
+
+        verify(mlTaskManager).updateMLTaskDirectly(any(), updatedTaskCaptor.capture(), any());
+        Map<String, Object> updatedTask = updatedTaskCaptor.getValue();
+        assertEquals(taskState, updatedTask.get("state"));
+        Map<String, Object> updatedRemoteJob = (Map<String, Object>) updatedTask.get("remote_job");
+        assertEquals(remoteJobResponseStatus, updatedRemoteJob.get(statusField));
+        assertEquals(remoteJobName, updatedRemoteJob.get("name"));
     }
 }
