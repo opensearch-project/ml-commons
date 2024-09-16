@@ -5,29 +5,23 @@
 
 package org.opensearch.ml.rest;
 
-import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID;
 import static org.opensearch.ml.common.MLModelGroup.MODEL_GROUP_ID_FIELD;
 import static org.opensearch.ml.common.MLTask.MODEL_ID_FIELD;
 import static org.opensearch.ml.rest.RestMLRAGSearchProcessorIT.COHERE_CONNECTOR_BLUEPRINT;
 
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Response;
 import org.opensearch.client.ResponseException;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.rest.RestRequest;
 
 public class RestMLModelGroupTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
 
     public void testModelGroupCRUD() throws Exception {
         boolean multiTenancyEnabled = isMultiTenancyEnabled();
-        // ensure local ml config has been deleted
-        // see https://github.com/opensearch-project/ml-commons/issues/2888
-        if (indexExistsWithAdminClient(ML_CONFIG_INDEX)) {
-            assertBusy(() -> assertFalse(indexExistsWithAdminClient(ML_CONFIG_INDEX)), 10, TimeUnit.SECONDS);
-        }
 
         /*
          * Create
@@ -64,9 +58,17 @@ public class RestMLModelGroupTenantAwareIT extends MLCommonsTenantAwareRestTestC
                 () -> makeRequest(otherTenantRequest, GET, MODEL_GROUPS_PATH + modelGroupId)
             );
             response = ex.getResponse();
-            assertForbidden(response);
             map = responseToMap(response);
-            assertEquals(NO_PERMISSION_REASON, getErrorReasonFromResponseMap(map));
+            if (DDB) {
+                assertNotFound(response);
+                assertEquals(
+                    "Failed to find model group with the provided model group id: " + modelGroupId,
+                    getErrorReasonFromResponseMap(map)
+                );
+            } else {
+                assertForbidden(response);
+                assertEquals(NO_PERMISSION_REASON, getErrorReasonFromResponseMap(map));
+            }
         } else {
             response = makeRequest(otherTenantRequest, GET, MODEL_GROUPS_PATH + modelGroupId);
             assertOK(response);
@@ -154,9 +156,15 @@ public class RestMLModelGroupTenantAwareIT extends MLCommonsTenantAwareRestTestC
                 () -> makeRequest(registerModelInSameGroupOtherTenantRequest, POST, MODELS_PATH + "_register")
             );
             response = ex.getResponse();
-            assertForbidden(response);
             map = responseToMap(response);
-            assertEquals(NO_PERMISSION_REASON, getErrorReasonFromResponseMap(map));
+            if (DDB) {
+                // Should probably be 404, see https://github.com/opensearch-project/ml-commons/issues/2958
+                assertEquals(RestStatus.INTERNAL_SERVER_ERROR.getStatus(), response.getStatusLine().getStatusCode());
+                assertEquals("Fail to find model group", getErrorReasonFromResponseMap(map));
+            } else {
+                assertForbidden(response);
+                assertEquals(NO_PERMISSION_REASON, getErrorReasonFromResponseMap(map));
+            }
         } else {
             response = makeRequest(registerModelInSameGroupOtherTenantRequest, POST, MODELS_PATH + "_register");
             assertOK(response);
@@ -189,9 +197,17 @@ public class RestMLModelGroupTenantAwareIT extends MLCommonsTenantAwareRestTestC
                 () -> makeRequest(otherUpdateRequest, PUT, MODEL_GROUPS_PATH + modelGroupId)
             );
             response = ex.getResponse();
-            assertForbidden(response);
             map = responseToMap(response);
-            assertEquals(NO_PERMISSION_REASON, getErrorReasonFromResponseMap(map));
+            if (DDB) {
+                assertNotFound(response);
+                assertEquals(
+                    "Failed to find model group with the provided model group id: " + modelGroupId,
+                    getErrorReasonFromResponseMap(map)
+                );
+            } else {
+                assertForbidden(response);
+                assertEquals(NO_PERMISSION_REASON, getErrorReasonFromResponseMap(map));
+            }
         } else {
             response = makeRequest(otherUpdateRequest, PUT, MODEL_GROUPS_PATH + modelGroupId);
             assertOK(response);
@@ -310,15 +326,26 @@ public class RestMLModelGroupTenantAwareIT extends MLCommonsTenantAwareRestTestC
                 () -> makeRequest(tenantRequest, DELETE, MODEL_GROUPS_PATH + otherModelGroupId)
             );
             response = ex.getResponse();
-            assertForbidden(response);
             map = responseToMap(response);
-            assertEquals(NO_PERMISSION_REASON, getErrorReasonFromResponseMap(map));
+            if (DDB) {
+                // Should probably be 404, see https://github.com/opensearch-project/ml-commons/issues/2958
+                assertEquals(RestStatus.INTERNAL_SERVER_ERROR.getStatus(), response.getStatusLine().getStatusCode());
+                assertEquals("Fail to find model group", getErrorReasonFromResponseMap(map));
+            } else {
+                assertForbidden(response);
+                assertEquals(NO_PERMISSION_REASON, getErrorReasonFromResponseMap(map));
+            }
 
             ex = assertThrows(ResponseException.class, () -> makeRequest(otherTenantRequest, DELETE, MODEL_GROUPS_PATH + modelGroupId));
             response = ex.getResponse();
-            assertForbidden(response);
-            map = responseToMap(response);
-            assertEquals(NO_PERMISSION_REASON, getErrorReasonFromResponseMap(map));
+            if (DDB) {
+                // Should probably be 404, see https://github.com/opensearch-project/ml-commons/issues/2958
+                assertEquals(RestStatus.INTERNAL_SERVER_ERROR.getStatus(), response.getStatusLine().getStatusCode());
+                assertEquals("Fail to find model group", getErrorReasonFromResponseMap(map));
+            } else {
+                assertForbidden(response);
+                assertEquals(NO_PERMISSION_REASON, getErrorReasonFromResponseMap(map));
+            }
 
             // and can't delete without a tenant ID either
             ex = assertThrows(ResponseException.class, () -> makeRequest(nullTenantRequest, DELETE, MODEL_GROUPS_PATH + modelGroupId));
