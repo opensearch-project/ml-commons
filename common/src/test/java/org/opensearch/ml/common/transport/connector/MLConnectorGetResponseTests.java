@@ -14,7 +14,6 @@ import static org.junit.Assert.assertSame;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 
-import org.json.JSONObject;
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
@@ -61,11 +60,7 @@ public class MLConnectorGetResponseTests {
         assertNotNull(builder);
         String jsonStr = builder.toString();
 
-        JSONObject connectorJsonObject = new JSONObject(jsonStr);
-        long connectorCreatedTime = connectorJsonObject.getLong("created_time");
-        long connectorLastUpdatedTime = connectorJsonObject.getLong("last_updated_time");
-
-        String expectedControllerResponseFormat = "{\"name\":\"test_connector_name\",\"version\":\"1\","
+        String expectedControllerResponse = "{\"name\":\"test_connector_name\",\"version\":\"1\","
             + "\"description\":\"this is a test connector\",\"protocol\":\"http\","
             + "\"parameters\":{\"input\":\"test input value\"},\"credential\":{\"key\":\"test_key_value\"},"
             + "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://test.com\","
@@ -74,12 +69,10 @@ public class MLConnectorGetResponseTests {
             + "\"pre_process_function\":\"connector.pre_process.openai.embedding\","
             + "\"post_process_function\":\"connector.post_process.openai.embedding\"}],"
             + "\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\","
-            + "\"created_time\":%d,\"last_updated_time\":%d,"
             + "\"client_config\":{\"max_connection\":30,"
             + "\"connection_timeout\":30000,\"read_timeout\":30000,"
             + "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}}";
 
-        String expectedControllerResponse = String.format(expectedControllerResponseFormat, connectorCreatedTime, connectorLastUpdatedTime);
         assertEquals(expectedControllerResponse, jsonStr);
     }
 

@@ -72,11 +72,6 @@ public abstract class AbstractConnector implements Connector {
     @Setter
     protected ConnectorClientConfig connectorClientConfig;
 
-    public AbstractConnector() {
-        this.createdTime = Instant.now();
-        this.lastUpdateTime = Instant.now();
-    }
-
     protected Map<String, String> createDecryptedHeaders(Map<String, String> headers) {
         if (headers == null) {
             return null;

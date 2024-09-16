@@ -17,7 +17,6 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
-import org.json.JSONObject;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -56,7 +55,7 @@ public class MLUpdateModelInputTest {
             + "\"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": ${parameters.messages} }\"}]},\"connector_id\":"
             + "\"test-connector_id\",\"connector\":{\"description\":\"updated description\",\"version\":\"1\"},\"last_updated_time\":1}";
 
-    private final String expectedOutputStrForUpdateRequestDocFormat =
+    private final String expectedOutputStrForUpdateRequestDoc =
         "{\"model_id\":\"test-model_id\",\"name\":\"name\",\"description\":\"description\",\"model_version\":"
             + "\"2\",\"model_group_id\":\"modelGroupId\",\"is_enabled\":false,\"rate_limiter\":"
             + "{\"limit\":\"1\",\"unit\":\"MILLISECONDS\"},\"model_config\":"
@@ -65,8 +64,7 @@ public class MLUpdateModelInputTest {
             + "{\"name\":\"test\",\"version\":\"1\",\"protocol\":\"http\",\"parameters\":{\"param1\":\"value1\"},\"credential\":"
             + "{\"api_key\":\"credential_value\"},\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":"
             + "\"https://api.openai.com/v1/chat/completions\",\"headers\":{\"Authorization\":\"Bearer ${credential.api_key}\"},\"request_body\":"
-            + "\"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": ${parameters.messages} }\"}],"
-            + "\"created_time\":%d,\"last_updated_time\":%d},"
+            + "\"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": ${parameters.messages} }\"}]},"
             + "\"connector_id\":\"test-connector_id\",\"last_updated_time\":1}";
 
     private final String expectedOutputStr = "{\"model_id\":null,\"name\":\"name\",\"description\":\"description\",\"model_group_id\":"
@@ -155,13 +153,7 @@ public class MLUpdateModelInputTest {
     public void testToXContent() throws Exception {
         String jsonStr = serializationWithToXContent(updateModelInput);
 
-        JSONObject connectorJsonObject = new JSONObject(jsonStr);
-        long connectorCreatedTime = connectorJsonObject.getJSONObject("connector").getLong("created_time");
-        long connectorLastUpdatedTime = connectorJsonObject.getJSONObject("connector").getLong("last_updated_time");
-
-        String expectedStringResponse = String
-            .format(expectedOutputStrForUpdateRequestDocFormat, connectorCreatedTime, connectorLastUpdatedTime);
-        assertEquals(expectedStringResponse, jsonStr);
+        assertEquals(expectedOutputStrForUpdateRequestDoc, jsonStr);
     }
 
     @Test

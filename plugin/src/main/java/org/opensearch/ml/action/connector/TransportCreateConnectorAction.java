@@ -8,6 +8,7 @@ package org.opensearch.ml.action.connector;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
 
@@ -135,6 +136,11 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                 }, listener::onFailure);
 
                 IndexRequest indexRequest = new IndexRequest(ML_CONNECTOR_INDEX);
+
+                Instant currentTime = Instant.now();
+                connector.setCreatedTime(currentTime);
+                connector.setLastUpdateTime(currentTime);
+
                 indexRequest.source(connector.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS));
                 indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                 client.index(indexRequest, ActionListener.runBefore(indexResponseListener, context::restore));

@@ -14,10 +14,8 @@ import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.time.Instant;
+import java.util.*;
 
 import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
@@ -200,6 +198,116 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
             listener.onResponse(connector);
             return null;
         }).when(connectorAccessControlHelper).getConnector(any(Client.class), any(String.class), isA(ActionListener.class));
+    }
+
+    @Test
+    public void testUpdateConnectorDoesNotUpdateHttpConnectorTimeFields() {
+        HttpConnector connector = HttpConnector
+            .builder()
+            .name("test")
+            .protocol("http")
+            .version("1")
+            .credential(Map.of("api_key", "credential_value"))
+            .parameters(Map.of("param1", "value1"))
+            .actions(
+                Arrays
+                    .asList(
+                        ConnectorAction
+                            .builder()
+                            .actionType(ConnectorAction.ActionType.PREDICT)
+                            .method("POST")
+                            .url("https://api.openai.com/v1/chat/completions")
+                            .headers(Map.of("Authorization", "Bearer ${credential.api_key}"))
+                            .requestBody("{ \"model\": \"${parameters.model}\", \"messages\": ${parameters.messages} }")
+                            .build()
+                    )
+            )
+            .build();
+
+        assertNull(connector.getCreatedTime());
+        assertNull(connector.getLastUpdateTime());
+
+        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(2);
+            listener.onResponse(connector);
+            return null;
+        }).when(connectorAccessControlHelper).getConnector(any(Client.class), any(String.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        assertNull(connector.getLastUpdateTime());
+    }
+
+    @Test
+    public void testUpdateConnectorUpdatesHttpConnectorTimeFields() {
+        HttpConnector connector = HttpConnector
+            .builder()
+            .name("test")
+            .protocol("http")
+            .version("1")
+            .credential(Map.of("api_key", "credential_value"))
+            .parameters(Map.of("param1", "value1"))
+            .actions(
+                Arrays
+                    .asList(
+                        ConnectorAction
+                            .builder()
+                            .actionType(ConnectorAction.ActionType.PREDICT)
+                            .method("POST")
+                            .url("https://api.openai.com/v1/chat/completions")
+                            .headers(Map.of("Authorization", "Bearer ${credential.api_key}"))
+                            .requestBody("{ \"model\": \"${parameters.model}\", \"messages\": ${parameters.messages} }")
+                            .build()
+                    )
+            )
+            .build();
+
+        Instant testInitialTime = Instant.now();
+        connector.setCreatedTime(testInitialTime);
+        connector.setLastUpdateTime(testInitialTime);
+
+        assert (connector.getCreatedTime().toEpochMilli() == connector.getLastUpdateTime().toEpochMilli());
+
+        doReturn(true).when(connectorAccessControlHelper).validateConnectorAccess(any(Client.class), any(Connector.class));
+
+        doAnswer(invocation -> {
+            ActionListener<Connector> listener = invocation.getArgument(2);
+            listener.onResponse(connector);
+            return null;
+        }).when(connectorAccessControlHelper).getConnector(any(Client.class), any(String.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+
+        updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
+
+        assertTrue(
+            "Last update time must be bigger than the creation time",
+            connector.getLastUpdateTime().toEpochMilli() >= connector.getCreatedTime().toEpochMilli()
+        );
     }
 
     @Test
