@@ -140,7 +140,12 @@ public class ModelAccessControlHelper {
             listener.onResponse(true);
             return;
         }
-        GetDataObjectRequest getModelGroupRequest = GetDataObjectRequest.builder().index(ML_MODEL_GROUP_INDEX).id(modelGroupId).build();
+        GetDataObjectRequest getModelGroupRequest = GetDataObjectRequest
+            .builder()
+            .index(ML_MODEL_GROUP_INDEX)
+            .id(modelGroupId)
+            .tenantId(tenantId)
+            .build();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<Boolean> wrappedListener = ActionListener.runBefore(listener, context::restore);
             sdkClient

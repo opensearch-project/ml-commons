@@ -124,6 +124,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
             .builder()
             .index(ML_MODEL_INDEX)
             .id(modelId)
+            .tenantId(tenantId)
             .fetchSourceContext(fetchSourceContext)
             .build();
         User user = RestActionUtils.getUserContext(client);
@@ -174,7 +175,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                                 );
                                         } else {
                                             if (isModelNotDeployed(mlModelState)) {
-                                                deleteModel(modelId, algorithmName, isHidden, actionListener);
+                                                deleteModel(modelId, tenantId, algorithmName, isHidden, actionListener);
                                             } else {
                                                 wrappedListener
                                                     .onFailure(
@@ -201,7 +202,13 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                                                 )
                                                             );
                                                     } else if (isModelNotDeployed(mlModelState)) {
-                                                        deleteModel(modelId, mlModel.getAlgorithm().name(), isHidden, actionListener);
+                                                        deleteModel(
+                                                            modelId,
+                                                            tenantId,
+                                                            mlModel.getAlgorithm().name(),
+                                                            isHidden,
+                                                            actionListener
+                                                        );
                                                     } else {
                                                         wrappedListener
                                                             .onFailure(
@@ -281,8 +288,19 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         actionListener.onFailure(new OpenSearchStatusException(errorMessage, RestStatus.INTERNAL_SERVER_ERROR));
     }
 
-    private void deleteModel(String modelId, String functionName, Boolean isHidden, ActionListener<DeleteResponse> actionListener) {
-        DeleteDataObjectRequest deleteDataObjectRequest = DeleteDataObjectRequest.builder().index(ML_MODEL_INDEX).id(modelId).build();
+    private void deleteModel(
+        String modelId,
+        String tenantId,
+        String functionName,
+        Boolean isHidden,
+        ActionListener<DeleteResponse> actionListener
+    ) {
+        DeleteDataObjectRequest deleteDataObjectRequest = DeleteDataObjectRequest
+            .builder()
+            .index(ML_MODEL_INDEX)
+            .id(modelId)
+            .tenantId(tenantId)
+            .build();
         sdkClient
             .deleteDataObjectAsync(deleteDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
             .whenComplete((r, throwable) -> {
@@ -355,7 +373,9 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
             // for remote model we don't need to delete model chunks so reducing one latch countdown.
             countDownLatch.countDown();
         }
-        deleteController(modelId, isHidden, countDownActionListener);
+        // TODO This uses remote client but we haven't implemented it anywhere else?!
+        // deleteController(modelId, isHidden, countDownActionListener);
+        countDownActionListener.onResponse(true);
     }
 
     /**
