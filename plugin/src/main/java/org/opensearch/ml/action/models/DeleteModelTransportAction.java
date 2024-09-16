@@ -374,7 +374,9 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
             // for remote model we don't need to delete model chunks so reducing one latch countdown.
             countDownLatch.countDown();
         }
-        deleteController(modelId, isHidden, countDownActionListener);
+        // TODO This uses remote client but we haven't implemented it anywhere else?!
+        // deleteController(modelId, isHidden, countDownActionListener);
+        countDownActionListener.onResponse(true);
     }
 
     /**
