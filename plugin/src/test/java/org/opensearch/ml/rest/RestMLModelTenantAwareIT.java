@@ -104,20 +104,19 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
         /*
          * Update
          */
-        /* FAILING BECAUSE OF OVERWRITE, NULL ALGORITHM NAME
         // Now attempt to update the model name
         RestRequest updateRequest = getRestRequestWithHeadersAndContent(tenantId, "{\"description\":\"Updated test model\"}");
         response = makeRequest(updateRequest, PUT, MODELS_PATH + modelId);
         assertOK(response);
         map = responseToMap(response);
         assertEquals(modelId, map.get(DOC_ID).toString());
-        
+
         // Verify the update
         response = makeRequest(tenantRequest, GET, MODELS_PATH + modelId);
         assertOK(response);
         map = responseToMap(response);
         assertEquals("Updated test model", map.get("description"));
-        
+
         // Try the update with other tenant ID
         RestRequest otherUpdateRequest = getRestRequestWithHeadersAndContent(
             otherTenantId,
@@ -143,7 +142,7 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
             map = responseToMap(response);
             assertEquals("Other updated test model", map.get("description"));
         }
-        
+
         // Try the update with no tenant ID
         RestRequest nullUpdateRequest = getRestRequestWithHeadersAndContent(null, "{\"description\":\"Null updated test model\"}");
         if (multiTenancyEnabled) {
@@ -161,7 +160,7 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
             map = responseToMap(response);
             assertEquals("Null updated test model", map.get("description"));
         }
-        
+
         // Verify no change from original update when multiTenancy enabled
         if (multiTenancyEnabled) {
             response = makeRequest(tenantRequest, GET, MODELS_PATH + modelId);
@@ -169,7 +168,6 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
             map = responseToMap(response);
             assertEquals("Updated test model", map.get("description"));
         }
-        */
 
         /*
          * Search

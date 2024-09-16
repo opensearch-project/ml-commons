@@ -655,7 +655,6 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
             )
             .build();
         Mockito.when(dynamoDbClient.getItem(Mockito.any(GetItemRequest.class))).thenReturn(getItemResponse);
-
         ConditionalCheckFailedException conflictException = ConditionalCheckFailedException.builder().build();
         // throw conflict exception on first two times, return on third time (that never executes)
         Mockito
