@@ -156,6 +156,11 @@ public abstract class MLCommonsTenantAwareRestTestCase extends MLCommonsRestTest
             return ((Map<String, String>) map.get("error")).get("reason");
         }
 
+        // Due to https://github.com/opensearch-project/ml-commons/issues/2958
+        if ("m_l_resource_not_found_exception".equals(type)) {
+            return ((Map<String, String>) map.get("error")).get("reason");
+        }
+
         // {
         // "error": {
         // "reason": "System Error",
