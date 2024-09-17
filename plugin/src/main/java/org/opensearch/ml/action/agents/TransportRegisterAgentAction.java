@@ -86,7 +86,7 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
 
                     sdkClient
                         .putDataObjectAsync(
-                            PutDataObjectRequest.builder().index(ML_AGENT_INDEX).dataObject(mlAgent).build(),
+                            PutDataObjectRequest.builder().index(ML_AGENT_INDEX).tenantId(tenantId).dataObject(mlAgent).build(),
                             client.threadPool().executor(GENERAL_THREAD_POOL)
                         )
                         .whenComplete((r, throwable) -> {

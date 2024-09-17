@@ -264,6 +264,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                 updateModelWithRegisteringToAnotherModelGroup(
                     modelId,
                     newModelGroupId,
+                    tenantId,
                     user,
                     updateModelInput,
                     wrappedListener,
@@ -291,6 +292,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                 updateModelWithRegisteringToAnotherModelGroup(
                     modelId,
                     newModelGroupId,
+                    tenantId,
                     user,
                     updateModelInput,
                     wrappedListener,
@@ -336,6 +338,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                             updateModelWithRegisteringToAnotherModelGroup(
                                 modelId,
                                 newModelGroupId,
+                                tenantId,
                                 user,
                                 updateModelInput,
                                 wrappedListener,
@@ -369,6 +372,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
     private void updateModelWithRegisteringToAnotherModelGroup(
         String modelId,
         String newModelGroupId,
+        String tenantId,
         User user,
         MLUpdateModelInput updateModelInput,
         ActionListener<UpdateResponse> wrappedListener,
@@ -414,12 +418,13 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                     wrappedListener.onFailure(exception);
                 }));
         } else {
-            buildUpdateRequest(modelId, updateRequest, updateModelInput, wrappedListener, isUpdateModelCache);
+            buildUpdateRequest(modelId, tenantId, updateRequest, updateModelInput, wrappedListener, isUpdateModelCache);
         }
     }
 
     private void buildUpdateRequest(
         String modelId,
+        String tenantId,
         UpdateRequest updateRequest,
         MLUpdateModelInput updateModelInput,
         ActionListener<UpdateResponse> wrappedListener,
@@ -430,6 +435,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
             .builder()
             .index(updateRequest.index())
             .id(updateRequest.id())
+            .tenantId(tenantId)
             .dataObject(updateModelInput)
             .build();
         // TODO: This should probably be default on update data object:
