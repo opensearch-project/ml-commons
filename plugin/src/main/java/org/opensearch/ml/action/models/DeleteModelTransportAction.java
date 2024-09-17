@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.action.models;
 
+import static org.opensearch.action.support.WriteRequest.RefreshPolicy.IMMEDIATE;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_CONTROLLER_INDEX;
@@ -25,12 +26,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.ActionRequest;
+import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
-import org.opensearch.client.opensearch._types.OpenSearchException;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.settings.Settings;
@@ -365,46 +366,40 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
      * @param modelId model ID
      */
     private void deleteController(String modelId, Boolean isHidden, ActionListener<Boolean> actionListener) {
-        DeleteDataObjectRequest deleteDataObjectRequest = DeleteDataObjectRequest.builder().index(ML_CONTROLLER_INDEX).id(modelId).build();
-        sdkClient
-            .deleteDataObjectAsync(deleteDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
-            .whenComplete((r, throwable) -> {
-                if (throwable == null) {
-                    try {
-                        DeleteResponse deleteResponse = DeleteResponse.fromXContent(r.parser());
-                        log
-                            .info(
-                                getErrorMessage(
-                                    "Model controller for the provided model successfully deleted from index, result: {}.",
-                                    modelId,
-                                    isHidden
-                                ),
-                                deleteResponse.getResult()
-                            );
-                        actionListener.onResponse(true);
-                    } catch (Exception e) {
-                        actionListener.onFailure(e);
-                    }
+        DeleteRequest deleteRequest = new DeleteRequest(ML_CONTROLLER_INDEX, modelId).setRefreshPolicy(IMMEDIATE);
+        client.delete(deleteRequest, new ActionListener<>() {
+            @Override
+            public void onResponse(DeleteResponse deleteResponse) {
+                log
+                    .info(
+                        getErrorMessage(
+                            "Model controller for the provided model successfully deleted from index, result: {}.",
+                            modelId,
+                            isHidden
+                        ),
+                        deleteResponse.getResult()
+                    );
+                actionListener.onResponse(true);
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                if (e instanceof ResourceNotFoundException) {
+                    log
+                        .info(
+                            getErrorMessage(
+                                "Model controller not deleted due to no model controller found for the given model.",
+                                modelId,
+                                isHidden
+                            )
+                        );
+                    actionListener.onResponse(true); // we consider this as success
                 } else {
-                    Exception e = SdkClientUtils.unwrapAndConvertToException(throwable);
-                    if (e instanceof ResourceNotFoundException // Local client
-                        || e instanceof OpenSearchException && // Remote client
-                            ((OpenSearchException) e).status() == RestStatus.NOT_FOUND.getStatus()) {
-                        log
-                            .info(
-                                getErrorMessage(
-                                    "Model controller not deleted due to no model controller found for the given model.",
-                                    modelId,
-                                    isHidden
-                                )
-                            );
-                        actionListener.onResponse(true); // we consider this as success
-                    } else {
-                        log.error(getErrorMessage("Failed to delete model controller for the given model.", modelId, isHidden), e);
-                        actionListener.onFailure(e);
-                    }
+                    log.error(getErrorMessage("Failed to delete model controller for the given model.", modelId, isHidden), e);
+                    actionListener.onFailure(e);
                 }
-            });
+            }
+        });
     }
 
     private Boolean isModelNotDeployed(MLModelState mlModelState) {

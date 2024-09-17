@@ -179,6 +179,13 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testDeleteModel_Success() throws IOException, InterruptedException {
+        // For controller
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
+            listener.onResponse(deleteResponse);
+            return null;
+        }).when(client).delete(any(), any());
+        // For model
         PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
         future.onResponse(deleteResponse);
         when(client.delete(any())).thenReturn(future);
@@ -207,6 +214,13 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testDeleteRemoteModel_Success() throws IOException, InterruptedException {
+        // For controller
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
+            listener.onResponse(deleteResponse);
+            return null;
+        }).when(client).delete(any(), any());
+        // For model
         PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
         future.onResponse(deleteResponse);
         when(client.delete(any())).thenReturn(future);
@@ -228,11 +242,16 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testDeleteRemoteModel_deleteModelController_failed() throws IOException, InterruptedException {
+        // For controller
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException("runtime exception"));
+            return null;
+        }).when(client).delete(any(), any());
+        // For model
         PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
         future.onResponse(deleteResponse);
-        PlainActionFuture<DeleteResponse> failFuture = PlainActionFuture.newFuture();
-        failFuture.onFailure(new RuntimeException("runtime exception"));
-        when(client.delete(any())).thenReturn(future).thenReturn(failFuture);
+        when(client.delete(any())).thenReturn(future);
 
         doAnswer(invocation -> {
             ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
@@ -257,11 +276,16 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testDeleteLocalModel_deleteModelController_failed() throws IOException, InterruptedException {
+        // For controller
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException("runtime exception"));
+            return null;
+        }).when(client).delete(any(), any());
+        // For model
         PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
         future.onResponse(deleteResponse);
-        PlainActionFuture<DeleteResponse> failFuture = PlainActionFuture.newFuture();
-        failFuture.onFailure(new RuntimeException("runtime exception"));
-        when(client.delete(any())).thenReturn(future).thenReturn(failFuture);
+        when(client.delete(any())).thenReturn(future);
 
         doAnswer(invocation -> {
             ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
@@ -286,6 +310,13 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testDeleteRemoteModel_deleteModelChunks_failed() throws IOException, InterruptedException {
+        // For controller
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
+            listener.onResponse(deleteResponse);
+            return null;
+        }).when(client).delete(any(), any());
+        // For model
         PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
         future.onResponse(deleteResponse);
         when(client.delete(any())).thenReturn(future);
@@ -312,6 +343,13 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testDeleteHiddenModel_Success() throws IOException, InterruptedException {
+        // For controller
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
+            listener.onResponse(deleteResponse);
+            return null;
+        }).when(client).delete(any(), any());
+        // For model
         PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
         future.onResponse(deleteResponse);
         when(client.delete(any())).thenReturn(future);
@@ -371,6 +409,13 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testDeleteModel_Success_AlgorithmNotNull() throws IOException, InterruptedException {
+        // For controller
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
+            listener.onResponse(deleteResponse);
+            return null;
+        }).when(client).delete(any(), any());
+        // For model
         PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
         future.onResponse(deleteResponse);
         when(client.delete(any())).thenReturn(future);
@@ -455,6 +500,13 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testDeleteModel_deleteModelController_ResourceNotFoundException() throws IOException, InterruptedException {
+        // For controller
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new ResourceNotFoundException("errorMessage"));
+            return null;
+        }).when(client).delete(any(), any());
+        // For model
         PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
         future.onResponse(deleteResponse);
         PlainActionFuture<DeleteResponse> failFuture = PlainActionFuture.newFuture();
@@ -505,6 +557,13 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testDeleteRemoteModel_modelNotFound_ResourceNotFoundException() throws IOException, InterruptedException {
+        // For controller
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
+            listener.onResponse(deleteResponse);
+            return null;
+        }).when(client).delete(any(), any());
+        // For model
         PlainActionFuture<DeleteResponse> failFuture = PlainActionFuture.newFuture();
         failFuture.onFailure(new ResourceNotFoundException("resource not found"));
         PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
@@ -567,9 +626,11 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         getFuture.onResponse(null);
         when(client.get(any())).thenReturn(getFuture);
 
-        PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
-        future.onResponse(deleteResponse);
-        when(client.delete(any())).thenReturn(future);
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
+            listener.onResponse(deleteResponse);
+            return null;
+        }).when(client).delete(any(), any());
 
         doAnswer(invocation -> {
             ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
