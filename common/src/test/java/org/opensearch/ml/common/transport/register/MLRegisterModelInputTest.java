@@ -9,7 +9,6 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.function.Consumer;
 
-import org.json.JSONObject;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -170,11 +169,7 @@ public class MLRegisterModelInputTest {
         assertNotNull(builder);
         String jsonStr = builder.toString();
 
-        JSONObject connectorJsonObject = new JSONObject(jsonStr);
-        long connectorCreatedTime = connectorJsonObject.getJSONObject("connector").getLong("created_time");
-        long connectorLastUpdatedTime = connectorJsonObject.getJSONObject("connector").getLong("last_updated_time");
-
-        String expectedFunctionInputStrFormat = "{\"function_name\":\"LINEAR_REGRESSION\",\"name\":\"modelName\","
+        String expectedFunctionInputStr = "{\"function_name\":\"LINEAR_REGRESSION\",\"name\":\"modelName\","
             + "\"version\":\"version\",\"model_group_id\":\"modelGroupId\",\"description\":\"test description\","
             + "\"url\":\"url\",\"model_content_hash_value\":\"hash_value_test\",\"model_format\":\"ONNX\","
             + "\"model_config\":{\"model_type\":\"testModelType\",\"embedding_dimension\":100,"
@@ -189,11 +184,9 @@ public class MLRegisterModelInputTest {
             + "\"pre_process_function\":\"connector.pre_process.openai.embedding\","
             + "\"post_process_function\":\"connector.post_process.openai.embedding\"}],"
             + "\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\","
-            + "\"created_time\":%d,\"last_updated_time\":%d,"
             + "\"client_config\":{\"max_connection\":30,\"connection_timeout\":30000,\"read_timeout\":30000,"
             + "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}},\"is_hidden\":false}";
 
-        String expectedFunctionInputStr = String.format(expectedFunctionInputStrFormat, connectorCreatedTime, connectorLastUpdatedTime);
         assertEquals(expectedFunctionInputStr, jsonStr);
     }
 
@@ -208,11 +201,8 @@ public class MLRegisterModelInputTest {
         assertNotNull(builder);
 
         String jsonStr = builder.toString();
-        JSONObject connectorJsonObject = new JSONObject(jsonStr);
-        long connectorCreatedTime = connectorJsonObject.getJSONObject("connector").getLong("created_time");
-        long connectorLastUpdatedTime = connectorJsonObject.getJSONObject("connector").getLong("last_updated_time");
 
-        String expectedIncompleteInputStrFormat = "{\"function_name\":\"LINEAR_REGRESSION\","
+        String expectedIncompleteInputStr = "{\"function_name\":\"LINEAR_REGRESSION\","
             + "\"name\":\"modelName\",\"version\":\"version\",\"model_group_id\":\"modelGroupId\","
             + "\"description\":\"test description\",\"model_content_hash_value\":\"hash_value_test\","
             + "\"deploy_model\":true,\"connector\":{\"name\":\"test_connector_name\",\"version\":\"1\","
@@ -224,11 +214,9 @@ public class MLRegisterModelInputTest {
             + "\"pre_process_function\":\"connector.pre_process.openai.embedding\","
             + "\"post_process_function\":\"connector.post_process.openai.embedding\"}],"
             + "\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\","
-            + "\"created_time\":%d,\"last_updated_time\":%d,"
             + "\"client_config\":{\"max_connection\":30,\"connection_timeout\":30000,\"read_timeout\":30000,"
             + "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}},\"is_hidden\":false}";
 
-        String expectedIncompleteInputStr = String.format(expectedIncompleteInputStrFormat, connectorCreatedTime, connectorLastUpdatedTime);
         assertEquals(expectedIncompleteInputStr, jsonStr);
     }
 
