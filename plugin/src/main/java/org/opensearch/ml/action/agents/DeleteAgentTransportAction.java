@@ -95,20 +95,19 @@ public class DeleteAgentTransportAction extends HandledTransportAction<ActionReq
             .build();
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-
+            ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
             sdkClient
                 .getDataObjectAsync(getDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
                 .whenComplete((r, throwable) -> {
                     log.debug("Completed Get Agent Request, Agent id:{}", agentId);
                     if (throwable != null) {
-                        context.restore();
                         Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
                         if (cause instanceof IndexNotFoundException) {
                             log.info("Failed to get Agent index", cause);
-                            actionListener.onFailure(new OpenSearchStatusException("Failed to get agent index", RestStatus.NOT_FOUND));
+                            wrappedListener.onFailure(new OpenSearchStatusException("Failed to get agent index", RestStatus.NOT_FOUND));
                         } else {
                             log.error("Failed to get ML Agent {}", agentId, cause);
-                            actionListener.onFailure(cause);
+                            wrappedListener.onFailure(cause);
                         }
                     } else {
                         try {
@@ -122,10 +121,14 @@ public class DeleteAgentTransportAction extends HandledTransportAction<ActionReq
                                     ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                                     MLAgent mlAgent = MLAgent.parse(parser);
                                     if (TenantAwareHelper
-                                        .validateTenantResource(mlFeatureEnabledSetting, tenantId, mlAgent.getTenantId(), actionListener)) {
+                                        .validateTenantResource(
+                                            mlFeatureEnabledSetting,
+                                            tenantId,
+                                            mlAgent.getTenantId(),
+                                            wrappedListener
+                                        )) {
                                         if (mlAgent.getIsHidden() && !isSuperAdmin) {
-                                            context.restore();
-                                            actionListener
+                                            wrappedListener
                                                 .onFailure(
                                                     new OpenSearchStatusException(
                                                         "User doesn't have privilege to perform this operation on this agent",
@@ -146,26 +149,24 @@ public class DeleteAgentTransportAction extends HandledTransportAction<ActionReq
                                                         client.threadPool().executor(GENERAL_THREAD_POOL)
                                                     )
                                                     .whenComplete((response, delThrowable) -> {
-                                                        context.restore();
-                                                        handleDeleteResponse(response, delThrowable, tenantId, actionListener);
+                                                        handleDeleteResponse(response, delThrowable, tenantId, wrappedListener);
                                                     });
                                             } catch (Exception e) {
-                                                context.restore();
                                                 log.error("Failed to delete ML agent: {}", agentId, e);
-                                                actionListener.onFailure(e);
+                                                wrappedListener.onFailure(e);
                                             }
                                         }
                                     }
                                 } catch (Exception e) {
                                     log.error("Failed to parse ml agent {}", agentId, e);
-                                    actionListener.onFailure(e);
+                                    wrappedListener.onFailure(e);
                                 }
                             } else {
-                                actionListener.onFailure(new OpenSearchStatusException("Fail to find ml agent", RestStatus.NOT_FOUND));
+                                wrappedListener.onFailure(new OpenSearchStatusException("Fail to find ml agent", RestStatus.NOT_FOUND));
                             }
                         } catch (Exception e) {
                             log.error("Failed to delete ML agent: {}", agentId, e);
-                            actionListener.onFailure(e);
+                            wrappedListener.onFailure(e);
                         }
                     }
                 });
