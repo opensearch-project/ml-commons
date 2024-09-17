@@ -30,6 +30,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.model.Guardrails;
+import org.opensearch.ml.common.model.ImageEmbeddingModelConfig;
 import org.opensearch.ml.common.model.MLDeploySetting;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
@@ -271,6 +272,8 @@ public class MLModel implements ToXContentObject {
                     modelConfig = new MetricsCorrelationModelConfig(input);
                 } else if (algorithm.equals(FunctionName.QUESTION_ANSWERING)) {
                     modelConfig = new QuestionAnsweringModelConfig(input);
+                } else if (algorithm.equals(FunctionName.IMAGE_EMBEDDING)) {
+                    modelConfig = new ImageEmbeddingModelConfig(input);
                 } else {
                     modelConfig = new TextEmbeddingModelConfig(input);
                 }
@@ -607,6 +610,8 @@ public class MLModel implements ToXContentObject {
                         modelConfig = MetricsCorrelationModelConfig.parse(parser);
                     } else if (FunctionName.QUESTION_ANSWERING.name().equals(algorithmName)) {
                         modelConfig = QuestionAnsweringModelConfig.parse(parser);
+                    } else if (FunctionName.IMAGE_EMBEDDING.name().equals(algorithmName)) {
+                        modelConfig = ImageEmbeddingModelConfig.parse(parser);
                     } else {
                         modelConfig = TextEmbeddingModelConfig.parse(parser);
                     }
