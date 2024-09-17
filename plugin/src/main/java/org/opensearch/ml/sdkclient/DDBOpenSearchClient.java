@@ -232,14 +232,8 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
             try {
                 String source = Strings.toString(MediaTypeRegistry.JSON, request.dataObject());
                 JsonNode jsonNode = OBJECT_MAPPER.readTree(source);
-                Map<String, AttributeValue> updateItem = JsonTransformer.convertJsonObjectToDDBAttributeMap(jsonNode);
-                updateItem.remove(TENANT_ID);
-                updateItem.remove(RANGE_KEY);
-                Map<String, AttributeValue> updateKey = new HashMap<>();
-                updateKey.put(HASH_KEY, AttributeValue.builder().s(tenantId).build());
-                updateKey.put(RANGE_KEY, AttributeValue.builder().s(request.id()).build());
 
-                Long sequenceNumber = updateItemWithRetryOnConflict(updateKey, updateItem, request);
+                Long sequenceNumber = updateItemWithRetryOnConflict(tenantId, jsonNode, request);
                 String simulatedUpdateResponse = simulateOpenSearchResponse(
                     request.index(),
                     request.id(),
@@ -259,23 +253,21 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
         }), executor);
     }
 
-    private Long updateItemWithRetryOnConflict(
-        Map<String, AttributeValue> updateKey,
-        Map<String, AttributeValue> updateItem,
-        UpdateDataObjectRequest request
-    ) {
+    private Long updateItemWithRetryOnConflict(String tenantId, JsonNode jsonNode, UpdateDataObjectRequest request) {
+        Map<String, AttributeValue> updateItem = JsonTransformer.convertJsonObjectToDDBAttributeMap(jsonNode);
+        updateItem.remove(TENANT_ID);
+        updateItem.remove(RANGE_KEY);
+        Map<String, AttributeValue> updateKey = new HashMap<>();
+        updateKey.put(HASH_KEY, AttributeValue.builder().s(tenantId).build());
+        updateKey.put(RANGE_KEY, AttributeValue.builder().s(request.id()).build());
+        Map<String, String> expressionAttributeNames = new HashMap<>();
+        expressionAttributeNames.put("#seqNo", SEQ_NO_KEY);
+        expressionAttributeNames.put("#source", SOURCE);
+        Map<String, AttributeValue> expressionAttributeValues = new HashMap<>();
+        expressionAttributeValues.put(":incr", AttributeValue.builder().n("1").build());
         int retriesRemaining = request.retryOnConflict();
         do {
             try {
-                UpdateItemRequest.Builder updateItemRequestBuilder = UpdateItemRequest.builder().tableName(request.index()).key(updateKey);
-                updateItemRequestBuilder.updateExpression("SET #seqNo = #seqNo + :incr, #source = :source ");
-                // Get current document version and put in attribute map. Ignore primary term on DDB.
-                updateItemRequestBuilder.conditionExpression("#seqNo = :currentSeqNo");
-                Map<String, String> expressionAttributeNames = new HashMap<>();
-                expressionAttributeNames.put("#seqNo", SEQ_NO_KEY);
-                expressionAttributeNames.put("#source", SOURCE);
-                Map<String, AttributeValue> expressionAttributeValues = new HashMap<>();
-                expressionAttributeValues.put(":incr", AttributeValue.builder().n("1").build());
                 // Fetch current item and extract data object
                 Map<String, AttributeValue> currentItem = dynamoDbClient
                     .getItem(GetItemRequest.builder().tableName(request.index()).key(updateKey).build())
@@ -290,6 +282,9 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
                 } else {
                     expressionAttributeValues.put(":currentSeqNo", currentItem.get(SEQ_NO_KEY));
                 }
+                UpdateItemRequest.Builder updateItemRequestBuilder = UpdateItemRequest.builder().tableName(request.index()).key(updateKey);
+                updateItemRequestBuilder.updateExpression("SET #seqNo = #seqNo + :incr, #source = :source ");
+                updateItemRequestBuilder.conditionExpression("#seqNo = :currentSeqNo");
                 updateItemRequestBuilder
                     .expressionAttributeNames(expressionAttributeNames)
                     .expressionAttributeValues(expressionAttributeValues);
