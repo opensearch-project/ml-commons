@@ -20,7 +20,9 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.MLConfig;
 
 import lombok.Builder;
+import lombok.Getter;
 
+@Getter
 public class MLConfigGetResponse extends ActionResponse implements ToXContentObject {
     MLConfig mlConfig;
 

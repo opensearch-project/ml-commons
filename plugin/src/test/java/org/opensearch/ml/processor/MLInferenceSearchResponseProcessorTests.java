@@ -169,10 +169,10 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
     /**
      * Tests create processor with one_to_one is true
      * with custom prompt
-     * with many to one prediction, 5 documents in hits are calling 1 prediction tasks
+     * with one to one prediction, 5 documents in hits are calling 5 prediction tasks
      * @throws Exception if an error occurs during the test
      */
-    public void testProcessResponseManyToOneWithCustomPrompt() throws Exception {
+    public void testProcessResponseOneToOneWithCustomPrompt() throws Exception {
 
         String newDocumentField = "context";
         String modelOutputField = "response";
@@ -200,6 +200,102 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             false,
             false,
             "{ \"prompt\": \"${model_config.prompt}\"}",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            true
+        );
+
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(5, true, fieldName);
+
+        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "there is 1 value")).build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                assertEquals(newSearchResponse.getHits().getHits().length, 5);
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[0].getSourceAsMap().get(newDocumentField).toString(),
+                    "there is 1 value"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[1].getSourceAsMap().get(newDocumentField).toString(),
+                    "there is 1 value"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[2].getSourceAsMap().get(newDocumentField).toString(),
+                    "there is 1 value"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[3].getSourceAsMap().get(newDocumentField).toString(),
+                    "there is 1 value"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[4].getSourceAsMap().get(newDocumentField).toString(),
+                    "there is 1 value"
+                );
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException(e);
+            }
+
+        };
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+        verify(client, times(5)).execute(any(), any(), any());
+    }
+
+    /**
+     * Tests create processor with one_to_one is false
+     * with custom prompt
+     * with many to one prediction, 5 documents in hits are calling 1 prediction tasks
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseManyToOneWithCustomPrompt() throws Exception {
+
+        String documentField = "text";
+        String modelInputField = "context";
+        List<Map<String, String>> inputMap = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        input.put(modelInputField, documentField);
+        inputMap.add(input);
+
+        String newDocumentField = "llm_response";
+        String modelOutputField = "response";
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+        Map<String, String> modelConfig = new HashMap<>();
+        modelConfig
+            .put(
+                "prompt",
+                "\\n\\nHuman: You are a professional data analyst. You will always answer question based on the given context first. If the answer is not directly shown in the context, you will analyze the data and find the answer. If you don't know the answer, just say I don't know. Context: ${parameters.context}. \\n\\n Human: please summarize the documents \\n\\n Assistant:"
+            );
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            inputMap,
+            outputMap,
+            modelConfig,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
             client,
             TEST_XCONTENT_REGISTRY_FOR_QUERY,
             false
@@ -243,6 +339,158 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
                     newSearchResponse.getHits().getHits()[4].getSourceAsMap().get(newDocumentField).toString(),
                     "there are 5 values"
                 );
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException(e);
+            }
+
+        };
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+        verify(client, times(1)).execute(any(), any(), any());
+    }
+
+    /**
+     * Tests create processor with one_to_one is false
+     * with custom prompt
+     * with many to one prediction, 5 documents in hits are calling 1 prediction tasks
+     * with full response path false and no output mapping is provided
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseManyToOneWithCustomPromptFullResponsePathFalse() throws Exception {
+
+        String documentField = "text";
+        String modelInputField = "context";
+        List<Map<String, String>> inputMap = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        input.put(modelInputField, documentField);
+        inputMap.add(input);
+
+        Map<String, String> modelConfig = new HashMap<>();
+        modelConfig
+            .put(
+                "prompt",
+                "\\n\\nHuman: You are a professional data analyst. You will always answer question based on the given context first. If the answer is not directly shown in the context, you will analyze the data and find the answer. If you don't know the answer, just say I don't know. Context: ${parameters.context}. \\n\\n Human: please summarize the documents \\n\\n Assistant:"
+            );
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            inputMap,
+            null,
+            modelConfig,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            false
+        );
+
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(5, true, fieldName);
+        Map<String, Object> predictionResult = ImmutableMap.of("response", "here is a summary of the documents");
+
+        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(predictionResult).build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                assertEquals(newSearchResponse.getHits().getHits().length, 5);
+                assertEquals(newSearchResponse.getHits().getHits()[0].getSourceAsMap().get("inference_results"), predictionResult);
+                assertEquals(newSearchResponse.getHits().getHits()[1].getSourceAsMap().get("inference_results"), predictionResult);
+                assertEquals(newSearchResponse.getHits().getHits()[2].getSourceAsMap().get("inference_results"), predictionResult);
+                assertEquals(newSearchResponse.getHits().getHits()[3].getSourceAsMap().get("inference_results"), predictionResult);
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException(e);
+            }
+
+        };
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+        verify(client, times(1)).execute(any(), any(), any());
+    }
+
+    /**
+     * Tests create processor with one_to_one is false
+     * with custom prompt
+     * with many to one prediction, 5 documents in hits are calling 1 prediction tasks
+     * with full response path true and no output mapping is provided
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseManyToOneWithCustomPromptFullResponsePathTrue() throws Exception {
+
+        String documentField = "text";
+        String modelInputField = "context";
+        List<Map<String, String>> inputMap = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        input.put(modelInputField, documentField);
+        inputMap.add(input);
+
+        Map<String, String> modelConfig = new HashMap<>();
+        modelConfig
+            .put(
+                "prompt",
+                "\\n\\nHuman: You are a professional data analyst. You will always answer question based on the given context first. If the answer is not directly shown in the context, you will analyze the data and find the answer. If you don't know the answer, just say I don't know. Context: ${parameters.context}. \\n\\n Human: please summarize the documents \\n\\n Assistant:"
+            );
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            inputMap,
+            null,
+            modelConfig,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            true,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            false
+        );
+
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(5, true, fieldName);
+        Map<String, Object> predictionResult = ImmutableMap.of("response", "here is a summary of the documents");
+        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(predictionResult).build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+        Map<String, Object> fullPredictionResult = generateInferenceResult("here is a summary of the documents");
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                assertEquals(newSearchResponse.getHits().getHits().length, 5);
+                assertEquals(newSearchResponse.getHits().getHits()[0].getSourceAsMap().get("inference_results"), fullPredictionResult);
+                assertEquals(newSearchResponse.getHits().getHits()[1].getSourceAsMap().get("inference_results"), fullPredictionResult);
+                assertEquals(newSearchResponse.getHits().getHits()[2].getSourceAsMap().get("inference_results"), fullPredictionResult);
+                assertEquals(newSearchResponse.getHits().getHits()[3].getSourceAsMap().get("inference_results"), fullPredictionResult);
             }
 
             @Override
@@ -305,23 +553,23 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
                 assertEquals(newSearchResponse.getHits().getHits().length, 5);
                 assertEquals(
                     newSearchResponse.getHits().getHits()[0].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[1].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[2].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[3].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[4].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
             }
 
@@ -386,23 +634,23 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
                 assertEquals(newSearchResponse.getHits().getHits().length, 5);
                 assertEquals(
                     newSearchResponse.getHits().getHits()[0].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[1].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[2].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[3].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[4].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
             }
 
@@ -1797,23 +2045,23 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
                 assertEquals(newSearchResponse.getHits().getHits().length, 5);
                 assertEquals(
                     newSearchResponse.getHits().getHits()[0].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[1].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[2].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[3].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[4].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
             }
 
@@ -1877,23 +2125,23 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
                 assertEquals(newSearchResponse.getHits().getHits().length, 5);
                 assertEquals(
                     newSearchResponse.getHits().getHits()[0].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[1].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[2].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[3].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
                 assertEquals(
                     newSearchResponse.getHits().getHits()[4].getSourceAsMap().get(DEFAULT_OUTPUT_FIELD_NAME).toString(),
-                    "[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]"
+                    "{inference_results=[{output=[{dataAsMap={response=[0.0, 1.0, 2.0, 3.0, 4.0]}}]}]}"
                 );
             }
 
@@ -2956,6 +3204,27 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
         SearchSourceBuilder source = new SearchSourceBuilder().query(incomingQuery);
         SearchRequest request = new SearchRequest().source(source);
         return request;
+    }
+
+    private static Map<String, Object> generateInferenceResult(String response) {
+        Map<String, Object> inferenceResult = new HashMap<>();
+        List<Map<String, Object>> inferenceResults = new ArrayList<>();
+
+        Map<String, Object> outputMap = new HashMap<>();
+        List<Map<String, Object>> outputs = new ArrayList<>();
+
+        Map<String, Object> responseOutput = new HashMap<>();
+        Map<String, String> dataAsMap = new HashMap<>();
+        dataAsMap.put("response", response);
+        responseOutput.put("dataAsMap", dataAsMap);
+
+        outputs.add(responseOutput);
+        outputMap.put("output", outputs);
+
+        inferenceResults.add(outputMap);
+        inferenceResult.put("inference_results", inferenceResults);
+
+        return inferenceResult;
     }
 
     /**

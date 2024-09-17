@@ -326,7 +326,6 @@ public class MLSdkAsyncHttpResponseHandlerTest {
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener, times(1)).onFailure(captor.capture());
         assert captor.getValue() instanceof OpenSearchStatusException;
-        System.out.println(captor.getValue().getMessage());
         assert captor.getValue().getMessage().contains("runtime error");
     }
 
@@ -350,7 +349,6 @@ public class MLSdkAsyncHttpResponseHandlerTest {
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener, times(1)).onFailure(captor.capture());
         assert captor.getValue() instanceof OpenSearchStatusException;
-        System.out.println(captor.getValue().getMessage());
         assert captor.getValue().getMessage().contains(REMOTE_SERVICE_ERROR);
     }
 

@@ -14,6 +14,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
+import static org.opensearch.ml.common.CommonValue.MASTER_KEY;
 import static org.opensearch.ml.common.input.Constants.ACTION;
 import static org.opensearch.ml.common.input.Constants.ALGORITHM;
 import static org.opensearch.ml.common.input.Constants.KMEANS;
@@ -40,6 +41,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
@@ -51,12 +53,15 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.index.Index;
 import org.opensearch.core.index.shard.ShardId;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.Configuration;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLAgentType;
+import org.opensearch.ml.common.MLConfig;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
@@ -84,6 +89,9 @@ import org.opensearch.ml.common.transport.agent.MLAgentDeleteRequest;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentAction;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentRequest;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
+import org.opensearch.ml.common.transport.config.MLConfigGetAction;
+import org.opensearch.ml.common.transport.config.MLConfigGetRequest;
+import org.opensearch.ml.common.transport.config.MLConfigGetResponse;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteRequest;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
@@ -205,6 +213,9 @@ public class MachineLearningNodeClientTest {
 
     @Mock
     ActionListener<ToolMetadata> getToolActionListener;
+
+    @Mock
+    ActionListener<MLConfig> getMlConfigListener;
 
     @InjectMocks
     MachineLearningNodeClient machineLearningNodeClient;
@@ -949,6 +960,43 @@ public class MachineLearningNodeClientTest {
         verify(listToolsActionListener).onResponse(argumentCaptor.capture());
         assertEquals("WikipediaTool", argumentCaptor.getValue().get(0).getName());
         assertEquals("Use this tool to search general knowledge on wikipedia.", argumentCaptor.getValue().get(0).getDescription());
+    }
+
+    @Test
+    public void getConfig() {
+        MLConfig mlConfig = MLConfig.builder().type("type").configuration(Configuration.builder().agentId("agentId").build()).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLConfigGetResponse> actionListener = invocation.getArgument(2);
+            MLConfigGetResponse output = MLConfigGetResponse.builder().mlConfig(mlConfig).build();
+            actionListener.onResponse(output);
+            return null;
+        }).when(client).execute(eq(MLConfigGetAction.INSTANCE), any(), any());
+
+        ArgumentCaptor<MLConfig> argumentCaptor = ArgumentCaptor.forClass(MLConfig.class);
+        machineLearningNodeClient.getConfig("agentId", getMlConfigListener);
+
+        verify(client).execute(eq(MLConfigGetAction.INSTANCE), isA(MLConfigGetRequest.class), any());
+        verify(getMlConfigListener).onResponse(argumentCaptor.capture());
+        assertEquals("agentId", argumentCaptor.getValue().getConfiguration().getAgentId());
+        assertEquals("type", argumentCaptor.getValue().getType());
+    }
+
+    @Test
+    public void getConfigRejectedMasterKey() {
+        doAnswer(invocation -> {
+            ActionListener<MLConfigGetResponse> actionListener = invocation.getArgument(2);
+            actionListener.onFailure(new OpenSearchStatusException("You are not allowed to access this config doc", RestStatus.FORBIDDEN));
+            return null;
+        }).when(client).execute(eq(MLConfigGetAction.INSTANCE), any(), any());
+
+        ArgumentCaptor<OpenSearchStatusException> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+        machineLearningNodeClient.getConfig(MASTER_KEY, getMlConfigListener);
+
+        verify(client).execute(eq(MLConfigGetAction.INSTANCE), isA(MLConfigGetRequest.class), any());
+        verify(getMlConfigListener).onFailure(argumentCaptor.capture());
+        assertEquals(RestStatus.FORBIDDEN, argumentCaptor.getValue().status());
+        assertEquals("You are not allowed to access this config doc", argumentCaptor.getValue().getLocalizedMessage());
     }
 
     private SearchResponse createSearchResponse(ToXContentObject o) throws IOException {

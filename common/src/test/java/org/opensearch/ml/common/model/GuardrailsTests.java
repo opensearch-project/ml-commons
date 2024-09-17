@@ -8,6 +8,7 @@ package org.opensearch.ml.common.model;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.Assert;
 import org.junit.Before;
@@ -27,6 +28,8 @@ public class GuardrailsTests {
     String[] regex;
     LocalRegexGuardrail inputLocalRegexGuardrail;
     LocalRegexGuardrail outputLocalRegexGuardrail;
+    ModelGuardrail inputModelGuardrail;
+    ModelGuardrail outputModelGuardrail;
 
     @Before
     public void setUp() {
@@ -34,6 +37,8 @@ public class GuardrailsTests {
         regex = List.of("regex1").toArray(new String[0]);
         inputLocalRegexGuardrail = new LocalRegexGuardrail(List.of(stopWords), regex);
         outputLocalRegexGuardrail = new LocalRegexGuardrail(List.of(stopWords), regex);
+        inputModelGuardrail = new ModelGuardrail(Map.of("model_id", "guardrail_model_id", "response_validation_regex", "accept"));
+        outputModelGuardrail = new ModelGuardrail(Map.of("model_id", "guardrail_model_id", "response_validation_regex", "accept"));
     }
 
     @Test
@@ -82,5 +87,45 @@ public class GuardrailsTests {
         Assert.assertEquals(guardrails.getType(), "local_regex");
         Assert.assertEquals(guardrails.getInputGuardrail(), inputLocalRegexGuardrail);
         Assert.assertEquals(guardrails.getOutputGuardrail(), outputLocalRegexGuardrail);
+    }
+
+    @Test
+    public void parseNonType() throws IOException {
+        String jsonStr = "{"
+            + "\"input_guardrail\":{\"stop_words\":[{\"index_name\":\"test_index\",\"source_fields\":[\"test_field\"]}],\"regex\":[\"regex1\"]},"
+            + "\"output_guardrail\":{\"stop_words\":[{\"index_name\":\"test_index\",\"source_fields\":[\"test_field\"]}],\"regex\":[\"regex1\"]}}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
+        parser.nextToken();
+        Guardrails guardrails = Guardrails.parse(parser);
+
+        Assert.assertEquals(guardrails.getType(), "local_regex");
+        Assert.assertEquals(guardrails.getInputGuardrail(), inputLocalRegexGuardrail);
+        Assert.assertEquals(guardrails.getOutputGuardrail(), outputLocalRegexGuardrail);
+    }
+
+    @Test
+    public void parseModelType() throws IOException {
+        String jsonStr = "{\"type\":\"model\","
+            + "\"input_guardrail\":{\"model_id\":\"guardrail_model_id\",\"response_validation_regex\":\"accept\"},"
+            + "\"output_guardrail\":{\"model_id\":\"guardrail_model_id\",\"response_validation_regex\":\"accept\"}}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
+        parser.nextToken();
+        Guardrails guardrails = Guardrails.parse(parser);
+
+        Assert.assertEquals(guardrails.getType(), "model");
+        Assert.assertEquals(guardrails.getInputGuardrail(), inputModelGuardrail);
+        Assert.assertEquals(guardrails.getOutputGuardrail(), outputModelGuardrail);
     }
 }
