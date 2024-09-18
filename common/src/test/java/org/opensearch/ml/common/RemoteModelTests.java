@@ -9,9 +9,7 @@ import static org.junit.Assert.assertEquals;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
 import java.io.IOException;
-import java.time.Instant;
 
-import org.json.JSONObject;
 import org.junit.Assert;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
@@ -21,7 +19,6 @@ import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.HttpConnectorTest;
 
@@ -52,8 +49,6 @@ public class RemoteModelTests {
     @Test
     public void toXContent_InternalConnector() throws IOException {
         Connector connector = HttpConnectorTest.createHttpConnector();
-        Instant testTime = Instant.now();
-
         MLModel mlModel = MLModel
             .builder()
             .algorithm(FunctionName.REMOTE)
@@ -61,21 +56,14 @@ public class RemoteModelTests {
             .version("1.0.0")
             .modelGroupId("test_group_id")
             .description("test model")
-            .createdTime(testTime)
-            .lastUpdateTime(testTime)
             .connector(connector)
             .build();
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         mlModel.toXContent(builder, EMPTY_PARAMS);
         String mlModelContent = TestHelper.xContentBuilderToString(builder);
 
-        JSONObject mlModelJsonObject = new JSONObject(mlModelContent);
-        long mlModelCreatedTime = mlModelJsonObject.getLong(AbstractConnector.CREATED_TIME_FIELD);
-        long mlModelLastUpdatedTime = mlModelJsonObject.getLong(AbstractConnector.LAST_UPDATED_TIME_FIELD);
-
-        String expectedConnectorResponseFormat = "{\"name\":\"test_model_name\",\"model_group_id\":\"test_group_id\","
+        String expectedConnectorResponse = "{\"name\":\"test_model_name\",\"model_group_id\":\"test_group_id\","
             + "\"algorithm\":\"REMOTE\",\"model_version\":\"1.0.0\",\"description\":\"test model\","
-            + "\"created_time\":%d,\"last_updated_time\":%d,"
             + "\"connector\":{\"name\":\"test_connector_name\",\"version\":\"1\","
             + "\"description\":\"this is a test connector\",\"protocol\":\"http\","
             + "\"parameters\":{\"input\":\"test input value\"},\"credential\":{\"key\":\"test_key_value\"},"
@@ -88,7 +76,6 @@ public class RemoteModelTests {
             + "\"client_config\":{\"max_connection\":30,\"connection_timeout\":30000,\"read_timeout\":30000,"
             + "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}}}";
 
-        String expectedConnectorResponse = String.format(expectedConnectorResponseFormat, mlModelCreatedTime, mlModelLastUpdatedTime);
         assertEquals(expectedConnectorResponse, mlModelContent);
     }
 
