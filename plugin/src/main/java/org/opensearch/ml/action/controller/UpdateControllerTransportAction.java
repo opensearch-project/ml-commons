@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.CommonValue.ML_CONTROLLER_INDEX;
 import static org.opensearch.ml.common.FunctionName.REMOTE;
 import static org.opensearch.ml.common.FunctionName.TEXT_EMBEDDING;
 import static org.opensearch.ml.common.utils.StringUtils.getErrorMessage;
+import static org.opensearch.ml.utils.MLExceptionUtils.CONTROLLER_DISABLED_ERR_MSG;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -46,6 +47,7 @@ import org.opensearch.ml.common.transport.controller.MLUpdateControllerRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
@@ -62,6 +64,7 @@ public class UpdateControllerTransportAction extends HandledTransportAction<Acti
     MLModelCacheHelper mlModelCacheHelper;
     ClusterService clusterService;
     ModelAccessControlHelper modelAccessControlHelper;
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Inject
     public UpdateControllerTransportAction(
@@ -71,7 +74,8 @@ public class UpdateControllerTransportAction extends HandledTransportAction<Acti
         ClusterService clusterService,
         ModelAccessControlHelper modelAccessControlHelper,
         MLModelCacheHelper mlModelCacheHelper,
-        MLModelManager mlModelManager
+        MLModelManager mlModelManager,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLUpdateControllerAction.NAME, transportService, actionFilters, MLUpdateControllerRequest::new);
         this.client = client;
@@ -79,6 +83,7 @@ public class UpdateControllerTransportAction extends HandledTransportAction<Acti
         this.clusterService = clusterService;
         this.mlModelCacheHelper = mlModelCacheHelper;
         this.modelAccessControlHelper = modelAccessControlHelper;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
@@ -90,6 +95,9 @@ public class UpdateControllerTransportAction extends HandledTransportAction<Acti
         String[] excludes = new String[] { MLModel.MODEL_CONTENT_FIELD, MLModel.OLD_MODEL_CONTENT_FIELD };
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            if (!mlFeatureEnabledSetting.isControllerEnabled()) {
+                throw new IllegalStateException(CONTROLLER_DISABLED_ERR_MSG);
+            }
             ActionListener<UpdateResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
             mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
                 FunctionName functionName = mlModel.getAlgorithm();

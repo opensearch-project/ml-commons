@@ -11,6 +11,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.util.HashMap;
 import java.util.List;
@@ -34,6 +35,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.controller.MLController;
 import org.opensearch.ml.common.transport.controller.MLUpdateControllerAction;
 import org.opensearch.ml.common.transport.controller.MLUpdateControllerRequest;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
@@ -53,12 +55,16 @@ public class RestMLUpdateControllerActionTests extends OpenSearchTestCase {
     @Mock
     RestChannel channel;
 
+    @Mock
+    MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
-        restMLUpdateControllerAction = new RestMLUpdateControllerAction();
+        when(mlFeatureEnabledSetting.isControllerEnabled()).thenReturn(true);
+        restMLUpdateControllerAction = new RestMLUpdateControllerAction(mlFeatureEnabledSetting);
         doAnswer(invocation -> {
             invocation.getArgument(2);
             return null;
@@ -74,7 +80,7 @@ public class RestMLUpdateControllerActionTests extends OpenSearchTestCase {
 
     @Test
     public void testConstructor() {
-        RestMLUpdateControllerAction UpdateModelAction = new RestMLUpdateControllerAction();
+        RestMLUpdateControllerAction UpdateModelAction = new RestMLUpdateControllerAction(mlFeatureEnabledSetting);
         assertNotNull(UpdateModelAction);
     }
 
@@ -126,6 +132,18 @@ public class RestMLUpdateControllerActionTests extends OpenSearchTestCase {
         exceptionRule.expect(ParsingException.class);
         exceptionRule.expectMessage("expecting token of type [START_OBJECT] but found [VALUE_NULL]");
         RestRequest request = getRestRequestWithNullField();
+        restMLUpdateControllerAction.handleRequest(request, channel, client);
+    }
+
+    @Test
+    public void testUpdateControllerRequestWithControllerDisabled() throws Exception {
+        exceptionRule.expect(IllegalStateException.class);
+        exceptionRule
+            .expectMessage(
+                "Controller is currently disabled. To enable it, update the setting \"plugins.ml_commons.controller_enabled\" to true."
+            );
+        when(mlFeatureEnabledSetting.isControllerEnabled()).thenReturn(false);
+        RestRequest request = getRestRequest();
         restMLUpdateControllerAction.handleRequest(request, channel, client);
     }
 

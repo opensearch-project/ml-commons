@@ -755,10 +755,10 @@ public class MachineLearningPlugin extends Plugin
         RestMemorySearchInteractionsAction restSearchInteractionsAction = new RestMemorySearchInteractionsAction();
         RestMemoryGetConversationAction restGetConversationAction = new RestMemoryGetConversationAction();
         RestMemoryGetInteractionAction restGetInteractionAction = new RestMemoryGetInteractionAction();
-        RestMLCreateControllerAction restMLCreateControllerAction = new RestMLCreateControllerAction();
-        RestMLGetControllerAction restMLGetControllerAction = new RestMLGetControllerAction();
-        RestMLUpdateControllerAction restMLUpdateControllerAction = new RestMLUpdateControllerAction();
-        RestMLDeleteControllerAction restMLDeleteControllerAction = new RestMLDeleteControllerAction();
+        RestMLCreateControllerAction restMLCreateControllerAction = new RestMLCreateControllerAction(mlFeatureEnabledSetting);
+        RestMLGetControllerAction restMLGetControllerAction = new RestMLGetControllerAction(mlFeatureEnabledSetting);
+        RestMLUpdateControllerAction restMLUpdateControllerAction = new RestMLUpdateControllerAction(mlFeatureEnabledSetting);
+        RestMLDeleteControllerAction restMLDeleteControllerAction = new RestMLDeleteControllerAction(mlFeatureEnabledSetting);
         RestMLGetAgentAction restMLGetAgentAction = new RestMLGetAgentAction(mlFeatureEnabledSetting);
         RestMLDeleteAgentAction restMLDeleteAgentAction = new RestMLDeleteAgentAction(mlFeatureEnabledSetting);
         RestMemoryUpdateConversationAction restMemoryUpdateConversationAction = new RestMemoryUpdateConversationAction();
@@ -969,7 +969,8 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_COMPLETED_REGEX,
                 MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_CANCELLED_REGEX,
                 MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_CANCELLING_REGEX,
-                MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_EXPIRED_REGEX
+                MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_EXPIRED_REGEX,
+                MLCommonsSettings.ML_COMMONS_CONTROLLER_ENABLED
             );
         return settings;
     }

@@ -84,7 +84,7 @@ POST /_plugins/_ml/connectors/_create
                 "content-type": "application/json"
             },
             "url": "https://bedrock-runtime.us-east-1.amazonaws.com/model/${parameters.model}/invoke",
-            "request_body": "{\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"${parameters.prompt}\"}]}],\"anthropic_version\":\"${parameters.anthropic_version}\",\"max_tokens\":${parameters.max_tokens_to_sample}}"
+            "request_body": "{\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"${parameters.inputs}\"}]}],\"anthropic_version\":\"${parameters.anthropic_version}\",\"max_tokens\":${parameters.max_tokens_to_sample}}"
         }
     ]
 }
