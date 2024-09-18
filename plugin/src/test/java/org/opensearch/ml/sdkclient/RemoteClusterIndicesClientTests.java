@@ -122,8 +122,7 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
                         .setSerializationInclusion(JsonInclude.Include.NON_NULL)
                 )
             );
-        sdkClient = SdkClientFactory.wrapSdkClientDelegate(new RemoteClusterIndicesClient(mockedOpenSearchClient));
-        sdkClient.onMultiTenancyEnabledChanged(true);
+        sdkClient = SdkClientFactory.wrapSdkClientDelegate(new RemoteClusterIndicesClient(mockedOpenSearchClient), true);
         testDataObject = new TestDataObject("foo");
     }
 
@@ -592,8 +591,6 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
 
     public void testSearchDataObject_NullTenant() throws IOException {
         // Tests exception if multitenancy enabled
-        sdkClient.onMultiTenancyEnabledChanged(true);
-
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         SearchDataObjectRequest searchRequest = SearchDataObjectRequest
             .builder()
@@ -611,5 +608,28 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
         Throwable cause = ce.getCause();
         assertEquals(OpenSearchStatusException.class, cause.getClass());
         assertEquals("Tenant ID is required when multitenancy is enabled.", cause.getMessage());
+    }
+
+    public void testSearchDataObject_NullTenantNoMultitenancy() throws IOException {
+        // Tests no status exception if multitenancy not enabled
+        SdkClient sdkClientNoTenant = SdkClientFactory.wrapSdkClientDelegate(new RemoteClusterIndicesClient(mockedOpenSearchClient), false);
+
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        SearchDataObjectRequest searchRequest = SearchDataObjectRequest
+            .builder()
+            .indices(TEST_INDEX)
+            // null tenant Id
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
+
+        when(mockedOpenSearchClient.search(any(SearchRequest.class), any())).thenThrow(new UnsupportedOperationException("test"));
+        CompletableFuture<SearchDataObjectResponse> future = sdkClientNoTenant
+            .searchDataObjectAsync(searchRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture();
+
+        CompletionException ce = assertThrows(CompletionException.class, () -> future.join());
+        Throwable cause = ce.getCause();
+        assertEquals(UnsupportedOperationException.class, cause.getClass());
+        assertEquals("test", cause.getMessage());
     }
 }

@@ -19,6 +19,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+
 import java.io.IOException;
 import java.util.EnumSet;
 import java.util.Map;
@@ -119,8 +120,7 @@ public class LocalClusterIndicesClientTests {
     public void setup() {
         MockitoAnnotations.openMocks(this);
 
-        sdkClient = new SdkClient(new LocalClusterIndicesClient(mockedClient, xContentRegistry));
-        sdkClient.onMultiTenancyEnabledChanged(false);
+        sdkClient = new SdkClient(new LocalClusterIndicesClient(mockedClient, xContentRegistry), true);
 
         testDataObject = new TestDataObject("foo");
     }
@@ -559,8 +559,8 @@ public class LocalClusterIndicesClientTests {
         when(mockedClient.search(any(SearchRequest.class))).thenReturn(future);
         when(future.actionGet()).thenReturn(searchResponse);
 
-        sdkClient.onMultiTenancyEnabledChanged(false);
-        SearchDataObjectResponse response = sdkClient
+        SdkClient sdkClientNoTenant = new SdkClient(new LocalClusterIndicesClient(mockedClient, xContentRegistry), false);
+        SearchDataObjectResponse response = sdkClientNoTenant
             .searchDataObjectAsync(searchRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
             .toCompletableFuture()
             .join();
@@ -608,7 +608,6 @@ public class LocalClusterIndicesClientTests {
         when(mockedClient.search(any(SearchRequest.class))).thenReturn(future);
         when(future.actionGet()).thenReturn(searchResponse);
 
-        sdkClient.onMultiTenancyEnabledChanged(true);
         SearchDataObjectResponse response = sdkClient
             .searchDataObjectAsync(searchRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
             .toCompletableFuture()
@@ -655,9 +654,7 @@ public class LocalClusterIndicesClientTests {
     
     @Test
     public void testSearchDataObject_NullTenantId() throws IOException {
-        // Tests exception if multitenancy enabled
-        sdkClient.onMultiTenancyEnabledChanged(true);
-        
+        // Tests exception if multitenancy enabled        
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         SearchDataObjectRequest searchRequest = SearchDataObjectRequest
             .builder()
@@ -674,5 +671,27 @@ public class LocalClusterIndicesClientTests {
         Throwable cause = ce.getCause();
         assertEquals(OpenSearchStatusException.class, cause.getClass());
         assertEquals("Tenant ID is required when multitenancy is enabled.", cause.getMessage());
+    }
+    
+    public void testSearchDataObject_NullTenantNoMultitenancy() throws IOException {
+        // Tests no status exception if multitenancy not enabled
+        SdkClient sdkClientNoTenant = new SdkClient(new LocalClusterIndicesClient(mockedClient, xContentRegistry), false);
+
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        SearchDataObjectRequest searchRequest = SearchDataObjectRequest
+            .builder()
+            .indices(TEST_INDEX)
+            // null tenant Id
+            .searchSourceBuilder(searchSourceBuilder)
+            .build();
+        
+        CompletableFuture<SearchDataObjectResponse> future = sdkClientNoTenant
+            .searchDataObjectAsync(searchRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture();
+
+        CompletionException ce = assertThrows(CompletionException.class, () -> future.join());
+        Throwable cause = ce.getCause();
+        assertEquals(UnsupportedOperationException.class, cause.getClass());
+        assertEquals("test", cause.getMessage());
     }
 }

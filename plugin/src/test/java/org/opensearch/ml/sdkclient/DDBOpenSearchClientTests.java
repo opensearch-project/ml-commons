@@ -129,8 +129,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
     public void setup() {
         MockitoAnnotations.openMocks(this);
 
-        sdkClient = SdkClientFactory.wrapSdkClientDelegate(new DDBOpenSearchClient(dynamoDbClient, remoteClusterIndicesClient));
-        sdkClient.onMultiTenancyEnabledChanged(true);
+        sdkClient = SdkClientFactory.wrapSdkClientDelegate(new DDBOpenSearchClient(dynamoDbClient, remoteClusterIndicesClient), true);
         testDataObject = new TestDataObject("foo");
     }
 

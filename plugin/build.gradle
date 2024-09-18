@@ -91,7 +91,7 @@ dependencies {
     implementation("software.amazon.awssdk:utils:2.25.40")
     // AWS OpenSearch Service dependency
     implementation("software.amazon.awssdk:apache-client:2.25.40")
-    
+
     configurations.all {
         resolutionStrategy.force 'org.apache.httpcomponents.core5:httpcore5:5.2.4'
         resolutionStrategy.force 'org.apache.httpcomponents.core5:httpcore5-h2:5.2.4'
@@ -104,7 +104,8 @@ dependencies {
 
 publishing {
     publications {
-        pluginZip(MavenPublication) { publication ->
+        pluginZip(MavenPublication) {
+            publication ->
             pom {
                 name = opensearchplugin.name
                 description = opensearchplugin.description
@@ -173,7 +174,9 @@ task integTest(type: RestIntegTestTask) {
     testClassesDirs = sourceSets.test.output.classesDirs
     classpath = sourceSets.test.runtimeClasspath
 }
-tasks.named("check").configure { dependsOn(integTest) }
+tasks.named("check").configure {
+    dependsOn(integTest)
+}
 
 integTest {
     dependsOn "bundlePlugin"
@@ -245,6 +248,10 @@ testClusters.integTest {
     environment "AWS_ACCESS_KEY_ID", System.getenv("AWS_ACCESS_KEY_ID");
     environment "AWS_SECRET_ACCESS_KEY", System.getenv("AWS_SECRET_ACCESS_KEY");
     environment "AWS_SESSION_TOKEN", System.getenv("AWS_SESSION_TOKEN");
+
+    if (System.getProperty("tests.rest.tenantaware") != null) {
+        environment "plugins.ml_commons.multi_tenancy_enabled", "true"
+    }
 
     testDistribution = "ARCHIVE"
     // Cluster shrink exception thrown if we try to set numberOfNodes to 1, so only apply if > 1

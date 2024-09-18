@@ -231,7 +231,7 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
     ) {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<SearchDataObjectResponse>) () -> {
             try {
-                log.info("Searching {}", Arrays.toString(request.indices()), null);
+                log.info("Searching {}", Arrays.toString(request.indices()));
                 // work around https://github.com/opensearch-project/opensearch-java/issues/1150
                 String json = SdkClientUtils
                     .lowerCaseEnumValues(
@@ -254,6 +254,8 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
                         .filter(tenantIdFilterQuery.toQuery())
                         .build();
                     searchRequest = searchRequest.toBuilder().index(Arrays.asList(request.indices())).query(boolQuery.toQuery()).build();
+                } else {
+                    searchRequest = searchRequest.toBuilder().index(Arrays.asList(request.indices())).build();
                 }
                 SearchResponse<?> searchResponse = openSearchClient.search(searchRequest, MAP_DOCTYPE);
                 log.info("Search returned {} hits", searchResponse.hits().total().value());

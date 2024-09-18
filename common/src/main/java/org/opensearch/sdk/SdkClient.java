@@ -19,18 +19,14 @@ import org.opensearch.ml.common.settings.SettingsChangeListener;
 
 import static org.opensearch.sdk.SdkClientUtils.unwrapAndConvertToException;
 
-public class SdkClient implements SettingsChangeListener {
+public class SdkClient {
     
     private final SdkClientDelegate delegate;
-    private volatile Boolean isMultiTenancyEnabled;
+    private final Boolean isMultiTenancyEnabled;
     
-    public SdkClient(SdkClientDelegate delegate) {
+    public SdkClient(SdkClientDelegate delegate, Boolean multiTenancy) {
         this.delegate = delegate;
-    }
-
-    @Override
-    public void onMultiTenancyEnabledChanged(boolean isEnabled) {
-        this.isMultiTenancyEnabled = isEnabled;
+        this.isMultiTenancyEnabled = multiTenancy;
     }
 
     /**

@@ -357,7 +357,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
 
     private String getIndexName(String index) {
         // System index is not supported in remote index. Replacing '.' from index name.
-        return index.replaceAll("\\.", "");
+        return (index.length() > 1 && index.charAt(0) == '.') ? index.substring(1) : index;
     }
 
     private XContentParser createParser(String json) throws IOException {
