@@ -511,8 +511,7 @@ public class MachineLearningPlugin extends Plugin
             mlTaskManager,
             modelCacheHelper,
             mlEngine,
-            nodeHelper,
-            mlFeatureEnabledSetting
+            nodeHelper
         );
         mlInputDatasetHandler = new MLInputDatasetHandler(client);
         modelAccessControlHelper = new ModelAccessControlHelper(clusterService, settings);

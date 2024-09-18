@@ -122,7 +122,6 @@ import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.sdkclient.SdkClientFactory;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
@@ -209,8 +208,6 @@ public class MLModelManagerTests extends OpenSearchTestCase {
 
     @Mock
     private MLTask pretrainedMLTask;
-    @Mock
-    MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Before
     public void setup() throws URISyntaxException, IOException {
@@ -287,7 +284,6 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         when(threadPool.executor(any())).thenReturn(testThreadPool.executor(GENERAL_THREAD_POOL));
-        when(mlFeatureEnabledSetting.isControllerEnabled()).thenReturn(true);
 
         modelManager = spy(
             new MLModelManager(
@@ -305,8 +301,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
                 mlTaskManager,
                 modelCacheHelper,
                 mlEngine,
-                nodeHelper,
-                mlFeatureEnabledSetting
+                nodeHelper
             )
         );
 
