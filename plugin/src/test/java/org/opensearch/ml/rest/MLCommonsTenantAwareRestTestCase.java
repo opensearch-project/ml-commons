@@ -10,6 +10,7 @@ import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonList;
 import static org.opensearch.common.xcontent.XContentType.JSON;
 import static org.opensearch.ml.common.input.Constants.TENANT_ID_HEADER;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -18,7 +19,6 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.apache.http.Header;
-import org.apache.http.HttpHeaders;
 import org.apache.http.message.BasicHeader;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Response;
@@ -82,25 +82,8 @@ public abstract class MLCommonsTenantAwareRestTestCase extends MLCommonsRestTest
 
     protected static boolean isMultiTenancyEnabled() throws IOException {
         // pass -Dtests.rest.tenantaware on gradle command line to enable
-        boolean enabled = Boolean.parseBoolean(System.getProperty("tests.rest.tenantaware"));
-        // TODO: remove this as a changeable setting and load from opensearch.yml
-        if (enabled) {
-            enableMultiTenancy();
-        }
-        return enabled;
-    }
-
-    protected static void enableMultiTenancy() throws IOException {
-        Response response = TestHelper
-            .makeRequest(
-                client(),
-                PUT,
-                "_cluster/settings",
-                null,
-                "{\"persistent\":{\"plugins.ml_commons.multi_tenancy_enabled\":true}}",
-                List.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
-            );
-        assertEquals(200, response.getStatusLine().getStatusCode());
+        return Boolean.parseBoolean(System.getProperty(ML_COMMONS_MULTI_TENANCY_ENABLED.getKey()))
+            || Boolean.parseBoolean(System.getenv(ML_COMMONS_MULTI_TENANCY_ENABLED.getKey()));
     }
 
     protected static Response makeRequest(RestRequest request, String method, String path) throws IOException {
