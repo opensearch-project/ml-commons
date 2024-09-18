@@ -104,7 +104,7 @@ public class EncryptorImplTest {
         MockitoAnnotations.openMocks(this);
         masterKey = new ConcurrentHashMap<>();
         masterKey.put(DEFAULT_TENANT_ID, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
-        sdkClient = new SdkClient(new LocalClusterIndicesClient(client, xContentRegistry));
+        sdkClient = new SdkClient(new LocalClusterIndicesClient(client, xContentRegistry), true);
 
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
