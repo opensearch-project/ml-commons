@@ -47,6 +47,7 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_MODELS
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE;
 import static org.opensearch.ml.stats.ActionName.REGISTER;
 import static org.opensearch.ml.stats.MLActionLevelStat.ML_ACTION_REQUEST_COUNT;
+import static org.opensearch.ml.utils.MLExceptionUtils.CONTROLLER_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 import static org.opensearch.ml.utils.MLNodeUtils.checkOpenCircuitBreaker;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
@@ -131,6 +132,7 @@ import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.engine.utils.FileUtils;
 import org.opensearch.ml.profile.MLModelProfile;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
@@ -178,6 +180,7 @@ public class MLModelManager {
     private final MLTaskManager mlTaskManager;
     private final MLEngine mlEngine;
     private final DiscoveryNodeHelper nodeHelper;
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     private volatile Integer maxModelPerNode;
     private volatile Integer maxRegisterTasksPerNode;
@@ -208,7 +211,8 @@ public class MLModelManager {
         MLTaskManager mlTaskManager,
         MLModelCacheHelper modelCacheHelper,
         MLEngine mlEngine,
-        DiscoveryNodeHelper nodeHelper
+        DiscoveryNodeHelper nodeHelper,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         this.client = client;
         this.sdkClient = sdkClient;
@@ -224,6 +228,7 @@ public class MLModelManager {
         this.mlTaskManager = mlTaskManager;
         this.mlEngine = mlEngine;
         this.nodeHelper = nodeHelper;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
 
         this.maxModelPerNode = ML_COMMONS_MAX_MODELS_PER_NODE.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MAX_MODELS_PER_NODE, it -> maxModelPerNode = it);
@@ -1329,6 +1334,9 @@ public class MLModelManager {
      */
     public synchronized void deployControllerWithDeployedModel(String modelId, ActionListener<String> listener) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            if (!mlFeatureEnabledSetting.isControllerEnabled()) {
+                throw new IllegalStateException(CONTROLLER_DISABLED_ERR_MSG);
+            }
             if (!modelCacheHelper.isModelDeployed(modelId)) {
                 throw new OpenSearchStatusException(
                     "The model of this model controller has not deployed yet, please deploy the model first.",
@@ -1498,6 +1506,9 @@ public class MLModelManager {
      * @param mlModel ml model
      */
     public void deployControllerWithDeployingModel(MLModel mlModel, Integer eligibleNodeCount) {
+        if (!mlFeatureEnabledSetting.isControllerEnabled()) {
+            throw new IllegalStateException(CONTROLLER_DISABLED_ERR_MSG);
+        }
         if (mlModel.getModelState() != MLModelState.DEPLOYING) {
             throw new OpenSearchStatusException(
                 "This method should only be called when model is in DEPLOYING state, but the model is in state: " + mlModel.getModelState(),
