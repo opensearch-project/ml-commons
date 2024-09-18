@@ -193,6 +193,11 @@ integTest {
         filter {
             includeTestsMatching "org.opensearch.ml.rest.*TenantAwareIT"
         }
+        systemProperty "plugins.ml_commons.multi_tenancy_enabled", "true"
+    }
+
+    if (System.getProperty("tests.rest.tenantaware") != null) {
+        environment "plugins.ml_commons.multi_tenancy_enabled", "true"
     }
 
     // Only rest case can run with remote cluster
@@ -221,6 +226,19 @@ integTest {
 
     // The 'doFirst' delays till execution time.
     doFirst {
+        if (System.getProperty("tests.rest.tenantaware") != null) {
+            def ymlFile = file("$buildDir/testclusters/integTest-0/config/opensearch.yml")
+            if (ymlFile.exists()) {
+                ymlFile.withWriterAppend {
+                    writer ->
+                    writer.write("\n# Set multitenancy\n")
+                    writer.write("plugins.ml_commons.multi_tenancy_enabled: true\n")
+                }
+            } else {
+                throw new GradleException("opensearch.yml not found at: $ymlFile")
+            }
+        }
+    
         // TODO this properly uses the remote client factory but needs a remote cluster set up
         if (System.getProperty("tests.rest.cluster") != null && System.getProperty("tests.rest.tenantaware") != null) {
             def ymlFile = file("$buildDir/testclusters/integTest-0/config/opensearch.yml")
