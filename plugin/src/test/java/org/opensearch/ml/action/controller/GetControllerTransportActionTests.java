@@ -46,6 +46,7 @@ import org.opensearch.ml.common.transport.controller.MLControllerGetRequest;
 import org.opensearch.ml.common.transport.controller.MLControllerGetResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -81,6 +82,9 @@ public class GetControllerTransportActionTests extends OpenSearchTestCase {
     @Mock
     MLModel mlModel;
 
+    @Mock
+    MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
@@ -93,6 +97,7 @@ public class GetControllerTransportActionTests extends OpenSearchTestCase {
         MockitoAnnotations.openMocks(this);
 
         Settings settings = Settings.builder().build();
+        when(mlFeatureEnabledSetting.isControllerEnabled()).thenReturn(true);
         getControllerTransportAction = spy(
             new GetControllerTransportAction(
                 transportService,
@@ -101,7 +106,8 @@ public class GetControllerTransportActionTests extends OpenSearchTestCase {
                 xContentRegistry,
                 clusterService,
                 mlModelManager,
-                modelAccessControlHelper
+                modelAccessControlHelper,
+                mlFeatureEnabledSetting
             )
         );
         mlControllerGetRequest = MLControllerGetRequest.builder().modelId("testModelId").build();
@@ -134,6 +140,18 @@ public class GetControllerTransportActionTests extends OpenSearchTestCase {
     public void testGetControllerSuccess() {
         getControllerTransportAction.doExecute(null, mlControllerGetRequest, actionListener);
         verify(actionListener).onResponse(any(MLControllerGetResponse.class));
+    }
+
+    @Test
+    public void testGetControllerFailedWithControllerFeatureFlagDisabled() {
+        when(mlFeatureEnabledSetting.isControllerEnabled()).thenReturn(false);
+        getControllerTransportAction.doExecute(null, mlControllerGetRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+                "Controller is currently disabled. To enable it, update the setting \"plugins.ml_commons.controller_enabled\" to true.",
+                argumentCaptor.getValue().getMessage()
+        );
     }
 
     @Test

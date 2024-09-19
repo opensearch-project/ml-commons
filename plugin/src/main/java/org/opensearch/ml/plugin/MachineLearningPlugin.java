@@ -750,10 +750,10 @@ public class MachineLearningPlugin extends Plugin
         RestMemorySearchInteractionsAction restSearchInteractionsAction = new RestMemorySearchInteractionsAction();
         RestMemoryGetConversationAction restGetConversationAction = new RestMemoryGetConversationAction();
         RestMemoryGetInteractionAction restGetInteractionAction = new RestMemoryGetInteractionAction();
-        RestMLCreateControllerAction restMLCreateControllerAction = new RestMLCreateControllerAction();
-        RestMLGetControllerAction restMLGetControllerAction = new RestMLGetControllerAction();
-        RestMLUpdateControllerAction restMLUpdateControllerAction = new RestMLUpdateControllerAction();
-        RestMLDeleteControllerAction restMLDeleteControllerAction = new RestMLDeleteControllerAction();
+        RestMLCreateControllerAction restMLCreateControllerAction = new RestMLCreateControllerAction(mlFeatureEnabledSetting);
+        RestMLGetControllerAction restMLGetControllerAction = new RestMLGetControllerAction(mlFeatureEnabledSetting);
+        RestMLUpdateControllerAction restMLUpdateControllerAction = new RestMLUpdateControllerAction(mlFeatureEnabledSetting);
+        RestMLDeleteControllerAction restMLDeleteControllerAction = new RestMLDeleteControllerAction(mlFeatureEnabledSetting);
         RestMLGetAgentAction restMLGetAgentAction = new RestMLGetAgentAction(mlFeatureEnabledSetting);
         RestMLDeleteAgentAction restMLDeleteAgentAction = new RestMLDeleteAgentAction(mlFeatureEnabledSetting);
         RestMemoryUpdateConversationAction restMemoryUpdateConversationAction = new RestMemoryUpdateConversationAction();
@@ -946,6 +946,7 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED,
                 MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE,
                 MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
+                MLCommonsSettings.ML_COMMONS_CONTROLLER_ENABLED,
                 // Settings for SdkClient
                 SdkClientSettings.REMOTE_METADATA_TYPE,
                 SdkClientSettings.REMOTE_METADATA_ENDPOINT,
