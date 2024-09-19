@@ -131,6 +131,7 @@ import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.engine.utils.FileUtils;
 import org.opensearch.ml.profile.MLModelProfile;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
@@ -178,6 +179,7 @@ public class MLModelManager {
     private final MLTaskManager mlTaskManager;
     private final MLEngine mlEngine;
     private final DiscoveryNodeHelper nodeHelper;
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     private volatile Integer maxModelPerNode;
     private volatile Integer maxRegisterTasksPerNode;
@@ -208,7 +210,8 @@ public class MLModelManager {
         MLTaskManager mlTaskManager,
         MLModelCacheHelper modelCacheHelper,
         MLEngine mlEngine,
-        DiscoveryNodeHelper nodeHelper
+        DiscoveryNodeHelper nodeHelper,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         this.client = client;
         this.sdkClient = sdkClient;
@@ -224,6 +227,7 @@ public class MLModelManager {
         this.mlTaskManager = mlTaskManager;
         this.mlEngine = mlEngine;
         this.nodeHelper = nodeHelper;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
 
         this.maxModelPerNode = ML_COMMONS_MAX_MODELS_PER_NODE.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MAX_MODELS_PER_NODE, it -> maxModelPerNode = it);
