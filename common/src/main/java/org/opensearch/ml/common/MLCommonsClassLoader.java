@@ -5,7 +5,15 @@
 
 package org.opensearch.ml.common;
 
-import lombok.extern.log4j.Log4j2;
+import java.io.IOException;
+import java.lang.reflect.Constructor;
+import java.security.AccessController;
+import java.security.PrivilegedActionException;
+import java.security.PrivilegedExceptionAction;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
+
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.ml.common.annotation.Connector;
 import org.opensearch.ml.common.annotation.ExecuteInput;
@@ -20,14 +28,7 @@ import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLOutputType;
 import org.reflections.Reflections;
 
-import java.io.IOException;
-import java.lang.reflect.Constructor;
-import java.security.AccessController;
-import java.security.PrivilegedActionException;
-import java.security.PrivilegedExceptionAction;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 @SuppressWarnings("removal")
@@ -93,7 +94,7 @@ public class MLCommonsClassLoader {
             if (mlAlgoParameter != null) {
                 FunctionName[] algorithms = mlAlgoParameter.algorithms();
                 if (algorithms != null && algorithms.length > 0) {
-                    for(FunctionName name : algorithms){
+                    for (FunctionName name : algorithms) {
                         parameterClassMap.put(name, clazz);
                     }
                 }
@@ -157,7 +158,7 @@ public class MLCommonsClassLoader {
             if (executeInput != null) {
                 FunctionName[] algorithms = executeInput.algorithms();
                 if (algorithms != null && algorithms.length > 0) {
-                    for(FunctionName name : algorithms){
+                    for (FunctionName name : algorithms) {
                         executeInputClassMap.put(name, clazz);
                     }
                 }
@@ -176,7 +177,7 @@ public class MLCommonsClassLoader {
             if (executeOutput != null) {
                 FunctionName[] algorithms = executeOutput.algorithms();
                 if (algorithms != null && algorithms.length > 0) {
-                    for(FunctionName name : algorithms){
+                    for (FunctionName name : algorithms) {
                         executeOutputClassMap.put(name, clazz);
                     }
                 }
@@ -192,7 +193,7 @@ public class MLCommonsClassLoader {
             if (mlInput != null) {
                 FunctionName[] algorithms = mlInput.functionNames();
                 if (algorithms != null && algorithms.length > 0) {
-                    for(FunctionName name : algorithms){
+                    for (FunctionName name : algorithms) {
                         mlInputClassMap.put(name, clazz);
                     }
                 }
@@ -242,7 +243,7 @@ public class MLCommonsClassLoader {
         } catch (Exception e) {
             Throwable cause = e.getCause();
             if (cause instanceof MLException || cause instanceof IllegalArgumentException) {
-                throw (RuntimeException)cause;
+                throw (RuntimeException) cause;
             } else {
                 log.error("Failed to init instance for type " + type, e);
                 return null;
@@ -254,19 +255,16 @@ public class MLCommonsClassLoader {
         return mlInputClassMap.containsKey(functionName);
     }
 
-    public static <S> S initConnector(String name, Object[] initArgs,
-                                      Class<?>... constructorParameterTypes) {
+    public static <S> S initConnector(String name, Object[] initArgs, Class<?>... constructorParameterTypes) {
         return init(connectorClassMap, name, initArgs, constructorParameterTypes);
     }
 
     @SuppressWarnings("unchecked")
-    public static <T extends Enum<T>, S> S initMLInput(T type, Object[] initArgs,
-                                                       Class<?>... constructorParameterTypes) {
+    public static <T extends Enum<T>, S> S initMLInput(T type, Object[] initArgs, Class<?>... constructorParameterTypes) {
         return init(mlInputClassMap, type, initArgs, constructorParameterTypes);
     }
 
-    private static <T, S> S init(Map<T, Class<?>> map, T type,
-                                 Object[] initArgs, Class<?>... constructorParameterTypes) {
+    private static <T, S> S init(Map<T, Class<?>> map, T type, Object[] initArgs, Class<?>... constructorParameterTypes) {
         Class<?> clazz = map.get(type);
         if (clazz == null) {
             throw new IllegalArgumentException("Can't find class for type " + type);
@@ -277,7 +275,7 @@ public class MLCommonsClassLoader {
         } catch (Exception e) {
             Throwable cause = e.getCause();
             if (cause instanceof MLException) {
-                throw (MLException)cause;
+                throw (MLException) cause;
             } else if (cause instanceof IllegalArgumentException) {
                 throw (IllegalArgumentException) cause;
             } else {

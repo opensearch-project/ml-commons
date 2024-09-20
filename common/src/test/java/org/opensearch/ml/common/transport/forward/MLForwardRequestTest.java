@@ -1,5 +1,15 @@
 package org.opensearch.ml.common.transport.forward;
 
+import static org.junit.Assert.*;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -23,16 +33,6 @@ import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-
-import static org.junit.Assert.*;
-
 @RunWith(MockitoJUnitRunner.class)
 public class MLForwardRequestTest {
 
@@ -42,70 +42,74 @@ public class MLForwardRequestTest {
     private MLRegisterModelInput registerModelInput;
     private final FunctionName functionName = FunctionName.KMEANS;
 
-
     @Before
     public void setUp() throws Exception {
         Instant time = Instant.now();
-        mlTask = MLTask.builder()
-                .taskId("mlTaskTaskId")
-                .modelId("mlTaskModelId")
-                .taskType(MLTaskType.PREDICTION)
-                .functionName(functionName)
-                .state(MLTaskState.RUNNING)
-                .inputType(MLInputDataType.DATA_FRAME)
-                .workerNodes(Arrays.asList("mlTaskNode1"))
-                .progress(0.0f)
-                .outputIndex("test_index")
-                .error("test_error")
-                .createTime(time.minus(1, ChronoUnit.MINUTES))
-                .lastUpdateTime(time)
-                .build();
+        mlTask = MLTask
+            .builder()
+            .taskId("mlTaskTaskId")
+            .modelId("mlTaskModelId")
+            .taskType(MLTaskType.PREDICTION)
+            .functionName(functionName)
+            .state(MLTaskState.RUNNING)
+            .inputType(MLInputDataType.DATA_FRAME)
+            .workerNodes(Arrays.asList("mlTaskNode1"))
+            .progress(0.0f)
+            .outputIndex("test_index")
+            .error("test_error")
+            .createTime(time.minus(1, ChronoUnit.MINUTES))
+            .lastUpdateTime(time)
+            .build();
 
-        DataFrame dataFrame = DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {{
-            put("key1", 2.0D);
-        }}));
-        modelInput = MLInput.builder()
-                .algorithm(FunctionName.KMEANS)
-                .parameters(KMeansParams.builder().centroids(1).build())
-                .inputDataset(DataFrameInputDataset.builder().dataFrame(dataFrame).build())
-                .build();
-        MLModelConfig config = TextEmbeddingModelConfig.builder()
-                .modelType("testModelType")
-                .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
-                .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
-                .embeddingDimension(100)
-                .build();
-        registerModelInput = MLRegisterModelInput.builder()
-                .functionName(functionName)
-                .modelName("testModelName")
-                .version("testModelVersion")
-                .modelGroupId("modelGroupId")
-                .url("url")
-                .modelFormat(MLModelFormat.ONNX)
-                .modelConfig(config)
-                .deployModel(true)
-                .modelNodeIds(new String[]{"modelNodeIds" })
-                .build();
+        DataFrame dataFrame = DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {
+            {
+                put("key1", 2.0D);
+            }
+        }));
+        modelInput = MLInput
+            .builder()
+            .algorithm(FunctionName.KMEANS)
+            .parameters(KMeansParams.builder().centroids(1).build())
+            .inputDataset(DataFrameInputDataset.builder().dataFrame(dataFrame).build())
+            .build();
+        MLModelConfig config = TextEmbeddingModelConfig
+            .builder()
+            .modelType("testModelType")
+            .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .embeddingDimension(100)
+            .build();
+        registerModelInput = MLRegisterModelInput
+            .builder()
+            .functionName(functionName)
+            .modelName("testModelName")
+            .version("testModelVersion")
+            .modelGroupId("modelGroupId")
+            .url("url")
+            .modelFormat(MLModelFormat.ONNX)
+            .modelConfig(config)
+            .deployModel(true)
+            .modelNodeIds(new String[] { "modelNodeIds" })
+            .build();
 
-        forwardInput = MLForwardInput.builder()
-                .taskId("forwardInputTaskId")
-                .modelId("forwardInputModelId")
-                .workerNodeId("forwardInputWorkerNodeId")
-                .requestType(MLForwardRequestType.DEPLOY_MODEL_DONE)
-                .mlTask(mlTask)
-                .modelInput(modelInput)
-                .error("forwardInputError")
-                .workerNodes(new String [] {"forwardInputNodeId1", "forwardInputNodeId2", "forwardInputNodeId3"})
-                .registerModelInput(registerModelInput)
-                .build();
+        forwardInput = MLForwardInput
+            .builder()
+            .taskId("forwardInputTaskId")
+            .modelId("forwardInputModelId")
+            .workerNodeId("forwardInputWorkerNodeId")
+            .requestType(MLForwardRequestType.DEPLOY_MODEL_DONE)
+            .mlTask(mlTask)
+            .modelInput(modelInput)
+            .error("forwardInputError")
+            .workerNodes(new String[] { "forwardInputNodeId1", "forwardInputNodeId2", "forwardInputNodeId3" })
+            .registerModelInput(registerModelInput)
+            .build();
     }
 
     @Test
     public void writeTo_Success() throws IOException {
 
-        MLForwardRequest request = MLForwardRequest.builder()
-                .forwardInput(forwardInput)
-                .build();
+        MLForwardRequest request = MLForwardRequest.builder().forwardInput(forwardInput).build();
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         request.writeTo(bytesStreamOutput);
         request = new MLForwardRequest(bytesStreamOutput.bytes().streamInput());
@@ -114,7 +118,10 @@ public class MLForwardRequestTest {
         assertEquals("forwardInputWorkerNodeId", request.getForwardInput().getWorkerNodeId());
         assertEquals(MLForwardRequestType.DEPLOY_MODEL_DONE, request.getForwardInput().getRequestType());
         assertEquals("forwardInputError", request.getForwardInput().getError());
-        assertArrayEquals(new String [] {"forwardInputNodeId1", "forwardInputNodeId2", "forwardInputNodeId3"}, request.getForwardInput().getWorkerNodes());
+        assertArrayEquals(
+            new String[] { "forwardInputNodeId1", "forwardInputNodeId2", "forwardInputNodeId3" },
+            request.getForwardInput().getWorkerNodes()
+        );
         assertEquals(mlTask.getTaskId(), request.getForwardInput().getMlTask().getTaskId());
         assertEquals(modelInput.getAlgorithm().toString(), request.getForwardInput().getModelInput().getAlgorithm().toString());
         assertEquals(registerModelInput.getModelName(), request.getForwardInput().getRegisterModelInput().getModelName());
@@ -122,17 +129,14 @@ public class MLForwardRequestTest {
 
     @Test
     public void validate_Success() {
-        MLForwardRequest request = MLForwardRequest.builder()
-                .forwardInput(forwardInput)
-                .build();
+        MLForwardRequest request = MLForwardRequest.builder().forwardInput(forwardInput).build();
 
         assertNull(request.validate());
     }
 
     @Test
     public void validate_Exception_NullMLInput() {
-        MLForwardRequest request = MLForwardRequest.builder()
-                .build();
+        MLForwardRequest request = MLForwardRequest.builder().build();
         ActionRequestValidationException exception = request.validate();
         assertEquals("Validation Failed: 1: ML input can't be null;", exception.getMessage());
     }
@@ -141,9 +145,7 @@ public class MLForwardRequestTest {
     // MLForwardInput check its parameters when created, so exception is not thrown here
     public void validate_Exception_NullMLModelName() {
         forwardInput.setTaskId(null);
-        MLForwardRequest request = MLForwardRequest.builder()
-                .forwardInput(forwardInput)
-                .build();
+        MLForwardRequest request = MLForwardRequest.builder().forwardInput(forwardInput).build();
 
         assertNull(request.validate());
         assertNull(request.getForwardInput().getTaskId());
@@ -151,19 +153,14 @@ public class MLForwardRequestTest {
 
     @Test
     public void fromActionRequest_Success_WithMLForwardRequest() {
-        MLForwardRequest request = MLForwardRequest.builder()
-                .forwardInput(forwardInput)
-                .build();
+        MLForwardRequest request = MLForwardRequest.builder().forwardInput(forwardInput).build();
 
         assertSame(MLForwardRequest.fromActionRequest(request), request);
     }
 
-
     @Test
     public void fromActionRequest_Success_WithNonMLForwardRequest() {
-        MLForwardRequest request = MLForwardRequest.builder()
-                .forwardInput(forwardInput)
-                .build();
+        MLForwardRequest request = MLForwardRequest.builder().forwardInput(forwardInput).build();
         ActionRequest actionRequest = new ActionRequest() {
             @Override
             public ActionRequestValidationException validate() {
@@ -179,8 +176,14 @@ public class MLForwardRequestTest {
         assertNotSame(result, request);
         assertEquals(request.getForwardInput().getTaskId(), result.getForwardInput().getTaskId());
         assertEquals(request.getForwardInput().getMlTask().getTaskId(), result.getForwardInput().getMlTask().getTaskId());
-        assertEquals(request.getForwardInput().getModelInput().getAlgorithm().toString(), result.getForwardInput().getModelInput().getAlgorithm().toString());
-        assertEquals(request.getForwardInput().getRegisterModelInput().getModelName(), result.getForwardInput().getRegisterModelInput().getModelName());
+        assertEquals(
+            request.getForwardInput().getModelInput().getAlgorithm().toString(),
+            result.getForwardInput().getModelInput().getAlgorithm().toString()
+        );
+        assertEquals(
+            request.getForwardInput().getRegisterModelInput().getModelName(),
+            result.getForwardInput().getRegisterModelInput().getModelName()
+        );
     }
 
     @Test(expected = UncheckedIOException.class)

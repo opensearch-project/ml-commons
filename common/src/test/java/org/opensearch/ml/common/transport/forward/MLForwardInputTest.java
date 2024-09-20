@@ -1,5 +1,15 @@
 package org.opensearch.ml.common.transport.forward;
 
+import static org.junit.Assert.*;
+
+import java.io.IOException;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.function.Consumer;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -21,79 +31,74 @@ import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
-import java.io.IOException;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.function.Consumer;
-
-import static org.junit.Assert.*;
-
-
 @RunWith(MockitoJUnitRunner.class)
 public class MLForwardInputTest {
 
     private MLForwardInput forwardInput;
     private final FunctionName functionName = FunctionName.KMEANS;
 
-
     @Before
     public void setUp() throws Exception {
         Instant time = Instant.now();
-        MLTask mlTask = MLTask.builder()
-                .taskId("mlTaskTaskId")
-                .modelId("mlTaskModelId")
-                .taskType(MLTaskType.PREDICTION)
-                .functionName(functionName)
-                .state(MLTaskState.RUNNING)
-                .inputType(MLInputDataType.DATA_FRAME)
-                .workerNodes(Arrays.asList("mlTaskNode1"))
-                .progress(0.0f)
-                .outputIndex("test_index")
-                .error("test_error")
-                .createTime(time.minus(1, ChronoUnit.MINUTES))
-                .lastUpdateTime(time)
-                .build();
+        MLTask mlTask = MLTask
+            .builder()
+            .taskId("mlTaskTaskId")
+            .modelId("mlTaskModelId")
+            .taskType(MLTaskType.PREDICTION)
+            .functionName(functionName)
+            .state(MLTaskState.RUNNING)
+            .inputType(MLInputDataType.DATA_FRAME)
+            .workerNodes(Arrays.asList("mlTaskNode1"))
+            .progress(0.0f)
+            .outputIndex("test_index")
+            .error("test_error")
+            .createTime(time.minus(1, ChronoUnit.MINUTES))
+            .lastUpdateTime(time)
+            .build();
 
-        DataFrame dataFrame = DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {{
-            put("key1", 2.0D);
-        }}));
-        MLInput modelInput = MLInput.builder()
-                .algorithm(FunctionName.KMEANS)
-                .parameters(KMeansParams.builder().centroids(1).build())
-                .inputDataset(DataFrameInputDataset.builder().dataFrame(dataFrame).build())
-                .build();
-        MLModelConfig config = TextEmbeddingModelConfig.builder()
-                .modelType("testModelType")
-                .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
-                .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
-                .embeddingDimension(100)
-                .build();
-        MLRegisterModelInput registerModelInput = MLRegisterModelInput.builder()
-                .functionName(functionName)
-                .modelName("testModelName")
-                .version("testModelVersion")
-                .modelGroupId("mockModelGroupId")
-                .url("url")
-                .modelFormat(MLModelFormat.ONNX)
-                .modelConfig(config)
-                .deployModel(true)
-                .modelNodeIds(new String[]{"modelNodeIds"})
-                .build();
+        DataFrame dataFrame = DataFrameBuilder.load(Collections.singletonList(new HashMap<String, Object>() {
+            {
+                put("key1", 2.0D);
+            }
+        }));
+        MLInput modelInput = MLInput
+            .builder()
+            .algorithm(FunctionName.KMEANS)
+            .parameters(KMeansParams.builder().centroids(1).build())
+            .inputDataset(DataFrameInputDataset.builder().dataFrame(dataFrame).build())
+            .build();
+        MLModelConfig config = TextEmbeddingModelConfig
+            .builder()
+            .modelType("testModelType")
+            .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .embeddingDimension(100)
+            .build();
+        MLRegisterModelInput registerModelInput = MLRegisterModelInput
+            .builder()
+            .functionName(functionName)
+            .modelName("testModelName")
+            .version("testModelVersion")
+            .modelGroupId("mockModelGroupId")
+            .url("url")
+            .modelFormat(MLModelFormat.ONNX)
+            .modelConfig(config)
+            .deployModel(true)
+            .modelNodeIds(new String[] { "modelNodeIds" })
+            .build();
 
-        forwardInput = MLForwardInput.builder()
-                .taskId("forwardInputTaskId")
-                .modelId("forwardInputModelId")
-                .workerNodeId("forwardInputWorkerNodeId")
-                .requestType(MLForwardRequestType.DEPLOY_MODEL_DONE)
-                .mlTask(mlTask)
-                .modelInput(modelInput)
-                .error("forwardInputError")
-                .workerNodes(new String [] {"forwardInputNodeId1", "forwardInputNodeId2", "forwardInputNodeId3"})
-                .registerModelInput(registerModelInput)
-                .build();
+        forwardInput = MLForwardInput
+            .builder()
+            .taskId("forwardInputTaskId")
+            .modelId("forwardInputModelId")
+            .workerNodeId("forwardInputWorkerNodeId")
+            .requestType(MLForwardRequestType.DEPLOY_MODEL_DONE)
+            .mlTask(mlTask)
+            .modelInput(modelInput)
+            .error("forwardInputError")
+            .workerNodes(new String[] { "forwardInputNodeId1", "forwardInputNodeId2", "forwardInputNodeId3" })
+            .registerModelInput(registerModelInput)
+            .build();
     }
 
     @Test
@@ -103,7 +108,6 @@ public class MLForwardInputTest {
             assertEquals(forwardInput.getModelId(), parsedInput.getModelId());
         });
     }
-
 
     @Test
     public void readInputStream_SuccessWithNullFields() throws IOException {
@@ -116,7 +120,6 @@ public class MLForwardInputTest {
             assertNull(parsedInput.getRegisterModelInput());
         });
     }
-
 
     private void readInputStream(MLForwardInput input, Consumer<MLForwardInput> verify) throws IOException {
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();

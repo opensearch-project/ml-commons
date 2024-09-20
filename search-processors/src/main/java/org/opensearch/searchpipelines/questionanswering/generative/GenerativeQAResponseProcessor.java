@@ -179,7 +179,8 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
                         chatHistory,
                         searchResults,
                         timeout,
-                        params.getLlmResponseField()
+                        params.getLlmResponseField(),
+                        params.getLlmMessages()
                     ),
                 null,
                 llmQuestion,
@@ -202,7 +203,8 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
                             chatHistory,
                             searchResults,
                             timeout,
-                            params.getLlmResponseField()
+                            params.getLlmResponseField(),
+                            params.getLlmMessages()
                         ),
                     conversationId,
                     llmQuestion,

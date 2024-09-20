@@ -7,10 +7,10 @@
 
 package org.opensearch.ml.common;
 
-import lombok.Getter;
-
 import java.util.HashMap;
 import java.util.Map;
+
+import lombok.Getter;
 
 public enum AccessMode {
     PUBLIC("public"),

@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.config;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.MASTER_KEY;
 import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
@@ -57,6 +58,11 @@ public class GetConfigTransportAction extends HandledTransportAction<ActionReque
         MLConfigGetRequest mlConfigGetRequest = MLConfigGetRequest.fromActionRequest(request);
         String configId = mlConfigGetRequest.getConfigId();
         GetRequest getRequest = new GetRequest(ML_CONFIG_INDEX).id(configId);
+
+        if (configId.equals(MASTER_KEY)) {
+            actionListener.onFailure(new OpenSearchStatusException("You are not allowed to access this config doc", RestStatus.FORBIDDEN));
+            return;
+        }
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             client.get(getRequest, ActionListener.runBefore(ActionListener.wrap(r -> {

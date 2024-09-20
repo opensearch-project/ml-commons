@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.transport.controller;
 
 import static org.junit.Assert.assertEquals;
+
 import java.io.IOException;
 
 import org.junit.Before;
@@ -39,9 +40,11 @@ public class MLUndeployControllerNodesRequestTest {
         DiscoveryNode[] discoveryNodeIds = { localNode1, localNode2 };
 
         undeployControllerNodeRequestWithStringNodeIds = new MLUndeployControllerNodeRequest(
-                new MLUndeployControllerNodesRequest(stringNodeIds, modelId));
+            new MLUndeployControllerNodesRequest(stringNodeIds, modelId)
+        );
         undeployControllerNodeRequestWithDiscoveryNodeIds = new MLUndeployControllerNodeRequest(
-                new MLUndeployControllerNodesRequest(discoveryNodeIds, modelId));
+            new MLUndeployControllerNodesRequest(discoveryNodeIds, modelId)
+        );
 
     }
 
@@ -49,15 +52,13 @@ public class MLUndeployControllerNodesRequestTest {
     public void testConstructorSerialization1() throws IOException {
         BytesStreamOutput output = new BytesStreamOutput();
         undeployControllerNodeRequestWithStringNodeIds.writeTo(output);
-        assertEquals("testModelId",
-                undeployControllerNodeRequestWithStringNodeIds.getUndeployControllerNodesRequest().getModelId());
+        assertEquals("testModelId", undeployControllerNodeRequestWithStringNodeIds.getUndeployControllerNodesRequest().getModelId());
 
     }
 
     @Test
     public void testConstructorSerialization2() {
-        assertEquals(2, undeployControllerNodeRequestWithDiscoveryNodeIds.getUndeployControllerNodesRequest()
-                .concreteNodes().length);
+        assertEquals(2, undeployControllerNodeRequestWithDiscoveryNodeIds.getUndeployControllerNodesRequest().concreteNodes().length);
 
     }
 
@@ -69,8 +70,10 @@ public class MLUndeployControllerNodesRequestTest {
         StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
         MLUndeployControllerNodeRequest parsedNodeRequest = new MLUndeployControllerNodeRequest(streamInput);
 
-        assertEquals(undeployControllerNodeRequestWithStringNodeIds.getUndeployControllerNodesRequest().getModelId(),
-                parsedNodeRequest.getUndeployControllerNodesRequest().getModelId());
+        assertEquals(
+            undeployControllerNodeRequestWithStringNodeIds.getUndeployControllerNodesRequest().getModelId(),
+            parsedNodeRequest.getUndeployControllerNodesRequest().getModelId()
+        );
 
     }
 }

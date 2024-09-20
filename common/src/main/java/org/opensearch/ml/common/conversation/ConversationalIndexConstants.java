@@ -24,7 +24,7 @@ import org.opensearch.common.settings.Setting;
  */
 public class ConversationalIndexConstants {
     /** Version of the meta index schema */
-    public final static Integer META_INDEX_SCHEMA_VERSION = 1;
+    public final static Integer META_INDEX_SCHEMA_VERSION = 2;
     /** Name of the conversational metadata index */
     public final static String META_INDEX_NAME = ".plugins-ml-memory-meta";
     /** Name of the metadata field for initial timestamp */
@@ -37,10 +37,15 @@ public class ConversationalIndexConstants {
     public final static String USER_FIELD = "user";
     /** Name of the application that created this conversation */
     public final static String APPLICATION_TYPE_FIELD = "application_type";
+    /** Name of the additional information for this memory  */
+    public final static String META_ADDITIONAL_INFO_FIELD = "additional_info";
+
     /** Mappings for the conversational metadata index */
     public final static String META_MAPPING = "{\n"
         + "    \"_meta\": {\n"
-        + "        \"schema_version\": " + META_INDEX_SCHEMA_VERSION + "\n"
+        + "        \"schema_version\": "
+        + META_INDEX_SCHEMA_VERSION
+        + "\n"
         + "    },\n"
         + "    \"properties\": {\n"
         + "        \""
@@ -57,7 +62,10 @@ public class ConversationalIndexConstants {
         + "\": {\"type\": \"keyword\"},\n"
         + "        \""
         + APPLICATION_TYPE_FIELD
-        + "\": {\"type\": \"keyword\"}\n"
+        + "\": {\"type\": \"keyword\"},\n"
+        + "        \""
+        + META_ADDITIONAL_INFO_FIELD
+        + "\": {\"type\": \"flat_object\"}\n"
         + "    }\n"
         + "}";
 
@@ -86,7 +94,9 @@ public class ConversationalIndexConstants {
     /** Mappings for the interactions index */
     public final static String INTERACTIONS_MAPPINGS = "{\n"
         + "    \"_meta\": {\n"
-        + "        \"schema_version\": " + INTERACTIONS_INDEX_SCHEMA_VERSION + "\n"
+        + "        \"schema_version\": "
+        + INTERACTIONS_INDEX_SCHEMA_VERSION
+        + "\n"
         + "    },\n"
         + "    \"properties\": {\n"
         + "        \""
@@ -123,5 +133,7 @@ public class ConversationalIndexConstants {
     public static final Setting<Boolean> ML_COMMONS_MEMORY_FEATURE_ENABLED = Setting
         .boolSetting("plugins.ml_commons.memory_feature_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
-    public static final String ML_COMMONS_MEMORY_FEATURE_DISABLED_MESSAGE = "The Conversation Memory feature is not enabled. To enable, please update the setting " + ML_COMMONS_MEMORY_FEATURE_ENABLED.getKey();
+    public static final String ML_COMMONS_MEMORY_FEATURE_DISABLED_MESSAGE =
+        "The Conversation Memory feature is not enabled. To enable, please update the setting "
+            + ML_COMMONS_MEMORY_FEATURE_ENABLED.getKey();
 }

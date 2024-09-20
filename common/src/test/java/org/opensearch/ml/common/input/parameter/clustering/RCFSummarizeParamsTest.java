@@ -5,6 +5,13 @@
 
 package org.opensearch.ml.common.input.parameter.clustering;
 
+import static org.junit.Assert.assertEquals;
+import static org.opensearch.ml.common.TestHelper.contentObjectToString;
+import static org.opensearch.ml.common.TestHelper.testParseFromString;
+
+import java.io.IOException;
+import java.util.function.Function;
+
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -14,13 +21,6 @@ import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.TestHelper;
 
-import java.io.IOException;
-import java.util.function.Function;
-
-import static org.junit.Assert.assertEquals;
-import static org.opensearch.ml.common.TestHelper.contentObjectToString;
-import static org.opensearch.ml.common.TestHelper.testParseFromString;
-
 public class RCFSummarizeParamsTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -28,7 +28,7 @@ public class RCFSummarizeParamsTest {
     RCFSummarizeParams params;
     private Function<XContentParser, RCFSummarizeParams> function = parser -> {
         try {
-            return (RCFSummarizeParams)RCFSummarizeParams.parse(parser);
+            return (RCFSummarizeParams) RCFSummarizeParams.parse(parser);
         } catch (IOException e) {
             throw new RuntimeException("failed to parse RCFSummarizeParams", e);
         }
@@ -36,11 +36,7 @@ public class RCFSummarizeParamsTest {
 
     @Before
     public void setUp() {
-        params = RCFSummarizeParams.builder()
-                .maxK(2)
-                .initialK(10)
-                .distanceType(RCFSummarizeParams.DistanceType.L1)
-                .build();
+        params = RCFSummarizeParams.builder().maxK(2).initialK(10).distanceType(RCFSummarizeParams.DistanceType.L1).build();
     }
 
     @Test

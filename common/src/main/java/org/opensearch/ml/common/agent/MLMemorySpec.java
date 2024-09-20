@@ -5,19 +5,20 @@
 
 package org.opensearch.ml.common.agent;
 
-import lombok.Builder;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.Setter;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+
+import java.io.IOException;
+
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 
-import java.io.IOException;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.Setter;
 
 @EqualsAndHashCode
 @Getter
@@ -31,11 +32,8 @@ public class MLMemorySpec implements ToXContentObject {
     private String sessionId;
     private Integer windowSize;
 
-
     @Builder(toBuilder = true)
-    public MLMemorySpec(String type,
-                        String sessionId,
-                        Integer windowSize) {
+    public MLMemorySpec(String type, String sessionId, Integer windowSize) {
         if (type == null) {
             throw new IllegalArgumentException("agent name is null");
         }
@@ -44,7 +42,7 @@ public class MLMemorySpec implements ToXContentObject {
         this.windowSize = windowSize;
     }
 
-    public MLMemorySpec(StreamInput input) throws IOException{
+    public MLMemorySpec(StreamInput input) throws IOException {
         type = input.readString();
         sessionId = input.readOptionalString();
         windowSize = input.readOptionalInt();
@@ -95,11 +93,7 @@ public class MLMemorySpec implements ToXContentObject {
                     break;
             }
         }
-        return MLMemorySpec.builder()
-                .type(type)
-                .sessionId(sessionId)
-                .windowSize(windowSize)
-                .build();
+        return MLMemorySpec.builder().type(type).sessionId(sessionId).windowSize(windowSize).build();
     }
 
     public static MLMemorySpec fromStream(StreamInput in) throws IOException {

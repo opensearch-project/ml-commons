@@ -5,9 +5,11 @@
 
 package org.opensearch.ml.common.model;
 
-import lombok.Builder;
-import lombok.Getter;
-import lombok.Setter;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+
+import java.io.IOException;
+import java.util.Locale;
+
 import org.opensearch.core.ParseField;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -16,19 +18,18 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 
-import java.io.IOException;
-import java.util.Locale;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.Setter;
 
 @Setter
 @Getter
 public class QuestionAnsweringModelConfig extends MLModelConfig {
     public static final String PARSE_FIELD_NAME = FunctionName.QUESTION_ANSWERING.name();
     public static final NamedXContentRegistry.Entry XCONTENT_REGISTRY = new NamedXContentRegistry.Entry(
-            QuestionAnsweringModelConfig.class,
-            new ParseField(PARSE_FIELD_NAME),
-            it -> parse(it)
+        QuestionAnsweringModelConfig.class,
+        new ParseField(PARSE_FIELD_NAME),
+        it -> parse(it)
     );
     public static final String FRAMEWORK_TYPE_FIELD = "framework_type";
     public static final String NORMALIZE_RESULT_FIELD = "normalize_result";
@@ -39,7 +40,13 @@ public class QuestionAnsweringModelConfig extends MLModelConfig {
     private final Integer modelMaxLength;
 
     @Builder(toBuilder = true)
-    public QuestionAnsweringModelConfig(String modelType, FrameworkType frameworkType, String allConfig, boolean normalizeResult, Integer modelMaxLength) {
+    public QuestionAnsweringModelConfig(
+        String modelType,
+        FrameworkType frameworkType,
+        String allConfig,
+        boolean normalizeResult,
+        Integer modelMaxLength
+    ) {
         super(modelType, allConfig);
         if (frameworkType == null) {
             throw new IllegalArgumentException("framework type is null");
@@ -90,7 +97,7 @@ public class QuestionAnsweringModelConfig extends MLModelConfig {
         return PARSE_FIELD_NAME;
     }
 
-    public QuestionAnsweringModelConfig(StreamInput in) throws IOException{
+    public QuestionAnsweringModelConfig(StreamInput in) throws IOException {
         super(in);
         frameworkType = in.readEnum(FrameworkType.class);
         normalizeResult = in.readBoolean();
@@ -126,6 +133,7 @@ public class QuestionAnsweringModelConfig extends MLModelConfig {
         builder.endObject();
         return builder;
     }
+
     public enum FrameworkType {
         HUGGINGFACE_TRANSFORMERS,
         SENTENCE_TRANSFORMERS,

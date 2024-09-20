@@ -31,16 +31,14 @@ public class MLControllerDeleteRequestTest {
 
         modelId = "testModelId";
 
-        request = MLControllerDeleteRequest.builder()
-                .modelId(modelId).build();
+        request = MLControllerDeleteRequest.builder().modelId(modelId).build();
     }
 
     @Test
     public void writeToSuccess() throws IOException {
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         request.writeTo(bytesStreamOutput);
-        MLControllerDeleteRequest parsedRequest = new MLControllerDeleteRequest(
-                bytesStreamOutput.bytes().streamInput());
+        MLControllerDeleteRequest parsedRequest = new MLControllerDeleteRequest(bytesStreamOutput.bytes().streamInput());
         assertEquals(parsedRequest.getModelId(), modelId);
     }
 

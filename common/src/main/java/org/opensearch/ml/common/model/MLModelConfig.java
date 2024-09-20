@@ -5,14 +5,15 @@
 
 package org.opensearch.ml.common.model;
 
-import lombok.Getter;
-import lombok.Setter;
+import java.io.IOException;
+
 import org.opensearch.core.common.io.stream.NamedWriteable;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.ToXContentObject;
 
-import java.io.IOException;
+import lombok.Getter;
+import lombok.Setter;
 
 @Setter
 @Getter

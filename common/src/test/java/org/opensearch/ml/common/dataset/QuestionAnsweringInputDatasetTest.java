@@ -4,6 +4,10 @@
  */
 package org.opensearch.ml.common.dataset;
 
+import static org.junit.Assert.assertThrows;
+
+import java.io.IOException;
+
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.bytes.BytesReference;
@@ -12,13 +16,8 @@ import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 
-import java.io.IOException;
-import java.util.List;
-
-import static org.junit.Assert.assertThrows;
-
 public class QuestionAnsweringInputDatasetTest {
-    
+
     @Test
     public void testStreaming() throws IOException {
         String question = "What color is apple";
@@ -36,15 +35,16 @@ public class QuestionAnsweringInputDatasetTest {
     @Test
     public void noContext_ThenFail() {
         String question = "What color is apple";
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, 
-            () -> QuestionAnsweringInputDataSet.builder().question(question).build());
+        IllegalArgumentException e = assertThrows(
+            IllegalArgumentException.class,
+            () -> QuestionAnsweringInputDataSet.builder().question(question).build()
+        );
         assert (e.getMessage().equals("Context is not provided"));
     }
 
     @Test
     public void noQuestion_ThenFail() {
         String context = "I like Apples. They are red";
-        assertThrows(IllegalArgumentException.class,
-            () -> QuestionAnsweringInputDataSet.builder().context(context).build());
+        assertThrows(IllegalArgumentException.class, () -> QuestionAnsweringInputDataSet.builder().context(context).build());
     }
 }

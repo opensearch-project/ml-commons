@@ -45,6 +45,7 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_MODELS
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE;
 import static org.opensearch.ml.stats.ActionName.REGISTER;
 import static org.opensearch.ml.stats.MLActionLevelStat.ML_ACTION_REQUEST_COUNT;
+import static org.opensearch.ml.utils.MLExceptionUtils.CONTROLLER_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 import static org.opensearch.ml.utils.MLNodeUtils.checkOpenCircuitBreaker;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
@@ -929,7 +930,7 @@ public class MLModelManager {
         // This checks if model group is created when registering the version. If yes,
         // model group is deleted since the version registration
         // had failed. Else model group latest version is decremented by 1
-        if (doesVersionCreateModelGroup) {
+        if (Boolean.TRUE.equals(doesVersionCreateModelGroup)) {
             DeleteRequest deleteModelGroupRequest = new DeleteRequest();
             deleteModelGroupRequest.index(ML_MODEL_GROUP_INDEX).id(modelGroupID).setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
             client.delete(deleteModelGroupRequest);
@@ -1254,6 +1255,9 @@ public class MLModelManager {
      */
     public synchronized void deployControllerWithDeployedModel(String modelId, ActionListener<String> listener) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            if (!mlFeatureEnabledSetting.isControllerEnabled()) {
+                throw new IllegalStateException(CONTROLLER_DISABLED_ERR_MSG);
+            }
             if (!modelCacheHelper.isModelDeployed(modelId)) {
                 throw new OpenSearchStatusException(
                     "The model of this model controller has not deployed yet, please deploy the model first.",
@@ -1423,6 +1427,9 @@ public class MLModelManager {
      * @param mlModel ml model
      */
     public void deployControllerWithDeployingModel(MLModel mlModel, Integer eligibleNodeCount) {
+        if (!mlFeatureEnabledSetting.isControllerEnabled()) {
+            throw new IllegalStateException(CONTROLLER_DISABLED_ERR_MSG);
+        }
         if (mlModel.getModelState() != MLModelState.DEPLOYING) {
             throw new OpenSearchStatusException(
                 "This method should only be called when model is in DEPLOYING state, but the model is in state: " + mlModel.getModelState(),

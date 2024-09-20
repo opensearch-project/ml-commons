@@ -29,6 +29,9 @@ import java.time.Instant;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
@@ -74,7 +77,7 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
         assert (result.actionGet(200).equals("cid"));
     }
 
-    public void testCreateConversation_Named_FutureSucess() {
+    public void testCreateConversation_Named_FutureSuccess() {
         doAnswer(invocation -> {
             ActionListener<String> al = invocation.getArgument(1);
             al.onResponse("cid");
@@ -82,6 +85,17 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
         }).when(conversationMetaIndex).createConversation(anyString(), any());
         ActionFuture<String> result = cmHandler.createConversation("FutureSuccess");
         assert (result.actionGet(200).equals("cid"));
+    }
+
+    public void testCreateConversation_AdditionalInfo_Success() throws Exception {
+        doAnswer(invocation -> {
+            ActionListener<String> al = invocation.getArgument(3);
+            al.onResponse("cid");
+            return null;
+        }).when(conversationMetaIndex).createConversation(anyString(), anyString(), any(), any());
+        CompletableFuture<String> future = new CompletableFuture<>();
+        cmHandler.createConversation("FutureSuccess", "", Map.of(), ActionListener.wrap(future::complete, future::completeExceptionally));
+        assert (future.get(200, TimeUnit.MILLISECONDS).equals("cid"));
     }
 
     public void testCreateInteraction_Future() {
@@ -301,7 +315,7 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
     }
 
     public void testGetAConversation_Future() {
-        ConversationMeta response = new ConversationMeta("cid", Instant.now(), Instant.now(), "boring name", null);
+        ConversationMeta response = new ConversationMeta("cid", Instant.now(), Instant.now(), "boring name", null, null);
         doAnswer(invocation -> {
             ActionListener<ConversationMeta> listener = invocation.getArgument(1);
             listener.onResponse(response);

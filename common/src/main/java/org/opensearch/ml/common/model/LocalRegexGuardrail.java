@@ -5,25 +5,10 @@
 
 package org.opensearch.ml.common.model;
 
-import lombok.Builder;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.NonNull;
-import lombok.extern.log4j.Log4j2;
-import org.opensearch.action.LatchedActionListener;
-import org.opensearch.action.search.SearchRequest;
-import org.opensearch.action.search.SearchResponse;
-import org.opensearch.client.Client;
-import org.opensearch.common.util.concurrent.ThreadContext;
-import org.opensearch.common.xcontent.LoggingDeprecationHandler;
-import org.opensearch.common.xcontent.XContentType;
-import org.opensearch.core.action.ActionListener;
-import org.opensearch.core.common.io.stream.StreamInput;
-import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.search.builder.SearchSourceBuilder;
+import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.stopWordsIndices;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.io.IOException;
 import java.security.AccessController;
@@ -39,10 +24,26 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static java.util.concurrent.TimeUnit.SECONDS;
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.stopWordsIndices;
-import static org.opensearch.ml.common.utils.StringUtils.gson;
+import org.opensearch.action.LatchedActionListener;
+import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
+import org.opensearch.client.Client;
+import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
+import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.search.builder.SearchSourceBuilder;
+
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NonNull;
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 @EqualsAndHashCode
@@ -63,6 +64,7 @@ public class LocalRegexGuardrail extends Guardrail {
         this.stopWords = stopWords;
         this.regex = regex;
     }
+
     public LocalRegexGuardrail(@NonNull Map<String, Object> params) {
         List<Map> words = (List<Map>) params.get(STOP_WORDS_FIELD);
         stopWords = new ArrayList<>();
@@ -81,7 +83,7 @@ public class LocalRegexGuardrail extends Guardrail {
         if (input.readBoolean()) {
             stopWords = new ArrayList<>();
             int size = input.readInt();
-            for (int i=0; i<size; i++) {
+            for (int i = 0; i < size; i++) {
                 stopWords.add(new StopWords(input));
             }
         }
@@ -151,10 +153,7 @@ public class LocalRegexGuardrail extends Guardrail {
                     break;
             }
         }
-        return LocalRegexGuardrail.builder()
-                .stopWords(stopWords)
-                .regex(regex)
-                .build();
+        return LocalRegexGuardrail.builder().stopWords(stopWords).regex(regex).build();
     }
 
     private void init() {
@@ -219,17 +218,18 @@ public class LocalRegexGuardrail extends Guardrail {
         for (String field : fieldNames) {
             documentMap.put(field, input);
         }
-        Map<String, Object> queryBodyMap = Map
-                .of("query", Map.of("percolate", Map.of("field", "query", "document", documentMap)));
+        Map<String, Object> queryBodyMap = Map.of("query", Map.of("percolate", Map.of("field", "query", "document", documentMap)));
         CountDownLatch latch = new CountDownLatch(1);
         ThreadContext.StoredContext context = null;
 
         try {
             queryBody = AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(queryBodyMap));
             SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-            XContentParser queryParser = XContentType.JSON.xContent().createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, queryBody);
+            XContentParser queryParser = XContentType.JSON
+                .xContent()
+                .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, queryBody);
             searchSourceBuilder.parseXContent(queryParser);
-            searchSourceBuilder.size(1); //Only need 1 doc returned, if hit.
+            searchSourceBuilder.size(1); // Only need 1 doc returned, if hit.
             searchRequest = new SearchRequest().source(searchSourceBuilder).indices(indexName);
             if (isStopWordsSystemIndex(indexName)) {
                 context = client.threadPool().getThreadContext().stashContext();

@@ -11,6 +11,8 @@ public class MLConnectorGetAction extends ActionType<MLConnectorGetResponse> {
     public static final MLConnectorGetAction INSTANCE = new MLConnectorGetAction();
     public static final String NAME = "cluster:admin/opensearch/ml/connectors/get";
 
-    private MLConnectorGetAction() { super(NAME, MLConnectorGetResponse::new);}
+    private MLConnectorGetAction() {
+        super(NAME, MLConnectorGetResponse::new);
+    }
 
 }

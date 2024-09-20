@@ -4,6 +4,18 @@
  */
 
 package org.opensearch.ml.common.transport.agent;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotSame;
+import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
+
+import java.io.*;
+import java.time.Instant;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
@@ -18,28 +30,19 @@ import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
 
-import java.io.*;
-import java.time.Instant;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotSame;
-import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
-
 public class MLAgentGetResponseTest {
 
     MLAgent mlAgent;
 
     @Before
     public void setUp() {
-        mlAgent = MLAgent.builder()
-                .name("test_agent")
-                .appType("test_app")
-                .type(MLAgentType.FLOW.name())
-                .tools(Arrays.asList(MLToolSpec.builder().type("CatIndexTool").build()))
-                .build();
+        mlAgent = MLAgent
+            .builder()
+            .name("test_agent")
+            .appType("test_app")
+            .type(MLAgentType.FLOW.name())
+            .tools(Arrays.asList(MLToolSpec.builder().type("CatIndexTool").build()))
+            .build();
     }
 
     @Test
@@ -60,20 +63,29 @@ public class MLAgentGetResponseTest {
     @Test
     public void mLAgentGetResponse_Builder() throws IOException {
 
-        MLAgentGetResponse mlAgentGetResponse = MLAgentGetResponse.builder()
-                .mlAgent(mlAgent)
-                .build();
+        MLAgentGetResponse mlAgentGetResponse = MLAgentGetResponse.builder().mlAgent(mlAgent).build();
 
         assertEquals(mlAgentGetResponse.mlAgent, mlAgent);
     }
+
     @Test
     public void writeTo() throws IOException {
-        //create ml agent using MLAgent and mlAgentGetResponse
-        mlAgent = new MLAgent("test", MLAgentType.CONVERSATIONAL.name(), "test", new LLMSpec("test_model", Map.of("test_key", "test_value")), List.of(new MLToolSpec("test", "test", "test", Collections.EMPTY_MAP, false)), Map.of("test", "test"), new MLMemorySpec("test", "123", 0), Instant.EPOCH, Instant.EPOCH, "test", false);
-        MLAgentGetResponse mlAgentGetResponse = MLAgentGetResponse.builder()
-                .mlAgent(mlAgent)
-                .build();
-        //use write out for both agents
+        // create ml agent using MLAgent and mlAgentGetResponse
+        mlAgent = new MLAgent(
+            "test",
+            MLAgentType.CONVERSATIONAL.name(),
+            "test",
+            new LLMSpec("test_model", Map.of("test_key", "test_value")),
+            List.of(new MLToolSpec("test", "test", "test", Collections.EMPTY_MAP, false)),
+            Map.of("test", "test"),
+            new MLMemorySpec("test", "123", 0),
+            Instant.EPOCH,
+            Instant.EPOCH,
+            "test",
+            false
+        );
+        MLAgentGetResponse mlAgentGetResponse = MLAgentGetResponse.builder().mlAgent(mlAgent).build();
+        // use write out for both agents
         BytesStreamOutput output = new BytesStreamOutput();
         mlAgent.writeTo(output);
         mlAgentGetResponse.writeTo(output);
@@ -90,9 +102,7 @@ public class MLAgentGetResponseTest {
     @Test
     public void toXContent() throws IOException {
         mlAgent = new MLAgent("mock", MLAgentType.FLOW.name(), "test", null, null, null, null, null, null, "test", false);
-        MLAgentGetResponse mlAgentGetResponse = MLAgentGetResponse.builder()
-                .mlAgent(mlAgent)
-                .build();
+        MLAgentGetResponse mlAgentGetResponse = MLAgentGetResponse.builder().mlAgent(mlAgent).build();
         XContentBuilder builder = XContentFactory.jsonBuilder();
         ToXContent.Params params = EMPTY_PARAMS;
         XContentBuilder getResponseXContentBuilder = mlAgentGetResponse.toXContent(builder, params);
@@ -101,17 +111,14 @@ public class MLAgentGetResponseTest {
 
     @Test
     public void fromActionResponse_Success() throws IOException {
-        MLAgentGetResponse mlAgentGetResponse = MLAgentGetResponse.builder()
-                .mlAgent(mlAgent)
-                .build();
+        MLAgentGetResponse mlAgentGetResponse = MLAgentGetResponse.builder().mlAgent(mlAgent).build();
         assertEquals(mlAgentGetResponse.fromActionResponse(mlAgentGetResponse), mlAgentGetResponse);
 
-        }
+    }
+
     @Test
     public void fromActionResponse_Success_fromActionResponse() throws IOException {
-        MLAgentGetResponse mlAgentGetResponse = MLAgentGetResponse.builder()
-                .mlAgent(mlAgent)
-                .build();
+        MLAgentGetResponse mlAgentGetResponse = MLAgentGetResponse.builder().mlAgent(mlAgent).build();
 
         ActionResponse actionResponse = new ActionResponse() {
             @Override
@@ -125,9 +132,7 @@ public class MLAgentGetResponseTest {
 
     @Test(expected = UncheckedIOException.class)
     public void fromActionResponse_IOException() {
-        MLAgentGetResponse mlAgentGetResponse = MLAgentGetResponse.builder()
-                .mlAgent(mlAgent)
-                .build();
+        MLAgentGetResponse mlAgentGetResponse = MLAgentGetResponse.builder().mlAgent(mlAgent).build();
         ActionResponse actionResponse = new ActionResponse() {
             @Override
             public void writeTo(StreamOutput out) throws IOException {
@@ -136,4 +141,4 @@ public class MLAgentGetResponseTest {
         };
         mlAgentGetResponse.fromActionResponse(actionResponse);
     }
-    }
+}

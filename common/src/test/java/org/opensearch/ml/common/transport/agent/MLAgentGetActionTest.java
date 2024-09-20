@@ -5,9 +5,10 @@
 
 package org.opensearch.ml.common.transport.agent;
 
-import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+
+import org.junit.Test;
 
 public class MLAgentGetActionTest {
 
@@ -16,6 +17,5 @@ public class MLAgentGetActionTest {
         assertNotNull(MLAgentGetAction.INSTANCE);
         assertEquals("cluster:admin/opensearch/ml/agents/get", MLAgentGetAction.NAME);
     }
-
 
 }

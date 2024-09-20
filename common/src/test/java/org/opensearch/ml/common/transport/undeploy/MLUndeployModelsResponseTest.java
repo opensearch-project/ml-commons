@@ -5,6 +5,18 @@
 
 package org.opensearch.ml.common.transport.undeploy;
 
+import static org.junit.Assert.*;
+import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.net.InetAddress;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -22,18 +34,6 @@ import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.net.InetAddress;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import static org.junit.Assert.*;
-import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
-
 public class MLUndeployModelsResponseTest {
 
     MLUndeployModelNodesResponse undeployModelNodesResponse;
@@ -46,15 +46,15 @@ public class MLUndeployModelsResponseTest {
         Map<String, String> modelToDeployStatus = new HashMap<>();
         modelToDeployStatus.put("modelId1", "response");
         DiscoveryNode localNode = new DiscoveryNode(
-                "test_node_name",
-                "test_node_id",
-                new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
-                Collections.emptyMap(),
-                Collections.singleton(CLUSTER_MANAGER_ROLE),
-                Version.CURRENT
+            "test_node_name",
+            "test_node_id",
+            new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
+            Collections.emptyMap(),
+            Collections.singleton(CLUSTER_MANAGER_ROLE),
+            Version.CURRENT
         );
         Map<String, String[]> modelWorkerNodeCounts = new HashMap<>();
-        modelWorkerNodeCounts.put("modelId1", new String[]{"node"});
+        modelWorkerNodeCounts.put("modelId1", new String[] { "node" });
         MLUndeployModelNodeResponse nodeResponse = new MLUndeployModelNodeResponse(localNode, modelToDeployStatus, modelWorkerNodeCounts);
         List<MLUndeployModelNodeResponse> nodes = Arrays.asList(nodeResponse);
 

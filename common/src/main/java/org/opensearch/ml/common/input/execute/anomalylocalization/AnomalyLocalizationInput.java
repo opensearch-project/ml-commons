@@ -5,22 +5,25 @@
 
 package org.opensearch.ml.common.input.execute.anomalylocalization;
 
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.index.query.AbstractQueryBuilder.parseInnerQueryBuilder;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
+import org.opensearch.core.ParseField;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.core.ParseField;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.query.QueryBuilder;
-import org.opensearch.ml.common.annotation.ExecuteInput;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.annotation.ExecuteInput;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.search.aggregations.AggregationBuilder;
 import org.opensearch.search.aggregations.AggregatorFactories;
@@ -28,13 +31,10 @@ import org.opensearch.search.aggregations.AggregatorFactories;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.index.query.AbstractQueryBuilder.parseInnerQueryBuilder;
-
 /**
  * Information about aggregate, time, etc to localize.
  */
-@ExecuteInput(algorithms={FunctionName.ANOMALY_LOCALIZATION})
+@ExecuteInput(algorithms = { FunctionName.ANOMALY_LOCALIZATION })
 @Data
 @AllArgsConstructor
 public class AnomalyLocalizationInput implements Input {
@@ -50,9 +50,9 @@ public class AnomalyLocalizationInput implements Input {
     public static final String FIELD_ANOMALY_START_TIME = "anomaly_start_time";
     public static final String FIELD_FILTER_QUERY = "filter_query";
     public static final NamedXContentRegistry.Entry XCONTENT_REGISTRY_ENTRY = new NamedXContentRegistry.Entry(
-            Input.class,
-            new ParseField(FunctionName.ANOMALY_LOCALIZATION.name()),
-            parser -> parse(parser)
+        Input.class,
+        new ParseField(FunctionName.ANOMALY_LOCALIZATION.name()),
+        parser -> parse(parser)
     );
 
     public static AnomalyLocalizationInput parse(XContentParser parser) throws IOException {
@@ -124,9 +124,18 @@ public class AnomalyLocalizationInput implements Input {
                     break;
             }
         }
-        return new AnomalyLocalizationInput(indexName, attributeFieldNames, aggregations, timeFieldName, startTime, endTime,
-                minTimeInterval, numOutputs,
-                anomalyStartTime, filterQuery);
+        return new AnomalyLocalizationInput(
+            indexName,
+            attributeFieldNames,
+            aggregations,
+            timeFieldName,
+            startTime,
+            endTime,
+            minTimeInterval,
+            numOutputs,
+            anomalyStartTime,
+            filterQuery
+        );
     }
 
     private final String indexName; // name pattern of the data index

@@ -103,7 +103,23 @@ public class OpenSearchConversationalMemoryHandler implements ConversationalMemo
      * @param listener listener to wait for this op to finish, gets unique id of new conversation
      */
     public void createConversation(String name, String applicationType, ActionListener<String> listener) {
-        conversationMetaIndex.createConversation(name, applicationType, listener);
+        conversationMetaIndex.createConversation(name, applicationType, null, listener);
+    }
+
+    /**
+     * Create a new conversation
+     * @param name the name of the new conversation
+     * @param applicationType the application that creates this conversation
+     * @param additionalInfos the additional information associated with this conversation
+     * @param listener listener to wait for this op to finish, gets unique id of new conversation
+     */
+    public void createConversation(
+        String name,
+        String applicationType,
+        Map<String, String> additionalInfos,
+        ActionListener<String> listener
+    ) {
+        conversationMetaIndex.createConversation(name, applicationType, additionalInfos, listener);
     }
 
     /**

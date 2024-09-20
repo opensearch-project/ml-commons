@@ -4,6 +4,12 @@
  */
 package org.opensearch.ml.common;
 
+import static org.junit.Assert.assertEquals;
+import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
+
+import java.io.IOException;
+import java.util.function.Function;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
@@ -15,12 +21,6 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 
-import java.io.IOException;
-import java.util.function.Function;
-
-import static org.junit.Assert.assertEquals;
-import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
-
 public class ToolMetadataTests {
     ToolMetadata toolMetadata;
 
@@ -28,12 +28,13 @@ public class ToolMetadataTests {
 
     @Before
     public void setUp() {
-        toolMetadata = ToolMetadata.builder()
-                .name("MathTool")
-                .description("Use this tool to calculate any math problem.")
-                .type("MathTool")
-                .version("test")
-                .build();
+        toolMetadata = ToolMetadata
+            .builder()
+            .name("MathTool")
+            .description("Use this tool to calculate any math problem.")
+            .type("MathTool")
+            .version("test")
+            .build();
 
         function = parser -> {
             try {
@@ -49,7 +50,10 @@ public class ToolMetadataTests {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         toolMetadata.toXContent(builder, EMPTY_PARAMS);
         String toolMetadataString = TestHelper.xContentBuilderToString(builder);
-        assertEquals(toolMetadataString, "{\"name\":\"MathTool\",\"description\":\"Use this tool to calculate any math problem.\",\"type\":\"MathTool\",\"version\":\"test\"}");
+        assertEquals(
+            toolMetadataString,
+            "{\"name\":\"MathTool\",\"description\":\"Use this tool to calculate any math problem.\",\"type\":\"MathTool\",\"version\":\"test\"}"
+        );
     }
 
     @Test
@@ -66,12 +70,12 @@ public class ToolMetadataTests {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         toolMetadata.toXContent(builder, EMPTY_PARAMS);
         String toolMetadataString = TestHelper.xContentBuilderToString(builder);
-        XContentParser parser = XContentType.JSON.xContent().createParser(NamedXContentRegistry.EMPTY,
-                LoggingDeprecationHandler.INSTANCE, toolMetadataString);
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, toolMetadataString);
         parser.nextToken();
         toolMetadata.equals(function.apply(parser));
     }
-
 
     @Test
     public void readInputStream_Success() throws IOException {

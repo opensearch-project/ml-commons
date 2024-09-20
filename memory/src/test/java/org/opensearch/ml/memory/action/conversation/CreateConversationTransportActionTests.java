@@ -111,10 +111,10 @@ public class CreateConversationTransportActionTests extends OpenSearchTestCase {
     public void testCreateConversation() {
         log.info("testing create conversation transport");
         doAnswer(invocation -> {
-            ActionListener<String> listener = invocation.getArgument(2);
+            ActionListener<String> listener = invocation.getArgument(3);
             listener.onResponse("testID");
             return null;
-        }).when(cmHandler).createConversation(any(), any(), any());
+        }).when(cmHandler).createConversation(any(), any(), any(), any());
         action.doExecute(null, request, actionListener);
         ArgumentCaptor<CreateConversationResponse> argCaptor = ArgumentCaptor.forClass(CreateConversationResponse.class);
         verify(actionListener).onResponse(argCaptor.capture());
@@ -137,10 +137,10 @@ public class CreateConversationTransportActionTests extends OpenSearchTestCase {
 
     public void testCreateConversationFails_thenFail() {
         doAnswer(invocation -> {
-            ActionListener<String> listener = invocation.getArgument(2);
+            ActionListener<String> listener = invocation.getArgument(3);
             listener.onFailure(new Exception("Testing Error"));
             return null;
-        }).when(cmHandler).createConversation(any(), any(), any());
+        }).when(cmHandler).createConversation(any(), any(), any(), any());
         action.doExecute(null, request, actionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argCaptor.capture());
@@ -148,7 +148,7 @@ public class CreateConversationTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testDoExecuteFails_thenFail() {
-        doThrow(new RuntimeException("Test doExecute Error")).when(cmHandler).createConversation(any(), any(), any());
+        doThrow(new RuntimeException("Test doExecute Error")).when(cmHandler).createConversation(any(), any(), any(), any());
         action.doExecute(null, request, actionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argCaptor.capture());
