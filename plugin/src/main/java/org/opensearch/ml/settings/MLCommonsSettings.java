@@ -199,4 +199,7 @@ public final class MLCommonsSettings {
     // After setting it, a full cluster restart is required for the changes to take effect.
     public static final Setting<Boolean> ML_COMMONS_MULTI_TENANCY_ENABLED = Setting
         .boolSetting("plugins.ml_commons.multi_tenancy_enabled", false, Setting.Property.NodeScope);
+
+    public static final Setting<Boolean> ML_COMMONS_CONTROLLER_ENABLED = Setting
+        .boolSetting("plugins.ml_commons.controller_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 }

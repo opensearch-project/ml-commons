@@ -8,6 +8,7 @@
 package org.opensearch.ml.settings;
 
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_CONTROLLER_ENABLED;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ENABLED;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_ENABLED;
@@ -31,6 +32,8 @@ public class MLFeatureEnabledSetting {
     // This is to identify if this node is in multi-tenancy or not.
     private volatile Boolean isMultiTenancyEnabled;
 
+    private volatile Boolean isControllerEnabled;
+
     private final List<SettingsChangeListener> listeners = new ArrayList<>();
 
     public MLFeatureEnabledSetting(ClusterService clusterService, Settings settings) {
@@ -38,6 +41,7 @@ public class MLFeatureEnabledSetting {
         isAgentFrameworkEnabled = ML_COMMONS_AGENT_FRAMEWORK_ENABLED.get(settings);
         isLocalModelEnabled = ML_COMMONS_LOCAL_MODEL_ENABLED.get(settings);
         isMultiTenancyEnabled = ML_COMMONS_MULTI_TENANCY_ENABLED.get(settings);
+        isControllerEnabled = ML_COMMONS_CONTROLLER_ENABLED.get(settings);
 
         clusterService
             .getClusterSettings()
@@ -46,6 +50,7 @@ public class MLFeatureEnabledSetting {
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_AGENT_FRAMEWORK_ENABLED, it -> isAgentFrameworkEnabled = it);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_LOCAL_MODEL_ENABLED, it -> isLocalModelEnabled = it);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_CONTROLLER_ENABLED, it -> isControllerEnabled = it);
     }
 
     /**
@@ -89,6 +94,14 @@ public class MLFeatureEnabledSetting {
         for (SettingsChangeListener listener : listeners) {
             listener.onMultiTenancyEnabledChanged(isEnabled);
         }
+    }
+
+    /**
+     * Whether the controller feature is enabled. If disabled, APIs in ml-commons will block controller.
+     * @return whether the controller is enabled.
+     */
+    public Boolean isControllerEnabled() {
+        return isControllerEnabled;
     }
 
 }

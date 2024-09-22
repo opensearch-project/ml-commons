@@ -7,6 +7,7 @@ package org.opensearch.ml.action.controller;
 
 import static org.opensearch.ml.common.CommonValue.ML_CONTROLLER_INDEX;
 import static org.opensearch.ml.common.utils.StringUtils.getErrorMessage;
+import static org.opensearch.ml.utils.MLExceptionUtils.CONTROLLER_DISABLED_ERR_MSG;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -40,6 +41,7 @@ import org.opensearch.ml.common.transport.controller.MLUndeployControllerNodesRe
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
@@ -57,6 +59,7 @@ public class DeleteControllerTransportAction extends HandledTransportAction<Acti
     MLModelManager mlModelManager;
     MLModelCacheHelper mlModelCacheHelper;
     ModelAccessControlHelper modelAccessControlHelper;
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Inject
     public DeleteControllerTransportAction(
@@ -67,7 +70,8 @@ public class DeleteControllerTransportAction extends HandledTransportAction<Acti
         ClusterService clusterService,
         MLModelManager mlModelManager,
         MLModelCacheHelper mlModelCacheHelper,
-        ModelAccessControlHelper modelAccessControlHelper
+        ModelAccessControlHelper modelAccessControlHelper,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLControllerDeleteAction.NAME, transportService, actionFilters, MLControllerDeleteRequest::new);
         this.client = client;
@@ -76,6 +80,7 @@ public class DeleteControllerTransportAction extends HandledTransportAction<Acti
         this.mlModelManager = mlModelManager;
         this.mlModelCacheHelper = mlModelCacheHelper;
         this.modelAccessControlHelper = modelAccessControlHelper;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
@@ -85,6 +90,9 @@ public class DeleteControllerTransportAction extends HandledTransportAction<Acti
         User user = RestActionUtils.getUserContext(client);
         String[] excludes = new String[] { MLModel.MODEL_CONTENT_FIELD, MLModel.OLD_MODEL_CONTENT_FIELD };
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            if (!mlFeatureEnabledSetting.isControllerEnabled()) {
+                throw new IllegalStateException(CONTROLLER_DISABLED_ERR_MSG);
+            }
             ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
             // TODO: Add support for multi tenancy
             mlModelManager.getModel(modelId, null, null, excludes, ActionListener.wrap(mlModel -> {
