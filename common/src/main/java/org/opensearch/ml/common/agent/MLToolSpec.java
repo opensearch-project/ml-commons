@@ -11,11 +11,13 @@ import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 import java.io.IOException;
 import java.util.Map;
 
+import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.CommonValue;
 
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -24,6 +26,8 @@ import lombok.Getter;
 @EqualsAndHashCode
 @Getter
 public class MLToolSpec implements ToXContentObject {
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_TOOL_CONFIG = CommonValue.VERSION_2_17_0;
+
     public static final String TOOL_TYPE_FIELD = "type";
     public static final String TOOL_NAME_FIELD = "name";
     public static final String DESCRIPTION_FIELD = "description";
@@ -66,7 +70,7 @@ public class MLToolSpec implements ToXContentObject {
             parameters = input.readMap(StreamInput::readString, StreamInput::readOptionalString);
         }
         includeOutputInAgentResponse = input.readBoolean();
-        if (input.readBoolean()) {
+        if (input.getVersion().onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_TOOL_CONFIG) && input.readBoolean()) {
             configMap = input.readMap(StreamInput::readOptionalString, StreamInput::readOptionalString);
         }
     }
@@ -82,11 +86,13 @@ public class MLToolSpec implements ToXContentObject {
             out.writeBoolean(false);
         }
         out.writeBoolean(includeOutputInAgentResponse);
-        if (configMap != null) {
-            out.writeBoolean(true);
-            out.writeMap(configMap, StreamOutput::writeOptionalString, StreamOutput::writeOptionalString);
-        } else {
-            out.writeBoolean(false);
+        if (out.getVersion().onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_TOOL_CONFIG)) {
+            if (configMap != null) {
+                out.writeBoolean(true);
+                out.writeMap(configMap, StreamOutput::writeOptionalString, StreamOutput::writeOptionalString);
+            } else {
+                out.writeBoolean(false);
+            }
         }
     }
 
