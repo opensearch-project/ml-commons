@@ -54,10 +54,6 @@ import org.opensearch.search.pipeline.PipelineProcessingContext;
 import org.opensearch.search.pipeline.Processor;
 import org.opensearch.search.pipeline.SearchResponseProcessor;
 
-import com.jayway.jsonpath.Configuration;
-import com.jayway.jsonpath.JsonPath;
-import com.jayway.jsonpath.Option;
-
 public class MLInferenceSearchResponseProcessor extends AbstractProcessor implements SearchResponseProcessor, ModelExecutor {
 
     private final NamedXContentRegistry xContentRegistry;
@@ -350,13 +346,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
                         String modelInputFieldName = entry.getKey();
                         String documentFieldName = entry.getValue();
 
-                        Object documentJson = JsonPath.parse(document).read("$");
-                        Configuration configuration = Configuration
-                            .builder()
-                            .options(Option.SUPPRESS_EXCEPTIONS, Option.DEFAULT_PATH_LEAF_TO_NULL)
-                            .build();
-
-                        Object documentValue = JsonPath.using(configuration).parse(documentJson).read(documentFieldName);
+                        Object documentValue = getMappedInputFromObject(document, documentFieldName);
                         if (documentValue != null) {
                             // when not existed in the map, add into the modelInputParameters map
                             updateModelInputParameters(modelInputParameters, modelInputFieldName, documentValue);
@@ -428,6 +418,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
      * simply put the document value in the map
      * If the setting is many-to-one,
      * create a new list and add the document value
+     *
      * @param modelInputParameters The map containing the model input parameters.
      * @param modelInputFieldName The name of the model input field.
      * @param documentValue The value from the document that needs to be added to the model input parameters.

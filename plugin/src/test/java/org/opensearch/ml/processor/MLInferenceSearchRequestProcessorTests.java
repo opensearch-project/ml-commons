@@ -7,6 +7,7 @@ package org.opensearch.ml.processor;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static org.opensearch.ml.common.utils.StringUtils.toJson;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.*;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.MAX_PREDICTION_TASKS;
 import static org.opensearch.ml.processor.MLInferenceSearchRequestProcessor.*;
@@ -15,6 +16,7 @@ import static org.opensearch.ml.processor.MLInferenceSearchRequestProcessor.MODE
 import java.util.*;
 
 import org.junit.Before;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchParseException;
@@ -30,10 +32,16 @@ import org.opensearch.index.query.RangeQueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.ingest.Processor;
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
+import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.input.remote.RemoteInferenceMLInput;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
+import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.search.SearchModule;
 import org.opensearch.search.builder.SearchSourceBuilder;
@@ -186,9 +194,100 @@ public class MLInferenceSearchRequestProcessorTests extends AbstractBuilderTestC
                 throw new RuntimeException("Failed in executing processRequestAsync.");
             }
         };
-
+        ArgumentCaptor<MLPredictionTaskRequest> argCaptor = ArgumentCaptor.forClass(MLPredictionTaskRequest.class);
         requestProcessor.processRequestAsync(request, requestContext, Listener);
+        verify(client, times(1)).execute(eq(MLPredictionTaskAction.INSTANCE), argCaptor.capture(), any());
+        MLPredictionTaskRequest req = argCaptor.getValue();
+        MLInput mlInput = req.getMlInput();
 
+        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) mlInput.getInputDataset();
+        System.out.println(inputDataSet.getParameters());
+        Map<String, String> tmpParameters = new HashMap<>();
+        tmpParameters.put("inputs", "foo");
+
+        MLInput expectedMlInput = RemoteInferenceMLInput
+            .builder()
+            .algorithm(FunctionName.REMOTE)
+            .inputDataset(RemoteInferenceInputDataSet.builder().parameters(tmpParameters).build())
+            .build();
+
+        RemoteInferenceInputDataSet expectedInputDataSet = (RemoteInferenceInputDataSet) expectedMlInput.getInputDataset();
+        assertEquals(expectedInputDataSet.getParameters(), inputDataSet.getParameters());
+        assertEquals(toJson(expectedInputDataSet.getParameters()), "{\"inputs\":\"foo\"}");
+
+    }
+
+    /**
+     * Tests the successful rewriting of a single string in a term query based on the model output.
+     * Model requires a list of model input
+     * @throws Exception if an error occurs during the test
+     */
+    public void testExecute_rewriteSingleStringTermQueryModelInputRequiredListSuccess() throws Exception {
+
+        /**
+         * example term query: {"query":{"term":{"text":{"value":"foo","boost":1.0}}}}
+         */
+        String modelInputField = "inputs";
+        String originalQueryField = "$.query.term.text.value";
+        String newQueryField = "$.query.term.text.value";
+        String modelOutputField = "response";
+        MLInferenceSearchRequestProcessor requestProcessor = getMlInferenceSearchRequestProcessor(
+            null,
+            modelInputField,
+            originalQueryField,
+            newQueryField,
+            modelOutputField,
+            false,
+            false
+        );
+        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "eng")).build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        QueryBuilder incomingQuery = new TermQueryBuilder("text", "foo");
+        SearchSourceBuilder source = new SearchSourceBuilder().query(incomingQuery);
+        SearchRequest request = new SearchRequest().source(source);
+        QueryBuilder expectedQuery = new TermQueryBuilder("text", "eng");
+
+        ActionListener<SearchRequest> Listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchRequest newSearchRequest) {
+                assertEquals(expectedQuery, newSearchRequest.source().query());
+                assertEquals(request.toString(), newSearchRequest.toString());
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException("Failed in executing processRequestAsync.");
+            }
+        };
+        ArgumentCaptor<MLPredictionTaskRequest> argCaptor = ArgumentCaptor.forClass(MLPredictionTaskRequest.class);
+        requestProcessor.processRequestAsync(request, requestContext, Listener);
+        verify(client, times(1)).execute(eq(MLPredictionTaskAction.INSTANCE), argCaptor.capture(), any());
+        MLPredictionTaskRequest req = argCaptor.getValue();
+        MLInput mlInput = req.getMlInput();
+
+        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) mlInput.getInputDataset();
+        Map<String, String> tmpParameters = new HashMap<>();
+        ArrayList<String> input = new ArrayList<>();
+        input.add("foo");
+        tmpParameters.put("inputs", toJson(input));
+
+        MLInput expectedMlInput = RemoteInferenceMLInput
+            .builder()
+            .algorithm(FunctionName.REMOTE)
+            .inputDataset(RemoteInferenceInputDataSet.builder().parameters(tmpParameters).build())
+            .build();
+
+        RemoteInferenceInputDataSet expectedInputDataSet = (RemoteInferenceInputDataSet) expectedMlInput.getInputDataset();
+        assertEquals(expectedInputDataSet.getParameters(), inputDataSet.getParameters());
+        assertEquals(toJson(expectedInputDataSet.getParameters()), "{\"inputs\":\"[\\\"foo\\\"]\"}");
     }
 
     /**

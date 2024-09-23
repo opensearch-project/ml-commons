@@ -42,7 +42,7 @@ import com.jayway.jsonpath.Option;
  * General ModelExecutor interface.
  */
 public interface ModelExecutor {
-
+    public static final String DOLLAR_SYMBOL = "$";
     Configuration suppressExceptionConfiguration = Configuration
         .builder()
         .options(Option.SUPPRESS_EXCEPTIONS, Option.DEFAULT_PATH_LEAF_TO_NULL)
@@ -329,5 +329,28 @@ public interface ModelExecutor {
      */
     default String convertToDotPath(String path) {
         return path.replaceAll("\\[(\\d+)\\]", "$1\\.").replaceAll("\\['(.*?)']", "$1\\.").replaceAll("^\\$", "").replaceAll("\\.$", "");
+    }
+
+    /**
+     * Retrieves the mapped input value from the object based on the provided field name.
+     * when the field name start with a dollar symbol, which starts all path expressions in JSONPATH notation,
+     * default to always return lists
+     * otherwise, return the original format of elements retrieving from the fieldName
+     *
+     * @param object       the object containing the elements
+     * @param fieldName    the name of the field to retrieve the value from
+     * @return the mapped input value as a JSON string, or null if the field value is empty and the field name contains a dot symbol
+     */
+    default Object getMappedInputFromObject(Object object, String fieldName) {
+        if (fieldName.startsWith(DOLLAR_SYMBOL)) {
+            Configuration returnListConfiguration = Configuration
+                .builder()
+                .options(Option.SUPPRESS_EXCEPTIONS, Option.DEFAULT_PATH_LEAF_TO_NULL, Option.ALWAYS_RETURN_LIST)
+                .build();
+            ArrayList<Object> fieldValueList = JsonPath.using(returnListConfiguration).parse(object).read(fieldName);
+            return fieldValueList.isEmpty() ? null : fieldValueList;
+        } else {
+            return JsonPath.using(suppressExceptionConfiguration).parse(object).read(fieldName);
+        }
     }
 }

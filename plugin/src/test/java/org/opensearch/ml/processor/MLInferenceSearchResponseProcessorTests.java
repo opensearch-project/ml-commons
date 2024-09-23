@@ -6,11 +6,13 @@
 package org.opensearch.ml.processor;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.utils.StringUtils.toJson;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.INPUT_MAP;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.MAX_PREDICTION_TASKS;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.MODEL_CONFIG;
@@ -33,6 +35,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchParseException;
@@ -50,11 +53,17 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
+import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.input.remote.RemoteInferenceMLInput;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
+import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
@@ -529,7 +538,6 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             TEST_XCONTENT_REGISTRY_FOR_QUERY,
             true
         );
-
         SearchRequest request = getSearchRequest();
         String fieldName = "text";
         SearchResponse response = getSearchResponse(5, true, fieldName);
@@ -749,6 +757,232 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
         };
         responseProcessor.processResponseAsync(request, response, responseContext, listener);
         verify(client, times(5)).execute(any(), any(), any());
+    }
+
+    /**
+     * Tests create processor with one_to_one is true
+     * with input_maps and output_maps
+     * with one to one prediction, 5 documents in hits are calling 5 prediction tasks
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseOneToOneWithBothMapping() throws Exception {
+
+        String newDocumentField = "text_embedding";
+        String modelOutputField = "response";
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+
+        String modelInputField = "inputs";
+        String documentField = "text";
+        List<Map<String, String>> inputMap = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        input.put(modelInputField, documentField);
+        inputMap.add(input);
+
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            inputMap,
+            outputMap,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            true
+        );
+
+        SearchRequest request = getSearchRequest();
+        SearchResponse response = getSearchResponse(5, true, documentField);
+
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .dataAsMap(ImmutableMap.of("response", Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)))
+            .build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                assertEquals(newSearchResponse.getHits().getHits().length, 5);
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[0].getSourceAsMap().get(newDocumentField).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[1].getSourceAsMap().get(newDocumentField).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[2].getSourceAsMap().get(newDocumentField).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[3].getSourceAsMap().get(newDocumentField).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[4].getSourceAsMap().get(newDocumentField).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException(e);
+            }
+
+        };
+        ArgumentCaptor<MLPredictionTaskRequest> argCaptor = ArgumentCaptor.forClass(MLPredictionTaskRequest.class);
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+        verify(client, times(5)).execute(eq(MLPredictionTaskAction.INSTANCE), argCaptor.capture(), any());
+
+        MLPredictionTaskRequest req = argCaptor.getValue();
+        MLInput mlInput = req.getMlInput();
+
+        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) mlInput.getInputDataset();
+        Map<String, String> tmpParameters = new HashMap<>();
+        tmpParameters.put("inputs", "value 4");
+
+        MLInput expectedMlInput = RemoteInferenceMLInput
+            .builder()
+            .algorithm(FunctionName.REMOTE)
+            .inputDataset(RemoteInferenceInputDataSet.builder().parameters(tmpParameters).build())
+            .build();
+
+        RemoteInferenceInputDataSet expectedInputDataSet = (RemoteInferenceInputDataSet) expectedMlInput.getInputDataset();
+        assertEquals(expectedInputDataSet.getParameters(), inputDataSet.getParameters());
+        assertEquals(toJson(expectedInputDataSet.getParameters()), "{\"inputs\":\"value 4\"}");
+    }
+
+    /**
+     * Tests create processor with one_to_one is true
+     * with input_maps and output_maps
+     * using dollar symbol in input_maps
+     * with one to one prediction, 5 documents in hits are calling 5 prediction tasks
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseOneToOneWithBothMappingAndDollarSymbol() throws Exception {
+
+        String newDocumentField = "text_embedding";
+        String modelOutputField = "response";
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+
+        String modelInputField = "inputs";
+        String documentField = "$.text";
+        List<Map<String, String>> inputMap = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        input.put(modelInputField, documentField);
+        inputMap.add(input);
+
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            inputMap,
+            outputMap,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            true
+        );
+
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(5, true, fieldName);
+
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .dataAsMap(ImmutableMap.of("response", Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)))
+            .build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                assertEquals(newSearchResponse.getHits().getHits().length, 5);
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[0].getSourceAsMap().get(newDocumentField).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[1].getSourceAsMap().get(newDocumentField).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[2].getSourceAsMap().get(newDocumentField).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[3].getSourceAsMap().get(newDocumentField).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[4].getSourceAsMap().get(newDocumentField).toString(),
+                    "[0.0, 1.0, 2.0, 3.0, 4.0]"
+                );
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException(e);
+            }
+
+        };
+        ArgumentCaptor<MLPredictionTaskRequest> argCaptor = ArgumentCaptor.forClass(MLPredictionTaskRequest.class);
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+        verify(client, times(5)).execute(eq(MLPredictionTaskAction.INSTANCE), argCaptor.capture(), any());
+
+        MLPredictionTaskRequest req = argCaptor.getValue();
+        MLInput mlInput = req.getMlInput();
+
+        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) mlInput.getInputDataset();
+        Map<String, String> tmpParameters = new HashMap<>();
+        ArrayList<String> inputArray = new ArrayList<>();
+        inputArray.add("value 4");
+        tmpParameters.put("inputs", toJson(inputArray));
+
+        MLInput expectedMlInput = RemoteInferenceMLInput
+            .builder()
+            .algorithm(FunctionName.REMOTE)
+            .inputDataset(RemoteInferenceInputDataSet.builder().parameters(tmpParameters).build())
+            .build();
+
+        RemoteInferenceInputDataSet expectedInputDataSet = (RemoteInferenceInputDataSet) expectedMlInput.getInputDataset();
+        assertEquals(expectedInputDataSet.getParameters(), inputDataSet.getParameters());
+        assertEquals(toJson(expectedInputDataSet.getParameters()), "{\"inputs\":\"[\\\"value 4\\\"]\"}");
     }
 
     /**

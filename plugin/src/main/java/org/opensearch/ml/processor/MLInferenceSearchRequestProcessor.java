@@ -5,6 +5,7 @@
 package org.opensearch.ml.processor;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.utils.StringUtils.toJson;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.INPUT_MAP;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.MAX_PREDICTION_TASKS;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.MODEL_CONFIG;
@@ -73,6 +74,7 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
     public static final String FULL_RESPONSE_PATH = "full_response_path";
     public static final String MODEL_INPUT = "model_input";
     public static final String DEFAULT_MODEl_INPUT = "{ \"parameters\": ${ml_inference.parameters} }";
+    public static final String DOLLAR_SYMBOL = "$";
     // At default, ml inference processor allows maximum 10 prediction tasks running in parallel
     // it can be overwritten using max_prediction_tasks when creating processor
     public static final int DEFAULT_MAX_PREDICTION_TASKS = 10;
@@ -236,12 +238,9 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
                     Map<String, String> outputMapping = processOutputMap.get(mappingIndex);
                     try {
                         if (queryTemplate == null) {
-                            Object incomeQueryObject = JsonPath.parse(queryString).read("$");
+                            Object incomeQueryObject = JsonPath.parse(queryString).read(DOLLAR_SYMBOL);
                             updateIncomeQueryObject(incomeQueryObject, outputMapping, mlOutput);
-                            SearchSourceBuilder searchSourceBuilder = getSearchSourceBuilder(
-                                xContentRegistry,
-                                StringUtils.toJson(incomeQueryObject)
-                            );
+                            SearchSourceBuilder searchSourceBuilder = getSearchSourceBuilder(xContentRegistry, toJson(incomeQueryObject));
                             request.source(searchSourceBuilder);
                             requestListener.onResponse(request);
                         } else {
@@ -278,7 +277,7 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
                     String newQueryField = outputMapEntry.getKey();
                     String modelOutputFieldName = outputMapEntry.getValue();
                     Object modelOutputValue = getModelOutputValue(mlOutput, modelOutputFieldName, ignoreMissing, fullResponsePath);
-                    String jsonPathExpression = "$." + newQueryField;
+                    String jsonPathExpression = newQueryField;
                     JsonPath.parse(incomeQueryObject).set(jsonPathExpression, modelOutputValue);
                 }
             }
@@ -397,12 +396,12 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
 
         if (processInputMap != null) {
             inputMapping = processInputMap.get(inputMapIndex);
-            Object newQuery = JsonPath.parse(queryString).read("$");
+            Object newQuery = JsonPath.parse(queryString).read(DOLLAR_SYMBOL);
             for (Map.Entry<String, String> entry : inputMapping.entrySet()) {
                 // model field as key, query field name as value
                 String modelInputFieldName = entry.getKey();
                 String queryFieldName = entry.getValue();
-                String queryFieldValue = StringUtils.toJson(JsonPath.parse(newQuery).read(queryFieldName));
+                String queryFieldValue = toJson(getMappedInputFromObject(newQuery, queryFieldName));
                 modelParameters.put(modelInputFieldName, queryFieldValue);
             }
         }
