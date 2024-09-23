@@ -22,7 +22,7 @@ public class MLToolSpecTest {
 
     @Test
     public void writeTo() throws IOException {
-        MLToolSpec spec = new MLToolSpec("test", "test", "test", Map.of("test", "test"), false);
+        MLToolSpec spec = new MLToolSpec("test", "test", "test", Map.of("test", "test"), false, Map.of("configKey", "configValue"));
         BytesStreamOutput output = new BytesStreamOutput();
         spec.writeTo(output);
         MLToolSpec spec1 = new MLToolSpec(output.bytes().streamInput());
@@ -32,11 +32,70 @@ public class MLToolSpecTest {
         Assert.assertEquals(spec.getParameters(), spec1.getParameters());
         Assert.assertEquals(spec.getDescription(), spec1.getDescription());
         Assert.assertEquals(spec.isIncludeOutputInAgentResponse(), spec1.isIncludeOutputInAgentResponse());
+        Assert.assertEquals(spec.getConfigMap(), spec1.getConfigMap());
+    }
+
+    @Test
+    public void writeToEmptyConfigMap() throws IOException {
+        MLToolSpec spec = new MLToolSpec("test", "test", "test", Map.of("test", "test"), false, Collections.EMPTY_MAP);
+        BytesStreamOutput output = new BytesStreamOutput();
+        spec.writeTo(output);
+        MLToolSpec spec1 = new MLToolSpec(output.bytes().streamInput());
+
+        Assert.assertEquals(spec.getType(), spec1.getType());
+        Assert.assertEquals(spec.getName(), spec1.getName());
+        Assert.assertEquals(spec.getParameters(), spec1.getParameters());
+        Assert.assertEquals(spec.getDescription(), spec1.getDescription());
+        Assert.assertEquals(spec.isIncludeOutputInAgentResponse(), spec1.isIncludeOutputInAgentResponse());
+        Assert.assertEquals(spec.getConfigMap(), spec1.getConfigMap());
+    }
+
+    @Test
+    public void writeToNullConfigMap() throws IOException {
+        MLToolSpec spec = new MLToolSpec("test", "test", "test", Map.of("test", "test"), false, null);
+        BytesStreamOutput output = new BytesStreamOutput();
+        spec.writeTo(output);
+        MLToolSpec spec1 = new MLToolSpec(output.bytes().streamInput());
+
+        Assert.assertEquals(spec.getType(), spec1.getType());
+        Assert.assertEquals(spec.getName(), spec1.getName());
+        Assert.assertEquals(spec.getParameters(), spec1.getParameters());
+        Assert.assertEquals(spec.getDescription(), spec1.getDescription());
+        Assert.assertEquals(spec.isIncludeOutputInAgentResponse(), spec1.isIncludeOutputInAgentResponse());
+        Assert.assertNull(spec1.getConfigMap());
     }
 
     @Test
     public void toXContent() throws IOException {
-        MLToolSpec spec = new MLToolSpec("test", "test", "test", Map.of("test", "test"), false);
+        MLToolSpec spec = new MLToolSpec("test", "test", "test", Map.of("test", "test"), false, Map.of("configKey", "configValue"));
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        spec.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String content = TestHelper.xContentBuilderToString(builder);
+
+        Assert
+            .assertEquals(
+                "{\"type\":\"test\",\"name\":\"test\",\"description\":\"test\",\"parameters\":{\"test\":\"test\"},\"include_output_in_agent_response\":false,\"config\":{\"configKey\":\"configValue\"}}",
+                content
+            );
+    }
+
+    @Test
+    public void toXContentEmptyConfigMap() throws IOException {
+        MLToolSpec spec = new MLToolSpec("test", "test", "test", Map.of("test", "test"), false, Collections.EMPTY_MAP);
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        spec.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String content = TestHelper.xContentBuilderToString(builder);
+
+        Assert
+            .assertEquals(
+                "{\"type\":\"test\",\"name\":\"test\",\"description\":\"test\",\"parameters\":{\"test\":\"test\"},\"include_output_in_agent_response\":false}",
+                content
+            );
+    }
+
+    @Test
+    public void toXContentNullConfigMap() throws IOException {
+        MLToolSpec spec = new MLToolSpec("test", "test", "test", Map.of("test", "test"), false, null);
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         spec.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String content = TestHelper.xContentBuilderToString(builder);
@@ -50,6 +109,28 @@ public class MLToolSpecTest {
 
     @Test
     public void parse() throws IOException {
+        String jsonStr =
+            "{\"type\":\"test\",\"name\":\"test\",\"description\":\"test\",\"parameters\":{\"test\":\"test\"},\"include_output_in_agent_response\":false,\"config\":{\"configKey\":\"configValue\"}}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
+        parser.nextToken();
+        MLToolSpec spec = MLToolSpec.parse(parser);
+
+        Assert.assertEquals(spec.getType(), "test");
+        Assert.assertEquals(spec.getName(), "test");
+        Assert.assertEquals(spec.getDescription(), "test");
+        Assert.assertEquals(spec.getParameters(), Map.of("test", "test"));
+        Assert.assertEquals(spec.isIncludeOutputInAgentResponse(), false);
+        Assert.assertEquals(spec.getConfigMap(), Map.of("configKey", "configValue"));
+    }
+
+    @Test
+    public void parseEmptyConfigMap() throws IOException {
         String jsonStr =
             "{\"type\":\"test\",\"name\":\"test\",\"description\":\"test\",\"parameters\":{\"test\":\"test\"},\"include_output_in_agent_response\":false}";
         XContentParser parser = XContentType.JSON
@@ -67,11 +148,12 @@ public class MLToolSpecTest {
         Assert.assertEquals(spec.getDescription(), "test");
         Assert.assertEquals(spec.getParameters(), Map.of("test", "test"));
         Assert.assertEquals(spec.isIncludeOutputInAgentResponse(), false);
+        Assert.assertEquals(spec.getConfigMap(), null);
     }
 
     @Test
     public void fromStream() throws IOException {
-        MLToolSpec spec = new MLToolSpec("test", "test", "test", Map.of("test", "test"), false);
+        MLToolSpec spec = new MLToolSpec("test", "test", "test", Map.of("test", "test"), false, Map.of("configKey", "configValue"));
         BytesStreamOutput output = new BytesStreamOutput();
         spec.writeTo(output);
         MLToolSpec spec1 = MLToolSpec.fromStream(output.bytes().streamInput());
@@ -81,5 +163,36 @@ public class MLToolSpecTest {
         Assert.assertEquals(spec.getParameters(), spec1.getParameters());
         Assert.assertEquals(spec.getDescription(), spec1.getDescription());
         Assert.assertEquals(spec.isIncludeOutputInAgentResponse(), spec1.isIncludeOutputInAgentResponse());
+        Assert.assertEquals(spec.getConfigMap(), spec1.getConfigMap());
+    }
+
+    @Test
+    public void fromStreamEmptyConfigMap() throws IOException {
+        MLToolSpec spec = new MLToolSpec("test", "test", "test", Map.of("test", "test"), false, Collections.EMPTY_MAP);
+        BytesStreamOutput output = new BytesStreamOutput();
+        spec.writeTo(output);
+        MLToolSpec spec1 = MLToolSpec.fromStream(output.bytes().streamInput());
+
+        Assert.assertEquals(spec.getType(), spec1.getType());
+        Assert.assertEquals(spec.getName(), spec1.getName());
+        Assert.assertEquals(spec.getParameters(), spec1.getParameters());
+        Assert.assertEquals(spec.getDescription(), spec1.getDescription());
+        Assert.assertEquals(spec.isIncludeOutputInAgentResponse(), spec1.isIncludeOutputInAgentResponse());
+        Assert.assertEquals(spec.getConfigMap(), spec1.getConfigMap());
+    }
+
+    @Test
+    public void fromStreamNullConfigMap() throws IOException {
+        MLToolSpec spec = new MLToolSpec("test", "test", "test", Map.of("test", "test"), false, null);
+        BytesStreamOutput output = new BytesStreamOutput();
+        spec.writeTo(output);
+        MLToolSpec spec1 = MLToolSpec.fromStream(output.bytes().streamInput());
+
+        Assert.assertEquals(spec.getType(), spec1.getType());
+        Assert.assertEquals(spec.getName(), spec1.getName());
+        Assert.assertEquals(spec.getParameters(), spec1.getParameters());
+        Assert.assertEquals(spec.getDescription(), spec1.getDescription());
+        Assert.assertEquals(spec.isIncludeOutputInAgentResponse(), spec1.isIncludeOutputInAgentResponse());
+        Assert.assertEquals(spec.getConfigMap(), spec1.getConfigMap());
     }
 }

@@ -29,15 +29,24 @@ public class MLToolSpec implements ToXContentObject {
     public static final String DESCRIPTION_FIELD = "description";
     public static final String PARAMETERS_FIELD = "parameters";
     public static final String INCLUDE_OUTPUT_IN_AGENT_RESPONSE = "include_output_in_agent_response";
+    public static final String CONFIG_FIELD = "config";
 
     private String type;
     private String name;
     private String description;
     private Map<String, String> parameters;
     private boolean includeOutputInAgentResponse;
+    private Map<String, String> configMap;
 
     @Builder(toBuilder = true)
-    public MLToolSpec(String type, String name, String description, Map<String, String> parameters, boolean includeOutputInAgentResponse) {
+    public MLToolSpec(
+        String type,
+        String name,
+        String description,
+        Map<String, String> parameters,
+        boolean includeOutputInAgentResponse,
+        Map<String, String> configMap
+    ) {
         if (type == null) {
             throw new IllegalArgumentException("tool type is null");
         }
@@ -46,6 +55,7 @@ public class MLToolSpec implements ToXContentObject {
         this.description = description;
         this.parameters = parameters;
         this.includeOutputInAgentResponse = includeOutputInAgentResponse;
+        this.configMap = configMap;
     }
 
     public MLToolSpec(StreamInput input) throws IOException {
@@ -56,6 +66,9 @@ public class MLToolSpec implements ToXContentObject {
             parameters = input.readMap(StreamInput::readString, StreamInput::readOptionalString);
         }
         includeOutputInAgentResponse = input.readBoolean();
+        if (input.readBoolean()) {
+            configMap = input.readMap(StreamInput::readOptionalString, StreamInput::readOptionalString);
+        }
     }
 
     public void writeTo(StreamOutput out) throws IOException {
@@ -69,6 +82,12 @@ public class MLToolSpec implements ToXContentObject {
             out.writeBoolean(false);
         }
         out.writeBoolean(includeOutputInAgentResponse);
+        if (configMap != null) {
+            out.writeBoolean(true);
+            out.writeMap(configMap, StreamOutput::writeOptionalString, StreamOutput::writeOptionalString);
+        } else {
+            out.writeBoolean(false);
+        }
     }
 
     @Override
@@ -87,6 +106,9 @@ public class MLToolSpec implements ToXContentObject {
             builder.field(PARAMETERS_FIELD, parameters);
         }
         builder.field(INCLUDE_OUTPUT_IN_AGENT_RESPONSE, includeOutputInAgentResponse);
+        if (configMap != null && configMap.size() > 0) {
+            builder.field(CONFIG_FIELD, configMap);
+        }
         builder.endObject();
         return builder;
     }
@@ -97,6 +119,7 @@ public class MLToolSpec implements ToXContentObject {
         String description = null;
         Map<String, String> parameters = null;
         boolean includeOutputInAgentResponse = false;
+        Map<String, String> configMap = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -119,6 +142,9 @@ public class MLToolSpec implements ToXContentObject {
                 case INCLUDE_OUTPUT_IN_AGENT_RESPONSE:
                     includeOutputInAgentResponse = parser.booleanValue();
                     break;
+                case CONFIG_FIELD:
+                    configMap = getParameterMap(parser.map());
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -131,6 +157,7 @@ public class MLToolSpec implements ToXContentObject {
             .description(description)
             .parameters(parameters)
             .includeOutputInAgentResponse(includeOutputInAgentResponse)
+            .configMap(configMap)
             .build();
     }
 

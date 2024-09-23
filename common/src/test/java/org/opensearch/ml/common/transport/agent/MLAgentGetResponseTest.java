@@ -76,7 +76,7 @@ public class MLAgentGetResponseTest {
             MLAgentType.CONVERSATIONAL.name(),
             "test",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
-            List.of(new MLToolSpec("test", "test", "test", Collections.EMPTY_MAP, false)),
+            List.of(new MLToolSpec("test", "test", "test", Collections.EMPTY_MAP, false, Collections.EMPTY_MAP)),
             Map.of("test", "test"),
             new MLMemorySpec("test", "123", 0),
             Instant.EPOCH,
