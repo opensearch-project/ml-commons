@@ -71,7 +71,7 @@ public class MLToolSpec implements ToXContentObject {
         }
         includeOutputInAgentResponse = input.readBoolean();
         if (input.getVersion().onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_TOOL_CONFIG) && input.readBoolean()) {
-            configMap = input.readMap(StreamInput::readOptionalString, StreamInput::readOptionalString);
+            configMap = input.readMap(StreamInput::readString, StreamInput::readOptionalString);
         }
     }
 
@@ -89,7 +89,7 @@ public class MLToolSpec implements ToXContentObject {
         if (out.getVersion().onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_TOOL_CONFIG)) {
             if (configMap != null) {
                 out.writeBoolean(true);
-                out.writeMap(configMap, StreamOutput::writeOptionalString, StreamOutput::writeOptionalString);
+                out.writeMap(configMap, StreamOutput::writeString, StreamOutput::writeOptionalString);
             } else {
                 out.writeBoolean(false);
             }
@@ -112,7 +112,7 @@ public class MLToolSpec implements ToXContentObject {
             builder.field(PARAMETERS_FIELD, parameters);
         }
         builder.field(INCLUDE_OUTPUT_IN_AGENT_RESPONSE, includeOutputInAgentResponse);
-        if (configMap != null && configMap.size() > 0) {
+        if (configMap != null && !configMap.isEmpty()) {
             builder.field(CONFIG_FIELD, configMap);
         }
         builder.endObject();

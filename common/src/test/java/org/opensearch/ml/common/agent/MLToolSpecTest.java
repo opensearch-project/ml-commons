@@ -37,7 +37,7 @@ public class MLToolSpecTest {
 
     @Test
     public void writeToEmptyConfigMap() throws IOException {
-        MLToolSpec spec = new MLToolSpec("test", "test", "test", Map.of("test", "test"), false, Collections.EMPTY_MAP);
+        MLToolSpec spec = new MLToolSpec("test", "test", "test", Map.of("test", "test"), false, Collections.emptyMap());
         BytesStreamOutput output = new BytesStreamOutput();
         spec.writeTo(output);
         MLToolSpec spec1 = new MLToolSpec(output.bytes().streamInput());
@@ -81,7 +81,7 @@ public class MLToolSpecTest {
 
     @Test
     public void toXContentEmptyConfigMap() throws IOException {
-        MLToolSpec spec = new MLToolSpec("test", "test", "test", Map.of("test", "test"), false, Collections.EMPTY_MAP);
+        MLToolSpec spec = new MLToolSpec("test", "test", "test", Map.of("test", "test"), false, Collections.emptyMap());
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         spec.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String content = TestHelper.xContentBuilderToString(builder);
@@ -168,7 +168,7 @@ public class MLToolSpecTest {
 
     @Test
     public void fromStreamEmptyConfigMap() throws IOException {
-        MLToolSpec spec = new MLToolSpec("test", "test", "test", Map.of("test", "test"), false, Collections.EMPTY_MAP);
+        MLToolSpec spec = new MLToolSpec("test", "test", "test", Map.of("test", "test"), false, Collections.emptyMap());
         BytesStreamOutput output = new BytesStreamOutput();
         spec.writeTo(output);
         MLToolSpec spec1 = MLToolSpec.fromStream(output.bytes().streamInput());
