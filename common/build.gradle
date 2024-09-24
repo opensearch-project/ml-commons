@@ -34,6 +34,7 @@ dependencies {
         exclude group: 'com.google.j2objc', module: 'j2objc-annotations'
         exclude group: 'com.google.guava', module: 'listenablefuture'
     }
+    compileOnly 'com.jayway.jsonpath:json-path:2.9.0'
 }
 
 lombok {
