@@ -157,11 +157,24 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
 
     public void testPrepareBatchRequest() throws Exception {
         RestRequest request = getBatchRestRequest();
+        when(mlFeatureEnabledSetting.isOfflineBatchInferenceEnabled()).thenReturn(true);
         restMLPredictionAction.handleRequest(request, channel, client);
         ArgumentCaptor<MLPredictionTaskRequest> argumentCaptor = ArgumentCaptor.forClass(MLPredictionTaskRequest.class);
         verify(client, times(1)).execute(eq(MLPredictionTaskAction.INSTANCE), argumentCaptor.capture(), any());
         MLInput mlInput = argumentCaptor.getValue().getMlInput();
         verifyParsedBatchMLInput(mlInput);
+    }
+
+    public void testPrepareBatchRequest_FeatureFlagDisabled() throws Exception {
+        thrown.expect(IllegalStateException.class);
+        thrown
+            .expectMessage(
+                "Offline Batch Inference is currently disabled. To enable it, update the setting \"plugins.ml_commons.offline_batch_inference_enabled\" to true."
+            );
+
+        RestRequest request = getBatchRestRequest();
+        when(mlFeatureEnabledSetting.isOfflineBatchInferenceEnabled()).thenReturn(false);
+        restMLPredictionAction.handleRequest(request, channel, client);
     }
 
     public void testPrepareBatchRequest_WrongActionType() throws Exception {
