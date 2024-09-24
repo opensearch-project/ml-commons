@@ -190,7 +190,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testPutDataObject_ExistingDocument_DisableOverwrite() throws IOException {
+    public void testPutDataObject_ExistingDocument_DisableOverwrite() {
         PutDataObjectRequest putRequest = PutDataObjectRequest
             .builder()
             .index(TEST_INDEX)
@@ -211,7 +211,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testPutDataObject_WithComplexData() throws IOException {
+    public void testPutDataObject_WithComplexData() {
         ComplexDataObject complexDataObject = ComplexDataObject
             .builder()
             .testString("testString")
@@ -242,7 +242,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testPutDataObject_NullTenantId_SetsDefaultTenantId() throws IOException {
+    public void testPutDataObject_NullTenantId_SetsDefaultTenantId() {
         PutDataObjectRequest putRequest = PutDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).dataObject(testDataObject).build();
         Mockito.when(dynamoDbClient.putItem(Mockito.any(PutItemRequest.class))).thenReturn(PutItemResponse.builder().build());
         sdkClient.putDataObjectAsync(putRequest, testThreadPool.executor(GENERAL_THREAD_POOL)).toCompletableFuture().join();
@@ -254,7 +254,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testPutDataObject_NullId_SetsDefaultTenantId() throws IOException {
+    public void testPutDataObject_NullId_SetsDefaultTenantId() {
         PutDataObjectRequest putRequest = PutDataObjectRequest.builder().index(TEST_INDEX).dataObject(testDataObject).build();
         Mockito.when(dynamoDbClient.putItem(Mockito.any(PutItemRequest.class))).thenReturn(PutItemResponse.builder().build());
         PutDataObjectResponse response = sdkClient
@@ -373,7 +373,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testGetDataObject_UseDefaultTenantIdIfNull() throws IOException {
+    public void testGetDataObject_UseDefaultTenantIdIfNull() {
         GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).build();
         GetItemResponse getItemResponse = GetItemResponse.builder().build();
         Mockito.when(dynamoDbClient.getItem(Mockito.any(GetItemRequest.class))).thenReturn(getItemResponse);
@@ -384,7 +384,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testGetDataObject_DDBException_ThrowsOSException() throws IOException {
+    public void testGetDataObject_DDBException_ThrowsOSException() {
         GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).tenantId(TENANT_ID).build();
         Mockito.when(dynamoDbClient.getItem(Mockito.any(GetItemRequest.class))).thenThrow(new RuntimeException("Test exception"));
         CompletableFuture<GetDataObjectResponse> future = sdkClient
@@ -430,7 +430,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void updateDataObjectAsync_HappyCase() {
+    public void testUpdateDataObjectAsync_HappyCase() {
         UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
             .builder()
             .id(TEST_ID)
@@ -470,7 +470,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void updateDataObjectAsync_HappyCaseWithMap() throws Exception {
+    public void testUpdateDataObjectAsync_HappyCaseWithMap() throws Exception {
         UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
             .builder()
             .id(TEST_ID)
@@ -521,7 +521,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void updateDataObjectAsync_NullTenantId_UsesDefaultTenantId() {
+    public void testUpdateDataObjectAsync_NullTenantId_UsesDefaultTenantId() {
         UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
             .builder()
             .id(TEST_ID)
@@ -546,7 +546,25 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
         assertEquals(TENANT_ID, updateItemRequest.key().get(HASH_KEY).s());
     }
 
-    public void testUpdateDataObject_VersionCheck() throws IOException {
+    @Test
+    public void testUpdateDataObject_DDBException_ThrowsException() {
+        UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
+            .builder()
+            .index(TEST_INDEX)
+            .id(TEST_ID)
+            .dataObject(testDataObject)
+            .build();
+        Mockito.when(dynamoDbClient.getItem(Mockito.any(GetItemRequest.class))).thenThrow(new RuntimeException("Test exception"));
+        CompletableFuture<UpdateDataObjectResponse> future = sdkClient
+            .updateDataObjectAsync(updateRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture();
+
+        CompletionException ce = assertThrows(CompletionException.class, () -> future.join());
+        assertEquals(RuntimeException.class, ce.getCause().getClass());
+    }
+
+    @Test
+    public void testUpdateDataObject_VersionCheck() {
         UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
             .builder()
             .index(TEST_INDEX)
@@ -602,11 +620,12 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
             .build();
         Mockito.when(dynamoDbClient.getItem(Mockito.any(GetItemRequest.class))).thenReturn(getItemResponse);
         ConditionalCheckFailedException conflictException = ConditionalCheckFailedException.builder().build();
-        // throw conflict exception on first time, return on second time
+        // throw conflict exception on first time, return on second time, throw on third time (never get here)
         Mockito
             .when(dynamoDbClient.updateItem(updateItemRequestArgumentCaptor.capture()))
             .thenThrow(conflictException)
-            .thenReturn(UpdateItemResponse.builder().build());
+            .thenReturn(UpdateItemResponse.builder().build())
+            .thenThrow(conflictException);
         UpdateDataObjectResponse updateResponse = sdkClient
             .updateDataObjectAsync(updateRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
             .toCompletableFuture()
@@ -668,6 +687,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
             .tenantId(TENANT_ID)
             .searchSourceBuilder(searchSourceBuilder)
             .build();
+        @SuppressWarnings("unchecked")
         CompletionStage<SearchDataObjectResponse> searchDataObjectResponse = Mockito.mock(CompletionStage.class);
         Mockito
             .when(remoteClusterIndicesClient.searchDataObjectAsync(Mockito.any(), Mockito.any(), Mockito.anyBoolean()))
@@ -693,6 +713,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
             .tenantId(TENANT_ID)
             .searchSourceBuilder(searchSourceBuilder)
             .build();
+        @SuppressWarnings("unchecked")
         CompletionStage<SearchDataObjectResponse> searchDataObjectResponse = Mockito.mock(CompletionStage.class);
         Mockito
             .when(remoteClusterIndicesClient.searchDataObjectAsync(Mockito.any(), Mockito.any(), Mockito.anyBoolean()))
