@@ -26,6 +26,8 @@ public class MLExceptionUtils {
         "Agent Framework is currently disabled. To enable it, update the setting \"plugins.ml_commons.agent_framework_enabled\" to true.";
     public static final String CONTROLLER_DISABLED_ERR_MSG =
         "Controller is currently disabled. To enable it, update the setting \"plugins.ml_commons.controller_enabled\" to true.";
+    public static final String OFFLINE_BATCH_INGESTION_DISABLED_ERR_MSG =
+        "Offline batch ingestion is currently disabled. To enable it, update the setting \"plugins.ml_commons.offline_batch_ingestion_enabled\" to true.";
 
     public static String getRootCauseMessage(final Throwable throwable) {
         String message = ExceptionUtils.getRootCauseMessage(throwable);

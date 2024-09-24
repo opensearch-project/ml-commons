@@ -11,6 +11,7 @@ import static org.opensearch.ml.common.MLTaskState.COMPLETED;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.INGEST_THREAD_POOL;
 import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
+import static org.opensearch.ml.utils.MLExceptionUtils.OFFLINE_BATCH_INGESTION_DISABLED_ERR_MSG;
 
 import java.time.Instant;
 import java.util.List;
@@ -35,6 +36,7 @@ import org.opensearch.ml.common.transport.batch.MLBatchIngestionRequest;
 import org.opensearch.ml.common.transport.batch.MLBatchIngestionResponse;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.ingest.Ingestable;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.MLExceptionUtils;
 import org.opensearch.tasks.Task;
@@ -55,6 +57,7 @@ public class TransportBatchIngestionAction extends HandledTransportAction<Action
     MLTaskManager mlTaskManager;
     private final Client client;
     private ThreadPool threadPool;
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Inject
     public TransportBatchIngestionAction(
@@ -62,13 +65,15 @@ public class TransportBatchIngestionAction extends HandledTransportAction<Action
         ActionFilters actionFilters,
         Client client,
         MLTaskManager mlTaskManager,
-        ThreadPool threadPool
+        ThreadPool threadPool,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLBatchIngestionAction.NAME, transportService, actionFilters, MLBatchIngestionRequest::new);
         this.transportService = transportService;
         this.client = client;
         this.mlTaskManager = mlTaskManager;
         this.threadPool = threadPool;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
@@ -76,6 +81,9 @@ public class TransportBatchIngestionAction extends HandledTransportAction<Action
         MLBatchIngestionRequest mlBatchIngestionRequest = MLBatchIngestionRequest.fromActionRequest(request);
         MLBatchIngestionInput mlBatchIngestionInput = mlBatchIngestionRequest.getMlBatchIngestionInput();
         try {
+            if (!mlFeatureEnabledSetting.isOfflineBatchIngestionEnabled()) {
+                throw new IllegalStateException(OFFLINE_BATCH_INGESTION_DISABLED_ERR_MSG);
+            }
             validateBatchIngestInput(mlBatchIngestionInput);
             MLTask mlTask = MLTask
                 .builder()
