@@ -129,7 +129,8 @@ public class RestMLPredictionAction extends BaseRestHandler {
         ActionType actionType = ActionType.from(getActionTypeFromRestRequest(request));
         if (FunctionName.REMOTE.name().equals(algorithm) && !mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
             throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
-        } else if (FunctionName.isDLModel(FunctionName.from(algorithm.toUpperCase())) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
+        } else if (FunctionName.isDLModel(FunctionName.from(algorithm.toUpperCase(Locale.ROOT)))
+            && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
             throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
         } else if (!ActionType.isValidActionInModelPrediction(actionType)) {
             throw new IllegalArgumentException("Wrong action type in the rest request path!");

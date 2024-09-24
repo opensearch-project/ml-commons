@@ -65,7 +65,7 @@ jobs:
                                export COHERE_KEY=`aws secretsmanager get-secret-value --secret-id github_cohere_key --query SecretString --output text` &&
                                echo "::add-mask::$OPENAI_KEY" &&
                                echo "::add-mask::$COHERE_KEY" &&
-                               echo "build and run tests" && ./gradlew build -Dtests.locale=en-US &&
+                               echo "build and run tests" && ./gradlew build &&
                                echo "Publish to Maven Local" && ./gradlew publishToMavenLocal &&
                                echo "Multi Nodes Integration Testing" && ./gradlew integTest -PnumNodes=3'
           plugin=`basename $(ls plugin/build/distributions/*.zip)`

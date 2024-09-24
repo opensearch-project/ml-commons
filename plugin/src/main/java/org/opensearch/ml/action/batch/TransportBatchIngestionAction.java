@@ -14,6 +14,7 @@ import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -93,7 +94,7 @@ public class TransportBatchIngestionAction extends HandledTransportAction<Action
                     mlTaskManager.add(mlTask);
                     listener.onResponse(new MLBatchIngestionResponse(taskId, MLTaskType.BATCH_INGEST, MLTaskState.CREATED.name()));
                     String ingestType = (String) mlBatchIngestionInput.getDataSources().get(TYPE);
-                    Ingestable ingestable = MLEngineClassLoader.initInstance(ingestType.toLowerCase(), client, Client.class);
+                    Ingestable ingestable = MLEngineClassLoader.initInstance(ingestType.toLowerCase(Locale.ROOT), client, Client.class);
                     threadPool.executor(INGEST_THREAD_POOL).execute(() -> {
                         executeWithErrorHandling(() -> {
                             double successRate = ingestable.ingest(mlBatchIngestionInput);
@@ -185,7 +186,7 @@ public class TransportBatchIngestionAction extends HandledTransportAction<Action
         if (dataSources.get(TYPE) == null || dataSources.get(SOURCE) == null) {
             throw new IllegalArgumentException("The batch ingest input data source is missing data type or source");
         }
-        if (((String) dataSources.get(TYPE)).toLowerCase() == "s3") {
+        if (((String) dataSources.get(TYPE)).equalsIgnoreCase("s3")) {
             List<String> s3Uris = (List<String>) dataSources.get(SOURCE);
             if (s3Uris == null || s3Uris.isEmpty()) {
                 throw new IllegalArgumentException("The batch ingest input s3Uris is empty");
