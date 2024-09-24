@@ -232,36 +232,8 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
             try {
                 String source = Strings.toString(MediaTypeRegistry.JSON, request.dataObject());
                 JsonNode jsonNode = OBJECT_MAPPER.readTree(source);
-                Map<String, AttributeValue> updateItem = JsonTransformer.convertJsonObjectToDDBAttributeMap(jsonNode);
-                updateItem.remove(HASH_KEY);
-                updateItem.remove(RANGE_KEY);
-                Map<String, AttributeValue> updateKey = new HashMap<>();
-                updateKey.put(HASH_KEY, AttributeValue.builder().s(tenantId).build());
-                updateKey.put(RANGE_KEY, AttributeValue.builder().s(request.id()).build());
-                UpdateItemRequest.Builder updateItemRequestBuilder = UpdateItemRequest.builder().tableName(request.index()).key(updateKey);
-                Map<String, String> expressionAttributeNames = new HashMap<>();
-                expressionAttributeNames.put("#seqNo", SEQ_NO_KEY);
-                expressionAttributeNames.put("#source", SOURCE);
-                Map<String, AttributeValue> expressionAttributeValues = new HashMap<>();
-                expressionAttributeValues.put(":incr", AttributeValue.builder().n("1").build());
-                expressionAttributeValues.put(":source", AttributeValue.builder().m(updateItem).build());
-                updateItemRequestBuilder.updateExpression("SET #seqNo = #seqNo + :incr, #source = :source ");
-                if (request.ifSeqNo() != null) {
-                    // Get current document version and put in attribute map. Ignore primary term on DDB.
-                    updateItemRequestBuilder.conditionExpression("#seqNo = :currentSeqNo");
-                    expressionAttributeValues.put(":currentSeqNo", AttributeValue.builder().n(Long.toString(request.ifSeqNo())).build());
-                }
-                updateItemRequestBuilder
-                    .expressionAttributeNames(expressionAttributeNames)
-                    .expressionAttributeValues(expressionAttributeValues);
-                UpdateItemRequest updateItemRequest = updateItemRequestBuilder.build();
-                UpdateItemResponse updateItemResponse = dynamoDbClient.updateItem(updateItemRequest);
-                Long sequenceNumber = null;
-                if (updateItemResponse != null
-                    && updateItemResponse.attributes() != null
-                    && updateItemResponse.attributes().containsKey(SEQ_NO_KEY)) {
-                    sequenceNumber = Long.parseLong(updateItemResponse.attributes().get(SEQ_NO_KEY).n());
-                }
+
+                Long sequenceNumber = updateItemWithRetryOnConflict(tenantId, jsonNode, request);
                 String simulatedUpdateResponse = simulateOpenSearchResponse(
                     request.index(),
                     request.id(),
@@ -270,13 +242,6 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
                     Map.of("result", "updated")
                 );
                 return UpdateDataObjectResponse.builder().id(request.id()).parser(createParser(simulatedUpdateResponse)).build();
-            } catch (ConditionalCheckFailedException ccfe) {
-                log.error("Document version conflict updating {} in {}: {}", request.id(), request.index(), ccfe.getMessage(), ccfe);
-                // Rethrow
-                throw new OpenSearchStatusException(
-                    "Document version conflict updating " + request.id() + " in index " + request.index(),
-                    RestStatus.CONFLICT
-                );
             } catch (IOException e) {
                 log.error("Error updating {} in {}: {}", request.id(), request.index(), e.getMessage(), e);
                 // Rethrow unchecked exception on update IOException
@@ -286,6 +251,60 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
                 );
             }
         }), executor);
+    }
+
+    private Long updateItemWithRetryOnConflict(String tenantId, JsonNode jsonNode, UpdateDataObjectRequest request) {
+        Map<String, AttributeValue> updateItem = JsonTransformer.convertJsonObjectToDDBAttributeMap(jsonNode);
+        updateItem.remove(TENANT_ID);
+        updateItem.remove(RANGE_KEY);
+        Map<String, AttributeValue> updateKey = new HashMap<>();
+        updateKey.put(HASH_KEY, AttributeValue.builder().s(tenantId).build());
+        updateKey.put(RANGE_KEY, AttributeValue.builder().s(request.id()).build());
+        Map<String, String> expressionAttributeNames = new HashMap<>();
+        expressionAttributeNames.put("#seqNo", SEQ_NO_KEY);
+        expressionAttributeNames.put("#source", SOURCE);
+        Map<String, AttributeValue> expressionAttributeValues = new HashMap<>();
+        expressionAttributeValues.put(":incr", AttributeValue.builder().n("1").build());
+        int retriesRemaining = request.retryOnConflict();
+        do {
+            try {
+                // Fetch current item and extract data object
+                Map<String, AttributeValue> currentItem = dynamoDbClient
+                    .getItem(GetItemRequest.builder().tableName(request.index()).key(updateKey).build())
+                    .item();
+                Map<String, AttributeValue> dataObject = new HashMap<>(currentItem.get(SOURCE).m());
+                // Update existing with changes
+                dataObject.putAll(updateItem);
+                expressionAttributeValues.put(":source", AttributeValue.builder().m(dataObject).build());
+                // Use seqNo from the object we got to make sure we're updating the same thing
+                if (request.ifSeqNo() != null) {
+                    expressionAttributeValues.put(":currentSeqNo", AttributeValue.builder().n(Long.toString(request.ifSeqNo())).build());
+                } else {
+                    expressionAttributeValues.put(":currentSeqNo", currentItem.get(SEQ_NO_KEY));
+                }
+                UpdateItemRequest.Builder updateItemRequestBuilder = UpdateItemRequest.builder().tableName(request.index()).key(updateKey);
+                updateItemRequestBuilder.updateExpression("SET #seqNo = #seqNo + :incr, #source = :source ");
+                updateItemRequestBuilder.conditionExpression("#seqNo = :currentSeqNo");
+                updateItemRequestBuilder
+                    .expressionAttributeNames(expressionAttributeNames)
+                    .expressionAttributeValues(expressionAttributeValues);
+                UpdateItemRequest updateItemRequest = updateItemRequestBuilder.build();
+                UpdateItemResponse updateItemResponse = dynamoDbClient.updateItem(updateItemRequest);
+                if (updateItemResponse != null
+                    && updateItemResponse.attributes() != null
+                    && updateItemResponse.attributes().containsKey(SEQ_NO_KEY)) {
+                    return Long.parseLong(updateItemResponse.attributes().get(SEQ_NO_KEY).n());
+                }
+            } catch (ConditionalCheckFailedException ccfe) {
+                if (retriesRemaining < 1) {
+                    // Throw exception if retries exhausted
+                    String message = "Document version conflict updating " + request.id() + " in index " + request.index();
+                    log.error(message + ": {}", ccfe.getMessage(), ccfe);
+                    throw new OpenSearchStatusException(message, RestStatus.CONFLICT);
+                }
+            }
+        } while (retriesRemaining-- > 0);
+        return null; // Should never get here
     }
 
     /**

@@ -301,6 +301,7 @@ public class LocalClusterIndicesClientTests {
             .builder()
             .index(TEST_INDEX)
             .id(TEST_ID)
+            .retryOnConflict(3)
             .dataObject(testDataObject)
             .build();
 
@@ -327,6 +328,7 @@ public class LocalClusterIndicesClientTests {
         ArgumentCaptor<UpdateRequest> requestCaptor = ArgumentCaptor.forClass(UpdateRequest.class);
         verify(mockedClient, times(1)).update(requestCaptor.capture());
         assertEquals(TEST_INDEX, requestCaptor.getValue().index());
+        assertEquals(3, requestCaptor.getValue().retryOnConflict());
         assertEquals(TEST_ID, response.id());
 
         UpdateResponse updateActionResponse = UpdateResponse.fromXContent(response.parser());

@@ -175,6 +175,9 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
                 if (request.ifPrimaryTerm() != null) {
                     updateRequestBuilder.ifPrimaryTerm(request.ifPrimaryTerm());
                 }
+                if (request.retryOnConflict() > 0) {
+                    updateRequestBuilder.retryOnConflict(request.retryOnConflict());
+                }
                 UpdateRequest<Map<String, Object>, ?> updateRequest = updateRequestBuilder.build();
                 log.info("Updating {} in {}", request.id(), request.index());
                 UpdateResponse<Map<String, Object>> updateResponse = openSearchClient.update(updateRequest, MAP_DOCTYPE);

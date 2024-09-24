@@ -8,6 +8,7 @@
  */
 package org.opensearch.ml.sdkclient;
 
+import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -320,6 +321,7 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
             .join();
 
         assertEquals(TEST_INDEX, updateRequestCaptor.getValue().index());
+        assertNull(updateRequestCaptor.getValue().retryOnConflict());
         assertEquals(TEST_ID, response.id());
 
         org.opensearch.action.update.UpdateResponse updateActionResponse = org.opensearch.action.update.UpdateResponse
@@ -336,6 +338,7 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
             .builder()
             .index(TEST_INDEX)
             .id(TEST_ID)
+            .retryOnConflict(3)
             .dataObject(Map.of("foo", "bar"))
             .build();
 
@@ -356,6 +359,7 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
         sdkClient.updateDataObjectAsync(updateRequest, testThreadPool.executor(GENERAL_THREAD_POOL)).toCompletableFuture().join();
 
         assertEquals(TEST_INDEX, updateRequestCaptor.getValue().index());
+        assertEquals(3, updateRequestCaptor.getValue().retryOnConflict().intValue());
         assertEquals(TEST_ID, updateRequestCaptor.getValue().id());
         assertEquals("bar", ((Map<String, Object>) updateRequestCaptor.getValue().doc()).get("foo"));
     }

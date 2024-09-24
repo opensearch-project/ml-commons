@@ -165,6 +165,9 @@ public class LocalClusterIndicesClient implements SdkClientDelegate {
                 if (request.ifPrimaryTerm() != null) {
                     updateRequest.setIfPrimaryTerm(request.ifPrimaryTerm());
                 }
+                if (request.retryOnConflict() > 0) {
+                    updateRequest.retryOnConflict(request.retryOnConflict());
+                }
                 UpdateResponse updateResponse = client.update(updateRequest).actionGet();
                 if (updateResponse == null) {
                     log.info("Null UpdateResponse");
