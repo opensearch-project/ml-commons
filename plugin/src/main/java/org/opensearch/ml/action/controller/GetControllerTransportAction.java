@@ -8,6 +8,7 @@ package org.opensearch.ml.action.controller;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_CONTROLLER_INDEX;
 import static org.opensearch.ml.common.utils.StringUtils.getErrorMessage;
+import static org.opensearch.ml.utils.MLExceptionUtils.CONTROLLER_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
@@ -33,6 +34,7 @@ import org.opensearch.ml.common.transport.controller.MLControllerGetRequest;
 import org.opensearch.ml.common.transport.controller.MLControllerGetResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
@@ -50,6 +52,7 @@ public class GetControllerTransportAction extends HandledTransportAction<ActionR
     ClusterService clusterService;
     MLModelManager mlModelManager;
     ModelAccessControlHelper modelAccessControlHelper;
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Inject
     public GetControllerTransportAction(
@@ -59,7 +62,8 @@ public class GetControllerTransportAction extends HandledTransportAction<ActionR
         NamedXContentRegistry xContentRegistry,
         ClusterService clusterService,
         MLModelManager mlModelManager,
-        ModelAccessControlHelper modelAccessControlHelper
+        ModelAccessControlHelper modelAccessControlHelper,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLControllerGetAction.NAME, transportService, actionFilters, MLControllerGetRequest::new);
         this.client = client;
@@ -67,6 +71,7 @@ public class GetControllerTransportAction extends HandledTransportAction<ActionR
         this.clusterService = clusterService;
         this.mlModelManager = mlModelManager;
         this.modelAccessControlHelper = modelAccessControlHelper;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
@@ -79,6 +84,9 @@ public class GetControllerTransportAction extends HandledTransportAction<ActionR
         String[] excludes = new String[] { MLModel.MODEL_CONTENT_FIELD, MLModel.OLD_MODEL_CONTENT_FIELD };
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            if (!mlFeatureEnabledSetting.isControllerEnabled()) {
+                throw new IllegalStateException(CONTROLLER_DISABLED_ERR_MSG);
+            }
             ActionListener<MLControllerGetResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
             client.get(getRequest, ActionListener.wrap(r -> {
                 if (r != null && r.isExists()) {
