@@ -9,6 +9,7 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.CANCEL_BATCH_PREDICT;
+import static org.opensearch.ml.utils.MLExceptionUtils.BATCH_INFERENCE_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
 import java.util.HashMap;
@@ -51,8 +52,8 @@ import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.algorithms.remote.RemoteConnectorExecutor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
-import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.script.ScriptService;
 import org.opensearch.tasks.Task;
@@ -74,7 +75,7 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
     MLModelManager mlModelManager;
 
     MLTaskManager mlTaskManager;
-    MLModelCacheHelper modelCacheHelper;
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Inject
     public CancelBatchJobTransportAction(
@@ -87,7 +88,8 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
         ConnectorAccessControlHelper connectorAccessControlHelper,
         EncryptorImpl encryptor,
         MLTaskManager mlTaskManager,
-        MLModelManager mlModelManager
+        MLModelManager mlModelManager,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLCancelBatchJobAction.NAME, transportService, actionFilters, MLCancelBatchJobRequest::new);
         this.client = client;
@@ -98,6 +100,7 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
         this.encryptor = encryptor;
         this.mlTaskManager = mlTaskManager;
         this.mlModelManager = mlModelManager;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
@@ -116,6 +119,10 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
                         MLTask mlTask = MLTask.parse(parser);
 
                         // check if function is remote and task is of type batch prediction
+                        if (mlTask.getTaskType() == MLTaskType.BATCH_PREDICTION
+                            && !mlFeatureEnabledSetting.isOfflineBatchInferenceEnabled()) {
+                            throw new IllegalStateException(BATCH_INFERENCE_DISABLED_ERR_MSG);
+                        }
                         if (mlTask.getTaskType() == MLTaskType.BATCH_PREDICTION && mlTask.getFunctionName() == FunctionName.REMOTE) {
                             processRemoteBatchPrediction(mlTask, actionListener);
                         } else {

@@ -71,6 +71,7 @@ import org.opensearch.ml.common.transport.task.MLTaskGetResponse;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.script.ScriptService;
 import org.opensearch.test.OpenSearchTestCase;
@@ -115,6 +116,9 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
 
     @Mock
     private MLTaskManager mlTaskManager;
+
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -172,6 +176,7 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
                 encryptor,
                 mlTaskManager,
                 mlModelManager,
+                mlFeatureEnabledSetting,
                 settings
             )
         );
@@ -215,7 +220,7 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
             listener.onResponse(connector);
             return null;
         }).when(connectorAccessControlHelper).getConnector(eq(client), anyString(), any());
-
+        when(mlFeatureEnabledSetting.isOfflineBatchInferenceEnabled()).thenReturn(true);
     }
 
     public void testGetTask_NullResponse() {
@@ -297,6 +302,31 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("You don't have permission to access this connector", argumentCaptor.getValue().getMessage());
+    }
+
+    public void test_BatchPredictStatus_FeatureFlagDisabled() throws IOException {
+        Map<String, Object> remoteJob = new HashMap<>();
+        remoteJob.put("Status", "IN PROGRESS");
+        remoteJob.put("TransformJobName", "SM-offline-batch-transform13");
+
+        when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(false);
+
+        GetResponse getResponse = prepareMLTask(FunctionName.REMOTE, MLTaskType.BATCH_PREDICTION, remoteJob);
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+        when(mlFeatureEnabledSetting.isOfflineBatchInferenceEnabled()).thenReturn(false);
+
+        getTaskTransportAction.doExecute(null, mlTaskGetRequest, actionListener);
+        ArgumentCaptor<IllegalStateException> argumentCaptor = ArgumentCaptor.forClass(IllegalStateException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "Offline Batch Inference is currently disabled. To enable it, update the setting \"plugins.ml_commons.offline_batch_inference_enabled\" to true.",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 
     public void test_BatchPredictStatus_NoAccessToConnector() throws IOException {
