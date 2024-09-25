@@ -260,19 +260,16 @@ public class MLModelAutoReDeployer {
         String modelId = modelAutoRedeployArrangement.getSearchResponse().getId();
         List<String> addedNodes = modelAutoRedeployArrangement.getAddedNodes();
         Map<String, Object> sourceAsMap = modelAutoRedeployArrangement.getSearchResponse().getSourceAsMap();
-        String functionName = (String) Optional.ofNullable(sourceAsMap.get(MLModel.FUNCTION_NAME_FIELD))
+        String functionName = (String) Optional
+            .ofNullable(sourceAsMap.get(MLModel.FUNCTION_NAME_FIELD))
             .orElse(sourceAsMap.get(MLModel.ALGORITHM_FIELD));
         if (FunctionName.REMOTE == FunctionName.from(functionName)) {
             log.info("Skipping redeploying remote model {} as remote model deployment can be done at prediction time.", modelId);
             return;
         }
-        List<String> planningWorkerNodes = (List<String>) sourceAsMap
-            .get(MLModel.PLANNING_WORKER_NODES_FIELD);
-        Integer autoRedeployRetryTimes = (Integer) sourceAsMap
-            .get(MLModel.AUTO_REDEPLOY_RETRY_TIMES_FIELD);
-        Boolean deployToAllNodes = (Boolean) Optional
-            .ofNullable(sourceAsMap.get(MLModel.DEPLOY_TO_ALL_NODES_FIELD))
-            .orElse(false);
+        List<String> planningWorkerNodes = (List<String>) sourceAsMap.get(MLModel.PLANNING_WORKER_NODES_FIELD);
+        Integer autoRedeployRetryTimes = (Integer) sourceAsMap.get(MLModel.AUTO_REDEPLOY_RETRY_TIMES_FIELD);
+        Boolean deployToAllNodes = (Boolean) Optional.ofNullable(sourceAsMap.get(MLModel.DEPLOY_TO_ALL_NODES_FIELD)).orElse(false);
         // calculate node ids.
         String[] nodeIds = null;
         if (deployToAllNodes || !allowCustomDeploymentPlan) {
