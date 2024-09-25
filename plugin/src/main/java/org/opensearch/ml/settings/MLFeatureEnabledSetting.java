@@ -11,6 +11,8 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_AGENT_FRAM
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_CONTROLLER_ENABLED;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ENABLED;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_OFFLINE_BATCH_INFERENCE_ENABLED;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_OFFLINE_BATCH_INGESTION_ENABLED;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_ENABLED;
 
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -27,6 +29,8 @@ public class MLFeatureEnabledSetting {
     private volatile AtomicBoolean isConnectorPrivateIpEnabled;
 
     private volatile Boolean isControllerEnabled;
+    private volatile Boolean isBatchIngestionEnabled;
+    private volatile Boolean isBatchInferenceEnabled;
 
     public MLFeatureEnabledSetting(ClusterService clusterService, Settings settings) {
         isRemoteInferenceEnabled = ML_COMMONS_REMOTE_INFERENCE_ENABLED.get(settings);
@@ -34,6 +38,8 @@ public class MLFeatureEnabledSetting {
         isLocalModelEnabled = ML_COMMONS_LOCAL_MODEL_ENABLED.get(settings);
         isConnectorPrivateIpEnabled = new AtomicBoolean(ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED.get(settings));
         isControllerEnabled = ML_COMMONS_CONTROLLER_ENABLED.get(settings);
+        isBatchIngestionEnabled = ML_COMMONS_OFFLINE_BATCH_INGESTION_ENABLED.get(settings);
+        isBatchInferenceEnabled = ML_COMMONS_OFFLINE_BATCH_INFERENCE_ENABLED.get(settings);
 
         clusterService
             .getClusterSettings()
@@ -46,6 +52,12 @@ public class MLFeatureEnabledSetting {
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED, it -> isConnectorPrivateIpEnabled.set(it));
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_CONTROLLER_ENABLED, it -> isControllerEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_OFFLINE_BATCH_INGESTION_ENABLED, it -> isBatchIngestionEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_OFFLINE_BATCH_INFERENCE_ENABLED, it -> isBatchInferenceEnabled = it);
     }
 
     /**
@@ -84,4 +96,19 @@ public class MLFeatureEnabledSetting {
         return isControllerEnabled;
     }
 
+    /**
+     * Whether the offline batch ingestion is enabled. If disabled, APIs in ml-commons will block offline batch ingestion.
+     * @return whether the feature is enabled.
+     */
+    public Boolean isOfflineBatchIngestionEnabled() {
+        return isBatchIngestionEnabled;
+    }
+
+    /**
+     * Whether the offline batch inference is enabled. If disabled, APIs in ml-commons will block offline batch inference.
+     * @return whether the feature is enabled.
+     */
+    public Boolean isOfflineBatchInferenceEnabled() {
+        return isBatchInferenceEnabled;
+    }
 }
