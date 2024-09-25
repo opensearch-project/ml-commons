@@ -7,6 +7,7 @@ package org.opensearch.ml.rest;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
+import static org.opensearch.ml.utils.MLExceptionUtils.BATCH_INFERENCE_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLExceptionUtils.REMOTE_INFERENCE_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
@@ -131,6 +132,8 @@ public class RestMLPredictionAction extends BaseRestHandler {
             throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
         } else if (FunctionName.isDLModel(FunctionName.from(algorithm.toUpperCase())) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
             throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
+        } else if (ActionType.BATCH_PREDICT == actionType && !mlFeatureEnabledSetting.isOfflineBatchInferenceEnabled()) {
+            throw new IllegalStateException(BATCH_INFERENCE_DISABLED_ERR_MSG);
         } else if (!ActionType.isValidActionInModelPrediction(actionType)) {
             throw new IllegalArgumentException("Wrong action type in the rest request path!");
         }

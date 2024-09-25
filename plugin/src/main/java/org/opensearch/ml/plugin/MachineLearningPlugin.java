@@ -971,7 +971,9 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_CANCELLED_REGEX,
                 MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_CANCELLING_REGEX,
                 MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_EXPIRED_REGEX,
-                MLCommonsSettings.ML_COMMONS_CONTROLLER_ENABLED
+                MLCommonsSettings.ML_COMMONS_CONTROLLER_ENABLED,
+                MLCommonsSettings.ML_COMMONS_OFFLINE_BATCH_INGESTION_ENABLED,
+                MLCommonsSettings.ML_COMMONS_OFFLINE_BATCH_INFERENCE_ENABLED
             );
         return settings;
     }
