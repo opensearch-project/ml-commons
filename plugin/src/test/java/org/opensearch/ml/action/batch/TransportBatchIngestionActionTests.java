@@ -46,6 +46,7 @@ import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.transport.batch.MLBatchIngestionInput;
 import org.opensearch.ml.common.transport.batch.MLBatchIngestionRequest;
 import org.opensearch.ml.common.transport.batch.MLBatchIngestionResponse;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
@@ -73,6 +74,8 @@ public class TransportBatchIngestionActionTests extends OpenSearchTestCase {
     ThreadPool threadPool;
     @Mock
     ExecutorService executorService;
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     private TransportBatchIngestionAction batchAction;
     private MLBatchIngestionInput batchInput;
@@ -81,7 +84,14 @@ public class TransportBatchIngestionActionTests extends OpenSearchTestCase {
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        batchAction = new TransportBatchIngestionAction(transportService, actionFilters, client, mlTaskManager, threadPool);
+        batchAction = new TransportBatchIngestionAction(
+            transportService,
+            actionFilters,
+            client,
+            mlTaskManager,
+            threadPool,
+            mlFeatureEnabledSetting
+        );
 
         Map<String, Object> fieldMap = new HashMap<>();
         fieldMap.put("chapter", "$.content[0]");
@@ -106,6 +116,8 @@ public class TransportBatchIngestionActionTests extends OpenSearchTestCase {
             .dataSources(dataSource)
             .build();
         when(mlBatchIngestionRequest.getMlBatchIngestionInput()).thenReturn(batchInput);
+
+        when(mlFeatureEnabledSetting.isOfflineBatchIngestionEnabled()).thenReturn(true);
     }
 
     public void test_doExecute_success() {
@@ -179,6 +191,18 @@ public class TransportBatchIngestionActionTests extends OpenSearchTestCase {
                 TASK_SEMAPHORE_TIMEOUT,
                 true
             );
+    }
+
+    public void test_doExecute_batchIngestionDisabled() {
+        when(mlFeatureEnabledSetting.isOfflineBatchIngestionEnabled()).thenReturn(false);
+        batchAction.doExecute(task, mlBatchIngestionRequest, actionListener);
+
+        ArgumentCaptor<IllegalStateException> argumentCaptor = ArgumentCaptor.forClass(IllegalStateException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+                "Offline batch ingestion is currently disabled. To enable it, update the setting \"plugins.ml_commons.offline_batch_ingestion_enabled\" to true.",
+                argumentCaptor.getValue().getMessage()
+        );
     }
 
     public void test_doExecute_noDataSource() {

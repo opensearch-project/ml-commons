@@ -20,6 +20,7 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_COMPLETED_REGEX;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_EXPIRED_REGEX;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_FIELD;
+import static org.opensearch.ml.utils.MLExceptionUtils.BATCH_INFERENCE_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
@@ -68,8 +69,8 @@ import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.algorithms.remote.RemoteConnectorExecutor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
-import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.script.ScriptService;
 import org.opensearch.tasks.Task;
@@ -91,7 +92,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
     MLModelManager mlModelManager;
 
     MLTaskManager mlTaskManager;
-    MLModelCacheHelper modelCacheHelper;
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     volatile List<String> remoteJobStatusFields;
     volatile Pattern remoteJobCompletedStatusRegexPattern;
@@ -111,6 +112,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         EncryptorImpl encryptor,
         MLTaskManager mlTaskManager,
         MLModelManager mlModelManager,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
         Settings settings
     ) {
         super(MLTaskGetAction.NAME, transportService, actionFilters, MLTaskGetRequest::new);
@@ -122,6 +124,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         this.encryptor = encryptor;
         this.mlTaskManager = mlTaskManager;
         this.mlModelManager = mlModelManager;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
 
         remoteJobStatusFields = ML_COMMONS_REMOTE_JOB_STATUS_FIELD.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_REMOTE_JOB_STATUS_FIELD, it -> remoteJobStatusFields = it);
@@ -178,6 +181,10 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
                         MLTask mlTask = MLTask.parse(parser);
 
                         // check if function is remote and task is of type batch prediction
+                        if (mlTask.getTaskType() == MLTaskType.BATCH_PREDICTION
+                            && !mlFeatureEnabledSetting.isOfflineBatchInferenceEnabled()) {
+                            throw new IllegalStateException(BATCH_INFERENCE_DISABLED_ERR_MSG);
+                        }
                         if (mlTask.getTaskType() == MLTaskType.BATCH_PREDICTION && mlTask.getFunctionName() == FunctionName.REMOTE) {
                             processRemoteBatchPrediction(mlTask, taskId, actionListener);
                         } else {
