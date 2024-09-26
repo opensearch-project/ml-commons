@@ -208,7 +208,7 @@ public class ConnectorAction implements ToXContentObject, Writeable {
 
         public static boolean isValidAction(String action) {
             try {
-                ActionType.valueOf(action.toUpperCase());
+                ActionType.valueOf(action.toUpperCase(Locale.ROOT));
                 return true;
             } catch (IllegalArgumentException e) {
                 return false;
