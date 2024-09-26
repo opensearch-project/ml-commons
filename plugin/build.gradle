@@ -242,9 +242,16 @@ integTest {
 
 testClusters.integTest {
     // Replicate credential environment variables to cluster nodes    
-    environment "AWS_ACCESS_KEY_ID", System.getenv("AWS_ACCESS_KEY_ID");
-    environment "AWS_SECRET_ACCESS_KEY", System.getenv("AWS_SECRET_ACCESS_KEY");
-    environment "AWS_SESSION_TOKEN", System.getenv("AWS_SESSION_TOKEN");
+    // Set environment variables only if they are present
+    if (System.getenv("AWS_ACCESS_KEY_ID") != null) {
+        environment "AWS_ACCESS_KEY_ID", System.getenv("AWS_ACCESS_KEY_ID")
+    }
+    if (System.getenv("AWS_SECRET_ACCESS_KEY") != null) {
+        environment "AWS_SECRET_ACCESS_KEY", System.getenv("AWS_SECRET_ACCESS_KEY")
+    }
+    if (System.getenv("AWS_SESSION_TOKEN") != null) {
+        environment "AWS_SESSION_TOKEN", System.getenv("AWS_SESSION_TOKEN")
+    }
 
     testDistribution = "ARCHIVE"
     // Cluster shrink exception thrown if we try to set numberOfNodes to 1, so only apply if > 1
