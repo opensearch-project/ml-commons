@@ -249,7 +249,8 @@ public class UpdateConnectorTransportActionTests extends OpenSearchTestCase {
 
         updateConnectorTransportAction.doExecute(task, updateRequest, actionListener);
 
-        assertNull(connector.getLastUpdateTime());
+        assertNull(connector.getCreatedTime());
+        assertNotNull(connector.getLastUpdateTime());
     }
 
     @Test

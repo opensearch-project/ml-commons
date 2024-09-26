@@ -37,7 +37,6 @@ import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.MLModel;
-import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorRequest;
 import org.opensearch.ml.engine.MLEngine;
@@ -96,9 +95,7 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                     connector.update(mlUpdateConnectorAction.getUpdateContent(), mlEngine::encrypt);
                     connector.validateConnectorURL(trustedConnectorEndpointsRegex);
 
-                    if (connector instanceof HttpConnector && ((HttpConnector) connector).getLastUpdateTime() != null) {
-                        connector.setLastUpdateTime(Instant.now());
-                    }
+                    connector.setLastUpdateTime(Instant.now());
 
                     UpdateRequest updateRequest = new UpdateRequest(ML_CONNECTOR_INDEX, connectorId);
                     updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);

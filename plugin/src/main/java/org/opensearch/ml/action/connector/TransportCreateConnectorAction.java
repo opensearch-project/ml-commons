@@ -135,12 +135,11 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                     listener.onResponse(response);
                 }, listener::onFailure);
 
-                IndexRequest indexRequest = new IndexRequest(ML_CONNECTOR_INDEX);
-
                 Instant currentTime = Instant.now();
                 connector.setCreatedTime(currentTime);
                 connector.setLastUpdateTime(currentTime);
 
+                IndexRequest indexRequest = new IndexRequest(ML_CONNECTOR_INDEX);
                 indexRequest.source(connector.toXContent(XContentBuilder.builder(XContentType.JSON.xContent()), ToXContent.EMPTY_PARAMS));
                 indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                 client.index(indexRequest, ActionListener.runBefore(indexResponseListener, context::restore));
