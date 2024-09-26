@@ -8,6 +8,7 @@ package org.opensearch.ml.common.input.parameter.clustering;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
 import java.io.IOException;
+import java.util.Locale;
 
 import org.opensearch.core.ParseField;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -97,7 +98,7 @@ public class RCFSummarizeParams implements MLAlgoParams {
                     parallel = parser.booleanValue();
                     break;
                 case DISTANCE_TYPE_FIELD:
-                    distanceType = DistanceType.from(parser.text().toUpperCase());
+                    distanceType = DistanceType.from(parser.text().toUpperCase(Locale.ROOT));
                     break;
                 default:
                     parser.skipChildren();
