@@ -19,7 +19,7 @@ jobs:
       - name: Get CodeOwner List
         id: step-is-require-approval
         run: |
-          approvers=$(cat .github/CODEOWNERS | grep @ | tr -d '* ' | sed 's/@/,/g' | sed 's/,//1')"
+          approvers=$(cat .github/CODEOWNERS | grep @ | tr -d '* ' | sed 's/@/,/g' | sed 's/,//1')
           author=${{ github.event.pull_request.user.login }}
           if [[ "$approvers" =~ "$author" ]]; then
             echo "$authoer is in the approval list"
