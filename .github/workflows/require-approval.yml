@@ -19,7 +19,7 @@ jobs:
       - name: Get CodeOwner List
         id: step-is-require-approval
         run: |
-          github_event = ${{ github.event_name }}
+          github_event=${{ github.event_name }}
           if [[ "$github_event" = "push" ]]; then
             echo "Push event does not need approval"
             echo "is-require-approval=ml-commons-cicd-env" >> $GITHUB_OUTPUT
