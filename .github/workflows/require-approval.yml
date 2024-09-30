@@ -27,7 +27,7 @@ jobs:
             approvers=$(cat .github/CODEOWNERS | grep @ | tr -d '* ' | sed 's/@/,/g' | sed 's/,//1')
             author=${{ github.event.pull_request.user.login }}
             if [[ "$approvers" =~ "$author" ]]; then
-              echo "$authoer is in the approval list"
+              echo "$author is in the approval list"
               echo "is-require-approval=ml-commons-cicd-env" >> $GITHUB_OUTPUT
             else
               echo "$author is not in the approval list"
