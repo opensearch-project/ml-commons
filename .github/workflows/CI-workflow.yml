@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   Get-Require-Approval:
-    uses: .github/workflows/require-approval.yml@${{ github.event.pull_request.base.sha }}
+    uses: ./.github/workflows/require-approval.yml
 
   Get-CI-Image-Tag:
     uses: opensearch-project/opensearch-build/.github/workflows/get-ci-image-tag.yml@main
