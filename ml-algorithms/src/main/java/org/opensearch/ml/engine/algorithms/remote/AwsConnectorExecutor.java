@@ -11,11 +11,12 @@ import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.time.Duration;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
+import org.apache.logging.log4j.Logger;
 import org.opensearch.client.Client;
+import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.util.TokenBucket;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.connector.AwsConnector;
@@ -69,15 +70,19 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
         this.httpClient = MLHttpClientFactory.getAsyncHttpClient(connectionTimeout, readTimeout, maxConnection);
     }
 
+    @Override
+    public Logger getLogger() {
+        return log;
+    }
+
     @SuppressWarnings("removal")
     @Override
     public void invokeRemoteModel(
         MLInput mlInput,
         Map<String, String> parameters,
         String payload,
-        Map<Integer, ModelTensors> tensorOutputs,
-        ExecutionContext countDownLatch,
-        ActionListener<List<ModelTensors>> actionListener
+        ExecutionContext executionContext,
+        ActionListener<Tuple<Integer, ModelTensors>> actionListener
     ) {
         try {
             SdkHttpFullRequest request = ConnectorUtils.buildSdkRequest(connector, parameters, payload, POST);
@@ -86,15 +91,7 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
                 .request(signRequest(request))
                 .requestContentPublisher(new SimpleHttpContentPublisher(request))
                 .responseHandler(
-                    new MLSdkAsyncHttpResponseHandler(
-                        countDownLatch,
-                        actionListener,
-                        parameters,
-                        tensorOutputs,
-                        connector,
-                        scriptService,
-                        mlGuard
-                    )
+                    new MLSdkAsyncHttpResponseHandler(executionContext, actionListener, parameters, connector, scriptService, mlGuard)
                 )
                 .build();
             AccessController.doPrivileged((PrivilegedExceptionAction<CompletableFuture<Void>>) () -> httpClient.execute(executeRequest));
