@@ -124,7 +124,7 @@ public class MLModelToolTests {
         tool.run(null, listener);
 
         future.join();
-        assertEquals(null, future.get());
+        assertEquals("{\"response\":\"response 1\",\"action\":\"action1\"}", future.get());
     }
 
     @Test
@@ -168,6 +168,26 @@ public class MLModelToolTests {
 
         // Assert that the result matches the expected response
         assertEquals("testResponse", result);
+    }
+
+    @Test
+    public void testOutputParserWithJsonResponse() {
+        Parser outputParser = new MLModelTool(client, "modelId", "response").getOutputParser();
+        String expectedJson = "{\"key1\":\"value1\",\"key2\":\"value2\"}";
+
+        // Create a mock ModelTensors with json object
+        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("key1", "value1", "key2", "value2")).build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+        Object result = outputParser.parse(mlModelTensorOutput.getMlModelOutputs());
+        assertEquals(expectedJson, result);
+
+        // Create a mock ModelTensors with response string
+        modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "{\"key1\":\"value1\",\"key2\":\"value2\"}")).build();
+        modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+        result = outputParser.parse(mlModelTensorOutput.getMlModelOutputs());
+        assertEquals(expectedJson, result);
     }
 
     @Test

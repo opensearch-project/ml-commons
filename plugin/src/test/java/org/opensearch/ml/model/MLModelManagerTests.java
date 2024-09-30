@@ -61,6 +61,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
 import org.junit.Before;
@@ -76,14 +77,16 @@ import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
+import org.opensearch.cluster.service.ClusterApplierService;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.breaker.CircuitBreaker;
+import org.opensearch.core.common.breaker.CircuitBreakingException;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
-import org.opensearch.ml.breaker.MemoryCircuitBreaker;
 import org.opensearch.ml.breaker.ThresholdCircuitBreaker;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
@@ -107,6 +110,7 @@ import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
@@ -114,7 +118,6 @@ import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.stats.suppliers.CounterSupplier;
 import org.opensearch.ml.task.MLTaskManager;
-import org.opensearch.monitor.jvm.JvmService;
 import org.opensearch.script.ScriptService;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
@@ -177,7 +180,9 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     private ScriptService scriptService;
 
     @Mock
-    private MLTask pretrainedMLTask;
+    ClusterApplierService clusterApplierService;
+    @Mock
+    MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Before
     public void setup() throws URISyntaxException {
@@ -196,7 +201,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
             ML_COMMONS_MONITORING_REQUEST_COUNT,
             ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE
         );
-        clusterService = spy(new ClusterService(settings, clusterSettings, null));
+        clusterService = spy(new ClusterService(settings, clusterSettings, null, clusterApplierService));
         xContentRegistry = NamedXContentRegistry.EMPTY;
 
         modelName = "model_name1";
@@ -251,6 +256,8 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
+        when(mlFeatureEnabledSetting.isControllerEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled()).thenReturn(new AtomicBoolean(false));
 
         modelManager = spy(
             new MLModelManager(
@@ -267,7 +274,8 @@ public class MLModelManagerTests extends OpenSearchTestCase {
                 mlTaskManager,
                 modelCacheHelper,
                 mlEngine,
-                nodeHelper
+                nodeHelper,
+                mlFeatureEnabledSetting
             )
         );
 
@@ -323,7 +331,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn(thresholdCircuitBreaker);
         when(thresholdCircuitBreaker.getName()).thenReturn("Disk Circuit Breaker");
         when(thresholdCircuitBreaker.getThreshold()).thenReturn(87);
-        expectedEx.expect(MLException.class);
+        expectedEx.expect(CircuitBreakingException.class);
         expectedEx.expectMessage("Disk Circuit Breaker is open, please check your resources!");
         modelManager.registerMLModel(registerModelInput, mlTask);
         verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
@@ -452,21 +460,30 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
     }
 
-    public void testRegisterMLRemoteModel_WhenMemoryCBOpen_ThenFail() {
+    public void testRegisterMLRemoteModel_SkipMemoryCBOpen() {
         ActionListener<MLRegisterModelResponse> listener = mock(ActionListener.class);
-        MemoryCircuitBreaker memCB = new MemoryCircuitBreaker(mock(JvmService.class));
-        String memCBIsOpenMessage = memCB.getName() + " is open, please check your resources!";
-        when(mlCircuitBreakerService.checkOpenCB()).thenThrow(new MLLimitExceededException(memCBIsOpenMessage));
-
+        doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
+        when(mlCircuitBreakerService.checkOpenCB())
+            .thenThrow(
+                new CircuitBreakingException(
+                    "Memory Circuit Breaker is open, please check your resources!",
+                    CircuitBreaker.Durability.TRANSIENT
+                )
+            );
+        when(threadPool.executor(REGISTER_THREAD_POOL)).thenReturn(taskExecutorService);
+        when(modelHelper.isModelAllowed(any(), any())).thenReturn(true);
         MLRegisterModelInput pretrainedInput = mockRemoteModelInput(true);
         MLTask pretrainedTask = MLTask.builder().taskId("pretrained").modelId("pretrained").functionName(FunctionName.REMOTE).build();
+        mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> indexResponseActionListener = (ActionListener<IndexResponse>) invocation.getArguments()[1];
+            indexResponseActionListener.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(), any());
+        when(indexResponse.getId()).thenReturn("mockIndexId");
         modelManager.registerMLRemoteModel(pretrainedInput, pretrainedTask, listener);
-
-        ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(listener, times(1)).onFailure(argCaptor.capture());
-        Exception e = argCaptor.getValue();
-        assertTrue(e instanceof MLLimitExceededException);
-        assertEquals(memCBIsOpenMessage, e.getMessage());
+        assertEquals(pretrainedTask.getFunctionName(), FunctionName.REMOTE);
+        verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
     }
 
     public void testIndexRemoteModel() throws PrivilegedActionException {
@@ -1139,6 +1156,20 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         modelManager.registerModelMeta(mlUploadInput, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
+    }
+
+    public void testRegisterModelMeta_NoResponseToInitIndex() {
+        setupForModelMeta();
+        doAnswer(invocation -> {
+            ActionListener<Boolean> actionListener = invocation.getArgument(0);
+            actionListener.onResponse(false);
+            return null;
+        }).when(mlIndicesHandler).initModelIndexIfAbsent(any());
+        MLRegisterModelMetaInput mlUploadInput = prepareRequest();
+        modelManager.registerModelMeta(mlUploadInput, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("No response to create ML Model index", argumentCaptor.getValue().getMessage());
     }
 
     public void test_trackPredictDuration_sync() {

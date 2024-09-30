@@ -11,7 +11,10 @@ import static org.mockito.Mockito.*;
 import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLExceptionUtils.REMOTE_INFERENCE_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
+import static org.opensearch.ml.utils.TestHelper.getBatchRestRequest;
+import static org.opensearch.ml.utils.TestHelper.getBatchRestRequest_WrongActionType;
 import static org.opensearch.ml.utils.TestHelper.getKMeansRestRequest;
+import static org.opensearch.ml.utils.TestHelper.verifyParsedBatchMLInput;
 import static org.opensearch.ml.utils.TestHelper.verifyParsedKMeansMLInput;
 
 import java.io.IOException;
@@ -107,6 +110,15 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
         assertEquals("/_plugins/_ml/_predict/{algorithm}/{model_id}", route.getPath());
     }
 
+    public void testRoutes_Batch() {
+        List<RestHandler.Route> routes = restMLPredictionAction.routes();
+        assertNotNull(routes);
+        assertFalse(routes.isEmpty());
+        RestHandler.Route route = routes.get(2);
+        assertEquals(RestRequest.Method.POST, route.getMethod());
+        assertEquals("/_plugins/_ml/models/{model_id}/_batch_predict", route.getPath());
+    }
+
     public void testGetRequest() throws IOException {
         RestRequest request = getRestRequest_PredictModel();
         MLPredictionTaskRequest mlPredictionTaskRequest = restMLPredictionAction.getRequest("modelId", FunctionName.KMEANS.name(), request);
@@ -141,6 +153,36 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
         verify(client, times(1)).execute(eq(MLPredictionTaskAction.INSTANCE), argumentCaptor.capture(), any());
         MLInput mlInput = argumentCaptor.getValue().getMlInput();
         verifyParsedKMeansMLInput(mlInput);
+    }
+
+    public void testPrepareBatchRequest() throws Exception {
+        RestRequest request = getBatchRestRequest();
+        when(mlFeatureEnabledSetting.isOfflineBatchInferenceEnabled()).thenReturn(true);
+        restMLPredictionAction.handleRequest(request, channel, client);
+        ArgumentCaptor<MLPredictionTaskRequest> argumentCaptor = ArgumentCaptor.forClass(MLPredictionTaskRequest.class);
+        verify(client, times(1)).execute(eq(MLPredictionTaskAction.INSTANCE), argumentCaptor.capture(), any());
+        MLInput mlInput = argumentCaptor.getValue().getMlInput();
+        verifyParsedBatchMLInput(mlInput);
+    }
+
+    public void testPrepareBatchRequest_FeatureFlagDisabled() throws Exception {
+        thrown.expect(IllegalStateException.class);
+        thrown
+            .expectMessage(
+                "Offline Batch Inference is currently disabled. To enable it, update the setting \"plugins.ml_commons.offline_batch_inference_enabled\" to true."
+            );
+
+        RestRequest request = getBatchRestRequest();
+        when(mlFeatureEnabledSetting.isOfflineBatchInferenceEnabled()).thenReturn(false);
+        restMLPredictionAction.handleRequest(request, channel, client);
+    }
+
+    public void testPrepareBatchRequest_WrongActionType() throws Exception {
+        thrown.expect(IllegalArgumentException.class);
+        thrown.expectMessage("Wrong Action Type");
+
+        RestRequest request = getBatchRestRequest_WrongActionType();
+        restMLPredictionAction.getRequest("model id", "remote", request);
     }
 
     @Ignore

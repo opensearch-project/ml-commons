@@ -5,18 +5,8 @@
 
 package org.opensearch.ml.common.agent;
 
-import lombok.Builder;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import org.opensearch.Version;
-import org.opensearch.core.common.io.stream.StreamInput;
-import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.core.common.io.stream.Writeable;
-import org.opensearch.core.xcontent.ToXContentObject;
-import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.MLAgentType;
-import org.opensearch.ml.common.MLModel;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -28,8 +18,20 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
+import org.opensearch.Version;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.common.io.stream.Writeable;
+import org.opensearch.core.xcontent.ToXContentObject;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.CommonValue;
+import org.opensearch.ml.common.MLAgentType;
+import org.opensearch.ml.common.MLModel;
+
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
 
 @EqualsAndHashCode
 @Getter
@@ -47,7 +49,7 @@ public class MLAgent implements ToXContentObject, Writeable {
     public static final String APP_TYPE_FIELD = "app_type";
     public static final String IS_HIDDEN_FIELD = "is_hidden";
 
-    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_HIDDEN_AGENT = Version.V_2_13_0;
+    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_HIDDEN_AGENT = CommonValue.VERSION_2_13_0;
 
     private String name;
     private String type;
@@ -63,17 +65,19 @@ public class MLAgent implements ToXContentObject, Writeable {
     private Boolean isHidden;
 
     @Builder(toBuilder = true)
-    public MLAgent(String name,
-                   String type,
-                   String description,
-                   LLMSpec llm,
-                   List<MLToolSpec> tools,
-                   Map<String, String> parameters,
-                   MLMemorySpec memory,
-                   Instant createdTime,
-                   Instant lastUpdateTime,
-                   String appType,
-                   Boolean isHidden) {
+    public MLAgent(
+        String name,
+        String type,
+        String description,
+        LLMSpec llm,
+        List<MLToolSpec> tools,
+        Map<String, String> parameters,
+        MLMemorySpec memory,
+        Instant createdTime,
+        Instant lastUpdateTime,
+        String appType,
+        Boolean isHidden
+    ) {
         this.name = name;
         this.type = type;
         this.description = description;
@@ -123,7 +127,7 @@ public class MLAgent implements ToXContentObject, Writeable {
         }
     }
 
-    public MLAgent(StreamInput input) throws IOException{
+    public MLAgent(StreamInput input) throws IOException {
         Version streamInputVersion = input.getVersion();
         name = input.readString();
         type = input.readString();
@@ -134,7 +138,7 @@ public class MLAgent implements ToXContentObject, Writeable {
         if (input.readBoolean()) {
             tools = new ArrayList<>();
             int size = input.readInt();
-            for (int i=0; i<size; i++) {
+            for (int i = 0; i < size; i++) {
                 tools.add(new MLToolSpec(input));
             }
         }
@@ -298,7 +302,8 @@ public class MLAgent implements ToXContentObject, Writeable {
                     appType = parser.text();
                     break;
                 case IS_HIDDEN_FIELD:
-                    if (parseHidden) isHidden = parser.booleanValue();
+                    if (parseHidden)
+                        isHidden = parser.booleanValue();
                     break;
                 default:
                     parser.skipChildren();
@@ -306,20 +311,22 @@ public class MLAgent implements ToXContentObject, Writeable {
             }
         }
 
-        return MLAgent.builder()
-                .name(name)
-                .type(type)
-                .description(description)
-                .llm(llm)
-                .tools(tools)
-                .parameters(parameters)
-                .memory(memory)
-                .createdTime(createdTime)
-                .lastUpdateTime(lastUpdateTime)
-                .appType(appType)
-                .isHidden(isHidden)
-                .build();
+        return MLAgent
+            .builder()
+            .name(name)
+            .type(type)
+            .description(description)
+            .llm(llm)
+            .tools(tools)
+            .parameters(parameters)
+            .memory(memory)
+            .createdTime(createdTime)
+            .lastUpdateTime(lastUpdateTime)
+            .appType(appType)
+            .isHidden(isHidden)
+            .build();
     }
+
     public static MLAgent fromStream(StreamInput in) throws IOException {
         MLAgent agent = new MLAgent(in);
         return agent;

@@ -163,7 +163,7 @@ public class QuestionAnsweringModelTest {
             .modelFormat(MLModelFormat.ONNX)
             .name("test_model_name")
             .modelId("test_model_id")
-            .algorithm(FunctionName.TEXT_SIMILARITY)
+            .algorithm(FunctionName.QUESTION_ANSWERING)
             .version("1.0.0")
             .modelState(MLModelState.TRAINED)
             .build();
@@ -171,7 +171,7 @@ public class QuestionAnsweringModelTest {
         params.put(MODEL_ZIP_FILE, modelZipFile);
 
         questionAnsweringModel.initModel(model, params, encryptor);
-        MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_SIMILARITY).inputDataset(inputDataSet).build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.QUESTION_ANSWERING).inputDataset(inputDataSet).build();
         ModelTensorOutput output = (ModelTensorOutput) questionAnsweringModel.predict(mlInput);
         List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
         assertEquals(1, mlModelOutputs.size());

@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.action.models;
 
+import static org.opensearch.action.support.WriteRequest.RefreshPolicy.IMMEDIATE;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_CONTROLLER_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
@@ -184,7 +185,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     @VisibleForTesting
     void deleteModelChunks(String modelId, Boolean isHidden, ActionListener<Boolean> actionListener) {
         DeleteByQueryRequest deleteModelsRequest = new DeleteByQueryRequest(ML_MODEL_INDEX);
-        deleteModelsRequest.setQuery(new TermsQueryBuilder(MODEL_ID_FIELD, modelId));
+        deleteModelsRequest.setQuery(new TermsQueryBuilder(MODEL_ID_FIELD, modelId)).setRefresh(true);
 
         client.execute(DeleteByQueryAction.INSTANCE, deleteModelsRequest, ActionListener.wrap(r -> {
             if ((r.getBulkFailures() == null || r.getBulkFailures().size() == 0)
@@ -287,7 +288,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
      * @param modelId model ID
      */
     private void deleteController(String modelId, Boolean isHidden, ActionListener<Boolean> actionListener) {
-        DeleteRequest deleteRequest = new DeleteRequest(ML_CONTROLLER_INDEX, modelId);
+        DeleteRequest deleteRequest = new DeleteRequest(ML_CONTROLLER_INDEX, modelId).setRefreshPolicy(IMMEDIATE);
         client.delete(deleteRequest, new ActionListener<>() {
             @Override
             public void onResponse(DeleteResponse deleteResponse) {

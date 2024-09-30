@@ -5,7 +5,11 @@
 
 package org.opensearch.ml.common.transport.agent;
 
-import lombok.Getter;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+
 import org.opensearch.core.action.ActionResponse;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
@@ -14,10 +18,7 @@ import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.UncheckedIOException;
+import lombok.Getter;
 
 @Getter
 public class MLRegisterAgentResponse extends ActionResponse implements ToXContentObject {
@@ -31,7 +32,7 @@ public class MLRegisterAgentResponse extends ActionResponse implements ToXConten
     }
 
     public MLRegisterAgentResponse(String agentId) {
-        this.agentId= agentId;
+        this.agentId = agentId;
     }
 
     @Override
@@ -52,8 +53,7 @@ public class MLRegisterAgentResponse extends ActionResponse implements ToXConten
             return (MLRegisterAgentResponse) actionResponse;
         }
 
-        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
-             OutputStreamStreamOutput osso = new OutputStreamStreamOutput(baos)) {
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream(); OutputStreamStreamOutput osso = new OutputStreamStreamOutput(baos)) {
             actionResponse.writeTo(osso);
             try (StreamInput input = new InputStreamStreamInput(new ByteArrayInputStream(baos.toByteArray()))) {
                 return new MLRegisterAgentResponse(input);

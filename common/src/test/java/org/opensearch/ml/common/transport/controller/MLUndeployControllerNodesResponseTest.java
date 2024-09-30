@@ -12,7 +12,6 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -44,31 +43,31 @@ public class MLUndeployControllerNodesResponseTest {
     public void setUp() throws Exception {
         clusterName = new ClusterName("clusterName");
         node1 = new DiscoveryNode(
-                "foo1",
-                "foo1",
-                new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
-                Collections.emptyMap(),
-                Collections.singleton(CLUSTER_MANAGER_ROLE),
-                Version.CURRENT);
+            "foo1",
+            "foo1",
+            new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
+            Collections.emptyMap(),
+            Collections.singleton(CLUSTER_MANAGER_ROLE),
+            Version.CURRENT
+        );
         node2 = new DiscoveryNode(
-                "foo2",
-                "foo2",
-                new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
-                Collections.emptyMap(),
-                Collections.singleton(CLUSTER_MANAGER_ROLE),
-                Version.CURRENT);
+            "foo2",
+            "foo2",
+            new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
+            Collections.emptyMap(),
+            Collections.singleton(CLUSTER_MANAGER_ROLE),
+            Version.CURRENT
+        );
     }
 
     @Test
     public void testSerializationDeserialization1() throws IOException {
         List<MLUndeployControllerNodeResponse> responseList = new ArrayList<>();
         List<FailedNodeException> failuresList = new ArrayList<>();
-        MLUndeployControllerNodesResponse response = new MLUndeployControllerNodesResponse(clusterName, responseList,
-                failuresList);
+        MLUndeployControllerNodesResponse response = new MLUndeployControllerNodesResponse(clusterName, responseList, failuresList);
         BytesStreamOutput output = new BytesStreamOutput();
         response.writeTo(output);
-        MLUndeployControllerNodesResponse newResponse = new MLUndeployControllerNodesResponse(
-                output.bytes().streamInput());
+        MLUndeployControllerNodesResponse newResponse = new MLUndeployControllerNodesResponse(output.bytes().streamInput());
         assertEquals(newResponse.getNodes().size(), response.getNodes().size());
     }
 
@@ -83,14 +82,11 @@ public class MLUndeployControllerNodesResponseTest {
         nodes.add(new MLUndeployControllerNodeResponse(node2, undeployControllerStatus2));
 
         List<FailedNodeException> failures = new ArrayList<>();
-        MLUndeployControllerNodesResponse response = new MLUndeployControllerNodesResponse(clusterName, nodes,
-                failures);
+        MLUndeployControllerNodesResponse response = new MLUndeployControllerNodesResponse(clusterName, nodes, failures);
         XContentBuilder builder = XContentFactory.jsonBuilder();
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = builder.toString();
-        assertEquals(
-                "{\"foo1\":{\"stats\":{\"modelId1\":\"response\"}},\"foo2\":{\"stats\":{\"modelId2\":\"response\"}}}",
-                jsonStr);
+        assertEquals("{\"foo1\":{\"stats\":{\"modelId1\":\"response\"}},\"foo2\":{\"stats\":{\"modelId2\":\"response\"}}}", jsonStr);
     }
 
     @Test
@@ -98,8 +94,7 @@ public class MLUndeployControllerNodesResponseTest {
         List<MLUndeployControllerNodeResponse> nodes = new ArrayList<>();
         nodes.add(new MLUndeployControllerNodeResponse(node1, null));
         List<FailedNodeException> failures = new ArrayList<>();
-        MLUndeployControllerNodesResponse response = new MLUndeployControllerNodesResponse(clusterName, nodes,
-                failures);
+        MLUndeployControllerNodesResponse response = new MLUndeployControllerNodesResponse(clusterName, nodes, failures);
         XContentBuilder builder = XContentFactory.jsonBuilder();
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = builder.toString();

@@ -22,6 +22,7 @@ import java.util.Set;
 import java.util.concurrent.Semaphore;
 import java.util.stream.Collectors;
 
+import org.opensearch.action.DocWriteRequest;
 import org.opensearch.action.bulk.BulkRequest;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.index.IndexRequest;
@@ -185,10 +186,13 @@ public class MLSyncUpCron implements Runnable {
                     return;
                 }
                 // refresh model status
-                mlIndicesHandler
-                    .initModelIndexIfAbsent(ActionListener.wrap(res -> { refreshModelState(modelWorkerNodes, deployingModels); }, e -> {
-                        log.error("Failed to init model index", e);
-                    }));
+                mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(res -> {
+                    if (!res) {
+                        log.error("No response to create ML model index");
+                        return;
+                    }
+                    refreshModelState(modelWorkerNodes, deployingModels);
+                }, e -> { log.error("Failed to init model index", e); }));
             }, ex -> { log.error("Failed to sync model routing", ex); }));
         }, e -> { log.error("Failed to sync model routing", e); }));
     }
@@ -210,10 +214,13 @@ public class MLSyncUpCron implements Runnable {
                 log.debug("Received failures in undeploying expired models", mlUndeployModelNodesResponse.failures());
             }
 
-            mlIndicesHandler
-                .initModelIndexIfAbsent(ActionListener.wrap(res -> { refreshModelState(modelWorkerNodes, deployingModels); }, e -> {
-                    log.error("Failed to init model index", e);
-                }));
+            mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(res -> {
+                if (!res) {
+                    log.error("No response to create ML model index");
+                    return;
+                }
+                refreshModelState(modelWorkerNodes, deployingModels);
+            }, e -> { log.error("Failed to init model index", e); }));
         }, e -> { log.error("Failed to undeploy models {}", expiredModels, e); }));
     }
 
@@ -223,6 +230,10 @@ public class MLSyncUpCron implements Runnable {
             return;
         }
         mlIndicesHandler.initMLConfigIndex(ActionListener.wrap(r -> {
+            if (!r) {
+                log.error("Failed to initialize or update ML Config index");
+                return;
+            }
             GetRequest getRequest = new GetRequest(ML_CONFIG_INDEX).id(MASTER_KEY);
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 client.get(getRequest, ActionListener.wrap(getResponse -> {
@@ -231,6 +242,7 @@ public class MLSyncUpCron implements Runnable {
                         final String masterKey = encryptor.generateMasterKey();
                         indexRequest.source(ImmutableMap.of(MASTER_KEY, masterKey, CREATE_TIME_FIELD, Instant.now().toEpochMilli()));
                         indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+                        indexRequest.opType(DocWriteRequest.OpType.CREATE);
                         client.index(indexRequest, ActionListener.wrap(indexResponse -> {
                             log.info("ML configuration initialized successfully");
                             encryptor.setMasterKey(masterKey);
@@ -426,6 +438,7 @@ public class MLSyncUpCron implements Runnable {
                 updateRequest.index(ML_MODEL_INDEX).id(modelId).doc(builder.build());
                 bulkUpdateRequest.add(updateRequest);
             }
+            bulkUpdateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
             log.info("Refresh model state: {}", newModelStates);
             client.bulk(bulkUpdateRequest, ActionListener.wrap(br -> {
                 updateModelStateSemaphore.release();

@@ -6,9 +6,10 @@
 //TODO: cleanup gradle config file, some overlap
 plugins {
     id 'java'
-    id 'com.github.johnrengelman.shadow'
+    id 'io.github.goooler.shadow' version "8.1.7"
     id 'jacoco'
     id "io.freefair.lombok"
+    id 'com.diffplug.spotless' version '6.25.0'
     id 'maven-publish'
     id 'signing'
 }
@@ -34,6 +35,7 @@ dependencies {
         exclude group: 'com.google.j2objc', module: 'j2objc-annotations'
         exclude group: 'com.google.guava', module: 'listenablefuture'
     }
+    compileOnly 'com.jayway.jsonpath:json-path:2.9.0'
 }
 
 lombok {
@@ -66,6 +68,15 @@ jacocoTestCoverageVerification {
     dependsOn jacocoTestReport
 }
 check.dependsOn jacocoTestCoverageVerification
+
+spotless {
+    java {
+        removeUnusedImports()
+        importOrder 'java', 'javax', 'org', 'com'
+
+        eclipse().configFile rootProject.file('.eclipseformat.xml')
+    }
+}
 
 shadowJar {
     destinationDirectory = file("${project.buildDir}/distributions")

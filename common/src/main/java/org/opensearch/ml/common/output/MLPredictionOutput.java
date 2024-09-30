@@ -5,10 +5,8 @@
 
 package org.opensearch.ml.common.output;
 
-import lombok.Builder;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.ToString;
+import java.io.IOException;
+
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -17,10 +15,13 @@ import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DataFrameType;
 import org.opensearch.ml.common.dataframe.DefaultDataFrame;
 
-import java.io.IOException;
+import lombok.Builder;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.ToString;
 
 @Data
-@EqualsAndHashCode(callSuper=false)
+@EqualsAndHashCode(callSuper = false)
 @MLAlgoOutput(MLOutputType.PREDICTION)
 public class MLPredictionOutput extends MLOutput {
 

@@ -5,6 +5,18 @@
 
 package org.opensearch.ml.common.connector;
 
+import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.function.Function;
+
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
@@ -22,17 +34,6 @@ import org.opensearch.ml.common.TestHelper;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.search.SearchModule;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Optional;
-import java.util.function.Function;
-
 public class HttpConnectorTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -40,21 +41,22 @@ public class HttpConnectorTest {
     Function<String, String> encryptFunction;
     Function<String, String> decryptFunction;
 
-    String TEST_CONNECTOR_JSON_STRING = "{\"name\":\"test_connector_name\",\"version\":\"1\"," +
-            "\"description\":\"this is a test connector\",\"protocol\":\"http\"," +
-            "\"parameters\":{\"input\":\"test input value\"},\"credential\":{\"key\":\"test_key_value\"}," +
-            "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://test.com\"," +
-            "\"headers\":{\"api_key\":\"${credential.key}\"}," +
-            "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\"," +
-            "\"pre_process_function\":\"connector.pre_process.openai.embedding\"," +
-            "\"post_process_function\":\"connector.post_process.openai.embedding\"}]," +
-            "\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\"," +
-            "\"client_config\":{\"max_connection\":30,\"connection_timeout\":30000,\"read_timeout\":30000}}";
+    String TEST_CONNECTOR_JSON_STRING = "{\"name\":\"test_connector_name\",\"version\":\"1\","
+        + "\"description\":\"this is a test connector\",\"protocol\":\"http\","
+        + "\"parameters\":{\"input\":\"test input value\"},\"credential\":{\"key\":\"test_key_value\"},"
+        + "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://test.com\","
+        + "\"headers\":{\"api_key\":\"${credential.key}\"},"
+        + "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\","
+        + "\"pre_process_function\":\"connector.pre_process.openai.embedding\","
+        + "\"post_process_function\":\"connector.post_process.openai.embedding\"}],"
+        + "\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\","
+        + "\"client_config\":{\"max_connection\":30,\"connection_timeout\":30000,\"read_timeout\":30000,"
+        + "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}}";
 
     @Before
     public void setUp() {
-        encryptFunction = s -> "encrypted: "+s.toLowerCase(Locale.ROOT);
-        decryptFunction = s -> "decrypted: "+s.toUpperCase(Locale.ROOT);
+        encryptFunction = s -> "encrypted: " + s.toLowerCase(Locale.ROOT);
+        decryptFunction = s -> "decrypted: " + s.toUpperCase(Locale.ROOT);
     }
 
     @Test
@@ -86,12 +88,16 @@ public class HttpConnectorTest {
         Assert.assertEquals(TEST_CONNECTOR_JSON_STRING, content);
     }
 
-
     @Test
     public void constructor_Parser() throws IOException {
 
-        XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
-                Collections.emptyList()).getNamedXContents()), null, TEST_CONNECTOR_JSON_STRING);
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                TEST_CONNECTOR_JSON_STRING
+            );
         parser.nextToken();
 
         HttpConnector connector = new HttpConnector("http", parser);
@@ -118,7 +124,7 @@ public class HttpConnectorTest {
     @Test
     public void decrypt() {
         HttpConnector connector = createHttpConnector();
-        connector.decrypt(decryptFunction);
+        connector.decrypt(PREDICT.name(), decryptFunction);
         Map<String, String> decryptedCredential = connector.getDecryptedCredential();
         Assert.assertEquals(1, decryptedCredential.size());
         Assert.assertEquals("decrypted: TEST_KEY_VALUE", decryptedCredential.get("key"));
@@ -147,42 +153,42 @@ public class HttpConnectorTest {
     }
 
     @Test
-    public void getPredictEndpoint() {
+    public void getActionEndpoint() {
         HttpConnector connector = createHttpConnector();
-        Assert.assertEquals("https://test.com", connector.getPredictEndpoint(null));
+        Assert.assertEquals("https://test.com", connector.getActionEndpoint(PREDICT.name(), null));
     }
 
     @Test
-    public void getPredictHttpMethod() {
+    public void getActionHttpMethod() {
         HttpConnector connector = createHttpConnector();
-        Assert.assertEquals("POST", connector.getPredictHttpMethod());
+        Assert.assertEquals("POST", connector.getActionHttpMethod(PREDICT.name()));
     }
 
     @Test
-    public void createPredictPayload_Invalid() {
+    public void createPayload_Invalid() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Some parameter placeholder not filled in payload: input");
         HttpConnector connector = createHttpConnector();
-        String predictPayload = connector.createPredictPayload(null);
+        String predictPayload = connector.createPayload(PREDICT.name(), null);
         connector.validatePayload(predictPayload);
     }
 
     @Test
-    public void createPredictPayload_InvalidJson() {
+    public void createPayload_InvalidJson() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Invalid payload: {\"input\": ${parameters.input} }");
         String requestBody = "{\"input\": ${parameters.input} }";
         HttpConnector connector = createHttpConnectorWithRequestBody(requestBody);
-        String predictPayload = connector.createPredictPayload(null);
+        String predictPayload = connector.createPayload(PREDICT.name(), null);
         connector.validatePayload(predictPayload);
     }
 
     @Test
-    public void createPredictPayload() {
+    public void createPayload() {
         HttpConnector connector = createHttpConnector();
         Map<String, String> parameters = new HashMap<>();
         parameters.put("input", "test input value");
-        String predictPayload = connector.createPredictPayload(parameters);
+        String predictPayload = connector.createPayload(PREDICT.name(), parameters);
         connector.validatePayload(predictPayload);
         Assert.assertEquals("{\"input\": \"test input value\"}", predictPayload);
     }
@@ -285,7 +291,15 @@ public class HttpConnectorTest {
         String preProcessFunction = MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT;
         String postProcessFunction = MLPostProcessFunction.OPENAI_EMBEDDING;
 
-        ConnectorAction action = new ConnectorAction(actionType, method, url, headers, requestBody, preProcessFunction, postProcessFunction);
+        ConnectorAction action = new ConnectorAction(
+            actionType,
+            method,
+            url,
+            headers,
+            requestBody,
+            preProcessFunction,
+            postProcessFunction
+        );
 
         Map<String, String> parameters = new HashMap<>();
         parameters.put("input", "test input value");
@@ -293,20 +307,21 @@ public class HttpConnectorTest {
         Map<String, String> credential = new HashMap<>();
         credential.put("key", "test_key_value");
 
-        ConnectorClientConfig httpClientConfig = new ConnectorClientConfig(30, 30000, 30000);
+        ConnectorClientConfig httpClientConfig = new ConnectorClientConfig(30, 30000, 30000, 10, 10, -1, RetryBackoffPolicy.CONSTANT);
 
-        HttpConnector connector = HttpConnector.builder()
-                .name("test_connector_name")
-                .description("this is a test connector")
-                .version("1")
-                .protocol("http")
-                .parameters(parameters)
-                .credential(credential)
-                .actions(Arrays.asList(action))
-                .backendRoles(Arrays.asList("role1", "role2"))
-                .accessMode(AccessMode.PUBLIC)
-                .connectorClientConfig(httpClientConfig)
-                .build();
+        HttpConnector connector = HttpConnector
+            .builder()
+            .name("test_connector_name")
+            .description("this is a test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(parameters)
+            .credential(credential)
+            .actions(Arrays.asList(action))
+            .backendRoles(Arrays.asList("role1", "role2"))
+            .accessMode(AccessMode.PUBLIC)
+            .connectorClientConfig(httpClientConfig)
+            .build();
         return connector;
     }
 

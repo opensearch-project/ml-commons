@@ -19,7 +19,7 @@ plugins {
     id 'java'
     id 'jacoco'
     id "io.freefair.lombok"
-    id 'com.diffplug.spotless' version '6.23.0'
+    id 'com.diffplug.spotless' version '6.25.0'
 }
 
 repositories {
@@ -35,7 +35,7 @@ dependencies {
     implementation project(':opensearch-ml-memory')
     implementation group: 'org.opensearch', name: 'common-utils', version: "${common_utils_version}"
     // https://mvnrepository.com/artifact/org.apache.httpcomponents.core5/httpcore5
-    implementation group: 'org.apache.httpcomponents.core5', name: 'httpcore5', version: '5.2.2'
+    implementation group: 'org.apache.httpcomponents.core5', name: 'httpcore5', version: "${versions.httpcore5}"
     implementation group: 'com.google.guava', name: 'guava', version: '32.1.2-jre'
     implementation group: 'org.json', name: 'json', version: '20231013'
     implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'

@@ -19,6 +19,7 @@ import org.opensearch.action.ActionRequest;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
+import org.opensearch.action.support.WriteRequest;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
@@ -186,6 +187,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
 
     private void updateModelGroup(String modelGroupId, Map<String, Object> source, ActionListener<MLUpdateModelGroupResponse> listener) {
         UpdateRequest updateModelGroupRequest = new UpdateRequest();
+        updateModelGroupRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
         updateModelGroupRequest.index(ML_MODEL_GROUP_INDEX).id(modelGroupId).doc(source);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<MLUpdateModelGroupResponse> wrappedListener = ActionListener.runBefore(listener, () -> context.restore());

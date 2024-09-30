@@ -5,27 +5,30 @@
 
 package org.opensearch.ml.common;
 
-import lombok.Builder;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.Setter;
-import org.opensearch.core.common.io.stream.StreamInput;
-import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.core.common.io.stream.Writeable;
-import org.opensearch.commons.authuser.User;
-import org.opensearch.core.xcontent.ToXContentObject;
-import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.dataset.MLInputDataType;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.USER;
 
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.USER;
+import org.opensearch.Version;
+import org.opensearch.commons.authuser.User;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.common.io.stream.Writeable;
+import org.opensearch.core.xcontent.ToXContentObject;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.dataset.MLInputDataType;
+
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.Setter;
 
 @Getter
 @EqualsAndHashCode
@@ -44,6 +47,8 @@ public class MLTask implements ToXContentObject, Writeable {
     public static final String LAST_UPDATE_TIME_FIELD = "last_update_time";
     public static final String ERROR_FIELD = "error";
     public static final String IS_ASYNC_TASK_FIELD = "is_async";
+    public static final String REMOTE_JOB_FIELD = "remote_job";
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_BATCH_PREDICTION_JOB = CommonValue.VERSION_2_17_0;
 
     @Setter
     private String taskId;
@@ -65,6 +70,8 @@ public class MLTask implements ToXContentObject, Writeable {
     private String error;
     private User user; // TODO: support document level access control later
     private boolean async;
+    @Setter
+    private Map<String, Object> remoteJob;
 
     @Builder(toBuilder = true)
     public MLTask(
@@ -81,7 +88,8 @@ public class MLTask implements ToXContentObject, Writeable {
         Instant lastUpdateTime,
         String error,
         User user,
-        boolean async
+        boolean async,
+        Map<String, Object> remoteJob
     ) {
         this.taskId = taskId;
         this.modelId = modelId;
@@ -97,9 +105,11 @@ public class MLTask implements ToXContentObject, Writeable {
         this.error = error;
         this.user = user;
         this.async = async;
+        this.remoteJob = remoteJob;
     }
 
     public MLTask(StreamInput input) throws IOException {
+        Version streamInputVersion = input.getVersion();
         this.taskId = input.readOptionalString();
         this.modelId = input.readOptionalString();
         this.taskType = input.readEnum(MLTaskType.class);
@@ -122,10 +132,16 @@ public class MLTask implements ToXContentObject, Writeable {
             this.user = null;
         }
         this.async = input.readBoolean();
+        if (streamInputVersion.onOrAfter(MLTask.MINIMAL_SUPPORTED_VERSION_FOR_BATCH_PREDICTION_JOB)) {
+            if (input.readBoolean()) {
+                this.remoteJob = input.readMap(s -> s.readString(), s -> s.readGenericValue());
+            }
+        }
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
+        Version streamOutputVersion = out.getVersion();
         out.writeOptionalString(taskId);
         out.writeOptionalString(modelId);
         out.writeEnum(taskType);
@@ -149,6 +165,14 @@ public class MLTask implements ToXContentObject, Writeable {
             out.writeBoolean(false);
         }
         out.writeBoolean(async);
+        if (streamOutputVersion.onOrAfter(MLTask.MINIMAL_SUPPORTED_VERSION_FOR_BATCH_PREDICTION_JOB)) {
+            if (remoteJob != null) {
+                out.writeBoolean(true);
+                out.writeMap(remoteJob, StreamOutput::writeString, StreamOutput::writeGenericValue);
+            } else {
+                out.writeBoolean(false);
+            }
+        }
     }
 
     @Override
@@ -194,6 +218,9 @@ public class MLTask implements ToXContentObject, Writeable {
             builder.field(USER, user);
         }
         builder.field(IS_ASYNC_TASK_FIELD, async);
+        if (remoteJob != null) {
+            builder.field(REMOTE_JOB_FIELD, remoteJob);
+        }
         return builder.endObject();
     }
 
@@ -217,6 +244,7 @@ public class MLTask implements ToXContentObject, Writeable {
         String error = null;
         User user = null;
         boolean async = false;
+        Map<String, Object> remoteJob = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -274,26 +302,31 @@ public class MLTask implements ToXContentObject, Writeable {
                 case IS_ASYNC_TASK_FIELD:
                     async = parser.booleanValue();
                     break;
+                case REMOTE_JOB_FIELD:
+                    remoteJob = parser.map();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
-        return MLTask.builder()
-                .taskId(taskId)
-                .modelId(modelId)
-                .taskType(taskType)
-                .functionName(functionName)
-                .state(state)
-                .inputType(inputType)
-                .progress(progress)
-                .outputIndex(outputIndex)
-                .workerNodes(workerNodes)
-                .createTime(createTime)
-                .lastUpdateTime(lastUpdateTime)
-                .error(error)
-                .user(user)
-                .async(async)
-                .build();
+        return MLTask
+            .builder()
+            .taskId(taskId)
+            .modelId(modelId)
+            .taskType(taskType)
+            .functionName(functionName)
+            .state(state)
+            .inputType(inputType)
+            .progress(progress)
+            .outputIndex(outputIndex)
+            .workerNodes(workerNodes)
+            .createTime(createTime)
+            .lastUpdateTime(lastUpdateTime)
+            .error(error)
+            .user(user)
+            .async(async)
+            .remoteJob(remoteJob)
+            .build();
     }
 }

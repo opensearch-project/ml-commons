@@ -11,6 +11,8 @@ public class MLAgentGetAction extends ActionType<MLAgentGetResponse> {
     public static final MLAgentGetAction INSTANCE = new MLAgentGetAction();
     public static final String NAME = "cluster:admin/opensearch/ml/agents/get";
 
-    private MLAgentGetAction() { super(NAME, MLAgentGetResponse::new);}
+    private MLAgentGetAction() {
+        super(NAME, MLAgentGetResponse::new);
+    }
 
 }

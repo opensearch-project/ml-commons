@@ -36,8 +36,7 @@ public class MLCreateControllerResponseTest {
     public void writeToSuccess() throws IOException {
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         response.writeTo(bytesStreamOutput);
-        MLCreateControllerResponse newResponse = new MLCreateControllerResponse(
-                bytesStreamOutput.bytes().streamInput());
+        MLCreateControllerResponse newResponse = new MLCreateControllerResponse(bytesStreamOutput.bytes().streamInput());
         assertEquals(response.getModelId(), newResponse.getModelId());
         assertEquals(response.getStatus(), newResponse.getStatus());
     }
@@ -68,8 +67,7 @@ public class MLCreateControllerResponseTest {
                 response.writeTo(out);
             }
         };
-        MLCreateControllerResponse responseFromActionResponse = MLCreateControllerResponse
-                .fromActionResponse(actionResponse);
+        MLCreateControllerResponse responseFromActionResponse = MLCreateControllerResponse.fromActionResponse(actionResponse);
         assertNotSame(response, responseFromActionResponse);
         assertEquals(response.getModelId(), responseFromActionResponse.getModelId());
     }

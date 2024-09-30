@@ -59,6 +59,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.opensearch.client.Request;
 import org.opensearch.client.Response;
+import org.opensearch.client.ResponseException;
 import org.opensearch.client.RestClient;
 import org.opensearch.client.RestClientBuilder;
 import org.opensearch.common.io.PathUtils;
@@ -103,6 +104,9 @@ import com.google.common.collect.ImmutableMap;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 
+import lombok.extern.log4j.Log4j2;
+
+@Log4j2
 public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
     protected Gson gson = new Gson();
     public static long CUSTOM_MODEL_TIMEOUT = 20_000; // 20 seconds
@@ -177,7 +181,9 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
 
         String jsonEntity = "{\n"
             + "  \"persistent\" : {\n"
-            + "    \"plugins.ml_commons.native_memory_threshold\" : 100 \n"
+            + "    \"plugins.ml_commons.jvm_heap_memory_threshold\" : 100, \n"
+            + "    \"plugins.ml_commons.native_memory_threshold\" : 100, \n"
+            + "    \"plugins.ml_commons.disk_free_space_threshold\" : 0 \n"
             + "  }\n"
             + "}";
         response = TestHelper
@@ -911,6 +917,19 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         return result;
     }
 
+    public Map predictTextEmbeddingModel(String modelId, MLInput input) throws IOException {
+        String requestBody = TestHelper.toJsonString(input);
+        Response response = null;
+        try {
+            response = TestHelper
+                .makeRequest(client(), "POST", "/_plugins/_ml/_predict/TEXT_EMBEDDING/" + modelId, null, requestBody, null);
+        } catch (ResponseException e) {
+            log.error(e.getMessage(), e);
+            response = e.getResponse();
+        }
+        return parseResponseToMap(response);
+    }
+
     public Consumer<Map<String, Object>> verifyTextEmbeddingModelDeployed() {
         return (modelProfile) -> {
             if (modelProfile.containsKey("model_state")) {
@@ -959,5 +978,48 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
             return taskDone.get();
         }, CUSTOM_MODEL_TIMEOUT, TimeUnit.SECONDS);
         assertTrue(taskDone.get());
+    }
+
+    public String registerConnector(String createConnectorInput) throws IOException, InterruptedException {
+        Response response;
+        try {
+            response = RestMLRemoteInferenceIT.createConnector(createConnectorInput);
+        } catch (Throwable throwable) {
+            // Add retry for `The ML encryption master key has not been initialized yet. Please retry after waiting for 10 seconds.`
+            TimeUnit.SECONDS.sleep(10);
+            response = RestMLRemoteInferenceIT.createConnector(createConnectorInput);
+        }
+        Map responseMap = parseResponseToMap(response);
+        String connectorId = (String) responseMap.get("connector_id");
+        return connectorId;
+
+    }
+
+    public String registerRemoteModel(String createConnectorInput, String modelName, boolean deploy) throws IOException,
+        InterruptedException {
+        Response response = RestMLRemoteInferenceIT.createConnector(createConnectorInput);
+        Map responseMap = parseResponseToMap(response);
+        String connectorId = (String) responseMap.get("connector_id");
+        response = RestMLRemoteInferenceIT.registerRemoteModel(modelName, modelName, connectorId);
+        responseMap = parseResponseToMap(response);
+        String taskId = (String) responseMap.get("task_id");
+        waitForTask(taskId, MLTaskState.COMPLETED);
+        response = RestMLRemoteInferenceIT.getTask(taskId);
+        responseMap = parseResponseToMap(response);
+        String modelId = (String) responseMap.get("model_id");
+        if (deploy) {
+            response = RestMLRemoteInferenceIT.deployRemoteModel(modelId);
+            responseMap = parseResponseToMap(response);
+            taskId = (String) responseMap.get("task_id");
+            waitForTask(taskId, MLTaskState.COMPLETED);
+        }
+        return modelId;
+    }
+
+    public Map searchWithPipeline(RestClient client, String indexName, String pipelineName, String query) throws IOException {
+        String formattedQuery = String.format(Locale.ROOT, query);
+        Response response = TestHelper
+            .makeRequest(client, "GET", "/" + indexName + "/" + "_search?search_pipeline=" + pipelineName, null, formattedQuery, null);
+        return parseResponseToMap(response);
     }
 }

@@ -5,6 +5,9 @@
 
 package org.opensearch.ml.common.transport.controller;
 
+import java.io.IOException;
+import java.util.List;
+
 import org.opensearch.action.FailedNodeException;
 import org.opensearch.action.support.nodes.BaseNodesResponse;
 import org.opensearch.cluster.ClusterName;
@@ -15,19 +18,17 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 
-import java.io.IOException;
-import java.util.List;
-
-public class MLUndeployControllerNodesResponse extends BaseNodesResponse<MLUndeployControllerNodeResponse>
-        implements ToXContentObject {
+public class MLUndeployControllerNodesResponse extends BaseNodesResponse<MLUndeployControllerNodeResponse> implements ToXContentObject {
 
     public MLUndeployControllerNodesResponse(StreamInput in) throws IOException {
-        super(new ClusterName(in), in.readList(MLUndeployControllerNodeResponse::readStats),
-                in.readList(FailedNodeException::new));
+        super(new ClusterName(in), in.readList(MLUndeployControllerNodeResponse::readStats), in.readList(FailedNodeException::new));
     }
 
-    public MLUndeployControllerNodesResponse(ClusterName clusterName, List<MLUndeployControllerNodeResponse> nodes,
-            List<FailedNodeException> failures) {
+    public MLUndeployControllerNodesResponse(
+        ClusterName clusterName,
+        List<MLUndeployControllerNodeResponse> nodes,
+        List<FailedNodeException> failures
+    ) {
         super(clusterName, nodes, failures);
     }
 

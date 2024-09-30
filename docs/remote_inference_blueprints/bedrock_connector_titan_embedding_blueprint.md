@@ -19,6 +19,7 @@ PUT /_cluster/settings
 
 If you are using self-managed Opensearch, you should supply AWS credentials:
 
+If you are using Titan Text Embedding V2, change "model" to `amazon.titan-embed-text-v2:0`
 ```json
 POST /_plugins/_ml/connectors/_create
 {
@@ -28,7 +29,8 @@ POST /_plugins/_ml/connectors/_create
   "protocol": "aws_sigv4",
   "parameters": {
     "region": "<PLEASE ADD YOUR AWS REGION HERE>",
-    "service_name": "bedrock"
+    "service_name": "bedrock",
+    "model": "amazon.titan-embed-text-v1"
   },
   "credential": {
     "access_key": "<PLEASE ADD YOUR AWS ACCESS KEY HERE>",
@@ -39,14 +41,14 @@ POST /_plugins/_ml/connectors/_create
     {
       "action_type": "predict",
       "method": "POST",
-      "url": "https://bedrock-runtime.us-east-1.amazonaws.com/model/amazon.titan-embed-text-v1/invoke",
+      "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/invoke",
       "headers": {
         "content-type": "application/json",
         "x-amz-content-sha256": "required"
       },
       "request_body": "{ \"inputText\": \"${parameters.inputText}\" }",
-      "pre_process_function": "\n    StringBuilder builder = new StringBuilder();\n    builder.append(\"\\\"\");\n    String first = params.text_docs[0];\n    builder.append(first);\n    builder.append(\"\\\"\");\n    def parameters = \"{\" +\"\\\"inputText\\\":\" + builder + \"}\";\n    return  \"{\" +\"\\\"parameters\\\":\" + parameters + \"}\";",
-      "post_process_function": "\n      def name = \"sentence_embedding\";\n      def dataType = \"FLOAT32\";\n      if (params.embedding == null || params.embedding.length == 0) {\n        return params.message;\n      }\n      def shape = [params.embedding.length];\n      def json = \"{\" +\n                 \"\\\"name\\\":\\\"\" + name + \"\\\",\" +\n                 \"\\\"data_type\\\":\\\"\" + dataType + \"\\\",\" +\n                 \"\\\"shape\\\":\" + shape + \",\" +\n                 \"\\\"data\\\":\" + params.embedding +\n                 \"}\";\n      return json;\n    "
+      "pre_process_function": "connector.pre_process.bedrock.embedding",
+      "post_process_function": "connector.post_process.bedrock.embedding"
     }
   ]
 }
@@ -64,7 +66,8 @@ POST /_plugins/_ml/connectors/_create
   "protocol": "aws_sigv4",
   "parameters": {
     "region": "<PLEASE ADD YOUR AWS REGION HERE>",
-    "service_name": "bedrock"
+    "service_name": "bedrock",
+    "model": "amazon.titan-embed-text-v1"
   },
   "credential": {
     "roleArn": "<PLEASE ADD YOUR AWS ROLE ARN HERE>"
@@ -73,7 +76,43 @@ POST /_plugins/_ml/connectors/_create
     {
       "action_type": "predict",
       "method": "POST",
-      "url": "https://bedrock-runtime.us-east-1.amazonaws.com/model/amazon.titan-embed-text-v1/invoke",
+      "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/invoke",
+      "headers": {
+        "content-type": "application/json",
+        "x-amz-content-sha256": "required"
+      },
+      "request_body": "{ \"inputText\": \"${parameters.inputText}\" }",
+      "pre_process_function": "connector.pre_process.bedrock.embedding",
+      "post_process_function": "connector.post_process.bedrock.embedding"
+    }
+  ]
+}
+```
+
+As of version 2.12 of the OpenSearch Service, we support the connector.pre_process.bedrock.embedding and connector.post_process.bedrock.embedding embedding functions.
+However, If you are using AWS OpenSearch Service version 2.11, there are no built-in functions for pre_process_function and post_process_function.
+So, you need to add the script as shown below.
+
+```json
+POST /_plugins/_ml/connectors/_create
+{
+  "name": "Amazon Bedrock Connector: embedding",
+  "description": "The connector to bedrock Titan embedding model",
+  "version": 1,
+  "protocol": "aws_sigv4",
+  "parameters": {
+    "region": "<PLEASE ADD YOUR AWS REGION HERE>",
+    "service_name": "bedrock",
+    "model": "amazon.titan-embed-text-v1"
+  },
+  "credential": {
+    "roleArn": "<PLEASE ADD YOUR AWS ROLE ARN HERE>"
+  },
+  "actions": [
+    {
+      "action_type": "predict",
+      "method": "POST",
+      "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/invoke",
       "headers": {
         "content-type": "application/json",
         "x-amz-content-sha256": "required"
@@ -151,7 +190,7 @@ POST /_plugins/_ml/models/sKR9PIsBQRofe4CSlUov/_predict
 }
 ```
 
-Sample response:
+Sample response of Titan Text Embedding V1:
 ```json
 {
   "inference_results": [
@@ -167,6 +206,32 @@ Sample response:
             0.41992188,
             -0.7265625,
             -0.080078125,
+            ...
+          ]
+        }
+      ],
+      "status_code": 200
+    }
+  ]
+}
+```
+
+Sample response of Titan Text Embedding V2:
+```json
+{
+  "inference_results": [
+    {
+      "output": [
+        {
+          "name": "sentence_embedding",
+          "data_type": "FLOAT32",
+          "shape": [
+            1024
+          ],
+          "data": [
+            -0.041385926,
+            0.08503958,
+            0.0026220535,
             ...
           ]
         }

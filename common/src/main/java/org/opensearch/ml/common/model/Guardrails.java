@@ -5,18 +5,21 @@
 
 package org.opensearch.ml.common.model;
 
-import lombok.Builder;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+
+import java.io.IOException;
+import java.util.Map;
+import java.util.Set;
+
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 
-import java.io.IOException;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
 
 @EqualsAndHashCode
 @Getter
@@ -24,6 +27,7 @@ public class Guardrails implements ToXContentObject {
     public static final String TYPE_FIELD = "type";
     public static final String INPUT_GUARDRAIL_FIELD = "input_guardrail";
     public static final String OUTPUT_GUARDRAIL_FIELD = "output_guardrail";
+    public static final Set<String> types = Set.of("local_regex", "model");
 
     private String type;
     private Guardrail inputGuardrail;
@@ -39,10 +43,26 @@ public class Guardrails implements ToXContentObject {
     public Guardrails(StreamInput input) throws IOException {
         type = input.readString();
         if (input.readBoolean()) {
-            inputGuardrail = new Guardrail(input);
+            switch (type) {
+                case "local_regex":
+                    inputGuardrail = new LocalRegexGuardrail(input);
+                    break;
+                case "model":
+                    break;
+                default:
+                    throw new IllegalArgumentException(String.format("Unsupported guardrails type: %s", type));
+            }
         }
         if (input.readBoolean()) {
-            outputGuardrail = new Guardrail(input);
+            switch (type) {
+                case "local_regex":
+                    outputGuardrail = new LocalRegexGuardrail(input);
+                    break;
+                case "model":
+                    break;
+                default:
+                    throw new IllegalArgumentException(String.format("Unsupported guardrails type: %s", type));
+            }
         }
     }
 
@@ -80,8 +100,8 @@ public class Guardrails implements ToXContentObject {
 
     public static Guardrails parse(XContentParser parser) throws IOException {
         String type = null;
-        Guardrail inputGuardrail = null;
-        Guardrail outputGuardrail = null;
+        Map<String, Object> inputGuardrailMap = null;
+        Map<String, Object> outputGuardrailMap = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -93,20 +113,50 @@ public class Guardrails implements ToXContentObject {
                     type = parser.text();
                     break;
                 case INPUT_GUARDRAIL_FIELD:
-                    inputGuardrail = Guardrail.parse(parser);
+                    inputGuardrailMap = parser.map();
                     break;
                 case OUTPUT_GUARDRAIL_FIELD:
-                    outputGuardrail = Guardrail.parse(parser);
+                    outputGuardrailMap = parser.map();
                     break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
-        return Guardrails.builder()
-                .type(type)
-                .inputGuardrail(inputGuardrail)
-                .outputGuardrail(outputGuardrail)
-                .build();
+        if (type == null) {
+            type = "local_regex";
+        }
+        if (!validateType(type)) {
+            throw new IllegalArgumentException("The type of guardrails is required, can not be null.");
+        }
+
+        return Guardrails
+            .builder()
+            .type(type)
+            .inputGuardrail(createGuardrail(type, inputGuardrailMap))
+            .outputGuardrail(createGuardrail(type, outputGuardrailMap))
+            .build();
+    }
+
+    private static Boolean validateType(String type) {
+        if (types.contains(type)) {
+            return true;
+        }
+        return false;
+    }
+
+    private static Guardrail createGuardrail(String type, Map<String, Object> params) {
+        if (params == null || params.isEmpty()) {
+            return null;
+        }
+
+        switch (type) {
+            case "local_regex":
+                return new LocalRegexGuardrail(params);
+            case "model":
+                return new ModelGuardrail(params);
+            default:
+                throw new IllegalArgumentException(String.format("Unsupported guardrails type: %s", type));
+        }
     }
 }

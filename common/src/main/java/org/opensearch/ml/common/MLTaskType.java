@@ -15,5 +15,7 @@ public enum MLTaskType {
     @Deprecated
     LOAD_MODEL,
     REGISTER_MODEL,
-    DEPLOY_MODEL
+    DEPLOY_MODEL,
+    BATCH_INGEST,
+    BATCH_PREDICTION
 }

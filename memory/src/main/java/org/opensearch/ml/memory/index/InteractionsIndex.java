@@ -40,12 +40,14 @@ import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.support.WriteRequest;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
 import org.opensearch.client.Requests;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
@@ -90,7 +92,7 @@ public class InteractionsIndex {
             log.debug("No messages index found. Adding it");
             CreateIndexRequest request = Requests
                 .createIndexRequest(INTERACTIONS_INDEX_NAME)
-                .mapping(ConversationalIndexConstants.INTERACTIONS_MAPPINGS)
+                .mapping(ConversationalIndexConstants.INTERACTIONS_MAPPINGS, XContentType.JSON)
                 .settings(INDEX_SETTINGS);
             try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
                 ActionListener<Boolean> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
@@ -489,7 +491,7 @@ public class InteractionsIndex {
                     internalListener.onResponse(true);
                     return;
                 }
-                BulkRequest request = Requests.bulkRequest();
+                BulkRequest request = Requests.bulkRequest().setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                 for (Interaction interaction : interactions) {
                     DeleteRequest delRequest = Requests.deleteRequest(INTERACTIONS_INDEX_NAME).id(interaction.getId());
                     request.add(delRequest);

@@ -7,6 +7,8 @@ package org.opensearch.ml.action.register;
 
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
+import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
+import static org.opensearch.ml.common.utils.ModelInterfaceUtils.updateRegisterModelInputModelInterfaceFieldsByConnector;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
@@ -238,7 +240,14 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             if (Strings.isNotBlank(registerModelInput.getConnectorId())) {
                 connectorAccessControlHelper.validateConnectorAccess(client, registerModelInput.getConnectorId(), ActionListener.wrap(r -> {
                     if (Boolean.TRUE.equals(r)) {
-                        createModelGroup(registerModelInput, listener);
+                        if (registerModelInput.getModelInterface() == null) {
+                            mlModelManager.getConnector(registerModelInput.getConnectorId(), ActionListener.wrap(connector -> {
+                                updateRegisterModelInputModelInterfaceFieldsByConnector(registerModelInput, connector);
+                                createModelGroup(registerModelInput, listener);
+                            }, listener::onFailure));
+                        } else {
+                            createModelGroup(registerModelInput, listener);
+                        }
                     } else {
                         listener
                             .onFailure(
@@ -260,6 +269,9 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                 validateInternalConnector(registerModelInput);
                 ActionListener<MLCreateConnectorResponse> dryRunResultListener = ActionListener.wrap(res -> {
                     log.info("Dry run create connector successfully");
+                    if (registerModelInput.getModelInterface() == null) {
+                        updateRegisterModelInputModelInterfaceFieldsByConnector(registerModelInput);
+                    }
                     createModelGroup(registerModelInput, listener);
                 }, e -> {
                     log.error(e.getMessage(), e);
@@ -300,7 +312,9 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             log.error("You must provide connector content when creating a remote model without providing connector id!");
             throw new IllegalArgumentException("You must provide connector content when creating a remote model without connector id!");
         }
-        if (registerModelInput.getConnector().getPredictEndpoint(registerModelInput.getConnector().getParameters()) == null) {
+        if (registerModelInput
+            .getConnector()
+            .getActionEndpoint(PREDICT.name(), registerModelInput.getConnector().getParameters()) == null) {
             log.error("Connector endpoint is required when creating a remote model without connector id!");
             throw new IllegalArgumentException("Connector endpoint is required when creating a remote model without connector id!");
         }

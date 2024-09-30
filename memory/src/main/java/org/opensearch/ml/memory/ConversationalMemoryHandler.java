@@ -69,6 +69,20 @@ public interface ConversationalMemoryHandler {
     public void createConversation(String name, String applicationType, ActionListener<String> listener);
 
     /**
+     * Create a new conversation
+     * @param name the name of the new conversation
+     * @param applicationType the application that creates this conversation
+     * @param additionalInfos additional information associated with this conversation
+     * @param listener listener to wait for this op to finish, gets unique id of new conversation
+     */
+    public void createConversation(
+        String name,
+        String applicationType,
+        Map<String, String> additionalInfos,
+        ActionListener<String> listener
+    );
+
+    /**
      * Adds an interaction to the conversation indicated, updating the conversational metadata
      * @param conversationId the conversation to add the interaction to
      * @param input the human input for the interaction

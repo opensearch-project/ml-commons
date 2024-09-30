@@ -4,6 +4,14 @@
  */
 package org.opensearch.ml.common.transport.tools;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotSame;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.util.ArrayList;
+import java.util.List;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.action.ActionRequest;
@@ -12,35 +20,25 @@ import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.ToolMetadata;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.util.ArrayList;
-import java.util.List;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotSame;
-
 public class MLToolGetRequestTests {
     private List<ToolMetadata> toolMetadataList;
 
     @Before
     public void setUp() {
         toolMetadataList = new ArrayList<>();
-        ToolMetadata wikipediaTool = ToolMetadata.builder()
-                .name("MathTool")
-                .description("Use this tool to search general knowledge on wikipedia.")
-                .type("MathTool")
-                .version("test")
-                .build();
+        ToolMetadata wikipediaTool = ToolMetadata
+            .builder()
+            .name("MathTool")
+            .description("Use this tool to search general knowledge on wikipedia.")
+            .type("MathTool")
+            .version("test")
+            .build();
         toolMetadataList.add(wikipediaTool);
     }
 
     @Test
     public void writeTo_success() throws IOException {
-        MLToolGetRequest mlToolGetRequest = MLToolGetRequest.builder()
-                .toolName("MathTool")
-                .toolMetadataList(toolMetadataList)
-                .build();
+        MLToolGetRequest mlToolGetRequest = MLToolGetRequest.builder().toolName("MathTool").toolMetadataList(toolMetadataList).build();
 
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         mlToolGetRequest.writeTo(bytesStreamOutput);
@@ -51,10 +49,7 @@ public class MLToolGetRequestTests {
 
     @Test
     public void fromActionRequest_success() {
-        MLToolGetRequest mlToolGetRequest = MLToolGetRequest.builder()
-                .toolName("MathTool")
-                .toolMetadataList(toolMetadataList)
-                .build();
+        MLToolGetRequest mlToolGetRequest = MLToolGetRequest.builder().toolName("MathTool").toolMetadataList(toolMetadataList).build();
         ActionRequest actionRequest = new ActionRequest() {
             @Override
             public ActionRequestValidationException validate() {

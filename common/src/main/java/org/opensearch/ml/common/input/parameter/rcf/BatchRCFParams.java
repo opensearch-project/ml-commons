@@ -5,30 +5,31 @@
 
 package org.opensearch.ml.common.input.parameter.rcf;
 
-import lombok.Builder;
-import lombok.Data;
-import org.opensearch.core.common.io.stream.StreamInput;
-import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.core.ParseField;
-import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.annotation.MLAlgoParameter;
-import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.input.parameter.MLAlgoParams;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
 import java.io.IOException;
 
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import org.opensearch.core.ParseField;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.annotation.MLAlgoParameter;
+import org.opensearch.ml.common.input.parameter.MLAlgoParams;
+
+import lombok.Builder;
+import lombok.Data;
 
 @Data
-@MLAlgoParameter(algorithms={FunctionName.BATCH_RCF})
+@MLAlgoParameter(algorithms = { FunctionName.BATCH_RCF })
 public class BatchRCFParams implements MLAlgoParams {
     public static final String PARSE_FIELD_NAME = FunctionName.BATCH_RCF.name();
     public static final NamedXContentRegistry.Entry XCONTENT_REGISTRY = new NamedXContentRegistry.Entry(
-            MLAlgoParams.class,
-            new ParseField(PARSE_FIELD_NAME),
-            it -> parse(it)
+        MLAlgoParams.class,
+        new ParseField(PARSE_FIELD_NAME),
+        it -> parse(it)
     );
 
     public static final String NUMBER_OF_TREES = "number_of_trees";
@@ -45,12 +46,14 @@ public class BatchRCFParams implements MLAlgoParams {
     private Double anomalyScoreThreshold;
 
     @Builder
-    public BatchRCFParams(Integer numberOfTrees,
-                          Integer shingleSize,
-                          Integer sampleSize,
-                          Integer outputAfter,
-                          Integer trainingDataSize,
-                          Double anomalyScoreThreshold) {
+    public BatchRCFParams(
+        Integer numberOfTrees,
+        Integer shingleSize,
+        Integer sampleSize,
+        Integer outputAfter,
+        Integer trainingDataSize,
+        Double anomalyScoreThreshold
+    ) {
         this.numberOfTrees = numberOfTrees;
         this.shingleSize = shingleSize;
         this.sampleSize = sampleSize;
@@ -115,8 +118,7 @@ public class BatchRCFParams implements MLAlgoParams {
                     break;
             }
         }
-        return new BatchRCFParams(numberOfTrees, shingleSize, sampleSize, outputAfter,
-                trainingDataSize, anomalyScoreThreshold);
+        return new BatchRCFParams(numberOfTrees, shingleSize, sampleSize, outputAfter, trainingDataSize, anomalyScoreThreshold);
     }
 
     @Override

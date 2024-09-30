@@ -5,8 +5,16 @@
 
 package org.opensearch.ml.common.transport.upload_chunk;
 
-import lombok.Builder;
-import lombok.Data;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.MLModel.allowedInterfaceFieldKeys;
+import static org.opensearch.ml.common.utils.StringUtils.filteredParameterMap;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+
 import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -15,28 +23,20 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.model.MLDeploySetting;
 import org.opensearch.ml.common.model.MLModelConfig;
-import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.model.QuestionAnsweringModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.MLModel.allowedInterfaceFieldKeys;
-import static org.opensearch.ml.common.utils.StringUtils.filteredParameterMap;
+import lombok.Builder;
+import lombok.Data;
 
 @Data
 public class MLRegisterModelMetaInput implements ToXContentObject, Writeable {
@@ -86,13 +86,28 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable {
     private Map<String, String> modelInterface;
 
     @Builder(toBuilder = true)
-    public MLRegisterModelMetaInput(String name, FunctionName functionName, String modelGroupId, String version,
-            String description, Boolean isEnabled, MLRateLimiter rateLimiter, MLModelFormat modelFormat,
-            MLModelState modelState, Long modelContentSizeInBytes, String modelContentHashValue,
-            MLModelConfig modelConfig, MLDeploySetting deploySetting, Integer totalChunks, List<String> backendRoles,
-            AccessMode accessMode,
-            Boolean isAddAllBackendRoles,
-            Boolean doesVersionCreateModelGroup, Boolean isHidden, Map<String, String> modelInterface) {
+    public MLRegisterModelMetaInput(
+        String name,
+        FunctionName functionName,
+        String modelGroupId,
+        String version,
+        String description,
+        Boolean isEnabled,
+        MLRateLimiter rateLimiter,
+        MLModelFormat modelFormat,
+        MLModelState modelState,
+        Long modelContentSizeInBytes,
+        String modelContentHashValue,
+        MLModelConfig modelConfig,
+        MLDeploySetting deploySetting,
+        Integer totalChunks,
+        List<String> backendRoles,
+        AccessMode accessMode,
+        Boolean isAddAllBackendRoles,
+        Boolean doesVersionCreateModelGroup,
+        Boolean isHidden,
+        Map<String, String> modelInterface
+    ) {
         if (name == null) {
             throw new IllegalArgumentException("model name is null");
         }
@@ -107,11 +122,32 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable {
         if (modelContentHashValue == null) {
             throw new IllegalArgumentException("model content hash value is null");
         }
-        if (modelConfig == null && functionName != FunctionName.SPARSE_TOKENIZE
-                && functionName != FunctionName.SPARSE_ENCODING) { // The tokenize model doesn't require a model
-                                                                   // configuration. Currently, we only support one type
-                                                                   // of sparse model, which is pretrained, and it
-                                                                   // doesn't necessitate a model configuration.
+        if (modelConfig == null && functionName != FunctionName.SPARSE_TOKENIZE && functionName != FunctionName.SPARSE_ENCODING) { // The
+                                                                                                                                   // tokenize
+                                                                                                                                   // model
+                                                                                                                                   // doesn't
+                                                                                                                                   // require
+                                                                                                                                   // a
+                                                                                                                                   // model
+                                                                                                                                   // configuration.
+                                                                                                                                   // Currently,
+                                                                                                                                   // we
+                                                                                                                                   // only
+                                                                                                                                   // support
+                                                                                                                                   // one
+                                                                                                                                   // type
+                                                                                                                                   // of
+                                                                                                                                   // sparse
+                                                                                                                                   // model,
+                                                                                                                                   // which
+                                                                                                                                   // is
+                                                                                                                                   // pretrained,
+                                                                                                                                   // and it
+                                                                                                                                   // doesn't
+                                                                                                                                   // necessitate
+                                                                                                                                   // a
+                                                                                                                                   // model
+                                                                                                                                   // configuration.
             throw new IllegalArgumentException("model config is null");
         }
         if (totalChunks == null) {
@@ -415,10 +451,28 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable {
                     break;
             }
         }
-        return new MLRegisterModelMetaInput(name, functionName, modelGroupId, version, description, isEnabled,
-                rateLimiter, modelFormat, modelState, modelContentSizeInBytes, modelContentHashValue, modelConfig,
-                deploySetting, totalChunks, backendRoles, accessMode, isAddAllBackendRoles, doesVersionCreateModelGroup,
-                isHidden, modelInterface);
+        return new MLRegisterModelMetaInput(
+            name,
+            functionName,
+            modelGroupId,
+            version,
+            description,
+            isEnabled,
+            rateLimiter,
+            modelFormat,
+            modelState,
+            modelContentSizeInBytes,
+            modelContentHashValue,
+            modelConfig,
+            deploySetting,
+            totalChunks,
+            backendRoles,
+            accessMode,
+            isAddAllBackendRoles,
+            doesVersionCreateModelGroup,
+            isHidden,
+            modelInterface
+        );
     }
 
 }

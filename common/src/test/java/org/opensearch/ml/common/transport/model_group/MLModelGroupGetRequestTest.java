@@ -5,20 +5,20 @@
 
 package org.opensearch.ml.common.transport.model_group;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamOutput;
-
-import java.io.IOException;
-import java.io.UncheckedIOException;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
 
 public class MLModelGroupGetRequestTest {
     private String modelGroupId;
@@ -30,8 +30,7 @@ public class MLModelGroupGetRequestTest {
 
     @Test
     public void writeTo_Success() throws IOException {
-        MLModelGroupGetRequest mlModelGroupGetRequest = MLModelGroupGetRequest.builder()
-                .modelGroupId(modelGroupId).build();
+        MLModelGroupGetRequest mlModelGroupGetRequest = MLModelGroupGetRequest.builder().modelGroupId(modelGroupId).build();
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         mlModelGroupGetRequest.writeTo(bytesStreamOutput);
         MLModelGroupGetRequest parsedRequest = new MLModelGroupGetRequest(bytesStreamOutput.bytes().streamInput());
@@ -48,17 +47,16 @@ public class MLModelGroupGetRequestTest {
 
     @Test
     public void fromActionRequest_Success() {
-        MLModelGroupGetRequest mlModelGroupGetRequest = MLModelGroupGetRequest.builder()
-                .modelGroupId(modelGroupId).build();
+        MLModelGroupGetRequest mlModelGroupGetRequest = MLModelGroupGetRequest.builder().modelGroupId(modelGroupId).build();
         ActionRequest actionRequest = new ActionRequest() {
             @Override
             public ActionRequestValidationException validate() {
-              return null;
+                return null;
             }
 
             @Override
             public void writeTo(StreamOutput out) throws IOException {
-              mlModelGroupGetRequest.writeTo(out);
+                mlModelGroupGetRequest.writeTo(out);
             }
         };
         MLModelGroupGetRequest result = MLModelGroupGetRequest.fromActionRequest(actionRequest);
@@ -71,12 +69,12 @@ public class MLModelGroupGetRequestTest {
         ActionRequest actionRequest = new ActionRequest() {
             @Override
             public ActionRequestValidationException validate() {
-              return null;
+                return null;
             }
 
             @Override
             public void writeTo(StreamOutput out) throws IOException {
-              throw new IOException("test");
+                throw new IOException("test");
             }
         };
         MLModelGroupGetRequest.fromActionRequest(actionRequest);

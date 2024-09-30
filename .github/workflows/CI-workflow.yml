@@ -23,7 +23,9 @@ jobs:
     needs: Get-CI-Image-Tag
     strategy:
       matrix:
-        java: [11, 17, 21]
+        java: [21]
+    env:
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
     name: Build and Test MLCommons Plugin on linux
     if: github.repository == 'opensearch-project/ml-commons'
@@ -88,7 +90,7 @@ jobs:
     needs: Build-ml-linux
     strategy:
       matrix:
-        java: [11, 17, 21]
+        java: [21]
 
     name: Test MLCommons Plugin on linux docker
     if: github.repository == 'opensearch-project/ml-commons'
@@ -100,6 +102,11 @@ jobs:
         with:
           role-to-assume: ${{ secrets.ML_ROLE }}
           aws-region: us-west-2
+
+      - name: Setup Java ${{ matrix.java }}
+        uses: actions/setup-java@v1
+        with:
+          java-version: ${{ matrix.java }}
 
       - name: Checkout MLCommons
         uses: actions/checkout@v3
@@ -179,7 +186,7 @@ jobs:
   Build-ml-windows:
     strategy:
       matrix:
-        java: [11, 17, 21]
+        java: [21]
     name: Build and Test MLCommons Plugin on Windows
     if: github.repository == 'opensearch-project/ml-commons'
     environment: ml-commons-cicd-env

@@ -1,5 +1,12 @@
 package org.opensearch.ml.common.transport.task;
 
+import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+
+import java.io.IOException;
+import java.time.Instant;
+import java.util.Arrays;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
@@ -8,40 +15,34 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
-
-import java.io.IOException;
-import java.time.Instant;
-import java.util.Arrays;
-
-import static org.junit.Assert.*;
-import static org.junit.Assert.assertEquals;
+import org.opensearch.ml.common.dataset.MLInputDataType;
 
 public class MLTaskGetResponseTest {
     MLTask mlTask;
 
     @Before
     public void setUp() {
-        mlTask = MLTask.builder()
-                .taskId("id")
-                .modelId("model id")
-                .taskType(MLTaskType.EXECUTION)
-                .functionName(FunctionName.LINEAR_REGRESSION)
-                .state(MLTaskState.CREATED)
-                .inputType(MLInputDataType.DATA_FRAME)
-                .progress(1.3f)
-                .outputIndex("some index")
-                .workerNodes(Arrays.asList("some node"))
-                .createTime(Instant.ofEpochMilli(123))
-                .lastUpdateTime(Instant.ofEpochMilli(123))
-                .error("error")
-                .user(new User())
-                .async(true)
-                .build();
+        mlTask = MLTask
+            .builder()
+            .taskId("id")
+            .modelId("model id")
+            .taskType(MLTaskType.EXECUTION)
+            .functionName(FunctionName.LINEAR_REGRESSION)
+            .state(MLTaskState.CREATED)
+            .inputType(MLInputDataType.DATA_FRAME)
+            .progress(1.3f)
+            .outputIndex("some index")
+            .workerNodes(Arrays.asList("some node"))
+            .createTime(Instant.ofEpochMilli(123))
+            .lastUpdateTime(Instant.ofEpochMilli(123))
+            .error("error")
+            .user(new User())
+            .async(true)
+            .build();
     }
 
     @Test
@@ -72,19 +73,22 @@ public class MLTaskGetResponseTest {
         mlTaskGetResponse.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
         String jsonStr = builder.toString();
-        assertEquals("{\"task_id\":\"id\"," +
-                "\"model_id\":\"model id\"," +
-                "\"task_type\":\"EXECUTION\"," +
-                "\"function_name\":\"LINEAR_REGRESSION\"," +
-                "\"state\":\"CREATED\"," +
-                "\"input_type\":\"DATA_FRAME\"," +
-                "\"progress\":1.3," +
-                "\"output_index\":\"some index\"," +
-                "\"worker_node\":[\"some node\"]," +
-                "\"create_time\":123," +
-                "\"last_update_time\":123," +
-                "\"error\":\"error\"," +
-                "\"user\":{\"name\":\"\",\"backend_roles\":[],\"roles\":[],\"custom_attribute_names\":[],\"user_requested_tenant\":null}," +
-                "\"is_async\":true}", jsonStr);
+        assertEquals(
+            "{\"task_id\":\"id\","
+                + "\"model_id\":\"model id\","
+                + "\"task_type\":\"EXECUTION\","
+                + "\"function_name\":\"LINEAR_REGRESSION\","
+                + "\"state\":\"CREATED\","
+                + "\"input_type\":\"DATA_FRAME\","
+                + "\"progress\":1.3,"
+                + "\"output_index\":\"some index\","
+                + "\"worker_node\":[\"some node\"],"
+                + "\"create_time\":123,"
+                + "\"last_update_time\":123,"
+                + "\"error\":\"error\","
+                + "\"user\":{\"name\":\"\",\"backend_roles\":[],\"roles\":[],\"custom_attribute_names\":[],\"user_requested_tenant\":null},"
+                + "\"is_async\":true}",
+            jsonStr
+        );
     }
 }

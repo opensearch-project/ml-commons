@@ -29,6 +29,7 @@ public class LlmIOUtil {
 
     public static final String BEDROCK_PROVIDER_PREFIX = "bedrock/";
     public static final String COHERE_PROVIDER_PREFIX = "cohere/";
+    public static final String BEDROCK_CONVERSE__PROVIDER_PREFIX = "bedrock-converse/";
 
     public static ChatCompletionInput createChatCompletionInput(
         String llmModel,
@@ -49,7 +50,8 @@ public class LlmIOUtil {
             chatHistory,
             contexts,
             timeoutInSeconds,
-            llmResponseField
+            llmResponseField,
+            null
         );
     }
 
@@ -61,7 +63,8 @@ public class LlmIOUtil {
         List<Interaction> chatHistory,
         List<String> contexts,
         int timeoutInSeconds,
-        String llmResponseField
+        String llmResponseField,
+        List<MessageBlock> llmMessages
     ) {
         Llm.ModelProvider provider = null;
         if (llmResponseField == null) {
@@ -71,6 +74,8 @@ public class LlmIOUtil {
                     provider = Llm.ModelProvider.BEDROCK;
                 } else if (llmModel.startsWith(COHERE_PROVIDER_PREFIX)) {
                     provider = Llm.ModelProvider.COHERE;
+                } else if (llmModel.startsWith(BEDROCK_CONVERSE__PROVIDER_PREFIX)) {
+                    provider = Llm.ModelProvider.BEDROCK_CONVERSE;
                 }
             }
         }
@@ -83,7 +88,8 @@ public class LlmIOUtil {
             systemPrompt,
             userInstructions,
             provider,
-            llmResponseField
+            llmResponseField,
+            llmMessages
         );
     }
 }

@@ -19,8 +19,10 @@ package org.opensearch.ml.memory.action.conversation;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.Map;
 
 import org.apache.lucene.search.spell.LevenshteinDistance;
+import org.junit.Assert;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.bytes.BytesReference;
@@ -36,7 +38,7 @@ import org.opensearch.test.OpenSearchTestCase;
 public class GetConversationResponseTests extends OpenSearchTestCase {
 
     public void testGetConversationResponseStreaming() throws IOException {
-        ConversationMeta convo = new ConversationMeta("cid", Instant.now(), Instant.now(), "name", null);
+        ConversationMeta convo = new ConversationMeta("cid", Instant.now(), Instant.now(), "name", null, null);
         GetConversationResponse response = new GetConversationResponse(convo);
         assert (response.getConversation().equals(convo));
 
@@ -49,7 +51,7 @@ public class GetConversationResponseTests extends OpenSearchTestCase {
     }
 
     public void testToXContent() throws IOException {
-        ConversationMeta convo = new ConversationMeta("cid", Instant.now(), Instant.now(), "name", null);
+        ConversationMeta convo = new ConversationMeta("cid", Instant.now(), Instant.now(), "name", null, null);
         GetConversationResponse response = new GetConversationResponse(convo);
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
@@ -62,5 +64,24 @@ public class GetConversationResponseTests extends OpenSearchTestCase {
         // Sometimes there's an extra trailing 0 in the time stringification, so just assert closeness
         LevenshteinDistance ld = new LevenshteinDistance();
         assert (ld.getDistance(result, expected) > 0.95);
+    }
+
+    public void testToXContent_withAdditionalInfo() throws IOException {
+        Map<String, String> additionalInfos = Map.of("key1", "value1");
+        ConversationMeta convo = new ConversationMeta("cid", Instant.now(), Instant.now(), "name", null, additionalInfos);
+        GetConversationResponse response = new GetConversationResponse(convo);
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        response.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String result = BytesReference.bytes(builder).utf8ToString();
+        String expected = "{\"memory_id\":\"cid\",\"create_time\":\""
+            + convo.getCreatedTime()
+            + "\",\"updated_time\":\""
+            + convo.getUpdatedTime()
+            + "\",\"name\":\"name\""
+            + ",\"additional_info\":{\"key1\":\"value1\"}"
+            + "}";
+        // Sometimes there's an extra trailing 0 in the time stringification, so just assert closeness
+        LevenshteinDistance ld = new LevenshteinDistance();
+        Assert.assertTrue(ld.getDistance(result, expected) > 0.95);
     }
 }

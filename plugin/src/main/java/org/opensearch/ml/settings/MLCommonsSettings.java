@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.function.Function;
 
 import org.opensearch.common.settings.Setting;
+import org.opensearch.core.common.unit.ByteSizeUnit;
+import org.opensearch.core.common.unit.ByteSizeValue;
 import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.searchpipelines.questionanswering.generative.GenerativeQAProcessorConstants;
 
@@ -77,6 +79,14 @@ public final class MLCommonsSettings {
     public static final Setting<Integer> ML_COMMONS_JVM_HEAP_MEM_THRESHOLD = Setting
         .intSetting("plugins.ml_commons.jvm_heap_memory_threshold", 85, 0, 100, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
+    public static final Setting<ByteSizeValue> ML_COMMONS_DISK_FREE_SPACE_THRESHOLD = Setting
+        .byteSizeSetting(
+            "plugins.ml_commons.disk_free_space_threshold",
+            new ByteSizeValue(5L, ByteSizeUnit.GB),
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
     public static final Setting<String> ML_COMMONS_EXCLUDE_NODE_NAMES = Setting
         .simpleString("plugins.ml_commons.exclude_nodes._name", Setting.Property.NodeScope, Setting.Property.Dynamic);
     public static final Setting<Boolean> ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN = Setting
@@ -126,15 +136,24 @@ public final class MLCommonsSettings {
     public static final Setting<Boolean> ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED = Setting
         .boolSetting("plugins.ml_commons.connector_access_control_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
+    public static final Setting<Boolean> ML_COMMONS_OFFLINE_BATCH_INGESTION_ENABLED = Setting
+        .boolSetting("plugins.ml_commons.offline_batch_ingestion_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    public static final Setting<Boolean> ML_COMMONS_OFFLINE_BATCH_INFERENCE_ENABLED = Setting
+        .boolSetting("plugins.ml_commons.offline_batch_inference_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
     public static final Setting<List<String>> ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX = Setting
         .listSetting(
             "plugins.ml_commons.trusted_connector_endpoints_regex",
             ImmutableList
                 .of(
                     "^https://runtime\\.sagemaker\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
+                    "^https://api\\.sagemaker\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
                     "^https://api\\.openai\\.com/.*$",
                     "^https://api\\.cohere\\.ai/.*$",
-                    "^https://bedrock-runtime\\..*[a-z0-9-]\\.amazonaws\\.com/.*$"
+                    "^https://bedrock-runtime\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
+                    "^https://bedrock-agent-runtime\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
+                    "^https://bedrock\\..*[a-z0-9-]\\.amazonaws\\.com/.*$"
                 ),
             Function.identity(),
             Setting.Property.NodeScope,
@@ -184,4 +203,53 @@ public final class MLCommonsSettings {
     // This setting is to enable/disable agent related API register/execute/delete/get/search agent.
     public static final Setting<Boolean> ML_COMMONS_AGENT_FRAMEWORK_ENABLED = Setting
         .boolSetting("plugins.ml_commons.agent_framework_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    public static final Setting<Boolean> ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED = Setting
+        .boolSetting("plugins.ml_commons.connector.private_ip_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    public static final Setting<List<String>> ML_COMMONS_REMOTE_JOB_STATUS_FIELD = Setting
+        .listSetting(
+            "plugins.ml_commons.remote_job.status_field",
+            ImmutableList
+                .of(
+                    "status", // openai, bedrock, cohere
+                    "Status",
+                    "TransformJobStatus" // sagemaker
+                ),
+            Function.identity(),
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<String> ML_COMMONS_REMOTE_JOB_STATUS_COMPLETED_REGEX = Setting
+        .simpleString(
+            "plugins.ml_commons.remote_job.status_regex.completed",
+            "(complete|completed)",
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+    public static final Setting<String> ML_COMMONS_REMOTE_JOB_STATUS_CANCELLED_REGEX = Setting
+        .simpleString(
+            "plugins.ml_commons.remote_job.status_regex.cancelled",
+            "(stopped|cancelled)",
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+    public static final Setting<String> ML_COMMONS_REMOTE_JOB_STATUS_CANCELLING_REGEX = Setting
+        .simpleString(
+            "plugins.ml_commons.remote_job.status_regex.cancelling",
+            "(stopping|cancelling)",
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+    public static final Setting<String> ML_COMMONS_REMOTE_JOB_STATUS_EXPIRED_REGEX = Setting
+        .simpleString(
+            "plugins.ml_commons.remote_job.status_regex.expired",
+            "(expired|timeout)",
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<Boolean> ML_COMMONS_CONTROLLER_ENABLED = Setting
+        .boolSetting("plugins.ml_commons.controller_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 }

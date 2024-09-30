@@ -6,16 +6,19 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.opensearch.ml.common.connector.ConnectorProtocols.AWS_SIGV4;
+import static software.amazon.awssdk.http.SdkHttpMethod.GET;
 import static software.amazon.awssdk.http.SdkHttpMethod.POST;
 
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.time.Duration;
-import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
+import org.apache.logging.log4j.Logger;
 import org.opensearch.client.Client;
+import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.util.TokenBucket;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.connector.AwsConnector;
@@ -69,41 +72,57 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
         this.httpClient = MLHttpClientFactory.getAsyncHttpClient(connectionTimeout, readTimeout, maxConnection);
     }
 
+    @Override
+    public Logger getLogger() {
+        return log;
+    }
+
     @SuppressWarnings("removal")
     @Override
-    public void invokeRemoteModel(
+    public void invokeRemoteService(
+        String action,
         MLInput mlInput,
         Map<String, String> parameters,
         String payload,
-        Map<Integer, ModelTensors> tensorOutputs,
-        ExecutionContext countDownLatch,
-        ActionListener<List<ModelTensors>> actionListener
+        ExecutionContext executionContext,
+        ActionListener<Tuple<Integer, ModelTensors>> actionListener
     ) {
         try {
-            SdkHttpFullRequest request = ConnectorUtils.buildSdkRequest(connector, parameters, payload, POST);
+            SdkHttpFullRequest request;
+            switch (connector.getActionHttpMethod(action).toUpperCase(Locale.ROOT)) {
+                case "POST":
+                    log.debug("original payload to remote model: " + payload);
+                    request = ConnectorUtils.buildSdkRequest(action, connector, parameters, payload, POST);
+                    break;
+                case "GET":
+                    request = ConnectorUtils.buildSdkRequest(action, connector, parameters, null, GET);
+                    break;
+                default:
+                    throw new IllegalArgumentException("unsupported http method");
+            }
             AsyncExecuteRequest executeRequest = AsyncExecuteRequest
                 .builder()
                 .request(signRequest(request))
                 .requestContentPublisher(new SimpleHttpContentPublisher(request))
                 .responseHandler(
                     new MLSdkAsyncHttpResponseHandler(
-                        countDownLatch,
+                        executionContext,
                         actionListener,
                         parameters,
-                        tensorOutputs,
                         connector,
                         scriptService,
-                        mlGuard
+                        mlGuard,
+                        action
                     )
                 )
                 .build();
             AccessController.doPrivileged((PrivilegedExceptionAction<CompletableFuture<Void>>) () -> httpClient.execute(executeRequest));
         } catch (RuntimeException exception) {
-            log.error("Failed to execute predict in aws connector: " + exception.getMessage(), exception);
+            log.error("Failed to execute {} in aws connector: {}", action, exception.getMessage(), exception);
             actionListener.onFailure(exception);
         } catch (Throwable e) {
-            log.error("Failed to execute predict in aws connector", e);
-            actionListener.onFailure(new MLException("Fail to execute predict in aws connector", e));
+            log.error("Failed to execute {} in aws connector", action, e);
+            actionListener.onFailure(new MLException("Fail to execute " + action + " in aws connector", e));
         }
     }
 

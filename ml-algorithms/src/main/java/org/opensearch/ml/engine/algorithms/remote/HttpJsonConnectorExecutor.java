@@ -13,12 +13,14 @@ import java.net.URL;
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.time.Duration;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.apache.logging.log4j.Logger;
 import org.opensearch.client.Client;
+import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.util.TokenBucket;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.connector.Connector;
@@ -61,6 +63,8 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
     @Setter
     @Getter
     private MLGuard mlGuard;
+    @Setter
+    private volatile AtomicBoolean connectorPrivateIpEnabled;
 
     private SdkAsyncHttpClient httpClient;
 
@@ -73,27 +77,32 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
         this.httpClient = MLHttpClientFactory.getAsyncHttpClient(connectionTimeout, readTimeout, maxConnection);
     }
 
+    @Override
+    public Logger getLogger() {
+        return log;
+    }
+
     @SuppressWarnings("removal")
     @Override
-    public void invokeRemoteModel(
+    public void invokeRemoteService(
+        String action,
         MLInput mlInput,
         Map<String, String> parameters,
         String payload,
-        Map<Integer, ModelTensors> tensorOutputs,
-        ExecutionContext countDownLatch,
-        ActionListener<List<ModelTensors>> actionListener
+        ExecutionContext executionContext,
+        ActionListener<Tuple<Integer, ModelTensors>> actionListener
     ) {
         try {
             SdkHttpFullRequest request;
-            switch (connector.getPredictHttpMethod().toUpperCase(Locale.ROOT)) {
+            switch (connector.getActionHttpMethod(action).toUpperCase(Locale.ROOT)) {
                 case "POST":
                     log.debug("original payload to remote model: " + payload);
-                    validateHttpClientParameters(parameters);
-                    request = ConnectorUtils.buildSdkRequest(connector, parameters, payload, POST);
+                    validateHttpClientParameters(action, parameters);
+                    request = ConnectorUtils.buildSdkRequest(action, connector, parameters, payload, POST);
                     break;
                 case "GET":
-                    validateHttpClientParameters(parameters);
-                    request = ConnectorUtils.buildSdkRequest(connector, parameters, null, GET);
+                    validateHttpClientParameters(action, parameters);
+                    request = ConnectorUtils.buildSdkRequest(action, connector, parameters, null, GET);
                     break;
                 default:
                     throw new IllegalArgumentException("unsupported http method");
@@ -104,13 +113,13 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
                 .requestContentPublisher(new SimpleHttpContentPublisher(request))
                 .responseHandler(
                     new MLSdkAsyncHttpResponseHandler(
-                        countDownLatch,
+                        executionContext,
                         actionListener,
                         parameters,
-                        tensorOutputs,
                         connector,
                         scriptService,
-                        mlGuard
+                        mlGuard,
+                        action
                     )
                 )
                 .build();
@@ -124,12 +133,12 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
         }
     }
 
-    private void validateHttpClientParameters(Map<String, String> parameters) throws Exception {
-        String endpoint = connector.getPredictEndpoint(parameters);
+    private void validateHttpClientParameters(String action, Map<String, String> parameters) throws Exception {
+        String endpoint = connector.getActionEndpoint(action, parameters);
         URL url = new URL(endpoint);
         String protocol = url.getProtocol();
         String host = url.getHost();
         int port = url.getPort();
-        MLHttpClientFactory.validate(protocol, host, port);
+        MLHttpClientFactory.validate(protocol, host, port, connectorPrivateIpEnabled);
     }
 }

@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.OpenSearchWrapperException;
@@ -46,6 +47,7 @@ import org.opensearch.client.Client;
 import org.opensearch.client.Requests;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
@@ -87,7 +89,7 @@ public class ConversationMetaIndex {
             log.debug("No conversational meta index found. Adding it");
             CreateIndexRequest request = Requests
                 .createIndexRequest(META_INDEX_NAME)
-                .mapping(ConversationalIndexConstants.META_MAPPING)
+                .mapping(ConversationalIndexConstants.META_MAPPING, XContentType.JSON)
                 .settings(INDEX_SETTINGS);
             try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
                 ActionListener<Boolean> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
@@ -126,9 +128,15 @@ public class ConversationMetaIndex {
      * Adds a new conversation with the specified name to the index
      * @param name user-specified name of the conversation to be added
      * @param applicationType the application type that creates this conversation
+     * @param additionalInfos the additional info that creates this conversation
      * @param listener listener to wait for this to finish
      */
-    public void createConversation(String name, String applicationType, ActionListener<String> listener) {
+    public void createConversation(
+        String name,
+        String applicationType,
+        Map<String, String> additionalInfos,
+        ActionListener<String> listener
+    ) {
         initConversationMetaIndexIfAbsent(ActionListener.wrap(indexExists -> {
             if (indexExists) {
                 String userstr = getUserStrFromThreadContext();
@@ -145,7 +153,9 @@ public class ConversationMetaIndex {
                         ConversationalIndexConstants.USER_FIELD,
                         userstr == null ? null : User.parse(userstr).getName(),
                         ConversationalIndexConstants.APPLICATION_TYPE_FIELD,
-                        applicationType
+                        applicationType,
+                        ConversationalIndexConstants.META_ADDITIONAL_INFO_FIELD,
+                        additionalInfos == null ? Map.of() : additionalInfos
                     );
                 try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
                     ActionListener<String> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
@@ -176,7 +186,7 @@ public class ConversationMetaIndex {
      * @param listener listener to wait for this to finish
      */
     public void createConversation(ActionListener<String> listener) {
-        createConversation("", "", listener);
+        createConversation("", "", null, listener);
     }
 
     /**
@@ -185,7 +195,7 @@ public class ConversationMetaIndex {
      * @param listener listener to wait for this to finish
      */
     public void createConversation(String name, ActionListener<String> listener) {
-        createConversation(name, "", listener);
+        createConversation(name, "", null, listener);
     }
 
     /**

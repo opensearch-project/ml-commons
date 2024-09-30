@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.metrics_correlation;
 
+import static org.opensearch.action.support.WriteRequest.RefreshPolicy.IMMEDIATE;
 import static org.opensearch.index.query.QueryBuilders.termQuery;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX_MAPPING;
@@ -129,7 +130,8 @@ public class MetricsCorrelation extends DLModelExecute {
             boolean hasModelGroupIndex = clusterService.state().getMetadata().hasIndex(ML_MODEL_GROUP_INDEX);
             if (!hasModelGroupIndex) { // Create model group index if it doesn't exist
                 try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                    CreateIndexRequest request = new CreateIndexRequest(ML_MODEL_GROUP_INDEX).mapping(ML_MODEL_GROUP_INDEX_MAPPING);
+                    CreateIndexRequest request = new CreateIndexRequest(ML_MODEL_GROUP_INDEX)
+                        .mapping(ML_MODEL_GROUP_INDEX_MAPPING, XContentType.JSON);
                     CreateIndexResponse createIndexResponse = client.admin().indices().create(request).actionGet(1000);
                     if (!createIndexResponse.isAcknowledged()) {
                         throw new MLException("Failed to create model group index");
@@ -268,6 +270,7 @@ public class MetricsCorrelation extends DLModelExecute {
             XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
             modelGroup.toXContent(builder, ToXContent.EMPTY_PARAMS);
             createModelGroupRequest.source(builder);
+            createModelGroupRequest.setRefreshPolicy(IMMEDIATE);
             client.index(createModelGroupRequest, ActionListener.runBefore(ActionListener.wrap(r -> {
                 client.execute(MLRegisterModelAction.INSTANCE, registerRequest, ActionListener.wrap(listener::onResponse, e -> {
                     log.error("Failed to Register Model", e);

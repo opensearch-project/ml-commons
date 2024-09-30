@@ -5,9 +5,14 @@
 
 package org.opensearch.ml.common.connector;
 
-import lombok.Builder;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+
+import java.io.IOException;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -15,11 +20,9 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 
-import java.io.IOException;
-import java.util.Locale;
-import java.util.Map;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
 
 @Getter
 @EqualsAndHashCode
@@ -170,18 +173,46 @@ public class ConnectorAction implements ToXContentObject, Writeable {
                     break;
             }
         }
-        return ConnectorAction.builder()
-                .actionType(actionType)
-                .method(method)
-                .url(url)
-                .headers(headers)
-                .requestBody(requestBody)
-                .preProcessFunction(preProcessFunction)
-                .postProcessFunction(postProcessFunction)
-                .build();
+        return ConnectorAction
+            .builder()
+            .actionType(actionType)
+            .method(method)
+            .url(url)
+            .headers(headers)
+            .requestBody(requestBody)
+            .preProcessFunction(preProcessFunction)
+            .postProcessFunction(postProcessFunction)
+            .build();
     }
 
     public enum ActionType {
-        PREDICT
+        PREDICT,
+        EXECUTE,
+        BATCH_PREDICT,
+        CANCEL_BATCH_PREDICT,
+        BATCH_PREDICT_STATUS;
+
+        public static ActionType from(String value) {
+            try {
+                return ActionType.valueOf(value.toUpperCase(Locale.ROOT));
+            } catch (Exception e) {
+                throw new IllegalArgumentException("Wrong Action Type of " + value);
+            }
+        }
+
+        private static final HashSet<ActionType> MODEL_SUPPORT_ACTIONS = new HashSet<>(Set.of(PREDICT, BATCH_PREDICT));
+
+        public static boolean isValidActionInModelPrediction(ActionType actionType) {
+            return MODEL_SUPPORT_ACTIONS.contains(actionType);
+        }
+
+        public static boolean isValidAction(String action) {
+            try {
+                ActionType.valueOf(action.toUpperCase(Locale.ROOT));
+                return true;
+            } catch (IllegalArgumentException e) {
+                return false;
+            }
+        }
     }
 }

@@ -14,9 +14,12 @@ import static org.opensearch.ml.permission.AccessController.getUserContext;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.PREDICT_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.REMOTE_PREDICT_THREAD_POOL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE;
+import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 import org.opensearch.OpenSearchException;
@@ -47,12 +50,16 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.connector.ConnectorAction.ActionType;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.dataset.MLInputDataset;
+import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLPredictionOutput;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
@@ -143,7 +150,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                 if (clusterService.localNode().getId().equals(node.getId())) {
                     log.debug("Execute ML predict request {} locally on node {}", request.getRequestID(), node.getId());
                     request.setDispatchTask(false);
-                    executeTask(request, listener);
+                    checkCBAndExecute(functionName, request, listener);
                 } else {
                     log.debug("Execute ML predict request {} remotely on node {}", request.getRequestID(), node.getId());
                     request.setDispatchTask(false);
@@ -226,11 +233,18 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         Instant now = Instant.now();
         String modelId = request.getModelId();
         FunctionName functionName = request.getMlInput().getFunctionName();
+
+        MLInput mlInput = request.getMlInput();
+        ActionType actionType = null;
+        if (mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet) {
+            actionType = ((RemoteInferenceInputDataSet) mlInput.getInputDataset()).getActionType();
+        }
+        actionType = actionType == null ? ActionType.PREDICT : actionType;
         MLTask mlTask = MLTask
             .builder()
             .taskId(UUID.randomUUID().toString())
             .modelId(modelId)
-            .taskType(MLTaskType.PREDICTION)
+            .taskType(actionType.equals(ActionType.BATCH_PREDICT) ? MLTaskType.BATCH_PREDICTION : MLTaskType.PREDICTION)
             .inputType(inputDataType)
             .functionName(functionName)
             .state(MLTaskState.CREATED)
@@ -239,7 +253,6 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
             .lastUpdateTime(now)
             .async(false)
             .build();
-        MLInput mlInput = request.getMlInput();
         switch (inputDataType) {
             case SEARCH_QUERY:
                 ActionListener<MLInputDataset> dataFrameActionListener = ActionListener.wrap(dataSet -> {
@@ -276,13 +289,12 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
     private void predict(String modelId, MLTask mlTask, MLInput mlInput, ActionListener<MLTaskResponse> listener) {
         ActionListener<MLTaskResponse> internalListener = wrappedCleanupListener(listener, mlTask.getTaskId());
         // track ML task count and add ML task into cache
+        ActionName actionName = getActionNameFromInput(mlInput);
         mlStats.getStat(MLNodeLevelStat.ML_EXECUTING_TASK_COUNT).increment();
         mlStats.getStat(MLNodeLevelStat.ML_REQUEST_COUNT).increment();
-        mlStats
-            .createCounterStatIfAbsent(mlTask.getFunctionName(), ActionName.PREDICT, MLActionLevelStat.ML_ACTION_REQUEST_COUNT)
-            .increment();
+        mlStats.createCounterStatIfAbsent(mlTask.getFunctionName(), actionName, MLActionLevelStat.ML_ACTION_REQUEST_COUNT).increment();
         if (modelId != null) {
-            mlStats.createModelCounterStatIfAbsent(modelId, ActionName.PREDICT, MLActionLevelStat.ML_ACTION_REQUEST_COUNT).increment();
+            mlStats.createModelCounterStatIfAbsent(modelId, actionName, MLActionLevelStat.ML_ACTION_REQUEST_COUNT).increment();
         }
         mlTask.setState(MLTaskState.RUNNING);
         mlTaskManager.add(mlTask);
@@ -305,7 +317,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                 .workerNodes(Arrays.asList(clusterService.localNode().getId()))
                 .build();
             mlModelManager.deployModel(modelId, null, functionName, false, true, mlDeployTask, ActionListener.wrap(s -> {
-                runPredict(modelId, mlTask, mlInput, functionName, internalListener);
+                runPredict(modelId, mlTask, mlInput, functionName, actionName, internalListener);
             }, e -> {
                 log.error("Failed to auto deploy model " + modelId, e);
                 internalListener.onFailure(e);
@@ -313,7 +325,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
             return;
         }
 
-        runPredict(modelId, mlTask, mlInput, functionName, internalListener);
+        runPredict(modelId, mlTask, mlInput, functionName, actionName, internalListener);
     }
 
     private void runPredict(
@@ -321,6 +333,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         MLTask mlTask,
         MLInput mlInput,
         FunctionName algorithm,
+        ActionName actionName,
         ActionListener<MLTaskResponse> internalListener
     ) {
         // run predict
@@ -334,13 +347,61 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     if (mlInput.getAlgorithm() == FunctionName.REMOTE) {
                         long startTime = System.nanoTime();
                         ActionListener<MLTaskResponse> trackPredictDurationListener = ActionListener.wrap(output -> {
+
                             if (output.getOutput() instanceof ModelTensorOutput) {
                                 validateOutputSchema(modelId, (ModelTensorOutput) output.getOutput());
                             }
-                            handleAsyncMLTaskComplete(mlTask);
-                            mlModelManager.trackPredictDuration(modelId, startTime);
-                            internalListener.onResponse(output);
-                        }, e -> handlePredictFailure(mlTask, internalListener, e, false, modelId));
+                            if (mlTask.getTaskType().equals(MLTaskType.BATCH_PREDICTION)) {
+                                Map<String, Object> remoteJob = new HashMap<>();
+                                ModelTensorOutput tensorOutput = (ModelTensorOutput) output.getOutput();
+                                if (tensorOutput != null
+                                    && tensorOutput.getMlModelOutputs() != null
+                                    && !tensorOutput.getMlModelOutputs().isEmpty()) {
+                                    ModelTensors modelOutput = tensorOutput.getMlModelOutputs().get(0);
+                                    Integer statusCode = modelOutput.getStatusCode();
+                                    if (modelOutput.getMlModelTensors() != null && !modelOutput.getMlModelTensors().isEmpty()) {
+                                        Map<String, Object> dataAsMap = (Map<String, Object>) modelOutput
+                                            .getMlModelTensors()
+                                            .get(0)
+                                            .getDataAsMap();
+                                        if (dataAsMap != null && statusCode != null && statusCode >= 200 && statusCode < 300) {
+                                            remoteJob.putAll(dataAsMap);
+                                            mlTask.setRemoteJob(remoteJob);
+                                            mlTask.setTaskId(null);
+                                            mlTaskManager.createMLTask(mlTask, ActionListener.wrap(response -> {
+                                                String taskId = response.getId();
+                                                mlTask.setTaskId(taskId);
+                                                MLPredictionOutput outputBuilder = MLPredictionOutput
+                                                    .builder()
+                                                    .taskId(taskId)
+                                                    .status(MLTaskState.CREATED.name())
+                                                    .build();
+
+                                                MLTaskResponse predictOutput = MLTaskResponse.builder().output(outputBuilder).build();
+                                                internalListener.onResponse(predictOutput);
+                                            }, e -> {
+                                                logException("Failed to create task for batch predict model", e, log);
+                                                internalListener.onFailure(e);
+                                            }));
+                                        } else {
+                                            log.debug("Batch transform job output from remote model did not return the job ID");
+                                            internalListener
+                                                .onFailure(new ResourceNotFoundException("Unable to create batch transform job"));
+                                        }
+                                    } else {
+                                        log.debug("ML Model Tensors are null or empty.");
+                                        internalListener.onFailure(new ResourceNotFoundException("Unable to create batch transform job"));
+                                    }
+                                } else {
+                                    log.debug("ML Model Outputs are null or empty.");
+                                    internalListener.onFailure(new ResourceNotFoundException("Unable to create batch transform job"));
+                                }
+                            } else {
+                                handleAsyncMLTaskComplete(mlTask);
+                                mlModelManager.trackPredictDuration(modelId, startTime);
+                                internalListener.onResponse(output);
+                            }
+                        }, e -> handlePredictFailure(mlTask, internalListener, e, false, modelId, actionName));
                         predictor.asyncPredict(mlInput, trackPredictDurationListener);
                     } else {
                         MLOutput output = mlModelManager.trackPredictDuration(modelId, () -> predictor.predict(mlInput));
@@ -357,7 +418,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     return;
                 } catch (Exception e) {
                     log.error("Failed to predict model " + modelId, e);
-                    handlePredictFailure(mlTask, internalListener, e, false, modelId);
+                    handlePredictFailure(mlTask, internalListener, e, false, modelId, actionName);
                     return;
                 }
             } else if (FunctionName.needDeployFirst(algorithm)) {
@@ -388,7 +449,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                             OpenSearchException e = new OpenSearchException(
                                 "User: " + requestUser.getName() + " does not have permissions to run predict by model: " + modelId
                             );
-                            handlePredictFailure(mlTask, internalListener, e, false, modelId);
+                            handlePredictFailure(mlTask, internalListener, e, false, modelId, actionName);
                             return;
                         }
                         // run predict
@@ -413,7 +474,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
 
                 }, e -> {
                     log.error("Failed to predict " + mlInput.getAlgorithm() + ", modelId: " + mlTask.getModelId(), e);
-                    handlePredictFailure(mlTask, internalListener, e, true, modelId);
+                    handlePredictFailure(mlTask, internalListener, e, true, modelId, actionName);
                 });
                 GetRequest getRequest = new GetRequest(ML_MODEL_INDEX, mlTask.getModelId());
                 client
@@ -426,12 +487,12 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     );
             } catch (Exception e) {
                 log.error("Failed to get model " + mlTask.getModelId(), e);
-                handlePredictFailure(mlTask, internalListener, e, true, modelId);
+                handlePredictFailure(mlTask, internalListener, e, true, modelId, actionName);
             }
         } else {
             IllegalArgumentException e = new IllegalArgumentException("ModelId is invalid");
             log.error("ModelId is invalid", e);
-            handlePredictFailure(mlTask, internalListener, e, false, modelId);
+            handlePredictFailure(mlTask, internalListener, e, false, modelId, actionName);
         }
     }
 
@@ -445,17 +506,24 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         ActionListener<MLTaskResponse> listener,
         Exception e,
         boolean trackFailure,
-        String modelId
+        String modelId,
+        ActionName actionName
     ) {
         if (trackFailure) {
-            mlStats
-                .createCounterStatIfAbsent(mlTask.getFunctionName(), ActionName.PREDICT, MLActionLevelStat.ML_ACTION_FAILURE_COUNT)
-                .increment();
-            mlStats.createModelCounterStatIfAbsent(modelId, ActionName.PREDICT, MLActionLevelStat.ML_ACTION_FAILURE_COUNT);
+            mlStats.createCounterStatIfAbsent(mlTask.getFunctionName(), actionName, MLActionLevelStat.ML_ACTION_FAILURE_COUNT).increment();
+            mlStats.createModelCounterStatIfAbsent(modelId, actionName, MLActionLevelStat.ML_ACTION_FAILURE_COUNT);
             mlStats.getStat(MLNodeLevelStat.ML_FAILURE_COUNT).increment();
         }
         handleAsyncMLTaskFailure(mlTask, e);
         listener.onFailure(e);
+    }
+
+    private ActionName getActionNameFromInput(MLInput mlInput) {
+        ConnectorAction.ActionType actionType = null;
+        if (mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet) {
+            actionType = ((RemoteInferenceInputDataSet) mlInput.getInputDataset()).getActionType();
+        }
+        return (actionType == null) ? ActionName.PREDICT : ActionName.from(actionType.toString());
     }
 
     public void validateOutputSchema(String modelId, ModelTensorOutput output) {

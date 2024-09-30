@@ -7,10 +7,12 @@ package org.opensearch.ml.rest;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
+import static org.opensearch.ml.utils.MLExceptionUtils.BATCH_INFERENCE_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLExceptionUtils.REMOTE_INFERENCE_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
+import static org.opensearch.ml.utils.RestActionUtils.getActionTypeFromRestRequest;
 import static org.opensearch.ml.utils.RestActionUtils.getParameterId;
 
 import java.io.IOException;
@@ -25,6 +27,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.connector.ConnectorAction.ActionType;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
@@ -69,7 +72,11 @@ public class RestMLPredictionAction extends BaseRestHandler {
                     RestRequest.Method.POST,
                     String.format(Locale.ROOT, "%s/_predict/{%s}/{%s}", ML_BASE_URI, PARAMETER_ALGORITHM, PARAMETER_MODEL_ID)
                 ),
-                new Route(RestRequest.Method.POST, String.format(Locale.ROOT, "%s/models/{%s}/_predict", ML_BASE_URI, PARAMETER_MODEL_ID))
+                new Route(RestRequest.Method.POST, String.format(Locale.ROOT, "%s/models/{%s}/_predict", ML_BASE_URI, PARAMETER_MODEL_ID)),
+                new Route(
+                    RestRequest.Method.POST,
+                    String.format(Locale.ROOT, "%s/models/{%s}/_batch_predict", ML_BASE_URI, PARAMETER_MODEL_ID)
+                )
             );
     }
 
@@ -120,14 +127,21 @@ public class RestMLPredictionAction extends BaseRestHandler {
      */
     @VisibleForTesting
     MLPredictionTaskRequest getRequest(String modelId, String algorithm, RestRequest request) throws IOException {
+        ActionType actionType = ActionType.from(getActionTypeFromRestRequest(request));
         if (FunctionName.REMOTE.name().equals(algorithm) && !mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
             throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
-        } else if (FunctionName.isDLModel(FunctionName.from(algorithm.toUpperCase())) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
+        } else if (FunctionName.isDLModel(FunctionName.from(algorithm.toUpperCase(Locale.ROOT)))
+            && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
             throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
+        } else if (ActionType.BATCH_PREDICT == actionType && !mlFeatureEnabledSetting.isOfflineBatchInferenceEnabled()) {
+            throw new IllegalStateException(BATCH_INFERENCE_DISABLED_ERR_MSG);
+        } else if (!ActionType.isValidActionInModelPrediction(actionType)) {
+            throw new IllegalArgumentException("Wrong action type in the rest request path!");
         }
+
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-        MLInput mlInput = MLInput.parse(parser, algorithm);
+        MLInput mlInput = MLInput.parse(parser, algorithm, actionType);
         return new MLPredictionTaskRequest(modelId, mlInput, null);
     }
 

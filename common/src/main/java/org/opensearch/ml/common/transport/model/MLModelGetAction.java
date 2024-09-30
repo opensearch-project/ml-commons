@@ -11,5 +11,7 @@ public class MLModelGetAction extends ActionType<MLModelGetResponse> {
     public static final MLModelGetAction INSTANCE = new MLModelGetAction();
     public static final String NAME = "cluster:admin/opensearch/ml/models/get";
 
-    private MLModelGetAction() { super(NAME, MLModelGetResponse::new);}
+    private MLModelGetAction() {
+        super(NAME, MLModelGetResponse::new);
+    }
 }

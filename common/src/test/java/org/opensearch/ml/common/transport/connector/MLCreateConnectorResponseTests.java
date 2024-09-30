@@ -5,7 +5,13 @@
 
 package org.opensearch.ml.common.transport.connector;
 
-import org.junit.Assert;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertSame;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentType;
@@ -14,13 +20,6 @@ import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.TestHelper;
-
-import java.io.IOException;
-import java.io.UncheckedIOException;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertSame;
 
 public class MLCreateConnectorResponseTests {
 
@@ -42,7 +41,6 @@ public class MLCreateConnectorResponseTests {
         MLCreateConnectorResponse response2 = new MLCreateConnectorResponse(output.bytes().streamInput());
         assertEquals("testConnectorId", response2.getConnectorId());
     }
-
 
     @Test
     public void fromActionResponseWithMLCreateConnectorResponseSuccess() {

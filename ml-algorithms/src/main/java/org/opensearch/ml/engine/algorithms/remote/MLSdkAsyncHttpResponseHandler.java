@@ -8,18 +8,21 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.opensearch.ml.common.CommonValue.REMOTE_SERVICE_ERROR;
+import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.CANCEL_BATCH_PREDICT;
 import static org.opensearch.ml.engine.algorithms.remote.ConnectorUtils.processOutput;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.commons.collections.MapUtils;
 import org.apache.http.HttpStatus;
 import org.apache.logging.log4j.util.Strings;
+import org.jetbrains.annotations.NotNull;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.common.collect.Tuple;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.connector.Connector;
@@ -47,34 +50,37 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
 
     private final ExecutionContext executionContext;
 
-    private final ActionListener<List<ModelTensors>> actionListener;
+    private final ActionListener<Tuple<Integer, ModelTensors>> actionListener;
 
     private final Map<String, String> parameters;
 
-    private final Map<Integer, ModelTensors> tensorOutputs;
-
     private final Connector connector;
+
+    private final String action;
 
     private final ScriptService scriptService;
 
     private final MLGuard mlGuard;
 
+    // used to cache exceptions before the invocation of response()
+    private AtomicReference<Exception> exceptionHolder = new AtomicReference<>();
+
     public MLSdkAsyncHttpResponseHandler(
         ExecutionContext executionContext,
-        ActionListener<List<ModelTensors>> actionListener,
+        ActionListener<Tuple<Integer, ModelTensors>> actionListener,
         Map<String, String> parameters,
-        Map<Integer, ModelTensors> tensorOutputs,
         Connector connector,
         ScriptService scriptService,
-        MLGuard mlGuard
+        MLGuard mlGuard,
+        String action
     ) {
         this.executionContext = executionContext;
         this.actionListener = actionListener;
         this.parameters = parameters;
-        this.tensorOutputs = tensorOutputs;
         this.connector = connector;
         this.scriptService = scriptService;
         this.mlGuard = mlGuard;
+        this.action = action;
     }
 
     @Override
@@ -101,6 +107,12 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         actionListener.onFailure(new OpenSearchStatusException(errorMessage, status));
     }
 
+    private void handleException(Exception e) {
+        if (exceptionHolder.get() == null) {
+            exceptionHolder.compareAndSet(null, e);
+        }
+    }
+
     private void handleThrottlingInHeader(SdkHttpFullResponse sdkResponse) {
         if (MapUtils.isEmpty(sdkResponse.headers())) {
             return;
@@ -112,73 +124,24 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         // Check the throttling exception from AMZN servers, e.g. sageMaker.
         // See [https://github.com/opensearch-project/ml-commons/issues/2429] for more details.
         boolean containsThrottlingException = errorsInHeader.stream().anyMatch(str -> str.startsWith("ThrottlingException"));
-        if (containsThrottlingException && executionContext.getExceptionHolder().get() == null) {
+        if (containsThrottlingException) {
             log.error("Remote server returned error code: {}", statusCode);
-            executionContext
-                .getExceptionHolder()
-                .compareAndSet(
-                    null,
-                    new OpenSearchStatusException(
-                        REMOTE_SERVICE_ERROR + "The request was denied due to remote server throttling.",
-                        RestStatus.fromCode(statusCode)
-                    )
-                );
+            handleException(
+                new RemoteConnectorThrottlingException(
+                    REMOTE_SERVICE_ERROR
+                        + "The request was denied due to remote server throttling. "
+                        + "To change the retry policy and behavior, please update the connector client_config.",
+                    RestStatus.fromCode(statusCode)
+                )
+            );
         }
-    }
-
-    private void processResponse(
-        Integer statusCode,
-        String body,
-        Map<String, String> parameters,
-        Map<Integer, ModelTensors> tensorOutputs
-    ) {
-        if (Strings.isBlank(body)) {
-            log.error("Remote model response body is empty!");
-            if (executionContext.getExceptionHolder().get() == null) {
-                executionContext
-                    .getExceptionHolder()
-                    .compareAndSet(null, new OpenSearchStatusException("No response from model", RestStatus.BAD_REQUEST));
-            }
-        } else {
-            if (statusCode < HttpStatus.SC_OK || statusCode > HttpStatus.SC_MULTIPLE_CHOICES) {
-                log.error("Remote server returned error code: {}", statusCode);
-                if (executionContext.getExceptionHolder().get() == null) {
-                    executionContext
-                        .getExceptionHolder()
-                        .compareAndSet(null, new OpenSearchStatusException(REMOTE_SERVICE_ERROR + body, RestStatus.fromCode(statusCode)));
-                }
-            } else {
-                try {
-                    ModelTensors tensors = processOutput(body, connector, scriptService, parameters, mlGuard);
-                    tensors.setStatusCode(statusCode);
-                    tensorOutputs.put(executionContext.getSequence(), tensors);
-                } catch (Exception e) {
-                    log.error("Failed to process response body: {}", body, e);
-                    if (executionContext.getExceptionHolder().get() == null) {
-                        executionContext
-                            .getExceptionHolder()
-                            .compareAndSet(null, new MLException("Fail to execute predict in aws connector", e));
-                    }
-                }
-            }
-        }
-    }
-
-    // Only all requests successful case will be processed here.
-    private void reOrderTensorResponses(Map<Integer, ModelTensors> tensorOutputs) {
-        ModelTensors[] modelTensors = new ModelTensors[tensorOutputs.size()];
-        log.debug("Reordered tensor outputs size is {}", tensorOutputs.size());
-        for (Map.Entry<Integer, ModelTensors> entry : tensorOutputs.entrySet()) {
-            modelTensors[entry.getKey()] = entry.getValue();
-        }
-        actionListener.onResponse(Arrays.asList(modelTensors));
     }
 
     protected class MLResponseSubscriber implements Subscriber<ByteBuffer> {
         private Subscription subscription;
 
         @Override
-        public void onSubscribe(Subscription s) {
+        public void onSubscribe(@NotNull Subscription s) {
             this.subscription = s;
             s.request(Long.MAX_VALUE);
         }
@@ -197,27 +160,49 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
                     t instanceof NullPointerException ? "NullPointerException" : t.getMessage(),
                     t
                 );
-            response(tensorOutputs);
+            response();
         }
 
         @Override
         public void onComplete() {
-            response(tensorOutputs);
+            response();
         }
     }
 
-    private void response(Map<Integer, ModelTensors> tensors) {
-        processResponse(statusCode, responseBody.toString(), parameters, tensorOutputs);
-        executionContext.getCountDownLatch().countDown();
-        // when countdown's count equals to 0 means all responses are received.
-        if (executionContext.getCountDownLatch().getCount() == 0) {
-            if (executionContext.getExceptionHolder().get() != null) {
-                actionListener.onFailure(executionContext.getExceptionHolder().get());
-                return;
-            }
-            reOrderTensorResponses(tensors);
-        } else {
-            log.debug("Not all responses received, left response count is: " + executionContext.getCountDownLatch().getCount());
+    private void response() {
+        String body = responseBody.toString();
+
+        if (exceptionHolder.get() != null) {
+            actionListener.onFailure(exceptionHolder.get());
+            return;
+        }
+
+        if (Strings.isBlank(body) && !action.equals(CANCEL_BATCH_PREDICT.toString())) {
+            log.error("Remote model response body is empty!");
+            actionListener.onFailure(new OpenSearchStatusException("No response from model", RestStatus.BAD_REQUEST));
+            return;
+        }
+
+        if (statusCode < HttpStatus.SC_OK || statusCode > HttpStatus.SC_MULTIPLE_CHOICES) {
+            log.error("Remote server returned error code: {}", statusCode);
+            actionListener.onFailure(new OpenSearchStatusException(REMOTE_SERVICE_ERROR + body, RestStatus.fromCode(statusCode)));
+            return;
+        }
+
+        if (action.equals(CANCEL_BATCH_PREDICT.toString())) {
+            ModelTensors tensors = ModelTensors.builder().statusCode(statusCode).build();
+            tensors.setStatusCode(statusCode);
+            actionListener.onResponse(new Tuple<>(executionContext.getSequence(), tensors));
+            return;
+        }
+
+        try {
+            ModelTensors tensors = processOutput(action, body, connector, scriptService, parameters, mlGuard);
+            tensors.setStatusCode(statusCode);
+            actionListener.onResponse(new Tuple<>(executionContext.getSequence(), tensors));
+        } catch (Exception e) {
+            log.error("Failed to process response body: {}", body, e);
+            actionListener.onFailure(new MLException("Fail to execute " + action + " in aws connector", e));
         }
     }
 }

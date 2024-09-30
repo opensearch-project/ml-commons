@@ -5,6 +5,17 @@
 
 package org.opensearch.ml.common.input.execute.agent;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+
 import org.junit.Test;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -12,17 +23,6 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
-
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 public class AgentMLInputTests {
 
@@ -77,21 +77,19 @@ public class AgentMLInputTests {
 
         // Simulate parser behavior for START_OBJECT token
         when(parser.currentToken()).thenReturn(XContentParser.Token.START_OBJECT);
-        when(parser.nextToken()).thenReturn(XContentParser.Token.FIELD_NAME)
-                .thenReturn(XContentParser.Token.VALUE_STRING)
-                .thenReturn(XContentParser.Token.FIELD_NAME) // For PARAMETERS_FIELD
-                .thenReturn(XContentParser.Token.START_OBJECT) // Start of PARAMETERS_FIELD map
-                .thenReturn(XContentParser.Token.FIELD_NAME) // Key in PARAMETERS_FIELD map
-                .thenReturn(XContentParser.Token.VALUE_STRING) // Value in PARAMETERS_FIELD map
-                .thenReturn(XContentParser.Token.END_OBJECT) // End of PARAMETERS_FIELD map
-                .thenReturn(XContentParser.Token.END_OBJECT); // End of the main object
+        when(parser.nextToken())
+            .thenReturn(XContentParser.Token.FIELD_NAME)
+            .thenReturn(XContentParser.Token.VALUE_STRING)
+            .thenReturn(XContentParser.Token.FIELD_NAME) // For PARAMETERS_FIELD
+            .thenReturn(XContentParser.Token.START_OBJECT) // Start of PARAMETERS_FIELD map
+            .thenReturn(XContentParser.Token.FIELD_NAME) // Key in PARAMETERS_FIELD map
+            .thenReturn(XContentParser.Token.VALUE_STRING) // Value in PARAMETERS_FIELD map
+            .thenReturn(XContentParser.Token.END_OBJECT) // End of PARAMETERS_FIELD map
+            .thenReturn(XContentParser.Token.END_OBJECT); // End of the main object
 
         // Simulate parser behavior for agent_id
-        when(parser.currentName()).thenReturn("agent_id")
-                .thenReturn("parameters")
-                .thenReturn("paramKey");
-        when(parser.text()).thenReturn("testAgentId")
-                .thenReturn("paramValue");
+        when(parser.currentName()).thenReturn("agent_id").thenReturn("parameters").thenReturn("paramKey");
+        when(parser.text()).thenReturn("testAgentId").thenReturn("paramValue");
 
         // Simulate parser behavior for parameters
         Map<String, Object> paramMap = new HashMap<>();

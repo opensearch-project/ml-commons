@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.apache.commons.text.StringEscapeUtils.escapeJson;
+import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.CANCEL_BATCH_PREDICT;
 import static org.opensearch.ml.common.connector.HttpConnector.RESPONSE_FILTER_FIELD;
 import static org.opensearch.ml.common.connector.MLPreProcessFunction.CONVERT_INPUT_TO_JSON_STRING;
 import static org.opensearch.ml.common.connector.MLPreProcessFunction.PROCESS_REMOTE_INFERENCE_INPUT;
@@ -58,11 +59,14 @@ import software.amazon.awssdk.regions.Region;
 public class ConnectorUtils {
 
     private static final Aws4Signer signer;
+    public static final String SKIP_VALIDATE_MISSING_PARAMETERS = "skip_validating_missing_parameters";
+
     static {
         signer = Aws4Signer.create();
     }
 
     public static RemoteInferenceInputDataSet processInput(
+        String action,
         MLInput mlInput,
         Connector connector,
         Map<String, String> parameters,
@@ -71,22 +75,23 @@ public class ConnectorUtils {
         if (mlInput == null) {
             throw new IllegalArgumentException("Input is null");
         }
-        Optional<ConnectorAction> predictAction = connector.findPredictAction();
-        if (predictAction.isEmpty()) {
-            throw new IllegalArgumentException("no predict action found");
+        Optional<ConnectorAction> connectorAction = connector.findAction(action);
+        if (connectorAction.isEmpty()) {
+            throw new IllegalArgumentException("no " + action + " action found");
         }
-        RemoteInferenceInputDataSet inputData = processMLInput(mlInput, connector, parameters, scriptService);
+        RemoteInferenceInputDataSet inputData = processMLInput(action, mlInput, connector, parameters, scriptService);
         escapeRemoteInferenceInputData(inputData);
         return inputData;
     }
 
     private static RemoteInferenceInputDataSet processMLInput(
+        String action,
         MLInput mlInput,
         Connector connector,
         Map<String, String> parameters,
         ScriptService scriptService
     ) {
-        String preProcessFunction = getPreprocessFunction(mlInput, connector);
+        String preProcessFunction = getPreprocessFunction(action, mlInput, connector);
         if (preProcessFunction == null) {
             if (mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet) {
                 return (RemoteInferenceInputDataSet) mlInput.getInputDataset();
@@ -168,9 +173,9 @@ public class ConnectorUtils {
         }
     }
 
-    private static String getPreprocessFunction(MLInput mlInput, Connector connector) {
-        Optional<ConnectorAction> predictAction = connector.findPredictAction();
-        String preProcessFunction = predictAction.get().getPreProcessFunction();
+    private static String getPreprocessFunction(String action, MLInput mlInput, Connector connector) {
+        Optional<ConnectorAction> connectorAction = connector.findAction(action);
+        String preProcessFunction = connectorAction.get().getPreProcessFunction();
         if (preProcessFunction != null) {
             return preProcessFunction;
         }
@@ -181,6 +186,7 @@ public class ConnectorUtils {
     }
 
     public static ModelTensors processOutput(
+        String action,
         String modelResponse,
         Connector connector,
         ScriptService scriptService,
@@ -190,16 +196,21 @@ public class ConnectorUtils {
         if (modelResponse == null) {
             throw new IllegalArgumentException("model response is null");
         }
-        if (mlGuard != null && !mlGuard.validate(modelResponse, MLGuard.Type.OUTPUT)) {
+        if (mlGuard != null
+            && !mlGuard
+                .validate(
+                    modelResponse,
+                    MLGuard.Type.OUTPUT,
+                    Map.of("question", org.opensearch.ml.common.utils.StringUtils.processTextDoc(modelResponse))
+                )) {
             throw new IllegalArgumentException("guardrails triggered for LLM output");
         }
         List<ModelTensor> modelTensors = new ArrayList<>();
-        Optional<ConnectorAction> predictAction = connector.findPredictAction();
-        if (predictAction.isEmpty()) {
-            throw new IllegalArgumentException("no predict action found");
+        Optional<ConnectorAction> connectorAction = connector.findAction(action);
+        if (connectorAction.isEmpty()) {
+            throw new IllegalArgumentException("no " + action + " action found");
         }
-        ConnectorAction connectorAction = predictAction.get();
-        String postProcessFunction = connectorAction.getPostProcessFunction();
+        String postProcessFunction = connectorAction.get().getPostProcessFunction();
         postProcessFunction = fillProcessFunctionParameter(parameters, postProcessFunction);
 
         String responseFilter = parameters.get(RESPONSE_FILTER_FIELD);
@@ -263,6 +274,7 @@ public class ConnectorUtils {
     }
 
     public static SdkHttpFullRequest buildSdkRequest(
+        String action,
         Connector connector,
         Map<String, String> parameters,
         String payload,
@@ -275,11 +287,13 @@ public class ConnectorUtils {
         } else {
             requestBody = RequestBody.empty();
         }
-        if (SdkHttpMethod.POST == method && 0 == requestBody.optionalContentLength().get()) {
+        if (SdkHttpMethod.POST == method
+            && 0 == requestBody.optionalContentLength().get()
+            && !action.equals(CANCEL_BATCH_PREDICT.toString())) {
             log.error("Content length is 0. Aborting request to remote model");
             throw new IllegalArgumentException("Content length is 0. Aborting request to remote model");
         }
-        String endpoint = connector.getPredictEndpoint(parameters);
+        String endpoint = connector.getActionEndpoint(action, parameters);
         SdkHttpFullRequest.Builder builder = SdkHttpFullRequest
             .builder()
             .method(method)

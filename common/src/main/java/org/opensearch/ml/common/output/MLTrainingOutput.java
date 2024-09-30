@@ -5,15 +5,16 @@
 
 package org.opensearch.ml.common.output;
 
-import lombok.Builder;
-import lombok.Getter;
+import java.io.IOException;
+
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.annotation.MLAlgoOutput;
 
-import java.io.IOException;
+import lombok.Builder;
+import lombok.Getter;
 
 @Getter
 @MLAlgoOutput(MLOutputType.TRAINING)
@@ -32,7 +33,7 @@ public class MLTrainingOutput extends MLOutput {
         super(OUTPUT_TYPE);
         this.modelId = modelId;
         this.taskId = taskId;
-        this.status= status;
+        this.status = status;
     }
 
     public MLTrainingOutput(StreamInput in) throws IOException {

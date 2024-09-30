@@ -58,7 +58,7 @@ public class RestMLMemoryCircuitBreakerIT extends MLCommonsRestTestCase {
                 exception.getMessage(),
                 allOf(
                     containsString("Memory Circuit Breaker is open, please check your resources!"),
-                    containsString("m_l_limit_exceeded_exception")
+                    containsString("circuit_breaking_exception")
                 )
             );
 

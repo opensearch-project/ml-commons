@@ -5,7 +5,10 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
+import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
+
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
@@ -15,6 +18,8 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.ConnectorAction.ActionType;
+import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLGuard;
@@ -41,6 +46,7 @@ public class RemoteModel implements Predictable {
     public static final String RATE_LIMITER = "rate_limiter";
     public static final String USER_RATE_LIMITER_MAP = "user_rate_limiter_map";
     public static final String GUARDRAILS = "guardrails";
+    public static final String CONNECTOR_PRIVATE_IP_ENABLED = "connectorPrivateIpEnabled";
 
     private RemoteConnectorExecutor connectorExecutor;
 
@@ -66,7 +72,12 @@ public class RemoteModel implements Predictable {
             return;
         }
         try {
-            connectorExecutor.executePredict(mlInput, actionListener);
+            ActionType actionType = null;
+            if (mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet) {
+                actionType = ((RemoteInferenceInputDataSet) mlInput.getInputDataset()).getActionType();
+            }
+            actionType = actionType == null ? ActionType.PREDICT : actionType;
+            connectorExecutor.executeAction(actionType.toString(), mlInput, actionListener);
         } catch (RuntimeException e) {
             log.error("Failed to call remote model.", e);
             actionListener.onFailure(e);
@@ -90,7 +101,7 @@ public class RemoteModel implements Predictable {
     public void initModel(MLModel model, Map<String, Object> params, Encryptor encryptor) {
         try {
             Connector connector = model.getConnector().cloneConnector();
-            connector.decrypt((credential) -> encryptor.decrypt(credential));
+            connector.decrypt(PREDICT.name(), (credential) -> encryptor.decrypt(credential));
             this.connectorExecutor = MLEngineClassLoader.initInstance(connector.getProtocol(), connector, Connector.class);
             this.connectorExecutor.setScriptService((ScriptService) params.get(SCRIPT_SERVICE));
             this.connectorExecutor.setClusterService((ClusterService) params.get(CLUSTER_SERVICE));
@@ -99,6 +110,7 @@ public class RemoteModel implements Predictable {
             this.connectorExecutor.setRateLimiter((TokenBucket) params.get(RATE_LIMITER));
             this.connectorExecutor.setUserRateLimiterMap((Map<String, TokenBucket>) params.get(USER_RATE_LIMITER_MAP));
             this.connectorExecutor.setMlGuard((MLGuard) params.get(GUARDRAILS));
+            this.connectorExecutor.setConnectorPrivateIpEnabled((AtomicBoolean) params.get(CONNECTOR_PRIVATE_IP_ENABLED));
         } catch (RuntimeException e) {
             log.error("Failed to init remote model.", e);
             throw e;

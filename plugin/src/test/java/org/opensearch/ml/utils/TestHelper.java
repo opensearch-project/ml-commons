@@ -16,6 +16,7 @@ import static org.opensearch.cluster.node.DiscoveryNodeRole.SEARCH_ROLE;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
+import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -71,8 +72,10 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
+import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.execute.metricscorrelation.MetricsCorrelationInput;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
@@ -209,6 +212,33 @@ public class TestHelper {
             + "\"COSINE\"},\"input_query\":{\"_source\":[\"petal_length_in_cm\",\"petal_width_in_cm\"],"
             + "\"size\":10000},\"input_index\":[\"iris_data\"]}";
         RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
+            .withPath("/_plugins/_ml/models/{model_id}}/_predict")
+            .withParams(params)
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .build();
+        return request;
+    }
+
+    public static RestRequest getBatchRestRequest() {
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_MODEL_ID, "sample model");
+        params.put(PARAMETER_ALGORITHM, "remote");
+        final String requestContent = "{\"parameters\":{\"TransformJobName\":\"SM-offline-batch-transform-07-17-14-30\"}}";
+        RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
+            .withPath("/_plugins/_ml/models/{model_id}/_batch_predict")
+            .withParams(params)
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .build();
+        return request;
+    }
+
+    public static RestRequest getBatchRestRequest_WrongActionType() {
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_MODEL_ID, "sample model");
+        params.put(PARAMETER_ALGORITHM, "remote");
+        final String requestContent = "{\"parameters\":{\"TransformJobName\":\"SM-offline-batch-transform-07-17-14-30\"}}";
+        RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
+            .withPath("/_plugins/_ml/models/{model_id}}/_BadType")
             .withParams(params)
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .build();
@@ -354,6 +384,13 @@ public class TestHelper {
         assertEquals(3, kMeansParams.getCentroids().intValue());
     }
 
+    public static void verifyParsedBatchMLInput(MLInput mlInput) {
+        assertEquals(FunctionName.REMOTE, mlInput.getAlgorithm());
+        assertEquals(MLInputDataType.REMOTE, mlInput.getInputDataset().getInputDataType());
+        RemoteInferenceInputDataSet inputDataset = (RemoteInferenceInputDataSet) mlInput.getInputDataset();
+        assertEquals(ConnectorAction.ActionType.BATCH_PREDICT, inputDataset.getActionType());
+    }
+
     private static NamedXContentRegistry getXContentRegistry() {
         SearchModule searchModule = new SearchModule(Settings.EMPTY, Collections.emptyList());
         List<NamedXContentRegistry.Entry> entries = new ArrayList<>();
@@ -486,4 +523,27 @@ public class TestHelper {
         FileUtils.copyFile(new File(sourceFile), new File(destFile));
     }
 
+    public static RestRequest getBatchIngestionRestRequest() {
+        final String requestContent = "{\n"
+            + "    \"index_name\": \"test batch index\",\n"
+            + "    \"field_map\": {\n"
+            + "        \"chapter\": \"$.content[0]\",\n"
+            + "        \"title\": \"$.content[1]\",\n"
+            + "        \"chapter_embedding\": \"$.SageMakerOutput[0]\",\n"
+            + "        \"title_embedding\": \"$.SageMakerOutput[1]\"\n"
+            + "    },\n"
+            + "    \"ingest_fields\": [\"$.id\"],\n"
+            + "    \"credential\": {\n"
+            + "        \"region\": \"xxxxxxxx\"\n"
+            + "    },\n"
+            + "    \"data_source\": {\n"
+            + "        \"type\": \"s3\",\n"
+            + "        \"source\": [\"s3://offlinebatch/output/sagemaker_djl_batch_input.json.out\"]\n"
+            + "    }\n"
+            + "}";
+        RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .build();
+        return request;
+    }
 }

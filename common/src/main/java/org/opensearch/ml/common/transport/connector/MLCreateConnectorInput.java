@@ -5,8 +5,15 @@
 
 package org.opensearch.ml.common.transport.connector;
 
-import lombok.Builder;
-import lombok.Data;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -16,18 +23,13 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
+import lombok.Builder;
+import lombok.Data;
 
 @Data
 public class MLCreateConnectorInput implements ToXContentObject, Writeable {
@@ -46,7 +48,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
     public static final String ACCESS_MODE_FIELD = "access_mode";
     public static final String DRY_RUN_FIELD = "dry_run";
 
-    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_CLIENT_CONFIG = Version.V_2_13_0;
+    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_CLIENT_CONFIG = CommonValue.VERSION_2_13_0;
 
     public static final String DRY_RUN_CONNECTOR_NAME = "dryRunConnector";
 
@@ -64,21 +66,21 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
     private boolean updateConnector;
     private ConnectorClientConfig connectorClientConfig;
 
-
     @Builder(toBuilder = true)
-    public MLCreateConnectorInput(String name,
-                                  String description,
-                                  String version,
-                                  String protocol,
-                                  Map<String, String> parameters,
-                                  Map<String, String> credential,
-                                  List<ConnectorAction> actions,
-                                  List<String> backendRoles,
-                                  Boolean addAllBackendRoles,
-                                  AccessMode access,
-                                  boolean dryRun,
-                                  boolean updateConnector,
-                                  ConnectorClientConfig connectorClientConfig
+    public MLCreateConnectorInput(
+        String name,
+        String description,
+        String version,
+        String protocol,
+        Map<String, String> parameters,
+        Map<String, String> credential,
+        List<ConnectorAction> actions,
+        List<String> backendRoles,
+        Boolean addAllBackendRoles,
+        AccessMode access,
+        boolean dryRun,
+        boolean updateConnector,
+        ConnectorClientConfig connectorClientConfig
 
     ) {
         if (!dryRun && !updateConnector) {
@@ -181,8 +183,21 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                     break;
             }
         }
-        return new MLCreateConnectorInput(name, description, version, protocol, parameters, credential, actions,
-                backendRoles, addAllBackendRoles, access, dryRun, updateConnector, connectorClientConfig);
+        return new MLCreateConnectorInput(
+            name,
+            description,
+            version,
+            protocol,
+            parameters,
+            credential,
+            actions,
+            backendRoles,
+            addAllBackendRoles,
+            access,
+            dryRun,
+            updateConnector,
+            connectorClientConfig
+        );
     }
 
     @Override
@@ -288,7 +303,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
             parameters = input.readMap(s -> s.readString(), s -> s.readString());
         }
         if (input.readBoolean()) {
-            credential = input.readMap(s -> s.readString(), s-> s.readString());
+            credential = input.readMap(s -> s.readString(), s -> s.readString());
         }
         if (input.readBoolean()) {
             actions = new ArrayList<>();

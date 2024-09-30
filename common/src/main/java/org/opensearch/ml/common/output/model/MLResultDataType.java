@@ -34,6 +34,7 @@ public enum MLResultDataType {
         this.format = format;
         this.numOfBytes = numOfBytes;
     }
+
     /**
      * Checks whether it is a floating data type.
      *

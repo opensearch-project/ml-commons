@@ -17,6 +17,10 @@
  */
 package org.opensearch.ml.memory.action.conversation;
 
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_DISABLED_MESSAGE;
+
+import java.util.Map;
+
 import org.opensearch.OpenSearchException;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
@@ -72,17 +76,12 @@ public class CreateConversationTransportAction extends HandledTransportAction<Cr
     @Override
     protected void doExecute(Task task, CreateConversationRequest request, ActionListener<CreateConversationResponse> actionListener) {
         if (!featureIsEnabled) {
-            actionListener
-                .onFailure(
-                    new OpenSearchException(
-                        "The experimental Conversation Memory feature is not enabled. To enable, please update the setting "
-                            + ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED.getKey()
-                    )
-                );
+            actionListener.onFailure(new OpenSearchException(ML_COMMONS_MEMORY_FEATURE_DISABLED_MESSAGE));
             return;
         }
         String name = request.getName();
         String applicationType = request.getApplicationType();
+        Map<String, String> additionalInfos = request.getAdditionalInfos();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
             ActionListener<CreateConversationResponse> internalListener = ActionListener.runBefore(actionListener, () -> context.restore());
             ActionListener<String> al = ActionListener.wrap(r -> { internalListener.onResponse(new CreateConversationResponse(r)); }, e -> {
@@ -93,7 +92,7 @@ public class CreateConversationTransportAction extends HandledTransportAction<Cr
             if (name == null) {
                 cmHandler.createConversation(al);
             } else {
-                cmHandler.createConversation(name, applicationType, al);
+                cmHandler.createConversation(name, applicationType, additionalInfos, al);
             }
         } catch (Exception e) {
             log.error("Failed to create new memory with name " + request.getName(), e);

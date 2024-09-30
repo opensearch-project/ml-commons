@@ -5,12 +5,14 @@
 
 package org.opensearch.ml.action.config;
 
+import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.MASTER_KEY;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -22,6 +24,7 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
@@ -30,6 +33,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -158,14 +162,60 @@ public class GetConfigTransportActionTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(any(MLConfigGetResponse.class));
     }
 
+    @Test
+    public void testDoExecute_Success_ForNewFields() throws IOException {
+        String configID = "config_id";
+        MLConfig mlConfig = new MLConfig(null, "olly_agent", null, new Configuration("agent_id"), Instant.EPOCH, null, Instant.EPOCH);
+
+        XContentBuilder content = mlConfig.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
+        BytesReference bytesReference = BytesReference.bytes(content);
+        GetResult getResult = new GetResult("indexName", configID, 111l, 111l, 111l, true, bytesReference, null, null);
+        GetResponse getResponse = new GetResponse(getResult);
+        ActionListener<MLConfigGetResponse> actionListener = mock(ActionListener.class);
+        MLConfigGetRequest request = new MLConfigGetRequest(configID);
+        Task task = mock(Task.class);
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        getConfigTransportAction.doExecute(task, request, actionListener);
+        verify(actionListener).onResponse(any(MLConfigGetResponse.class));
+    }
+
     public GetResponse prepareMLConfig(String configID) throws IOException {
 
-        MLConfig mlConfig = new MLConfig("olly_agent", new Configuration("agent_id"), Instant.EPOCH, Instant.EPOCH);
+        MLConfig mlConfig = new MLConfig("olly_agent", null, new Configuration("agent_id"), null, Instant.EPOCH, Instant.EPOCH, null);
 
         XContentBuilder content = mlConfig.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
         BytesReference bytesReference = BytesReference.bytes(content);
         GetResult getResult = new GetResult("indexName", configID, 111l, 111l, 111l, true, bytesReference, null, null);
         GetResponse getResponse = new GetResponse(getResult);
         return getResponse;
+    }
+
+    @Test
+    public void testDoExecute_Rejected_MASTER_KEY() throws IOException {
+        String configID = MASTER_KEY;
+        GetResponse getResponse = prepareMLConfig(configID);
+        ActionListener<MLConfigGetResponse> actionListener = mock(ActionListener.class);
+        MLConfigGetRequest request = new MLConfigGetRequest(configID);
+        Task task = mock(Task.class);
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        ArgumentCaptor<OpenSearchStatusException> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+
+        getConfigTransportAction.doExecute(task, request, actionListener);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(RestStatus.FORBIDDEN, argumentCaptor.getValue().status());
+        assertEquals("You are not allowed to access this config doc", argumentCaptor.getValue().getLocalizedMessage());
+
     }
 }

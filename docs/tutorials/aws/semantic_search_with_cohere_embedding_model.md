@@ -61,7 +61,8 @@ Go to IAM console, create IAM role `my_cohere_secret_role` with:
     "Statement": [
         {
             "Action": [
-                "secretsmanager:GetSecretValue"
+                "secretsmanager:GetSecretValue",
+                "secretsmanager:DescribeSecret"
             ],
             "Effect": "Allow",
             "Resource": "your_secret_arn_created_in_step1"

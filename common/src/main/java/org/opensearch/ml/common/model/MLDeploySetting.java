@@ -5,21 +5,23 @@
 
 package org.opensearch.ml.common.model;
 
-import lombok.Builder;
-import lombok.Getter;
-import lombok.Setter;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+
+import java.io.IOException;
+
 import org.opensearch.Version;
-import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.CommonValue;
 
-import java.io.IOException;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.Setter;
 
 @Setter
 @Getter
@@ -27,7 +29,7 @@ public class MLDeploySetting implements ToXContentObject, Writeable {
     public static final String IS_AUTO_DEPLOY_ENABLED_FIELD = "is_auto_deploy_enabled";
     public static final String MODEL_TTL_MINUTES_FIELD = "model_ttl_minutes";
     private static final long DEFAULT_TTL_MINUTES = -1;
-    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_MODEL_TTL = Version.V_2_14_0;
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_MODEL_TTL = CommonValue.VERSION_2_14_0;
 
     private Boolean isAutoDeployEnabled;
     private Long modelTTLInMinutes; // in minutes

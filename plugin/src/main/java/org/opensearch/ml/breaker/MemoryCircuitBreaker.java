@@ -7,6 +7,8 @@ package org.opensearch.ml.breaker;
 
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_JVM_HEAP_MEM_THRESHOLD;
 
+import java.util.Optional;
+
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.monitor.jvm.JvmService;
@@ -15,11 +17,9 @@ import org.opensearch.monitor.jvm.JvmService;
  * A circuit breaker for memory usage.
  */
 public class MemoryCircuitBreaker extends ThresholdCircuitBreaker<Short> {
-    // TODO: make this value configurable as cluster setting
     private static final String ML_MEMORY_CB = "Memory Circuit Breaker";
     public static final short DEFAULT_JVM_HEAP_USAGE_THRESHOLD = 85;
     private final JvmService jvmService;
-    private volatile Integer jvmHeapMemThreshold = 85;
 
     public MemoryCircuitBreaker(JvmService jvmService) {
         super(DEFAULT_JVM_HEAP_USAGE_THRESHOLD);
@@ -32,10 +32,16 @@ public class MemoryCircuitBreaker extends ThresholdCircuitBreaker<Short> {
     }
 
     public MemoryCircuitBreaker(Settings settings, ClusterService clusterService, JvmService jvmService) {
-        super(DEFAULT_JVM_HEAP_USAGE_THRESHOLD);
+        super(
+            Optional
+                .ofNullable(ML_COMMONS_JVM_HEAP_MEM_THRESHOLD.get(settings))
+                .map(Integer::shortValue)
+                .orElse(DEFAULT_JVM_HEAP_USAGE_THRESHOLD)
+        );
         this.jvmService = jvmService;
-        this.jvmHeapMemThreshold = ML_COMMONS_JVM_HEAP_MEM_THRESHOLD.get(settings);
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_JVM_HEAP_MEM_THRESHOLD, it -> jvmHeapMemThreshold = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_JVM_HEAP_MEM_THRESHOLD, it -> super.setThreshold(it.shortValue()));
     }
 
     @Override
@@ -44,12 +50,7 @@ public class MemoryCircuitBreaker extends ThresholdCircuitBreaker<Short> {
     }
 
     @Override
-    public Short getThreshold() {
-        return this.jvmHeapMemThreshold.shortValue();
-    }
-
-    @Override
     public boolean isOpen() {
-        return jvmService.stats().getMem().getHeapUsedPercent() > this.getThreshold();
+        return getThreshold() < 100 && jvmService.stats().getMem().getHeapUsedPercent() > getThreshold();
     }
 }
