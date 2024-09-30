@@ -44,7 +44,7 @@ jobs:
       options: --user root
 
     steps:
-      - run: echo test ${{ steps.step-is-require-approval.outputs.is-require-approval }}
+      - run: echo test ${{ needs.Get-Require-Approval.outputs.is-require-approval }}
       - name: Setup Java ${{ matrix.java }}
         uses: actions/setup-java@v1
         with:
