@@ -1,11 +1,11 @@
 name: Build and Test ml-commons
 # This workflow is triggered on pull requests and push to any branches
 on:
-  push:
-    branches-ignore:
-      - 'backport/**'
-      - 'create-pull-request/**'
-      - 'dependabot/**'
+#  push:
+#    branches-ignore:
+#      - 'backport/**'
+#      - 'create-pull-request/**'
+#      - 'dependabot/**'
   pull_request_target:
     types: [opened, synchronize, reopened]
 
@@ -44,6 +44,7 @@ jobs:
       options: --user root
 
     steps:
+      - run: echo test ${{ steps.step-is-require-approval.outputs.is-require-approval }}
       - name: Setup Java ${{ matrix.java }}
         uses: actions/setup-java@v1
         with:
