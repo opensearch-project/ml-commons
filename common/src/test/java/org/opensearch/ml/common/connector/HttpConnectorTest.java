@@ -85,12 +85,12 @@ public class HttpConnectorTest {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         connector.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String content = TestHelper.xContentBuilderToString(builder);
+
         Assert.assertEquals(TEST_CONNECTOR_JSON_STRING, content);
     }
 
     @Test
     public void constructor_Parser() throws IOException {
-
         XContentParser parser = XContentType.JSON
             .xContent()
             .createParser(

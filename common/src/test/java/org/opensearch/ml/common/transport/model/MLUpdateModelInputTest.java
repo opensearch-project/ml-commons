@@ -64,8 +64,8 @@ public class MLUpdateModelInputTest {
             + "{\"name\":\"test\",\"version\":\"1\",\"protocol\":\"http\",\"parameters\":{\"param1\":\"value1\"},\"credential\":"
             + "{\"api_key\":\"credential_value\"},\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":"
             + "\"https://api.openai.com/v1/chat/completions\",\"headers\":{\"Authorization\":\"Bearer ${credential.api_key}\"},\"request_body\":"
-            + "\"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": ${parameters.messages} }\"}]},\"connector_id\":"
-            + "\"test-connector_id\",\"last_updated_time\":1}";
+            + "\"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": ${parameters.messages} }\"}]},"
+            + "\"connector_id\":\"test-connector_id\",\"last_updated_time\":1}";
 
     private final String expectedOutputStr = "{\"model_id\":null,\"name\":\"name\",\"description\":\"description\",\"model_group_id\":"
         + "\"modelGroupId\",\"is_enabled\":false,\"rate_limiter\":"
@@ -152,6 +152,7 @@ public class MLUpdateModelInputTest {
     @Test
     public void testToXContent() throws Exception {
         String jsonStr = serializationWithToXContent(updateModelInput);
+
         assertEquals(expectedOutputStrForUpdateRequestDoc, jsonStr);
     }
 
