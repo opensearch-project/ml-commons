@@ -89,6 +89,42 @@ POST /_plugins/_ml/connectors/_create
 }
 ```
 
+As of version 2.12 of the OpenSearch Service, we support the connector.pre_process.bedrock.embedding and connector.post_process.bedrock.embedding embedding functions.
+However, If you are using AWS OpenSearch Service version 2.11, there are no built-in functions for pre_process_function and post_process_function.
+So, you need to add the script as shown below.
+
+```json
+POST /_plugins/_ml/connectors/_create
+{
+  "name": "Amazon Bedrock Connector: embedding",
+  "description": "The connector to bedrock Titan embedding model",
+  "version": 1,
+  "protocol": "aws_sigv4",
+  "parameters": {
+    "region": "<PLEASE ADD YOUR AWS REGION HERE>",
+    "service_name": "bedrock",
+    "model": "amazon.titan-embed-text-v1"
+  },
+  "credential": {
+    "roleArn": "<PLEASE ADD YOUR AWS ROLE ARN HERE>"
+  },
+  "actions": [
+    {
+      "action_type": "predict",
+      "method": "POST",
+      "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/invoke",
+      "headers": {
+        "content-type": "application/json",
+        "x-amz-content-sha256": "required"
+      },
+      "request_body": "{ \"inputText\": \"${parameters.inputText}\" }",
+      "pre_process_function": "\n    StringBuilder builder = new StringBuilder();\n    builder.append(\"\\\"\");\n    String first = params.text_docs[0];\n    builder.append(first);\n    builder.append(\"\\\"\");\n    def parameters = \"{\" +\"\\\"inputText\\\":\" + builder + \"}\";\n    return  \"{\" +\"\\\"parameters\\\":\" + parameters + \"}\";",
+      "post_process_function": "\n      def name = \"sentence_embedding\";\n      def dataType = \"FLOAT32\";\n      if (params.embedding == null || params.embedding.length == 0) {\n        return params.message;\n      }\n      def shape = [params.embedding.length];\n      def json = \"{\" +\n                 \"\\\"name\\\":\\\"\" + name + \"\\\",\" +\n                 \"\\\"data_type\\\":\\\"\" + dataType + \"\\\",\" +\n                 \"\\\"shape\\\":\" + shape + \",\" +\n                 \"\\\"data\\\":\" + params.embedding +\n                 \"}\";\n      return json;\n    "
+    }
+  ]
+}
+```
+
 Sample response:
 ```json
 {
