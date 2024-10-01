@@ -14,13 +14,16 @@ permissions:
   contents: read
 
 jobs:
+  Get-Require-Approval:
+    uses: ./.github/workflows/require-approval.yml
+
   Get-CI-Image-Tag:
     uses: opensearch-project/opensearch-build/.github/workflows/get-ci-image-tag.yml@main
     with:
       product: opensearch
 
   Build-ml-linux:
-    needs: Get-CI-Image-Tag
+    needs: [Get-Require-Approval, Get-CI-Image-Tag]
     strategy:
       matrix:
         java: [11, 17, 21]
@@ -29,7 +32,7 @@ jobs:
 
     name: Build and Test MLCommons Plugin on linux
     if: github.repository == 'opensearch-project/ml-commons'
-    environment: ml-commons-cicd-env
+    environment: ${{ needs.Get-Require-Approval.outputs.is-require-approval }}
     outputs:
       build-test-linux: ${{ steps.step-build-test-linux.outputs.build-test-linux }}
     runs-on: ubuntu-latest
@@ -87,14 +90,14 @@ jobs:
 
 
   Test-ml-linux-docker:
-    needs: Build-ml-linux
+    needs: [Get-Require-Approval, Build-ml-linux]
     strategy:
       matrix:
         java: [11, 17, 21]
 
     name: Test MLCommons Plugin on linux docker
     if: github.repository == 'opensearch-project/ml-commons'
-    environment: ml-commons-cicd-env
+    environment: ${{ needs.Get-Require-Approval.outputs.is-require-approval }}
     runs-on: ubuntu-latest
 
     steps:
@@ -184,7 +187,8 @@ jobs:
         java: [11, 17, 21]
     name: Build and Test MLCommons Plugin on Windows
     if: github.repository == 'opensearch-project/ml-commons'
-    environment: ml-commons-cicd-env
+    needs: [Get-Require-Approval]
+    environment: ${{ needs.Get-Require-Approval.outputs.is-require-approval }}
     runs-on: windows-latest
 
     steps:
