@@ -625,7 +625,7 @@ public class AwsConnectorExecutorTest {
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_BEDROCK_EMBEDDING_INPUT)
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
         Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "bedrock");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
@@ -636,7 +636,7 @@ public class AwsConnectorExecutorTest {
             .credential(credential)
             .actions(Arrays.asList(predictAction))
             .build();
-        connector.decrypt(PREDICT.name(), (c) -> encryptor.decrypt(c));
+        connector.decrypt(PREDICT.name(), (c, tenantId) -> encryptor.decrypt(c, null), null);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
@@ -664,7 +664,7 @@ public class AwsConnectorExecutorTest {
             .requestBody("{\"input\": ${parameters.input}}")
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
         Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "bedrock");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
@@ -675,7 +675,7 @@ public class AwsConnectorExecutorTest {
             .credential(credential)
             .actions(Arrays.asList(predictAction))
             .build();
-        connector.decrypt(PREDICT.name(), (c) -> encryptor.decrypt(c));
+        connector.decrypt(PREDICT.name(), (c, tenantId) -> encryptor.decrypt(c, null), null);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
