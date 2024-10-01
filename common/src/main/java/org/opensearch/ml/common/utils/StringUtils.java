@@ -28,6 +28,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
+import com.jayway.jsonpath.JsonPath;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -293,4 +294,29 @@ public class StringUtils {
         // Extract the substring from the startIndex to the end of the input string
         return (startIndex != -1) ? jsonPathWithSource.substring(startIndex) : jsonPathWithSource;
     }
+
+    /**
+     * Checks if the given input string matches the JSONPath format.
+     *
+     * <p>The JSONPath format is a way to navigate and extract data from JSON documents.
+     * It uses a syntax similar to XPath for XML documents. This method attempts to compile
+     * the input string as a JSONPath expression using the {@link com.jayway.jsonpath.JsonPath}
+     * library. If the compilation succeeds, it means the input string is a valid JSONPath
+     * expression.
+     *
+     * @param input the input string to be checked for JSONPath format validity
+     * @return true if the input string is a valid JSONPath expression, false otherwise
+     */
+    public static boolean isValidJSONPath(String input) {
+        if (input == null || input.isBlank()) {
+            return false;
+        }
+        try {
+            JsonPath.compile(input); // This will throw an exception if the path is invalid
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
 }
