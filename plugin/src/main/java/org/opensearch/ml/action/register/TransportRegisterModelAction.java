@@ -7,6 +7,7 @@ package org.opensearch.ml.action.register;
 
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
+import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
@@ -332,7 +333,9 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             log.error("You must provide connector content when creating a remote model without providing connector id!");
             throw new IllegalArgumentException("You must provide connector content when creating a remote model without connector id!");
         }
-        if (registerModelInput.getConnector().getPredictEndpoint(registerModelInput.getConnector().getParameters()) == null) {
+        if (registerModelInput
+            .getConnector()
+            .getActionEndpoint(PREDICT.name(), registerModelInput.getConnector().getParameters()) == null) {
             log.error("Connector endpoint is required when creating a remote model without connector id!");
             throw new IllegalArgumentException("Connector endpoint is required when creating a remote model without connector id!");
         }

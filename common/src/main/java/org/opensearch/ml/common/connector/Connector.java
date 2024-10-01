@@ -61,18 +61,18 @@ public interface Connector extends ToXContentObject, Writeable {
 
     ConnectorClientConfig getConnectorClientConfig();
 
-    String getPredictEndpoint(Map<String, String> parameters);
+    String getActionEndpoint(String action, Map<String, String> parameters);
 
-    String getPredictHttpMethod();
+    String getActionHttpMethod(String action);
 
-    <T> T createPredictPayload(Map<String, String> parameters);
+    <T> T createPayload(String action, Map<String, String> parameters);
 
-    void decrypt(BiFunction<String, String, String> function, String tenantId);
+    void decrypt(String action, BiFunction<String, String, String> function, String tenantId);
     void encrypt(BiFunction<String, String, String> function, String tenantId);
 
     Connector cloneConnector();
 
-    Optional<ConnectorAction> findPredictAction();
+    Optional<ConnectorAction> findAction(String action);
 
     void removeCredential();
 

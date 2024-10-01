@@ -72,7 +72,7 @@ public abstract class AbstractConnector implements Connector {
     @Setter
     protected String tenantId;
 
-    protected Map<String, String> createPredictDecryptedHeaders(Map<String, String> headers) {
+    protected Map<String, String> createDecryptedHeaders(Map<String, String> headers) {
         if (headers == null) {
             return null;
         }
@@ -118,9 +118,9 @@ public abstract class AbstractConnector implements Connector {
     }
 
     @Override
-    public Optional<ConnectorAction> findPredictAction() {
+    public Optional<ConnectorAction> findAction(String action) {
         if (actions != null) {
-            return actions.stream().filter(a -> a.getActionType() == ConnectorAction.ActionType.PREDICT).findFirst();
+            return actions.stream().filter(a -> a.getActionType().name().equalsIgnoreCase(action)).findFirst();
         }
         return Optional.empty();
     }
@@ -133,13 +133,13 @@ public abstract class AbstractConnector implements Connector {
     }
 
     @Override
-    public String getPredictEndpoint(Map<String, String> parameters) {
-        Optional<ConnectorAction> predictAction = findPredictAction();
-        if (predictAction.isEmpty()) {
+    public String getActionEndpoint(String action, Map<String, String> parameters) {
+        Optional<ConnectorAction> actionEndpoint = findAction(action);
+        if (!actionEndpoint.isPresent()) {
             return null;
         }
-        String predictEndpoint = predictAction.get().getUrl();
-        if (parameters != null && !parameters.isEmpty()) {
+        String predictEndpoint = actionEndpoint.get().getUrl();
+        if (parameters != null && parameters.size() > 0) {
             StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
             predictEndpoint = substitutor.replace(predictEndpoint);
         }
