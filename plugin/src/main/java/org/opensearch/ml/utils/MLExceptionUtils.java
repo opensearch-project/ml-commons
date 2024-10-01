@@ -62,4 +62,7 @@ public class MLExceptionUtils {
         }
     }
 
+    public static Throwable getRootCause(Throwable t) {
+        return ExceptionUtils.getRootCause(t);
+    }
 }
