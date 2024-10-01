@@ -6,7 +6,6 @@ package org.opensearch.ml.processor;
 
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.*;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -31,9 +30,7 @@ import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.script.ScriptService;
 import org.opensearch.script.TemplateScript;
 
-import com.jayway.jsonpath.Configuration;
 import com.jayway.jsonpath.JsonPath;
-import com.jayway.jsonpath.Option;
 
 /**
  * MLInferenceIngestProcessor requires a modelId string to call model inferences
@@ -56,11 +53,6 @@ public class MLInferenceIngestProcessor extends AbstractProcessor implements Mod
     // At default, ml inference processor allows maximum 10 prediction tasks running in parallel
     // it can be overwritten using max_prediction_tasks when creating processor
     public static final int DEFAULT_MAX_PREDICTION_TASKS = 10;
-
-    private Configuration suppressExceptionConfiguration = Configuration
-        .builder()
-        .options(Option.SUPPRESS_EXCEPTIONS, Option.DEFAULT_PATH_LEAF_TO_NULL, Option.ALWAYS_RETURN_LIST)
-        .build();
 
     protected MLInferenceIngestProcessor(
         String modelId,
@@ -243,24 +235,29 @@ public class MLInferenceIngestProcessor extends AbstractProcessor implements Mod
             Object documentFieldValue = ingestDocument.getFieldValue(originalFieldPath, Object.class);
             String documentFieldValueAsString = toString(documentFieldValue);
             updateModelParameters(modelInputFieldName, documentFieldValueAsString, modelParameters);
+            return;
         }
-        // else when cannot find field path in document, try check for nested array using json path
-        else {
-            if (documentFieldName.contains(DOT_SYMBOL)) {
+        // If the standard dot path fails, try to check for a nested array using JSON path
+        if (StringUtils.isValidJSONPath(documentFieldName)) {
+            Map<String, Object> sourceObject = ingestDocument.getSourceAndMetadata();
+            Object fieldValue = JsonPath.using(suppressExceptionConfiguration).parse(sourceObject).read(documentFieldName);
 
-                Map<String, Object> sourceObject = ingestDocument.getSourceAndMetadata();
-                ArrayList<Object> fieldValueList = JsonPath
-                    .using(suppressExceptionConfiguration)
-                    .parse(sourceObject)
-                    .read(documentFieldName);
-                if (!fieldValueList.isEmpty()) {
-                    updateModelParameters(modelInputFieldName, toString(fieldValueList), modelParameters);
-                } else if (!ignoreMissing) {
-                    throw new IllegalArgumentException("cannot find field name defined from input map: " + documentFieldName);
+            if (fieldValue != null) {
+                if (fieldValue instanceof List) {
+                    List<?> fieldValueList = (List<?>) fieldValue;
+                    if (!fieldValueList.isEmpty()) {
+                        updateModelParameters(modelInputFieldName, toString(fieldValueList), modelParameters);
+                    } else if (!ignoreMissing) {
+                        throw new IllegalArgumentException("Cannot find field name defined from input map: " + documentFieldName);
+                    }
+                } else {
+                    updateModelParameters(modelInputFieldName, toString(fieldValue), modelParameters);
                 }
             } else if (!ignoreMissing) {
-                throw new IllegalArgumentException("cannot find field name defined from input map: " + documentFieldName);
+                throw new IllegalArgumentException("Cannot find field name defined from input map: " + documentFieldName);
             }
+        } else {
+            throw new IllegalArgumentException("Cannot find field name defined from input map: " + documentFieldName);
         }
     }
 
