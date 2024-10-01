@@ -1,0 +1,36 @@
+---
+name: Check if the workflow require approval
+on:
+  workflow_call:
+    outputs:
+      is-require-approval:
+        description: The ci image version for linux build
+        value: ${{ jobs.Require-Approval.outputs.output-is-require-approval }}
+
+jobs:
+  Require-Approval:
+    runs-on: ubuntu-latest
+    outputs:
+      output-is-require-approval: ${{ steps.step-is-require-approval.outputs.is-require-approval }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+      - name: Get CodeOwner List
+        id: step-is-require-approval
+        run: |
+          github_event=${{ github.event_name }}
+          if [[ "$github_event" = "push" ]]; then
+            echo "Push event does not need approval"
+            echo "is-require-approval=ml-commons-cicd-env" >> $GITHUB_OUTPUT
+          else
+            approvers=$(cat .github/CODEOWNERS | grep @ | tr -d '* ' | sed 's/@/,/g' | sed 's/,//1')
+            author=${{ github.event.pull_request.user.login }}
+            if [[ "$approvers" =~ "$author" ]]; then
+              echo "$author is in the approval list"
+              echo "is-require-approval=ml-commons-cicd-env" >> $GITHUB_OUTPUT
+            else
+              echo "$author is not in the approval list"
+              echo "is-require-approval=ml-commons-cicd-env-require-approval" >> $GITHUB_OUTPUT
+            fi
+          fi
