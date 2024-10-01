@@ -13,6 +13,7 @@ import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import org.opensearch.ResourceNotFoundException;
@@ -281,7 +282,7 @@ public class MLAgentExecutor implements Executable {
 
     @VisibleForTesting
     protected MLAgentRunner getAgentRunner(MLAgent mlAgent) {
-        final MLAgentType agentType = MLAgentType.from(mlAgent.getType().toUpperCase());
+        final MLAgentType agentType = MLAgentType.from(mlAgent.getType().toUpperCase(Locale.ROOT));
         switch (agentType) {
             case FLOW:
                 return new MLFlowAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryFactoryMap);
