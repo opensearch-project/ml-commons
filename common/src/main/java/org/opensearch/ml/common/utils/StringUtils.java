@@ -34,6 +34,11 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD;
+import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD;
+import com.jayway.jsonpath.JsonPath;
+
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class StringUtils {
@@ -238,6 +243,46 @@ public class StringUtils {
             return errorMessage + " Model ID: " + modelId;
         }
     }
+
+    public static String obtainFieldNameFromJsonPath(String jsonPath) {
+        String[] parts = jsonPath.split("\\.");
+
+        // Get the last part which is the field name
+        return parts[parts.length - 1];
+    }
+
+    public static String getJsonPath(String jsonPathWithSource) {
+        // Find the index of the first occurrence of "$."
+        int startIndex = jsonPathWithSource.indexOf("$.");
+
+        // Extract the substring from the startIndex to the end of the input string
+        return (startIndex != -1) ? jsonPathWithSource.substring(startIndex) : jsonPathWithSource;
+    }
+
+    /**
+     * Checks if the given input string matches the JSONPath format.
+     *
+     * <p>The JSONPath format is a way to navigate and extract data from JSON documents.
+     * It uses a syntax similar to XPath for XML documents. This method attempts to compile
+     * the input string as a JSONPath expression using the {@link com.jayway.jsonpath.JsonPath}
+     * library. If the compilation succeeds, it means the input string is a valid JSONPath
+     * expression.
+     *
+     * @param input the input string to be checked for JSONPath format validity
+     * @return true if the input string is a valid JSONPath expression, false otherwise
+     */
+    public static boolean isValidJSONPath(String input) {
+        if (input == null || input.isBlank()) {
+            return false;
+        }
+        try {
+            JsonPath.compile(input); // This will throw an exception if the path is invalid
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
 
     /**
      * Collects the prefixes of the toString() method calls present in the values of the given map.
