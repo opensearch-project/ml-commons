@@ -168,7 +168,7 @@ public class MLAgentExecutorTest {
         when(threadPool.executor(anyString())).thenReturn(testThreadPool.executor("opensearch_ml_general"));
 
         settings = Settings.builder().build();
-        sdkClient = new SdkClient(new LocalClusterIndicesClient(client, xContentRegistry));
+        sdkClient = new SdkClient(new LocalClusterIndicesClient(client, xContentRegistry), true);
         mlAgentExecutor = Mockito
             .spy(new MLAgentExecutor(client, sdkClient, settings, clusterService, xContentRegistry, toolFactories, memoryMap, false));
 
