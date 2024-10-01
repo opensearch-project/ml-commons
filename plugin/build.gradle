@@ -67,7 +67,7 @@ dependencies {
     implementation "org.opensearch.client:opensearch-java:2.10.2"
     api "org.apache.httpcomponents.client5:httpclient5:5.3.1"
     api "org.apache.httpcomponents.core5:httpcore5:5.2.5"
-    
+
     // Dynamo dependencies
     implementation("software.amazon.awssdk:sdk-core:2.25.40")
     implementation("software.amazon.awssdk:aws-core:2.25.40")
@@ -91,7 +91,7 @@ dependencies {
     implementation("software.amazon.awssdk:utils:2.25.40")
     // AWS OpenSearch Service dependency
     implementation("software.amazon.awssdk:apache-client:2.25.40")
-    
+
     configurations.all {
         resolutionStrategy.force 'org.apache.httpcomponents.core5:httpcore5:5.2.4'
         resolutionStrategy.force 'org.apache.httpcomponents.core5:httpcore5-h2:5.2.4'
@@ -241,7 +241,7 @@ integTest {
 }
 
 testClusters.integTest {
-    // Replicate credential environment variables to cluster nodes    
+    // Replicate credential environment variables to cluster nodes
     // Set environment variables only if they are present
     if (System.getenv("AWS_ACCESS_KEY_ID") != null) {
         environment "AWS_ACCESS_KEY_ID", System.getenv("AWS_ACCESS_KEY_ID")
@@ -335,7 +335,7 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.profile.MLPredictRequestStats',
         'org.opensearch.ml.action.deploy.TransportDeployModelAction',
         'org.opensearch.ml.action.deploy.TransportDeployModelOnNodeAction',
-	    'org.opensearch.ml.action.undeploy.TransportUndeployModelsAction',
+        'org.opensearch.ml.action.undeploy.TransportUndeployModelsAction',
         'org.opensearch.ml.action.prediction.TransportPredictionTaskAction',
         'org.opensearch.ml.action.prediction.TransportPredictionTaskAction.1',
         'org.opensearch.ml.action.tasks.GetTaskTransportAction',
