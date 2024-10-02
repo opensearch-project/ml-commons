@@ -93,14 +93,22 @@ import org.opensearch.ml.profile.MLProfileInput;
 import org.opensearch.ml.utils.TestData;
 import org.opensearch.plugins.Plugin;
 import org.opensearch.search.builder.SearchSourceBuilder;
-import org.opensearch.test.OpenSearchIntegTestCase;
+import org.opensearch.test.ParameterizedStaticSettingsOpenSearchIntegTestCase;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.gson.Gson;
 
-public class MLCommonsIntegTestCase extends OpenSearchIntegTestCase {
+public class MLCommonsIntegTestCase extends ParameterizedStaticSettingsOpenSearchIntegTestCase {
     private Gson gson = new Gson();
+
+    public MLCommonsIntegTestCase() {
+        super(Settings.EMPTY);
+    }
+
+    public MLCommonsIntegTestCase(Settings nodeSettings) {
+        super(nodeSettings);
+    }
 
     @Override
     protected Collection<Class<? extends Plugin>> nodePlugins() {
