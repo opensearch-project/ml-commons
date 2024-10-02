@@ -83,12 +83,12 @@ public class ModelGuardrailTests {
         modelGuardrail.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String content = TestHelper.xContentBuilderToString(builder);
 
-        Assert.assertEquals("{\"model_id\":\"test_model_id\",\"response_filter\":\"$.test\",\"response_accept\":\"^accept$\"}", content);
+        Assert.assertEquals("{\"model_id\":\"test_model_id\",\"response_filter\":\"$.test\",\"response_validation_regex\":\"^accept$\"}", content);
     }
 
     @Test
     public void parse() throws IOException {
-        String jsonStr = "{\"model_id\":\"test_model_id\",\"response_filter\":\"$.test\",\"response_accept\":\"^accept$\"}";
+        String jsonStr = "{\"model_id\":\"test_model_id\",\"response_filter\":\"$.test\",\"response_validation_regex\":\"^accept$\"}";
         XContentParser parser = XContentType.JSON.xContent().createParser(new NamedXContentRegistry(new SearchModule(Settings.EMPTY,
                 Collections.emptyList()).getNamedXContents()), null, jsonStr);
         parser.nextToken();
