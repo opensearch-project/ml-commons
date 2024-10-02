@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.rest;
 
+import static org.opensearch.ml.common.MLTask.MODEL_ID_FIELD;
+import static org.opensearch.ml.utils.TestData.SENTENCE_TRANSFORMER_MODEL_URL;
 import static org.opensearch.ml.utils.TestHelper.makeRequest;
 
 import java.io.IOException;
@@ -15,6 +17,12 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.opensearch.client.Request;
 import org.opensearch.client.Response;
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLTaskState;
+import org.opensearch.ml.common.model.MLModelConfig;
+import org.opensearch.ml.common.model.MLModelFormat;
+import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
+import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.utils.TestHelper;
 
 import com.jayway.jsonpath.JsonPath;
@@ -23,6 +31,8 @@ public class RestMLInferenceIngestProcessorIT extends MLCommonsRestTestCase {
     private final String OPENAI_KEY = System.getenv("OPENAI_KEY");
     private String openAIChatModelId;
     private String bedrockEmbeddingModelId;
+
+    private String localModelId;
     private final String completionModelConnectorEntity = "{\n"
         + "  \"name\": \"OpenAI text embedding model Connector\",\n"
         + "  \"description\": \"The connector to public OpenAI text embedding model service\",\n"
@@ -347,6 +357,192 @@ public class RestMLInferenceIngestProcessorIT extends MLCommonsRestTestCase {
         Assert.assertEquals(1536, embedding2.size());
     }
 
+    public void testMLInferenceProcessorLocalModelObjectField() throws Exception {
+
+        String taskId = registerModel(TestHelper.toJsonString(registerModelInput()));
+        waitForTask(taskId, MLTaskState.COMPLETED);
+        getTask(client(), taskId, response -> {
+            assertNotNull(response.get(MODEL_ID_FIELD));
+            this.localModelId = (String) response.get(MODEL_ID_FIELD);
+            try {
+                String deployTaskID = deployModel(this.localModelId);
+                waitForTask(deployTaskID, MLTaskState.COMPLETED);
+
+                getModel(client(), this.localModelId, model -> { assertEquals("DEPLOYED", model.get("model_state")); });
+            } catch (IOException | InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        });
+
+        String createPipelineRequestBody = "{\n"
+            + "  \"description\": \"test ml model ingest processor\",\n"
+            + "  \"processors\": [\n"
+            + "    {\n"
+            + "      \"ml_inference\": {\n"
+            + "        \"function_name\": \"text_embedding\",\n"
+            + "        \"full_response_path\": true,\n"
+            + "        \"model_id\": \""
+            + this.localModelId
+            + "\",\n"
+            + "        \"model_input\": \"{ \\\"text_docs\\\": ${ml_inference.text_docs} }\",\n"
+            + "        \"input_map\": [\n"
+            + "          {\n"
+            + "            \"text_docs\": \"diary\"\n"
+            + "          }\n"
+            + "        ],\n"
+            + "        \"output_map\": [\n"
+            + "          {\n"
+            + "            \"diary_embedding\": \"$.inference_results.*.output.*.data\"\n"
+            + "          }\n"
+            + "        ],\n"
+            + "        \"ignore_missing\": false,\n"
+            + "        \"ignore_failure\": false\n"
+            + "      }\n"
+            + "    }\n"
+            + "  ]\n"
+            + "}";
+        String createIndexRequestBody = "{\n"
+            + "  \"settings\": {\n"
+            + "    \"index\": {\n"
+            + "      \"default_pipeline\": \"diary_embedding_pipeline\"\n"
+            + "    }\n"
+            + "  }\n"
+            + " }";
+        String uploadDocumentRequestBody = "{\n"
+            + "  \"id\": 1,\n"
+            + "  \"diary\": [\"happy\",\"first day at school\"],\n"
+            + "  \"weather\": \"rainy\"\n"
+            + "  }";
+        String index_name = "daily_index";
+        createPipelineProcessor(createPipelineRequestBody, "diary_embedding_pipeline");
+        createIndex(index_name, createIndexRequestBody);
+
+        uploadDocument(index_name, "1", uploadDocumentRequestBody);
+        Map document = getDocument(index_name, "1");
+        List embeddingList = JsonPath.parse(document).read("_source.diary_embedding");
+        Assert.assertEquals(2, embeddingList.size());
+
+        List embedding1 = JsonPath.parse(document).read("_source.diary_embedding[0]");
+        Assert.assertEquals(768, embedding1.size());
+        Assert.assertEquals(0.42101282, (Double) embedding1.get(0), 0.005);
+
+        List embedding2 = JsonPath.parse(document).read("_source.diary_embedding[1]");
+        Assert.assertEquals(768, embedding2.size());
+        Assert.assertEquals(0.49191704, (Double) embedding2.get(0), 0.005);
+    }
+
+    // TODO: add tests for other local model types such as sparse/cross encoders
+    public void testMLInferenceProcessorLocalModelNestedField() throws Exception {
+
+        String taskId = registerModel(TestHelper.toJsonString(registerModelInput()));
+        waitForTask(taskId, MLTaskState.COMPLETED);
+        getTask(client(), taskId, response -> {
+            assertNotNull(response.get(MODEL_ID_FIELD));
+            this.localModelId = (String) response.get(MODEL_ID_FIELD);
+            try {
+                String deployTaskID = deployModel(this.localModelId);
+                waitForTask(deployTaskID, MLTaskState.COMPLETED);
+
+                getModel(client(), this.localModelId, model -> { assertEquals("DEPLOYED", model.get("model_state")); });
+            } catch (IOException | InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        });
+
+        String createPipelineRequestBody = "{\n"
+            + "  \"description\": \"ingest reviews and generate embedding\",\n"
+            + "  \"processors\": [\n"
+            + "    {\n"
+            + "      \"ml_inference\": {\n"
+            + "        \"function_name\": \"text_embedding\",\n"
+            + "        \"full_response_path\": true,\n"
+            + "        \"model_id\": \""
+            + this.localModelId
+            + "\",\n"
+            + "        \"model_input\": \"{ \\\"text_docs\\\": ${ml_inference.text_docs} }\",\n"
+            + "        \"input_map\": [\n"
+            + "          {\n"
+            + "            \"text_docs\": \"book.*.chunk.text.*.context\"\n"
+            + "          }\n"
+            + "        ],\n"
+            + "        \"output_map\": [\n"
+            + "          {\n"
+            + "            \"book.*.chunk.text.*.context_embedding\": \"$.inference_results.*.output.*.data\"\n"
+            + "          }\n"
+            + "        ],\n"
+            + "        \"ignore_missing\": true,\n"
+            + "        \"ignore_failure\": true\n"
+            + "      }\n"
+            + "    }\n"
+            + "  ]\n"
+            + "}";
+
+        String createIndexRequestBody = "{\n"
+            + "  \"settings\": {\n"
+            + "    \"index\": {\n"
+            + "      \"default_pipeline\": \"embedding_pipeline\"\n"
+            + "    }\n"
+            + "  }\n"
+            + " }";
+        String uploadDocumentRequestBody = "{\n"
+            + "  \"book\": [\n"
+            + "    {\n"
+            + "      \"chunk\": {\n"
+            + "        \"text\": [\n"
+            + "          {\n"
+            + "            \"chapter\": \"first chapter\",\n"
+            + "            \"context\": \"this is the first part\"\n"
+            + "          },\n"
+            + "          {\n"
+            + "            \"chapter\": \"first chapter\",\n"
+            + "            \"context\": \"this is the second part\"\n"
+            + "          }\n"
+            + "        ]\n"
+            + "      }\n"
+            + "    },\n"
+            + "    {\n"
+            + "      \"chunk\": {\n"
+            + "        \"text\": [\n"
+            + "          {\n"
+            + "            \"chapter\": \"second chapter\",\n"
+            + "            \"context\": \"this is the third part\"\n"
+            + "          },\n"
+            + "          {\n"
+            + "            \"chapter\": \"second chapter\",\n"
+            + "            \"context\": \"this is the fourth part\"\n"
+            + "          }\n"
+            + "        ]\n"
+            + "      }\n"
+            + "    }\n"
+            + "  ]\n"
+            + "}";
+        String index_name = "book_index";
+        createPipelineProcessor(createPipelineRequestBody, "embedding_pipeline");
+        createIndex(index_name, createIndexRequestBody);
+
+        uploadDocument(index_name, "1", uploadDocumentRequestBody);
+        Map document = getDocument(index_name, "1");
+
+        List embeddingList = JsonPath.parse(document).read("_source.book[*].chunk.text[*].context_embedding");
+        Assert.assertEquals(4, embeddingList.size());
+
+        List embedding1 = JsonPath.parse(document).read("_source.book[0].chunk.text[0].context_embedding");
+        Assert.assertEquals(768, embedding1.size());
+        Assert.assertEquals(0.48988956, (Double) embedding1.get(0), 0.005);
+
+        List embedding2 = JsonPath.parse(document).read("_source.book[0].chunk.text[1].context_embedding");
+        Assert.assertEquals(768, embedding2.size());
+        Assert.assertEquals(0.49552172, (Double) embedding2.get(0), 0.005);
+
+        List embedding3 = JsonPath.parse(document).read("_source.book[1].chunk.text[0].context_embedding");
+        Assert.assertEquals(768, embedding3.size());
+        Assert.assertEquals(0.5004309, (Double) embedding3.get(0), 0.005);
+
+        List embedding4 = JsonPath.parse(document).read("_source.book[1].chunk.text[1].context_embedding");
+        Assert.assertEquals(768, embedding4.size());
+        Assert.assertEquals(0.47907734, (Double) embedding4.get(0), 0.005);
+    }
+
     protected void createPipelineProcessor(String requestBody, final String pipelineName) throws Exception {
         Response pipelineCreateResponse = TestHelper
             .makeRequest(client(), "PUT", "/_ingest/pipeline/" + pipelineName, null, requestBody, null);
@@ -361,7 +557,6 @@ public class RestMLInferenceIngestProcessorIT extends MLCommonsRestTestCase {
 
     protected void uploadDocument(final String index, final String docId, final String jsonBody) throws IOException {
         Request request = new Request("PUT", "/" + index + "/_doc/" + docId + "?refresh=true");
-
         request.setJsonEntity(jsonBody);
         client().performRequest(request);
     }
@@ -371,6 +566,27 @@ public class RestMLInferenceIngestProcessorIT extends MLCommonsRestTestCase {
         assertEquals(200, docResponse.getStatusLine().getStatusCode());
 
         return parseResponseToMap(docResponse);
+    }
+
+    protected MLRegisterModelInput registerModelInput() throws IOException, InterruptedException {
+
+        MLModelConfig modelConfig = TextEmbeddingModelConfig
+            .builder()
+            .modelType("bert")
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .embeddingDimension(768)
+            .build();
+        return MLRegisterModelInput
+            .builder()
+            .modelName("test_model_name")
+            .version("1.0.0")
+            .functionName(FunctionName.TEXT_EMBEDDING)
+            .modelFormat(MLModelFormat.TORCH_SCRIPT)
+            .modelConfig(modelConfig)
+            .url(SENTENCE_TRANSFORMER_MODEL_URL)
+            .deployModel(false)
+            .hashValue("e13b74006290a9d0f58c1376f9629d4ebc05a0f9385f40db837452b167ae9021")
+            .build();
     }
 
 }
