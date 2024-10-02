@@ -10,6 +10,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_CONTROLLER_ENABLED;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ENABLED;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
@@ -48,7 +49,8 @@ public class MLFeatureEnabledSettingTests {
                             ML_COMMONS_REMOTE_INFERENCE_ENABLED,
                             ML_COMMONS_AGENT_FRAMEWORK_ENABLED,
                             ML_COMMONS_LOCAL_MODEL_ENABLED,
-                            ML_COMMONS_CONTROLLER_ENABLED
+                            ML_COMMONS_CONTROLLER_ENABLED,
+                            ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED
                         )
                 )
             );
