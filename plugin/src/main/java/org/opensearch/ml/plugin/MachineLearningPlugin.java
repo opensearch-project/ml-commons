@@ -956,7 +956,7 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE,
                 MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
                 MLCommonsSettings.ML_COMMONS_CONTROLLER_ENABLED,
-                    MLCommonsSettings.ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED,
+                MLCommonsSettings.ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED,
                 // Settings for SdkClient
                 SdkClientSettings.REMOTE_METADATA_TYPE,
                 SdkClientSettings.REMOTE_METADATA_ENDPOINT,
