@@ -11,6 +11,7 @@ This guide applies to the development within the ML-Commons project
     - [Build](#Build)
       - [Building from the command line](#Building-from-the-command-line)
       - [Debugging](#Debugging)
+- [Workflow CI/CD Approval](#Workflow-CICD-Approval)
 - [More documentation](#More-docs)
 - [Code guidelines](#code-guidelines)
 
@@ -96,7 +97,7 @@ This package uses the [Gradle](https://docs.gradle.org/current/userguide/usergui
 7. `./gradlew integTest -Dtests.rest.cluster=localhost:9200 -Dtests.cluster=localhost:9200 -Dtests.clustername="docker-cluster" -Dhttps=true -Duser=admin -Dpassword=admin` launches integration tests against a local cluster and run tests with security. Detail steps: (1)download OpenSearch tarball to local and install by running `opensearch-tar-install.sh`; (2)build ML plugin zip with your change and install ML plugin zip; (3)restart local test cluster; (4) run this gradle command to test.
 8. `./gradlew spotlessApply` formats code. And/or import formatting rules in `.eclipseformat.xml` with IDE.
 
-When launching a cluster using one of the above commands logs are placed in `/build/cluster/run node0/opensearch-<version>/logs`. Though the logs are teed to the console, in practices it's best to check the actual log file.
+When launching a cluster using one of the above commands logs are placed in `/build/cluster/run node0/opensearch-<version>/logs`. Though the logs are tied to the console, in practices it's best to check the actual log file.
 
 #### Debugging
 
@@ -117,6 +118,14 @@ To debug code running in an integ test (which exercises the server from a separa
 ```
 
 The test runner JVM will start suspended and wait for a debugger to attach to `localhost:5005` before running the tests.
+
+## Workflow CI/CD Approval
+As of October 2nd 2024, you will need to ask for maintainer approval to run the GitHub
+CI/CD workflow actions to see your code changes build on pushing your PR.
+
+This is regarding a security issue, we hope you can understand.
+
+To see the current maintainers to check  [MAINTAINERS.md](MAINTAINERS.md)
 
 ## More docs
 
