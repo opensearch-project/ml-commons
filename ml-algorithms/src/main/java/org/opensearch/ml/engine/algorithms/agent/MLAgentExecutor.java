@@ -135,7 +135,12 @@ public class MLAgentExecutor implements Executable {
                                     (ConversationIndexMemory.Factory) memoryFactoryMap.get(memorySpec.getType());
                                 conversationIndexMemoryFactory.create(question, memoryId, appType, ActionListener.wrap(memory -> {
                                     inputDataSet.getParameters().put(MEMORY_ID, memory.getConversationId());
-                                    ActionListener<Object> agentActionListener = createAgentActionListener(listener, outputs, modelTensors);
+                                    ActionListener<Object> agentActionListener = createAgentActionListener(
+                                        listener,
+                                        outputs,
+                                        modelTensors,
+                                        mlAgent.getType()
+                                    );
                                     // get question for regenerate
                                     if (regenerateInteractionId != null) {
                                         log.info("Regenerate for existing interaction {}", regenerateInteractionId);
@@ -161,7 +166,12 @@ public class MLAgentExecutor implements Executable {
                                     listener.onFailure(ex);
                                 }));
                             } else {
-                                ActionListener<Object> agentActionListener = createAgentActionListener(listener, outputs, modelTensors);
+                                ActionListener<Object> agentActionListener = createAgentActionListener(
+                                    listener,
+                                    outputs,
+                                    modelTensors,
+                                    mlAgent.getType()
+                                );
                                 executeAgent(inputDataSet, mlAgent, agentActionListener);
                             }
                         }
@@ -235,7 +245,8 @@ public class MLAgentExecutor implements Executable {
     private ActionListener<Object> createAgentActionListener(
         ActionListener<Output> listener,
         List<ModelTensors> outputs,
-        List<ModelTensor> modelTensors
+        List<ModelTensor> modelTensors,
+        String agentType
     ) {
         return ActionListener.wrap(output -> {
             if (output != null) {
@@ -275,7 +286,7 @@ public class MLAgentExecutor implements Executable {
                 listener.onResponse(null);
             }
         }, ex -> {
-            log.error("Failed to run flow agent", ex);
+            log.error("Failed to run " + agentType + " agent", ex);
             listener.onFailure(ex);
         });
     }
