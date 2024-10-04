@@ -239,7 +239,18 @@ public class GenerativeQAParametersTests extends OpenSearchTestCase {
         assertNotNull(parameters.toXContent(builder, null));
     }
 
-    public void testToXConentAllOptionalParameters() throws IOException {
+    public void testToXContentEmptyParams() throws IOException {
+        GenerativeQAParameters parameters = new GenerativeQAParameters();
+        XContent xc = mock(XContent.class);
+        OutputStream os = mock(OutputStream.class);
+        XContentGenerator generator = mock(XContentGenerator.class);
+        when(xc.createGenerator(any(), any(), any())).thenReturn(generator);
+        XContentBuilder builder = new XContentBuilder(xc, os);
+        parameters.toXContent(builder, null);
+        assertNotNull(parameters.toXContent(builder, null));
+    }
+
+    public void testToXContentAllOptionalParameters() throws IOException {
         String conversationId = "a";
         String llmModel = "b";
         String llmQuestion = "c";
