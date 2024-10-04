@@ -21,7 +21,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
 import java.io.EOFException;
@@ -128,12 +127,12 @@ public class GenerativeQAParamExtBuilderTests extends OpenSearchTestCase {
         String requiredJsonStr = "{\"llm_question\":\"this is test llm question\"}";
 
         XContentParser parser = XContentType.JSON
-                .xContent()
-                .createParser(
-                        new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
-                        null,
-                        requiredJsonStr
-                );
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                requiredJsonStr
+            );
 
         parser.nextToken();
         GenerativeQAParamExtBuilder builder = GenerativeQAParamExtBuilder.parse(parser);
@@ -151,7 +150,7 @@ public class GenerativeQAParamExtBuilderTests extends OpenSearchTestCase {
         XContentType xContentType = randomFrom(XContentType.values());
         XContentBuilder builder = XContentBuilder.builder(xContentType.xContent());
         builder = extBuilder.toXContent(builder, EMPTY_PARAMS);
-        BytesReference serialized =  BytesReference.bytes(builder);
+        BytesReference serialized = BytesReference.bytes(builder);
 
         XContentParser parser = createParser(xContentType.xContent(), serialized);
         parser.nextToken();
@@ -172,7 +171,7 @@ public class GenerativeQAParamExtBuilderTests extends OpenSearchTestCase {
         XContentType xContentType = randomFrom(XContentType.values());
         XContentBuilder builder = XContentBuilder.builder(xContentType.xContent());
         builder = extBuilder.toXContent(builder, EMPTY_PARAMS);
-        BytesReference serialized =  BytesReference.bytes(builder);
+        BytesReference serialized = BytesReference.bytes(builder);
 
         XContentParser parser = createParser(xContentType.xContent(), serialized);
         parser.nextToken();
