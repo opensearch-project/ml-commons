@@ -26,8 +26,6 @@ import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 import java.io.EOFException;
 import java.io.IOException;
 import java.util.Collections;
-import java.util.List;
-import java.util.Map;
 
 import org.junit.Assert;
 import org.opensearch.common.io.stream.BytesStreamOutput;
