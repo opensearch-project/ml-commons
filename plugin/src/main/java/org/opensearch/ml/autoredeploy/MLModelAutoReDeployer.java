@@ -12,6 +12,7 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -30,6 +31,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.TermsQueryBuilder;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
@@ -257,17 +259,17 @@ public class MLModelAutoReDeployer {
     private void triggerModelRedeploy(ModelAutoRedeployArrangement modelAutoRedeployArrangement) {
         String modelId = modelAutoRedeployArrangement.getSearchResponse().getId();
         List<String> addedNodes = modelAutoRedeployArrangement.getAddedNodes();
-        List<String> planningWorkerNodes = (List<String>) modelAutoRedeployArrangement
-            .getSearchResponse()
-            .getSourceAsMap()
-            .get(MLModel.PLANNING_WORKER_NODES_FIELD);
-        Integer autoRedeployRetryTimes = (Integer) modelAutoRedeployArrangement
-            .getSearchResponse()
-            .getSourceAsMap()
-            .get(MLModel.AUTO_REDEPLOY_RETRY_TIMES_FIELD);
-        Boolean deployToAllNodes = (Boolean) Optional
-            .ofNullable(modelAutoRedeployArrangement.getSearchResponse().getSourceAsMap().get(MLModel.DEPLOY_TO_ALL_NODES_FIELD))
-            .orElse(false);
+        Map<String, Object> sourceAsMap = modelAutoRedeployArrangement.getSearchResponse().getSourceAsMap();
+        String functionName = (String) Optional
+            .ofNullable(sourceAsMap.get(MLModel.FUNCTION_NAME_FIELD))
+            .orElse(sourceAsMap.get(MLModel.ALGORITHM_FIELD));
+        if (FunctionName.REMOTE == FunctionName.from(functionName)) {
+            log.info("Skipping redeploying remote model {} as remote model deployment can be done at prediction time.", modelId);
+            return;
+        }
+        List<String> planningWorkerNodes = (List<String>) sourceAsMap.get(MLModel.PLANNING_WORKER_NODES_FIELD);
+        Integer autoRedeployRetryTimes = (Integer) sourceAsMap.get(MLModel.AUTO_REDEPLOY_RETRY_TIMES_FIELD);
+        Boolean deployToAllNodes = (Boolean) Optional.ofNullable(sourceAsMap.get(MLModel.DEPLOY_TO_ALL_NODES_FIELD)).orElse(false);
         // calculate node ids.
         String[] nodeIds = null;
         if (deployToAllNodes || !allowCustomDeploymentPlan) {
