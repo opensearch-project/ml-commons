@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.output;
 
 import java.io.IOException;
+import java.util.Map;
 
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -29,9 +30,11 @@ public class MLPredictionOutput extends MLOutput {
     public static final String TASK_ID_FIELD = "task_id";
     public static final String STATUS_FIELD = "status";
     public static final String PREDICTION_RESULT_FIELD = "prediction_result";
+    public static final String REMOTE_JOB_FIELD = "remote_job";
 
     String taskId;
     String status;
+    Map<String, Object> remoteJob;
 
     @ToString.Exclude
     DataFrame predictionResult;
@@ -42,6 +45,14 @@ public class MLPredictionOutput extends MLOutput {
         this.taskId = taskId;
         this.status = status;
         this.predictionResult = predictionResult;
+    }
+
+    @Builder
+    public MLPredictionOutput(String taskId, String status, Map<String, Object> remoteJob) {
+        super(OUTPUT_TYPE);
+        this.taskId = taskId;
+        this.status = status;
+        this.remoteJob = remoteJob;
     }
 
     public MLPredictionOutput(StreamInput in) throws IOException {
@@ -56,6 +67,9 @@ public class MLPredictionOutput extends MLOutput {
                     break;
             }
         }
+        if (in.readBoolean()) {
+            this.remoteJob = in.readMap(s -> s.readString(), s -> s.readGenericValue());
+        }
     }
 
     @Override
@@ -66,6 +80,12 @@ public class MLPredictionOutput extends MLOutput {
         if (predictionResult != null) {
             out.writeBoolean(true);
             predictionResult.writeTo(out);
+        } else {
+            out.writeBoolean(false);
+        }
+        if (remoteJob != null) {
+            out.writeBoolean(true);
+            out.writeMap(remoteJob, StreamOutput::writeString, StreamOutput::writeGenericValue);
         } else {
             out.writeBoolean(false);
         }
@@ -85,6 +105,10 @@ public class MLPredictionOutput extends MLOutput {
             builder.startObject(PREDICTION_RESULT_FIELD);
             predictionResult.toXContent(builder, params);
             builder.endObject();
+        }
+
+        if (remoteJob != null) {
+            builder.field(REMOTE_JOB_FIELD, remoteJob);
         }
 
         builder.endObject();

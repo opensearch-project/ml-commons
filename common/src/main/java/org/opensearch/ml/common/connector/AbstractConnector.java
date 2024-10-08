@@ -126,6 +126,11 @@ public abstract class AbstractConnector implements Connector {
     }
 
     @Override
+    public void setAction(ConnectorAction action) {
+        actions.add(action);
+    }
+
+    @Override
     public void removeCredential() {
         this.credential = null;
         this.decryptedCredential = null;

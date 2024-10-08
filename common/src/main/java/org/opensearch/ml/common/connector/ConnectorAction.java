@@ -23,6 +23,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import lombok.Setter;
 
 @Getter
 @EqualsAndHashCode
@@ -35,6 +36,7 @@ public class ConnectorAction implements ToXContentObject, Writeable {
     public static final String REQUEST_BODY_FIELD = "request_body";
     public static final String ACTION_PRE_PROCESS_FUNCTION = "pre_process_function";
     public static final String ACTION_POST_PROCESS_FUNCTION = "post_process_function";
+
 
     private ActionType actionType;
     private String method;
