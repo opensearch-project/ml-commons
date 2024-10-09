@@ -30,6 +30,8 @@ public class MLPredictionOutput extends MLOutput {
     public static final String TASK_ID_FIELD = "task_id";
     public static final String STATUS_FIELD = "status";
     public static final String PREDICTION_RESULT_FIELD = "prediction_result";
+
+    // This field will be created for offline batch prediction tasks containing details of the batch job as outputted by the remote server.
     public static final String REMOTE_JOB_FIELD = "remote_job";
 
     String taskId;
