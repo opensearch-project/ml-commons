@@ -167,9 +167,11 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
         this.conversationId = conversationId;
         this.llmModel = llmModel;
 
-        // TODO: keep this requirement until we can extract the question from the query or from the request processor parameters
-        // for question rewriting.
-        Preconditions.checkArgument(!Strings.isNullOrEmpty(llmQuestion), LLM_QUESTION + " must be provided.");
+        Preconditions
+            .checkArgument(
+                !(Strings.isNullOrEmpty(llmQuestion) && (llmMessages == null || llmMessages.isEmpty())),
+                "At least one of " + LLM_QUESTION + " or " + LLM_MESSAGES_FIELD + " must be provided."
+            );
         this.llmQuestion = llmQuestion;
         this.systemPrompt = systemPrompt;
         this.userInstructions = userInstructions;
@@ -185,7 +187,7 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
     public GenerativeQAParameters(StreamInput input) throws IOException {
         this.conversationId = input.readOptionalString();
         this.llmModel = input.readOptionalString();
-        this.llmQuestion = input.readString();
+        this.llmQuestion = input.readOptionalString();
         this.systemPrompt = input.readOptionalString();
         this.userInstructions = input.readOptionalString();
         this.contextSize = input.readInt();
@@ -246,9 +248,7 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
     public void writeTo(StreamOutput out) throws IOException {
         out.writeOptionalString(conversationId);
         out.writeOptionalString(llmModel);
-
-        Preconditions.checkNotNull(llmQuestion, "llm_question must not be null.");
-        out.writeString(llmQuestion);
+        out.writeOptionalString(llmQuestion);
         out.writeOptionalString(systemPrompt);
         out.writeOptionalString(userInstructions);
         out.writeInt(contextSize);

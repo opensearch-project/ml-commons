@@ -360,7 +360,6 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         + "   \"ext\": {\n"
         + "      \"generative_qa_parameters\": {\n"
         + "        \"llm_model\": \"%s\",\n"
-        + "        \"llm_question\": \"%s\",\n"
         + "        \"system_prompt\": \"%s\",\n"
         + "        \"user_instructions\": \"%s\",\n"
         + "        \"context_size\": %d,\n"
@@ -379,8 +378,6 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
         + "   \"ext\": {\n"
         + "      \"generative_qa_parameters\": {\n"
         + "        \"llm_model\": \"%s\",\n"
-        + "        \"llm_question\": \"%s\",\n"
-        // + " \"system_prompt\": \"%s\",\n"
         + "        \"user_instructions\": \"%s\",\n"
         + "        \"context_size\": %d,\n"
         + "        \"message_size\": %d,\n"
@@ -726,8 +723,12 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
     public void testBM25WithBedrockConverse() throws Exception {
         // Skip test if key is null
         if (AWS_ACCESS_KEY_ID == null) {
+            System.out.println("Skipping testBM25WithBedrockConverse because AWS_ACCESS_KEY_ID is null");
             return;
         }
+
+        System.out.println("Running testBM25WithBedrockConverse");
+
         Response response = createConnector(BEDROCK_CONVERSE_CONNECTOR_BLUEPRINT);
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
@@ -779,8 +780,11 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
     public void testBM25WithBedrockConverseUsingLlmMessages() throws Exception {
         // Skip test if key is null
         if (AWS_ACCESS_KEY_ID == null) {
+            System.out.println("Skipping testBM25WithBedrockConverseUsingLlmMessages because AWS_ACCESS_KEY_ID is null");
             return;
         }
+        System.out.println("Running testBM25WithBedrockConverseUsingLlmMessages");
+
         Response response = createConnector(BEDROCK_CONVERSE_CONNECTOR_BLUEPRINT2);
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
@@ -840,8 +844,11 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
     public void testBM25WithBedrockConverseUsingLlmMessagesForDocumentChat() throws Exception {
         // Skip test if key is null
         if (AWS_ACCESS_KEY_ID == null) {
+            System.out.println("Skipping testBM25WithBedrockConverseUsingLlmMessagesForDocumentChat because AWS_ACCESS_KEY_ID is null");
             return;
         }
+
+        System.out.println("Running testBM25WithBedrockConverseUsingLlmMessagesForDocumentChat");
         Response response = createConnector(BEDROCK_DOCUMENT_CONVERSE_CONNECTOR_BLUEPRINT2);
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
@@ -899,8 +906,11 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
     public void testBM25WithOpenAIWithConversation() throws Exception {
         // Skip test if key is null
         if (OPENAI_KEY == null) {
+            System.out.println("Skipping testBM25WithOpenAIWithConversation because OPENAI_KEY is null");
             return;
         }
+        System.out.println("Running testBM25WithOpenAIWithConversation");
+
         Response response = createConnector(OPENAI_CONNECTOR_BLUEPRINT);
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
@@ -957,8 +967,11 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
     public void testBM25WithOpenAIWithConversationAndImage() throws Exception {
         // Skip test if key is null
         if (OPENAI_KEY == null) {
+            System.out.println("Skipping testBM25WithOpenAIWithConversationAndImage because OPENAI_KEY is null");
             return;
         }
+        System.out.println("Running testBM25WithOpenAIWithConversationAndImage");
+
         Response response = createConnector(OPENAI_4o_CONNECTOR_BLUEPRINT);
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
@@ -1251,7 +1264,6 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
                         requestParameters.source,
                         requestParameters.match,
                         requestParameters.llmModel,
-                        requestParameters.llmQuestion,
                         requestParameters.systemPrompt,
                         requestParameters.userInstructions,
                         requestParameters.contextSize,
@@ -1274,8 +1286,6 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
                         requestParameters.source,
                         requestParameters.match,
                         requestParameters.llmModel,
-                        requestParameters.llmQuestion,
-                        // requestParameters.systemPrompt,
                         requestParameters.userInstructions,
                         requestParameters.contextSize,
                         requestParameters.interactionSize,
@@ -1315,7 +1325,6 @@ public class RestMLRAGSearchProcessorIT extends MLCommonsRestTestCase {
                         requestParameters.source,
                         requestParameters.match,
                         requestParameters.llmModel,
-                        requestParameters.llmQuestion,
                         requestParameters.systemPrompt,
                         requestParameters.userInstructions,
                         requestParameters.contextSize,
