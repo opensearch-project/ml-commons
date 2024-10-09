@@ -371,11 +371,11 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                                             mlTaskManager.createMLTask(mlTask, ActionListener.wrap(response -> {
                                                 String taskId = response.getId();
                                                 mlTask.setTaskId(taskId);
-                                                MLPredictionOutput outputBuilder = MLPredictionOutput
-                                                    .builder()
-                                                    .taskId(taskId)
-                                                    .status(MLTaskState.CREATED.name())
-                                                    .build();
+                                                MLPredictionOutput outputBuilder = new MLPredictionOutput(
+                                                    taskId,
+                                                    MLTaskState.CREATED.name(),
+                                                    remoteJob
+                                                );
 
                                                 MLTaskResponse predictOutput = MLTaskResponse.builder().output(outputBuilder).build();
                                                 internalListener.onResponse(predictOutput);
