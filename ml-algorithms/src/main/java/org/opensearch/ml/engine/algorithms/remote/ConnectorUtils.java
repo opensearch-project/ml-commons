@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.apache.commons.text.StringEscapeUtils.escapeJson;
+import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.BATCH_PREDICT;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.CANCEL_BATCH_PREDICT;
 import static org.opensearch.ml.common.connector.HttpConnector.RESPONSE_FILTER_FIELD;
 import static org.opensearch.ml.common.connector.MLPreProcessFunction.CONVERT_INPUT_TO_JSON_STRING;
@@ -19,6 +20,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -60,6 +62,9 @@ public class ConnectorUtils {
 
     private static final Aws4Signer signer;
     public static final String SKIP_VALIDATE_MISSING_PARAMETERS = "skip_validating_missing_parameters";
+
+    public static final List<String> SUPPORTED_REMOTE_SERVERS_FOR_DEFAULT_ACTION_TYPES = List
+        .of("sagemaker", "openai", "bedrock", "cohere");
 
     static {
         signer = Aws4Signer.create();
@@ -312,5 +317,59 @@ public class ConnectorUtils {
             builder.putHeader("Content-Length", requestBody.optionalContentLength().get().toString());
         }
         return builder.build();
+    }
+
+    public static ConnectorAction createConnectorAction(Connector connector, ConnectorAction.ActionType actionType) {
+        Optional<ConnectorAction> batchPredictAction = connector.findAction(BATCH_PREDICT.name());
+        String predictEndpoint = batchPredictAction.get().getUrl();
+        Map<String, String> parameters = connector.getParameters() != null
+            ? new HashMap<>(connector.getParameters())
+            : Collections.emptyMap();
+
+        // Apply parameter substitution only if needed
+        if (!parameters.isEmpty()) {
+            StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
+            predictEndpoint = substitutor.replace(predictEndpoint);
+        }
+
+        boolean isCancelAction = actionType == CANCEL_BATCH_PREDICT;
+
+        // Initialize the default method and requestBody
+        String method = "POST";
+        String requestBody = null;
+        String url = "";
+
+        switch (getRemoteServerFromURL(predictEndpoint)) {
+            case "sagemaker":
+                url = isCancelAction
+                    ? predictEndpoint.replace("CreateTransformJob", "StopTransformJob")
+                    : predictEndpoint.replace("CreateTransformJob", "DescribeTransformJob");
+                requestBody = "{ \"TransformJobName\" : \"${parameters.TransformJobName}\"}";
+                break;
+            case "openai":
+            case "cohere":
+                url = isCancelAction ? predictEndpoint + "/${parameters.id}/cancel" : predictEndpoint + "/${parameters.id}";
+                method = isCancelAction ? "POST" : "GET";
+                break;
+            case "bedrock":
+                url = isCancelAction
+                    ? predictEndpoint + "/${parameters.processedJobArn}/stop"
+                    : predictEndpoint + "/${parameters.processedJobArn}";
+                method = isCancelAction ? "POST" : "GET";
+                break;
+        }
+
+        return ConnectorAction
+            .builder()
+            .actionType(actionType)
+            .method(method)
+            .url(url)
+            .requestBody(requestBody)
+            .headers(batchPredictAction.get().getHeaders())
+            .build();
+    }
+
+    public static String getRemoteServerFromURL(String url) {
+        return SUPPORTED_REMOTE_SERVERS_FOR_DEFAULT_ACTION_TYPES.stream().filter(url::contains).findFirst().orElse("");
     }
 }

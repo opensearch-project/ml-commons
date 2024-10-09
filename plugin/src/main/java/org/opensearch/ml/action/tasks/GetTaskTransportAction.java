@@ -14,7 +14,6 @@ import static org.opensearch.ml.common.MLTaskState.CANCELLED;
 import static org.opensearch.ml.common.MLTaskState.CANCELLING;
 import static org.opensearch.ml.common.MLTaskState.COMPLETED;
 import static org.opensearch.ml.common.MLTaskState.EXPIRED;
-import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.BATCH_PREDICT;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.BATCH_PREDICT_STATUS;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_CANCELLED_REGEX;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_CANCELLING_REGEX;
@@ -25,7 +24,6 @@ import static org.opensearch.ml.utils.MLExceptionUtils.BATCH_INFERENCE_DISABLED_
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,7 +32,6 @@ import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;
@@ -70,6 +67,7 @@ import org.opensearch.ml.common.transport.task.MLTaskGetAction;
 import org.opensearch.ml.common.transport.task.MLTaskGetRequest;
 import org.opensearch.ml.common.transport.task.MLTaskGetResponse;
 import org.opensearch.ml.engine.MLEngineClassLoader;
+import org.opensearch.ml.engine.algorithms.remote.ConnectorUtils;
 import org.opensearch.ml.engine.algorithms.remote.RemoteConnectorExecutor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
@@ -285,8 +283,8 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         if (connectorAccessControlHelper.validateConnectorAccess(client, connector)) {
             Optional<ConnectorAction> batchPredictStatusAction = connector.findAction(BATCH_PREDICT_STATUS.name());
             if (!batchPredictStatusAction.isPresent() || batchPredictStatusAction.get().getRequestBody() == null) {
-                ConnectorAction connectorAction = createConnectorAction(connector);
-                connector.setAction(connectorAction);
+                ConnectorAction connectorAction = ConnectorUtils.createConnectorAction(connector, BATCH_PREDICT_STATUS);
+                connector.addAction(connectorAction);
             }
             connector.decrypt(BATCH_PREDICT_STATUS.name(), (credential) -> encryptor.decrypt(credential));
             RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader
@@ -370,63 +368,5 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
     private boolean matchesPattern(Pattern pattern, String input) {
         Matcher matcher = pattern.matcher(input);
         return matcher.find();
-    }
-
-    // TODO: move this method to connector utils class
-    private ConnectorAction createConnectorAction(Connector connector) {
-        Optional<ConnectorAction> batchPredictAction = connector.findAction(BATCH_PREDICT.name());
-
-        Map<String, String> headers = batchPredictAction.get().getHeaders();
-
-        String predictEndpoint = batchPredictAction.get().getUrl();
-        Map<String, String> parameters = connector.getParameters() != null
-            ? new HashMap<>(connector.getParameters())
-            : Collections.emptyMap();
-
-        // Apply parameter substitution only if needed
-        if (!parameters.isEmpty()) {
-            StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
-            predictEndpoint = substitutor.replace(predictEndpoint);
-        }
-
-        String url = "";
-        String requestBody = "";
-        String method = "GET";
-
-        switch (getEndpointType(predictEndpoint)) {
-            case "sagemaker":
-                url = predictEndpoint.replace("CreateTransformJob", "DescribeTransformJob");
-                requestBody = "{ \"TransformJobName\" : \"${parameters.TransformJobName}\"}";
-                method = "POST";
-                break;
-            case "openai":
-            case "cohere":
-                url = predictEndpoint + "/${parameters.id}";
-                break;
-            case "bedrock":
-                url = predictEndpoint + "/${parameters.processedJobArn}";
-                break;
-        }
-        return ConnectorAction
-            .builder()
-            .actionType(BATCH_PREDICT_STATUS)
-            .method(method)
-            .url(url)
-            .requestBody(requestBody)
-            .headers(headers)
-            .build();
-
-    }
-
-    private String getEndpointType(String url) {
-        if (url.contains("sagemaker"))
-            return "sagemaker";
-        if (url.contains("openai"))
-            return "openai";
-        if (url.contains("bedrock"))
-            return "bedrock";
-        if (url.contains("cohere"))
-            return "cohere";
-        return "";
     }
 }

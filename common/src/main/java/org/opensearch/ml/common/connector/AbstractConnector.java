@@ -126,7 +126,7 @@ public abstract class AbstractConnector implements Connector {
     }
 
     @Override
-    public void setAction(ConnectorAction action) {
+    public void addAction(ConnectorAction action) {
         actions.add(action);
     }
 

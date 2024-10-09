@@ -65,7 +65,7 @@ public interface Connector extends ToXContentObject, Writeable {
 
     List<ConnectorAction> getActions();
 
-    void setAction(ConnectorAction action);
+    void addAction(ConnectorAction action);
 
     ConnectorClientConfig getConnectorClientConfig();
 

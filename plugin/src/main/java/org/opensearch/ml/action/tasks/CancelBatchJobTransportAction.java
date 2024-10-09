@@ -8,18 +8,15 @@ package org.opensearch.ml.action.tasks;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
-import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.BATCH_PREDICT;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.CANCEL_BATCH_PREDICT;
 import static org.opensearch.ml.utils.MLExceptionUtils.BATCH_INFERENCE_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
 import org.apache.hc.core5.http.HttpStatus;
-import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;
@@ -53,6 +50,7 @@ import org.opensearch.ml.common.transport.task.MLCancelBatchJobAction;
 import org.opensearch.ml.common.transport.task.MLCancelBatchJobRequest;
 import org.opensearch.ml.common.transport.task.MLCancelBatchJobResponse;
 import org.opensearch.ml.engine.MLEngineClassLoader;
+import org.opensearch.ml.engine.algorithms.remote.ConnectorUtils;
 import org.opensearch.ml.engine.algorithms.remote.RemoteConnectorExecutor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
@@ -216,8 +214,8 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
         if (connectorAccessControlHelper.validateConnectorAccess(client, connector)) {
             Optional<ConnectorAction> cancelBatchPredictAction = connector.findAction(CANCEL_BATCH_PREDICT.name());
             if (!cancelBatchPredictAction.isPresent() || cancelBatchPredictAction.get().getRequestBody() == null) {
-                ConnectorAction connectorAction = createConnectorAction(connector);
-                connector.setAction(connectorAction);
+                ConnectorAction connectorAction = ConnectorUtils.createConnectorAction(connector, CANCEL_BATCH_PREDICT);
+                connector.addAction(connectorAction);
             }
             connector.decrypt(CANCEL_BATCH_PREDICT.name(), (credential) -> encryptor.decrypt(credential));
             RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader
@@ -253,62 +251,5 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
         } catch (Exception e) {
             log.error("Unable to fetch status for ml task ", e);
         }
-    }
-
-    // TODO: move this method to connector utils class
-    private ConnectorAction createConnectorAction(Connector connector) {
-        Optional<ConnectorAction> batchPredictAction = connector.findAction(BATCH_PREDICT.name());
-
-        Map<String, String> headers = batchPredictAction.get().getHeaders();
-
-        String predictEndpoint = batchPredictAction.get().getUrl();
-        Map<String, String> parameters = connector.getParameters() != null
-            ? new HashMap<>(connector.getParameters())
-            : Collections.emptyMap();
-
-        if (!parameters.isEmpty()) {
-            StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
-            predictEndpoint = substitutor.replace(predictEndpoint);
-        }
-
-        String url = "";
-        String requestBody = "";
-        String method = "POST";  // Default method
-
-        switch (getEndpointType(predictEndpoint)) {
-            case "sagemaker":
-                url = predictEndpoint.replace("CreateTransformJob", "StopTransformJob");
-                requestBody = "{ \"TransformJobName\" : \"${parameters.TransformJobName}\"}";
-                break;
-            case "openai":
-            case "cohere":
-                url = predictEndpoint + "/${parameters.id}/cancel";
-                break;
-            case "bedrock":
-                url = predictEndpoint + "/${parameters.processedJobArn}/stop";
-                break;
-        }
-
-        return ConnectorAction
-            .builder()
-            .actionType(CANCEL_BATCH_PREDICT)
-            .method(method)
-            .url(url)
-            .requestBody(requestBody)
-            .headers(headers)
-            .build();
-
-    }
-
-    private String getEndpointType(String url) {
-        if (url.contains("sagemaker"))
-            return "sagemaker";
-        if (url.contains("openai"))
-            return "openai";
-        if (url.contains("bedrock"))
-            return "bedrock";
-        if (url.contains("cohere"))
-            return "cohere";
-        return "";
     }
 }
