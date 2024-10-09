@@ -121,8 +121,7 @@ public class GenerativeQAParamExtBuilderTests extends OpenSearchTestCase {
 
         StreamOutput so = mock(StreamOutput.class);
         builder1.writeTo(so);
-        verify(so, times(5)).writeOptionalString(any());
-        verify(so, times(1)).writeString(any());
+        verify(so, times(6)).writeOptionalString(any());
     }
 
     public void testParse() throws IOException {
