@@ -357,6 +357,11 @@ public class ConnectorUtils {
                     : predictEndpoint + "/${parameters.processedJobArn}";
                 method = isCancelAction ? "POST" : "GET";
                 break;
+            default:
+                String errorMessage = isCancelAction
+                    ? "Please configure the action type to cancel the batch job in the connector"
+                    : "Please configure the action type to get the batch job details in the connector";
+                throw new UnsupportedOperationException(errorMessage);
         }
 
         return ConnectorAction
