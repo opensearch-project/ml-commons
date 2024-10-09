@@ -6,6 +6,7 @@
 package org.opensearch.ml.processor;
 
 import static java.lang.Math.max;
+import static org.opensearch.ml.common.utils.StringUtils.toJson;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.INPUT_MAP;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.MAX_PREDICTION_TASKS;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.MODEL_CONFIG;
@@ -151,6 +152,8 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
         try {
             SearchHit[] hits = response.getHits().getHits();
             // skip processing when there is no hit
+
+            String queryString = request.source().toString();
             if (hits.length == 0) {
                 responseListener.onResponse(response);
                 return;
@@ -158,7 +161,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
 
             // if many to one, run rewriteResponseDocuments
             if (!oneToOne) {
-                rewriteResponseDocuments(response, responseListener);
+                rewriteResponseDocuments(response, responseListener, queryString);
             } else {
                 // if one to one, make one hit search response and run rewriteResponseDocuments
                 GroupedActionListener<SearchResponse> combineResponseListener = getCombineResponseGroupedActionListener(
@@ -173,7 +176,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
                     newHits[0] = hit;
                     SearchResponse oneHitResponse = SearchResponseUtil.replaceHits(newHits, response);
                     ActionListener<SearchResponse> oneHitListener = getOneHitListener(combineResponseListener, isOneHitListenerFailed);
-                    rewriteResponseDocuments(oneHitResponse, oneHitListener);
+                    rewriteResponseDocuments(oneHitResponse, oneHitListener, queryString);
                     // if any OneHitListener failure, try stop the rest of the predictions
                     if (isOneHitListenerFailed.get()) {
                         break;
@@ -280,9 +283,11 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
      *
      * @param response         the search response
      * @param responseListener the listener to be notified when the response is processed
+     * @param queryString
      * @throws IOException if an I/O error occurs during the rewriting process
      */
-    private void rewriteResponseDocuments(SearchResponse response, ActionListener<SearchResponse> responseListener) throws IOException {
+    private void rewriteResponseDocuments(SearchResponse response, ActionListener<SearchResponse> responseListener, String queryString)
+        throws IOException {
         List<Map<String, String>> processInputMap = inferenceProcessorAttributes.getInputMaps();
         List<Map<String, String>> processOutputMap = inferenceProcessorAttributes.getOutputMaps();
         int inputMapSize = (processInputMap == null) ? 0 : processInputMap.size();
@@ -304,7 +309,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
         );
         SearchHit[] hits = response.getHits().getHits();
         for (int inputMapIndex = 0; inputMapIndex < max(inputMapSize, 1); inputMapIndex++) {
-            processPredictions(hits, processInputMap, inputMapIndex, batchPredictionListener, hitCountInPredictions);
+            processPredictions(hits, processInputMap, inputMapIndex, batchPredictionListener, hitCountInPredictions, queryString);
         }
     }
 
@@ -316,6 +321,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
      * @param inputMapIndex           the index of the input mapping to process
      * @param batchPredictionListener the listener to be notified when the predictions are processed
      * @param hitCountInPredictions   a map to keep track of the count of hits that have the required input fields for each round of prediction
+     * @param queryString
      * @throws IOException if an I/O error occurs during the prediction process
      */
     private void processPredictions(
@@ -323,15 +329,34 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
         List<Map<String, String>> processInputMap,
         int inputMapIndex,
         GroupedActionListener<Map<Integer, MLOutput>> batchPredictionListener,
-        Map<Integer, Integer> hitCountInPredictions
+        Map<Integer, Integer> hitCountInPredictions,
+        String queryString
     ) throws IOException {
 
         Map<String, String> modelParameters = new HashMap<>();
         Map<String, String> modelConfigs = new HashMap<>();
 
         if (inferenceProcessorAttributes.getModelConfigMaps() != null) {
-            modelParameters.putAll(inferenceProcessorAttributes.getModelConfigMaps());
-            modelConfigs.putAll(inferenceProcessorAttributes.getModelConfigMaps());
+            Map<String, String> modelConfigMapsInput = inferenceProcessorAttributes.getModelConfigMaps();
+
+            for (Map.Entry<String, String> entry : modelConfigMapsInput.entrySet()) {
+                String modelConfigKey = entry.getKey();
+                String modelConfigValue = entry.getValue();
+                if (StringUtils.isValidJSONPath(modelConfigValue)) {
+                    Object queryJson = JsonPath.parse(queryString).read("$");
+                    Configuration configuration = Configuration
+                        .builder()
+                        .options(Option.SUPPRESS_EXCEPTIONS, Option.DEFAULT_PATH_LEAF_TO_NULL)
+                        .build();
+                    Object querySubString = JsonPath.using(configuration).parse(queryJson).read(modelConfigValue);
+                    if (querySubString != null) {
+                        modelConfigMapsInput.put(modelConfigKey, toJson(querySubString));
+                    }
+                }
+            }
+            modelParameters.putAll(modelConfigMapsInput);
+            modelConfigs.putAll(modelConfigMapsInput);
+
         }
 
         Map<String, Object> modelInputParameters = new HashMap<>();

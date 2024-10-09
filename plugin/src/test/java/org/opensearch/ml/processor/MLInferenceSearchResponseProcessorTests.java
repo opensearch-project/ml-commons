@@ -167,6 +167,82 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
     }
 
     /**
+     * Tests the successful processing of a response with a single pair of input and output mappings.
+     * read the query text into model config
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseSuccessReadQueryTextInModelConfig() throws Exception {
+        String modelInputField = "text_docs";
+        String originalDocumentField = "text";
+        String newDocumentField = "similarity_score";
+        String modelOutputField = "response";
+        List<Map<String, String>> inputMap = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        input.put(modelInputField, originalDocumentField);
+        inputMap.add(input);
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+        Map<String, String> modelConfig = new HashMap<>();
+        modelConfig.put("query_text", "query.term.text.value");
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            inputMap,
+            outputMap,
+            modelConfig,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "text_similarity",
+            false,
+            false,
+            false,
+            "{ \"query_text\": \"${model_config.query_text}\", \"text_docs\":${input_map.text_docs}}",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            false
+        );
+        assertEquals(responseProcessor.getType(), TYPE);
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(5, true, fieldName);
+
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .dataAsMap(ImmutableMap.of("response", Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)))
+            .build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                assertEquals(newSearchResponse.getHits().getHits().length, 5);
+                assertEquals(newSearchResponse.getHits().getHits()[0].getSourceAsMap().get(newDocumentField), 0.0);
+                assertEquals(newSearchResponse.getHits().getHits()[1].getSourceAsMap().get(newDocumentField), 1.0);
+                assertEquals(newSearchResponse.getHits().getHits()[2].getSourceAsMap().get(newDocumentField), 2.0);
+                assertEquals(newSearchResponse.getHits().getHits()[3].getSourceAsMap().get(newDocumentField), 3.0);
+                assertEquals(newSearchResponse.getHits().getHits()[4].getSourceAsMap().get(newDocumentField), 4.0);
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException(e);
+            }
+        };
+
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+    }
+
+    /**
      * Tests create processor with one_to_one is true
      * with custom prompt
      * with one to one prediction, 5 documents in hits are calling 5 prediction tasks
@@ -174,7 +250,14 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      */
     public void testProcessResponseOneToOneWithCustomPrompt() throws Exception {
 
-        String newDocumentField = "context";
+        String documentField = "text";
+        String modelInputField = "context";
+        List<Map<String, String>> inputMap = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        input.put(modelInputField, documentField);
+        inputMap.add(input);
+
+        String newDocumentField = "llm_response";
         String modelOutputField = "response";
         List<Map<String, String>> outputMap = new ArrayList<>();
         Map<String, String> output = new HashMap<>();
@@ -184,11 +267,11 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
         modelConfig
             .put(
                 "prompt",
-                "\\n\\nHuman: You are a professional data analyst. You will always answer question based on the given context first. If the answer is not directly shown in the context, you will analyze the data and find the answer. If you don't know the answer, just say I don't know. Context: ${input_map.context}. \\n\\n Human: please summarize the documents \\n\\n Assistant:"
+                "\\n\\nHuman: You are a professional data analyst. You will always answer question based on the given context first. If the answer is not directly shown in the context, you will analyze the data and find the answer. If you don't know the answer, just say I don't know. Context: ${parameters.context}. \\n\\n Human: please summarize the documents \\n\\n Assistant:"
             );
         MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
             "model1",
-            null,
+            inputMap,
             outputMap,
             modelConfig,
             DEFAULT_MAX_PREDICTION_TASKS,
@@ -199,7 +282,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             false,
             false,
             false,
-            "{ \"prompt\": \"${model_config.prompt}\"}",
+            "{ \"parameters\": ${ml_inference.parameters} }",
             client,
             TEST_XCONTENT_REGISTRY_FOR_QUERY,
             true
