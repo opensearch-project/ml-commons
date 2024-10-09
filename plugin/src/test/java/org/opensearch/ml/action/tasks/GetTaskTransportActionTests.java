@@ -195,6 +195,14 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
                     .asList(
                         ConnectorAction
                             .builder()
+                            .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
+                            .method("POST")
+                            .url("https://api.sagemaker.us-east-1.amazonaws.com/CreateTransformJob")
+                            .headers(Map.of("Authorization", "Bearer ${credential.api_key}"))
+                            .requestBody("{ \"TransformJobName\" : \"${parameters.TransformJobName}\"}")
+                            .build(),
+                        ConnectorAction
+                            .builder()
                             .actionType(ConnectorAction.ActionType.BATCH_PREDICT_STATUS)
                             .method("POST")
                             .url("https://api.sagemaker.us-east-1.amazonaws.com/DescribeTransformJob")

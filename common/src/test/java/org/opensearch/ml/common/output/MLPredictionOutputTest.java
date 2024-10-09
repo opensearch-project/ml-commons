@@ -9,7 +9,9 @@ import static org.junit.Assert.assertEquals;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -29,6 +31,7 @@ import org.opensearch.ml.common.dataframe.Row;
 public class MLPredictionOutputTest {
 
     MLPredictionOutput output;
+    MLPredictionOutput outputWithRemoteJob;
 
     @Before
     public void setUp() {
@@ -37,12 +40,17 @@ public class MLPredictionOutputTest {
         rows.add(new Row(new ColumnValue[] { new IntValue(1) }));
         rows.add(new Row(new ColumnValue[] { new IntValue(2) }));
         DataFrame dataFrame = new DefaultDataFrame(columnMetas, rows);
+        Map<String, Object> remoteJob = new HashMap<>();
+        remoteJob.put("status", "INPROGRESS");
+        remoteJob.put("job_id", "testJobID");
         output = MLPredictionOutput.builder().taskId("test_task_id").status("test_status").predictionResult(dataFrame).build();
+        outputWithRemoteJob = new MLPredictionOutput("test_task_id", "test_status", remoteJob);
     }
 
     @Test
     public void toXContent() throws IOException {
         XContentBuilder builder = XContentFactory.jsonBuilder();
+        XContentBuilder builderWithRemoteJob = XContentFactory.jsonBuilder();
         output.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = builder.toString();
         assertEquals(
@@ -51,6 +59,12 @@ public class MLPredictionOutputTest {
                 + "[{\"column_type\":\"INTEGER\",\"value\":1}]},{\"values\":[{\"column_type\":\"INTEGER\","
                 + "\"value\":2}]}]}}",
             jsonStr
+        );
+        outputWithRemoteJob.toXContent(builderWithRemoteJob, ToXContent.EMPTY_PARAMS);
+        String jsonStr2 = builderWithRemoteJob.toString();
+        assertEquals(
+            "{\"task_id\":\"test_task_id\",\"status\":\"test_status\",\"remote_job\":{\"job_id\":\"testJobID\",\"status\":\"INPROGRESS\"}}",
+            jsonStr2
         );
     }
 

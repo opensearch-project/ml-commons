@@ -65,6 +65,8 @@ public interface Connector extends ToXContentObject, Writeable {
 
     List<ConnectorAction> getActions();
 
+    void addAction(ConnectorAction action);
+
     ConnectorClientConfig getConnectorClientConfig();
 
     String getActionEndpoint(String action, Map<String, String> parameters);
