@@ -140,7 +140,6 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
             xContentBuilder.field(LLM_QUESTION, this.llmQuestion);
         }
 
-
         if (this.contextSize != null) {
             xContentBuilder.field(CONTEXT_SIZE, this.contextSize);
         }
