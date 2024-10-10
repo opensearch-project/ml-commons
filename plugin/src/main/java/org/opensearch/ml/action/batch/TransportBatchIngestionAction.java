@@ -15,7 +15,6 @@ import static org.opensearch.ml.utils.MLExceptionUtils.OFFLINE_BATCH_INGESTION_D
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -37,6 +36,7 @@ import org.opensearch.ml.common.transport.batch.MLBatchIngestionRequest;
 import org.opensearch.ml.common.transport.batch.MLBatchIngestionResponse;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.ingest.Ingestable;
+import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.MLExceptionUtils;
@@ -56,6 +56,7 @@ public class TransportBatchIngestionAction extends HandledTransportAction<Action
     public static final String SOURCE = "source";
     TransportService transportService;
     MLTaskManager mlTaskManager;
+    MLModelManager mlModelManager;
     private final Client client;
     private ThreadPool threadPool;
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
@@ -67,6 +68,7 @@ public class TransportBatchIngestionAction extends HandledTransportAction<Action
         Client client,
         MLTaskManager mlTaskManager,
         ThreadPool threadPool,
+        MLModelManager mlModelManager,
         MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLBatchIngestionAction.NAME, transportService, actionFilters, MLBatchIngestionRequest::new);
@@ -74,6 +76,7 @@ public class TransportBatchIngestionAction extends HandledTransportAction<Action
         this.client = client;
         this.mlTaskManager = mlTaskManager;
         this.threadPool = threadPool;
+        this.mlModelManager = mlModelManager;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
@@ -86,44 +89,24 @@ public class TransportBatchIngestionAction extends HandledTransportAction<Action
                 throw new IllegalStateException(OFFLINE_BATCH_INGESTION_DISABLED_ERR_MSG);
             }
             validateBatchIngestInput(mlBatchIngestionInput);
-            MLTask mlTask = MLTask
-                .builder()
-                .async(true)
-                .taskType(MLTaskType.BATCH_INGEST)
-                .createTime(Instant.now())
-                .lastUpdateTime(Instant.now())
-                .state(MLTaskState.CREATED)
-                .build();
-
-            mlTaskManager.createMLTask(mlTask, ActionListener.wrap(response -> {
-                String taskId = response.getId();
-                try {
-                    mlTask.setTaskId(taskId);
-                    mlTaskManager.add(mlTask);
-                    listener.onResponse(new MLBatchIngestionResponse(taskId, MLTaskType.BATCH_INGEST, MLTaskState.CREATED.name()));
-                    String ingestType = (String) mlBatchIngestionInput.getDataSources().get(TYPE);
-                    Ingestable ingestable = MLEngineClassLoader.initInstance(ingestType.toLowerCase(Locale.ROOT), client, Client.class);
-                    threadPool.executor(INGEST_THREAD_POOL).execute(() -> {
-                        executeWithErrorHandling(() -> {
-                            double successRate = ingestable.ingest(mlBatchIngestionInput);
-                            handleSuccessRate(successRate, taskId);
-                        }, taskId);
-                    });
-                } catch (Exception ex) {
-                    log.error("Failed in batch ingestion", ex);
-                    mlTaskManager
-                        .updateMLTask(
-                            taskId,
-                            Map.of(STATE_FIELD, FAILED, ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(ex)),
-                            TASK_SEMAPHORE_TIMEOUT,
-                            true
+            if (mlBatchIngestionInput.getConnectorId() != null
+                && (mlBatchIngestionInput.getCredential() == null || mlBatchIngestionInput.getCredential().isEmpty())) {
+                mlModelManager.getConnectorCredential(mlBatchIngestionInput.getConnectorId(), ActionListener.wrap(credentialMap -> {
+                    mlBatchIngestionInput.setCredential(credentialMap);
+                    createMLTaskandExecute(mlBatchIngestionInput, listener);
+                }, e -> {
+                    log.error(e.getMessage());
+                    listener
+                        .onFailure(
+                            new OpenSearchStatusException(
+                                "Fail to fetch credentials from the connector in the batch ingestion input: " + e.getMessage(),
+                                RestStatus.BAD_REQUEST
+                            )
                         );
-                    listener.onFailure(ex);
-                }
-            }, exception -> {
-                log.error("Failed to create batch ingestion task", exception);
-                listener.onFailure(exception);
-            }));
+                }));
+            } else {
+                createMLTaskandExecute(mlBatchIngestionInput, listener);
+            }
         } catch (IllegalArgumentException e) {
             log.error(e.getMessage());
             listener
@@ -136,6 +119,47 @@ public class TransportBatchIngestionAction extends HandledTransportAction<Action
         } catch (Exception e) {
             listener.onFailure(e);
         }
+    }
+
+    protected void createMLTaskandExecute(MLBatchIngestionInput mlBatchIngestionInput, ActionListener<MLBatchIngestionResponse> listener) {
+        MLTask mlTask = MLTask
+            .builder()
+            .async(true)
+            .taskType(MLTaskType.BATCH_INGEST)
+            .createTime(Instant.now())
+            .lastUpdateTime(Instant.now())
+            .state(MLTaskState.CREATED)
+            .build();
+
+        mlTaskManager.createMLTask(mlTask, ActionListener.wrap(response -> {
+            String taskId = response.getId();
+            try {
+                mlTask.setTaskId(taskId);
+                mlTaskManager.add(mlTask);
+                listener.onResponse(new MLBatchIngestionResponse(taskId, MLTaskType.BATCH_INGEST, MLTaskState.CREATED.name()));
+                String ingestType = (String) mlBatchIngestionInput.getDataSources().get(TYPE);
+                Ingestable ingestable = MLEngineClassLoader.initInstance(ingestType.toLowerCase(), client, Client.class);
+                threadPool.executor(INGEST_THREAD_POOL).execute(() -> {
+                    executeWithErrorHandling(() -> {
+                        double successRate = ingestable.ingest(mlBatchIngestionInput);
+                        handleSuccessRate(successRate, taskId);
+                    }, taskId);
+                });
+            } catch (Exception ex) {
+                log.error("Failed in batch ingestion", ex);
+                mlTaskManager
+                    .updateMLTask(
+                        taskId,
+                        Map.of(STATE_FIELD, FAILED, ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(ex)),
+                        TASK_SEMAPHORE_TIMEOUT,
+                        true
+                    );
+                listener.onFailure(ex);
+            }
+        }, exception -> {
+            log.error("Failed to create batch ingestion task", exception);
+            listener.onFailure(exception);
+        }));
     }
 
     protected void executeWithErrorHandling(Runnable task, String taskId) {
@@ -189,6 +213,9 @@ public class TransportBatchIngestionAction extends HandledTransportAction<Action
             || mlBatchIngestionInput.getDataSources() == null
             || mlBatchIngestionInput.getDataSources().isEmpty()) {
             throw new IllegalArgumentException("The batch ingest input data source cannot be null");
+        }
+        if (mlBatchIngestionInput.getCredential() == null && mlBatchIngestionInput.getConnectorId() == null) {
+            throw new IllegalArgumentException("The batch ingest credential or connector_id cannot be null");
         }
         Map<String, Object> dataSources = mlBatchIngestionInput.getDataSources();
         if (dataSources.get(TYPE) == null || dataSources.get(SOURCE) == null) {

@@ -46,6 +46,7 @@ import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.transport.batch.MLBatchIngestionInput;
 import org.opensearch.ml.common.transport.batch.MLBatchIngestionRequest;
 import org.opensearch.ml.common.transport.batch.MLBatchIngestionResponse;
+import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.tasks.Task;
@@ -62,6 +63,8 @@ public class TransportBatchIngestionActionTests extends OpenSearchTestCase {
     private TransportService transportService;
     @Mock
     private MLTaskManager mlTaskManager;
+    @Mock
+    MLModelManager mlModelManager;
     @Mock
     private ActionFilters actionFilters;
     @Mock
@@ -90,6 +93,7 @@ public class TransportBatchIngestionActionTests extends OpenSearchTestCase {
             client,
             mlTaskManager,
             threadPool,
+            mlModelManager,
             mlFeatureEnabledSetting
         );
 
