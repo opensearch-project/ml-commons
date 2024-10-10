@@ -21,6 +21,7 @@ import static org.opensearch.ml.processor.MLInferenceSearchResponseProcessor.DEF
 import static org.opensearch.ml.processor.MLInferenceSearchResponseProcessor.FULL_RESPONSE_PATH;
 import static org.opensearch.ml.processor.MLInferenceSearchResponseProcessor.FUNCTION_NAME;
 import static org.opensearch.ml.processor.MLInferenceSearchResponseProcessor.MODEL_INPUT;
+import static org.opensearch.ml.processor.MLInferenceSearchResponseProcessor.ONE_TO_ONE;
 import static org.opensearch.ml.processor.MLInferenceSearchResponseProcessor.TYPE;
 
 import java.util.ArrayList;
@@ -60,6 +61,7 @@ import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.SearchModule;
 import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.search.internal.InternalSearchResponse;
 import org.opensearch.search.pipeline.PipelineProcessingContext;
 import org.opensearch.test.AbstractBuilderTestCase;
 
@@ -491,6 +493,81 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
                 assertEquals(newSearchResponse.getHits().getHits()[1].getSourceAsMap().get("inference_results"), fullPredictionResult);
                 assertEquals(newSearchResponse.getHits().getHits()[2].getSourceAsMap().get("inference_results"), fullPredictionResult);
                 assertEquals(newSearchResponse.getHits().getHits()[3].getSourceAsMap().get("inference_results"), fullPredictionResult);
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException(e);
+            }
+
+        };
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+        verify(client, times(1)).execute(any(), any(), any());
+    }
+
+    /**
+     * Tests the successful processing of a response with a single pair of input and output mappings.
+     * read the query text into model config
+     * with query extensions
+     * @throws Exception if an error occurs during the test
+     */
+    public void testProcessResponseSuccessWriteToExt() throws Exception {
+        String documentField = "text";
+        String modelInputField = "context";
+        List<Map<String, String>> inputMap = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        input.put(modelInputField, documentField);
+        inputMap.add(input);
+
+        String newDocumentField = "ext.ml_inference.llm_response";
+        String modelOutputField = "response";
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+        Map<String, String> modelConfig = new HashMap<>();
+        modelConfig
+            .put(
+                "prompt",
+                "\\n\\nHuman: You are a professional data analyst. You will always answer question based on the given context first. If the answer is not directly shown in the context, you will analyze the data and find the answer. If you don't know the answer, just say I don't know. Context: ${parameters.context}. \\n\\n Human: please summarize the documents \\n\\n Assistant:"
+            );
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            inputMap,
+            outputMap,
+            modelConfig,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            false
+        );
+
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(5, true, fieldName);
+
+        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "there is 1 value")).build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                assertEquals(newSearchResponse.getHits().getHits().length, 5);
             }
 
             @Override
@@ -978,14 +1055,18 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
 
         SearchResponse mockResponse = mock(SearchResponse.class);
         SearchHits searchHits = response.getHits();
+
+        InternalSearchResponse internalSearchResponse = new InternalSearchResponse(searchHits, null, null, null, false, null, 1);
+        when(mockResponse.getInternalResponse()).thenReturn(internalSearchResponse);
+
         RuntimeException mockException = new RuntimeException("Mock exception");
         AtomicInteger callCount = new AtomicInteger(0);
-        ;
+
         when(mockResponse.getHits()).thenAnswer(invocation -> {
 
             int count = callCount.getAndIncrement();
 
-            if (count == 2) {
+            if (count == 6) {
                 // throw exception when it reaches createRewriteResponseListener
                 throw mockException;
             } else {
@@ -1011,7 +1092,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
     }
 
     /**
-     * Tests create processor with one_to_one is true
+     * Tests create processor with one_to_one is false
      * with output_maps
      * createRewriteResponseListener throw Exceptions
      * expect to run one prediction task
@@ -1066,7 +1147,10 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
         SearchHits searchHits = response.getHits();
         RuntimeException mockException = new RuntimeException("Mock exception");
         AtomicInteger callCount = new AtomicInteger(0);
-        ;
+
+        InternalSearchResponse internalSearchResponse = new InternalSearchResponse(searchHits, null, null, null, false, null, 1);
+        when(mockResponse.getInternalResponse()).thenReturn(internalSearchResponse);
+
         when(mockResponse.getHits()).thenAnswer(invocation -> {
 
             int count = callCount.getAndIncrement();
@@ -3538,7 +3622,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
         output2.put("hashtag_embedding", "response");
         outputMap.add(output2);
         Map<String, String> output3 = new HashMap<>();
-        output2.put("hashtvg_embedding", "response");
+        output3.put("hashtvg_embedding", "response");
         outputMap.add(output3);
         config.put(OUTPUT_MAP, outputMap);
         config.put(MAX_PREDICTION_TASKS, 2);
@@ -3586,5 +3670,41 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
         assertNotNull(MLInferenceSearchResponseProcessor);
         assertEquals(MLInferenceSearchResponseProcessor.getTag(), processorTag);
         assertEquals(MLInferenceSearchResponseProcessor.getType(), MLInferenceSearchResponseProcessor.TYPE);
+    }
+
+    /**
+     * Tests the case where output map try to write to extension and one to one inference  is true
+     * and an exception is expected.
+     *
+     * @throws Exception if an error occurs during the test
+     */
+    public void testWriteToExtensionAndOneToOne() throws Exception {
+        Map<String, Object> config = new HashMap<>();
+        config.put(MODEL_ID, "model2");
+        List<Map<String, String>> inputMap = new ArrayList<>();
+        Map<String, String> input0 = new HashMap<>();
+        input0.put("inputs", "text");
+        inputMap.add(input0);
+        Map<String, String> input1 = new HashMap<>();
+        input1.put("inputs", "hashtag");
+        inputMap.add(input1);
+        config.put(INPUT_MAP, inputMap);
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output1 = new HashMap<>();
+        output1.put("text_embedding", "response");
+        outputMap.add(output1);
+        Map<String, String> output2 = new HashMap<>();
+        output2.put("ext.inference.hashtag_embedding", "response");
+        outputMap.add(output2);
+        config.put(OUTPUT_MAP, outputMap);
+        config.put(ONE_TO_ONE, true);
+        String processorTag = randomAlphaOfLength(10);
+
+        try {
+            factory.create(Collections.emptyMap(), processorTag, null, false, config, null);
+        } catch (IllegalArgumentException e) {
+            assertEquals(e.getMessage(), "");
+
+        }
     }
 }
