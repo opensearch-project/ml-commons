@@ -82,7 +82,7 @@ lombok {
 }
 
 configurations.all {
-    resolutionStrategy.force 'com.google.protobuf:protobuf-java:3.21.9'
+    resolutionStrategy.force 'com.google.protobuf:protobuf-java:3.25.5'
     resolutionStrategy.force 'org.apache.commons:commons-compress:1.26.0'
 }
 
