@@ -19,7 +19,9 @@ PUT /_cluster/settings
 
 If you are using self-managed Opensearch, you should supply AWS credentials.
 You have two different approaches to specify the pre&post process function and request body in the API:
+
 **Use build-in function**
+> You can use this starting from OpenSearch 2.16
 ```json
 POST /_plugins/_ml/connectors/_create
 {
@@ -73,7 +75,9 @@ POST /_plugins/_ml/connectors/_create
 If using the AWS Opensearch Service, you can provide an IAM role arn that allows access to the bedrock service.
 Refer to this [AWS doc](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/ml-amazon-connector.html)
 You have two different approaches to specify the pre&post process function and request body in the API:
+
 **Use build-in function**
+> You can use this starting from OpenSearch 2.16
 ```json
 POST /_plugins/_ml/connectors/_create
 {
