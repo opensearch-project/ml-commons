@@ -126,6 +126,9 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
         }
 
         GenerativeQAParameters params = GenerativeQAParamUtil.getGenerativeQAParameters(request);
+        if (params == null) {
+            throw new IllegalArgumentException("generative_qa_parameters not found. Please provide ext.generative_qa_parameters to proceed.");
+        }
 
         Integer t = params.getTimeout();
         if (t == null || t == GenerativeQAParameters.SIZE_NULL_VALUE) {
