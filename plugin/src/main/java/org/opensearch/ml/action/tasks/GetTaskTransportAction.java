@@ -265,7 +265,11 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
                             });
                             try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
                                 connectorAccessControlHelper
-                                    .getConnector(client, model.getConnectorId(), ActionListener.runBefore(listener, threadContext::restore));
+                                    .getConnector(
+                                        client,
+                                        model.getConnectorId(),
+                                        ActionListener.runBefore(listener, threadContext::restore)
+                                    );
                             }
                         } else {
                             actionListener.onFailure(new ResourceNotFoundException("Can't find connector " + model.getConnectorId()));
@@ -303,8 +307,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
             connector.addAction(connectorAction);
         }
         connector.decrypt(BATCH_PREDICT_STATUS.name(), (credential) -> encryptor.decrypt(credential));
-        RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader
-            .initInstance(connector.getProtocol(), connector, Connector.class);
+        RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader.initInstance(connector.getProtocol(), connector, Connector.class);
         connectorExecutor.setScriptService(scriptService);
         connectorExecutor.setClusterService(clusterService);
         connectorExecutor.setClient(client);
