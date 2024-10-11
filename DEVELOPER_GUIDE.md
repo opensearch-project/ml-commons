@@ -11,7 +11,7 @@ This guide applies to the development within the ML-Commons project
     - [Build](#Build)
       - [Building from the command line](#Building-from-the-command-line)
       - [Debugging](#Debugging)
-- [Workflow CI/CD Approval](#Workflow-CICD-Approval)
+- [GitHub CI/CD workflow Approval](#github-cicd-workflow-approval)
 - [More documentation](#More-docs)
 - [Code guidelines](#code-guidelines)
 
@@ -119,13 +119,12 @@ To debug code running in an integ test (which exercises the server from a separa
 
 The test runner JVM will start suspended and wait for a debugger to attach to `localhost:5005` before running the tests.
 
-## Workflow CI/CD Approval
-As of October 2nd 2024, you will need to ask for maintainer approval to run the GitHub
-CI/CD workflow actions to see your code changes build on pushing your PR.
+## GitHub CI/CD workflow Approval
+Effective October 2, 2024, maintainer approval will be required to run GitHub CI/CD workflow actions when pushing a pull request (PR).
 
-This is regarding a security issue, we hope you can understand.
+This change is being implemented as part of our enhanced security measures. We appreciate your patience and cooperation.
 
-To see the current maintainers to check  [MAINTAINERS.md](MAINTAINERS.md)
+For a list of current maintainers, please refer to [MAINTAINERS.md](https://github.com/opensearch-project/ml-commons/blob/main/MAINTAINERS.md).
 
 ## More docs
 
