@@ -179,4 +179,6 @@ public interface Connector extends ToXContentObject, Writeable {
     }
 
     Map<String, String> getDecryptedHeaders();
+
+    Map<String, String> getDecryptedCredential();
 }
