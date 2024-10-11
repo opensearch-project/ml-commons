@@ -16,6 +16,8 @@ import static org.opensearch.ml.engine.helper.MLTestHelper.constructTestDataFram
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Map;
 import java.util.UUID;
 
 import org.junit.Assert;
@@ -24,11 +26,16 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.MockedStatic;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.dataframe.ColumnMeta;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DefaultDataFrame;
@@ -47,6 +54,7 @@ import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalcu
 import org.opensearch.ml.engine.algorithms.regression.LinearRegression;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
+import org.opensearch.search.SearchModule;
 
 // TODO: refactor MLEngineClassLoader's static functions to avoid mockStatic
 public class MLEngineTest extends MLStaticMockBase {
@@ -408,4 +416,32 @@ public class MLEngineTest extends MLStaticMockBase {
         assertNotEquals(testString, encryptedString);
     }
 
+    @Test
+    public void testGetConnectorCredential() throws IOException {
+        String encryptedValue = mlEngine.encrypt("test_key_value");
+        String test_connector_string = "{\"name\":\"test_connector_name\",\"version\":\"1\","
+            + "\"description\":\"this is a test connector\",\"protocol\":\"http\","
+            + "\"parameters\":{\"region\":\"test region\"},\"credential\":{\"key\":\""
+            + encryptedValue
+            + "\"},"
+            + "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://test.com\","
+            + "\"headers\":{\"api_key\":\"${credential.key}\"},"
+            + "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\"}],"
+            + "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}}";
+
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                test_connector_string
+            );
+        parser.nextToken();
+
+        HttpConnector connector = new HttpConnector("http", parser);
+        Map<String, String> decryptedCredential = mlEngine.getConnectorCredential(connector);
+        assertNotNull(decryptedCredential);
+        assertEquals(decryptedCredential.get("key"), "test_key_value");
+        assertEquals(decryptedCredential.get("region"), "test region");
+    }
 }

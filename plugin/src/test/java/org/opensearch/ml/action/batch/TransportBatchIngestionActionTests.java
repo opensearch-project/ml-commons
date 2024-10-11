@@ -46,6 +46,7 @@ import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.transport.batch.MLBatchIngestionInput;
 import org.opensearch.ml.common.transport.batch.MLBatchIngestionRequest;
 import org.opensearch.ml.common.transport.batch.MLBatchIngestionResponse;
+import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.tasks.Task;
@@ -63,6 +64,8 @@ public class TransportBatchIngestionActionTests extends OpenSearchTestCase {
     @Mock
     private MLTaskManager mlTaskManager;
     @Mock
+    MLModelManager mlModelManager;
+    @Mock
     private ActionFilters actionFilters;
     @Mock
     private MLBatchIngestionRequest mlBatchIngestionRequest;
@@ -79,7 +82,9 @@ public class TransportBatchIngestionActionTests extends OpenSearchTestCase {
 
     private TransportBatchIngestionAction batchAction;
     private MLBatchIngestionInput batchInput;
+    private MLBatchIngestionInput mlBatchIngestionInputWithConnector;
     private String[] ingestFields;
+    private Map<String, String> credential;
 
     @Before
     public void setup() {
@@ -90,6 +95,7 @@ public class TransportBatchIngestionActionTests extends OpenSearchTestCase {
             client,
             mlTaskManager,
             threadPool,
+            mlModelManager,
             mlFeatureEnabledSetting
         );
 
@@ -101,7 +107,7 @@ public class TransportBatchIngestionActionTests extends OpenSearchTestCase {
 
         ingestFields = new String[] { "$.id" };
 
-        Map<String, String> credential = Map
+        credential = Map
             .of("region", "us-east-1", "access_key", "some accesskey", "secret_key", "some secret", "session_token", "some token");
         Map<String, Object> dataSource = new HashMap<>();
         dataSource.put("type", "s3");
@@ -116,6 +122,15 @@ public class TransportBatchIngestionActionTests extends OpenSearchTestCase {
             .dataSources(dataSource)
             .build();
         when(mlBatchIngestionRequest.getMlBatchIngestionInput()).thenReturn(batchInput);
+
+        mlBatchIngestionInputWithConnector = MLBatchIngestionInput
+            .builder()
+            .indexName("testIndex")
+            .fieldMapping(fieldMap)
+            .ingestFields(ingestFields)
+            .connectorId("test_connector_id")
+            .dataSources(dataSource)
+            .build();
 
         when(mlFeatureEnabledSetting.isOfflineBatchIngestionEnabled()).thenReturn(true);
     }
@@ -318,5 +333,34 @@ public class TransportBatchIngestionActionTests extends OpenSearchTestCase {
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("some error", argumentCaptor.getValue().getMessage());
         verify(mlTaskManager).updateMLTask("taskId", Map.of(STATE_FIELD, FAILED, ERROR_FIELD, "some error"), TASK_SEMAPHORE_TIMEOUT, true);
+    }
+
+    public void test_doExecute_withConnector_success() {
+        when(mlBatchIngestionRequest.getMlBatchIngestionInput()).thenReturn(mlBatchIngestionInputWithConnector);
+
+        doAnswer(invocation -> {
+            ActionListener<Map<String, String>> listener = invocation.getArgument(1);
+            listener.onResponse(credential);
+            return null;
+        }).when(mlModelManager).getConnectorCredential(anyString(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            ShardId shardId = new ShardId(new Index("indexName", "uuid"), 1);
+            IndexResponse indexResponse = new IndexResponse(shardId, "taskId", 1, 1, 1, true);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(mlTaskManager).createMLTask(isA(MLTask.class), isA(ActionListener.class));
+        doReturn(executorService).when(threadPool).executor(INGEST_THREAD_POOL);
+        doAnswer(invocation -> {
+            Runnable runnable = invocation.getArgument(0);
+            runnable.run();
+            return null;
+        }).when(executorService).execute(any(Runnable.class));
+
+        batchAction.doExecute(task, mlBatchIngestionRequest, actionListener);
+
+        verify(actionListener).onResponse(any(MLBatchIngestionResponse.class));
+        verify(threadPool).executor(INGEST_THREAD_POOL);
     }
 }
