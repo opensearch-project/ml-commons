@@ -965,6 +965,14 @@ public class MLModelManager {
         mlTaskManager.updateMLTask(taskId, updated, TIMEOUT_IN_MILLIS, true);
     }
 
+    public void getConnectorCredential(String connectorId, ActionListener<Map<String, String>> connectorCredentialListener) {
+        getConnector(connectorId, ActionListener.wrap(connector -> {
+            Map<String, String> credential = mlEngine.getConnectorCredential(connector);
+            connectorCredentialListener.onResponse(credential);
+            log.info("Completed loading credential in the connector {}", connectorId);
+        }, connectorCredentialListener::onFailure));
+    }
+
     /**
      * Read model chunks from model index. Concat chunks into a whole model file,
      * then load

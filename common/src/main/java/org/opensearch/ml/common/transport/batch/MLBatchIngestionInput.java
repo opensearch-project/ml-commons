@@ -20,10 +20,12 @@ import org.opensearch.core.xcontent.XContentParser;
 
 import lombok.Builder;
 import lombok.Getter;
+import lombok.Setter;
 
 /**
  * ML batch ingestion data: index, field mapping and input and out files.
  */
+@Getter
 public class MLBatchIngestionInput implements ToXContentObject, Writeable {
 
     public static final String INDEX_NAME_FIELD = "index_name";
@@ -31,17 +33,15 @@ public class MLBatchIngestionInput implements ToXContentObject, Writeable {
     public static final String INGEST_FIELDS = "ingest_fields";
     public static final String CONNECTOR_CREDENTIAL_FIELD = "credential";
     public static final String DATA_SOURCE_FIELD = "data_source";
+    public static final String CONNECTOR_ID_FIELD = "connector_id";
 
-    @Getter
     private String indexName;
-    @Getter
     private Map<String, Object> fieldMapping;
-    @Getter
     private String[] ingestFields;
-    @Getter
     private Map<String, Object> dataSources;
-    @Getter
+    @Setter
     private Map<String, String> credential;
+    private String connectorId;
 
     @Builder(toBuilder = true)
     public MLBatchIngestionInput(
@@ -49,7 +49,8 @@ public class MLBatchIngestionInput implements ToXContentObject, Writeable {
         Map<String, Object> fieldMapping,
         String[] ingestFields,
         Map<String, Object> dataSources,
-        Map<String, String> credential
+        Map<String, String> credential,
+        String connectorId
     ) {
         if (indexName == null) {
             throw new IllegalArgumentException(
@@ -66,6 +67,7 @@ public class MLBatchIngestionInput implements ToXContentObject, Writeable {
         this.ingestFields = ingestFields;
         this.dataSources = dataSources;
         this.credential = credential;
+        this.connectorId = connectorId;
     }
 
     public static MLBatchIngestionInput parse(XContentParser parser) throws IOException {
@@ -74,6 +76,7 @@ public class MLBatchIngestionInput implements ToXContentObject, Writeable {
         String[] ingestFields = null;
         Map<String, Object> dataSources = null;
         Map<String, String> credential = new HashMap<>();
+        String connectorId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -93,6 +96,9 @@ public class MLBatchIngestionInput implements ToXContentObject, Writeable {
                 case CONNECTOR_CREDENTIAL_FIELD:
                     credential = parser.mapStrings();
                     break;
+                case CONNECTOR_ID_FIELD:
+                    connectorId = parser.text();
+                    break;
                 case DATA_SOURCE_FIELD:
                     dataSources = parser.map();
                     break;
@@ -101,7 +107,7 @@ public class MLBatchIngestionInput implements ToXContentObject, Writeable {
                     break;
             }
         }
-        return new MLBatchIngestionInput(indexName, fieldMapping, ingestFields, dataSources, credential);
+        return new MLBatchIngestionInput(indexName, fieldMapping, ingestFields, dataSources, credential, connectorId);
     }
 
     @Override
@@ -118,6 +124,9 @@ public class MLBatchIngestionInput implements ToXContentObject, Writeable {
         }
         if (credential != null) {
             builder.field(CONNECTOR_CREDENTIAL_FIELD, credential);
+        }
+        if (connectorId != null) {
+            builder.field(CONNECTOR_ID_FIELD, connectorId);
         }
         if (dataSources != null) {
             builder.field(DATA_SOURCE_FIELD, dataSources);
@@ -147,6 +156,7 @@ public class MLBatchIngestionInput implements ToXContentObject, Writeable {
         } else {
             output.writeBoolean(false);
         }
+        output.writeOptionalString(connectorId);
         if (dataSources != null) {
             output.writeBoolean(true);
             output.writeMap(dataSources, StreamOutput::writeString, StreamOutput::writeGenericValue);
@@ -166,6 +176,7 @@ public class MLBatchIngestionInput implements ToXContentObject, Writeable {
         if (input.readBoolean()) {
             credential = input.readMap(s -> s.readString(), s -> s.readString());
         }
+        this.connectorId = input.readOptionalString();
         if (input.readBoolean()) {
             dataSources = input.readMap(s -> s.readString(), s -> s.readGenericValue());
         }
