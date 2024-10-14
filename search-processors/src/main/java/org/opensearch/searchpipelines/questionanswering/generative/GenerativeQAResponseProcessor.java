@@ -18,6 +18,7 @@
 package org.opensearch.searchpipelines.questionanswering.generative;
 
 import static org.opensearch.ingest.ConfigurationUtils.newConfigurationException;
+import static org.opensearch.searchpipelines.questionanswering.generative.GenerativeQAProcessorConstants.RAG_NULL_GEN_QA_PARAMS_ERROR_MSG;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -127,10 +128,7 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
 
         GenerativeQAParameters params = GenerativeQAParamUtil.getGenerativeQAParameters(request);
         if (params == null) {
-            throw new IllegalArgumentException(
-                "generative_qa_parameters not found. Please provide ext.generative_qa_parameters to proceed."
-                    + "For more info, refer: https://opensearch.org/docs/latest/search-plugins/conversational-search/#step-6-use-the-pipeline-for-rag"
-            );
+            throw new IllegalArgumentException(RAG_NULL_GEN_QA_PARAMS_ERROR_MSG);
         }
 
         Integer t = params.getTimeout();
