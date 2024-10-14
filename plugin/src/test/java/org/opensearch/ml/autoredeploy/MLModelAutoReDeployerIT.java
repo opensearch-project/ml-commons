@@ -7,16 +7,17 @@
 
 package org.opensearch.ml.autoredeploy;
 
-import lombok.SneakyThrows;
-import org.junit.Before;
-import org.opensearch.ml.common.MLTaskState;
-import org.opensearch.ml.rest.MLCommonsRestTestCase;
+import static org.opensearch.ml.common.MLTask.MODEL_ID_FIELD;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-import static org.opensearch.ml.common.MLTask.MODEL_ID_FIELD;
+import org.junit.Before;
+import org.opensearch.ml.common.MLTaskState;
+import org.opensearch.ml.rest.MLCommonsRestTestCase;
+
+import lombok.SneakyThrows;
 
 public class MLModelAutoReDeployerIT extends MLCommonsRestTestCase {
 
@@ -27,11 +28,10 @@ public class MLModelAutoReDeployerIT extends MLCommonsRestTestCase {
 
     @SneakyThrows
     private void prepareModel() {
-        String requestBody = Files.readString(Path.of(this
-            .getClass()
-            .getClassLoader()
-            .getResource("org/opensearch/ml/autoredeploy/TracedSmallModelRequest.json")
-            .toURI()));
+        String requestBody = Files
+            .readString(
+                Path.of(this.getClass().getClassLoader().getResource("org/opensearch/ml/autoredeploy/TracedSmallModelRequest.json").toURI())
+            );
         String registerFirstModelTaskId = registerModel(requestBody);
         String registerSecondModelTaskId = registerModel(requestBody);
         waitForTask(registerFirstModelTaskId, MLTaskState.COMPLETED);

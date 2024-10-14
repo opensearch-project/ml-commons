@@ -243,7 +243,7 @@ public class MLModelAutoReDeployer {
             MLModel.PLANNING_WORKER_NODES_FIELD,
             MLModel.DEPLOY_TO_ALL_NODES_FIELD,
             MLModel.FUNCTION_NAME_FIELD,
-            MLModel.ALGORITHM_FIELD};
+            MLModel.ALGORITHM_FIELD };
 
         String[] excludes = new String[] { MLModel.MODEL_CONTENT_FIELD, MLModel.OLD_MODEL_CONTENT_FIELD };
         FetchSourceContext fetchContext = new FetchSourceContext(true, includes, excludes);
@@ -266,7 +266,11 @@ public class MLModelAutoReDeployer {
             .ofNullable(sourceAsMap.get(MLModel.FUNCTION_NAME_FIELD))
             .orElse(sourceAsMap.get(MLModel.ALGORITHM_FIELD));
         if (functionName == null) {
-            log.error("Model function_name or algorithm is null, model is not in correct status, please check the model, model id is: {}", modelId);
+            log
+                .error(
+                    "Model function_name or algorithm is null, model is not in correct status, please check the model, model id is: {}",
+                    modelId
+                );
             return;
         }
         if (FunctionName.REMOTE == FunctionName.from(functionName)) {
