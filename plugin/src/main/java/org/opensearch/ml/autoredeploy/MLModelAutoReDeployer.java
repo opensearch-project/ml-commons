@@ -241,7 +241,9 @@ public class MLModelAutoReDeployer {
         String[] includes = new String[] {
             MLModel.AUTO_REDEPLOY_RETRY_TIMES_FIELD,
             MLModel.PLANNING_WORKER_NODES_FIELD,
-            MLModel.DEPLOY_TO_ALL_NODES_FIELD };
+            MLModel.DEPLOY_TO_ALL_NODES_FIELD,
+            MLModel.FUNCTION_NAME_FIELD,
+            MLModel.ALGORITHM_FIELD};
 
         String[] excludes = new String[] { MLModel.MODEL_CONTENT_FIELD, MLModel.OLD_MODEL_CONTENT_FIELD };
         FetchSourceContext fetchContext = new FetchSourceContext(true, includes, excludes);
@@ -263,6 +265,10 @@ public class MLModelAutoReDeployer {
         String functionName = (String) Optional
             .ofNullable(sourceAsMap.get(MLModel.FUNCTION_NAME_FIELD))
             .orElse(sourceAsMap.get(MLModel.ALGORITHM_FIELD));
+        if (functionName == null) {
+            log.error("Model function_name or algorithm is null, model is not in correct status, please check the model, model id is: {}", modelId);
+            return;
+        }
         if (FunctionName.REMOTE == FunctionName.from(functionName)) {
             log.info("Skipping redeploying remote model {} as remote model deployment can be done at prediction time.", modelId);
             return;
