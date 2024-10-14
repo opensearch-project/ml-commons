@@ -465,12 +465,21 @@ public class AgentUtils {
     ) {
         Map<String, String> toolParams = new HashMap<>();
         Map<String, String> toolSpecParams = toolSpecMap.get(action).getParameters();
+        Map<String, String> toolSpecConfigMap = toolSpecMap.get(action).getConfigMap();
         if (toolSpecParams != null) {
             toolParams.putAll(toolSpecParams);
+        }
+        if (toolSpecConfigMap != null) {
+            toolParams.putAll(toolSpecConfigMap);
         }
         if (tools.get(action).useOriginalInput()) {
             toolParams.put("input", question);
             lastActionInput.set(question);
+        } else if (toolSpecConfigMap != null && toolSpecConfigMap.containsKey("input")) {
+            String input = toolSpecConfigMap.get("input");
+            StringSubstitutor substitutor = new StringSubstitutor(toolParams, "${parameters.", "}");
+            input = substitutor.replace(input);
+            toolParams.put("input", input);
         } else {
             toolParams.put("input", actionInput);
             if (isJson(actionInput)) {

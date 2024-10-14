@@ -287,6 +287,10 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                 executeParams.put(key, params.get(key));
             }
         }
+        // Override all parameters in tool config to tool execution parameters as the config contains the static parameters.
+        if (toolSpec.getConfigMap() != null && !toolSpec.getConfigMap().isEmpty()) {
+            executeParams.putAll(toolSpec.getConfigMap());
+        }
 
         if (executeParams.containsKey("input")) {
             String input = executeParams.get("input");
@@ -295,10 +299,6 @@ public class MLFlowAgentRunner implements MLAgentRunner {
             executeParams.put("input", input);
         }
 
-        // Override all parameters in tool config to tool execution parameters as the config contains the static parameters.
-        if (toolSpec.getConfigMap() != null && !toolSpec.getConfigMap().isEmpty()) {
-            executeParams.putAll(toolSpec.getConfigMap());
-        }
         return executeParams;
     }
 }

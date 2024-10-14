@@ -26,7 +26,7 @@ import lombok.Getter;
 @EqualsAndHashCode
 @Getter
 public class MLToolSpec implements ToXContentObject {
-    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_TOOL_CONFIG = CommonValue.VERSION_2_17_0;
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_TOOL_CONFIG = CommonValue.VERSION_2_18_0;
 
     public static final String TOOL_TYPE_FIELD = "type";
     public static final String TOOL_NAME_FIELD = "name";

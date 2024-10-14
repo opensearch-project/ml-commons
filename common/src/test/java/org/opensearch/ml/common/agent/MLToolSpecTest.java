@@ -22,7 +22,14 @@ public class MLToolSpecTest {
 
     @Test
     public void writeTo() throws IOException {
-        MLToolSpec spec = new MLToolSpec("test", "test", "test", Map.of("test", "test"), false, Map.of("configKey", "configValue"));
+        MLToolSpec spec = new MLToolSpec(
+            "test_type",
+            "test_name",
+            "test_desc",
+            Map.of("test_key", "test_value"),
+            false,
+            Map.of("configKey", "configValue")
+        );
         BytesStreamOutput output = new BytesStreamOutput();
         spec.writeTo(output);
         MLToolSpec spec1 = new MLToolSpec(output.bytes().streamInput());
@@ -37,7 +44,14 @@ public class MLToolSpecTest {
 
     @Test
     public void writeToEmptyConfigMap() throws IOException {
-        MLToolSpec spec = new MLToolSpec("test", "test", "test", Map.of("test", "test"), false, Collections.emptyMap());
+        MLToolSpec spec = new MLToolSpec(
+            "test_type",
+            "test_name",
+            "test_desc",
+            Map.of("test_key", "test_value"),
+            false,
+            Collections.emptyMap()
+        );
         BytesStreamOutput output = new BytesStreamOutput();
         spec.writeTo(output);
         MLToolSpec spec1 = new MLToolSpec(output.bytes().streamInput());
@@ -52,7 +66,7 @@ public class MLToolSpecTest {
 
     @Test
     public void writeToNullConfigMap() throws IOException {
-        MLToolSpec spec = new MLToolSpec("test", "test", "test", Map.of("test", "test"), false, null);
+        MLToolSpec spec = new MLToolSpec("test_type", "test_name", "test_desc", Map.of("test_key", "test_value"), false, null);
         BytesStreamOutput output = new BytesStreamOutput();
         spec.writeTo(output);
         MLToolSpec spec1 = new MLToolSpec(output.bytes().streamInput());
@@ -67,42 +81,56 @@ public class MLToolSpecTest {
 
     @Test
     public void toXContent() throws IOException {
-        MLToolSpec spec = new MLToolSpec("test", "test", "test", Map.of("test", "test"), false, Map.of("configKey", "configValue"));
+        MLToolSpec spec = new MLToolSpec(
+            "test_type",
+            "test_name",
+            "test_desc",
+            Map.of("test_key", "test_value"),
+            false,
+            Map.of("configKey", "configValue")
+        );
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         spec.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String content = TestHelper.xContentBuilderToString(builder);
 
         Assert
             .assertEquals(
-                "{\"type\":\"test\",\"name\":\"test\",\"description\":\"test\",\"parameters\":{\"test\":\"test\"},\"include_output_in_agent_response\":false,\"config\":{\"configKey\":\"configValue\"}}",
+                "{\"type\":\"test_type\",\"name\":\"test_name\",\"description\":\"test_desc\",\"parameters\":{\"test_key\":\"test_value\"},\"include_output_in_agent_response\":false,\"config\":{\"configKey\":\"configValue\"}}",
                 content
             );
     }
 
     @Test
     public void toXContentEmptyConfigMap() throws IOException {
-        MLToolSpec spec = new MLToolSpec("test", "test", "test", Map.of("test", "test"), false, Collections.emptyMap());
+        MLToolSpec spec = new MLToolSpec(
+            "test_type",
+            "test_name",
+            "test_desc",
+            Map.of("test_key", "test_value"),
+            false,
+            Collections.emptyMap()
+        );
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         spec.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String content = TestHelper.xContentBuilderToString(builder);
 
         Assert
             .assertEquals(
-                "{\"type\":\"test\",\"name\":\"test\",\"description\":\"test\",\"parameters\":{\"test\":\"test\"},\"include_output_in_agent_response\":false}",
+                "{\"type\":\"test_type\",\"name\":\"test_name\",\"description\":\"test_desc\",\"parameters\":{\"test_key\":\"test_value\"},\"include_output_in_agent_response\":false}",
                 content
             );
     }
 
     @Test
     public void toXContentNullConfigMap() throws IOException {
-        MLToolSpec spec = new MLToolSpec("test", "test", "test", Map.of("test", "test"), false, null);
+        MLToolSpec spec = new MLToolSpec("test_type", "test_name", "test_desc", Map.of("test_key", "test_value"), false, null);
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         spec.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String content = TestHelper.xContentBuilderToString(builder);
 
         Assert
             .assertEquals(
-                "{\"type\":\"test\",\"name\":\"test\",\"description\":\"test\",\"parameters\":{\"test\":\"test\"},\"include_output_in_agent_response\":false}",
+                "{\"type\":\"test_type\",\"name\":\"test_name\",\"description\":\"test_desc\",\"parameters\":{\"test_key\":\"test_value\"},\"include_output_in_agent_response\":false}",
                 content
             );
     }
@@ -110,7 +138,7 @@ public class MLToolSpecTest {
     @Test
     public void parse() throws IOException {
         String jsonStr =
-            "{\"type\":\"test\",\"name\":\"test\",\"description\":\"test\",\"parameters\":{\"test\":\"test\"},\"include_output_in_agent_response\":false,\"config\":{\"configKey\":\"configValue\"}}";
+            "{\"type\":\"test_type\",\"name\":\"test_name\",\"description\":\"test_desc\",\"parameters\":{\"test_key\":\"test_value\"},\"include_output_in_agent_response\":false,\"config\":{\"configKey\":\"configValue\"}}";
         XContentParser parser = XContentType.JSON
             .xContent()
             .createParser(
@@ -121,10 +149,10 @@ public class MLToolSpecTest {
         parser.nextToken();
         MLToolSpec spec = MLToolSpec.parse(parser);
 
-        Assert.assertEquals(spec.getType(), "test");
-        Assert.assertEquals(spec.getName(), "test");
-        Assert.assertEquals(spec.getDescription(), "test");
-        Assert.assertEquals(spec.getParameters(), Map.of("test", "test"));
+        Assert.assertEquals(spec.getType(), "test_type");
+        Assert.assertEquals(spec.getName(), "test_name");
+        Assert.assertEquals(spec.getDescription(), "test_desc");
+        Assert.assertEquals(spec.getParameters(), Map.of("test_key", "test_value"));
         Assert.assertEquals(spec.isIncludeOutputInAgentResponse(), false);
         Assert.assertEquals(spec.getConfigMap(), Map.of("configKey", "configValue"));
     }
@@ -132,7 +160,7 @@ public class MLToolSpecTest {
     @Test
     public void parseEmptyConfigMap() throws IOException {
         String jsonStr =
-            "{\"type\":\"test\",\"name\":\"test\",\"description\":\"test\",\"parameters\":{\"test\":\"test\"},\"include_output_in_agent_response\":false}";
+            "{\"type\":\"test_type\",\"name\":\"test_name\",\"description\":\"test_desc\",\"parameters\":{\"test_key\":\"test_value\"},\"include_output_in_agent_response\":false}";
         XContentParser parser = XContentType.JSON
             .xContent()
             .createParser(
@@ -143,17 +171,24 @@ public class MLToolSpecTest {
         parser.nextToken();
         MLToolSpec spec = MLToolSpec.parse(parser);
 
-        Assert.assertEquals(spec.getType(), "test");
-        Assert.assertEquals(spec.getName(), "test");
-        Assert.assertEquals(spec.getDescription(), "test");
-        Assert.assertEquals(spec.getParameters(), Map.of("test", "test"));
+        Assert.assertEquals(spec.getType(), "test_type");
+        Assert.assertEquals(spec.getName(), "test_name");
+        Assert.assertEquals(spec.getDescription(), "test_desc");
+        Assert.assertEquals(spec.getParameters(), Map.of("test_key", "test_value"));
         Assert.assertEquals(spec.isIncludeOutputInAgentResponse(), false);
         Assert.assertEquals(spec.getConfigMap(), null);
     }
 
     @Test
     public void fromStream() throws IOException {
-        MLToolSpec spec = new MLToolSpec("test", "test", "test", Map.of("test", "test"), false, Map.of("configKey", "configValue"));
+        MLToolSpec spec = new MLToolSpec(
+            "test_type",
+            "test_name",
+            "test_desc",
+            Map.of("test_key", "test_value"),
+            false,
+            Map.of("configKey", "configValue")
+        );
         BytesStreamOutput output = new BytesStreamOutput();
         spec.writeTo(output);
         MLToolSpec spec1 = MLToolSpec.fromStream(output.bytes().streamInput());
@@ -168,7 +203,14 @@ public class MLToolSpecTest {
 
     @Test
     public void fromStreamEmptyConfigMap() throws IOException {
-        MLToolSpec spec = new MLToolSpec("test", "test", "test", Map.of("test", "test"), false, Collections.emptyMap());
+        MLToolSpec spec = new MLToolSpec(
+            "test_type",
+            "test_name",
+            "test_desc",
+            Map.of("test_key", "test_value"),
+            false,
+            Collections.emptyMap()
+        );
         BytesStreamOutput output = new BytesStreamOutput();
         spec.writeTo(output);
         MLToolSpec spec1 = MLToolSpec.fromStream(output.bytes().streamInput());
@@ -183,7 +225,7 @@ public class MLToolSpecTest {
 
     @Test
     public void fromStreamNullConfigMap() throws IOException {
-        MLToolSpec spec = new MLToolSpec("test", "test", "test", Map.of("test", "test"), false, null);
+        MLToolSpec spec = new MLToolSpec("test_type", "test_name", "test_desc", Map.of("test_key", "test_value"), false, null);
         BytesStreamOutput output = new BytesStreamOutput();
         spec.writeTo(output);
         MLToolSpec spec1 = MLToolSpec.fromStream(output.bytes().streamInput());
