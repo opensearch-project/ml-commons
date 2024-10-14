@@ -10,7 +10,6 @@ import static org.opensearch.ml.common.utils.StringUtils.addDefaultMethod;
 import java.util.Collections;
 import java.util.Locale;
 import java.util.Map;
-import java.util.function.Function;
 
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
@@ -29,13 +28,39 @@ import lombok.extern.log4j.Log4j2;
  * If the input data is already of type {@link RemoteInferenceInputDataSet}, it can be returned directly by setting the {@link #returnDirectlyForRemoteInferenceInput} flag to true.
  */
 @Log4j2
-public abstract class ConnectorPreProcessFunction implements Function<MLInput, RemoteInferenceInputDataSet> {
+public abstract class ConnectorPreProcessFunction implements PreProcessFunction {
 
     /**
      * This is a flag that can be used to determine if the pre-process function should return the input directly for RemoteInferenceInputDataSet.
      * If this is true and the input is already of type RemoteInferenceInputDataSet, it will be returned directly, otherwise it will be processed.
      */
     protected boolean returnDirectlyForRemoteInferenceInput;
+
+    /**
+     * Applies the pre-processing function to the given MLInput object and returns the resulting RemoteInferenceInputDataSet.
+     *
+     * @param connectorParams the connector parameters: including parameters defined in the connector and the parameters from request.
+     *                        refer to RemoteConnectorExecutor.preparePayloadAndInvoke for details.
+     * @param  mlInput  the MLInput object to be processed
+     * @return RemoteInferenceInputDataSet resulting from the pre-processing function
+     * @throws IllegalArgumentException if the input MLInput object is null
+     */
+    @Override
+    public RemoteInferenceInputDataSet apply(Map<String, String> connectorParams, MLInput mlInput) {
+        if (mlInput == null) {
+            throw new IllegalArgumentException("Preprocess function input can't be null");
+        }
+        if (returnDirectlyForRemoteInferenceInput && mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet) {
+            return (RemoteInferenceInputDataSet) mlInput.getInputDataset();
+        } else {
+            validate(mlInput);
+            if (connectorParams != null) {
+                return process(connectorParams, mlInput);
+            } else {
+                return process(mlInput);
+            }
+        }
+    }
 
     /**
      * Applies the pre-processing function to the given MLInput object and returns the resulting RemoteInferenceInputDataSet.
@@ -56,10 +81,6 @@ public abstract class ConnectorPreProcessFunction implements Function<MLInput, R
             return process(mlInput);
         }
     }
-
-    public abstract void validate(MLInput mlInput);
-
-    public abstract RemoteInferenceInputDataSet process(MLInput mlInput);
 
     /**
      * Validates the input of a pre-process function for text documents.
