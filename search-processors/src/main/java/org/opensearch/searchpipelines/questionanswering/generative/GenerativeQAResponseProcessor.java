@@ -129,6 +129,7 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
         if (params == null) {
             throw new IllegalArgumentException(
                 "generative_qa_parameters not found. Please provide ext.generative_qa_parameters to proceed."
+                    + "For more info, refer: https://opensearch.org/docs/latest/search-plugins/conversational-search/#step-6-use-the-pipeline-for-rag"
             );
         }
 
