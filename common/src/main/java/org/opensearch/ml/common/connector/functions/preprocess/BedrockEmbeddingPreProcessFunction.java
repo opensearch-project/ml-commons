@@ -15,6 +15,9 @@ import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 public class BedrockEmbeddingPreProcessFunction extends ConnectorPreProcessFunction {
 
     public BedrockEmbeddingPreProcessFunction() {
@@ -40,6 +43,7 @@ public class BedrockEmbeddingPreProcessFunction extends ConnectorPreProcessFunct
         // Amazon Titan Text Embeddings V2 model: https://docs.aws.amazon.com/bedrock/latest/userguide/titan-embedding-models.html
         // Default dimension is 1024
         int dimensions = Optional.ofNullable(connectorParams.get("dimensions")).map(x -> NumberUtils.toInt(x, 1024)).orElse(1024);
+        log.error("The bedrock dimensions parameter value is: {}", dimensions);
         Map<String, Object> processedResult = Map
             .of("parameters", Map.of("inputText", inputData.getDocs().get(0), "dimensions", dimensions));
         return RemoteInferenceInputDataSet.builder().parameters(convertScriptStringToJsonString(processedResult)).build();

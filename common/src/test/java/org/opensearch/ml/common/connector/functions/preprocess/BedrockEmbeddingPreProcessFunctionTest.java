@@ -84,4 +84,12 @@ public class BedrockEmbeddingPreProcessFunctionTest {
         assertEquals(2, dataSet.getParameters().size());
         assertEquals("1024", dataSet.getParameters().get("dimensions"));
     }
+
+    @Test
+    public void process_TextDocsInput_withoutConnectorParams() {
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(textDocsInputDataSet).build();
+        RemoteInferenceInputDataSet dataSet = function.apply(Map.of(), mlInput);
+        assertEquals(2, dataSet.getParameters().size());
+        assertEquals("1024", dataSet.getParameters().get("dimensions"));
+    }
 }
