@@ -1,0 +1,14 @@
+{
+  "name": "traced_small_model",
+  "version": "1.0.0",
+  "model_format": "TORCH_SCRIPT",
+  "model_task_type": "text_embedding",
+  "model_content_hash_value": "e13b74006290a9d0f58c1376f9629d4ebc05a0f9385f40db837452b167ae9021",
+  "model_config": {
+    "model_type": "bert",
+    "embedding_dimension": 768,
+    "framework_type": "sentence_transformers",
+    "all_config": "{\"architectures\":[\"BertModel\"],\"max_position_embeddings\":512,\"model_type\":\"bert\",\"num_attention_heads\":12,\"num_hidden_layers\":6}"
+  },
+  "url": "https://github.com/opensearch-project/ml-commons/blob/2.x/ml-algorithms/src/test/resources/org/opensearch/ml/engine/algorithms/text_embedding/traced_small_model.zip?raw=true"
+}
