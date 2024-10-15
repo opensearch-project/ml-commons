@@ -49,7 +49,7 @@ POST /_plugins/_ml/connectors/_create
         "content-type": "application/json",
         "x-amz-content-sha256": "required"
       },
-      "request_body": "{\"body\":{\"inputText\": \"${parameters.inputText}\", \"inputImage\": \"${parameters.inputImage}\"}}",
+      "request_body": "{\"inputText\": \"${parameters.inputText:-null}\", \"inputImage\": \"${parameters.inputImage:-null}\"}",
       "pre_process_function": "connector.pre_process.bedrock.multimodal_embedding",
       "post_process_function": "connector.post_process.bedrock.embedding"
     }
@@ -103,7 +103,7 @@ POST /_plugins/_ml/connectors/_create
         "content-type": "application/json",
         "x-amz-content-sha256": "required"
       },
-      "request_body": "{\"body\":{\"inputText\": \"${parameters.inputText}\", \"inputImage\": \"${parameters.inputImage}\"}}",
+      "request_body": "{\"inputText\": \"${parameters.inputText:-null}\", \"inputImage\": \"${parameters.inputImage:-null}\"}",
       "pre_process_function": "connector.pre_process.bedrock.multimodal_embedding",
       "post_process_function": "connector.post_process.bedrock.embedding" 
     }
