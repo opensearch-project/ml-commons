@@ -308,7 +308,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
      *
      * @param response         the search response
      * @param responseListener the listener to be notified when the response is processed
-     * @param queryString
+     * @param queryString      the query body in string format, for example, "{ \"query\": { \"match_all\": {} } }\n"
      * @throws IOException if an I/O error occurs during the rewriting process
      */
     private void rewriteResponseDocuments(SearchResponse response, ActionListener<SearchResponse> responseListener, String queryString)
@@ -346,7 +346,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
      * @param inputMapIndex           the index of the input mapping to process
      * @param batchPredictionListener the listener to be notified when the predictions are processed
      * @param hitCountInPredictions   a map to keep track of the count of hits that have the required input fields for each round of prediction
-     * @param queryString
+     * @param queryString             the query body in string format, for example, "{ \"query\": { \"match_all\": {} } }\n"
      * @throws IOException if an I/O error occurs during the prediction process
      */
     private void processPredictions(
