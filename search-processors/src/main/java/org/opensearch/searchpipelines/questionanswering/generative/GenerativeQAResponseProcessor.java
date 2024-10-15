@@ -18,6 +18,7 @@
 package org.opensearch.searchpipelines.questionanswering.generative;
 
 import static org.opensearch.ingest.ConfigurationUtils.newConfigurationException;
+import static org.opensearch.searchpipelines.questionanswering.generative.GenerativeQAProcessorConstants.RAG_NULL_GEN_QA_PARAMS_ERROR_MSG;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -126,6 +127,9 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
         }
 
         GenerativeQAParameters params = GenerativeQAParamUtil.getGenerativeQAParameters(request);
+        if (params == null) {
+            throw new IllegalArgumentException(RAG_NULL_GEN_QA_PARAMS_ERROR_MSG);
+        }
 
         Integer t = params.getTimeout();
         if (t == null || t == GenerativeQAParameters.SIZE_NULL_VALUE) {
