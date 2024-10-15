@@ -8,6 +8,9 @@ package org.opensearch.ml.task;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.common.MLTask.LAST_UPDATE_TIME_FIELD;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
+import static org.opensearch.ml.common.MLTask.TASK_TYPE_FIELD;
+import static org.opensearch.ml.common.MLTaskState.CREATED;
+import static org.opensearch.ml.common.MLTaskState.RUNNING;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 
@@ -25,10 +28,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
+import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.WriteRequest;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
+import org.opensearch.client.Requests;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.action.ActionListener;
@@ -36,6 +42,8 @@ import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.index.query.BoolQueryBuilder;
+import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
@@ -43,6 +51,7 @@ import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
+import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.threadpool.ThreadPool;
 
 import com.google.common.collect.ImmutableMap;
@@ -61,7 +70,6 @@ public class MLTaskManager {
     private final ThreadPool threadPool;
     private final MLIndicesHandler mlIndicesHandler;
     private final Map<MLTaskType, AtomicInteger> runningTasksCount;
-
     public static final ImmutableSet TASK_DONE_STATES = ImmutableSet
         .of(MLTaskState.COMPLETED, MLTaskState.COMPLETED_WITH_ERROR, MLTaskState.FAILED, MLTaskState.CANCELLED);
 
@@ -91,12 +99,53 @@ public class MLTaskManager {
             throw new MLLimitExceededException(error);
         }
         if (contains(mlTask.getTaskId())) {
-            getMLTask(mlTask.getTaskId()).setState(MLTaskState.RUNNING);
+            getMLTask(mlTask.getTaskId()).setState(RUNNING);
         } else {
-            mlTask.setState(MLTaskState.RUNNING);
+            mlTask.setState(RUNNING);
             add(mlTask);
         }
         runningTaskCount.incrementAndGet();
+    }
+
+    public synchronized void checkMaxBatchJobTask(MLTaskType mlTaskType, Integer maxTaskLimit, ActionListener<Boolean> listener) {
+        try {
+            BoolQueryBuilder boolQuery = QueryBuilders
+                .boolQuery()
+                .must(QueryBuilders.termQuery(TASK_TYPE_FIELD, mlTaskType.name()))
+                .must(
+                    QueryBuilders
+                        .boolQuery()
+                        .should(QueryBuilders.termQuery(STATE_FIELD, CREATED))
+                        .should(QueryBuilders.termQuery(STATE_FIELD, RUNNING))
+                );
+
+            SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(boolQuery);
+            SearchRequest searchRequest = new SearchRequest(ML_TASK_INDEX);
+            searchRequest.source(searchSourceBuilder);
+
+            try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
+                ActionListener<SearchResponse> internalListener = ActionListener.runBefore(ActionListener.wrap(searchResponse -> {
+                    long matchedCount = searchResponse.getHits().getHits().length;
+                    Boolean exceedLimit = false;
+                    if (matchedCount >= maxTaskLimit) {
+                        exceedLimit = true;
+                    }
+                    listener.onResponse(exceedLimit);
+                }, exception -> { listener.onFailure(exception); }), () -> threadContext.restore());
+
+                client.admin().indices().refresh(Requests.refreshRequest(ML_TASK_INDEX), ActionListener.wrap(refreshResponse -> {
+                    client.search(searchRequest, internalListener);
+                }, e -> {
+                    log.error("Failed to refresh Task index during search MLTaskType for " + mlTaskType, e);
+                    internalListener.onFailure(e);
+                }));
+            } catch (Exception e) {
+                listener.onFailure(e);
+            }
+        } catch (Exception e) {
+            log.error("Failed to search ML task for " + mlTaskType, e);
+            listener.onFailure(e);
+        }
     }
 
     /**
@@ -140,7 +189,7 @@ public class MLTaskManager {
             MLTaskCache taskCache = taskCaches.remove(taskId);
             MLTask mlTask = taskCache.getMlTask();
 
-            if (mlTask.getState() != MLTaskState.CREATED) {
+            if (mlTask.getState() != CREATED) {
                 // Task initial state is CREATED. It will move forward to RUNNING state once it starts on worker node.
                 // When finished or failed, it's possible to move to COMPLETED/FAILED state.
                 // So if its state is not CREATED when remove it, the task already started on worker node, we should
@@ -205,7 +254,7 @@ public class MLTaskManager {
         int res = 0;
         for (Map.Entry<String, MLTaskCache> entry : taskCaches.entrySet()) {
             MLTask mlTask = entry.getValue().getMlTask();
-            if (mlTask.getState() != null && mlTask.getState() == MLTaskState.RUNNING) {
+            if (mlTask.getState() != null && mlTask.getState() == RUNNING) {
                 res++;
             }
         }
@@ -252,9 +301,9 @@ public class MLTaskManager {
             throw new IllegalArgumentException("Task not found");
         }
         MLTask task = getMLTask(taskId);
-        task.setState(MLTaskState.RUNNING);
+        task.setState(RUNNING);
         if (isAsyncTask) {
-            updateMLTask(taskId, ImmutableMap.of(STATE_FIELD, MLTaskState.RUNNING), TASK_SEMAPHORE_TIMEOUT, false);
+            updateMLTask(taskId, ImmutableMap.of(STATE_FIELD, RUNNING), TASK_SEMAPHORE_TIMEOUT, false);
         }
     }
 
@@ -387,7 +436,7 @@ public class MLTaskManager {
         List<String> runningDeployModelIds = new ArrayList<>();
         for (Map.Entry<String, MLTaskCache> entry : taskCaches.entrySet()) {
             MLTask mlTask = entry.getValue().getMlTask();
-            if (mlTask.getTaskType() == MLTaskType.DEPLOY_MODEL && mlTask.getState() != MLTaskState.CREATED) {
+            if (mlTask.getTaskType() == MLTaskType.DEPLOY_MODEL && mlTask.getState() != CREATED) {
                 runningDeployModelTaskIds.add(entry.getKey());
                 runningDeployModelIds.add(mlTask.getModelId());
             }

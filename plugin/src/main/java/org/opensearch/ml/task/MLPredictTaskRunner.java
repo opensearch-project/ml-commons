@@ -55,6 +55,7 @@ import org.opensearch.ml.common.connector.ConnectorAction.ActionType;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
+import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLPredictionOutput;
@@ -253,6 +254,32 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
             .lastUpdateTime(now)
             .async(false)
             .build();
+        if (actionType.equals(ActionType.BATCH_PREDICT)) {
+            mlModelManager.checkMaxBatchJobTask(mlTask, ActionListener.wrap(exceedLimits -> {
+                if (exceedLimits) {
+                    String error = "exceed maximum BATCH_PREDICTION Task limits";
+                    log.warn(error + " in task " + mlTask.getTaskId());
+                    listener.onFailure(new MLLimitExceededException(error));
+                } else {
+                    executePredictionByInputDataType(inputDataType, modelId, mlInput, mlTask, functionName, listener);
+                }
+            }, exception -> {
+                log.error("Failed to check the maximum BATCH_PREDICTION Task limits", exception);
+                listener.onFailure(exception);
+            }));
+            return;
+        }
+        executePredictionByInputDataType(inputDataType, modelId, mlInput, mlTask, functionName, listener);
+    }
+
+    private void executePredictionByInputDataType(
+        MLInputDataType inputDataType,
+        String modelId,
+        MLInput mlInput,
+        MLTask mlTask,
+        FunctionName functionName,
+        ActionListener<MLTaskResponse> listener
+    ) {
         switch (inputDataType) {
             case SEARCH_QUERY:
                 ActionListener<MLInputDataset> dataFrameActionListener = ActionListener.wrap(dataSet -> {
