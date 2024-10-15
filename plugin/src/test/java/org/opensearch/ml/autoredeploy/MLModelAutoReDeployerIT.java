@@ -9,11 +9,9 @@ package org.opensearch.ml.autoredeploy;
 
 import static org.opensearch.ml.common.MLTask.MODEL_ID_FIELD;
 
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-import org.junit.Before;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.rest.MLCommonsRestTestCase;
 
@@ -21,8 +19,7 @@ import lombok.SneakyThrows;
 
 public class MLModelAutoReDeployerIT extends MLCommonsRestTestCase {
 
-    @Before
-    public void setup() throws IOException {
+    public void testModelAutoRedeploy() {
         prepareModel();
     }
 
@@ -65,9 +62,4 @@ public class MLModelAutoReDeployerIT extends MLCommonsRestTestCase {
         });
     }
 
-    public void testModelAutoRedeploy() {
-        // This is a tricky IT to test model auto redeploy, since model auto redeploy is not easily to test with IT, so adding this test
-        // to mimic a case when a cluster spin up and immediately deploy a model, the model auto redeployer also selected this deploying
-        // model to deploy, and the original deploy task should complete and the auto redeploy task should fail in background.
-    }
 }

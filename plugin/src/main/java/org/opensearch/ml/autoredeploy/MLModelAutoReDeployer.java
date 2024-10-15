@@ -217,7 +217,7 @@ public class MLModelAutoReDeployer {
                     client.execute(MLUndeployModelAction.INSTANCE, undeployModelNodesRequest, undeployModelListener);
                 }
             }
-        }, e -> { log.error("Failed to query need undeploy models, no action will be performed"); });
+        }, e -> { log.error("Failed to query need undeploy models, no action will be performed", e); });
         queryRunningModels(listener);
     }
 
@@ -259,6 +259,10 @@ public class MLModelAutoReDeployer {
 
     @SuppressWarnings("unchecked")
     private void triggerModelRedeploy(ModelAutoRedeployArrangement modelAutoRedeployArrangement) {
+        if (modelAutoRedeployArrangement == null) {
+            log.info("No more models in arrangement, skipping the redeployment");
+            return;
+        }
         String modelId = modelAutoRedeployArrangement.getSearchResponse().getId();
         List<String> addedNodes = modelAutoRedeployArrangement.getAddedNodes();
         Map<String, Object> sourceAsMap = modelAutoRedeployArrangement.getSearchResponse().getSourceAsMap();
