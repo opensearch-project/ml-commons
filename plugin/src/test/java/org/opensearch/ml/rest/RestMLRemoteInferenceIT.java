@@ -77,46 +77,28 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         Thread.sleep(20000);
     }
 
-    public void testGetConnector() throws IOException {
+    public void testCreate_Get_DeleteConnector() throws IOException {
         Response response = createConnector(completionModelConnectorEntity);
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
+        assertNotNull(connectorId);    // Testing create connector
+
+        // Testing Get connector
         response = TestHelper.makeRequest(client(), "GET", "/_plugins/_ml/connectors/" + connectorId, null, "", null);
         responseMap = parseResponseToMap(response);
-        assertEquals("OpenAI Connector", (String) responseMap.get("name"));
+        assertEquals("OpenAI Connector", responseMap.get("name"));
         assertEquals("1", responseMap.get("version"));
-        assertEquals("The connector to public OpenAI model service for GPT 3.5", (String) responseMap.get("description"));
+        assertEquals("The connector to public OpenAI model service for GPT 3.5", responseMap.get("description"));
         assertEquals("http", responseMap.get("protocol"));
-    }
 
-    public void testCreate_Get_DeleteConnector() throws IOException {
-        try {
-            Response response = createConnector(completionModelConnectorEntity);
-            Map responseMap = parseResponseToMap(response);
-            String connectorId = (String) responseMap.get("connector_id");
-            assertNotNull(connectorId);    // Testing create connector
-
-            // Testing Get connector
-            response = TestHelper.makeRequest(client(), "GET", "/_plugins/_ml/connectors/" + connectorId, null, "", null);
-            responseMap = parseResponseToMap(response);
-            assertEquals("OpenAI Connector", responseMap.get("name"));
-            assertEquals("1", responseMap.get("version"));
-            assertEquals("The connector to public OpenAI model service for GPT 3.5", responseMap.get("description"));
-            assertEquals("http", responseMap.get("protocol"));
-
-            // Testing delete connector
-            response = TestHelper.makeRequest(client(), "DELETE", "/_plugins/_ml/connectors/" + connectorId, null, "", null);
-            responseMap = parseResponseToMap(response);
-            assertEquals("deleted", responseMap.get("result"));
-        } catch (ResponseException e) {
-            String sanitizedMessage = maskSensitiveInfo(e.getMessage());
-            logger.error("ResponseException: {}", sanitizedMessage);  // Log sanitized message
-            throw new RuntimeException("Request failed: " + sanitizedMessage);  // Re-throw sanitized exception
-        }
+        // Testing delete connector
+        response = TestHelper.makeRequest(client(), "DELETE", "/_plugins/_ml/connectors/" + connectorId, null, "", null);
+        responseMap = parseResponseToMap(response);
+        assertEquals("deleted", responseMap.get("result"));
 
     }
 
-    private String maskSensitiveInfo(String input) {
+    private static String maskSensitiveInfo(String input) {
         // Regex to remove the whole credential object and replace it with "***"
         String regex = "\"credential\":\\{.*?}";
         return input.replaceAll(regex, "\"credential\": \"***\"");
@@ -857,7 +839,12 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
     }
 
     public static Response createConnector(String input) throws IOException {
-        return TestHelper.makeRequest(client(), "POST", "/_plugins/_ml/connectors/_create", null, TestHelper.toHttpEntity(input), null);
+        try {
+            return TestHelper.makeRequest(client(), "POST", "/_plugins/_ml/connectors/_create", null, TestHelper.toHttpEntity(input), null);
+        } catch (ResponseException e) {
+            String sanitizedMessage = maskSensitiveInfo(e.getMessage());// Log sanitized message
+            throw new RuntimeException("Request failed: " + sanitizedMessage);  // Re-throw sanitized exception
+        }
     }
 
     public static Response registerRemoteModel(String name, String connectorId) throws IOException {
