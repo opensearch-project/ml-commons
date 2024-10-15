@@ -22,6 +22,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.searchpipelines.questionanswering.generative.GenerativeQAProcessorConstants.RAG_NULL_GEN_QA_PARAMS_ERROR_MSG;
 import static org.opensearch.searchpipelines.questionanswering.generative.GenerativeQAResponseProcessor.IllegalArgumentMessage;
 
 import java.time.Instant;
@@ -458,6 +459,54 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
         Llm llm = mock(Llm.class);
         when(llm.doChatCompletion(any())).thenThrow(new NullPointerException("Null Pointer in Interactions"));
         processor.setLlm(llm);
+
+        SearchResponse res = processor.processResponse(request, response);
+    }
+
+    public void testProcessResponseIllegalArgumentForNullParams() throws Exception {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage(RAG_NULL_GEN_QA_PARAMS_ERROR_MSG);
+
+        Client client = mock(Client.class);
+        Map<String, Object> config = new HashMap<>();
+        config.put(GenerativeQAProcessorConstants.CONFIG_NAME_MODEL_ID, "dummy-model");
+        config.put(GenerativeQAProcessorConstants.CONFIG_NAME_CONTEXT_FIELD_LIST, List.of("text"));
+
+        GenerativeQAResponseProcessor processor = (GenerativeQAResponseProcessor) new GenerativeQAResponseProcessor.Factory(
+            client,
+            alwaysOn
+        ).create(null, "tag", "desc", true, config, null);
+
+        ConversationalMemoryClient memoryClient = mock(ConversationalMemoryClient.class);
+        when(memoryClient.getInteractions(any(), anyInt()))
+            .thenReturn(List.of(new Interaction("0", Instant.now(), "1", null, null, null, null, null)));
+        processor.setMemoryClient(memoryClient);
+
+        SearchRequest request = new SearchRequest();
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+
+        GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
+        extBuilder.setParams(null);
+        request.source(sourceBuilder);
+        sourceBuilder.ext(List.of(extBuilder));
+
+        int numHits = 10;
+        SearchHit[] hitsArray = new SearchHit[numHits];
+        for (int i = 0; i < numHits; i++) {
+            XContentBuilder sourceContent = JsonXContent
+                .contentBuilder()
+                .startObject()
+                .field("_id", String.valueOf(i))
+                .field("text", "passage" + i)
+                .field("title", "This is the title for document " + i)
+                .endObject();
+            hitsArray[i] = new SearchHit(i, "doc" + i, Map.of(), Map.of());
+            hitsArray[i].sourceRef(BytesReference.bytes(sourceContent));
+        }
+
+        SearchHits searchHits = new SearchHits(hitsArray, null, 1.0f);
+        SearchResponseSections internal = new SearchResponseSections(searchHits, null, null, false, false, null, 0);
+        SearchResponse response = new SearchResponse(internal, null, 1, 1, 0, 1, null, null, null);
 
         SearchResponse res = processor.processResponse(request, response);
     }
