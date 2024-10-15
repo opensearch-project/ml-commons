@@ -122,7 +122,6 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         return input.replaceAll(regex, "\"credential\": \"***\"");
     }
 
-
     public void testSearchConnectors_beforeCreation() throws IOException {
         String searchEntity = "{\n" + "  \"query\": {\n" + "    \"match_all\": {}\n" + "  },\n" + "  \"size\": 1000\n" + "}";
         Response response = TestHelper
