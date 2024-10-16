@@ -11,6 +11,7 @@ This guide applies to the development within the ML-Commons project
     - [Build](#Build)
       - [Building from the command line](#Building-from-the-command-line)
       - [Debugging](#Debugging)
+- [GitHub CI/CD workflow Approval](#github-cicd-workflow-approval)
 - [More documentation](#More-docs)
 - [Code guidelines](#code-guidelines)
 
@@ -100,7 +101,7 @@ This package uses the [Gradle](https://docs.gradle.org/current/userguide/usergui
 11. `./gradlew adBwcCluster#fullRestartClusterTask -Dtests.security.manager=false` launches a cluster with three nodes of bwc version of OpenSearch with anomaly-detection and job-scheduler and tests backwards compatibility by performing a full restart on the cluster upgrading all the nodes with the current version of OpenSearch with anomaly-detection and job-scheduler.
 12. `./gradlew bwcTestSuite -Dtests.security.manager=false` runs all the above bwc tests combined.
 
-When launching a cluster using one of the above commands logs are placed in `/build/cluster/run node0/opensearch-<version>/logs`. Though the logs are teed to the console, in practices it's best to check the actual log file.
+When launching a cluster using one of the above commands logs are placed in `/build/cluster/run node0/opensearch-<version>/logs`. Though the logs are tied to the console, in practices it's best to check the actual log file.
 
 #### Debugging
 
@@ -121,6 +122,13 @@ To debug code running in an integ test (which exercises the server from a separa
 ```
 
 The test runner JVM will start suspended and wait for a debugger to attach to `localhost:5005` before running the tests.
+
+## GitHub CI/CD workflow Approval
+Effective October 2, 2024, maintainer approval will be required to run GitHub CI/CD workflow actions when pushing a pull request (PR).
+
+This change is being implemented as part of our enhanced security measures. We appreciate your patience and cooperation.
+
+For a list of current maintainers, please refer to [MAINTAINERS.md](https://github.com/opensearch-project/ml-commons/blob/main/MAINTAINERS.md).
 
 ## More docs
 
