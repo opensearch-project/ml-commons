@@ -253,6 +253,33 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
             .lastUpdateTime(now)
             .async(false)
             .build();
+        if (actionType.equals(ActionType.BATCH_PREDICT)) {
+            mlModelManager.checkMaxBatchJobTask(mlTask, ActionListener.wrap(exceedLimits -> {
+                if (exceedLimits) {
+                    String error =
+                        "Exceeded maximum limit for BATCH_PREDICTION tasks. To increase the limit, update the plugins.ml_commons.max_batch_inference_tasks setting.";
+                    log.warn(error + " in task " + mlTask.getTaskId());
+                    listener.onFailure(new OpenSearchStatusException(error, RestStatus.TOO_MANY_REQUESTS));
+                } else {
+                    executePredictionByInputDataType(inputDataType, modelId, mlInput, mlTask, functionName, listener);
+                }
+            }, exception -> {
+                log.error("Failed to check the maximum BATCH_PREDICTION Task limits", exception);
+                listener.onFailure(exception);
+            }));
+            return;
+        }
+        executePredictionByInputDataType(inputDataType, modelId, mlInput, mlTask, functionName, listener);
+    }
+
+    private void executePredictionByInputDataType(
+        MLInputDataType inputDataType,
+        String modelId,
+        MLInput mlInput,
+        MLTask mlTask,
+        FunctionName functionName,
+        ActionListener<MLTaskResponse> listener
+    ) {
         switch (inputDataType) {
             case SEARCH_QUERY:
                 ActionListener<MLInputDataset> dataFrameActionListener = ActionListener.wrap(dataSet -> {
