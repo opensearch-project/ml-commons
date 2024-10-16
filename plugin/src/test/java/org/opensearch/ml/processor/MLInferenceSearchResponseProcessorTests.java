@@ -176,6 +176,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      * read the query text into model config
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseSuccessReadQueryTextInModelConfig() throws Exception {
         String modelInputField = "text_docs";
         String originalDocumentField = "text";
@@ -183,6 +184,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
         String modelOutputField = "response";
         List<Map<String, String>> inputMap = new ArrayList<>();
         Map<String, String> input = new HashMap<>();
+        input.put("query_text", "query.term.text.value");
         input.put(modelInputField, originalDocumentField);
         inputMap.add(input);
         List<Map<String, String>> outputMap = new ArrayList<>();
@@ -190,7 +192,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
         output.put(newDocumentField, modelOutputField);
         outputMap.add(output);
         Map<String, String> modelConfig = new HashMap<>();
-        modelConfig.put("query_text", "query.term.text.value");
+
         MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
             "model1",
             inputMap,
