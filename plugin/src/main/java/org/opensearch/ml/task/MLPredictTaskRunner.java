@@ -55,7 +55,6 @@ import org.opensearch.ml.common.connector.ConnectorAction.ActionType;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
-import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLPredictionOutput;
@@ -257,9 +256,10 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         if (actionType.equals(ActionType.BATCH_PREDICT)) {
             mlModelManager.checkMaxBatchJobTask(mlTask, ActionListener.wrap(exceedLimits -> {
                 if (exceedLimits) {
-                    String error = "exceed maximum BATCH_PREDICTION Task limits";
+                    String error =
+                        "Exceeded maximum limit for BATCH_PREDICTION tasks. To increase the limit, update the plugins.ml_commons.max_batch_inference_tasks setting.";
                     log.warn(error + " in task " + mlTask.getTaskId());
-                    listener.onFailure(new MLLimitExceededException(error));
+                    listener.onFailure(new OpenSearchStatusException(error, RestStatus.TOO_MANY_REQUESTS));
                 } else {
                     executePredictionByInputDataType(inputDataType, modelId, mlInput, mlTask, functionName, listener);
                 }

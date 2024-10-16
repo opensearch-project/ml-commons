@@ -33,7 +33,6 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
-import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.transport.batch.MLBatchIngestionAction;
 import org.opensearch.ml.common.transport.batch.MLBatchIngestionInput;
 import org.opensearch.ml.common.transport.batch.MLBatchIngestionRequest;
@@ -146,9 +145,10 @@ public class TransportBatchIngestionAction extends HandledTransportAction<Action
 
         mlModelManager.checkMaxBatchJobTask(mlTask, ActionListener.wrap(exceedLimits -> {
             if (exceedLimits) {
-                String error = "exceed maximum BATCH_INGEST Task limits";
+                String error =
+                    "Exceeded maximum limit for BATCH_INGEST tasks. To increase the limit, update the plugins.ml_commons.max_batch_ingestion_tasks setting.";
                 log.warn(error + " in task " + mlTask.getTaskId());
-                listener.onFailure(new MLLimitExceededException(error));
+                listener.onFailure(new OpenSearchStatusException(error, RestStatus.TOO_MANY_REQUESTS));
             } else {
                 mlTaskManager.createMLTask(mlTask, ActionListener.wrap(response -> {
                     String taskId = response.getId();
