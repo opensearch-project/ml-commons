@@ -13,7 +13,7 @@ public interface Ingestable {
      * @param mlBatchIngestionInput batch ingestion input data
      * @return successRate (0 - 100)
      */
-    default double ingest(MLBatchIngestionInput mlBatchIngestionInput) {
+    default double ingest(MLBatchIngestionInput mlBatchIngestionInput, int bulkSize) {
         throw new IllegalStateException("Ingest is not implemented");
     }
 }
