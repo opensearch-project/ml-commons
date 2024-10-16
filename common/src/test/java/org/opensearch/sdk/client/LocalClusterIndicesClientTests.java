@@ -639,10 +639,9 @@ public class LocalClusterIndicesClientTests {
             .searchSourceBuilder(searchSourceBuilder)
             .build();
 
-        ArgumentCaptor<SearchRequest> searchRequestCaptor = ArgumentCaptor.forClass(SearchRequest.class);
         PlainActionFuture<SearchResponse> exceptionalFuture = PlainActionFuture.newFuture();
         exceptionalFuture.onFailure(new UnsupportedOperationException("test"));
-        when(mockedClient.search(searchRequestCaptor.capture())).thenReturn(exceptionalFuture);
+        when(mockedClient.search(any(SearchRequest.class))).thenReturn(exceptionalFuture);
         
         CompletableFuture<SearchDataObjectResponse> future = sdkClient
             .searchDataObjectAsync(searchRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
@@ -675,6 +674,7 @@ public class LocalClusterIndicesClientTests {
         assertEquals("Tenant ID is required when multitenancy is enabled.", cause.getMessage());
     }
     
+    @Test
     public void testSearchDataObject_NullTenantNoMultitenancy() throws IOException {
         // Tests no status exception if multitenancy not enabled
         SdkClient sdkClientNoTenant = new SdkClient(new LocalClusterIndicesClient(mockedClient, xContentRegistry), false);
@@ -686,7 +686,11 @@ public class LocalClusterIndicesClientTests {
             // null tenant Id
             .searchSourceBuilder(searchSourceBuilder)
             .build();
-        
+
+        PlainActionFuture<SearchResponse> exceptionalFuture = PlainActionFuture.newFuture();
+        exceptionalFuture.onFailure(new UnsupportedOperationException("test"));
+        when(mockedClient.search(any(SearchRequest.class))).thenReturn(exceptionalFuture);
+
         CompletableFuture<SearchDataObjectResponse> future = sdkClientNoTenant
             .searchDataObjectAsync(searchRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
             .toCompletableFuture();
