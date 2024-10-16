@@ -22,7 +22,10 @@ import static org.opensearch.ml.common.MLTaskState.COMPLETED;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
 import static org.opensearch.ml.engine.ingest.S3DataIngestion.SOURCE;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.INGEST_THREAD_POOL;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_BATCH_INGESTION_BULK_SIZE;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_BATCH_INGESTION_TASKS;
 import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
+import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -38,6 +41,9 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.ClusterSettings;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.index.Index;
 import org.opensearch.core.index.shard.ShardId;
@@ -79,6 +85,9 @@ public class TransportBatchIngestionActionTests extends OpenSearchTestCase {
     ExecutorService executorService;
     @Mock
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    @Mock
+    private ClusterService clusterService;
+    private Settings settings;
 
     private TransportBatchIngestionAction batchAction;
     private MLBatchIngestionInput batchInput;
@@ -89,14 +98,23 @@ public class TransportBatchIngestionActionTests extends OpenSearchTestCase {
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
+        settings = Settings.builder().put(ML_COMMONS_BATCH_INGESTION_BULK_SIZE.getKey(), 100).build();
+        ClusterSettings clusterSettings = clusterSetting(
+            settings,
+            ML_COMMONS_BATCH_INGESTION_BULK_SIZE,
+            ML_COMMONS_MAX_BATCH_INGESTION_TASKS
+        );
+        when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
         batchAction = new TransportBatchIngestionAction(
+            clusterService,
             transportService,
             actionFilters,
             client,
             mlTaskManager,
             threadPool,
             mlModelManager,
-            mlFeatureEnabledSetting
+            mlFeatureEnabledSetting,
+            settings
         );
 
         Map<String, Object> fieldMap = new HashMap<>();
@@ -133,6 +151,11 @@ public class TransportBatchIngestionActionTests extends OpenSearchTestCase {
             .build();
 
         when(mlFeatureEnabledSetting.isOfflineBatchIngestionEnabled()).thenReturn(true);
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(1);
+            listener.onResponse(false);
+            return null;
+        }).when(mlModelManager).checkMaxBatchJobTask(any(MLTask.class), isA(ActionListener.class));
     }
 
     public void test_doExecute_success() {
@@ -149,7 +172,6 @@ public class TransportBatchIngestionActionTests extends OpenSearchTestCase {
             runnable.run();
             return null;
         }).when(executorService).execute(any(Runnable.class));
-
         batchAction.doExecute(task, mlBatchIngestionRequest, actionListener);
 
         verify(actionListener).onResponse(any(MLBatchIngestionResponse.class));

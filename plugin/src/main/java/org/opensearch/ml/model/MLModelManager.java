@@ -40,6 +40,8 @@ import static org.opensearch.ml.engine.utils.FileUtils.calculateFileHash;
 import static org.opensearch.ml.engine.utils.FileUtils.deleteFileQuietly;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.DEPLOY_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.REGISTER_THREAD_POOL;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_BATCH_INFERENCE_TASKS;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_BATCH_INGESTION_TASKS;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_MODELS_PER_NODE;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE;
@@ -107,6 +109,7 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
+import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.controller.MLController;
 import org.opensearch.ml.common.controller.MLRateLimiter;
@@ -177,6 +180,8 @@ public class MLModelManager {
     private volatile Integer maxModelPerNode;
     private volatile Integer maxRegisterTasksPerNode;
     private volatile Integer maxDeployTasksPerNode;
+    private volatile Integer maxBatchInferenceTasks;
+    private volatile Integer maxBatchIngestionTasks;
 
     public static final ImmutableSet MODEL_DONE_STATES = ImmutableSet
         .of(
@@ -232,6 +237,16 @@ public class MLModelManager {
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE, it -> maxDeployTasksPerNode = it);
+
+        maxBatchInferenceTasks = ML_COMMONS_MAX_BATCH_INFERENCE_TASKS.get(settings);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_MAX_BATCH_INFERENCE_TASKS, it -> maxBatchInferenceTasks = it);
+
+        maxBatchIngestionTasks = ML_COMMONS_MAX_BATCH_INGESTION_TASKS.get(settings);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_MAX_BATCH_INGESTION_TASKS, it -> maxBatchIngestionTasks = it);
     }
 
     public void registerModelMeta(MLRegisterModelMetaInput mlRegisterModelMetaInput, ActionListener<String> listener) {
@@ -861,6 +876,18 @@ public class MLModelManager {
             checkOpenCircuitBreaker(mlCircuitBreakerService, mlStats);
         }
         mlTaskManager.checkLimitAndAddRunningTask(mlTask, runningTaskLimit);
+    }
+
+    /**
+     * Check if exceed batch job task limit
+     *
+     * @param mlTask ML task
+     * @param listener ActionListener if the limit is exceeded
+     */
+    public void checkMaxBatchJobTask(MLTask mlTask, ActionListener<Boolean> listener) {
+        MLTaskType taskType = mlTask.getTaskType();
+        int maxLimit = taskType.equals(MLTaskType.BATCH_PREDICTION) ? maxBatchInferenceTasks : maxBatchIngestionTasks;
+        mlTaskManager.checkMaxBatchJobTask(taskType, maxLimit, listener);
     }
 
     private void updateModelRegisterStateAsDone(
