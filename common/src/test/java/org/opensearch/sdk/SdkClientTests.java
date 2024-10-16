@@ -108,8 +108,7 @@ public class SdkClientTests {
                 return CompletableFuture.completedFuture(searchResponse);
             }
         });
-        sdkClient = new SdkClient(sdkClientImpl);
-        sdkClient.onMultiTenancyEnabledChanged(true);
+        sdkClient = new SdkClient(sdkClientImpl, true);
         testException = new OpenSearchStatusException("Test", RestStatus.BAD_REQUEST);
         interruptedException = new InterruptedException();
     }

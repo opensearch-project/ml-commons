@@ -8,6 +8,7 @@
  */
 package org.opensearch.ml.sdkclient;
 
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 import static org.opensearch.sdk.SdkClientSettings.AWS_DYNAMO_DB;
 import static org.opensearch.sdk.SdkClientSettings.AWS_OPENSEARCH_SERVICE;
 import static org.opensearch.sdk.SdkClientSettings.REMOTE_METADATA_ENDPOINT;
@@ -84,6 +85,7 @@ public class SdkClientFactory {
         String remoteMetadataEndpoint = REMOTE_METADATA_ENDPOINT.get(settings);
         String region = REMOTE_METADATA_REGION.get(settings);
         String serviceName = REMOTE_METADATA_SERVICE_NAME.get(settings);
+        Boolean multiTenancy = ML_COMMONS_MULTI_TENANCY_ENABLED.get(settings);
 
         switch (remoteMetadataType) {
             case REMOTE_OPENSEARCH:
@@ -91,12 +93,13 @@ public class SdkClientFactory {
                     throw new OpenSearchException("Remote Opensearch client requires a metadata endpoint.");
                 }
                 log.info("Using remote opensearch cluster as metadata store");
-                return new SdkClient(new RemoteClusterIndicesClient(createOpenSearchClient(remoteMetadataEndpoint)));
+                return new SdkClient(new RemoteClusterIndicesClient(createOpenSearchClient(remoteMetadataEndpoint)), multiTenancy);
             case AWS_OPENSEARCH_SERVICE:
                 validateAwsParams(remoteMetadataType, remoteMetadataEndpoint, region, serviceName);
                 log.info("Using remote AWS Opensearch Service cluster as metadata store");
                 return new SdkClient(
-                    new RemoteClusterIndicesClient(createAwsOpenSearchServiceClient(remoteMetadataEndpoint, region, serviceName))
+                    new RemoteClusterIndicesClient(createAwsOpenSearchServiceClient(remoteMetadataEndpoint, region, serviceName)),
+                    multiTenancy
                 );
             case AWS_DYNAMO_DB:
                 validateAwsParams(remoteMetadataType, remoteMetadataEndpoint, region, serviceName);
@@ -105,11 +108,12 @@ public class SdkClientFactory {
                     new DDBOpenSearchClient(
                         createDynamoDbClient(region),
                         new RemoteClusterIndicesClient(createAwsOpenSearchServiceClient(remoteMetadataEndpoint, region, serviceName))
-                    )
+                    ),
+                    multiTenancy
                 );
             default:
                 log.info("Using local opensearch cluster as metadata store");
-                return new SdkClient(new LocalClusterIndicesClient(client, xContentRegistry));
+                return new SdkClient(new LocalClusterIndicesClient(client, xContentRegistry), multiTenancy);
         }
     }
 
@@ -123,8 +127,8 @@ public class SdkClientFactory {
     }
 
     // Package private for testing
-    static SdkClient wrapSdkClientDelegate(SdkClientDelegate delegate) {
-        return new SdkClient(delegate);
+    static SdkClient wrapSdkClientDelegate(SdkClientDelegate delegate, Boolean multiTenancy) {
+        return new SdkClient(delegate, multiTenancy);
     }
 
     private static DynamoDbClient createDynamoDbClient(String region) {

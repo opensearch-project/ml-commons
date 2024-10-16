@@ -105,7 +105,8 @@ dependencies {
 
 publishing {
     publications {
-        pluginZip(MavenPublication) { publication ->
+        pluginZip(MavenPublication) {
+            publication ->
             pom {
                 name = opensearchplugin.name
                 description = opensearchplugin.description
@@ -174,7 +175,9 @@ task integTest(type: RestIntegTestTask) {
     testClassesDirs = sourceSets.test.output.classesDirs
     classpath = sourceSets.test.runtimeClasspath
 }
-tasks.named("check").configure { dependsOn(integTest) }
+tasks.named("check").configure {
+    dependsOn(integTest)
+}
 
 integTest {
     dependsOn "bundlePlugin"
@@ -252,6 +255,10 @@ testClusters.integTest {
     }
     if (System.getenv("AWS_SESSION_TOKEN") != null) {
         environment "AWS_SESSION_TOKEN", System.getenv("AWS_SESSION_TOKEN")
+    }
+
+    if (System.getProperty("tests.rest.tenantaware") != null) {
+        environment "plugins.ml_commons.multi_tenancy_enabled", "true"
     }
 
     testDistribution = "ARCHIVE"
