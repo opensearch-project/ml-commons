@@ -17,6 +17,7 @@ import org.apache.hc.core5.http.message.BasicHeader;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Rule;
+import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.opensearch.client.Response;
 import org.opensearch.client.ResponseException;
@@ -102,6 +103,30 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         // Regex to remove the whole credential object and replace it with "***"
         String regex = "\"credential\":\\{.*?}";
         return input.replaceAll(regex, "\"credential\": \"***\"");
+    }
+
+    @Test
+    public void testMaskSensitiveInfo_withCredential() {
+        String input = "{\"credential\":{\"username\":\"admin\",\"password\":\"secret\"}}";
+        String expectedOutput = "{\"credential\": \"***\"}";
+        String actualOutput = maskSensitiveInfo(input);
+        assertEquals(expectedOutput, actualOutput);
+    }
+
+    @Test
+    public void testMaskSensitiveInfo_noCredential() {
+        String input = "{\"otherInfo\":\"someValue\"}";
+        String expectedOutput = "{\"otherInfo\":\"someValue\"}";
+        String actualOutput = maskSensitiveInfo(input);
+        assertEquals(expectedOutput, actualOutput);
+    }
+
+    @Test
+    public void testMaskSensitiveInfo_emptyInput() {
+        String input = "";
+        String expectedOutput = "";
+        String actualOutput = maskSensitiveInfo(input);
+        assertEquals(expectedOutput, actualOutput);
     }
 
     public void testSearchConnectors_beforeCreation() throws IOException {
