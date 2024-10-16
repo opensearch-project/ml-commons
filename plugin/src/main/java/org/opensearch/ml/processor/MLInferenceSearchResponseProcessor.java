@@ -804,18 +804,15 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
             }
             boolean writeToSearchExtension = false;
 
-            if (outputMaps != null) {
-                for (Map<String, String> outputMap : outputMaps) {
-                    for (String key : outputMap.keySet()) {
-                        if (key.startsWith(EXTENSION_PREFIX)) {
-                            writeToSearchExtension = true;
-                            break;
-                        }
-                    }
-                }
+            if (outputMaps != null
+                && outputMaps
+                    .stream()
+                    .anyMatch(outputMap -> outputMap.keySet().stream().anyMatch(key -> key.startsWith(EXTENSION_PREFIX)))) {
+                writeToSearchExtension = true;
             }
+
             if (writeToSearchExtension & oneToOne) {
-                throw new IllegalArgumentException("Writing model response to search extension does not support when one_to_one is true.");
+                throw new IllegalArgumentException("Write model response to search extension does not support when one_to_one is true.");
             }
 
             return new MLInferenceSearchResponseProcessor(
