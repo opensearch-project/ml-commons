@@ -20,6 +20,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -84,6 +85,9 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
     // it can be overwritten using max_prediction_tasks when creating processor
     public static final int DEFAULT_MAX_PREDICTION_TASKS = 10;
     public static final String DEFAULT_OUTPUT_FIELD_NAME = "inference_results";
+    // allow to write to the extension of the search response, the path to point to search extension
+    // is prefix with ext.ml_inference
+    public static final String EXTENSION_PREFIX = "ext.ml_inference";
 
     protected MLInferenceSearchResponseProcessor(
         String modelId,
@@ -158,7 +162,28 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
 
             // if many to one, run rewriteResponseDocuments
             if (!oneToOne) {
-                rewriteResponseDocuments(response, responseListener);
+                // use MLInferenceSearchResponseProcessor to allow writing to extension
+                // check if the search response is in the type of MLInferenceSearchResponse
+                // if not, initiate a new one MLInferenceSearchResponse
+                MLInferenceSearchResponse mlInferenceSearchResponse;
+
+                if (response instanceof MLInferenceSearchResponse) {
+                    mlInferenceSearchResponse = (MLInferenceSearchResponse) response;
+                } else {
+                    mlInferenceSearchResponse = new MLInferenceSearchResponse(
+                        null,
+                        response.getInternalResponse(),
+                        response.getScrollId(),
+                        response.getTotalShards(),
+                        response.getSuccessfulShards(),
+                        response.getSkippedShards(),
+                        response.getSuccessfulShards(),
+                        response.getShardFailures(),
+                        response.getClusters()
+                    );
+                }
+
+                rewriteResponseDocuments(mlInferenceSearchResponse, responseListener);
             } else {
                 // if one to one, make one hit search response and run rewriteResponseDocuments
                 GroupedActionListener<SearchResponse> combineResponseListener = getCombineResponseGroupedActionListener(
@@ -545,22 +570,37 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
                                         } else {
                                             modelOutputValuePerDoc = modelOutputValue;
                                         }
+                                        // writing to search response extension
+                                        if (newDocumentFieldName.startsWith(EXTENSION_PREFIX)) {
+                                            Map<String, Object> params = ((MLInferenceSearchResponse) response).getParams();
+                                            String paramsName = newDocumentFieldName.replaceFirst(EXTENSION_PREFIX + ".", "");
 
-                                        if (sourceAsMap.containsKey(newDocumentFieldName)) {
-                                            if (override) {
-                                                sourceAsMapWithInference.remove(newDocumentFieldName);
-                                                sourceAsMapWithInference.put(newDocumentFieldName, modelOutputValuePerDoc);
+                                            if (params != null) {
+                                                params.put(paramsName, modelOutputValuePerDoc);
+                                                ((MLInferenceSearchResponse) response).setParams(params);
                                             } else {
-                                                logger
-                                                    .debug(
-                                                        "{} already exists in the search response hit. Skip processing this field.",
-                                                        newDocumentFieldName
-                                                    );
-                                                // TODO when the response has the same field name, should it throw exception? currently,
-                                                // ingest processor quietly skip it
+                                                Map<String, Object> newParams = new HashMap<>();
+                                                newParams.put(paramsName, modelOutputValuePerDoc);
+                                                ((MLInferenceSearchResponse) response).setParams(newParams);
                                             }
                                         } else {
-                                            sourceAsMapWithInference.put(newDocumentFieldName, modelOutputValuePerDoc);
+                                            // writing to search response hits
+                                            if (sourceAsMap.containsKey(newDocumentFieldName)) {
+                                                if (override) {
+                                                    sourceAsMapWithInference.remove(newDocumentFieldName);
+                                                    sourceAsMapWithInference.put(newDocumentFieldName, modelOutputValuePerDoc);
+                                                } else {
+                                                    logger
+                                                        .debug(
+                                                            "{} already exists in the search response hit. Skip processing this field.",
+                                                            newDocumentFieldName
+                                                        );
+                                                    // TODO when the response has the same field name, should it throw exception? currently,
+                                                    // ingest processor quietly skip it
+                                                }
+                                            } else {
+                                                sourceAsMapWithInference.put(newDocumentFieldName, modelOutputValuePerDoc);
+                                            }
                                         }
                                     }
                                 }
@@ -773,6 +813,19 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
                         + outputMaps.size()
                         + ". Please adjust mappings."
                 );
+            }
+            boolean writeToSearchExtension = false;
+
+            if (outputMaps != null) {
+                writeToSearchExtension = outputMaps
+                    .stream()
+                    .filter(Objects::nonNull) // To avoid potential NullPointerExceptions from null outputMaps
+                    .flatMap(outputMap -> outputMap.keySet().stream())
+                    .anyMatch(key -> key.startsWith(EXTENSION_PREFIX));
+            }
+
+            if (writeToSearchExtension & oneToOne) {
+                throw new IllegalArgumentException("Write model response to search extension does not support when one_to_one is true.");
             }
 
             return new MLInferenceSearchResponseProcessor(
