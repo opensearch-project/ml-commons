@@ -36,6 +36,8 @@ import java.util.stream.Collectors;
 
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD;
+import com.jayway.jsonpath.JsonPath;
+
 
 @Log4j2
 public class StringUtils {
@@ -56,6 +58,7 @@ public class StringUtils {
     static {
         gson = new Gson();
     }
+    public static final String TO_STRING_FUNCTION_NAME = ".toString()";
 
     public static boolean isValidJsonString(String Json) {
         try {
@@ -239,4 +242,89 @@ public class StringUtils {
             return errorMessage + " Model ID: " + modelId;
         }
     }
+
+    public static String obtainFieldNameFromJsonPath(String jsonPath) {
+        String[] parts = jsonPath.split("\\.");
+
+        // Get the last part which is the field name
+        return parts[parts.length - 1];
+    }
+
+    public static String getJsonPath(String jsonPathWithSource) {
+        // Find the index of the first occurrence of "$."
+        int startIndex = jsonPathWithSource.indexOf("$.");
+
+        // Extract the substring from the startIndex to the end of the input string
+        return (startIndex != -1) ? jsonPathWithSource.substring(startIndex) : jsonPathWithSource;
+    }
+
+    /**
+     * Checks if the given input string matches the JSONPath format.
+     *
+     * <p>The JSONPath format is a way to navigate and extract data from JSON documents.
+     * It uses a syntax similar to XPath for XML documents. This method attempts to compile
+     * the input string as a JSONPath expression using the {@link com.jayway.jsonpath.JsonPath}
+     * library. If the compilation succeeds, it means the input string is a valid JSONPath
+     * expression.
+     *
+     * @param input the input string to be checked for JSONPath format validity
+     * @return true if the input string is a valid JSONPath expression, false otherwise
+     */
+    public static boolean isValidJSONPath(String input) {
+        if (input == null || input.isBlank()) {
+            return false;
+        }
+        try {
+            JsonPath.compile(input); // This will throw an exception if the path is invalid
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+
+    /**
+     * Collects the prefixes of the toString() method calls present in the values of the given map.
+     *
+     * @param map A map containing key-value pairs where the values may contain toString() method calls.
+     * @return A list of prefixes for the toString() method calls found in the map values.
+     */
+    public static List<String> collectToStringPrefixes(Map<String, String> map) {
+        List<String> prefixes = new ArrayList<>();
+        for (String key : map.keySet()) {
+            String value = map.get(key);
+            if (value != null) {
+                Pattern pattern = Pattern.compile("\\$\\{parameters\\.(.+?)\\.toString\\(\\)\\}");
+                Matcher matcher = pattern.matcher(value);
+                while (matcher.find()) {
+                    String prefix = matcher.group(1);
+                    prefixes.add(prefix);
+                }
+            }
+        }
+        return prefixes;
+    }
+
+    /**
+     * Parses the given parameters map and processes the values containing toString() method calls.
+     *
+     * @param parameters A map containing key-value pairs where the values may contain toString() method calls.
+     * @return A new map with the processed values for the toString() method calls.
+     */
+    public static Map<String, String> parseParameters(Map<String, String> parameters) {
+        if (parameters != null) {
+            List<String> toStringParametersPrefixes = collectToStringPrefixes(parameters);
+
+            if (!toStringParametersPrefixes.isEmpty()) {
+                for (String prefix : toStringParametersPrefixes) {
+                    String value = parameters.get(prefix);
+                    if (value != null) {
+                        parameters.put(prefix + TO_STRING_FUNCTION_NAME, processTextDoc(value));
+                    }
+                }
+            }
+        }
+        return parameters;
+    }
+
 }
