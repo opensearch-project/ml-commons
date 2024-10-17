@@ -30,6 +30,7 @@ import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.CommonValue;
 
 import com.google.common.base.Preconditions;
 
@@ -37,7 +38,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.opensearch.ml.common.CommonValue;
 
 /**
  * Defines parameters for generative QA search pipelines.
