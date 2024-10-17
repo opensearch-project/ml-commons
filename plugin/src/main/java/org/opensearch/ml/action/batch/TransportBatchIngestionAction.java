@@ -10,6 +10,7 @@ import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTaskState.COMPLETED;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.INGEST_THREAD_POOL;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_BATCH_INGESTION_BULK_SIZE;
 import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
 import static org.opensearch.ml.utils.MLExceptionUtils.OFFLINE_BATCH_INGESTION_DISABLED_ERR_MSG;
 
@@ -24,7 +25,9 @@ import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
+import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.MLTask;
@@ -60,16 +63,19 @@ public class TransportBatchIngestionAction extends HandledTransportAction<Action
     private final Client client;
     private ThreadPool threadPool;
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private volatile Integer batchIngestionBulkSize;
 
     @Inject
     public TransportBatchIngestionAction(
+        ClusterService clusterService,
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
         MLTaskManager mlTaskManager,
         ThreadPool threadPool,
         MLModelManager mlModelManager,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        Settings settings
     ) {
         super(MLBatchIngestionAction.NAME, transportService, actionFilters, MLBatchIngestionRequest::new);
         this.transportService = transportService;
@@ -78,6 +84,12 @@ public class TransportBatchIngestionAction extends HandledTransportAction<Action
         this.threadPool = threadPool;
         this.mlModelManager = mlModelManager;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+
+        batchIngestionBulkSize = ML_COMMONS_BATCH_INGESTION_BULK_SIZE.get(settings);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_BATCH_INGESTION_BULK_SIZE, it -> batchIngestionBulkSize = it);
+
     }
 
     @Override
@@ -131,33 +143,45 @@ public class TransportBatchIngestionAction extends HandledTransportAction<Action
             .state(MLTaskState.CREATED)
             .build();
 
-        mlTaskManager.createMLTask(mlTask, ActionListener.wrap(response -> {
-            String taskId = response.getId();
-            try {
-                mlTask.setTaskId(taskId);
-                mlTaskManager.add(mlTask);
-                listener.onResponse(new MLBatchIngestionResponse(taskId, MLTaskType.BATCH_INGEST, MLTaskState.CREATED.name()));
-                String ingestType = (String) mlBatchIngestionInput.getDataSources().get(TYPE);
-                Ingestable ingestable = MLEngineClassLoader.initInstance(ingestType.toLowerCase(), client, Client.class);
-                threadPool.executor(INGEST_THREAD_POOL).execute(() -> {
-                    executeWithErrorHandling(() -> {
-                        double successRate = ingestable.ingest(mlBatchIngestionInput);
-                        handleSuccessRate(successRate, taskId);
-                    }, taskId);
-                });
-            } catch (Exception ex) {
-                log.error("Failed in batch ingestion", ex);
-                mlTaskManager
-                    .updateMLTask(
-                        taskId,
-                        Map.of(STATE_FIELD, FAILED, ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(ex)),
-                        TASK_SEMAPHORE_TIMEOUT,
-                        true
-                    );
-                listener.onFailure(ex);
+        mlModelManager.checkMaxBatchJobTask(mlTask, ActionListener.wrap(exceedLimits -> {
+            if (exceedLimits) {
+                String error =
+                    "Exceeded maximum limit for BATCH_INGEST tasks. To increase the limit, update the plugins.ml_commons.max_batch_ingestion_tasks setting.";
+                log.warn(error + " in task " + mlTask.getTaskId());
+                listener.onFailure(new OpenSearchStatusException(error, RestStatus.TOO_MANY_REQUESTS));
+            } else {
+                mlTaskManager.createMLTask(mlTask, ActionListener.wrap(response -> {
+                    String taskId = response.getId();
+                    try {
+                        mlTask.setTaskId(taskId);
+                        mlTaskManager.add(mlTask);
+                        listener.onResponse(new MLBatchIngestionResponse(taskId, MLTaskType.BATCH_INGEST, MLTaskState.CREATED.name()));
+                        String ingestType = (String) mlBatchIngestionInput.getDataSources().get(TYPE);
+                        Ingestable ingestable = MLEngineClassLoader.initInstance(ingestType.toLowerCase(), client, Client.class);
+                        threadPool.executor(INGEST_THREAD_POOL).execute(() -> {
+                            executeWithErrorHandling(() -> {
+                                double successRate = ingestable.ingest(mlBatchIngestionInput, batchIngestionBulkSize);
+                                handleSuccessRate(successRate, taskId);
+                            }, taskId);
+                        });
+                    } catch (Exception ex) {
+                        log.error("Failed in batch ingestion", ex);
+                        mlTaskManager
+                            .updateMLTask(
+                                taskId,
+                                Map.of(STATE_FIELD, FAILED, ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(ex)),
+                                TASK_SEMAPHORE_TIMEOUT,
+                                true
+                            );
+                        listener.onFailure(ex);
+                    }
+                }, exception -> {
+                    log.error("Failed to create batch ingestion task", exception);
+                    listener.onFailure(exception);
+                }));
             }
         }, exception -> {
-            log.error("Failed to create batch ingestion task", exception);
+            log.error("Failed to check the maximum BATCH_INGEST Task limits", exception);
             listener.onFailure(exception);
         }));
     }
