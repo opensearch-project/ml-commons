@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.common;
 
+import org.opensearch.Version;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.controller.MLController;
@@ -527,4 +528,9 @@ public class CommonValue {
                         + "\": {\"type\": \"long\"}\n"
                         + "    }\n"
                         + "}";
+        // Calculate Versions independently of OpenSearch core version
+        public static final Version VERSION_2_11_0 = Version.fromString("2.11.0");
+        public static final Version VERSION_2_12_0 = Version.fromString("2.12.0");
+        public static final Version VERSION_2_13_0 = Version.fromString("2.13.0");
+        public static final Version VERSION_2_14_0 = Version.fromString("2.14.0");
 }

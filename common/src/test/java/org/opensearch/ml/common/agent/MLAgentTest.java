@@ -18,6 +18,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.TestHelper;
 import org.opensearch.search.SearchModule;
@@ -196,7 +197,7 @@ public class MLAgentTest {
     public void writeTo_ReadFrom_HiddenFlag_VersionCompatibility() throws IOException {
         MLAgent agent = new MLAgent("test", "FLOW", "test", null, null, null, null, Instant.EPOCH, Instant.EPOCH, "test", true);
         BytesStreamOutput output = new BytesStreamOutput();
-        Version oldVersion = Version.fromString("2.12.0");
+        Version oldVersion = CommonValue.VERSION_2_12_0;
         output.setVersion(oldVersion); // Version before MINIMAL_SUPPORTED_VERSION_FOR_HIDDEN_AGENT
         agent.writeTo(output);
 
@@ -206,10 +207,10 @@ public class MLAgentTest {
         assertNull(agentOldVersion.getIsHidden()); // Hidden should be null for old versions
 
         output = new BytesStreamOutput();
-        output.setVersion(Version.V_2_13_0); // Version at or after MINIMAL_SUPPORTED_VERSION_FOR_HIDDEN_AGENT
+        output.setVersion(CommonValue.VERSION_2_13_0); // Version at or after MINIMAL_SUPPORTED_VERSION_FOR_HIDDEN_AGENT
         agent.writeTo(output);
         StreamInput streamInput1 = output.bytes().streamInput();
-        streamInput1.setVersion(Version.V_2_13_0);
+        streamInput1.setVersion(CommonValue.VERSION_2_13_0);
         MLAgent agentNewVersion = new MLAgent(output.bytes().streamInput());
         assertEquals(Boolean.TRUE, agentNewVersion.getIsHidden()); // Hidden should be true for new versions
     }
