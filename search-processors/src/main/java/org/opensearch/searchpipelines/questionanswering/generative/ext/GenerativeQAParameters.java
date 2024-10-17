@@ -22,6 +22,7 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import java.io.IOException;
 import java.util.Objects;
 
+import org.opensearch.Version;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -36,6 +37,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.opensearch.ml.common.CommonValue;
 
 /**
  * Defines parameters for generative QA search pipelines.
@@ -80,6 +82,8 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
     private static final String LLM_RESPONSE_FIELD = "llm_response_field";
 
     public static final int SIZE_NULL_VALUE = -1;
+
+    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_PROMPT_AND_INSTRUCTIONS = CommonValue.VERSION_2_13_0;
 
     @Setter
     @Getter
@@ -145,15 +149,23 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
     }
 
     public GenerativeQAParameters(StreamInput input) throws IOException {
+        Version version = input.getVersion();
         this.conversationId = input.readOptionalString();
         this.llmModel = input.readOptionalString();
         this.llmQuestion = input.readString();
-        this.systemPrompt = input.readOptionalString();
-        this.userInstructions = input.readOptionalString();
+
+        if (version.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_PROMPT_AND_INSTRUCTIONS)) {
+            this.systemPrompt = input.readOptionalString();
+            this.userInstructions = input.readOptionalString();
+        }
+
         this.contextSize = input.readInt();
         this.interactionSize = input.readInt();
         this.timeout = input.readInt();
-        this.llmResponseField = input.readOptionalString();
+
+        if (version.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_PROMPT_AND_INSTRUCTIONS)) {
+            this.llmResponseField = input.readOptionalString();
+        }
     }
 
     @Override
@@ -201,17 +213,25 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
+        Version version = out.getVersion();
         out.writeOptionalString(conversationId);
         out.writeOptionalString(llmModel);
 
         Preconditions.checkNotNull(llmQuestion, "llm_question must not be null.");
         out.writeString(llmQuestion);
-        out.writeOptionalString(systemPrompt);
-        out.writeOptionalString(userInstructions);
+
+        if (version.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_PROMPT_AND_INSTRUCTIONS)) {
+            out.writeOptionalString(systemPrompt);
+            out.writeOptionalString(userInstructions);
+        }
+
         out.writeInt(contextSize);
         out.writeInt(interactionSize);
         out.writeInt(timeout);
-        out.writeOptionalString(llmResponseField);
+
+        if (version.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_PROMPT_AND_INSTRUCTIONS)) {
+            out.writeOptionalString(llmResponseField);
+        }
     }
 
     public static GenerativeQAParameters parse(XContentParser parser) throws IOException {
