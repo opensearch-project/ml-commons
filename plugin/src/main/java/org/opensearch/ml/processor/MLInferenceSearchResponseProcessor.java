@@ -14,7 +14,14 @@ import static org.opensearch.ml.processor.InferenceProcessorAttributes.OUTPUT_MA
 import static org.opensearch.ml.processor.MLInferenceIngestProcessor.OVERRIDE;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.logging.log4j.LogManager;
@@ -156,18 +163,27 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
             // if many to one, run rewriteResponseDocuments
             if (!oneToOne) {
                 // use MLInferenceSearchResponseProcessor to allow writing to extension
-                MLInferenceSearchResponse mLInferenceSearchResponse = new MLInferenceSearchResponse(
-                    null,
-                    response.getInternalResponse(),
-                    response.getScrollId(),
-                    response.getTotalShards(),
-                    response.getSuccessfulShards(),
-                    response.getSkippedShards(),
-                    response.getSuccessfulShards(),
-                    response.getShardFailures(),
-                    response.getClusters()
-                );
-                rewriteResponseDocuments(mLInferenceSearchResponse, responseListener);
+                // check if the search response is in the type of MLInferenceSearchResponse
+                // if not, initiate a new one MLInferenceSearchResponse
+                MLInferenceSearchResponse mlInferenceSearchResponse;
+
+                if (response instanceof MLInferenceSearchResponse) {
+                    mlInferenceSearchResponse = (MLInferenceSearchResponse) response;
+                } else {
+                    mlInferenceSearchResponse = new MLInferenceSearchResponse(
+                        null,
+                        response.getInternalResponse(),
+                        response.getScrollId(),
+                        response.getTotalShards(),
+                        response.getSuccessfulShards(),
+                        response.getSkippedShards(),
+                        response.getSuccessfulShards(),
+                        response.getShardFailures(),
+                        response.getClusters()
+                    );
+                }
+
+                rewriteResponseDocuments(mlInferenceSearchResponse, responseListener);
             } else {
                 // if one to one, make one hit search response and run rewriteResponseDocuments
                 GroupedActionListener<SearchResponse> combineResponseListener = getCombineResponseGroupedActionListener(
