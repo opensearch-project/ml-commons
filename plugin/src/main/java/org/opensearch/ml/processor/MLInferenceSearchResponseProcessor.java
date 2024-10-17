@@ -14,13 +14,7 @@ import static org.opensearch.ml.processor.InferenceProcessorAttributes.OUTPUT_MA
 import static org.opensearch.ml.processor.MLInferenceIngestProcessor.OVERRIDE;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.logging.log4j.LogManager;
@@ -84,6 +78,8 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
     // it can be overwritten using max_prediction_tasks when creating processor
     public static final int DEFAULT_MAX_PREDICTION_TASKS = 10;
     public static final String DEFAULT_OUTPUT_FIELD_NAME = "inference_results";
+    // allow to write to the extension of the search response, the path to point to search extension
+    // is prefix with ext.ml_inference
     public static final String EXTENSION_PREFIX = "ext.ml_inference";
 
     protected MLInferenceSearchResponseProcessor(
@@ -804,11 +800,12 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
             }
             boolean writeToSearchExtension = false;
 
-            if (outputMaps != null
-                && outputMaps
+            if (outputMaps != null) {
+                writeToSearchExtension = outputMaps
                     .stream()
-                    .anyMatch(outputMap -> outputMap.keySet().stream().anyMatch(key -> key.startsWith(EXTENSION_PREFIX)))) {
-                writeToSearchExtension = true;
+                    .filter(Objects::nonNull) // To avoid potential NullPointerExceptions from null outputMaps
+                    .flatMap(outputMap -> outputMap.keySet().stream())
+                    .anyMatch(key -> key.startsWith(EXTENSION_PREFIX));
             }
 
             if (writeToSearchExtension & oneToOne) {

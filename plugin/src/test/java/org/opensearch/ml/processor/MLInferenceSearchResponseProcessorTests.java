@@ -34,6 +34,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
+import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchParseException;
@@ -87,6 +88,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      *
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseException() throws Exception {
 
         MLInferenceSearchResponseProcessor responseProcessor = getMlInferenceSearchResponseProcessorSinglePairMapping(
@@ -115,6 +117,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      *
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseSuccess() throws Exception {
         String modelInputField = "inputs";
         String originalDocumentField = "text";
@@ -174,6 +177,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      * with one to one prediction, 5 documents in hits are calling 5 prediction tasks
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseOneToOneWithCustomPrompt() throws Exception {
 
         String newDocumentField = "context";
@@ -263,6 +267,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      * with many to one prediction, 5 documents in hits are calling 1 prediction tasks
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseManyToOneWithCustomPrompt() throws Exception {
 
         String documentField = "text";
@@ -360,6 +365,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      * with full response path false and no output mapping is provided
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseManyToOneWithCustomPromptFullResponsePathFalse() throws Exception {
 
         String documentField = "text";
@@ -436,6 +442,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      * with full response path true and no output mapping is provided
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseManyToOneWithCustomPromptFullResponsePathTrue() throws Exception {
 
         String documentField = "text";
@@ -511,6 +518,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      * with query extensions
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseSuccessWriteToExt() throws Exception {
         String documentField = "text";
         String modelInputField = "context";
@@ -586,6 +594,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      * with one to one prediction, 5 documents in hits are calling 5 prediction tasks
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseOneToOneWithNoMappings() throws Exception {
 
         MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
@@ -666,6 +675,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      * with one to one prediction, 5 documents in hits are calling 5 prediction tasks
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseOneToOneWithEmptyMappings() throws Exception {
         List<Map<String, String>> outputMap = new ArrayList<>();
         List<Map<String, String>> inputMap = new ArrayList<>();
@@ -747,6 +757,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      * with one to one prediction, 5 documents in hits are calling 5 prediction tasks
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseOneToOneWithOutputMappings() throws Exception {
 
         String newDocumentField = "text_embedding";
@@ -836,6 +847,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      * when there is one document, the combinedResponseListener calls onFailure
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseOneToOneWithOutputMappingsCombineResponseListenerFail() throws Exception {
 
         String newDocumentField = "text_embedding";
@@ -897,6 +909,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      * when there is one document, the combinedResponseListener calls onFailure
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseOneToOneWithOutputMappingsCombineResponseListenerException() throws Exception {
 
         String newDocumentField = "text_embedding";
@@ -953,6 +966,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      * when there is one document and ignoreFailure, should return the original response
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseOneToOneWithOutputMappingsCombineResponseListenerExceptionIgnoreFailure() throws Exception {
 
         String newDocumentField = "text_embedding";
@@ -1009,6 +1023,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      * when there is one document and ignoreFailure, should return the original response
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseCreateRewriteResponseListenerExceptionIgnoreFailure() throws Exception {
 
         String newDocumentField = "text_embedding";
@@ -1099,6 +1114,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      * createRewriteResponseListener should reach on Failure
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseCreateRewriteResponseListenerException() throws Exception {
 
         String newDocumentField = "text_embedding";
@@ -1185,6 +1201,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      * test throwing OpenSearchStatusException
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseOpenSearchStatusException() throws Exception {
 
         String newDocumentField = "text_embedding";
@@ -1268,6 +1285,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      * test throwing MLResourceNotFoundException
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseMLResourceNotFoundException() throws Exception {
 
         String newDocumentField = "text_embedding";
@@ -1353,6 +1371,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      * when there is one document, the combinedResponseListener calls onFailure
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseOneToOneWithOutputMappingsIgnoreFailure() throws Exception {
 
         String newDocumentField = "text_embedding";
@@ -1414,6 +1433,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      * when there is one document, the combinedResponseListener calls onFailure
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseOneToOneWithOutputMappingsMLTaskResponseExceptionIgnoreFailure() throws Exception {
 
         String newDocumentField = "text_embedding";
@@ -1476,6 +1496,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      * expect to run one prediction task and the rest 4 predictions tasks are not created
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseOneToOneWithOutputMappingsPredictException() throws Exception {
 
         String newDocumentField = "text_embedding";
@@ -1532,6 +1553,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      * expect to run one prediction task and the rest 4 predictions tasks are not created
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseOneToOneWithOutputMappingsPredictFail() throws Exception {
 
         String newDocumentField = "text_embedding";
@@ -1594,6 +1616,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      * then return original response
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseOneToOneWithOutputMappingsPredictFailIgnoreFailure() throws Exception {
 
         String newDocumentField = "text_embedding";
@@ -1653,6 +1676,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      * with one to one prediction, 5 documents in hits are calling 10 prediction tasks
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseOneToOneTwoRoundsPredictions() throws Exception {
 
         String modelInputField = "inputs";
@@ -1783,6 +1807,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      * expect to throw exception without further processing
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseOneToOneTwoRoundsPredictionsOneException() throws Exception {
 
         String modelInputField = "inputs";
@@ -1883,6 +1908,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      * expect to return document with second round prediction results
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseOneToOneTwoRoundsPredictionsOneExceptionIgnoreMissing() throws Exception {
 
         String modelInputField = "inputs";
@@ -1993,6 +2019,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      * expect to return document with second round prediction results
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseOneToOneTwoRoundsPredictionsOneExceptionIgnoreFailure() throws Exception {
 
         String modelInputField = "inputs";
@@ -2086,6 +2113,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      *
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseNoMappingSuccess() throws Exception {
         MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
             "model1",
@@ -2163,6 +2191,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      *
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseEmptyMappingSuccess() throws Exception {
         List<Map<String, String>> inputMap = new ArrayList<>();
         Map<String, String> input = new HashMap<>();
@@ -2243,6 +2272,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      *
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseListOfEmbeddingsSuccess() throws Exception {
         /**
          * sample response before inference
@@ -2330,6 +2360,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      *
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseOverrideSameField() throws Exception {
         /**
          * sample response before inference
@@ -2416,6 +2447,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      *
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseOverrideSameFieldFalse() throws Exception {
         /**
          * sample response before inference
@@ -2504,6 +2536,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      *
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseListOfEmbeddingsMissingOneInputIgnoreMissingSuccess() throws Exception {
         /**
          * sample response before inference
@@ -2586,6 +2619,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      *
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseListOfEmbeddingsMissingOneInputException() throws Exception {
         /**
          * sample response before inference
@@ -2670,6 +2704,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      *
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseTwoRoundsOfPredictionSuccess() throws Exception {
         String modelInputField = "inputs";
         String modelOutputField = "response";
@@ -2767,6 +2802,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      *
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseOneModelInputMultipleModelOutputs() throws Exception {
         // one model input
         String modelInputField = "inputs";
@@ -2853,6 +2889,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      *
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponsePredictionException() throws Exception {
         MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
             "model1",
@@ -2898,6 +2935,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      *
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponsePredictionFailed() throws Exception {
         MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
             "model1",
@@ -2948,6 +2986,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      *
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponsePredictionExceptionIgnoreFailure() throws Exception {
         MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
             "model1",
@@ -2998,6 +3037,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      *
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseEmptyHit() throws Exception {
         MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
             "model1",
@@ -3042,6 +3082,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      *
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseHitWithNoSource() throws Exception {
         MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
             "model1",
@@ -3087,6 +3128,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      * Exceptions happen when replaceHits to be one Hit Response
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseOneToOneMadeOneHitResponseExceptions() throws Exception {
 
         String newDocumentField = "text_embedding";
@@ -3154,6 +3196,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      * Exceptions happen when replaceHits  and ignoreFailure return original response
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseOneToOneMadeOneHitResponseExceptionsIgnoreFailure() throws Exception {
 
         String newDocumentField = "text_embedding";
@@ -3220,6 +3263,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
      * Exceptions happen when replaceHits
      * @throws Exception if an error occurs during the test
      */
+    @Test
     public void testProcessResponseOneToOneCombinedHitsExceptions() throws Exception {
 
         String newDocumentField = "text_embedding";
