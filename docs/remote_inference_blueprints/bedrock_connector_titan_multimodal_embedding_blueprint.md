@@ -17,8 +17,11 @@ PUT /_cluster/settings
 
 ## 2. Create connector for Amazon Bedrock:
 
-If you are using self-managed Opensearch, you should supply AWS credentials:
+If you are using self-managed Opensearch, you should supply AWS credentials.
+You have two different approaches to specify the pre&post process function and request body in the API:
 
+**Use build-in function**
+> You can use this starting from OpenSearch 2.16
 ```json
 POST /_plugins/_ml/connectors/_create
 {
@@ -46,6 +49,21 @@ POST /_plugins/_ml/connectors/_create
         "content-type": "application/json",
         "x-amz-content-sha256": "required"
       },
+      "request_body": "{\"inputText\": \"${parameters.inputText:-null}\", \"inputImage\": \"${parameters.inputImage:-null}\"}",
+      "pre_process_function": "connector.pre_process.bedrock.multimodal_embedding",
+      "post_process_function": "connector.post_process.bedrock.embedding"
+    }
+  ]
+}
+```
+**Use painless script**
+```json
+POST /_plugins/_ml/connectors/_create
+{
+  ... //same above
+  "actions": [
+    {
+      ... // same above
       "request_body": "{ \"inputText\": \"${parameters.inputText:-null}\", \"inputImage\": \"${parameters.inputImage:-null}\" }",
       "pre_process_function": "\n    StringBuilder parametersBuilder = new StringBuilder(\"{\");\n    if (params.text_docs.length > 0 && params.text_docs[0] != null) {\n      parametersBuilder.append(\"\\\"inputText\\\":\");\n      parametersBuilder.append(\"\\\"\");\n      parametersBuilder.append(params.text_docs[0]);\n      parametersBuilder.append(\"\\\"\");\n      \n      if (params.text_docs.length > 1 && params.text_docs[1] != null) {\n        parametersBuilder.append(\",\");\n      }\n    }\n    \n    \n    if (params.text_docs.length > 1 && params.text_docs[1] != null) {\n      parametersBuilder.append(\"\\\"inputImage\\\":\");\n      parametersBuilder.append(\"\\\"\");\n      parametersBuilder.append(params.text_docs[1]);\n      parametersBuilder.append(\"\\\"\");\n    }\n    parametersBuilder.append(\"}\");\n    \n    return  \"{\" +\"\\\"parameters\\\":\" + parametersBuilder + \"}\";",
       "post_process_function": "\n      def name = \"sentence_embedding\";\n      def dataType = \"FLOAT32\";\n      if (params.embedding == null || params.embedding.length == 0) {\n          return null;\n      }\n      def shape = [params.embedding.length];\n      def json = \"{\" +\n                 \"\\\"name\\\":\\\"\" + name + \"\\\",\" +\n                 \"\\\"data_type\\\":\\\"\" + dataType + \"\\\",\" +\n                 \"\\\"shape\\\":\" + shape + \",\" +\n                 \"\\\"data\\\":\" + params.embedding +\n                 \"}\";\n      return json;\n    "
@@ -55,8 +73,11 @@ POST /_plugins/_ml/connectors/_create
 ```
 
 If using the AWS Opensearch Service, you can provide an IAM role arn that allows access to the bedrock service.
-Refer to this [AWS doc](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/ml-amazon-connector.html) 
+Refer to this [AWS doc](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/ml-amazon-connector.html)
+You have two different approaches to specify the pre&post process function and request body in the API:
 
+**Use build-in function**
+> You can use this starting from OpenSearch 2.16
 ```json
 POST /_plugins/_ml/connectors/_create
 {
@@ -82,6 +103,21 @@ POST /_plugins/_ml/connectors/_create
         "content-type": "application/json",
         "x-amz-content-sha256": "required"
       },
+      "request_body": "{\"inputText\": \"${parameters.inputText:-null}\", \"inputImage\": \"${parameters.inputImage:-null}\"}",
+      "pre_process_function": "connector.pre_process.bedrock.multimodal_embedding",
+      "post_process_function": "connector.post_process.bedrock.embedding" 
+    }
+  ] 
+}
+```
+**Use painless script**
+```json
+POST /_plugins/_ml/connectors/_create
+{
+  ... //same above
+  "actions": [
+    {
+      ... //same above 
       "request_body": "{ \"inputText\": \"${parameters.inputText:-null}\", \"inputImage\": \"${parameters.inputImage:-null}\" }",
       "pre_process_function": "\n    StringBuilder parametersBuilder = new StringBuilder(\"{\");\n    if (params.text_docs.length > 0 && params.text_docs[0] != null) {\n      parametersBuilder.append(\"\\\"inputText\\\":\");\n      parametersBuilder.append(\"\\\"\");\n      parametersBuilder.append(params.text_docs[0]);\n      parametersBuilder.append(\"\\\"\");\n      \n      if (params.text_docs.length > 1 && params.text_docs[1] != null) {\n        parametersBuilder.append(\",\");\n      }\n    }\n    \n    \n    if (params.text_docs.length > 1 && params.text_docs[1] != null) {\n      parametersBuilder.append(\"\\\"inputImage\\\":\");\n      parametersBuilder.append(\"\\\"\");\n      parametersBuilder.append(params.text_docs[1]);\n      parametersBuilder.append(\"\\\"\");\n    }\n    parametersBuilder.append(\"}\");\n    \n    return  \"{\" +\"\\\"parameters\\\":\" + parametersBuilder + \"}\";",
       "post_process_function": "\n      def name = \"sentence_embedding\";\n      def dataType = \"FLOAT32\";\n      if (params.embedding == null || params.embedding.length == 0) {\n          return null;\n      }\n      def shape = [params.embedding.length];\n      def json = \"{\" +\n                 \"\\\"name\\\":\\\"\" + name + \"\\\",\" +\n                 \"\\\"data_type\\\":\\\"\" + dataType + \"\\\",\" +\n                 \"\\\"shape\\\":\" + shape + \",\" +\n                 \"\\\"data\\\":\" + params.embedding +\n                 \"}\";\n      return json;\n    "
