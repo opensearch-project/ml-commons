@@ -9,6 +9,7 @@ import static org.junit.Assert.assertEquals;
 import static org.opensearch.ml.common.utils.StringUtils.TO_STRING_FUNCTION_NAME;
 import static org.opensearch.ml.common.utils.StringUtils.collectToStringPrefixes;
 import static org.opensearch.ml.common.utils.StringUtils.getJsonPath;
+import static org.opensearch.ml.common.utils.StringUtils.isValidJSONPath;
 import static org.opensearch.ml.common.utils.StringUtils.obtainFieldNameFromJsonPath;
 import static org.opensearch.ml.common.utils.StringUtils.parseParameters;
 import static org.opensearch.ml.common.utils.StringUtils.toJson;
@@ -456,5 +457,54 @@ public class StringUtilsTest {
         String input = "$.response.body.data[*].embedding";
         String result = getJsonPath(input);
         assertEquals("$.response.body.data[*].embedding", result);
+    }
+
+    @Test
+    public void testisValidJSONPath_InvalidInputs() {
+        Assert.assertFalse(isValidJSONPath("..bar"));
+        Assert.assertFalse(isValidJSONPath("."));
+        Assert.assertFalse(isValidJSONPath(".."));
+        Assert.assertFalse(isValidJSONPath("foo.bar."));
+        Assert.assertFalse(isValidJSONPath(".foo.bar."));
+    }
+
+    @Test
+    public void testisValidJSONPath_NullInput() {
+        Assert.assertFalse(isValidJSONPath(null));
+    }
+
+    @Test
+    public void testisValidJSONPath_EmptyInput() {
+        Assert.assertFalse(isValidJSONPath(""));
+    }
+
+    @Test
+    public void testisValidJSONPath_ValidInputs() {
+        Assert.assertTrue(isValidJSONPath("foo"));
+        Assert.assertTrue(isValidJSONPath("foo.bar"));
+        Assert.assertTrue(isValidJSONPath("foo.bar.baz"));
+        Assert.assertTrue(isValidJSONPath("foo.bar.baz.qux"));
+        Assert.assertTrue(isValidJSONPath(".foo"));
+        Assert.assertTrue(isValidJSONPath("$.foo"));
+        Assert.assertTrue(isValidJSONPath(".foo.bar"));
+        Assert.assertTrue(isValidJSONPath("$.foo.bar"));
+    }
+
+    @Test
+    public void testisValidJSONPath_WithFilter() {
+        Assert.assertTrue(isValidJSONPath("$.store['book']"));
+        Assert.assertTrue(isValidJSONPath("$['store']['book'][0]['title']"));
+        Assert.assertTrue(isValidJSONPath("$.store.book[0]"));
+        Assert.assertTrue(isValidJSONPath("$.store.book[1,2]"));
+        Assert.assertTrue(isValidJSONPath("$.store.book[-1:] "));
+        Assert.assertTrue(isValidJSONPath("$.store.book[0:2]"));
+        Assert.assertTrue(isValidJSONPath("$.store.book[*]"));
+        Assert.assertTrue(isValidJSONPath("$.store.book[?(@.price < 10)]"));
+        Assert.assertTrue(isValidJSONPath("$.store.book[?(@.author == 'J.K. Rowling')]"));
+        Assert.assertTrue(isValidJSONPath("$..author"));
+        Assert.assertTrue(isValidJSONPath("$..book[?(@.price > 15)]"));
+        Assert.assertTrue(isValidJSONPath("$.store.book[0,1]"));
+        Assert.assertTrue(isValidJSONPath("$['store','warehouse']"));
+        Assert.assertTrue(isValidJSONPath("$..book[?(@.price > 20)].title"));
     }
 }

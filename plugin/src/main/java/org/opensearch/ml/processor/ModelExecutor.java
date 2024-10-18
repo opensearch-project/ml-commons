@@ -282,8 +282,12 @@ public interface ModelExecutor {
     }
 
     default boolean hasField(Object json, String path) {
-        Object value = JsonPath.using(suppressExceptionConfiguration).parse(json).read(path);
-
+        Object value;
+        if (json instanceof String) {
+            value = JsonPath.using(suppressExceptionConfiguration).parse((String) json).read(path);
+        } else {
+            value = JsonPath.using(suppressExceptionConfiguration).parse(json).read(path);
+        }
         if (value != null) {
             return true;
         }
