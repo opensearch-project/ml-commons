@@ -60,6 +60,7 @@ import com.jayway.jsonpath.JsonPath;
 
 public class MLInferenceSearchResponseProcessor extends AbstractProcessor implements SearchResponseProcessor, ModelExecutor {
 
+    public static final String REQUEST_PREFIX = "_request.";
     private final NamedXContentRegistry xContentRegistry;
     private static final Logger logger = LogManager.getLogger(MLInferenceSearchResponseProcessor.class);
     private final InferenceProcessorAttributes inferenceProcessorAttributes;
@@ -323,8 +324,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
             responseListener,
             processInputMap,
             processOutputMap,
-            hitCountInPredictions,
-            queryString
+            hitCountInPredictions
         );
 
         GroupedActionListener<Map<Integer, MLOutput>> batchPredictionListener = createBatchPredictionListener(
@@ -373,22 +373,32 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
         Map<String, String> inputMapping;
         if (processInputMap != null && !processInputMap.isEmpty()) {
             inputMapping = processInputMap.get(inputMapIndex);
+            boolean isRequestInputMissing = checkIsRequestInputMissing(queryString, inputMapping);
+            if (isRequestInputMissing) {
+                if (!ignoreMissing) {
+                    throw new IllegalArgumentException(
+                        "Missing required input field in query body. input_map: " + inputMapping.values() + ", query body:" + queryString
+                    );
+                }
+            }
 
             for (SearchHit hit : hits) {
                 Map<String, Object> document = hit.getSourceAsMap();
-                boolean isModelInputMissing = checkIsModelInputMissing(document, queryString, inputMapping);
-                if (!isModelInputMissing) {
+                boolean isDocumentFieldMissing = checkIsDocumentFieldMissing(document, inputMapping);
+                if (!isDocumentFieldMissing) {
                     MapUtils.incrementCounter(hitCountInPredictions, inputMapIndex);
                     for (Map.Entry<String, String> entry : inputMapping.entrySet()) {
                         // model field as key, document field name as value
                         String modelInputFieldName = entry.getKey();
                         String documentFieldName = entry.getValue();
-                        // read the query string when the mapping field name starts with "$.query." or "query."
+                        // read the query string when the mapping field name starts with "$._request." or "_request."
                         // skip when modelInputParameters already has this modelInputFieldName to avoid duplicate read
                         if (StringUtils.isValidJSONPath(documentFieldName)
-                            && (documentFieldName.startsWith("query.") || documentFieldName.startsWith("$.query."))
+                            && (documentFieldName.startsWith("$." + REQUEST_PREFIX) || documentFieldName.startsWith(REQUEST_PREFIX))
                             && !modelInputParameters.containsKey(modelInputFieldName)) {
-                            Object queryText = JsonPath.using(suppressExceptionConfiguration).parse(queryString).read(documentFieldName);
+                            String requestFieldName = documentFieldName.replaceFirst(REQUEST_PREFIX, "");
+
+                            Object queryText = JsonPath.using(suppressExceptionConfiguration).parse(queryString).read(requestFieldName);
                             if (queryText != null) {
                                 modelInputParameters.put(modelInputFieldName, toJson(queryText));
                             }
@@ -403,7 +413,12 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
                 } else { // when document does not contain the documentFieldName, skip when ignoreMissing
                     if (!ignoreMissing) {
                         throw new IllegalArgumentException(
-                            "cannot find all required input fields: " + inputMapping.values() + " in hit:" + hit
+                            "cannot find all required input fields: "
+                                + inputMapping.values()
+                                + " in hit:"
+                                + hit
+                                + " and query body:"
+                                + queryString
                         );
                     }
                 }
@@ -522,7 +537,6 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
      * @param processInputMap       the list of input mappings
      * @param processOutputMap      the list of output mappings
      * @param hitCountInPredictions a map to keep track of the count of hits that have the required input fields for each round of prediction
-     * @param queryString           the query body in string format, for example, "{ \"query\": { \"match_all\": {} } }\n"
      * @return an action listener for rewriting the response with the inference results
      */
     private ActionListener<Map<Integer, MLOutput>> createRewriteResponseListener(
@@ -530,8 +544,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
         ActionListener<SearchResponse> responseListener,
         List<Map<String, String>> processInputMap,
         List<Map<String, String>> processOutputMap,
-        Map<Integer, Integer> hitCountInPredictions,
-        String queryString
+        Map<Integer, Integer> hitCountInPredictions
     ) {
         return new ActionListener<>() {
             @Override
@@ -557,11 +570,11 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
                                 Map<String, String> inputMapping = getDefaultInputMapping(sourceAsMap, mappingIndex, processInputMap);
                                 Map<String, String> outputMapping = getDefaultOutputMapping(mappingIndex, processOutputMap);
 
-                                boolean isModelInputMissing = false;
+                                boolean isDocumentFieldMissing = false;
                                 if (processInputMap != null && !processInputMap.isEmpty()) {
-                                    isModelInputMissing = checkIsModelInputMissing(document, queryString, inputMapping);
+                                    isDocumentFieldMissing = checkIsDocumentFieldMissing(document, inputMapping);
                                 }
-                                if (!isModelInputMissing) {
+                                if (!isDocumentFieldMissing) {
                                     // Iterate over outputMapping
                                     for (Map.Entry<String, String> outputMapEntry : outputMapping.entrySet()) {
 
@@ -655,22 +668,42 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
      * When model config contains the default model_input value, it's not considered as missing model input.
      *
      * @param document     the document map
+     * @param inputMapping the input mapping
+     * @return true if the document is missing any of the required input fields, false otherwise
+     */
+    private boolean checkIsDocumentFieldMissing(Map<String, Object> document, Map<String, String> inputMapping) {
+        return inputMapping
+            .values()
+            .stream()
+            .filter(fieldName -> !(fieldName.startsWith("$." + REQUEST_PREFIX) || fieldName.startsWith(REQUEST_PREFIX)))
+            .anyMatch(fieldName -> {
+                boolean isFieldPresentInDocument = document != null && hasField(document, fieldName);
+                boolean isFieldPresentInModelConfig = this.inferenceProcessorAttributes.modelConfigMaps != null
+                    && this.inferenceProcessorAttributes.modelConfigMaps.containsKey(fieldName);
+                return !isFieldPresentInDocument && !isFieldPresentInModelConfig;
+            });
+    }
+
+    /**
+     * Checks if the request is missing any of the required input fields specified in the input mapping.
+     * When model config contains the default model_input value, it's not considered as missing model input.
+     *
      * @param queryString  the query body in string format, e.g., "{ \"query\": { \"match_all\": {} } }\n"
      * @param inputMapping the input mapping
      * @return true if the document is missing any of the required input fields, false otherwise
      */
-    private boolean checkIsModelInputMissing(Map<String, Object> document, String queryString, Map<String, String> inputMapping) {
-        for (String fieldName : inputMapping.values()) {
-            boolean isFieldPresentInDocument = document != null && hasField(document, fieldName);
-            boolean isFieldPresentInQuery = queryString != null && hasField(queryString, fieldName);
-            boolean isFieldPresentInModelConfig = this.inferenceProcessorAttributes.modelConfigMaps != null
-                && this.inferenceProcessorAttributes.modelConfigMaps.containsKey(fieldName);
-
-            if (!isFieldPresentInDocument && !isFieldPresentInQuery && !isFieldPresentInModelConfig) {
-                return true;
-            }
-        }
-        return false;
+    private boolean checkIsRequestInputMissing(String queryString, Map<String, String> inputMapping) {
+        return inputMapping
+            .values()
+            .stream()
+            .filter(fieldName -> fieldName.startsWith("$." + REQUEST_PREFIX) || fieldName.startsWith(REQUEST_PREFIX))
+            .map(fieldName -> fieldName.replaceFirst(REQUEST_PREFIX, ""))
+            .anyMatch(requestFieldName -> {
+                boolean isFieldPresentInQuery = queryString != null && hasField(queryString, requestFieldName);
+                boolean isFieldPresentInModelConfig = this.inferenceProcessorAttributes.modelConfigMaps != null
+                    && this.inferenceProcessorAttributes.modelConfigMaps.containsKey(requestFieldName);
+                return !isFieldPresentInQuery && !isFieldPresentInModelConfig;
+            });
     }
 
     /**
