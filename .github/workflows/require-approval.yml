@@ -1,10 +1,10 @@
 ---
-name: Check if the workflow require approval
+name: Check if the workflow requires approval
 on:
   workflow_call:
     outputs:
       is-require-approval:
-        description: The ci image version for linux build
+        description: The CI image version for Linux build
         value: ${{ jobs.Require-Approval.outputs.output-is-require-approval }}
 
 jobs:
@@ -20,17 +20,27 @@ jobs:
         id: step-is-require-approval
         run: |
           github_event=${{ github.event_name }}
-          if [[ "$github_event" = "push" ]]; then
-            echo "Push event does not need approval"
+          author=${{ github.event.pull_request.user.login }}
+
+          if [[ "$github_event" == "push" ]]; then
+            echo "Push event does not need approval."
             echo "is-require-approval=ml-commons-cicd-env" >> $GITHUB_OUTPUT
           else
-            approvers=$(cat .github/CODEOWNERS | grep @ | tr -d '* ' | sed 's/@/,/g' | sed 's/,//1')
-            author=${{ github.event.pull_request.user.login }}
-            if [[ "$approvers" =~ "$author" ]]; then
-              echo "$author is in the approval list"
+            # Handle Pull Request events
+
+            # Check if the PR is triggered by opensearch-trigger-bot
+            if [[ "$author" == "opensearch-trigger-bot" ]]; then
+              echo "PR triggered by opensearch-trigger-bot. No approval needed."
               echo "is-require-approval=ml-commons-cicd-env" >> $GITHUB_OUTPUT
             else
-              echo "$author is not in the approval list"
-              echo "is-require-approval=ml-commons-cicd-env-require-approval" >> $GITHUB_OUTPUT
+              # Check if the author is in the approvers list
+              approvers=$(cat .github/CODEOWNERS | grep @ | tr -d '* ' | sed 's/@/,/g' | sed 's/,//1')
+              if [[ "$approvers" =~ "$author" ]]; then
+                echo "$author is in the approval list."
+                echo "is-require-approval=ml-commons-cicd-env" >> $GITHUB_OUTPUT
+              else
+                echo "$author is not in the approval list."
+                echo "is-require-approval=ml-commons-cicd-env-require-approval" >> $GITHUB_OUTPUT
+              fi
             fi
           fi
