@@ -743,6 +743,66 @@ public class MLChatAgentRunnerTest {
     }
 
     @Test
+    public void testToolConfig() {
+        // Mock tool validation to return false.
+        when(firstTool.validate(any())).thenReturn(true);
+
+        // Create an MLAgent with a tool including two parameters.
+        MLAgent mlAgent = createMLAgentWithToolsConfig(ImmutableMap.of("input", "config_value"));
+
+        // Create parameters for the agent.
+        Map<String, String> params = createAgentParamsWithAction(FIRST_TOOL, "someInput");
+        params.put("question", "raw input");
+        doReturn(false).when(firstTool).useOriginalInput();
+
+        // Run the MLChatAgentRunner.
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
+
+        // Verify that the tool's run method was called.
+        verify(firstTool).run(any(), any());
+        // Verify the size of parameters passed in the tool run method.
+        ArgumentCaptor argumentCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(firstTool).run((Map<String, String>) argumentCaptor.capture(), any());
+        assertEquals(15, ((Map) argumentCaptor.getValue()).size());
+        // The value of input should be "config_value".
+        assertEquals("config_value", ((Map<?, ?>) argumentCaptor.getValue()).get("input"));
+
+        Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
+        ModelTensorOutput modelTensorOutput = (ModelTensorOutput) objectCaptor.getValue();
+        assertNotNull(modelTensorOutput);
+    }
+
+    @Test
+    public void testToolConfigWithInputPlaceholder() {
+        // Mock tool validation to return false.
+        when(firstTool.validate(any())).thenReturn(true);
+
+        // Create an MLAgent with a tool including two parameters.
+        MLAgent mlAgent = createMLAgentWithToolsConfig(ImmutableMap.of("input", "${parameters.key2}"));
+
+        // Create parameters for the agent.
+        Map<String, String> params = createAgentParamsWithAction(FIRST_TOOL, "someInput");
+        params.put("question", "raw input");
+        doReturn(false).when(firstTool).useOriginalInput();
+
+        // Run the MLChatAgentRunner.
+        mlChatAgentRunner.run(mlAgent, params, agentActionListener);
+
+        // Verify that the tool's run method was called.
+        verify(firstTool).run(any(), any());
+        // Verify the size of parameters passed in the tool run method.
+        ArgumentCaptor argumentCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(firstTool).run((Map<String, String>) argumentCaptor.capture(), any());
+        assertEquals(15, ((Map) argumentCaptor.getValue()).size());
+        // The value of input should be replaced with the value associated with the key "key2" of the first tool.
+        assertEquals("value2", ((Map<?, ?>) argumentCaptor.getValue()).get("input"));
+
+        Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
+        ModelTensorOutput modelTensorOutput = (ModelTensorOutput) objectCaptor.getValue();
+        assertNotNull(modelTensorOutput);
+    }
+
+    @Test
     public void testSaveLastTraceFailure() {
         // Mock tool validation to return true.
         when(firstTool.validate(any())).thenReturn(true);
@@ -827,6 +887,25 @@ public class MLChatAgentRunnerTest {
             .name(FIRST_TOOL)
             .type(FIRST_TOOL)
             .parameters(ImmutableMap.of("key1", "value1", "key2", "value2"))
+            .build();
+        return MLAgent
+            .builder()
+            .name("TestAgent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .tools(Arrays.asList(firstToolSpec))
+            .memory(mlMemorySpec)
+            .llm(llmSpec)
+            .build();
+    }
+
+    private MLAgent createMLAgentWithToolsConfig(Map<String, String> configMap) {
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        MLToolSpec firstToolSpec = MLToolSpec
+            .builder()
+            .name(FIRST_TOOL)
+            .type(FIRST_TOOL)
+            .parameters(ImmutableMap.of("key1", "value1", "key2", "value2"))
+            .configMap(configMap)
             .build();
         return MLAgent
             .builder()
