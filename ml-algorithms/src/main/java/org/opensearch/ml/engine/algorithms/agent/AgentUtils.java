@@ -480,6 +480,10 @@ public class AgentUtils {
             StringSubstitutor substitutor = new StringSubstitutor(toolParams, "${parameters.", "}");
             input = substitutor.replace(input);
             toolParams.put("input", input);
+            if (isJson(input)) {
+                Map<String, String> params = getParameterMap(gson.fromJson(input, Map.class));
+                toolParams.putAll(params);
+            }
         } else {
             toolParams.put("input", actionInput);
             if (isJson(actionInput)) {
