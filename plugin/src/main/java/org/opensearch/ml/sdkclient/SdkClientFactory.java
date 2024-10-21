@@ -87,14 +87,6 @@ public class SdkClientFactory {
         String serviceName = REMOTE_METADATA_SERVICE_NAME.get(settings);
         Boolean multiTenancy = ML_COMMONS_MULTI_TENANCY_ENABLED.get(settings);
 
-        /*
-        // TODO Temp to force DDB for testing purposes
-        remoteMetadataType = AWS_DYNAMO_DB;
-        remoteMetadataEndpoint = "https://pkg8g8qwyrlggws3v4bk.us-west-2.aoss.amazonaws.com:443";
-        region = Region.US_WEST_2.id();
-        serviceName = "aoss";
-        */
-
         switch (remoteMetadataType) {
             case REMOTE_OPENSEARCH:
                 if (Strings.isBlank(remoteMetadataEndpoint)) {

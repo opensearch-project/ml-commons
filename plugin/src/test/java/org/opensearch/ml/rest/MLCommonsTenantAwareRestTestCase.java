@@ -36,7 +36,8 @@ import org.opensearch.test.rest.FakeRestRequest;
 public abstract class MLCommonsTenantAwareRestTestCase extends MLCommonsRestTestCase {
 
     // Toggle to run DDB tests
-    protected static final boolean DDB = true;
+    // TODO: Get this from a property
+    protected static final boolean DDB = false;
 
     protected static final String DOC_ID = "_id";
 
@@ -81,7 +82,7 @@ public abstract class MLCommonsTenantAwareRestTestCase extends MLCommonsRestTest
     protected final RestRequest nullTenantMatchAllRequest = getRestRequestWithHeadersAndContent(null, MATCH_ALL_QUERY);
 
     protected static boolean isMultiTenancyEnabled() throws IOException {
-        // pass -Dtests.rest.tenantaware on gradle command line to enable
+        // pass -Dtests.rest.tenantaware=true on gradle command line to enable
         return Boolean.parseBoolean(System.getProperty(ML_COMMONS_MULTI_TENANCY_ENABLED.getKey()))
             || Boolean.parseBoolean(System.getenv(ML_COMMONS_MULTI_TENANCY_ENABLED.getKey()));
     }

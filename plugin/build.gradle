@@ -189,15 +189,11 @@ integTest {
     systemProperty "password", System.getProperty("password")
 
     // Only tenant aware test if set
-    if (System.getProperty("tests.rest.tenantaware") != null) {
+    if (System.getProperty("tests.rest.tenantaware") == "true") {
         filter {
             includeTestsMatching "org.opensearch.ml.rest.*TenantAwareIT"
         }
         systemProperty "plugins.ml_commons.multi_tenancy_enabled", "true"
-    }
-
-    if (System.getProperty("tests.rest.tenantaware") != null) {
-        environment "plugins.ml_commons.multi_tenancy_enabled", "true"
     }
 
     // Only rest case can run with remote cluster
@@ -226,7 +222,7 @@ integTest {
 
     // The 'doFirst' delays till execution time.
     doFirst {
-        if (System.getProperty("tests.rest.tenantaware") != null) {
+        if (System.getProperty("tests.rest.tenantaware") == "true") {
             def ymlFile = file("$buildDir/testclusters/integTest-0/config/opensearch.yml")
             if (ymlFile.exists()) {
                 ymlFile.withWriterAppend {
@@ -234,24 +230,20 @@ integTest {
                     writer.write("\n# Set multitenancy\n")
                     writer.write("plugins.ml_commons.multi_tenancy_enabled: true\n")
                 }
-            } else {
-                throw new GradleException("opensearch.yml not found at: $ymlFile")
-            }
-        }
-    
-        // TODO this properly uses the remote client factory but needs a remote cluster set up
-        if (System.getProperty("tests.rest.cluster") != null && System.getProperty("tests.rest.tenantaware") != null) {
-            def ymlFile = file("$buildDir/testclusters/integTest-0/config/opensearch.yml")
-            if (ymlFile.exists()) {
-                ymlFile.withWriterAppend { writer ->
-                    writer.write("\n# Use a remote cluster\n")
-                    writer.write("plugins.ml_commons.remote_metadata_type: RemoteOpenSearch\n")
-                    writer.write("plugins.ml_commons.remote_metadata_endpoint: https://127.0.0.1:9200\n")
+                // TODO this properly uses the remote client factory but needs a remote cluster set up
+                // TODO get the endpoint from a system property
+                if (System.getProperty("tests.rest.cluster") != null) {
+                    ymlFile.withWriterAppend { writer ->
+                        writer.write("\n# Use a remote cluster\n")
+                        writer.write("plugins.ml_commons.remote_metadata_type: RemoteOpenSearch\n")
+                        writer.write("plugins.ml_commons.remote_metadata_endpoint: https://127.0.0.1:9200\n")
+                    }
                 }
             } else {
                 throw new GradleException("opensearch.yml not found at: $ymlFile")
             }
         }
+    
         // Tell the test JVM if the cluster JVM is running under a debugger so that tests can
         // use longer timeouts for requests.
         def isDebuggingCluster = getDebug() || System.getProperty("test.debug") != null
