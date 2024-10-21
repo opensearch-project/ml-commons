@@ -29,7 +29,7 @@ jobs:
             # Handle Pull Request events
 
             # Check if the PR is triggered by opensearch-trigger-bot
-            if [[ "$author" == "opensearch-trigger-bot" ]]; then
+            if [[ "$github_event" == "pull_request" ]] && [[ "$author" == "opensearch-trigger-bot[bot]" ]]; then
               echo "PR triggered by opensearch-trigger-bot. No approval needed."
               echo "is-require-approval=ml-commons-cicd-env" >> $GITHUB_OUTPUT
             else
