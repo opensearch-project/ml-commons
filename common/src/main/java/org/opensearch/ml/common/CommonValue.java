@@ -581,4 +581,5 @@ public class CommonValue {
     public static final Version VERSION_2_15_0 = Version.fromString("2.15.0");
     public static final Version VERSION_2_16_0 = Version.fromString("2.16.0");
     public static final Version VERSION_2_17_0 = Version.fromString("2.17.0");
+    public static final Version VERSION_2_18_0 = Version.fromString("2.18.0");
 }
