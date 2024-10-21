@@ -6,6 +6,7 @@
 package org.opensearch.ml.processor;
 
 import static java.lang.Math.max;
+import static org.opensearch.ml.common.utils.StringUtils.toJson;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.INPUT_MAP;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.MAX_PREDICTION_TASKS;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.MODEL_CONFIG;
@@ -55,12 +56,11 @@ import org.opensearch.search.pipeline.PipelineProcessingContext;
 import org.opensearch.search.pipeline.Processor;
 import org.opensearch.search.pipeline.SearchResponseProcessor;
 
-import com.jayway.jsonpath.Configuration;
 import com.jayway.jsonpath.JsonPath;
-import com.jayway.jsonpath.Option;
 
 public class MLInferenceSearchResponseProcessor extends AbstractProcessor implements SearchResponseProcessor, ModelExecutor {
 
+    public static final String REQUEST_PREFIX = "_request.";
     private final NamedXContentRegistry xContentRegistry;
     private static final Logger logger = LogManager.getLogger(MLInferenceSearchResponseProcessor.class);
     private final InferenceProcessorAttributes inferenceProcessorAttributes;
@@ -155,6 +155,8 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
         try {
             SearchHit[] hits = response.getHits().getHits();
             // skip processing when there is no hit
+
+            String queryString = request.source().toString();
             if (hits.length == 0) {
                 responseListener.onResponse(response);
                 return;
@@ -183,7 +185,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
                     );
                 }
 
-                rewriteResponseDocuments(mlInferenceSearchResponse, responseListener);
+                rewriteResponseDocuments(mlInferenceSearchResponse, responseListener, queryString);
             } else {
                 // if one to one, make one hit search response and run rewriteResponseDocuments
                 GroupedActionListener<SearchResponse> combineResponseListener = getCombineResponseGroupedActionListener(
@@ -198,7 +200,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
                     newHits[0] = hit;
                     SearchResponse oneHitResponse = SearchResponseUtil.replaceHits(newHits, response);
                     ActionListener<SearchResponse> oneHitListener = getOneHitListener(combineResponseListener, isOneHitListenerFailed);
-                    rewriteResponseDocuments(oneHitResponse, oneHitListener);
+                    rewriteResponseDocuments(oneHitResponse, oneHitListener, queryString);
                     // if any OneHitListener failure, try stop the rest of the predictions
                     if (isOneHitListenerFailed.get()) {
                         break;
@@ -305,9 +307,11 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
      *
      * @param response         the search response
      * @param responseListener the listener to be notified when the response is processed
+     * @param queryString      the query body in string format, for example, "{ \"query\": { \"match_all\": {} } }\n"
      * @throws IOException if an I/O error occurs during the rewriting process
      */
-    private void rewriteResponseDocuments(SearchResponse response, ActionListener<SearchResponse> responseListener) throws IOException {
+    private void rewriteResponseDocuments(SearchResponse response, ActionListener<SearchResponse> responseListener, String queryString)
+        throws IOException {
         List<Map<String, String>> processInputMap = inferenceProcessorAttributes.getInputMaps();
         List<Map<String, String>> processOutputMap = inferenceProcessorAttributes.getOutputMaps();
         int inputMapSize = (processInputMap == null) ? 0 : processInputMap.size();
@@ -329,7 +333,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
         );
         SearchHit[] hits = response.getHits().getHits();
         for (int inputMapIndex = 0; inputMapIndex < max(inputMapSize, 1); inputMapIndex++) {
-            processPredictions(hits, processInputMap, inputMapIndex, batchPredictionListener, hitCountInPredictions);
+            processPredictions(hits, processInputMap, inputMapIndex, batchPredictionListener, hitCountInPredictions, queryString);
         }
     }
 
@@ -341,6 +345,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
      * @param inputMapIndex           the index of the input mapping to process
      * @param batchPredictionListener the listener to be notified when the predictions are processed
      * @param hitCountInPredictions   a map to keep track of the count of hits that have the required input fields for each round of prediction
+     * @param queryString             the query body in string format, for example, "{ \"query\": { \"match_all\": {} } }\n"
      * @throws IOException if an I/O error occurs during the prediction process
      */
     private void processPredictions(
@@ -348,15 +353,19 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
         List<Map<String, String>> processInputMap,
         int inputMapIndex,
         GroupedActionListener<Map<Integer, MLOutput>> batchPredictionListener,
-        Map<Integer, Integer> hitCountInPredictions
+        Map<Integer, Integer> hitCountInPredictions,
+        String queryString
     ) throws IOException {
 
         Map<String, String> modelParameters = new HashMap<>();
         Map<String, String> modelConfigs = new HashMap<>();
 
         if (inferenceProcessorAttributes.getModelConfigMaps() != null) {
-            modelParameters.putAll(inferenceProcessorAttributes.getModelConfigMaps());
-            modelConfigs.putAll(inferenceProcessorAttributes.getModelConfigMaps());
+            Map<String, String> modelConfigMapsInput = inferenceProcessorAttributes.getModelConfigMaps();
+
+            modelParameters.putAll(modelConfigMapsInput);
+            modelConfigs.putAll(modelConfigMapsInput);
+
         }
 
         Map<String, Object> modelInputParameters = new HashMap<>();
@@ -364,33 +373,52 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
         Map<String, String> inputMapping;
         if (processInputMap != null && !processInputMap.isEmpty()) {
             inputMapping = processInputMap.get(inputMapIndex);
+            boolean isRequestInputMissing = checkIsRequestInputMissing(queryString, inputMapping);
+            if (isRequestInputMissing) {
+                if (!ignoreMissing) {
+                    throw new IllegalArgumentException(
+                        "Missing required input field in query body. input_map: " + inputMapping.values() + ", query body:" + queryString
+                    );
+                }
+            }
 
             for (SearchHit hit : hits) {
                 Map<String, Object> document = hit.getSourceAsMap();
-                boolean isModelInputMissing = checkIsModelInputMissing(document, inputMapping);
-                if (!isModelInputMissing) {
+                boolean isDocumentFieldMissing = checkIsDocumentFieldMissing(document, inputMapping);
+                if (!isDocumentFieldMissing) {
                     MapUtils.incrementCounter(hitCountInPredictions, inputMapIndex);
                     for (Map.Entry<String, String> entry : inputMapping.entrySet()) {
                         // model field as key, document field name as value
                         String modelInputFieldName = entry.getKey();
                         String documentFieldName = entry.getValue();
+                        // read the query string when the mapping field name starts with "$._request." or "_request."
+                        // skip when modelInputParameters already has this modelInputFieldName to avoid duplicate read
+                        if (StringUtils.isValidJSONPath(documentFieldName)
+                            && (documentFieldName.startsWith("$." + REQUEST_PREFIX) || documentFieldName.startsWith(REQUEST_PREFIX))
+                            && !modelInputParameters.containsKey(modelInputFieldName)) {
+                            String requestFieldName = documentFieldName.replaceFirst(REQUEST_PREFIX, "");
 
-                        Object documentJson = JsonPath.parse(document).read("$");
-                        Configuration configuration = Configuration
-                            .builder()
-                            .options(Option.SUPPRESS_EXCEPTIONS, Option.DEFAULT_PATH_LEAF_TO_NULL)
-                            .build();
-
-                        Object documentValue = JsonPath.using(configuration).parse(documentJson).read(documentFieldName);
-                        if (documentValue != null) {
-                            // when not existed in the map, add into the modelInputParameters map
-                            updateModelInputParameters(modelInputParameters, modelInputFieldName, documentValue);
+                            Object queryText = JsonPath.using(suppressExceptionConfiguration).parse(queryString).read(requestFieldName);
+                            if (queryText != null) {
+                                modelInputParameters.put(modelInputFieldName, toJson(queryText));
+                            }
+                        } else {
+                            Object documentValue = JsonPath.using(suppressExceptionConfiguration).parse(document).read(documentFieldName);
+                            if (documentValue != null) {
+                                // when not existed in the map, add into the modelInputParameters map
+                                updateModelInputParameters(modelInputParameters, modelInputFieldName, documentValue);
+                            }
                         }
                     }
                 } else { // when document does not contain the documentFieldName, skip when ignoreMissing
                     if (!ignoreMissing) {
                         throw new IllegalArgumentException(
-                            "cannot find all required input fields: " + inputMapping.values() + " in hit:" + hit
+                            "cannot find all required input fields: "
+                                + inputMapping.values()
+                                + " in hit:"
+                                + hit
+                                + " and query body:"
+                                + queryString
                         );
                     }
                 }
@@ -542,11 +570,11 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
                                 Map<String, String> inputMapping = getDefaultInputMapping(sourceAsMap, mappingIndex, processInputMap);
                                 Map<String, String> outputMapping = getDefaultOutputMapping(mappingIndex, processOutputMap);
 
-                                boolean isModelInputMissing = false;
+                                boolean isDocumentFieldMissing = false;
                                 if (processInputMap != null && !processInputMap.isEmpty()) {
-                                    isModelInputMissing = checkIsModelInputMissing(document, inputMapping);
+                                    isDocumentFieldMissing = checkIsDocumentFieldMissing(document, inputMapping);
                                 }
-                                if (!isModelInputMissing) {
+                                if (!isDocumentFieldMissing) {
                                     // Iterate over outputMapping
                                     for (Map.Entry<String, String> outputMapEntry : outputMapping.entrySet()) {
 
@@ -637,22 +665,45 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
 
     /**
      * Checks if the document is missing any of the required input fields specified in the input mapping.
+     * When model config contains the default model_input value, it's not considered as missing model input.
      *
      * @param document     the document map
      * @param inputMapping the input mapping
      * @return true if the document is missing any of the required input fields, false otherwise
      */
-    private boolean checkIsModelInputMissing(Map<String, Object> document, Map<String, String> inputMapping) {
-        boolean isModelInputMissing = false;
-        for (Map.Entry<String, String> inputMapEntry : inputMapping.entrySet()) {
-            String oldDocumentFieldName = inputMapEntry.getValue();
-            boolean checkSingleModelInputPresent = hasField(document, oldDocumentFieldName);
-            if (!checkSingleModelInputPresent) {
-                isModelInputMissing = true;
-                break;
-            }
-        }
-        return isModelInputMissing;
+    private boolean checkIsDocumentFieldMissing(Map<String, Object> document, Map<String, String> inputMapping) {
+        return inputMapping
+            .values()
+            .stream()
+            .filter(fieldName -> !(fieldName.startsWith("$." + REQUEST_PREFIX) || fieldName.startsWith(REQUEST_PREFIX)))
+            .anyMatch(fieldName -> {
+                boolean isFieldPresentInDocument = document != null && hasField(document, fieldName);
+                boolean isFieldPresentInModelConfig = this.inferenceProcessorAttributes.modelConfigMaps != null
+                    && this.inferenceProcessorAttributes.modelConfigMaps.containsKey(fieldName);
+                return !isFieldPresentInDocument && !isFieldPresentInModelConfig;
+            });
+    }
+
+    /**
+     * Checks if the request is missing any of the required input fields specified in the input mapping.
+     * When model config contains the default model_input value, it's not considered as missing model input.
+     *
+     * @param queryString  the query body in string format, e.g., "{ \"query\": { \"match_all\": {} } }\n"
+     * @param inputMapping the input mapping
+     * @return true if the document is missing any of the required input fields, false otherwise
+     */
+    private boolean checkIsRequestInputMissing(String queryString, Map<String, String> inputMapping) {
+        return inputMapping
+            .values()
+            .stream()
+            .filter(fieldName -> fieldName.startsWith("$." + REQUEST_PREFIX) || fieldName.startsWith(REQUEST_PREFIX))
+            .map(fieldName -> fieldName.replaceFirst(REQUEST_PREFIX, ""))
+            .anyMatch(requestFieldName -> {
+                boolean isFieldPresentInQuery = queryString != null && hasField(queryString, requestFieldName);
+                boolean isFieldPresentInModelConfig = this.inferenceProcessorAttributes.modelConfigMaps != null
+                    && this.inferenceProcessorAttributes.modelConfigMaps.containsKey(requestFieldName);
+                return !isFieldPresentInQuery && !isFieldPresentInModelConfig;
+            });
     }
 
     /**
