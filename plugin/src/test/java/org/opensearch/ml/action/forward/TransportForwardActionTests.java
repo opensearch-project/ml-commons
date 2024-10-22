@@ -29,6 +29,7 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ONLY_RUN_ON_ML_NODE;
 import static org.opensearch.ml.utils.TestHelper.ML_ROLE;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
+import static org.opensearch.ml.utils.TestHelper.setupTestClusterState;
 
 import java.util.Arrays;
 import java.util.HashSet;
@@ -43,6 +44,7 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.Version;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
+import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
@@ -94,6 +96,8 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
 
     private TransportForwardAction forwardAction;
 
+    private ClusterState testState;
+
     Settings settings = Settings
         .builder()
         .put(ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE.getKey(), true)
@@ -136,6 +140,9 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
                 mlModelAutoReDeployer
             )
         );
+
+        testState = setupTestClusterState("test_node_id2");
+        when(clusterService.state()).thenReturn(testState);
 
         node1 = new DiscoveryNode(nodeId1, buildNewFakeTransportAddress(), emptyMap(), ImmutableSet.of(ML_ROLE), Version.CURRENT);
         node2 = new DiscoveryNode(nodeId2, buildNewFakeTransportAddress(), emptyMap(), ImmutableSet.of(ML_ROLE), Version.CURRENT);
