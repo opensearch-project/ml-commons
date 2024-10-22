@@ -15,6 +15,7 @@ import java.util.concurrent.ForkJoinPool;
 
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchException;
+import org.opensearch.core.common.Strings;
 
 import static org.opensearch.sdk.SdkClientUtils.unwrapAndConvertToException;
 
@@ -214,7 +215,7 @@ public class SdkClient {
      * @param tenantId The tenantId from the request
      */
     private void validateTenantId(String tenantId) {
-        if (Boolean.TRUE.equals(isMultiTenancyEnabled) && tenantId == null) {
+        if (Boolean.TRUE.equals(isMultiTenancyEnabled) && Strings.isNullOrEmpty(tenantId)) {
             throw new IllegalArgumentException("A tenant ID is required when multitenancy is enabled.");
         }
     }

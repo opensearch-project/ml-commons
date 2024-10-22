@@ -135,7 +135,7 @@ public class LocalClusterIndicesClientTests {
         PutDataObjectRequest putRequest = PutDataObjectRequest
             .builder()
             .index(TEST_INDEX)
-            .id(TEST_ID)
+            .id(TEST_ID).tenantId(TEST_TENANT_ID)
             .overwriteIfExists(false)
             .dataObject(testDataObject)
             .build();
@@ -166,7 +166,7 @@ public class LocalClusterIndicesClientTests {
 
     @Test
     public void testPutDataObject_Exception() throws IOException {
-        PutDataObjectRequest putRequest = PutDataObjectRequest.builder().index(TEST_INDEX).dataObject(testDataObject).build();
+        PutDataObjectRequest putRequest = PutDataObjectRequest.builder().index(TEST_INDEX).tenantId(TEST_TENANT_ID).dataObject(testDataObject).build();
 
         when(mockedClient.index(any(IndexRequest.class))).thenThrow(new UnsupportedOperationException("test"));
 
@@ -188,7 +188,7 @@ public class LocalClusterIndicesClientTests {
                 throw new IOException("test");
             }
         };
-        PutDataObjectRequest putRequest = PutDataObjectRequest.builder().index(TEST_INDEX).dataObject(badDataObject).build();
+        PutDataObjectRequest putRequest = PutDataObjectRequest.builder().index(TEST_INDEX).tenantId(TEST_TENANT_ID).dataObject(badDataObject).build();
 
         CompletableFuture<PutDataObjectResponse> future = sdkClient
             .putDataObjectAsync(putRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
@@ -202,7 +202,7 @@ public class LocalClusterIndicesClientTests {
 
     @Test
     public void testGetDataObject() throws IOException {
-        GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).build();
+        GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).tenantId(TEST_TENANT_ID).build();
 
         String json = testDataObject.toJson();
         GetResponse getResponse = new GetResponse(new GetResult(TEST_INDEX, TEST_ID, -2, 0, 1, true, new BytesArray(json), null, null));
@@ -235,7 +235,7 @@ public class LocalClusterIndicesClientTests {
 
     @Test
     public void testGetDataObject_NullResponse() throws IOException {
-        GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).build();
+        GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).tenantId(TEST_TENANT_ID).build();
 
         @SuppressWarnings("unchecked")
         ActionFuture<GetResponse> future = mock(ActionFuture.class);
@@ -257,7 +257,7 @@ public class LocalClusterIndicesClientTests {
 
     @Test
     public void testGetDataObject_NotFound() throws IOException {
-        GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).build();
+        GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).tenantId(TEST_TENANT_ID).build();
         GetResponse getResponse = new GetResponse(new GetResult(TEST_INDEX, TEST_ID, -2, 0, 1, false, null, null, null));
 
         @SuppressWarnings("unchecked")
@@ -280,7 +280,7 @@ public class LocalClusterIndicesClientTests {
 
     @Test
     public void testGetDataObject_Exception() throws IOException {
-        GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).build();
+        GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).tenantId(TEST_TENANT_ID).build();
 
         ArgumentCaptor<GetRequest> getRequestCaptor = ArgumentCaptor.forClass(GetRequest.class);
         when(mockedClient.get(getRequestCaptor.capture())).thenThrow(new UnsupportedOperationException("test"));
@@ -300,7 +300,7 @@ public class LocalClusterIndicesClientTests {
         UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
             .builder()
             .index(TEST_INDEX)
-            .id(TEST_ID)
+            .id(TEST_ID).tenantId(TEST_TENANT_ID)
             .retryOnConflict(3)
             .dataObject(testDataObject)
             .build();
@@ -344,7 +344,7 @@ public class LocalClusterIndicesClientTests {
         UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
             .builder()
             .index(TEST_INDEX)
-            .id(TEST_ID)
+            .id(TEST_ID).tenantId(TEST_TENANT_ID)
             .dataObject(Map.of("foo", "bar"))
             .build();
 
@@ -377,7 +377,7 @@ public class LocalClusterIndicesClientTests {
         UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
             .builder()
             .index(TEST_INDEX)
-            .id(TEST_ID)
+            .id(TEST_ID).tenantId(TEST_TENANT_ID)
             .dataObject(testDataObject)
             .build();
 
@@ -419,7 +419,7 @@ public class LocalClusterIndicesClientTests {
         UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
             .builder()
             .index(TEST_INDEX)
-            .id(TEST_ID)
+            .id(TEST_ID).tenantId(TEST_TENANT_ID)
             .dataObject(testDataObject)
             .build();
 
@@ -445,7 +445,7 @@ public class LocalClusterIndicesClientTests {
         UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
             .builder()
             .index(TEST_INDEX)
-            .id(TEST_ID)
+            .id(TEST_ID).tenantId(TEST_TENANT_ID)
             .dataObject(testDataObject)
             .build();
 
@@ -467,7 +467,7 @@ public class LocalClusterIndicesClientTests {
         UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
             .builder()
             .index(TEST_INDEX)
-            .id(TEST_ID)
+            .id(TEST_ID).tenantId(TEST_TENANT_ID)
             .dataObject(testDataObject)
             .ifSeqNo(5)
             .ifPrimaryTerm(2)
@@ -493,7 +493,7 @@ public class LocalClusterIndicesClientTests {
 
     @Test
     public void testDeleteDataObject() throws IOException {
-        DeleteDataObjectRequest deleteRequest = DeleteDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).build();
+        DeleteDataObjectRequest deleteRequest = DeleteDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).tenantId(TEST_TENANT_ID).build();
 
         DeleteResponse deleteResponse = new DeleteResponse(new ShardId(TEST_INDEX, "_na_", 0), TEST_ID, 1, 0, 2, true);
         PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
@@ -517,7 +517,7 @@ public class LocalClusterIndicesClientTests {
 
     @Test
     public void testDeleteDataObject_Exception() throws IOException {
-        DeleteDataObjectRequest deleteRequest = DeleteDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).build();
+        DeleteDataObjectRequest deleteRequest = DeleteDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).tenantId(TEST_TENANT_ID).build();
 
         ArgumentCaptor<DeleteRequest> deleteRequestCaptor = ArgumentCaptor.forClass(DeleteRequest.class);
         when(mockedClient.delete(deleteRequestCaptor.capture())).thenThrow(new UnsupportedOperationException("test"));
@@ -651,27 +651,6 @@ public class LocalClusterIndicesClientTests {
         Throwable cause = ce.getCause();
         assertEquals(UnsupportedOperationException.class, cause.getClass());
         assertEquals("test", cause.getMessage());
-    }
-    
-    @Test
-    public void testSearchDataObject_NullTenantId() throws IOException {
-        // Tests exception if multitenancy enabled        
-        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-        SearchDataObjectRequest searchRequest = SearchDataObjectRequest
-            .builder()
-            .indices(TEST_INDEX)
-            // null tenant Id
-            .searchSourceBuilder(searchSourceBuilder)
-            .build();
-        
-        CompletableFuture<SearchDataObjectResponse> future = sdkClient
-            .searchDataObjectAsync(searchRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
-            .toCompletableFuture();
-
-        CompletionException ce = assertThrows(CompletionException.class, () -> future.join());
-        Throwable cause = ce.getCause();
-        assertEquals(OpenSearchStatusException.class, cause.getClass());
-        assertEquals("Tenant ID is required when multitenancy is enabled.", cause.getMessage());
     }
     
     @Test
