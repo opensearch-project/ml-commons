@@ -117,7 +117,7 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         encryptor = spy(new EncryptorImpl(null));
         syncUpCron = new MLSyncUpCron(client, clusterService, nodeHelper, mlIndicesHandler, encryptor);
 
-        testState = setupTestClusterState();
+        testState = setupTestClusterState("node");
         when(clusterService.state()).thenReturn(testState);
 
         doAnswer(invocation -> {
