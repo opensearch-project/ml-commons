@@ -32,6 +32,7 @@ import static org.mockito.Mockito.when;
 
 public class SdkClientTests {
 
+    private static final String TENANT_ID = "test_id";
     private SdkClient sdkClient;
     private SdkClientDelegate sdkClientImpl;
 
@@ -62,6 +63,12 @@ public class SdkClientTests {
     @Before
     public void setUp() {
         MockitoAnnotations.openMocks(this);
+        when(putRequest.tenantId()).thenReturn(TENANT_ID);
+        when(getRequest.tenantId()).thenReturn(TENANT_ID);
+        when(updateRequest.tenantId()).thenReturn(TENANT_ID);
+        when(deleteRequest.tenantId()).thenReturn(TENANT_ID);
+        when(searchRequest.tenantId()).thenReturn(TENANT_ID);
+
         sdkClientImpl = spy(new SdkClientDelegate() {
             @Override
             public CompletionStage<PutDataObjectResponse> putDataObjectAsync(
@@ -120,6 +127,12 @@ public class SdkClientTests {
     }
 
     @Test
+    public void testPutDataObjectNullTenantId() {
+        when(putRequest.tenantId()).thenReturn(null);
+        assertThrows(IllegalArgumentException.class, () -> sdkClient.putDataObject(putRequest));
+    }
+    
+    @Test
     public void testPutDataObjectException() {
         when(sdkClientImpl.putDataObjectAsync(any(PutDataObjectRequest.class), any(Executor.class), anyBoolean()))
                 .thenReturn(CompletableFuture.failedFuture(testException));
@@ -152,6 +165,12 @@ public class SdkClientTests {
     }
 
     @Test
+    public void testGetDataObjectNullTenantId() {
+        when(getRequest.tenantId()).thenReturn(null);
+        assertThrows(IllegalArgumentException.class, () -> sdkClient.getDataObject(getRequest));
+    }
+    
+    @Test
     public void testGetDataObjectException() {
         when(sdkClientImpl.getDataObjectAsync(any(GetDataObjectRequest.class), any(Executor.class), anyBoolean()))
                 .thenReturn(CompletableFuture.failedFuture(testException));
@@ -181,6 +200,11 @@ public class SdkClientTests {
     public void testUpdateDataObjectSuccess() {
         assertEquals(updateResponse, sdkClient.updateDataObject(updateRequest));
         verify(sdkClientImpl).updateDataObjectAsync(any(UpdateDataObjectRequest.class), any(Executor.class), anyBoolean());
+    }
+    @Test
+    public void testUpdateDataObjectNullTenantId() {
+        when(updateRequest.tenantId()).thenReturn(null);
+        assertThrows(IllegalArgumentException.class, () -> sdkClient.updateDataObject(updateRequest));
     }
 
     @Test
@@ -214,6 +238,12 @@ public class SdkClientTests {
     }
 
     @Test
+    public void testDeleteDataObjectNullTenantId() {
+        when(deleteRequest.tenantId()).thenReturn(null);
+        assertThrows(IllegalArgumentException.class, () -> sdkClient.deleteDataObject(deleteRequest));
+    }
+
+    @Test
     public void testDeleteDataObjectException() {
         when(sdkClientImpl.deleteDataObjectAsync(any(DeleteDataObjectRequest.class), any(Executor.class), anyBoolean()))
                 .thenReturn(CompletableFuture.failedFuture(testException));
@@ -242,6 +272,12 @@ public class SdkClientTests {
         assertEquals(searchResponse, sdkClient.searchDataObject(searchRequest));
         verify(sdkClientImpl).searchDataObjectAsync(any(SearchDataObjectRequest.class), any(Executor.class), anyBoolean());
     }
+    @Test
+    public void testSearchDataObjectNullTenantId() {
+        when(searchRequest.tenantId()).thenReturn(null);
+        assertThrows(IllegalArgumentException.class, () -> sdkClient.searchDataObject(searchRequest));
+    }
+
 
     @Test
     public void testSearchDataObjectException() {

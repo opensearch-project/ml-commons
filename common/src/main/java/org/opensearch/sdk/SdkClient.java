@@ -15,7 +15,6 @@ import java.util.concurrent.ForkJoinPool;
 
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchException;
-import org.opensearch.ml.common.settings.SettingsChangeListener;
 
 import static org.opensearch.sdk.SdkClientUtils.unwrapAndConvertToException;
 
@@ -36,6 +35,7 @@ public class SdkClient {
      * @return A completion stage encapsulating the response or exception
      */
     public CompletionStage<PutDataObjectResponse> putDataObjectAsync(PutDataObjectRequest request, Executor executor) {
+        validateTenantId(request.tenantId());
         return delegate.putDataObjectAsync(request, executor, isMultiTenancyEnabled);
     }
 
@@ -79,6 +79,7 @@ public class SdkClient {
      * @return A completion stage encapsulating the response or exception
      */
     public CompletionStage<GetDataObjectResponse> getDataObjectAsync(GetDataObjectRequest request) {
+        validateTenantId(request.tenantId());
         return getDataObjectAsync(request, ForkJoinPool.commonPool());
     }
 
@@ -103,6 +104,7 @@ public class SdkClient {
      * @return A completion stage encapsulating the response or exception
      */
     public CompletionStage<UpdateDataObjectResponse> updateDataObjectAsync(UpdateDataObjectRequest request, Executor executor) {
+        validateTenantId(request.tenantId());
         return delegate.updateDataObjectAsync(request, executor, isMultiTenancyEnabled);
     }
 
@@ -137,6 +139,7 @@ public class SdkClient {
      * @return A completion stage encapsulating the response or exception
      */
     public CompletionStage<DeleteDataObjectResponse> deleteDataObjectAsync(DeleteDataObjectRequest request, Executor executor) {
+        validateTenantId(request.tenantId());
         return delegate.deleteDataObjectAsync(request, executor, isMultiTenancyEnabled);
     }
 
@@ -171,6 +174,7 @@ public class SdkClient {
      * @return A completion stage encapsulating the response or exception
      */
     public CompletionStage<SearchDataObjectResponse> searchDataObjectAsync(SearchDataObjectRequest request, Executor executor) {
+        validateTenantId(request.tenantId());
         return delegate.searchDataObjectAsync(request, executor, isMultiTenancyEnabled);
     }
 
@@ -203,5 +207,15 @@ public class SdkClient {
      */
     public SdkClientDelegate getDelegate() {
         return delegate;
+    }
+
+    /**
+     * Throw exception if tenantId is null and multitenancy is enabled
+     * @param tenantId The tenantId from the request
+     */
+    private void validateTenantId(String tenantId) {
+        if (Boolean.TRUE.equals(isMultiTenancyEnabled) && tenantId == null) {
+            throw new IllegalArgumentException("A tenant ID is required when multitenancy is enabled.");
+        }
     }
 }
