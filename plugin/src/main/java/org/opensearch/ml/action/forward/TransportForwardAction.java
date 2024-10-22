@@ -10,12 +10,16 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO
 import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 import static org.opensearch.ml.utils.MLExceptionUtils.toJsonString;
+import static org.opensearch.ml.utils.RestActionUtils.getAllNodes;
 
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
@@ -131,10 +135,29 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
                         syncModelWorkerNodes(modelId, functionName);
                     }
 
-                    if (workNodes == null || workNodes.size() == 0) {
+                    Set<String> workNodesRemovedFromCluster = new HashSet<>();
+
+                    if (workNodes != null && !workNodes.isEmpty()) {
+                        Set<String> allNodesInCluster = new HashSet<>(List.of(getAllNodes(clusterService)));
+
+                        workNodesRemovedFromCluster = workNodes
+                            .stream()
+                            .filter(node -> !allNodesInCluster.contains(node))
+                            .collect(Collectors.toSet());
+
+                        if (!workNodesRemovedFromCluster.isEmpty()) {
+                            workNodes.removeAll(workNodesRemovedFromCluster);
+                        }
+                    }
+
+                    if (workNodes == null || workNodes.isEmpty()) {
+                        if (!workNodesRemovedFromCluster.isEmpty()) {
+                            mlTaskCache.updateWorkerNode(workNodesRemovedFromCluster);
+                            mlModelManager.removeModelWorkerNode(modelId, false, workNodesRemovedFromCluster.toArray(new String[0]));
+                        }
                         int currentWorkerNodeCount = mlTaskCache.getWorkerNodeSize();
                         MLTaskState taskState = mlTaskCache.hasError() ? MLTaskState.COMPLETED_WITH_ERROR : MLTaskState.COMPLETED;
-                        if (mlTaskCache.allNodeFailed()) {
+                        if (mlTaskCache.allNodeFailed() || mlTaskCache.getWorkerNodeSize() == 0) {
                             taskState = MLTaskState.FAILED;
                             currentWorkerNodeCount = 0;
                         } else {
@@ -150,11 +173,11 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
                         mlTaskManager.updateMLTask(taskId, builder.build(), TASK_SEMAPHORE_TIMEOUT, true);
 
                         MLModelState modelState;
-                        if (!mlTaskCache.allNodeFailed()) {
-                            modelState = mlTaskCache.hasError() ? MLModelState.PARTIALLY_DEPLOYED : MLModelState.DEPLOYED;
-                        } else {
+                        if (mlTaskCache.allNodeFailed() || mlTaskCache.getWorkerNodeSize() == 0) {
                             modelState = MLModelState.DEPLOY_FAILED;
                             log.error("deploy model failed on all nodes, model id: {}", modelId);
+                        } else {
+                            modelState = mlTaskCache.hasError() ? MLModelState.PARTIALLY_DEPLOYED : MLModelState.DEPLOYED;
                         }
                         Map<String, Object> updateFields = new HashMap<>();
                         updateFields.put(MLModel.MODEL_STATE_FIELD, modelState);
