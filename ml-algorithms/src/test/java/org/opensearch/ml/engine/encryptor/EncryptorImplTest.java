@@ -87,6 +87,7 @@ public class EncryptorImplTest {
     ThreadPool threadPool;
     ThreadContext threadContext;
     final String USER_STRING = "myuser|role1,role2|myTenant";
+    final String TENANT_ID = "myTenant";
 
     private static final TestThreadPool testThreadPool = new TestThreadPool(
         EncryptorImplTest.class.getName(),
@@ -193,10 +194,10 @@ public class EncryptorImplTest {
         when(client.index(any(IndexRequest.class))).thenReturn(indexFuture);
 
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
-        Assert.assertNull(encryptor.getMasterKey(null));
-        String encrypted = encryptor.encrypt("test", null);
+        Assert.assertNull(encryptor.getMasterKey(TENANT_ID));
+        String encrypted = encryptor.encrypt("test", TENANT_ID);
         Assert.assertNotNull(encrypted);
-        Assert.assertNotEquals(masterKey.get(DEFAULT_TENANT_ID), encryptor.getMasterKey(null));
+        Assert.assertNotEquals(masterKey.get(DEFAULT_TENANT_ID), encryptor.getMasterKey(TENANT_ID));
     }
 
     @Test
@@ -218,8 +219,8 @@ public class EncryptorImplTest {
         when(client.index(any(IndexRequest.class))).thenReturn(indexFuture);
 
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
-        Assert.assertNull(encryptor.getMasterKey(null));
-        encryptor.encrypt("test", null);
+        Assert.assertNull(encryptor.getMasterKey(TENANT_ID));
+        encryptor.encrypt("test", TENANT_ID);
     }
 
     @Test
@@ -241,8 +242,8 @@ public class EncryptorImplTest {
         when(client.index(any(IndexRequest.class))).thenReturn(indexFuture);
 
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
-        Assert.assertNull(encryptor.getMasterKey(null));
-        encryptor.encrypt("test", null);
+        Assert.assertNull(encryptor.getMasterKey(TENANT_ID));
+        encryptor.encrypt("test", TENANT_ID);
     }
 
     @Test
@@ -264,8 +265,8 @@ public class EncryptorImplTest {
         when(client.index(any(IndexRequest.class))).thenReturn(indexFuture);
 
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
-        Assert.assertNull(encryptor.getMasterKey(null));
-        encryptor.encrypt("test", null);
+        Assert.assertNull(encryptor.getMasterKey(TENANT_ID));
+        encryptor.encrypt("test", TENANT_ID);
     }
 
     @Test
@@ -287,8 +288,8 @@ public class EncryptorImplTest {
         when(client.index(any(IndexRequest.class))).thenReturn(indexFuture);
 
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
-        Assert.assertNull(encryptor.getMasterKey(null));
-        encryptor.encrypt("test", null);
+        Assert.assertNull(encryptor.getMasterKey(TENANT_ID));
+        encryptor.encrypt("test", TENANT_ID);
     }
 
     @Test
@@ -310,8 +311,8 @@ public class EncryptorImplTest {
         when(client.index(any(IndexRequest.class))).thenReturn(indexFuture);
 
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
-        Assert.assertNull(encryptor.getMasterKey(null));
-        encryptor.encrypt("test", null);
+        Assert.assertNull(encryptor.getMasterKey(TENANT_ID));
+        encryptor.encrypt("test", TENANT_ID);
     }
 
     @Test
