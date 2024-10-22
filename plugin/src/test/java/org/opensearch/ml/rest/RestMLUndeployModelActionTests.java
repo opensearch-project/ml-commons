@@ -67,7 +67,7 @@ public class RestMLUndeployModelActionTests extends OpenSearchTestCase {
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        testState = setupTestClusterState();
+        testState = setupTestClusterState("node");
         when(clusterService.state()).thenReturn(testState);
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
         restMLUndeployModelAction = new RestMLUndeployModelAction(clusterService, settings);
