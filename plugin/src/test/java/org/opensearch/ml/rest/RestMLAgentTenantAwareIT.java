@@ -320,6 +320,12 @@ public class RestMLAgentTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
         assertNotFound(response);
         map = responseToMap(response);
         assertEquals("Failed to find agent with the provided agent id: " + otherAgentId, getErrorReasonFromResponseMap(map));
+
+        /*
+         * Cleanup other resources created
+         */
+        deleteAndWaitForSearch(tenantId, MODELS_PATH, modelId, 0);
+        deleteAndWaitForSearch(tenantId, CONNECTORS_PATH, connectorId, 0);
     }
 
     private static String registerFlowAgentContent(String name, String modelId) {
