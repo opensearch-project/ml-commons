@@ -578,9 +578,7 @@ public class MLModelManager {
             String version = modelVersion == null ? registerModelInput.getVersion() : modelVersion;
             Instant now = Instant.now();
             if (registerModelInput.getConnector() != null) {
-                registerModelInput
-                    .getConnector()
-                    .encrypt((credential, tenantId) -> mlEngine.encrypt(credential, tenantId), registerModelInput.getTenantId());
+                registerModelInput.getConnector().encrypt(mlEngine::encrypt, registerModelInput.getTenantId());
             }
 
             mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(boolResponse -> {
@@ -880,7 +878,7 @@ public class MLModelManager {
                             }
                             semaphore.release();
                         }, e -> {
-                            log.error("Failed to index model chunk " + chunkId, e);
+                            log.error("Failed to index model chunk {}", chunkId, e);
                             failedToUploadChunk.set(true);
                             handleException(functionName, taskId, registerModelInput.getTenantId(), e);
                             deleteFileQuietly(file);

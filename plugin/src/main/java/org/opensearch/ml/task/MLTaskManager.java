@@ -11,6 +11,7 @@ import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 
+import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -23,6 +24,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.WriteRequest;
 import org.opensearch.action.update.UpdateRequest;
@@ -42,6 +44,8 @@ import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.sdk.PutDataObjectRequest;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.sdk.SdkClientUtils;
+import org.opensearch.sdk.UpdateDataObjectRequest;
+import org.opensearch.sdk.UpdateDataObjectResponse;
 import org.opensearch.threadpool.ThreadPool;
 
 import com.google.common.collect.ImmutableMap;
@@ -235,7 +239,7 @@ public class MLTaskManager {
 
                 sdkClient
                     .putDataObjectAsync(
-                        PutDataObjectRequest.builder().index(ML_TASK_INDEX).dataObject(mlTask).build(),
+                        PutDataObjectRequest.builder().index(ML_TASK_INDEX).tenantId(mlTask.getTenantId()).dataObject(mlTask).build(),
                         client.threadPool().executor(GENERAL_THREAD_POOL)
                     )
                     .whenComplete((r, throwable) -> {
@@ -333,7 +337,7 @@ public class MLTaskManager {
             } catch (InterruptedException e) {
                 log.error("Failed to acquire semaphore for ML task {}", taskId, e);
                 listener.onFailure(e);
-                return; // return directly if can't get semaphore
+                return; // return directly if you can't get semaphore
             }
             try {
                 if (updatedFields == null || updatedFields.isEmpty()) {
@@ -341,24 +345,43 @@ public class MLTaskManager {
                     return;
                 }
                 UpdateRequest updateRequest = new UpdateRequest(ML_TASK_INDEX, taskId);
-                Map<String, Object> updatedContent = new HashMap<>();
-                updatedContent.putAll(updatedFields);
+                Map<String, Object> updatedContent = new HashMap<>(updatedFields);
                 updatedContent.put(LAST_UPDATE_TIME_FIELD, Instant.now().toEpochMilli());
                 updateRequest.doc(updatedContent);
-                updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-                if (updatedFields.containsKey(STATE_FIELD) && TASK_DONE_STATES.contains(updatedFields.containsKey(STATE_FIELD))) {
-                    updateRequest.retryOnConflict(3);
+
+                UpdateDataObjectRequest.Builder requestBuilder = UpdateDataObjectRequest
+                    .builder()
+                    .index(ML_TASK_INDEX)
+                    .id(taskId)
+                    .tenantId(tenantId)
+                    .dataObject(updatedContent);
+
+                // Conditionally add retryOnConflict based on the provided condition
+                if (updatedFields.containsKey(STATE_FIELD) && TASK_DONE_STATES.contains(updatedFields.get(STATE_FIELD))) {
+                    requestBuilder.retryOnConflict(3);
                 }
-                ActionListener<UpdateResponse> actionListener = semaphore == null
-                    ? listener
-                    : ActionListener.runAfter(listener, semaphore::release);
+
+                // Build the request
+                UpdateDataObjectRequest updateDataObjectRequest = requestBuilder.build();
+
                 try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                    client.update(updateRequest, ActionListener.runBefore(actionListener, context::restore));
+                    sdkClient
+                        .updateDataObjectAsync(updateDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
+                        .whenComplete((r, throwable) -> {
+                            context.restore(); // Restore the context once the operation is done
+                            if (semaphore != null) {
+                                semaphore.release();
+                            }
+                            handleUpdateDataObjectCompletionStage(r, throwable, getUpdateResponseListener(taskId, listener));
+                        });
                 } catch (Exception e) {
-                    actionListener.onFailure(e);
+                    log.error("Failed to update ML task {}", taskId, e);
+                    listener.onFailure(e);
                 }
             } catch (Exception e) {
-                semaphore.release();
+                if (semaphore != null) {
+                    semaphore.release();
+                }
                 log.error("Failed to update ML task {}", taskId, e);
                 listener.onFailure(e);
             }
@@ -417,6 +440,39 @@ public class MLTaskManager {
             }
         }
         return Arrays.asList(runningDeployModelTaskIds.toArray(new String[0]), runningDeployModelIds.toArray(new String[0]));
+    }
+
+    private void handleUpdateDataObjectCompletionStage(
+        UpdateDataObjectResponse r,
+        Throwable throwable,
+        ActionListener<UpdateResponse> updateListener
+    ) {
+        if (throwable != null) {
+            Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+            updateListener.onFailure(cause);
+        } else {
+            try {
+                UpdateResponse updateResponse = r.parser() == null ? null : UpdateResponse.fromXContent(r.parser());
+                updateListener.onResponse(updateResponse);
+            } catch (IOException e) {
+                updateListener.onFailure(e);
+            }
+        }
+    }
+
+    private ActionListener<UpdateResponse> getUpdateResponseListener(String taskId, ActionListener<UpdateResponse> actionListener) {
+        return ActionListener.wrap(updateResponse -> {
+            if (updateResponse != null && updateResponse.getResult() != DocWriteResponse.Result.UPDATED) {
+                log.error("Failed to update the task with ID: {}", taskId);
+                actionListener.onResponse(updateResponse);
+                return;
+            }
+            log.info("Successfully updated the task with ID: {}", taskId);
+            actionListener.onResponse(updateResponse);
+        }, exception -> {
+            log.error("Failed to update ML task with ID {}. Details: {}", taskId, exception);
+            actionListener.onFailure(exception);
+        });
     }
 
 }
