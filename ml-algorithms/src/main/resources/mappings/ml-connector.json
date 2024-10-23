@@ -1,0 +1,95 @@
+{
+  "_meta": {
+    "schema_version": 3
+  },
+  "properties": {
+    "name": {
+      "type": "text",
+      "fields": {
+        "keyword": {
+          "type": "keyword",
+          "ignore_above": 256
+        }
+      }
+    },
+    "version": {
+      "type": "keyword"
+    },
+    "description": {
+      "type": "text"
+    },
+    "protocol": {
+      "type": "keyword"
+    },
+    "parameters": {
+      "type": "flat_object"
+    },
+    "credential": {
+      "type": "flat_object"
+    },
+    "client_config": {
+      "type": "flat_object"
+    },
+    "actions": {
+      "type": "flat_object"
+    },
+    "backend_roles": {
+      "type": "text",
+      "fields": {
+        "keyword": {
+          "type": "keyword",
+          "ignore_above": 256
+        }
+      }
+    },
+    "access": {
+      "type": "keyword"
+    },
+    "owner": {
+      "type": "nested",
+      "properties": {
+        "name": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword",
+              "ignore_above": 256
+            }
+          }
+        },
+        "backend_roles": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword"
+            }
+          }
+        },
+        "roles": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword"
+            }
+          }
+        },
+        "custom_attribute_names": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword"
+            }
+          }
+        }
+      }
+    },
+    "created_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "last_updated_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    }
+  }
+}

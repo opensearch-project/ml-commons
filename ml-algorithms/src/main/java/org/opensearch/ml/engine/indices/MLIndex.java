@@ -6,43 +6,43 @@
 package org.opensearch.ml.engine.indices;
 
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX_MAPPING;
-import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX_SCHEMA_VERSION;
+import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX_MAPPING_PATH;
 import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX_MAPPING;
-import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX_SCHEMA_VERSION;
+import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX_MAPPING_PATH;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX_MAPPING;
-import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_SCHEMA_VERSION;
+import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX_MAPPING_PATH;
 import static org.opensearch.ml.common.CommonValue.ML_CONTROLLER_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_CONTROLLER_INDEX_MAPPING;
-import static org.opensearch.ml.common.CommonValue.ML_CONTROLLER_INDEX_SCHEMA_VERSION;
+import static org.opensearch.ml.common.CommonValue.ML_CONTROLLER_INDEX_MAPPING_PATH;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_MESSAGE_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_MEMORY_MESSAGE_INDEX_MAPPING;
-import static org.opensearch.ml.common.CommonValue.ML_MEMORY_MESSAGE_INDEX_SCHEMA_VERSION;
+import static org.opensearch.ml.common.CommonValue.ML_MEMORY_MESSAGE_INDEX_MAPPING_PATH;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_META_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_MEMORY_META_INDEX_MAPPING;
-import static org.opensearch.ml.common.CommonValue.ML_MEMORY_META_INDEX_SCHEMA_VERSION;
+import static org.opensearch.ml.common.CommonValue.ML_MEMORY_META_INDEX_MAPPING_PATH;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX_MAPPING;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX_SCHEMA_VERSION;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX_MAPPING_PATH;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX_MAPPING;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX_SCHEMA_VERSION;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX_MAPPING_PATH;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX_MAPPING;
-import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX_SCHEMA_VERSION;
+import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX_MAPPING_PATH;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+
+import org.opensearch.ml.common.utils.IndexUtils;
+import org.opensearch.ml.common.utils.StringUtils;
+
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
 
 public enum MLIndex {
-    MODEL_GROUP(ML_MODEL_GROUP_INDEX, false, ML_MODEL_GROUP_INDEX_MAPPING, ML_MODEL_GROUP_INDEX_SCHEMA_VERSION),
-    MODEL(ML_MODEL_INDEX, false, ML_MODEL_INDEX_MAPPING, ML_MODEL_INDEX_SCHEMA_VERSION),
-    TASK(ML_TASK_INDEX, false, ML_TASK_INDEX_MAPPING, ML_TASK_INDEX_SCHEMA_VERSION),
-    CONNECTOR(ML_CONNECTOR_INDEX, false, ML_CONNECTOR_INDEX_MAPPING, ML_CONNECTOR_SCHEMA_VERSION),
-    CONFIG(ML_CONFIG_INDEX, false, ML_CONFIG_INDEX_MAPPING, ML_CONFIG_INDEX_SCHEMA_VERSION),
-    CONTROLLER(ML_CONTROLLER_INDEX, false, ML_CONTROLLER_INDEX_MAPPING, ML_CONTROLLER_INDEX_SCHEMA_VERSION),
-    AGENT(ML_AGENT_INDEX, false, ML_AGENT_INDEX_MAPPING, ML_AGENT_INDEX_SCHEMA_VERSION),
-    MEMORY_META(ML_MEMORY_META_INDEX, false, ML_MEMORY_META_INDEX_MAPPING, ML_MEMORY_META_INDEX_SCHEMA_VERSION),
-    MEMORY_MESSAGE(ML_MEMORY_MESSAGE_INDEX, false, ML_MEMORY_MESSAGE_INDEX_MAPPING, ML_MEMORY_MESSAGE_INDEX_SCHEMA_VERSION);
+    MODEL_GROUP(ML_MODEL_GROUP_INDEX, false, ML_MODEL_GROUP_INDEX_MAPPING_PATH),
+    MODEL(ML_MODEL_INDEX, false, ML_MODEL_INDEX_MAPPING_PATH),
+    TASK(ML_TASK_INDEX, false, ML_TASK_INDEX_MAPPING_PATH),
+    CONNECTOR(ML_CONNECTOR_INDEX, false, ML_CONNECTOR_INDEX_MAPPING_PATH),
+    CONFIG(ML_CONFIG_INDEX, false, ML_CONFIG_INDEX_MAPPING_PATH),
+    CONTROLLER(ML_CONTROLLER_INDEX, false, ML_CONTROLLER_INDEX_MAPPING_PATH),
+    AGENT(ML_AGENT_INDEX, false, ML_AGENT_INDEX_MAPPING_PATH),
+    MEMORY_META(ML_MEMORY_META_INDEX, false, ML_MEMORY_META_INDEX_MAPPING_PATH),
+    MEMORY_MESSAGE(ML_MEMORY_MESSAGE_INDEX, false, ML_MEMORY_MESSAGE_INDEX_MAPPING_PATH);
 
     private final String indexName;
     // whether we use an alias for the index
@@ -50,11 +50,34 @@ public enum MLIndex {
     private final String mapping;
     private final Integer version;
 
-    MLIndex(String name, boolean alias, String mapping, Integer version) {
+    MLIndex(String name, boolean alias, String mappingPath) {
         this.indexName = name;
         this.alias = alias;
-        this.mapping = mapping;
-        this.version = version;
+        this.mapping = getMapping(mappingPath);
+        this.version = getVersionFromMapping(this.mapping);
+    }
+
+    private String getMapping(String mappingPath) {
+        try {
+            return IndexUtils.getMappingFromFile(mappingPath);
+        } catch (IOException e) {
+            // Unchecked exception is throw since the method is being called within a constructor
+            throw new UncheckedIOException("Failed to fetch index mapping from file: " + mappingPath, e);
+        }
+    }
+
+    private Integer getVersionFromMapping(String mapping) {
+        JsonObject mappingJson = StringUtils.getJsonObjectFromString(mapping);
+        if (mappingJson == null || !mappingJson.has("_meta")) {
+            throw new JsonParseException("Failed to find \"_meta\" object in mapping: " + mapping);
+        }
+
+        JsonObject metaObject = mappingJson.getAsJsonObject("_meta");
+        if (metaObject == null || !metaObject.has("schema_version")) {
+            throw new JsonParseException("Failed to find \"schema_version\" in \"_meta\" object for mapping: " + mapping);
+        }
+
+        return metaObject.get("schema_version").getAsInt();
     }
 
     public String getIndexName() {

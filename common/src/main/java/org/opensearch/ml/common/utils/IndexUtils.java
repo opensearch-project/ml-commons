@@ -5,7 +5,13 @@
 
 package org.opensearch.ml.common.utils;
 
+import java.io.IOException;
+import java.net.URL;
 import java.util.Map;
+
+import com.fasterxml.jackson.core.JsonParseException;
+import com.google.common.base.Charsets;
+import com.google.common.io.Resources;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -32,4 +38,18 @@ public class IndexUtils {
     // Note: This does not include static settings like number of shards, which can't be changed after index creation.
     public static final Map<String, Object> UPDATED_DEFAULT_INDEX_SETTINGS = Map.of("index.auto_expand_replicas", "0-1");
     public static final Map<String, Object> UPDATED_ALL_NODES_REPLICA_INDEX_SETTINGS = Map.of("index.auto_expand_replicas", "0-all");
+
+    public static String getMappingFromFile(String path) throws IOException {
+        URL url = IndexUtils.class.getClassLoader().getResource(path);
+        if (url == null) {
+            throw new IOException("Resource not found: " + path);
+        }
+
+        String mapping = Resources.toString(url, Charsets.UTF_8);
+        if (!StringUtils.isJson(mapping)) {
+            throw new JsonParseException("Mapping is not a valid JSON: " + path);
+        }
+
+        return mapping;
+    }
 }
