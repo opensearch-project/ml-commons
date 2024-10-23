@@ -177,6 +177,7 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
             otherTenantId,
             registerRemoteModelContent("other test model", connectorId, null)
         );
+        String wrongTenantModelId = null;
         if (multiTenancyEnabled) {
             ResponseException ex = assertThrows(
                 ResponseException.class,
@@ -194,6 +195,9 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
         } else {
             response = makeRequest(wrongTenantModelRequest, POST, MODELS_PATH + "_register");
             assertOK(response);
+            map = responseToMap(response);
+            assertTrue(map.containsKey(MODEL_ID_FIELD));
+            wrongTenantModelId = map.get(MODEL_ID_FIELD).toString();
         }
 
         // Now register a model with correct connector
@@ -334,5 +338,27 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
         assertNotFound(response);
         map = responseToMap(response);
         assertEquals("Failed to find model with the provided model id: " + otherModelId, getErrorReasonFromResponseMap(map));
+
+        // Delete the model created with null tenant if applicable
+        if (wrongTenantModelId != null) {
+            response = makeRequest(otherTenantRequest, DELETE, MODELS_PATH + wrongTenantModelId);
+            assertOK(response);
+            map = responseToMap(response);
+            assertEquals(wrongTenantModelId, map.get(DOC_ID).toString());
+
+            // Verify the deletion
+            final String deletedModelId = wrongTenantModelId;
+            ex = assertThrows(ResponseException.class, () -> makeRequest(otherTenantRequest, GET, MODELS_PATH + deletedModelId));
+            response = ex.getResponse();
+            assertNotFound(response);
+            map = responseToMap(response);
+            assertEquals("Failed to find model with the provided model id: " + deletedModelId, getErrorReasonFromResponseMap(map));
+        }
+
+        /*
+         * Cleanup other resources created
+         */
+        deleteAndWaitForSearch(tenantId, CONNECTORS_PATH, connectorId, multiTenancyEnabled ? 0 : 1);
+        deleteAndWaitForSearch(otherTenantId, CONNECTORS_PATH, otherConnectorId, 0);
     }
 }

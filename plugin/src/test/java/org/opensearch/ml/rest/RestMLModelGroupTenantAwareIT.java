@@ -150,6 +150,7 @@ public class RestMLModelGroupTenantAwareIT extends MLCommonsTenantAwareRestTestC
             otherTenantId,
             registerRemoteModelContent("test model", otherConnectorId, sameGroupModelGroupId)
         );
+        String modelInSameGroupOtherTenant = null;
         if (multiTenancyEnabled) {
             ResponseException ex = assertThrows(
                 ResponseException.class,
@@ -168,6 +169,9 @@ public class RestMLModelGroupTenantAwareIT extends MLCommonsTenantAwareRestTestC
         } else {
             response = makeRequest(registerModelInSameGroupOtherTenantRequest, POST, MODELS_PATH + "_register");
             assertOK(response);
+            map = responseToMap(response);
+            assertTrue(map.containsKey(MODEL_ID_FIELD));
+            modelInSameGroupOtherTenant = map.get(MODEL_ID_FIELD).toString();
         }
 
         /*
@@ -318,7 +322,7 @@ public class RestMLModelGroupTenantAwareIT extends MLCommonsTenantAwareRestTestC
         /*
          * Delete
          */
-        // Delete the models
+        // Delete the model groups
         // First test that we can't delete other tenant model groups
         if (multiTenancyEnabled) {
             ResponseException ex = assertThrows(
@@ -388,6 +392,19 @@ public class RestMLModelGroupTenantAwareIT extends MLCommonsTenantAwareRestTestC
             "Failed to find model group with the provided model group id: " + otherModelGroupId,
             getErrorReasonFromResponseMap(map)
         );
+
+        /*
+         * Cleanup other resources created
+         */
+        int additionalModel = modelInSameGroupOtherTenant != null ? 1 : 0;
+        // Need to wait until it's gone from search due to https://github.com/opensearch-project/ml-commons/issues/2932
+        deleteAndWaitForSearch(tenantId, MODELS_PATH, modelId, 1 + additionalModel);
+        deleteAndWaitForSearch(tenantId, MODELS_PATH, sameGroupModelId, additionalModel);
+        if (modelInSameGroupOtherTenant != null) {
+            deleteAndWaitForSearch(otherTenantId, MODELS_PATH, modelInSameGroupOtherTenant, 0);
+        }
+        deleteAndWaitForSearch(tenantId, CONNECTORS_PATH, connectorId, multiTenancyEnabled ? 0 : 1);
+        deleteAndWaitForSearch(otherTenantId, CONNECTORS_PATH, otherConnectorId, 0);
     }
 
     private static String registerModelGroupContent(String name) {

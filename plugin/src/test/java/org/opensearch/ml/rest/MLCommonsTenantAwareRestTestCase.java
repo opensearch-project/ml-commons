@@ -16,12 +16,14 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import org.apache.http.Header;
 import org.apache.http.message.BasicHeader;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Response;
+import org.opensearch.client.ResponseException;
 import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.rest.RestStatus;
@@ -106,11 +108,10 @@ public abstract class MLCommonsTenantAwareRestTestCase extends MLCommonsRestTest
         if (tenantId != null) {
             headers.put(Constants.TENANT_ID_HEADER, singletonList(tenantId));
         }
-        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+        return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withHeaders(headers)
             .withContent(new BytesArray(requestContent), JSON)
             .build();
-        return request;
     }
 
     @SuppressWarnings("unchecked")
@@ -185,6 +186,39 @@ public abstract class MLCommonsTenantAwareRestTestCase extends MLCommonsRestTest
         } catch (IOException | InterruptedException e) {
             // ignore
         }
+    }
+
+    /**
+     * Delete the specified document and wait until a search matches only the specified number of hits
+     * @param tenantId The tenant ID to filter the search by
+     * @param restPath The base path for the REST API
+     * @param id The document ID to be appended to the REST API for deletion
+     * @param hits The number of hits to expect after the deletion is processed
+     * @throws Exception on failures with building or making the request
+     */
+    protected static void deleteAndWaitForSearch(String tenantId, String restPath, String id, int hits) throws Exception {
+        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withHeaders(Map.of(TENANT_ID_HEADER, singletonList(tenantId)))
+            .build();
+        // First process the deletion. Dependent resources (e.g. model with connector) may cause 409 status until they are deleted
+        assertBusy(() -> {
+            try {
+                Response deleteResponse = makeRequest(request, DELETE, restPath + id);
+                // first successful deletion should produce an OK
+                assertOK(deleteResponse);
+            } catch (ResponseException e) {
+                // repeat deletions can produce a 404, treat as a success
+                assertNotFound(e.getResponse());
+            }
+        }, 20, TimeUnit.SECONDS);
+        // Deletion processed, now wait for it to disappear from search
+        RestRequest searchRequest = getRestRequestWithHeadersAndContent(tenantId, MATCH_ALL_QUERY);
+        assertBusy(() -> {
+            Response response = makeRequest(searchRequest, GET, restPath + "_search");
+            assertOK(response);
+            SearchResponse searchResponse = searchResponseFromResponse(response);
+            assertEquals(hits, searchResponse.getHits().getTotalHits().value);
+        }, 20, TimeUnit.SECONDS);
     }
 
     protected static String registerRemoteModelContent(String description, String connectorId, String modelGroupId) {
