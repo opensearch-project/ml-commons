@@ -349,23 +349,39 @@ public class MLTaskManager {
                 updatedContent.put(LAST_UPDATE_TIME_FIELD, Instant.now().toEpochMilli());
                 updateRequest.doc(updatedContent);
 
-                UpdateDataObjectRequest updateDataObjectRequest = UpdateDataObjectRequest
-                    .builder()
-                    .index(ML_TASK_INDEX)
-                    .id(taskId)
-                    .tenantId(tenantId)
-                    .dataObject(updatedContent)
-                    .retryOnConflict(3)
-                    .build();
+                UpdateDataObjectRequest.Builder requestBuilder = UpdateDataObjectRequest
+                        .builder()
+                        .index(ML_TASK_INDEX)
+                        .id(taskId)
+                        .tenantId(tenantId)
+                        .dataObject(updatedContent);
 
-                sdkClient
-                    .updateDataObjectAsync(updateDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
-                    .whenComplete((r, throwable) -> {
-                        semaphore.release();
-                        handleUpdateDataObjectCompletionStage(r, throwable, getUpdateResponseListener(taskId, listener));
-                    });
+                // Conditionally add retryOnConflict based on the provided condition
+                if (updatedFields.containsKey(STATE_FIELD) && TASK_DONE_STATES.contains(updatedFields.get(STATE_FIELD))) {
+                    requestBuilder.retryOnConflict(3);
+                }
+
+                // Build the request
+                UpdateDataObjectRequest updateDataObjectRequest = requestBuilder.build();
+
+                try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                    sdkClient
+                            .updateDataObjectAsync(updateDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
+                            .whenComplete((r, throwable) -> {
+                                context.restore(); // Restore the context once the operation is done
+                                if (semaphore != null) {
+                                    semaphore.release();
+                                }
+                                handleUpdateDataObjectCompletionStage(r, throwable, getUpdateResponseListener(taskId, listener));
+                            });
+                } catch (Exception e) {
+                    log.error("Failed to update ML task {}", taskId, e);
+                    listener.onFailure(e);
+                }
             } catch (Exception e) {
-                semaphore.release();
+                if (semaphore != null) {
+                    semaphore.release();
+                }
                 log.error("Failed to update ML task {}", taskId, e);
                 listener.onFailure(e);
             }
