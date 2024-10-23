@@ -9,10 +9,10 @@ import java.io.IOException;
 import java.net.URL;
 import java.util.Map;
 
-import com.fasterxml.jackson.core.JsonParseException;
 import com.google.common.base.Charsets;
 import com.google.common.io.Resources;
 
+import com.google.gson.JsonSyntaxException;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
@@ -47,7 +47,7 @@ public class IndexUtils {
 
         String mapping = Resources.toString(url, Charsets.UTF_8);
         if (!StringUtils.isJson(mapping)) {
-            throw new JsonParseException("Mapping is not a valid JSON: " + path);
+            throw new JsonSyntaxException("Mapping is not a valid JSON: " + path);
         }
 
         return mapping;
