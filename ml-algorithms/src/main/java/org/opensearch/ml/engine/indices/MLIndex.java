@@ -61,7 +61,7 @@ public enum MLIndex {
         try {
             return IndexUtils.getMappingFromFile(mappingPath);
         } catch (IOException e) {
-            // Unchecked exception is throw since the method is being called within a constructor
+            // Unchecked exception is thrown since the method is being called within a constructor
             throw new UncheckedIOException("Failed to fetch index mapping from file: " + mappingPath, e);
         }
     }
