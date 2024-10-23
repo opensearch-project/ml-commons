@@ -23,6 +23,7 @@ public class MLForwardInput implements Writeable {
 
     private String taskId;
     private String modelId;
+    private String tenantId;
     private String workerNodeId;
     private MLForwardRequestType requestType;
     private MLTask mlTask;
@@ -32,11 +33,12 @@ public class MLForwardInput implements Writeable {
     private MLRegisterModelInput registerModelInput;
 
     @Builder(toBuilder = true)
-    public MLForwardInput(String taskId, String modelId, String workerNodeId, MLForwardRequestType requestType,
+    public MLForwardInput(String taskId, String modelId, String tenantId, String workerNodeId, MLForwardRequestType requestType,
                           MLTask mlTask, MLInput modelInput,
                           String error, String[] workerNodes, MLRegisterModelInput registerModelInput) {
         this.taskId = taskId;
         this.modelId = modelId;
+        this.tenantId = tenantId;
         this.workerNodeId = workerNodeId;
         this.requestType = requestType;
         this.mlTask = mlTask;
@@ -49,6 +51,8 @@ public class MLForwardInput implements Writeable {
     public MLForwardInput(StreamInput in) throws IOException {
         this.taskId = in.readOptionalString();
         this.modelId = in.readOptionalString();
+        // todo: need to do BWC check
+        this.tenantId = in.readOptionalString();
         this.workerNodeId = in.readOptionalString();
         this.requestType = in.readEnum(MLForwardRequestType.class);
         if (in.readBoolean()) {
@@ -68,6 +72,8 @@ public class MLForwardInput implements Writeable {
     public void writeTo(StreamOutput out) throws IOException {
         out.writeOptionalString(taskId);
         out.writeOptionalString(modelId);
+        // TODO: need to do BWC check
+        out.writeOptionalString(tenantId);
         out.writeOptionalString(workerNodeId);
         out.writeEnum(requestType);
         if (this.mlTask != null) {

@@ -285,10 +285,10 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
             String taskId = response.getId();
             mlTask.setTaskId(taskId);
             if (algorithm == FunctionName.REMOTE) {
-                if (mlFeatureEnabledSetting.isMultiTenancyEnabled()) {
-                    listener.onResponse(new MLDeployModelResponse(taskId, MLTaskType.DEPLOY_MODEL, MLTaskState.CREATED.name()));
-                    return;
-                }
+                // if (mlFeatureEnabledSetting.isMultiTenancyEnabled()) {
+                // listener.onResponse(new MLDeployModelResponse(taskId, MLTaskType.DEPLOY_MODEL, MLTaskState.CREATED.name()));
+                // return;
+                // }
                 mlTaskManager.add(mlTask, eligibleNodeIds);
                 deployRemoteModel(mlModel, mlTask, localNodeId, eligibleNodes, deployToAllNodes, listener);
                 return;
@@ -302,6 +302,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                         () -> updateModelDeployStatusAndTriggerOnNodesAction(
                             modelId,
                             taskId,
+                            tenantId,
                             mlModel,
                             localNodeId,
                             mlTask,
@@ -344,6 +345,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         MLDeployModelInput deployModelInput = new MLDeployModelInput(
             mlModel.getModelId(),
             mlTask.getTaskId(),
+            mlModel.getTenantId(),
             mlModel.getModelContentHash(),
             eligibleNodes.size(),
             localNodeId,
@@ -367,6 +369,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         mlModelManager
             .updateModel(
                 mlModel.getModelId(),
+                mlModel.getTenantId(),
                 Map
                     .of(
                         MLModel.MODEL_STATE_FIELD,
@@ -408,7 +411,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                     TASK_SEMAPHORE_TIMEOUT,
                     true
                 );
-            mlModelManager.updateModel(modelId, isHidden, Map.of(MLModel.MODEL_STATE_FIELD, MLModelState.DEPLOY_FAILED));
+            mlModelManager.updateModel(modelId, tenantId, isHidden, Map.of(MLModel.MODEL_STATE_FIELD, MLModelState.DEPLOY_FAILED));
             listener.onFailure(e);
         });
     }
@@ -417,6 +420,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
     void updateModelDeployStatusAndTriggerOnNodesAction(
         String modelId,
         String taskId,
+        String tenantId,
         MLModel mlModel,
         String localNodeId,
         MLTask mlTask,
@@ -426,6 +430,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         MLDeployModelInput deployModelInput = new MLDeployModelInput(
             modelId,
             taskId,
+            tenantId,
             mlModel.getModelContentHash(),
             eligibleNodes.size(),
             localNodeId,
@@ -451,13 +456,20 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                     TASK_SEMAPHORE_TIMEOUT,
                     true
                 );
-            mlModelManager.updateModel(modelId, mlModel.getIsHidden(), Map.of(MLModel.MODEL_STATE_FIELD, MLModelState.DEPLOY_FAILED));
+            mlModelManager
+                .updateModel(
+                    modelId,
+                    mlModel.getTenantId(),
+                    mlModel.getIsHidden(),
+                    Map.of(MLModel.MODEL_STATE_FIELD, MLModelState.DEPLOY_FAILED)
+                );
         });
 
         List<String> workerNodes = eligibleNodes.stream().map(DiscoveryNode::getId).collect(Collectors.toList());
         mlModelManager
             .updateModel(
                 modelId,
+                mlModel.getTenantId(),
                 Map
                     .of(
                         MLModel.MODEL_STATE_FIELD,

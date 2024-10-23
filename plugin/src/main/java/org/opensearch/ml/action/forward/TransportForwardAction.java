@@ -45,8 +45,11 @@ import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpInput;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodesRequest;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.task.MLTaskCache;
 import org.opensearch.ml.task.MLTaskManager;
+import org.opensearch.ml.utils.TenantAwareHelper;
+import org.opensearch.sdk.SdkClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
@@ -62,6 +65,7 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
     private final ClusterService clusterService;
     final MLTaskManager mlTaskManager;
     final Client client;
+    final SdkClient sdkClient;
     final MLModelManager mlModelManager;
     final DiscoveryNodeHelper nodeHelper;
 
@@ -73,26 +77,32 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
 
     private final MLModelAutoReDeployer mlModelAutoReDeployer;
 
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Inject
     public TransportForwardAction(
         TransportService transportService,
         ActionFilters actionFilters,
         MLTaskManager mlTaskManager,
         Client client,
+        SdkClient sdkClient,
         MLModelManager mlModelManager,
         DiscoveryNodeHelper nodeHelper,
         Settings settings,
         ClusterService clusterService,
-        MLModelAutoReDeployer mlModelAutoReDeployer
+        MLModelAutoReDeployer mlModelAutoReDeployer,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLForwardAction.NAME, transportService, actionFilters, MLForwardRequest::new);
         this.mlTaskManager = mlTaskManager;
         this.client = client;
+        this.sdkClient = sdkClient;
         this.mlModelManager = mlModelManager;
         this.nodeHelper = nodeHelper;
         this.settings = settings;
         this.clusterService = clusterService;
         this.mlModelAutoReDeployer = mlModelAutoReDeployer;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
 
         modelAutoRedeploySuccessRatio = ML_COMMONS_MODEL_AUTO_REDEPLOY_SUCCESS_RATIO.get(settings);
         enableAutoReDeployModel = ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE.get(settings);
@@ -107,6 +117,10 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
         MLForwardRequest mlForwardRequest = MLForwardRequest.fromActionRequest(request);
         MLForwardInput forwardInput = mlForwardRequest.getForwardInput();
         String modelId = forwardInput.getModelId();
+        String tenantId = forwardInput.getTenantId();
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, listener)) {
+            return;
+        }
         String taskId = forwardInput.getTaskId();
         MLRegisterModelInput registerModelInput = forwardInput.getRegisterModelInput();
         MLTask mlTask = forwardInput.getMlTask();
@@ -147,7 +161,7 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
                             builder.put(MLTask.ERROR_FIELD, toJsonString(mlTaskCache.getErrors()));
                         }
                         boolean clearAutoReDeployRetryTimes = triggerNextModelDeployAndCheckIfRestRetryTimes(workNodes, taskId);
-                        mlTaskManager.updateMLTask(taskId, null, builder.build(), TASK_SEMAPHORE_TIMEOUT, true);
+                        mlTaskManager.updateMLTask(taskId, tenantId, builder.build(), TASK_SEMAPHORE_TIMEOUT, true);
 
                         MLModelState modelState;
                         if (!mlTaskCache.allNodeFailed()) {
@@ -171,8 +185,8 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
                             } else {
                                 log.error("Failed to update ML model {}, status: {}", modelId, response.status());
                             }
-                        }, e -> { log.error("Failed to update ML model: " + modelId, e); });
-                        mlModelManager.updateModel(modelId, updateFields, ActionListener.runBefore(updateModelListener, () -> {
+                        }, e -> log.error("Failed to update ML model: {}", modelId, e));
+                        mlModelManager.updateModel(modelId, tenantId, updateFields, ActionListener.runBefore(updateModelListener, () -> {
                             mlModelManager.removeAutoDeployModel(modelId);
                         }));
                     }

@@ -287,7 +287,7 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
         when(mlTaskManager.getMLTaskCache(taskId)).thenReturn(taskCache);
         action.cleanUpLocalCache(runningDeployModelTasks);
         verify(mlTaskManager, times(1)).updateMLTask(anyString(), any(), any(), anyLong(), anyBoolean());
-        verify(mlModelManager, never()).updateModel(anyString(), (Boolean) any(), any());
+        verify(mlModelManager, never()).updateModel(anyString(), anyString(), (Boolean) any(), any());
     }
 
     public void testCleanUpLocalCache_ExpiredMLTask_Deploy_NullWorkerNode() {
@@ -326,7 +326,7 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
         action.cleanUpLocalCache(runningDeployModelTasks);
         verify(mlTaskManager, times(1)).updateMLTask(anyString(), any(), any(), anyLong(), anyBoolean());
         ArgumentCaptor<Map> argumentCaptor = ArgumentCaptor.forClass(Map.class);
-        verify(mlModelManager, never()).updateModel(eq(modelId), eq(false), argumentCaptor.capture());
+        verify(mlModelManager, never()).updateModel(eq(modelId), eq(null), eq(false), argumentCaptor.capture());
     }
 
     private MLSyncUpInput prepareRequest() {

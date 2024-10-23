@@ -923,7 +923,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
 
     public void testUpdateModel_NullUpdatedFields() {
         ActionListener<UpdateResponse> listener = mock(ActionListener.class);
-        modelManager.updateModel(modelId, null, listener);
+        modelManager.updateModel(modelId, null, null, listener);
         ArgumentCaptor<Exception> failure = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(failure.capture());
         assertEquals("Updated fields is null or empty", failure.getValue().getMessage());
@@ -931,7 +931,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
 
     public void testUpdateModel_EmptyUpdatedFields() {
         ActionListener<UpdateResponse> listener = mock(ActionListener.class);
-        modelManager.updateModel(modelId, ImmutableMap.of(), listener);
+        modelManager.updateModel(modelId, null, ImmutableMap.of(), listener);
         ArgumentCaptor<Exception> failure = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(failure.capture());
         assertEquals("Updated fields is null or empty", failure.getValue().getMessage());
@@ -940,7 +940,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     public void testUpdateModel_ThreadPoolException() {
         mock_client_ThreadContext_Exception(client, threadPool, threadContext);
         ActionListener<UpdateResponse> listener = mock(ActionListener.class);
-        modelManager.updateModel(modelId, ImmutableMap.of(MLModel.MODEL_STATE_FIELD, MLModelState.DEPLOYED), listener);
+        modelManager.updateModel(modelId, null, ImmutableMap.of(MLModel.MODEL_STATE_FIELD, MLModelState.DEPLOYED), listener);
         ArgumentCaptor<Exception> failure = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(failure.capture());
         assertEquals("failed to stashContext", failure.getValue().getMessage());

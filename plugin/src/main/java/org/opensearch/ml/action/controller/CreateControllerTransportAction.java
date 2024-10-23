@@ -186,7 +186,8 @@ public class CreateControllerTransportAction extends HandledTransportAction<Acti
                     String errorMessage = getErrorMessage("Model controller saved into index, result:{}", modelId, isHidden);
                     log.info(errorMessage, indexResponse.getResult());
                     if (indexResponse.getResult() == DocWriteResponse.Result.CREATED) {
-                        mlModelManager.updateModel(modelId, isHidden, Map.of(MLModel.IS_CONTROLLER_ENABLED_FIELD, true));
+                        mlModelManager
+                            .updateModel(modelId, mlModel.getTenantId(), isHidden, Map.of(MLModel.IS_CONTROLLER_ENABLED_FIELD, true));
                     }
                     if (!ArrayUtils.isEmpty(mlModelCacheHelper.getWorkerNodes(modelId))) {
                         log
