@@ -350,11 +350,11 @@ public class MLTaskManager {
                 updateRequest.doc(updatedContent);
 
                 UpdateDataObjectRequest.Builder requestBuilder = UpdateDataObjectRequest
-                        .builder()
-                        .index(ML_TASK_INDEX)
-                        .id(taskId)
-                        .tenantId(tenantId)
-                        .dataObject(updatedContent);
+                    .builder()
+                    .index(ML_TASK_INDEX)
+                    .id(taskId)
+                    .tenantId(tenantId)
+                    .dataObject(updatedContent);
 
                 // Conditionally add retryOnConflict based on the provided condition
                 if (updatedFields.containsKey(STATE_FIELD) && TASK_DONE_STATES.contains(updatedFields.get(STATE_FIELD))) {
@@ -366,14 +366,14 @@ public class MLTaskManager {
 
                 try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                     sdkClient
-                            .updateDataObjectAsync(updateDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
-                            .whenComplete((r, throwable) -> {
-                                context.restore(); // Restore the context once the operation is done
-                                if (semaphore != null) {
-                                    semaphore.release();
-                                }
-                                handleUpdateDataObjectCompletionStage(r, throwable, getUpdateResponseListener(taskId, listener));
-                            });
+                        .updateDataObjectAsync(updateDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
+                        .whenComplete((r, throwable) -> {
+                            context.restore(); // Restore the context once the operation is done
+                            if (semaphore != null) {
+                                semaphore.release();
+                            }
+                            handleUpdateDataObjectCompletionStage(r, throwable, getUpdateResponseListener(taskId, listener));
+                        });
                 } catch (Exception e) {
                     log.error("Failed to update ML task {}", taskId, e);
                     listener.onFailure(e);
