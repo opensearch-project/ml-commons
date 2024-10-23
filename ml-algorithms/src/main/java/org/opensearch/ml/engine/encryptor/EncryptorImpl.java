@@ -340,10 +340,13 @@ public class EncryptorImpl implements Encryptor {
                 createGetDataObjectRequest(tenantId, new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY)),
                 client.threadPool().executor("opensearch_ml_general")
             )
-            .whenComplete((response, throwable) -> handleVersionConflictResponse(context, response, throwable, exceptionRef, latch));
+            .whenComplete(
+                (response, throwable) -> handleVersionConflictResponse(tenantId, context, response, throwable, exceptionRef, latch)
+            );
     }
 
     private void handleVersionConflictResponse(
+        String tenantId,
         ThreadContext.StoredContext context,
         GetDataObjectResponse response1,
         Throwable throwable2,
@@ -359,7 +362,7 @@ public class EncryptorImpl implements Encryptor {
             exceptionRef.set(cause1);
             latch.countDown();
         } else {
-            handleGetDataObjectSuccess(response1, null, exceptionRef, latch, context); // Tenant ID is not used here
+            handleGetDataObjectSuccess(response1, tenantId, exceptionRef, latch, context);
         }
     }
 
