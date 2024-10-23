@@ -139,6 +139,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
             .builder()
             .index(TEST_INDEX)
             .id(TEST_ID)
+            .tenantId(TENANT_ID)
             .overwriteIfExists(false)
             .tenantId(TENANT_ID)
             .dataObject(testDataObject)
@@ -241,20 +242,13 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testPutDataObject_NullTenantId_SetsDefaultTenantId() {
-        PutDataObjectRequest putRequest = PutDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).dataObject(testDataObject).build();
-        Mockito.when(dynamoDbClient.putItem(Mockito.any(PutItemRequest.class))).thenReturn(PutItemResponse.builder().build());
-        sdkClient.putDataObjectAsync(putRequest, testThreadPool.executor(GENERAL_THREAD_POOL)).toCompletableFuture().join();
-        Mockito.verify(dynamoDbClient).putItem(putItemRequestArgumentCaptor.capture());
-
-        PutItemRequest putItemRequest = putItemRequestArgumentCaptor.getValue();
-        Assert.assertEquals("DEFAULT_TENANT", putItemRequest.item().get(HASH_KEY).s());
-        Assert.assertNull(putItemRequest.item().get(SOURCE).m().get(CommonValue.TENANT_ID));
-    }
-
-    @Test
     public void testPutDataObject_NullId_SetsDefaultTenantId() {
-        PutDataObjectRequest putRequest = PutDataObjectRequest.builder().index(TEST_INDEX).dataObject(testDataObject).build();
+        PutDataObjectRequest putRequest = PutDataObjectRequest
+            .builder()
+            .index(TEST_INDEX)
+            .tenantId(TENANT_ID)
+            .dataObject(testDataObject)
+            .build();
         Mockito.when(dynamoDbClient.putItem(Mockito.any(PutItemRequest.class))).thenReturn(PutItemResponse.builder().build());
         PutDataObjectResponse response = sdkClient
             .putDataObjectAsync(putRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
@@ -269,7 +263,13 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
 
     @Test
     public void testPutDataObject_DDBException_ThrowsException() {
-        PutDataObjectRequest putRequest = PutDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).dataObject(testDataObject).build();
+        PutDataObjectRequest putRequest = PutDataObjectRequest
+            .builder()
+            .index(TEST_INDEX)
+            .id(TEST_ID)
+            .tenantId(TENANT_ID)
+            .dataObject(testDataObject)
+            .build();
         Mockito.when(dynamoDbClient.putItem(Mockito.any(PutItemRequest.class))).thenThrow(new RuntimeException("Test exception"));
         CompletableFuture<PutDataObjectResponse> future = sdkClient
             .putDataObjectAsync(putRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
@@ -420,15 +420,6 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testDeleteDataObject_NullTenantId_UsesDefaultTenantId() {
-        DeleteDataObjectRequest deleteRequest = DeleteDataObjectRequest.builder().id(TEST_ID).index(TEST_INDEX).build();
-        Mockito.when(dynamoDbClient.deleteItem(deleteItemRequestArgumentCaptor.capture())).thenReturn(DeleteItemResponse.builder().build());
-        sdkClient.deleteDataObjectAsync(deleteRequest, testThreadPool.executor(GENERAL_THREAD_POOL)).toCompletableFuture().join();
-        DeleteItemRequest deleteItemRequest = deleteItemRequestArgumentCaptor.getValue();
-        Assert.assertEquals("DEFAULT_TENANT", deleteItemRequest.key().get(HASH_KEY).s());
-    }
-
-    @Test
     public void testUpdateDataObjectAsync_HappyCase() {
         UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
             .builder()
@@ -551,6 +542,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
             .builder()
             .index(TEST_INDEX)
             .id(TEST_ID)
+            .tenantId(TENANT_ID)
             .dataObject(testDataObject)
             .build();
         Mockito.when(dynamoDbClient.getItem(Mockito.any(GetItemRequest.class))).thenThrow(new RuntimeException("Test exception"));
@@ -568,6 +560,7 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
             .builder()
             .index(TEST_INDEX)
             .id(TEST_ID)
+            .tenantId(TENANT_ID)
             .dataObject(testDataObject)
             .ifSeqNo(5)
             .ifPrimaryTerm(2)
