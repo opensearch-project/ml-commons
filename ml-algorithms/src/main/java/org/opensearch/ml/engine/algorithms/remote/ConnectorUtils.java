@@ -25,7 +25,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Function;
 
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.text.StringSubstitutor;
@@ -34,6 +33,7 @@ import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.MLPostProcessFunction;
 import org.opensearch.ml.common.connector.MLPreProcessFunction;
 import org.opensearch.ml.common.connector.functions.preprocess.DefaultPreProcessFunction;
+import org.opensearch.ml.common.connector.functions.preprocess.PreProcessFunction;
 import org.opensearch.ml.common.connector.functions.preprocess.RemoteInferencePreProcessFunction;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.TextSimilarityInputDataSet;
@@ -106,8 +106,8 @@ public class ConnectorUtils {
         } else {
             preProcessFunction = fillProcessFunctionParameter(parameters, preProcessFunction);
             if (MLPreProcessFunction.contains(preProcessFunction)) {
-                Function<MLInput, RemoteInferenceInputDataSet> function = MLPreProcessFunction.get(preProcessFunction);
-                return function.apply(mlInput);
+                PreProcessFunction function = MLPreProcessFunction.get(preProcessFunction);
+                return function.apply(parameters, mlInput);
             } else if (mlInput.getInputDataset() instanceof RemoteInferenceInputDataSet) {
                 if (parameters.containsKey(PROCESS_REMOTE_INFERENCE_INPUT)
                     && Boolean.parseBoolean(parameters.get(PROCESS_REMOTE_INFERENCE_INPUT))) {

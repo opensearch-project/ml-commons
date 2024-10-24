@@ -39,7 +39,10 @@ public class BedrockEmbeddingPreProcessFunctionTest {
         function = new BedrockEmbeddingPreProcessFunction();
         textSimilarityInputDataSet = TextSimilarityInputDataSet.builder().queryText("test").textDocs(Arrays.asList("hello")).build();
         textDocsInputDataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("hello", "world")).build();
-        remoteInferenceInputDataSet = RemoteInferenceInputDataSet.builder().parameters(Map.of("key1", "value1", "key2", "value2")).build();
+        remoteInferenceInputDataSet = RemoteInferenceInputDataSet
+            .builder()
+            .parameters(Map.of("key1", "value1", "key2", "value2", "dimensions", "1024"))
+            .build();
 
         textEmbeddingInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(textDocsInputDataSet).build();
         textSimilarityInput = MLInput.builder().algorithm(FunctionName.TEXT_SIMILARITY).inputDataset(textSimilarityInputDataSet).build();
@@ -72,5 +75,13 @@ public class BedrockEmbeddingPreProcessFunctionTest {
     public void process_RemoteInferenceInput() {
         RemoteInferenceInputDataSet dataSet = function.apply(remoteInferenceInput);
         assertEquals(remoteInferenceInputDataSet, dataSet);
+    }
+
+    @Test
+    public void process_TextDocsInput_withConnectorParams() {
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(textDocsInputDataSet).build();
+        RemoteInferenceInputDataSet dataSet = function.apply(Map.of("dimensions", "1024"), mlInput);
+        assertEquals(2, dataSet.getParameters().size());
+        assertEquals("1024", dataSet.getParameters().get("dimensions"));
     }
 }

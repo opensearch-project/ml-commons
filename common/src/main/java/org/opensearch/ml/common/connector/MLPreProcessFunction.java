@@ -7,19 +7,17 @@ package org.opensearch.ml.common.connector;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.function.Function;
 
 import org.opensearch.ml.common.connector.functions.preprocess.BedrockEmbeddingPreProcessFunction;
 import org.opensearch.ml.common.connector.functions.preprocess.CohereEmbeddingPreProcessFunction;
 import org.opensearch.ml.common.connector.functions.preprocess.CohereRerankPreProcessFunction;
 import org.opensearch.ml.common.connector.functions.preprocess.MultiModalConnectorPreProcessFunction;
 import org.opensearch.ml.common.connector.functions.preprocess.OpenAIEmbeddingPreProcessFunction;
-import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
-import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.connector.functions.preprocess.PreProcessFunction;
 
 public class MLPreProcessFunction {
 
-    private static final Map<String, Function<MLInput, RemoteInferenceInputDataSet>> PRE_PROCESS_FUNCTIONS = new HashMap<>();
+    private static final Map<String, PreProcessFunction> PRE_PROCESS_FUNCTIONS = new HashMap<>();
     public static final String TEXT_DOCS_TO_COHERE_EMBEDDING_INPUT = "connector.pre_process.cohere.embedding";
     public static final String TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT = "connector.pre_process.openai.embedding";
     public static final String TEXT_DOCS_TO_BEDROCK_EMBEDDING_INPUT = "connector.pre_process.bedrock.embedding";
@@ -50,7 +48,7 @@ public class MLPreProcessFunction {
         return PRE_PROCESS_FUNCTIONS.containsKey(functionName);
     }
 
-    public static Function<MLInput, RemoteInferenceInputDataSet> get(String postProcessFunction) {
+    public static PreProcessFunction get(String postProcessFunction) {
         return PRE_PROCESS_FUNCTIONS.get(postProcessFunction);
     }
 }
