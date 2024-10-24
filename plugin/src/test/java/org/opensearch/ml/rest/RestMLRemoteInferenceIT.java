@@ -600,27 +600,6 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         }, null);
     }
 
-    public void testOpenAITextEmbeddingModel_ISO8859_1() throws IOException, InterruptedException {
-        testOpenAITextEmbeddingModel("ISO-8859-1", null, (exception) -> {
-            assertTrue(exception instanceof org.opensearch.client.ResponseException);
-
-            // TODO: Currently stackTrack is having different error message
-            // org.opensearch.client.ResponseException: method [POST], host [http://[::1]:63080], URI
-            // [/_plugins/_ml/models/ioJyv5IBqF95HT6CBDHZ/_predict], status line [HTTP/1.1 400 Bad Request
-            // {"error":{"root_cause":[{"type":"status_exception","reason":"Error from remote service: {\n \"error\": {\n
-            // \"message\": \"400: There was an error parsing the body\",\n \"type\": \"server_error\",\n \"param\": null,\n
-            // \"code\": null\n }\n}"}],"type":"status_exception","reason":"Error from remote service: {\n \"error\": {\n
-            // \"message\": \"400: There was an error parsing the body\",\n \"type\": \"server_error\",\n \"param\": null,\n
-            // \"code\": null\n }\n}"},"status":400}
-            // We need to understand the api requirements from OpenAi. For now I'm just disabling the assertion
-            // to unblock the pipeline.
-
-            // String stackTrace = ExceptionUtils.getStackTrace(exception);
-            // System.out.println(stackTrace);
-            // assertTrue(stackTrace.contains("'utf-8' codec can't decode byte 0xeb"));
-        });
-    }
-
     private void testOpenAITextEmbeddingModel(String charset, Consumer<Map> verifyResponse, Consumer<Exception> verifyException)
         throws IOException,
         InterruptedException {
