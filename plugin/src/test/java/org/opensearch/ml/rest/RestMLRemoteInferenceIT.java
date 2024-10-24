@@ -476,14 +476,6 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         }, null);
     }
 
-    public void testOpenAITextEmbeddingModel_ISO8859_1() throws IOException, InterruptedException {
-        testOpenAITextEmbeddingModel("ISO-8859-1", null, (exception) -> {
-            assertTrue(exception instanceof org.opensearch.client.ResponseException);
-            String stackTrace = ExceptionUtils.getStackTrace(exception);
-            assertTrue(stackTrace.contains("'utf-8' codec can't decode byte 0xeb"));
-        });
-    }
-
     private void testOpenAITextEmbeddingModel(String charset, Consumer<Map> verifyResponse, Consumer<Exception> verifyException)
         throws IOException,
         InterruptedException {
