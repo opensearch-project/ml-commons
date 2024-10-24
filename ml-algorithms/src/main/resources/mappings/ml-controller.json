@@ -1,0 +1,10 @@
+{
+  "_meta": {
+    "schema_version": 1
+  },
+  "properties": {
+    "user_rate_limiter": {
+      "type": "flat_object"
+    }
+  }
+}

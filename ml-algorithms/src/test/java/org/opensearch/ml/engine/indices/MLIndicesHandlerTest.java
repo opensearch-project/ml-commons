@@ -96,7 +96,7 @@ public class MLIndicesHandlerTest {
         when(agentindexMetadata.mapping()).thenReturn(agentmappingMetadata);
         when(memorymetaindexMetadata.mapping()).thenReturn(memorymappingMetadata);
         when(agentmappingMetadata.getSourceAsMap()).thenReturn(Map.of(META, Map.of(SCHEMA_VERSION_FIELD, Integer.valueOf(2))));
-        when(memorymappingMetadata.getSourceAsMap()).thenReturn(Map.of(META, Map.of(SCHEMA_VERSION_FIELD, Integer.valueOf(1))));
+        when(memorymappingMetadata.getSourceAsMap()).thenReturn(Map.of(META, Map.of(SCHEMA_VERSION_FIELD, Integer.valueOf(2))));
         settings = Settings.builder().put("test_key", 10).build();
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);

@@ -1,0 +1,35 @@
+{
+  "_meta": {
+    "schema_version": 1
+  },
+  "properties": {
+    "memory_id": {
+      "type": "keyword"
+    },
+    "create_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "input": {
+      "type": "text"
+    },
+    "prompt_template": {
+      "type": "text"
+    },
+    "response": {
+      "type": "text"
+    },
+    "origin": {
+      "type": "keyword"
+    },
+    "additional_info": {
+      "type": "flat_object"
+    },
+    "parent_message_id": {
+      "type": "keyword"
+    },
+    "trace_number": {
+      "type": "long"
+    }
+  }
+}

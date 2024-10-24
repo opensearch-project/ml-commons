@@ -1,0 +1,243 @@
+{
+  "_meta": {
+    "schema_version": 11
+  },
+  "properties": {
+    "algorithm": {
+      "type": "keyword"
+    },
+    "name": {
+      "type": "text",
+      "fields": {
+        "keyword": {
+          "type": "keyword",
+          "ignore_above": 256
+        }
+      }
+    },
+    "version": {
+      "type": "long"
+    },
+    "model_version": {
+      "type": "keyword"
+    },
+    "model_group_id": {
+      "type": "keyword"
+    },
+    "model_content": {
+      "type": "binary"
+    },
+    "chunk_number": {
+      "type": "long"
+    },
+    "total_chunks": {
+      "type": "long"
+    },
+    "model_id": {
+      "type": "keyword"
+    },
+    "description": {
+      "type": "text"
+    },
+    "model_format": {
+      "type": "keyword"
+    },
+    "model_state": {
+      "type": "keyword"
+    },
+    "model_content_size_in_bytes": {
+      "type": "long"
+    },
+    "planning_worker_node_count": {
+      "type": "integer"
+    },
+    "current_worker_node_count": {
+      "type": "integer"
+    },
+    "planning_worker_nodes": {
+      "type": "keyword"
+    },
+    "deploy_to_all_nodes": {
+      "type": "boolean"
+    },
+    "is_hidden": {
+      "type": "boolean"
+    },
+    "model_config": {
+      "properties": {
+        "model_type": {
+          "type": "keyword"
+        },
+        "embedding_dimension": {
+          "type": "integer"
+        },
+        "framework_type": {
+          "type": "keyword"
+        },
+        "pooling_mode": {
+          "type": "keyword"
+        },
+        "normalize_result": {
+          "type": "boolean"
+        },
+        "model_max_length": {
+          "type": "integer"
+        },
+        "all_config": {
+          "type": "text"
+        }
+      }
+    },
+    "deploy_setting": {
+      "type": "flat_object"
+    },
+    "is_enabled": {
+      "type": "boolean"
+    },
+    "is_controller_enabled": {
+      "type": "boolean"
+    },
+    "rate_limiter": {
+      "type": "flat_object"
+    },
+    "model_content_hash_value": {
+      "type": "keyword"
+    },
+    "auto_redeploy_retry_times": {
+      "type": "integer"
+    },
+    "created_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "last_updated_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "last_registered_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "last_deployed_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "last_undeployed_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "interface": {
+      "type": "flat_object"
+    },
+    "guardrails": {
+      "properties": {
+        "input_guardrail": {
+          "properties": {
+            "regex": {
+              "type": "text"
+            },
+            "stop_words": {
+              "properties": {
+                "index_name": {
+                  "type": "text"
+                },
+                "source_fields": {
+                  "type": "text"
+                }
+              }
+            }
+          }
+        },
+        "output_guardrail": {
+          "properties": {
+            "regex": {
+              "type": "text"
+            },
+            "stop_words": {
+              "properties": {
+                "index_name": {
+                  "type": "text"
+                },
+                "source_fields": {
+                  "type": "text"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "connector": {
+      "properties": {
+        "name": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword",
+              "ignore_above": 256
+            }
+          }
+        },
+        "version": {
+          "type": "keyword"
+        },
+        "description": {
+          "type": "text"
+        },
+        "protocol": {
+          "type": "keyword"
+        },
+        "parameters": {
+          "type": "flat_object"
+        },
+        "credential": {
+          "type": "flat_object"
+        },
+        "client_config": {
+          "type": "flat_object"
+        },
+        "actions": {
+          "type": "flat_object"
+        }
+      }
+    },
+    "user": {
+      "type": "nested",
+      "properties": {
+        "name": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword",
+              "ignore_above": 256
+            }
+          }
+        },
+        "backend_roles": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword"
+            }
+          }
+        },
+        "roles": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword"
+            }
+          }
+        },
+        "custom_attribute_names": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword"
+            }
+          }
+        }
+      }
+    }
+  }
+}

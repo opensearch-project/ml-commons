@@ -1,0 +1,13 @@
+{
+  "_meta": {
+    "schema_version": "1"
+  },
+  "properties": {
+    "test_field_1": {
+      "type": "test_type_1"
+    },
+    {
+      "malformed": }
+    }
+  }
+}

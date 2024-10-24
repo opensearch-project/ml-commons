@@ -8,7 +8,6 @@ package org.opensearch.ml.engine.algorithms.metrics_correlation;
 import static org.opensearch.action.support.WriteRequest.RefreshPolicy.IMMEDIATE;
 import static org.opensearch.index.query.QueryBuilders.termQuery;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX_MAPPING;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.MLModel.MODEL_STATE_FIELD;
 
@@ -69,6 +68,7 @@ import org.opensearch.ml.common.transport.task.MLTaskGetRequest;
 import org.opensearch.ml.common.transport.task.MLTaskGetResponse;
 import org.opensearch.ml.engine.algorithms.DLModelExecute;
 import org.opensearch.ml.engine.annotation.Function;
+import org.opensearch.ml.engine.indices.MLIndex;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -131,7 +131,7 @@ public class MetricsCorrelation extends DLModelExecute {
             if (!hasModelGroupIndex) { // Create model group index if it doesn't exist
                 try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                     CreateIndexRequest request = new CreateIndexRequest(ML_MODEL_GROUP_INDEX)
-                        .mapping(ML_MODEL_GROUP_INDEX_MAPPING, XContentType.JSON);
+                        .mapping(MLIndex.MODEL_GROUP.getMapping(), XContentType.JSON);
                     CreateIndexResponse createIndexResponse = client.admin().indices().create(request).actionGet(1000);
                     if (!createIndexResponse.isAcknowledged()) {
                         throw new MLException("Failed to create model group index");
