@@ -22,6 +22,8 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
 import static org.opensearch.ml.common.transport.forward.MLForwardRequestType.DEPLOY_MODEL_DONE;
 import static org.opensearch.ml.common.transport.forward.MLForwardRequestType.REGISTER_MODEL;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_THREAD_POOL_PREFIX;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_LIFETIME_RETRY_TIMES;
@@ -35,7 +37,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -47,6 +51,8 @@ import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.unit.TimeValue;
+import org.opensearch.common.util.concurrent.OpenSearchExecutors;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.autoredeploy.MLModelAutoReDeployer;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
@@ -63,10 +69,15 @@ import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodesRequest;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.task.MLTaskCache;
 import org.opensearch.ml.task.MLTaskManager;
+import org.opensearch.sdk.SdkClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
+import org.opensearch.threadpool.ScalingExecutorBuilder;
+import org.opensearch.threadpool.TestThreadPool;
+import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
 import com.google.common.collect.ImmutableMap;
@@ -88,9 +99,15 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
     DiscoveryNodeHelper nodeHelper;
     @Mock
     Task task;
+
+    @Mock
+    ThreadPool threadPool;
     @Mock
     ActionListener<MLForwardResponse> listener;
     MLTaskCache mlTaskCache;
+    SdkClient sdkClient;
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     private TransportForwardAction forwardAction;
 
@@ -112,6 +129,17 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
     String taskId = "test_task_id";
     String modelId = "test_model_id";
 
+    private static final TestThreadPool testThreadPool = new TestThreadPool(
+        TransportForwardActionTests.class.getName(),
+        new ScalingExecutorBuilder(
+            GENERAL_THREAD_POOL,
+            1,
+            Math.max(1, OpenSearchExecutors.allocatedProcessors(Settings.EMPTY) - 1),
+            TimeValue.timeValueMinutes(1),
+            ML_THREAD_POOL_PREFIX + GENERAL_THREAD_POOL
+        )
+    );
+
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
@@ -122,18 +150,22 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
             ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN,
             ML_COMMONS_ONLY_RUN_ON_ML_NODE
         );
+        when(client.threadPool()).thenReturn(threadPool);
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
+        when(threadPool.executor(any())).thenReturn(testThreadPool.executor(GENERAL_THREAD_POOL));
         forwardAction = spy(
             new TransportForwardAction(
                 transportService,
                 actionFilters,
                 mlTaskManager,
                 client,
+                sdkClient,
                 mlModelManager,
                 nodeHelper,
                 settings,
                 clusterService,
-                mlModelAutoReDeployer
+                mlModelAutoReDeployer,
+                mlFeatureEnabledSetting
             )
         );
 
@@ -141,6 +173,11 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
         node2 = new DiscoveryNode(nodeId2, buildNewFakeTransportAddress(), emptyMap(), ImmutableSet.of(ML_ROLE), Version.CURRENT);
 
         when(nodeHelper.getAllNodes()).thenReturn(new DiscoveryNode[] { node1, node2 });
+    }
+
+    @AfterClass
+    public static void cleanup() {
+        ThreadPool.terminate(testThreadPool, 500, TimeUnit.MILLISECONDS);
     }
 
     public void testDoExecute_DeployModelDone_Error() {

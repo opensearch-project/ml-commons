@@ -129,6 +129,7 @@ public class TransportDeployModelOnNodeAction extends
         MLDeployModelInput deployModelInput = MLDeployModelNodesRequest.getMlDeployModelInput();
         String modelId = deployModelInput.getModelId();
         String taskId = deployModelInput.getTaskId();
+        String tenantId = deployModelInput.getTenantId();
         String coordinatingNodeId = deployModelInput.getCoordinatingNodeId();
         MLTask mlTask = deployModelInput.getMlTask();
         String modelContentHash = deployModelInput.getModelContentHash();
@@ -140,12 +141,13 @@ public class TransportDeployModelOnNodeAction extends
         String localNodeId = clusterService.localNode().getId();
 
         ActionListener<MLForwardResponse> taskDoneListener = ActionListener
-            .wrap(res -> { log.info("deploy model task done " + taskId); }, ex -> {
+            .wrap(res -> { log.info("deploy model task done {}", taskId); }, ex -> {
                 logException("Deploy model task failed: " + taskId, ex, log);
             });
 
         deployModel(
             modelId,
+            tenantId,
             modelContentHash,
             mlTask.getFunctionName(),
             localNodeId,
@@ -158,6 +160,7 @@ public class TransportDeployModelOnNodeAction extends
                     .requestType(MLForwardRequestType.DEPLOY_MODEL_DONE)
                     .taskId(taskId)
                     .modelId(modelId)
+                    .tenantId(tenantId)
                     .workerNodeId(clusterService.localNode().getId())
                     .build();
                 MLForwardRequest deployModelDoneMessage = new MLForwardRequest(mlForwardInput);
@@ -177,6 +180,7 @@ public class TransportDeployModelOnNodeAction extends
                     .requestType(MLForwardRequestType.DEPLOY_MODEL_DONE)
                     .taskId(taskId)
                     .modelId(modelId)
+                    .tenantId(tenantId)
                     .workerNodeId(clusterService.localNode().getId())
                     .error(MLExceptionUtils.getRootCauseMessage(e))
                     .build();
@@ -211,6 +215,7 @@ public class TransportDeployModelOnNodeAction extends
 
     private void deployModel(
         String modelId,
+        String tenantId,
         String modelContentHash,
         FunctionName functionName,
         String localNodeId,
@@ -224,7 +229,7 @@ public class TransportDeployModelOnNodeAction extends
             mlModelManager
                 .deployModel(
                     modelId,
-                    null,
+                    tenantId,
                     modelContentHash,
                     functionName,
                     deployToAllNodes,

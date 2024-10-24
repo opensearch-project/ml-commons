@@ -16,7 +16,6 @@ import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Pattern;
 
@@ -402,7 +401,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                         );
                 });
                 try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                    mlTaskManager.add(mlTask, Arrays.asList(nodeId));
+                    mlTaskManager.add(mlTask, List.of(nodeId));
                     MLForwardInput forwardInput = MLForwardInput
                         .builder()
                         .requestType(MLForwardRequestType.REGISTER_MODEL)

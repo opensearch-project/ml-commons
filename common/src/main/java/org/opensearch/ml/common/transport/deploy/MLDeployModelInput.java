@@ -16,6 +16,7 @@ import org.opensearch.ml.common.MLTask;
 @Data
 public class MLDeployModelInput implements Writeable {
     private String modelId;
+    private String tenantId;
     private String taskId;
     private String modelContentHash;
     private Integer nodeCount;
@@ -26,6 +27,8 @@ public class MLDeployModelInput implements Writeable {
     public MLDeployModelInput(StreamInput in) throws IOException {
         this.modelId = in.readString();
         this.taskId = in.readString();
+        // todo: need to check BWC test
+        this.tenantId = in.readOptionalString();
         this.modelContentHash = in.readOptionalString();
         this.nodeCount = in.readInt();
         this.coordinatingNodeId = in.readString();
@@ -34,9 +37,10 @@ public class MLDeployModelInput implements Writeable {
     }
 
     @Builder
-    public MLDeployModelInput(String modelId, String taskId, String modelContentHash, Integer nodeCount, String coordinatingNodeId, Boolean isDeployToAllNodes, MLTask mlTask) {
+    public MLDeployModelInput(String modelId, String taskId, String tenantId, String modelContentHash, Integer nodeCount, String coordinatingNodeId, Boolean isDeployToAllNodes, MLTask mlTask) {
         this.modelId = modelId;
         this.taskId = taskId;
+        this.tenantId = tenantId;
         this.modelContentHash = modelContentHash;
         this.nodeCount = nodeCount;
         this.coordinatingNodeId = coordinatingNodeId;
@@ -51,6 +55,7 @@ public class MLDeployModelInput implements Writeable {
     public void writeTo(StreamOutput out) throws IOException {
         out.writeString(modelId);
         out.writeString(taskId);
+        out.writeOptionalString(tenantId);
         out.writeOptionalString(modelContentHash);
         out.writeInt(nodeCount);
         out.writeString(coordinatingNodeId);

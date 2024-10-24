@@ -234,7 +234,7 @@ public class DeleteControllerTransportAction extends HandledTransportAction<Acti
                         getErrorMessage("Model controller for the provided successfully deleted from index, result: {}", modelId, isHidden),
                         deleteResponse.getResult()
                     );
-                mlModelManager.updateModel(modelId, isHidden, Map.of(MLModel.IS_CONTROLLER_ENABLED_FIELD, false));
+                mlModelManager.updateModel(modelId, null, isHidden, Map.of(MLModel.IS_CONTROLLER_ENABLED_FIELD, false));
                 actionListener.onResponse(deleteResponse);
             }
 

@@ -53,6 +53,7 @@ import static org.opensearch.ml.utils.MLNodeUtils.checkOpenCircuitBreaker;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.security.PrivilegedActionException;
 import java.time.Instant;
@@ -76,6 +77,7 @@ import java.util.stream.Collectors;
 import org.apache.commons.lang3.BooleanUtils;
 import org.apache.logging.log4j.util.Strings;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
@@ -146,6 +148,7 @@ import org.opensearch.sdk.PutDataObjectRequest;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.sdk.SdkClientUtils;
 import org.opensearch.sdk.UpdateDataObjectRequest;
+import org.opensearch.sdk.UpdateDataObjectResponse;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.threadpool.ThreadPool;
 
@@ -936,6 +939,16 @@ public class MLModelManager {
         mlTaskManager.checkLimitAndAddRunningTask(mlTask, runningTaskLimit);
     }
 
+    /**
+     * Update model register state as done. This is only for local model. Not for remote model.
+     * @param registerModelInput model input for local model registration
+     * @param taskId id of the task
+     * @param modelId id of the model
+     * @param modelSizeInBytes size of the model in bytes
+     * @param chunkFiles list of chunk files
+     * @param hashValue model hash value
+     * @param version model version
+     */
     private void updateModelRegisterStateAsDone(
         MLRegisterModelInput registerModelInput,
         String taskId,
@@ -961,7 +974,8 @@ public class MLModelManager {
                 modelSizeInBytes
             );
         log.info("Model registered successfully, model id: {}, task id: {}", modelId, taskId);
-        updateModel(modelId, updatedFields, ActionListener.wrap(updateResponse -> {
+        // as this is only for local model and remote model isn't supported for multi-tenancy, tenantId will be null.
+        updateModel(modelId, null, updatedFields, ActionListener.wrap(updateResponse -> {
             mlTaskManager
                 .updateMLTask(
                     taskId,
@@ -1850,8 +1864,8 @@ public class MLModelManager {
      * @param modelId       model id
      * @param updatedFields updated fields
      */
-    public void updateModel(String modelId, Boolean isHidden, Map<String, Object> updatedFields) {
-        updateModel(modelId, updatedFields, ActionListener.wrap(response -> {
+    public void updateModel(String modelId, String tenantId, Boolean isHidden, Map<String, Object> updatedFields) {
+        updateModel(modelId, tenantId, updatedFields, ActionListener.wrap(response -> {
             if (response.status() == RestStatus.OK) {
                 log.debug(getErrorMessage("Updated ML model successfully: {}", modelId, isHidden), response.status());
             } else {
@@ -1867,7 +1881,7 @@ public class MLModelManager {
      * @param updatedFields updated fields
      * @param listener      action listener
      */
-    public void updateModel(String modelId, Map<String, Object> updatedFields, ActionListener<UpdateResponse> listener) {
+    public void updateModel(String modelId, String tenantId, Map<String, Object> updatedFields, ActionListener<UpdateResponse> listener) {
         if (updatedFields == null || updatedFields.isEmpty()) {
             listener.onFailure(new IllegalArgumentException("Updated fields is null or empty"));
             return;
@@ -1875,18 +1889,67 @@ public class MLModelManager {
         Map<String, Object> newUpdatedFields = new HashMap<>();
         newUpdatedFields.putAll(updatedFields);
         newUpdatedFields.put(MLModel.LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
-        UpdateRequest updateRequest = new UpdateRequest(ML_MODEL_INDEX, modelId);
-        updateRequest.doc(newUpdatedFields);
-        updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-        if (newUpdatedFields.containsKey(MLModel.MODEL_STATE_FIELD)
+
+        UpdateDataObjectRequest.Builder requestBuilder = UpdateDataObjectRequest
+            .builder()
+            .index(ML_MODEL_INDEX)
+            .id(modelId)
+            .tenantId(tenantId)
+            .dataObject(newUpdatedFields);
+
+        // Conditionally add retryOnConflict based on the provided condition
+        if (updatedFields.containsKey(MLModel.MODEL_STATE_FIELD)
             && MODEL_DONE_STATES.contains(newUpdatedFields.get(MLModel.MODEL_STATE_FIELD))) {
-            updateRequest.retryOnConflict(3);
+            requestBuilder.retryOnConflict(3);
         }
+
+        // Build the request
+        UpdateDataObjectRequest updateDataObjectRequest = requestBuilder.build();
+
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            client.update(updateRequest, ActionListener.runBefore(listener, context::restore));
+            sdkClient
+                .updateDataObjectAsync(updateDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
+                .whenComplete((r, throwable) -> {
+                    context.restore(); // Restore the context once the operation is done
+                    handleUpdateDataObjectCompletionStage(r, throwable, getUpdateResponseListener(modelId, listener));
+                });
         } catch (Exception e) {
             listener.onFailure(e);
         }
+
+    }
+
+    private void handleUpdateDataObjectCompletionStage(
+        UpdateDataObjectResponse r,
+        Throwable throwable,
+        ActionListener<UpdateResponse> updateListener
+    ) {
+        if (throwable != null) {
+            Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+            updateListener.onFailure(cause);
+        } else {
+            try {
+                UpdateResponse updateResponse = r.parser() == null ? null : UpdateResponse.fromXContent(r.parser());
+                updateListener.onResponse(updateResponse);
+            } catch (IOException e) {
+                updateListener.onFailure(e);
+            }
+        }
+    }
+
+    private ActionListener<UpdateResponse> getUpdateResponseListener(String modelId, ActionListener<UpdateResponse> actionListener) {
+        return ActionListener.wrap(updateResponse -> {
+            if (updateResponse != null && updateResponse.getResult() != DocWriteResponse.Result.UPDATED) {
+                log.error("Failed to update the model with ID: {}", modelId);
+                actionListener.onResponse(updateResponse);
+                return;
+            }
+            log.info("Successfully updated the model with ID: {}", modelId);
+            actionListener.onResponse(updateResponse);
+        }, exception -> {
+            log.error("Failed to update ML model with ID {}. Details: {}", modelId, exception);
+            actionListener.onFailure(exception);
+        });
     }
 
     /**
