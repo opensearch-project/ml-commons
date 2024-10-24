@@ -48,7 +48,7 @@ public class CommonValue {
     public static final String ML_MODEL_INDEX_MAPPING_PATH = "mappings/ml-model.json";
     public static final String ML_TASK_INDEX_MAPPING_PATH = "mappings/ml-task.json";
     public static final String ML_CONNECTOR_INDEX_MAPPING_PATH = "mappings/ml-connector.json";
-    public static final String ML_CONFIG_INDEX_MAPPING_PATH = "mappings/ml-config-random.json";
+    public static final String ML_CONFIG_INDEX_MAPPING_PATH = "mappings/ml-config.json";
     public static final String ML_CONTROLLER_INDEX_MAPPING_PATH = "mappings/ml-controller.json";
     public static final String ML_AGENT_INDEX_MAPPING_PATH = "mappings/ml-agent.json";
     public static final String ML_MEMORY_META_INDEX_MAPPING_PATH = "mappings/ml-memory-meta.json";
