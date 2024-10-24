@@ -11,8 +11,10 @@ import java.util.Map;
 
 import com.google.common.base.Charsets;
 import com.google.common.io.Resources;
-
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParseException;
 import com.google.gson.JsonSyntaxException;
+
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
@@ -51,5 +53,19 @@ public class IndexUtils {
         }
 
         return mapping;
+    }
+
+    public static Integer getVersionFromMapping(String mapping) {
+        JsonObject mappingJson = StringUtils.getJsonObjectFromString(mapping);
+        if (mappingJson == null || !mappingJson.has("_meta")) {
+            throw new JsonParseException("Failed to find \"_meta\" object in mapping: " + mapping);
+        }
+
+        JsonObject metaObject = mappingJson.getAsJsonObject("_meta");
+        if (metaObject == null || !metaObject.has("schema_version")) {
+            throw new JsonParseException("Failed to find \"schema_version\" in \"_meta\" object for mapping: " + mapping);
+        }
+
+        return metaObject.get("schema_version").getAsInt();
     }
 }

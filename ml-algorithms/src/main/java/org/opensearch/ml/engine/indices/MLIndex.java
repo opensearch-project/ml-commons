@@ -28,10 +28,6 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 
 import org.opensearch.ml.common.utils.IndexUtils;
-import org.opensearch.ml.common.utils.StringUtils;
-
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParseException;
 
 public enum MLIndex {
     MODEL_GROUP(ML_MODEL_GROUP_INDEX, false, ML_MODEL_GROUP_INDEX_MAPPING_PATH),
@@ -54,7 +50,7 @@ public enum MLIndex {
         this.indexName = name;
         this.alias = alias;
         this.mapping = getMapping(mappingPath);
-        this.version = getVersionFromMapping(this.mapping);
+        this.version = IndexUtils.getVersionFromMapping(this.mapping);
     }
 
     private String getMapping(String mappingPath) {
@@ -64,20 +60,6 @@ public enum MLIndex {
             // Unchecked exception is thrown since the method is being called within a constructor
             throw new UncheckedIOException("Failed to fetch index mapping from file: " + mappingPath, e);
         }
-    }
-
-    private Integer getVersionFromMapping(String mapping) {
-        JsonObject mappingJson = StringUtils.getJsonObjectFromString(mapping);
-        if (mappingJson == null || !mappingJson.has("_meta")) {
-            throw new JsonParseException("Failed to find \"_meta\" object in mapping: " + mapping);
-        }
-
-        JsonObject metaObject = mappingJson.getAsJsonObject("_meta");
-        if (metaObject == null || !metaObject.has("schema_version")) {
-            throw new JsonParseException("Failed to find \"schema_version\" in \"_meta\" object for mapping: " + mapping);
-        }
-
-        return metaObject.get("schema_version").getAsInt();
     }
 
     public String getIndexName() {
