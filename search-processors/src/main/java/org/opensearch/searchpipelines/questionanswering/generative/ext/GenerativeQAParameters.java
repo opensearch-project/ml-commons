@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
+import org.opensearch.Version;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -31,6 +32,7 @@ import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.searchpipelines.questionanswering.generative.llm.MessageBlock;
 
 import com.google.common.base.Preconditions;
@@ -85,6 +87,8 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
     private static final String LLM_MESSAGES_FIELD = "llm_messages";
 
     public static final int SIZE_NULL_VALUE = -1;
+
+    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_BEDROCK_CONVERSE_LLM_MESSAGES = CommonValue.VERSION_2_18_0;
 
     @Setter
     @Getter
@@ -185,6 +189,7 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
     }
 
     public GenerativeQAParameters(StreamInput input) throws IOException {
+        Version version = input.getVersion();
         this.conversationId = input.readOptionalString();
         this.llmModel = input.readOptionalString();
         this.llmQuestion = input.readOptionalString();
@@ -194,7 +199,10 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
         this.interactionSize = input.readInt();
         this.timeout = input.readInt();
         this.llmResponseField = input.readOptionalString();
-        this.llmMessages.addAll(input.readList(MessageBlock::new));
+
+        if (version.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_BEDROCK_CONVERSE_LLM_MESSAGES)) {
+            this.llmMessages.addAll(input.readList(MessageBlock::new));
+        }
     }
 
     @Override
@@ -246,6 +254,7 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
+        Version version = out.getVersion();
         out.writeOptionalString(conversationId);
         out.writeOptionalString(llmModel);
         out.writeOptionalString(llmQuestion);
@@ -255,7 +264,10 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
         out.writeInt(interactionSize);
         out.writeInt(timeout);
         out.writeOptionalString(llmResponseField);
-        out.writeList(llmMessages);
+
+        if (version.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_BEDROCK_CONVERSE_LLM_MESSAGES)) {
+            out.writeList(llmMessages);
+        }
     }
 
     public static GenerativeQAParameters parse(XContentParser parser) throws IOException {
