@@ -192,7 +192,14 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
         Version version = input.getVersion();
         this.conversationId = input.readOptionalString();
         this.llmModel = input.readOptionalString();
-        this.llmQuestion = input.readOptionalString();
+
+        // this string was made optional in 2.18
+        if (version.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_BEDROCK_CONVERSE_LLM_MESSAGES)) {
+            this.llmQuestion = input.readOptionalString();
+        } else {
+            this.llmQuestion = input.readString();
+        }
+
         this.systemPrompt = input.readOptionalString();
         this.userInstructions = input.readOptionalString();
         this.contextSize = input.readInt();
@@ -257,7 +264,14 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
         Version version = out.getVersion();
         out.writeOptionalString(conversationId);
         out.writeOptionalString(llmModel);
-        out.writeOptionalString(llmQuestion);
+
+        // this string was made optional in 2.18
+        if (version.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_BEDROCK_CONVERSE_LLM_MESSAGES)) {
+            out.writeOptionalString(llmQuestion);
+        } else {
+            out.writeString(llmQuestion);
+        }
+
         out.writeOptionalString(systemPrompt);
         out.writeOptionalString(userInstructions);
         out.writeInt(contextSize);
