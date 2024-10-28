@@ -88,7 +88,7 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
 
     public static final int SIZE_NULL_VALUE = -1;
 
-    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_BEDROCK_CONVERSE_LLM_MESSAGES = CommonValue.VERSION_2_18_0;
+    static final Version MINIMAL_SUPPORTED_VERSION_FOR_BEDROCK_CONVERSE_LLM_MESSAGES = CommonValue.VERSION_2_18_0;
 
     @Setter
     @Getter
