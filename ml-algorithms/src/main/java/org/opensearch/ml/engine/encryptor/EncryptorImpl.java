@@ -125,7 +125,10 @@ public class EncryptorImpl implements Encryptor {
         }
 
         try {
-            latch.await(5, SECONDS);
+            boolean completed = latch.await(3, SECONDS);
+            if (!completed) {
+                throw new MLException("Fetching master key timed out.");
+            }
         } catch (InterruptedException e) {
             throw new IllegalStateException(e);
         }

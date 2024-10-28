@@ -131,8 +131,8 @@ public class EncryptorImplTest {
 
     @Test
     public void encrypt_NullMasterKey_NullMasterKey_MasterKeyNotExistInIndex() {
-        exceptionRule.expect(ResourceNotFoundException.class);
-        exceptionRule.expectMessage(MASTER_KEY_NOT_READY_ERROR);
+        exceptionRule.expect(MLException.class);
+        exceptionRule.expectMessage("Fetching master key timed out.");
 
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
@@ -165,8 +165,8 @@ public class EncryptorImplTest {
 
     @Test
     public void decrypt_MLConfigIndexNotFound() {
-        exceptionRule.expect(ResourceNotFoundException.class);
-        exceptionRule.expectMessage(MASTER_KEY_NOT_READY_ERROR);
+        exceptionRule.expect(MLException.class);
+        exceptionRule.expectMessage("Fetching master key timed out.");
 
         Metadata metadata = new Metadata.Builder().indices(ImmutableMap.of()).build();
         when(clusterState.metadata()).thenReturn(metadata);
