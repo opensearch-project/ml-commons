@@ -14,6 +14,7 @@ import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentHelper;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.bytes.BytesReference;
+import org.opensearch.core.xcontent.MediaType;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -79,7 +80,7 @@ public class PutDataObjectRequestTests {
         contentBuilder.flush();
 
         BytesReference bytes = BytesReference.bytes(contentBuilder);
-        Map<String, Object> resultingMap = XContentHelper.convertToMap(bytes, false, XContentType.JSON).v2();
+        Map<String, Object> resultingMap = XContentHelper.convertToMap(bytes, false, (MediaType) XContentType.JSON).v2();
 
         assertEquals(dataObjectMap, resultingMap);
     }

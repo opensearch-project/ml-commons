@@ -10,11 +10,8 @@ package org.opensearch.sdk;
 
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 
-public class GetDataObjectRequest {
+public class GetDataObjectRequest extends DataObjectRequest {
 
-    private final String index;
-    private final String id;
-    private final String tenantId;
     private final FetchSourceContext fetchSourceContext;
 
     /**
@@ -27,34 +24,8 @@ public class GetDataObjectRequest {
      * @param fetchSourceContext the context to use when fetching _source
      */
     public GetDataObjectRequest(String index, String id, String tenantId, FetchSourceContext fetchSourceContext) {
-        this.index = index;
-        this.id = id;
-        this.tenantId = tenantId;
+        super(index, id, tenantId);
         this.fetchSourceContext = fetchSourceContext;
-    }
-
-    /**
-     * Returns the index
-     * @return the index
-     */
-    public String index() {
-        return this.index;
-    }
-
-    /**
-     * Returns the document id
-     * @return the id
-     */
-    public String id() {
-        return this.id;
-    }
-
-    /**
-     * Returns the tenant id
-     * @return the tenantId
-     */
-    public String tenantId() {
-        return this.tenantId;
     }
 
     /**
@@ -63,6 +34,11 @@ public class GetDataObjectRequest {
      */
     public FetchSourceContext fetchSourceContext() {
         return this.fetchSourceContext;
+    }
+
+    @Override
+    public boolean isWriteRequest() {
+        return false;
     }
 
     /**
@@ -76,46 +52,8 @@ public class GetDataObjectRequest {
     /**
      * Class for constructing a Builder for this Request Object
      */
-    public static class Builder {
-        private String index = null;
-        private String id = null;
-        private String tenantId = null;
+    public static class Builder extends DataObjectRequest.Builder<Builder> {
         private FetchSourceContext fetchSourceContext;
-
-        /**
-         * Empty Constructor for the Builder object
-         */
-        private Builder() {}
-
-        /**
-         * Add an index to this builder
-         * @param index the index to put the object
-         * @return the updated builder
-         */
-        public Builder index(String index) {
-            this.index = index;
-            return this;
-        }
-
-        /**
-         * Add an id to this builder
-         * @param id the document id
-         * @return the updated builder
-         */
-        public Builder id(String id) {
-            this.id = id;
-            return this;
-        }
-
-        /**
-         * Add a tenant id to this builder
-         * @param tenantId the tenant id
-         * @return the updated builder
-         */
-        public Builder tenantId(String tenantId) {
-            this.tenantId = tenantId;
-            return this;
-        }
 
         /**
          * Add a fetchSourceContext to this builder
