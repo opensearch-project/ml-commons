@@ -415,13 +415,12 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
         assertEquals(REMOTE_INFERENCE_DISABLED_ERR_MSG, argumentCaptor.getValue().getMessage());
     }
 
-    // TODO: come back to this test to make it active.
     @Test
-    @Ignore
     public void testDoExecuteRemoteInference_MultiNodeEnabled() throws InterruptedException {
         // Step 1: Mock the MLModel
         MLModel mlModel = mock(MLModel.class);
         when(mlModel.getAlgorithm()).thenReturn(FunctionName.REMOTE);
+        when(mlModel.getModelId()).thenReturn("test_model");
         when(mlModel.getTenantId()).thenReturn("test_tenant");
 
         // Step 2: Simulate successful model retrieval
@@ -440,16 +439,15 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
             return null;
         }).when(mlTaskManager).createMLTask(any(MLTask.class), Mockito.isA(ActionListener.class));
 
-        // Step 3: Simulate MLModel update
+        // Step 4: Simulate MLModel update
         doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            ActionListener<UpdateResponse> listener = invocation.getArgument(3);
             UpdateResponse updateResponse = mock(UpdateResponse.class);
-            // when(indexResponse.getId()).thenReturn("mockIndexId");
             listener.onResponse(updateResponse);
             return null;
         }).when(mlModelManager).updateModel(anyString(), anyString(), any(Map.class), isA(ActionListener.class));
 
-        // Step 4: Mock client.execute for MLDeployModelOnNodeAction
+        // Step 5: Mock client.execute for MLDeployModelOnNodeAction
         doAnswer(invocation -> {
             ActionListener<MLDeployModelNodesResponse> listener = invocation.getArgument(2);
             // Simulate successful response
@@ -457,27 +455,27 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(eq(MLDeployModelOnNodeAction.INSTANCE), any(), any(ActionListener.class));
 
-        // Step 5: Prepare the listener and request
+        // Step 6: Prepare the listener and request
         ActionListener<MLDeployModelResponse> deployModelResponseListener = mock(ActionListener.class);
         when(mlDeployModelRequest.getTenantId()).thenReturn("test_tenant");
 
-        // Step 6: Use a latch to wait for the async process
+        // Step 7: Use a latch to wait for the async process
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<MLDeployModelResponse> latchedActionListener = new LatchedActionListener<>(
             deployModelResponseListener,
             latch
         );
 
-        // Step 7: Execute the method being tested
+        // Step 8: Execute the method being tested
         transportDeployModelAction.doExecute(mock(Task.class), mlDeployModelRequest, latchedActionListener);
 
-        // Step 8: Wait for the async response
+        // Step 9: Wait for the async response
         latch.await(500, TimeUnit.MILLISECONDS);
 
-        // Step 9: Capture and verify the response
+        // Step 10: Capture and verify the response
         ArgumentCaptor<MLDeployModelResponse> argumentCaptor = ArgumentCaptor.forClass(MLDeployModelResponse.class);
         verify(deployModelResponseListener).onResponse(argumentCaptor.capture());
-        assertEquals("CREATED", argumentCaptor.getValue().getStatus());
+        assertEquals("COMPLETED", argumentCaptor.getValue().getStatus());
     }
 
     public void testDoExecuteLocalInferenceDisabled() {
