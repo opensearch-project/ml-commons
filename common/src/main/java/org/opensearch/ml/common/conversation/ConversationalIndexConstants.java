@@ -22,7 +22,7 @@ import org.opensearch.ml.common.MLIndex;
 
 /**
  * Class containing a bunch of constant defining how the conversational indices are formatted
- * ToDo: use MLIndex.MEMORY_MESSAGE and MLIndex.MEMORY_META for index names and mappings
+ * ToDo: use MLIndex.MEMORY_MESSAGE and MLIndex.MEMORY_META directly for index names and mappings rather than constants
  */
 public class ConversationalIndexConstants {
     /** Name of the conversational metadata index */
