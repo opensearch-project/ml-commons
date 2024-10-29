@@ -19,6 +19,9 @@
     },
     "application_type": {
       "type": "keyword"
+    },
+    "additional_info": {
+      "type": "flat_object"
     }
   }
 }

@@ -39,6 +39,7 @@ import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.MLTask;
@@ -68,7 +69,6 @@ import org.opensearch.ml.common.transport.task.MLTaskGetRequest;
 import org.opensearch.ml.common.transport.task.MLTaskGetResponse;
 import org.opensearch.ml.engine.algorithms.DLModelExecute;
 import org.opensearch.ml.engine.annotation.Function;
-import org.opensearch.ml.engine.indices.MLIndex;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
 import com.google.common.annotations.VisibleForTesting;
