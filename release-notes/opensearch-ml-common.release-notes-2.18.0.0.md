@@ -25,12 +25,13 @@ Compatible with OpenSearch 2.18.0
 * Gracefully handle error when generative_qa_parameters is not provided (#3100)[https://github.com/opensearch-project/ml-commons/pull/3100]
 * Fix error log to show the right agent type (#2809)[https://github.com/opensearch-project/ml-commons/pull/2809]
 * fix model stuck in deploying state during node crash/cluster restart (#3137)[https://github.com/opensearch-project/ml-commons/pull/3137]
+* increase the wait timeout to fetch the master key (#3151)[https://github.com/opensearch-project/ml-commons/pull/3151]
+* Handle BWC for bedrock converse API (#3173)[https://github.com/opensearch-project/ml-commons/pull/3173]
 
 ### Maintenance
 
 * Bump protobuf version to 3.25.5 to patch potential DOS (#3083)[https://github.com/opensearch-project/ml-commons/pull/3083]
 * removing api keys from the integ test log (#3112)[https://github.com/opensearch-project/ml-commons/pull/3112]
-* Bump actions/download-artifact from 3 to 4.1.7 in /.github/workflows (#2881)[https://github.com/opensearch-project/ml-commons/pull/2881]
 * allowing backport prs to skip approval (#3132)[https://github.com/opensearch-project/ml-commons/pull/3132]
 * updating the approval requirement (#3148)[https://github.com/opensearch-project/ml-commons/pull/3148]
 * unblocking the integ test pipeline for release (#3159)[https://github.com/opensearch-project/ml-commons/pull/3159]
@@ -40,6 +41,7 @@ Compatible with OpenSearch 2.18.0
 * Support index.auto_expand_replicas 0-all for .plugins-ml-config (#3017)[https://github.com/opensearch-project/ml-commons/pull/3017]
 * Add Test Env Require Approval Action (#3005)[https://github.com/opensearch-project/ml-commons/pull/3005]
 * upgrading upload artifact to v4 (#3162)[https://github.com/opensearch-project/ml-commons/pull/3162]
+* Bump actions/download-artifact from 3 to 4.1.7 in /.github/workflows (#2881)[https://github.com/opensearch-project/ml-commons/pull/2881]
 
 ### Documentation
 
