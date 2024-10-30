@@ -93,7 +93,7 @@ public class IndexUtils {
             - "_meta" is an object type
             - "_meta_.schema_version" provided type is integer
     
-        Note: validation can be further restricted if the schema for each index is well-defined
+        Note: Validation can be made more strict if a specific schema is defined for each index.
      */
     public static void validateMapping(String mapping) throws IOException {
         if (!StringUtils.isJson(mapping)) {
