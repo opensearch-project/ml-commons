@@ -38,6 +38,8 @@ import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.sdkclient.util.JsonTransformer;
+import org.opensearch.sdk.BulkDataObjectRequest;
+import org.opensearch.sdk.BulkDataObjectResponse;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
 import org.opensearch.sdk.GetDataObjectRequest;
@@ -350,6 +352,16 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
                 throw new OpenSearchStatusException("Failed to parse response", RestStatus.INTERNAL_SERVER_ERROR);
             }
         }), executor);
+    }
+
+    @Override
+    public CompletionStage<BulkDataObjectResponse> bulkDataObjectAsync(
+        BulkDataObjectRequest request,
+        Executor executor,
+        Boolean isMultiTenancyEnabled
+    ) {
+        // TODO Complete this
+        return null;
     }
 
     /**

@@ -22,6 +22,7 @@ public class BulkDataObjectRequest {
     private final List<DataObjectRequest> requests = new ArrayList<>();
     private final Set<String> indices = new HashSet<>();
     private String globalIndex;
+    private String globalTenantId;
 
     public BulkDataObjectRequest() {}
 
@@ -52,6 +53,14 @@ public class BulkDataObjectRequest {
     }
 
     /**
+     * Return the global tenant id to be applied to all requests
+     * @return the globalTenantId
+     */
+    public String globalTenantId() {
+        return this.globalTenantId;
+    }
+    
+    /**
      * Add the given request to the {@link BulkDataObjectRequest}
      * @param request The request to add
      * @return the updated request object
@@ -71,6 +80,7 @@ public class BulkDataObjectRequest {
         } else {
             indices.add(request.index());
         }
+        request.tenantId(globalTenantId);
         requests.add(request);
         return this;
     }

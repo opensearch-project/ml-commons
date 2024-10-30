@@ -12,7 +12,7 @@ public abstract class DataObjectRequest {
 
     private String index;
     private final String id;
-    private final String tenantId;
+    private String tenantId;
 
     /**
      * Instantiate this request with an index and id.
@@ -60,6 +60,14 @@ public abstract class DataObjectRequest {
         return this.tenantId;
     }
 
+    /**
+     * Sets the tenant id
+     * @param tenantId The new tenant id to set
+     */
+    public void tenantId(String tenantId) {
+        this.tenantId = tenantId;
+    }
+    
     /**
      * Returns whether the subclass can be used in a {@link BulkDataObjectRequest}
      * @return whether the subclass is a write request

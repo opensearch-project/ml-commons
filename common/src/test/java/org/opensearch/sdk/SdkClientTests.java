@@ -53,6 +53,10 @@ public class SdkClientTests {
     @Mock
     private DeleteDataObjectResponse deleteResponse;
     @Mock
+    private BulkDataObjectRequest bulkRequest;
+    @Mock
+    private BulkDataObjectResponse bulkResponse;
+    @Mock
     private SearchDataObjectRequest searchRequest;
     @Mock
     private SearchDataObjectResponse searchResponse;
@@ -67,6 +71,7 @@ public class SdkClientTests {
         when(getRequest.tenantId()).thenReturn(TENANT_ID);
         when(updateRequest.tenantId()).thenReturn(TENANT_ID);
         when(deleteRequest.tenantId()).thenReturn(TENANT_ID);
+        when(bulkRequest.globalTenantId()).thenReturn(TENANT_ID);
         when(searchRequest.tenantId()).thenReturn(TENANT_ID);
 
         sdkClientImpl = spy(new SdkClientDelegate() {
@@ -104,6 +109,15 @@ public class SdkClientTests {
                 Boolean isMultiTenancyEnabled
             ) {
                 return CompletableFuture.completedFuture(deleteResponse);
+            }
+
+            @Override
+            public CompletionStage<BulkDataObjectResponse> bulkDataObjectAsync(
+                BulkDataObjectRequest request,
+                Executor executor,
+                Boolean isMultiTenancyEnabled
+            ) {
+                return CompletableFuture.completedFuture(bulkResponse);
             }
 
             @Override
@@ -265,6 +279,43 @@ public class SdkClientTests {
         assertEquals(interruptedException, exception.getCause());
         assertTrue(Thread.interrupted());        
         verify(sdkClientImpl).deleteDataObjectAsync(any(DeleteDataObjectRequest.class), any(Executor.class), anyBoolean());
+    }
+    
+
+    @Test
+    public void testBulkDataObjectSuccess() {
+        assertEquals(bulkResponse, sdkClient.bulkDataObject(bulkRequest));
+        verify(sdkClientImpl).bulkDataObjectAsync(any(BulkDataObjectRequest.class), any(Executor.class), anyBoolean());
+    }
+
+    @Test
+    public void testBulkDataObjectNullTenantId() {
+        when(bulkRequest.globalTenantId()).thenReturn(null);
+        assertThrows(IllegalArgumentException.class, () -> sdkClient.bulkDataObject(bulkRequest));
+    }
+
+    @Test
+    public void testBulkDataObjectException() {
+        when(sdkClientImpl.bulkDataObjectAsync(any(BulkDataObjectRequest.class), any(Executor.class), anyBoolean()))
+                .thenReturn(CompletableFuture.failedFuture(testException));
+        OpenSearchStatusException exception = assertThrows(OpenSearchStatusException.class, () -> {
+            sdkClient.bulkDataObject(bulkRequest);
+        });
+        assertEquals(testException, exception);
+        assertFalse(Thread.interrupted());        
+        verify(sdkClientImpl).bulkDataObjectAsync(any(BulkDataObjectRequest.class), any(Executor.class), anyBoolean());
+    }
+
+    @Test
+    public void testBulkDataObjectInterrupted() {
+        when(sdkClientImpl.bulkDataObjectAsync(any(BulkDataObjectRequest.class), any(Executor.class), anyBoolean()))
+        .thenReturn(CompletableFuture.failedFuture(interruptedException));
+        OpenSearchException exception = assertThrows(OpenSearchException.class, () -> {
+            sdkClient.bulkDataObject(bulkRequest);
+        });
+        assertEquals(interruptedException, exception.getCause());
+        assertTrue(Thread.interrupted());        
+        verify(sdkClientImpl).bulkDataObjectAsync(any(BulkDataObjectRequest.class), any(Executor.class), anyBoolean());
     }
 
     @Test

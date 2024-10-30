@@ -53,6 +53,8 @@ import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.common.CommonValue;
+import org.opensearch.sdk.BulkDataObjectRequest;
+import org.opensearch.sdk.BulkDataObjectResponse;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
 import org.opensearch.sdk.GetDataObjectRequest;
@@ -201,7 +203,9 @@ public class LocalClusterIndicesClient implements SdkClientDelegate {
         return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<DeleteDataObjectResponse>) () -> {
             try {
                 log.info("Deleting {} from {}", request.id(), request.index());
-                DeleteResponse deleteResponse = client.delete(new DeleteRequest(request.index(), request.id()).setRefreshPolicy(IMMEDIATE)).actionGet();
+                DeleteResponse deleteResponse = client
+                    .delete(new DeleteRequest(request.index(), request.id()).setRefreshPolicy(IMMEDIATE))
+                    .actionGet();
                 log.info("Deletion status for id {}: {}", deleteResponse.getId(), deleteResponse.getResult());
                 return DeleteDataObjectResponse.builder().id(deleteResponse.getId()).parser(createParser(deleteResponse)).build();
             } catch (IOException e) {
@@ -212,6 +216,16 @@ public class LocalClusterIndicesClient implements SdkClientDelegate {
                 );
             }
         }), executor);
+    }
+
+    @Override
+    public CompletionStage<BulkDataObjectResponse> bulkDataObjectAsync(
+        BulkDataObjectRequest request,
+        Executor executor,
+        Boolean isMultiTenancyEnabled
+    ) {
+        // TODO Complete this
+        return null;
     }
 
     @Override

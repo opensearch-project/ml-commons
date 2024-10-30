@@ -56,6 +56,8 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.query.MatchPhraseQueryBuilder;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.sdkclient.util.JsonTransformer;
+import org.opensearch.sdk.BulkDataObjectRequest;
+import org.opensearch.sdk.BulkDataObjectResponse;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
 import org.opensearch.sdk.GetDataObjectRequest;
@@ -224,6 +226,16 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
                 );
             }
         }), executor);
+    }
+
+    @Override
+    public CompletionStage<BulkDataObjectResponse> bulkDataObjectAsync(
+        BulkDataObjectRequest request,
+        Executor executor,
+        Boolean isMultiTenancyEnabled
+    ) {
+        // TODO Complete this
+        return null;
     }
 
     @Override

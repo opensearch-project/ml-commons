@@ -20,10 +20,10 @@ import org.opensearch.core.common.Strings;
 import static org.opensearch.sdk.SdkClientUtils.unwrapAndConvertToException;
 
 public class SdkClient {
-    
+
     private final SdkClientDelegate delegate;
     private final Boolean isMultiTenancyEnabled;
-    
+
     public SdkClient(SdkClientDelegate delegate, Boolean multiTenancy) {
         this.delegate = delegate;
         this.isMultiTenancyEnabled = multiTenancy;
@@ -162,6 +162,42 @@ public class SdkClient {
     public DeleteDataObjectResponse deleteDataObject(DeleteDataObjectRequest request) {
         try {
             return deleteDataObjectAsync(request).toCompletableFuture().join();
+        } catch (CompletionException e) {
+            throw ExceptionsHelper.convertToRuntime(unwrapAndConvertToException(e));
+        }
+    }
+
+    /**
+     * Perform a bulk request for multiple data objects/documents in potentially multiple tables/indices.
+     *
+     * @param request  A request identifying the data object to delete
+     * @param executor the executor to use for asynchronous execution
+     * @return A completion stage encapsulating the response or exception
+     */
+    public CompletionStage<BulkDataObjectResponse> bulkDataObjectAsync(BulkDataObjectRequest request, Executor executor) {
+        validateTenantId(request.globalTenantId());
+        return delegate.bulkDataObjectAsync(request, executor, isMultiTenancyEnabled);
+    }
+
+    /**
+     * Perform a bulk request for multiple data objects/documents in potentially multiple tables/indices.
+     *
+     * @param request A request identifying the data object to delete
+     * @return A completion stage encapsulating the response or exception
+     */
+    public CompletionStage<BulkDataObjectResponse> bulkDataObjectAsync(BulkDataObjectRequest request) {
+        return bulkDataObjectAsync(request, ForkJoinPool.commonPool());
+    }
+
+    /**
+     * Perform a bulk request for multiple data objects/documents in potentially multiple tables/indices.
+     *
+     * @param request A request identifying the data object to delete
+     * @return A response on success. Throws unchecked exceptions or {@link OpenSearchException} wrapping the cause on checked exception.
+     */
+    public BulkDataObjectResponse bulkDataObject(BulkDataObjectRequest request) {
+        try {
+            return bulkDataObjectAsync(request).toCompletableFuture().join();
         } catch (CompletionException e) {
             throw ExceptionsHelper.convertToRuntime(unwrapAndConvertToException(e));
         }
