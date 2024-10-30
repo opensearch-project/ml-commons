@@ -83,7 +83,7 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
 
     public static final int SIZE_NULL_VALUE = -1;
 
-    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_PROMPT_AND_INSTRUCTIONS = CommonValue.VERSION_2_13_0;
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_PROMPT_AND_INSTRUCTIONS = CommonValue.VERSION_2_13_0;
 
     @Setter
     @Getter

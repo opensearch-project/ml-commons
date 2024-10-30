@@ -19,15 +19,19 @@ package org.opensearch.searchpipelines.questionanswering.generative.ext;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
+import static org.opensearch.ml.common.CommonValue.VERSION_2_16_0;
 
 import java.io.EOFException;
 import java.io.IOException;
 import java.util.Collections;
 
 import org.junit.Assert;
+import org.opensearch.Version;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
@@ -105,10 +109,17 @@ public class GenerativeQAParamExtBuilderTests extends OpenSearchTestCase {
         assertNotEquals(builder1, builder2);
         assertNotEquals(builder1.hashCode(), builder2.hashCode());
 
-        StreamOutput so = mock(StreamOutput.class);
-        builder1.writeTo(so);
-        verify(so, times(5)).writeOptionalString(any());
-        verify(so, times(1)).writeString(any());
+        StreamOutput so1 = mock(StreamOutput.class);
+        when(so1.getVersion()).thenReturn(GenerativeQAParameters.MINIMAL_SUPPORTED_VERSION_FOR_PROMPT_AND_INSTRUCTIONS);
+        builder1.writeTo(so1);
+        verify(so1, times(5)).writeOptionalString(any());
+        verify(so1, times(1)).writeString(any());
+
+        StreamOutput so2 = mock(StreamOutput.class);
+        when(so2.getVersion()).thenReturn(Version.V_2_12_0);
+        builder1.writeTo(so2);
+        verify(so2, times(2)).writeOptionalString(any());
+        verify(so1, times(1)).writeString(any());
     }
 
     public void testParse() throws IOException {
