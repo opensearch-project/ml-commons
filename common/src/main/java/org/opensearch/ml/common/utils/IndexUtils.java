@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.common.utils;
 
+import static org.opensearch.ml.common.utils.StringUtils.validateSchema;
+
 import java.io.IOException;
 import java.net.URL;
 import java.util.Map;
@@ -41,6 +43,15 @@ public class IndexUtils {
     public static final Map<String, Object> UPDATED_DEFAULT_INDEX_SETTINGS = Map.of("index.auto_expand_replicas", "0-1");
     public static final Map<String, Object> UPDATED_ALL_NODES_REPLICA_INDEX_SETTINGS = Map.of("index.auto_expand_replicas", "0-all");
 
+    // Schema that validates system index mappings
+    public static final String MAPPING_SCHEMA_PATH = "mappings/schema.json";
+
+    // Placeholders to use within the json mapping files
+    private static final String USER_PLACEHOLDER = "USER_MAPPING_PLACEHOLDER";
+    private static final String CONNECTOR_PLACEHOLDER = "CONNECTOR_MAPPING_PLACEHOLDER";
+    public static final Map<String, String> MAPPING_PLACEHOLDERS = Map
+        .of(USER_PLACEHOLDER, "mappings/placeholders/user.json", CONNECTOR_PLACEHOLDER, "mappings/placeholders/connector.json");
+
     public static String getMappingFromFile(String path) throws IOException {
         URL url = IndexUtils.class.getClassLoader().getResource(path);
         if (url == null) {
@@ -48,11 +59,54 @@ public class IndexUtils {
         }
 
         String mapping = Resources.toString(url, Charsets.UTF_8);
-        if (!StringUtils.isJson(mapping)) {
-            throw new JsonSyntaxException("Mapping is not a valid JSON: " + path);
+        mapping = replacePlaceholders(mapping);
+        validateMapping(mapping);
+
+        return mapping;
+    }
+
+    public static String replacePlaceholders(String mapping) throws IOException {
+        for (Map.Entry<String, String> placeholder : MAPPING_PLACEHOLDERS.entrySet()) {
+            URL url = IndexUtils.class.getClassLoader().getResource(placeholder.getValue());
+            if (url == null) {
+                throw new IOException("Resource not found: " + placeholder.getValue());
+            }
+
+            String placeholderMapping = Resources.toString(url, Charsets.UTF_8);
+            mapping = mapping.replace(placeholder.getKey(), placeholderMapping);
         }
 
         return mapping;
+    }
+
+    /*
+        - Checks if mapping is a valid json
+        - Validates mapping against a schema found in mappings/schema.json
+        - Schema validates the following:
+            - Below fields are present:
+                - "_meta"
+                    - "_meta.schema_version"
+                - "properties"
+            - No additional fields at root level
+            - No additional fields in "_meta" object
+            - "properties" is an object type
+            - "_meta" is an object type
+            - "_meta_.schema_version" provided type is integer
+    
+        Note: validation can be further restricted if the schema for each index is well-defined
+     */
+    public static void validateMapping(String mapping) throws IOException {
+        if (!StringUtils.isJson(mapping)) {
+            throw new JsonSyntaxException("Mapping is not a valid JSON: " + mapping);
+        }
+
+        URL url = IndexUtils.class.getClassLoader().getResource(MAPPING_SCHEMA_PATH);
+        if (url == null) {
+            throw new IOException("Resource not found: " + MAPPING_SCHEMA_PATH);
+        }
+
+        String schema = Resources.toString(url, Charsets.UTF_8);
+        validateSchema(schema, mapping);
     }
 
     public static Integer getVersionFromMapping(String mapping) {

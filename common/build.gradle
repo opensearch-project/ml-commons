@@ -35,6 +35,9 @@ dependencies {
         exclude group: 'com.google.guava', module: 'listenablefuture'
     }
     compileOnly 'com.jayway.jsonpath:json-path:2.9.0'
+    implementation("com.fasterxml.jackson.core:jackson-annotations:${versions.jackson}")
+    implementation("com.fasterxml.jackson.core:jackson-databind:${versions.jackson_databind}")
+    implementation group: 'com.networknt' , name: 'json-schema-validator', version: '1.4.0'
 }
 
 lombok {

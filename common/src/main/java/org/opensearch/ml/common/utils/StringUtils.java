@@ -5,12 +5,14 @@
 
 package org.opensearch.ml.common.utils;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -23,13 +25,20 @@ import org.apache.commons.lang3.BooleanUtils;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.opensearch.OpenSearchParseException;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
 import com.jayway.jsonpath.JsonPath;
+import com.networknt.schema.JsonSchema;
+import com.networknt.schema.JsonSchemaFactory;
+import com.networknt.schema.SpecVersion;
+import com.networknt.schema.ValidationMessage;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -324,4 +333,26 @@ public class StringUtils {
         return JsonParser.parseString(jsonString).getAsJsonObject();
     }
 
+    public static void validateSchema(String schemaString, String instanceString) throws IOException {
+        ObjectMapper mapper = new ObjectMapper();
+        // parse the schema JSON as string
+        JsonNode schemaNode = mapper.readTree(schemaString);
+        JsonSchema schema = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V202012).getSchema(schemaNode);
+
+        // JSON data to validate
+        JsonNode jsonNode = mapper.readTree(instanceString);
+
+        // Validate JSON node against the schema
+        Set<ValidationMessage> errors = schema.validate(jsonNode);
+        if (!errors.isEmpty()) {
+            throw new OpenSearchParseException(
+                "Validation failed: "
+                    + Arrays.toString(errors.toArray(new ValidationMessage[0]))
+                    + " for instance: "
+                    + instanceString
+                    + " with schema: "
+                    + schemaString
+            );
+        }
+    }
 }
