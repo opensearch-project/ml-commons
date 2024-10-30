@@ -26,7 +26,7 @@ public class DeleteDataObjectRequest extends DataObjectRequest {
     public boolean isWriteRequest() {
         return true;
     }
-    
+
     /**
      * Instantiate a builder for this object
      * @return a builder instance

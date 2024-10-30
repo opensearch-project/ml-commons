@@ -13,7 +13,7 @@ public abstract class DataObjectRequest {
     private String index;
     private final String id;
     private final String tenantId;
-    
+
     /**
      * Instantiate this request with an index and id.
      * <p>
@@ -43,7 +43,7 @@ public abstract class DataObjectRequest {
     public void index(String index) {
         this.index = index;
     }
-    
+
     /**
      * Returns the document id
      * @return the id
@@ -62,7 +62,7 @@ public abstract class DataObjectRequest {
 
     /**
      * Returns whether the subclass can be used in a {@link BulkDataObjectRequest}
-     * @return
+     * @return whether the subclass is a write request
      */
     public abstract boolean isWriteRequest();
 
