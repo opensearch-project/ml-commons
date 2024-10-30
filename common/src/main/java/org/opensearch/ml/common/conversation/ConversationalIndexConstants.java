@@ -18,15 +18,15 @@
 package org.opensearch.ml.common.conversation;
 
 import org.opensearch.common.settings.Setting;
+import org.opensearch.ml.common.MLIndex;
 
 /**
  * Class containing a bunch of constant defining how the conversational indices are formatted
+ * ToDo: use MLIndex.MEMORY_MESSAGE and MLIndex.MEMORY_META directly for index names and mappings rather than constants
  */
 public class ConversationalIndexConstants {
-    /** Version of the meta index schema */
-    public final static Integer META_INDEX_SCHEMA_VERSION = 2;
     /** Name of the conversational metadata index */
-    public final static String META_INDEX_NAME = ".plugins-ml-memory-meta";
+    public final static String META_INDEX_NAME = MLIndex.MEMORY_META.getIndexName();
     /** Name of the metadata field for initial timestamp */
     public final static String META_CREATED_TIME_FIELD = "create_time";
     /** Name of the metadata field for updated timestamp */
@@ -41,38 +41,10 @@ public class ConversationalIndexConstants {
     public final static String META_ADDITIONAL_INFO_FIELD = "additional_info";
 
     /** Mappings for the conversational metadata index */
-    public final static String META_MAPPING = "{\n"
-        + "    \"_meta\": {\n"
-        + "        \"schema_version\": "
-        + META_INDEX_SCHEMA_VERSION
-        + "\n"
-        + "    },\n"
-        + "    \"properties\": {\n"
-        + "        \""
-        + META_NAME_FIELD
-        + "\": {\"type\": \"text\"},\n"
-        + "        \""
-        + META_CREATED_TIME_FIELD
-        + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
-        + "        \""
-        + META_UPDATED_TIME_FIELD
-        + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
-        + "        \""
-        + USER_FIELD
-        + "\": {\"type\": \"keyword\"},\n"
-        + "        \""
-        + APPLICATION_TYPE_FIELD
-        + "\": {\"type\": \"keyword\"},\n"
-        + "        \""
-        + META_ADDITIONAL_INFO_FIELD
-        + "\": {\"type\": \"flat_object\"}\n"
-        + "    }\n"
-        + "}";
+    public final static String META_MAPPING = MLIndex.MEMORY_META.getMapping();
 
-    /** Version of the interactions index schema */
-    public final static Integer INTERACTIONS_INDEX_SCHEMA_VERSION = 1;
     /** Name of the conversational interactions index */
-    public final static String INTERACTIONS_INDEX_NAME = ".plugins-ml-memory-message";
+    public final static String INTERACTIONS_INDEX_NAME = MLIndex.MEMORY_MESSAGE.getIndexName();
     /** Name of the interaction field for the conversation Id */
     public final static String INTERACTIONS_CONVERSATION_ID_FIELD = "memory_id";
     /** Name of the interaction field for the human input */
@@ -92,42 +64,7 @@ public class ConversationalIndexConstants {
     /** The trace number of an interaction */
     public final static String INTERACTIONS_TRACE_NUMBER_FIELD = "trace_number";
     /** Mappings for the interactions index */
-    public final static String INTERACTIONS_MAPPINGS = "{\n"
-        + "    \"_meta\": {\n"
-        + "        \"schema_version\": "
-        + INTERACTIONS_INDEX_SCHEMA_VERSION
-        + "\n"
-        + "    },\n"
-        + "    \"properties\": {\n"
-        + "        \""
-        + INTERACTIONS_CONVERSATION_ID_FIELD
-        + "\": {\"type\": \"keyword\"},\n"
-        + "        \""
-        + INTERACTIONS_CREATE_TIME_FIELD
-        + "\": {\"type\": \"date\", \"format\": \"strict_date_time||epoch_millis\"},\n"
-        + "        \""
-        + INTERACTIONS_INPUT_FIELD
-        + "\": {\"type\": \"text\"},\n"
-        + "        \""
-        + INTERACTIONS_PROMPT_TEMPLATE_FIELD
-        + "\": {\"type\": \"text\"},\n"
-        + "        \""
-        + INTERACTIONS_RESPONSE_FIELD
-        + "\": {\"type\": \"text\"},\n"
-        + "        \""
-        + INTERACTIONS_ORIGIN_FIELD
-        + "\": {\"type\": \"keyword\"},\n"
-        + "        \""
-        + INTERACTIONS_ADDITIONAL_INFO_FIELD
-        + "\": {\"type\": \"flat_object\"},\n"
-        + "        \""
-        + PARENT_INTERACTIONS_ID_FIELD
-        + "\": {\"type\": \"keyword\"},\n"
-        + "        \""
-        + INTERACTIONS_TRACE_NUMBER_FIELD
-        + "\": {\"type\": \"long\"}\n"
-        + "    }\n"
-        + "}";
+    public final static String INTERACTIONS_MAPPINGS = MLIndex.MEMORY_MESSAGE.getMapping();
 
     /** Feature Flag setting for conversational memory */
     public static final Setting<Boolean> ML_COMMONS_MEMORY_FEATURE_ENABLED = Setting
