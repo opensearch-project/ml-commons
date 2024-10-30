@@ -18,6 +18,7 @@ import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_THREAD_POOL_PREFIX;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -40,6 +41,8 @@ import org.opensearch.client.opensearch._types.OpenSearchException;
 import org.opensearch.client.opensearch._types.Result;
 import org.opensearch.client.opensearch._types.ShardStatistics;
 import org.opensearch.client.opensearch._types.query_dsl.Query;
+import org.opensearch.client.opensearch.core.BulkRequest;
+import org.opensearch.client.opensearch.core.BulkResponse;
 import org.opensearch.client.opensearch.core.DeleteRequest;
 import org.opensearch.client.opensearch.core.DeleteResponse;
 import org.opensearch.client.opensearch.core.GetRequest;
@@ -50,6 +53,8 @@ import org.opensearch.client.opensearch.core.SearchRequest;
 import org.opensearch.client.opensearch.core.SearchResponse;
 import org.opensearch.client.opensearch.core.UpdateRequest;
 import org.opensearch.client.opensearch.core.UpdateResponse;
+import org.opensearch.client.opensearch.core.bulk.BulkResponseItem;
+import org.opensearch.client.opensearch.core.bulk.OperationType;
 import org.opensearch.client.opensearch.core.search.HitsMetadata;
 import org.opensearch.client.opensearch.core.search.TotalHits;
 import org.opensearch.client.opensearch.core.search.TotalHitsRelation;
@@ -63,6 +68,8 @@ import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.sdk.BulkDataObjectRequest;
+import org.opensearch.sdk.BulkDataObjectResponse;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
 import org.opensearch.sdk.GetDataObjectRequest;
@@ -556,6 +563,160 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
 
         CompletionException ce = assertThrows(CompletionException.class, () -> future.join());
         assertEquals(OpenSearchStatusException.class, ce.getCause().getClass());
+    }
+
+    public void testBulkDataObject() throws IOException {
+        PutDataObjectRequest putRequest = PutDataObjectRequest.builder().id(TEST_ID + "1").dataObject(testDataObject).build();
+        UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest.builder().id(TEST_ID + "2").dataObject(testDataObject).build();
+        DeleteDataObjectRequest deleteRequest = DeleteDataObjectRequest.builder().id(TEST_ID + "3").build();
+
+        BulkDataObjectRequest bulkRequest = BulkDataObjectRequest
+            .builder()
+            .globalIndex(TEST_INDEX)
+            .globalTenantId(TEST_TENANT_ID)
+            .build()
+            .add(putRequest)
+            .add(updateRequest)
+            .add(deleteRequest);
+
+        BulkResponse bulkResponse = new BulkResponse.Builder()
+            .took(100L)
+            .items(
+                Arrays
+                    .asList(
+                        new BulkResponseItem.Builder()
+                            .id(TEST_ID + "1")
+                            .index(TEST_INDEX)
+                            .operationType(OperationType.Index)
+                            .result(Result.Created.jsonValue())
+                            .status(RestStatus.OK.getStatus())
+                            .build(),
+                        new BulkResponseItem.Builder()
+                            .id(TEST_ID + "2")
+                            .index(TEST_INDEX)
+                            .operationType(OperationType.Update)
+                            .result(Result.Updated.jsonValue())
+                            .status(RestStatus.OK.getStatus())
+                            .build(),
+                        new BulkResponseItem.Builder()
+                            .id(TEST_ID + "3")
+                            .index(TEST_INDEX)
+                            .operationType(OperationType.Delete)
+                            .result(Result.Deleted.jsonValue())
+                            .status(RestStatus.OK.getStatus())
+                            .build()
+                    )
+            )
+            .errors(false)
+            .build();
+
+        ArgumentCaptor<BulkRequest> bulkRequestCaptor = ArgumentCaptor.forClass(BulkRequest.class);
+        when(mockedOpenSearchClient.bulk(bulkRequestCaptor.capture())).thenReturn(bulkResponse);
+
+        BulkDataObjectResponse response = sdkClient
+            .bulkDataObjectAsync(bulkRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture()
+            .join();
+
+        assertEquals(3, bulkRequestCaptor.getValue().operations().size());
+        assertEquals(3, response.getResponses().length);
+        assertEquals(100L, response.getTookInMillis());
+
+        assertTrue(response.getResponses()[0] instanceof PutDataObjectResponse);
+        assertTrue(response.getResponses()[1] instanceof UpdateDataObjectResponse);
+        assertTrue(response.getResponses()[2] instanceof DeleteDataObjectResponse);
+
+        assertEquals(TEST_ID + "1", response.getResponses()[0].id());
+        assertEquals(TEST_ID + "2", response.getResponses()[1].id());
+        assertEquals(TEST_ID + "3", response.getResponses()[2].id());
+    }
+
+    public void testBulkDataObject_WithFailures() throws IOException {
+        PutDataObjectRequest putRequest = PutDataObjectRequest
+            .builder()
+            .index(TEST_INDEX)
+            .id(TEST_ID + "1")
+            .dataObject(testDataObject)
+            .build();
+        UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
+            .builder()
+            .index(TEST_INDEX)
+            .id(TEST_ID + "2")
+            .dataObject(testDataObject)
+            .build();
+
+        BulkDataObjectRequest bulkRequest = BulkDataObjectRequest
+            .builder()
+            .globalTenantId(TEST_TENANT_ID)
+            .build()
+            .add(putRequest)
+            .add(updateRequest);
+
+        BulkResponse bulkResponse = new BulkResponse.Builder()
+            .took(100L)
+            .items(
+                Arrays
+                    .asList(
+                        new BulkResponseItem.Builder()
+                            .id(TEST_ID + "1")
+                            .index(TEST_INDEX)
+                            .operationType(OperationType.Index)
+                            .result(Result.Created.jsonValue())
+                            .status(RestStatus.OK.getStatus())
+                            .build(),
+                        new BulkResponseItem.Builder()
+                            .id(TEST_ID + "2")
+                            .index(TEST_INDEX)
+                            .operationType(OperationType.Update)
+                            .error(new ErrorCause.Builder().type("update_error").reason("Update failed").build())
+                            .status(RestStatus.INTERNAL_SERVER_ERROR.getStatus())
+                            .build()
+                    )
+            )
+            .errors(true)
+            .build();
+
+        when(mockedOpenSearchClient.bulk(any(BulkRequest.class))).thenReturn(bulkResponse);
+
+        BulkDataObjectResponse response = sdkClient
+            .bulkDataObjectAsync(bulkRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture()
+            .join();
+
+        assertEquals(2, response.getResponses().length);
+        assertFalse(response.getResponses()[0].isFailed());
+        assertTrue(response.getResponses()[1].isFailed());
+    }
+
+    public void testBulkDataObject_Exception() throws OpenSearchException, IOException {
+        PutDataObjectRequest putRequest = PutDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).dataObject(testDataObject).build();
+
+        BulkDataObjectRequest bulkRequest = BulkDataObjectRequest.builder().globalTenantId(TEST_TENANT_ID).build().add(putRequest);
+
+        when(mockedOpenSearchClient.bulk(any(BulkRequest.class)))
+            .thenThrow(
+                new OpenSearchException(
+                    new ErrorResponse.Builder()
+                        .error(
+                            new ErrorCause.Builder()
+                                .type("parse_exception")
+                                .reason("Failed to parse data object in a bulk response")
+                                .build()
+                        )
+                        .status(RestStatus.INTERNAL_SERVER_ERROR.getStatus())
+                        .build()
+                )
+            );
+
+        CompletableFuture<BulkDataObjectResponse> future = sdkClient
+            .bulkDataObjectAsync(bulkRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture();
+
+        CompletionException ce = assertThrows(CompletionException.class, () -> future.join());
+        Throwable cause = ce.getCause();
+        assertEquals(OpenSearchException.class, cause.getClass());
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR.getStatus(), ((OpenSearchException) cause).status());
+        assertTrue(cause.getMessage().contains("Failed to parse data object in a bulk response"));
     }
 
     @SuppressWarnings({ "unchecked", "rawtypes" })

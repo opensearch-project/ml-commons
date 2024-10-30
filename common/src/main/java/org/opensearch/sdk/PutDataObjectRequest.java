@@ -8,9 +8,9 @@
  */
 package org.opensearch.sdk;
 
-import org.opensearch.core.xcontent.ToXContentObject;
-
 import java.util.Map;
+
+import org.opensearch.core.xcontent.ToXContentObject;
 
 public class PutDataObjectRequest extends DataObjectRequest {
 

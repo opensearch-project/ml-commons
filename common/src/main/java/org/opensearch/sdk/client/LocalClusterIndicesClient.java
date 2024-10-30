@@ -8,21 +8,19 @@
  */
 package org.opensearch.sdk.client;
 
-import static org.opensearch.action.support.WriteRequest.RefreshPolicy.IMMEDIATE;
-import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
-import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
-
 import java.io.IOException;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.DocWriteRequest.OpType;
+import org.opensearch.action.bulk.BulkItemResponse;
+import org.opensearch.action.bulk.BulkRequest;
+import org.opensearch.action.bulk.BulkResponse;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.get.GetRequest;
@@ -31,7 +29,6 @@ import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
-import org.opensearch.action.support.PlainActionFuture;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
@@ -48,13 +45,14 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.engine.VersionConflictEngineException;
 import org.opensearch.index.query.BoolQueryBuilder;
-import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.sdk.BulkDataObjectRequest;
 import org.opensearch.sdk.BulkDataObjectResponse;
+import org.opensearch.sdk.DataObjectRequest;
+import org.opensearch.sdk.DataObjectResponse;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
 import org.opensearch.sdk.GetDataObjectRequest;
@@ -68,6 +66,10 @@ import org.opensearch.sdk.SearchDataObjectResponse;
 import org.opensearch.sdk.UpdateDataObjectRequest;
 import org.opensearch.sdk.UpdateDataObjectResponse;
 import org.opensearch.search.builder.SearchSourceBuilder;
+
+import static org.opensearch.action.support.WriteRequest.RefreshPolicy.IMMEDIATE;
+import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
+import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -224,8 +226,91 @@ public class LocalClusterIndicesClient implements SdkClientDelegate {
         Executor executor,
         Boolean isMultiTenancyEnabled
     ) {
-        // TODO Complete this
-        return null;
+        return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<BulkDataObjectResponse>) () -> {
+            try {
+                log.info("Performing {} bulk actions on indices {}", request.requests().size(), request.getIndices());
+                BulkRequest bulkRequest = new BulkRequest();
+
+                for (DataObjectRequest dataObjectRequest : request.requests()) {
+                    if (dataObjectRequest instanceof PutDataObjectRequest) {
+                        try (XContentBuilder sourceBuilder = XContentFactory.jsonBuilder()) {
+                            PutDataObjectRequest putRequest = (PutDataObjectRequest) dataObjectRequest;
+                            IndexRequest indexRequest = new IndexRequest(putRequest.index())
+                                .opType(putRequest.overwriteIfExists() ? OpType.INDEX : OpType.CREATE)
+                                .source(putRequest.dataObject().toXContent(sourceBuilder, EMPTY_PARAMS));
+                            if (!Strings.isNullOrEmpty(putRequest.id())) {
+                                indexRequest.id(putRequest.id());
+                            }
+                            bulkRequest.add(indexRequest);
+                        }
+                    } else if (dataObjectRequest instanceof UpdateDataObjectRequest) {
+                        try (XContentBuilder sourceBuilder = XContentFactory.jsonBuilder()) {
+                            UpdateDataObjectRequest updateDataRequest = (UpdateDataObjectRequest) dataObjectRequest;
+                            UpdateRequest updateRequest = new UpdateRequest(updateDataRequest.index(), updateDataRequest.id())
+                                .doc(updateDataRequest.dataObject().toXContent(sourceBuilder, EMPTY_PARAMS));
+                            if (updateDataRequest.ifSeqNo() != null) {
+                                updateRequest.setIfSeqNo(updateDataRequest.ifSeqNo());
+                            }
+                            if (updateDataRequest.ifPrimaryTerm() != null) {
+                                updateRequest.setIfPrimaryTerm(updateDataRequest.ifPrimaryTerm());
+                            }
+                            if (updateDataRequest.retryOnConflict() > 0) {
+                                updateRequest.retryOnConflict(updateDataRequest.retryOnConflict());
+                            }
+                            bulkRequest.add(updateRequest);
+                        }
+                    } else if (dataObjectRequest instanceof DeleteDataObjectRequest) {
+                        DeleteDataObjectRequest deleteDataRequest = (DeleteDataObjectRequest) dataObjectRequest;
+                        DeleteRequest deleteRequest = new DeleteRequest(deleteDataRequest.index(), deleteDataRequest.id());
+                        bulkRequest.add(deleteRequest);
+                    }
+                }
+
+                BulkResponse bulkResponse = client.bulk(bulkRequest.setRefreshPolicy(IMMEDIATE)).actionGet();
+                int responseCount = bulkResponse.getItems().length;
+                log.info("Bulk action complete for {} items: {}", responseCount, bulkResponse.hasFailures() ? "has failures" : "success");
+                DataObjectResponse[] responses = new DataObjectResponse[responseCount];
+                for (int i = 0; i < responseCount; i++) {
+                    BulkItemResponse itemResponse = bulkResponse.getItems()[i];
+                    switch (itemResponse.getOpType()) {
+                        case INDEX:
+                        case CREATE:
+                            responses[i] = PutDataObjectResponse
+                                .builder()
+                                .id(itemResponse.getId())
+                                .parser(createParser(itemResponse))
+                                .failed(itemResponse.isFailed())
+                                .build();
+                            break;
+                        case UPDATE:
+                            responses[i] = UpdateDataObjectResponse
+                                .builder()
+                                .id(itemResponse.getId())
+                                .parser(createParser(itemResponse))
+                                .failed(itemResponse.isFailed())
+                                .build();
+                            break;
+                        case DELETE:
+                            responses[i] = DeleteDataObjectResponse
+                                .builder()
+                                .id(itemResponse.getId())
+                                .parser(createParser(itemResponse))
+                                .failed(itemResponse.isFailed())
+                                .build();
+                            break;
+                        default:
+                            throw new OpenSearchStatusException(
+                                "Invalid operation type for bulk response",
+                                RestStatus.INTERNAL_SERVER_ERROR
+                            );
+                    }
+                }
+                return new BulkDataObjectResponse(responses, bulkResponse.getTook().millis(), bulkResponse.getIngestTookInMillis());
+            } catch (IOException e) {
+                // Rethrow unchecked exception on XContent parsing error
+                throw new OpenSearchStatusException("Failed to parse data object in a bulk response", RestStatus.INTERNAL_SERVER_ERROR);
+            }
+        }), executor);
     }
 
     @Override

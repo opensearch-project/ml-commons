@@ -8,10 +8,10 @@
  */
 package org.opensearch.sdk;
 
+import java.util.Set;
+
 import org.opensearch.common.settings.Setting;
 import org.opensearch.common.settings.Setting.Property;
-
-import java.util.Set;
 
 /** Settings applicable to the SdkClient */
 public class SdkClientSettings {

@@ -8,14 +8,14 @@
  */
 package org.opensearch.sdk;
 
-import org.opensearch.common.Nullable;
-import org.opensearch.core.common.Strings;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+
+import org.opensearch.common.Nullable;
+import org.opensearch.core.common.Strings;
 
 public class BulkDataObjectRequest {
 
@@ -24,16 +24,16 @@ public class BulkDataObjectRequest {
     private String globalIndex;
     private String globalTenantId;
 
-    public BulkDataObjectRequest() {}
-
     /**
      * Instantiate this request with a global index.
      * <p>
      * For data storage implementations other than OpenSearch, an index may be referred to as a table and the id may be referred to as a primary key.
-     * @param index the index location for all the bulk requests
+     * @param globalIndex the index location for all the bulk requests as a default if not already specified
+     * @param globalTenantId the tenantId for all the bulk requests, overwriting what's specified if not null
      */
-    public BulkDataObjectRequest(@Nullable String globalIndex) {
+    public BulkDataObjectRequest(@Nullable String globalIndex, @Nullable String globalTenantId) {
         this.globalIndex = globalIndex;
+        this.globalTenantId = globalTenantId;
     }
 
     /**
@@ -59,7 +59,7 @@ public class BulkDataObjectRequest {
     public String globalTenantId() {
         return this.globalTenantId;
     }
-    
+
     /**
      * Add the given request to the {@link BulkDataObjectRequest}
      * @param request The request to add
@@ -80,8 +80,59 @@ public class BulkDataObjectRequest {
         } else {
             indices.add(request.index());
         }
-        request.tenantId(globalTenantId);
+        if (!Strings.isNullOrEmpty(globalTenantId)) {
+            request.tenantId(globalTenantId);
+        }
         requests.add(request);
         return this;
+    }
+
+    /**
+     * Instantiate a builder for this object
+     * @return a builder instance
+     */
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    /**
+     * Class for constructing a Builder for this Request Object
+     */
+    public static class Builder {
+        private String globalIndex = null;
+        private String globalTenantId = null;
+
+        /**
+         * Empty constructor to initialize
+         */
+        protected Builder() {}
+
+        /**
+         * Add an index to this builder
+         * @param index the index to put the object
+         * @return the updated builder
+         */
+        public Builder globalIndex(String index) {
+            this.globalIndex = index;
+            return this;
+        }
+
+        /**
+         * Add a tenant id to this builder
+         * @param tenantId the tenant id
+         * @return the updated builder
+         */
+        public Builder globalTenantId(String tenantId) {
+            this.globalTenantId = tenantId;
+            return this;
+        }
+
+        /**
+         * Builds the request
+         * @return A {@link BulkDataObjectRequest}
+         */
+        public BulkDataObjectRequest build() {
+            return new BulkDataObjectRequest(this.globalIndex, this.globalTenantId);
+        }
     }
 }

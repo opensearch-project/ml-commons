@@ -8,6 +8,7 @@
  */
 package org.opensearch.ml.sdkclient;
 
+import static org.opensearch.action.bulk.BulkResponse.NO_INGEST_TOOK;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_PRIMARY_TERM;
 import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_SEQ_NO;
@@ -16,14 +17,17 @@ import static org.opensearch.ml.common.CommonValue.TENANT_ID;
 import java.io.IOException;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import org.opensearch.OpenSearchStatusException;
@@ -40,6 +44,8 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.sdkclient.util.JsonTransformer;
 import org.opensearch.sdk.BulkDataObjectRequest;
 import org.opensearch.sdk.BulkDataObjectResponse;
+import org.opensearch.sdk.DataObjectRequest;
+import org.opensearch.sdk.DataObjectResponse;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
 import org.opensearch.sdk.GetDataObjectRequest;
@@ -360,8 +366,54 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
         Executor executor,
         Boolean isMultiTenancyEnabled
     ) {
-        // TODO Complete this
-        return null;
+        return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<BulkDataObjectResponse>) () -> {
+            log.info("Performing {} bulk actions on table {}", request.requests().size(), request.getIndices());
+
+            List<DataObjectResponse> responses = new ArrayList<>();
+
+            long startNanos = System.nanoTime();
+
+            for (DataObjectRequest dataObjectRequest : request.requests()) {
+                try {
+                    if (dataObjectRequest instanceof PutDataObjectRequest) {
+                        responses
+                            .add(
+                                putDataObjectAsync((PutDataObjectRequest) dataObjectRequest, executor, isMultiTenancyEnabled)
+                                    .toCompletableFuture()
+                                    .join()
+                            );
+                    } else if (dataObjectRequest instanceof UpdateDataObjectRequest) {
+                        responses
+                            .add(
+                                updateDataObjectAsync((UpdateDataObjectRequest) dataObjectRequest, executor, isMultiTenancyEnabled)
+                                    .toCompletableFuture()
+                                    .join()
+                            );
+                    } else if (dataObjectRequest instanceof DeleteDataObjectRequest) {
+                        responses
+                            .add(
+                                deleteDataObjectAsync((DeleteDataObjectRequest) dataObjectRequest, executor, isMultiTenancyEnabled)
+                                    .toCompletableFuture()
+                                    .join()
+                            );
+                    }
+                } catch (CompletionException e) {
+                    if (dataObjectRequest instanceof PutDataObjectRequest) {
+                        responses.add(new PutDataObjectResponse.Builder().id(dataObjectRequest.id()).failed(true).build());
+                    } else if (dataObjectRequest instanceof UpdateDataObjectRequest) {
+                        responses.add(new UpdateDataObjectResponse.Builder().id(dataObjectRequest.id()).failed(true).build());
+                    } else if (dataObjectRequest instanceof DeleteDataObjectRequest) {
+                        responses.add(new DeleteDataObjectResponse.Builder().id(dataObjectRequest.id()).failed(true).build());
+                    }
+                    log.error("Error in bulk operation for id {}: {}", dataObjectRequest.id(), e.getCause().getMessage(), e.getCause());
+                }
+            }
+            long endNanos = System.nanoTime();
+            long tookMillis = TimeUnit.NANOSECONDS.toMillis(endNanos - startNanos);
+
+            log.info("Bulk action complete for {} items, took {} ms", responses.size(), tookMillis);
+            return new BulkDataObjectResponse(responses.toArray(new DataObjectResponse[0]), tookMillis, NO_INGEST_TOOK);
+        }), executor);
     }
 
     /**
