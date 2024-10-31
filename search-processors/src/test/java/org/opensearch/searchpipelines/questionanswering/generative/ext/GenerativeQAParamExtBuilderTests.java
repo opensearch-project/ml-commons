@@ -19,12 +19,10 @@ package org.opensearch.searchpipelines.questionanswering.generative.ext;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
-import static org.opensearch.ml.common.CommonValue.VERSION_2_16_0;
 
 import java.io.EOFException;
 import java.io.IOException;
