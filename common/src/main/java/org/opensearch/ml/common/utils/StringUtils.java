@@ -63,12 +63,16 @@ public class StringUtils {
     }
     public static final String TO_STRING_FUNCTION_NAME = ".toString()";
 
-    public static boolean isValidJsonString(String Json) {
+    public static boolean isValidJsonString(String json) {
+        if (json == null || json.isBlank()) {
+            return false;
+        }
+
         try {
-            new JSONObject(Json);
+            new JSONObject(json);
         } catch (JSONException ex) {
             try {
-                new JSONArray(Json);
+                new JSONArray(json);
             } catch (JSONException ex1) {
                 return false;
             }
@@ -77,6 +81,10 @@ public class StringUtils {
     }
 
     public static boolean isJson(String json) {
+        if (json == null || json.isBlank()) {
+            return false;
+        }
+
         try {
             if (!isValidJsonString(json)) {
                 return false;
@@ -330,6 +338,10 @@ public class StringUtils {
     }
 
     public static JsonObject getJsonObjectFromString(String jsonString) {
+        if (jsonString == null || jsonString.isBlank()) {
+            throw new IllegalArgumentException("Json cannot be null or empty");
+        }
+
         return JsonParser.parseString(jsonString).getAsJsonObject();
     }
 

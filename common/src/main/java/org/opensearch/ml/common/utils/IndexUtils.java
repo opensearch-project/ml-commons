@@ -59,6 +59,10 @@ public class IndexUtils {
         }
 
         String mapping = Resources.toString(url, Charsets.UTF_8);
+        if (mapping == null || mapping.isBlank()) {
+            throw new IllegalArgumentException("Empty mapping found at: " + path);
+        }
+
         mapping = replacePlaceholders(mapping);
         validateMapping(mapping);
 
@@ -66,6 +70,10 @@ public class IndexUtils {
     }
 
     public static String replacePlaceholders(String mapping) throws IOException {
+        if (mapping == null || mapping.isBlank()) {
+            throw new IllegalArgumentException("Mapping cannot be null or empty");
+        }
+
         for (Map.Entry<String, String> placeholder : MAPPING_PLACEHOLDERS.entrySet()) {
             URL url = IndexUtils.class.getClassLoader().getResource(placeholder.getValue());
             if (url == null) {
@@ -96,6 +104,10 @@ public class IndexUtils {
         Note: Validation can be made more strict if a specific schema is defined for each index.
      */
     public static void validateMapping(String mapping) throws IOException {
+        if (mapping == null || mapping.isBlank()) {
+            throw new IllegalArgumentException("Mapping cannot be null or empty");
+        }
+
         if (!StringUtils.isJson(mapping)) {
             throw new JsonSyntaxException("Mapping is not a valid JSON: " + mapping);
         }
@@ -110,6 +122,10 @@ public class IndexUtils {
     }
 
     public static Integer getVersionFromMapping(String mapping) {
+        if (mapping == null || mapping.isBlank()) {
+            throw new IllegalArgumentException("Mapping cannot be null or empty");
+        }
+
         JsonObject mappingJson = StringUtils.getJsonObjectFromString(mapping);
         if (mappingJson == null || !mappingJson.has("_meta")) {
             throw new JsonParseException("Failed to find \"_meta\" object in mapping: " + mapping);
