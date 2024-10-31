@@ -48,6 +48,10 @@ public class IndexUtils {
         }
 
         String mapping = Resources.toString(url, Charsets.UTF_8);
+        if (mapping == null || mapping.isBlank()) {
+            throw new IllegalArgumentException("Empty mapping found at: " + path);
+        }
+
         if (!StringUtils.isJson(mapping)) {
             throw new JsonSyntaxException("Mapping is not a valid JSON: " + path);
         }
@@ -56,6 +60,10 @@ public class IndexUtils {
     }
 
     public static Integer getVersionFromMapping(String mapping) {
+        if (mapping == null || mapping.isBlank()) {
+            throw new IllegalArgumentException("Mapping cannot be null or empty");
+        }
+
         JsonObject mappingJson = StringUtils.getJsonObjectFromString(mapping);
         if (mappingJson == null || !mappingJson.has("_meta")) {
             throw new JsonParseException("Failed to find \"_meta\" object in mapping: " + mapping);
