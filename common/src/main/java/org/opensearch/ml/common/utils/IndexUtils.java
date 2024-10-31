@@ -44,13 +44,13 @@ public class IndexUtils {
     public static final Map<String, Object> UPDATED_ALL_NODES_REPLICA_INDEX_SETTINGS = Map.of("index.auto_expand_replicas", "0-all");
 
     // Schema that validates system index mappings
-    public static final String MAPPING_SCHEMA_PATH = "mappings/schema.json";
+    public static final String MAPPING_SCHEMA_PATH = "index-mappings/schema.json";
 
     // Placeholders to use within the json mapping files
     private static final String USER_PLACEHOLDER = "USER_MAPPING_PLACEHOLDER";
     private static final String CONNECTOR_PLACEHOLDER = "CONNECTOR_MAPPING_PLACEHOLDER";
     public static final Map<String, String> MAPPING_PLACEHOLDERS = Map
-        .of(USER_PLACEHOLDER, "mappings/placeholders/user.json", CONNECTOR_PLACEHOLDER, "mappings/placeholders/connector.json");
+        .of(USER_PLACEHOLDER, "index-mappings/placeholders/user.json", CONNECTOR_PLACEHOLDER, "index-mappings/placeholders/connector.json");
 
     public static String getMappingFromFile(String path) throws IOException {
         URL url = IndexUtils.class.getClassLoader().getResource(path);
