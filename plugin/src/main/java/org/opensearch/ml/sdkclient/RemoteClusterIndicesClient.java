@@ -8,7 +8,6 @@
  */
 package org.opensearch.ml.sdkclient;
 
-import static org.opensearch.action.bulk.BulkResponse.NO_INGEST_TOOK;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 
 import java.io.IOException;
@@ -343,11 +342,9 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
                             );
                     }
                 }
-                return new BulkDataObjectResponse(
-                    responses,
-                    bulkResponse.took(),
-                    bulkResponse.ingestTook() == null ? NO_INGEST_TOOK : bulkResponse.ingestTook().longValue()
-                );
+                return bulkResponse.ingestTook() == null
+                    ? new BulkDataObjectResponse(responses, bulkResponse.took())
+                    : new BulkDataObjectResponse(responses, bulkResponse.took(), bulkResponse.ingestTook().longValue());
             } catch (IOException e) {
                 // Rethrow unchecked exception on XContent parsing error
                 throw new OpenSearchStatusException("Failed to parse data object in a bulk response", RestStatus.INTERNAL_SERVER_ERROR);

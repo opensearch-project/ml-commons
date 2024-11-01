@@ -8,7 +8,6 @@
  */
 package org.opensearch.ml.sdkclient;
 
-import static org.opensearch.action.bulk.BulkResponse.NO_INGEST_TOOK;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_PRIMARY_TERM;
 import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_SEQ_NO;
@@ -412,7 +411,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
             long tookMillis = TimeUnit.NANOSECONDS.toMillis(endNanos - startNanos);
 
             log.info("Bulk action complete for {} items, took {} ms", responses.size(), tookMillis);
-            return new BulkDataObjectResponse(responses.toArray(new DataObjectResponse[0]), tookMillis, NO_INGEST_TOOK);
+            return new BulkDataObjectResponse(responses.toArray(new DataObjectResponse[0]), tookMillis);
         }), executor);
     }
 

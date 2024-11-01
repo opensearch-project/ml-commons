@@ -10,11 +10,17 @@ package org.opensearch.sdk;
 
 import java.util.Arrays;
 
+import static org.opensearch.action.bulk.BulkResponse.NO_INGEST_TOOK;
+
 public class BulkDataObjectResponse {
 
     private final DataObjectResponse[] responses;
     private final long tookInMillis;
     private final long ingestTookInMillis;
+
+    public BulkDataObjectResponse(DataObjectResponse[] responses, long tookInMillis) {
+        this(responses, tookInMillis, NO_INGEST_TOOK);
+    }
 
     public BulkDataObjectResponse(DataObjectResponse[] responses, long tookInMillis, long ingestTookInMillis) {
         this.responses = responses;

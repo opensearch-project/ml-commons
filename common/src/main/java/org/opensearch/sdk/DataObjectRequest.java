@@ -67,7 +67,7 @@ public abstract class DataObjectRequest {
     public void tenantId(String tenantId) {
         this.tenantId = tenantId;
     }
-    
+
     /**
      * Returns whether the subclass can be used in a {@link BulkDataObjectRequest}
      * @return whether the subclass is a write request

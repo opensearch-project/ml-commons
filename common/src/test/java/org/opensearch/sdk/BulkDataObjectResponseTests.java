@@ -19,14 +19,16 @@ import static org.junit.Assert.assertTrue;
 public class BulkDataObjectResponseTests {
     @Test
     public void testBulkDataObjectResponse() {
-        
-        DataObjectResponse[] responses = List.of(
-            PutDataObjectResponse.builder().build(),
-            UpdateDataObjectResponse.builder().build(),
-            DeleteDataObjectResponse.builder().build()
-            ).toArray(new DataObjectResponse[0]);
-        
-        BulkDataObjectResponse response = new BulkDataObjectResponse(responses, 1L, -1L);
+
+        DataObjectResponse[] responses = List
+            .of(
+                PutDataObjectResponse.builder().build(),
+                UpdateDataObjectResponse.builder().build(),
+                DeleteDataObjectResponse.builder().build()
+            )
+            .toArray(new DataObjectResponse[0]);
+
+        BulkDataObjectResponse response = new BulkDataObjectResponse(responses, 1L);
 
         assertEquals(3, response.getResponses().length);
         assertEquals(1L, response.getTookInMillis());
@@ -36,12 +38,11 @@ public class BulkDataObjectResponseTests {
 
     @Test
     public void testBulkDataObjectRequest_Failures() {
-        DataObjectResponse[] responses = List.of(
-            PutDataObjectResponse.builder().build(),
-            DeleteDataObjectResponse.builder().failed(true).build()
-            ).toArray(new DataObjectResponse[0]);
-        
-        BulkDataObjectResponse response = new BulkDataObjectResponse(responses, 1L, -1L);
+        DataObjectResponse[] responses = List
+            .of(PutDataObjectResponse.builder().build(), DeleteDataObjectResponse.builder().failed(true).build())
+            .toArray(new DataObjectResponse[0]);
+
+        BulkDataObjectResponse response = new BulkDataObjectResponse(responses, 1L);
 
         assertTrue(response.hasFailures());
     }

@@ -170,7 +170,7 @@ public class SdkClient {
     /**
      * Perform a bulk request for multiple data objects/documents in potentially multiple tables/indices.
      *
-     * @param request  A request identifying the data object to delete
+     * @param request A request identifying the bulk requests to execute
      * @param executor the executor to use for asynchronous execution
      * @return A completion stage encapsulating the response or exception
      */
@@ -182,7 +182,7 @@ public class SdkClient {
     /**
      * Perform a bulk request for multiple data objects/documents in potentially multiple tables/indices.
      *
-     * @param request A request identifying the data object to delete
+     * @param request A request identifying the bulk requests to execute
      * @return A completion stage encapsulating the response or exception
      */
     public CompletionStage<BulkDataObjectResponse> bulkDataObjectAsync(BulkDataObjectRequest request) {
@@ -192,7 +192,7 @@ public class SdkClient {
     /**
      * Perform a bulk request for multiple data objects/documents in potentially multiple tables/indices.
      *
-     * @param request A request identifying the data object to delete
+     * @param request A request identifying the bulk requests to execute
      * @return A response on success. Throws unchecked exceptions or {@link OpenSearchException} wrapping the cause on checked exception.
      */
     public BulkDataObjectResponse bulkDataObject(BulkDataObjectRequest request) {
