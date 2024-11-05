@@ -68,7 +68,8 @@ public class IndexUtilsTest {
             + "}\n";
         try {
             String actualMapping = IndexUtils.getMappingFromFile("index-mappings/test-mapping.json");
-            assertEquals(expectedMapping, actualMapping);
+            // comparing JsonObjects to avoid issues caused by eol character in different OS
+            assertEquals(StringUtils.getJsonObjectFromString(expectedMapping), StringUtils.getJsonObjectFromString(actualMapping));
         } catch (IOException e) {
             throw new RuntimeException("Failed to read file at path: index-mappings/test-mapping.json");
         }
