@@ -629,23 +629,24 @@ public class LocalClusterIndicesClientTests {
     public void testBulkDataObject_WithFailures() throws IOException {
         PutDataObjectRequest putRequest = PutDataObjectRequest
             .builder()
-            .index(TEST_INDEX)
             .id(TEST_ID + "1")
             .dataObject(testDataObject)
             .build();
         UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
             .builder()
-            .index(TEST_INDEX)
             .id(TEST_ID + "2")
             .dataObject(testDataObject)
             .build();
+        DeleteDataObjectRequest deleteRequest = DeleteDataObjectRequest.builder().id(TEST_ID + "3").build();
 
         BulkDataObjectRequest bulkRequest = BulkDataObjectRequest
             .builder()
+            .globalIndex(TEST_INDEX)
             .globalTenantId(TEST_TENANT_ID)
             .build()
             .add(putRequest)
-            .add(updateRequest);
+            .add(updateRequest)
+            .add(deleteRequest);
 
         BulkResponse bulkResponse = new BulkResponse(
             new BulkItemResponse[] {
@@ -654,7 +655,9 @@ public class LocalClusterIndicesClientTests {
                     1,
                     OpType.UPDATE,
                     new BulkItemResponse.Failure(TEST_INDEX, TEST_ID + "2", new Exception("Update failed"))
-                ) },
+                ),
+                new BulkItemResponse(0, OpType.DELETE, new IndexResponse(new ShardId(TEST_INDEX, "_na_", 0), TEST_ID + "3", 1, 1, 1, true))
+                },
             100L
         );
 
@@ -667,10 +670,14 @@ public class LocalClusterIndicesClientTests {
             .bulkDataObjectAsync(bulkRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
             .toCompletableFuture()
             .join();
-
-        assertEquals(2, response.getResponses().length);
+        
+        assertEquals(3, response.getResponses().length);
         assertFalse(response.getResponses()[0].isFailed());
+        assertTrue(response.getResponses()[0] instanceof PutDataObjectResponse);
         assertTrue(response.getResponses()[1].isFailed());
+        assertTrue(response.getResponses()[1] instanceof UpdateDataObjectResponse);
+        assertFalse(response.getResponses()[2].isFailed());
+        assertTrue(response.getResponses()[2] instanceof DeleteDataObjectResponse);
     }
 
     @Test

@@ -10,22 +10,28 @@ package org.opensearch.sdk;
 
 import java.util.Arrays;
 
+import org.opensearch.core.xcontent.XContentParser;
+
 import static org.opensearch.action.bulk.BulkResponse.NO_INGEST_TOOK;
 
 public class BulkDataObjectResponse {
 
-    private final DataObjectResponse[] responses;
+    private final DataObjectResponse[] responses;    
     private final long tookInMillis;
     private final long ingestTookInMillis;
+    private final boolean failures;
+    private final XContentParser parser;
 
-    public BulkDataObjectResponse(DataObjectResponse[] responses, long tookInMillis) {
-        this(responses, tookInMillis, NO_INGEST_TOOK);
+    public BulkDataObjectResponse(DataObjectResponse[] responses, long tookInMillis, boolean failures, XContentParser parser) {
+        this(responses, tookInMillis, NO_INGEST_TOOK, failures, parser);
     }
 
-    public BulkDataObjectResponse(DataObjectResponse[] responses, long tookInMillis, long ingestTookInMillis) {
+    public BulkDataObjectResponse(DataObjectResponse[] responses, long tookInMillis, long ingestTookInMillis, boolean failures, XContentParser parser) {
         this.responses = responses;
         this.tookInMillis = tookInMillis;
         this.ingestTookInMillis = ingestTookInMillis;
+        this.failures = failures;
+        this.parser = parser;
     }
 
     /**
@@ -57,6 +63,14 @@ public class BulkDataObjectResponse {
      * @return true if any response failed, false otherwise
      */
     public boolean hasFailures() {
-        return Arrays.stream(responses).anyMatch(DataObjectResponse::isFailed);
+        return this.failures;
+    }
+    
+    /**
+     * Returns the parser
+     * @return the parser
+     */
+    public XContentParser parser() {
+        return this.parser;
     }
 }

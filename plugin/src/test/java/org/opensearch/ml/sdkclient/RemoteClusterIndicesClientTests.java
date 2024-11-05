@@ -9,6 +9,8 @@
 package org.opensearch.ml.sdkclient;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -632,21 +634,13 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
     }
 
     public void testBulkDataObject_WithFailures() throws IOException {
-        PutDataObjectRequest putRequest = PutDataObjectRequest
-            .builder()
-            .index(TEST_INDEX)
-            .id(TEST_ID + "1")
-            .dataObject(testDataObject)
-            .build();
-        UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
-            .builder()
-            .index(TEST_INDEX)
-            .id(TEST_ID + "2")
-            .dataObject(testDataObject)
-            .build();
+        PutDataObjectRequest putRequest = PutDataObjectRequest.builder().id(TEST_ID + "1").dataObject(testDataObject).build();
+        UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest.builder().id(TEST_ID + "2").dataObject(testDataObject).build();
+        DeleteDataObjectRequest deleteRequest = DeleteDataObjectRequest.builder().id(TEST_ID + "3").build();
 
         BulkDataObjectRequest bulkRequest = BulkDataObjectRequest
             .builder()
+            .globalIndex(TEST_INDEX)
             .globalTenantId(TEST_TENANT_ID)
             .build()
             .add(putRequest)
@@ -670,6 +664,13 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
                             .operationType(OperationType.Update)
                             .error(new ErrorCause.Builder().type("update_error").reason("Update failed").build())
                             .status(RestStatus.INTERNAL_SERVER_ERROR.getStatus())
+                            .build(),
+                        new BulkResponseItem.Builder()
+                            .id(TEST_ID + "3")
+                            .index(TEST_INDEX)
+                            .operationType(OperationType.Delete)
+                            .result(Result.Deleted.jsonValue())
+                            .status(RestStatus.OK.getStatus())
                             .build()
                     )
             )
@@ -683,9 +684,13 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
             .toCompletableFuture()
             .join();
 
-        assertEquals(2, response.getResponses().length);
+        assertEquals(3, response.getResponses().length);
         assertFalse(response.getResponses()[0].isFailed());
+        assertTrue(response.getResponses()[0] instanceof PutDataObjectResponse);
         assertTrue(response.getResponses()[1].isFailed());
+        assertTrue(response.getResponses()[1] instanceof UpdateDataObjectResponse);
+        assertFalse(response.getResponses()[2].isFailed());
+        assertTrue(response.getResponses()[2] instanceof DeleteDataObjectResponse);
     }
 
     public void testBulkDataObject_Exception() throws OpenSearchException, IOException {

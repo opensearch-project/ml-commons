@@ -723,13 +723,15 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
     public void testBulkDataObject_WithFailures() {
         PutDataObjectRequest putRequest = PutDataObjectRequest.builder().id(TEST_ID + "1").dataObject(testDataObject).build();
         UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest.builder().id(TEST_ID + "2").dataObject(testDataObject).build();
+        DeleteDataObjectRequest deleteRequest = DeleteDataObjectRequest.builder().id(TEST_ID + "3").build();
         BulkDataObjectRequest bulkRequest = BulkDataObjectRequest
             .builder()
             .globalIndex(TEST_INDEX)
             .globalTenantId(TENANT_ID)
             .build()
             .add(putRequest)
-            .add(updateRequest);
+            .add(updateRequest)
+            .add(deleteRequest);
 
         when(dynamoDbClient.putItem(any(PutItemRequest.class))).thenReturn(PutItemResponse.builder().build());
         GetItemResponse getItemResponse = GetItemResponse
@@ -743,16 +745,27 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
             )
             .build();
         when(dynamoDbClient.getItem(any(GetItemRequest.class))).thenReturn(getItemResponse);
-        when(dynamoDbClient.updateItem(any(UpdateItemRequest.class))).thenThrow(new RuntimeException("Update failed"));
+        Exception cause = new OpenSearchStatusException("Update failed with conflict", RestStatus.CONFLICT);
+        when(dynamoDbClient.updateItem(any(UpdateItemRequest.class))).thenThrow(cause);
+        when(dynamoDbClient.deleteItem(any(DeleteItemRequest.class))).thenReturn(DeleteItemResponse.builder().build());
 
         BulkDataObjectResponse response = sdkClient
             .bulkDataObjectAsync(bulkRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
             .toCompletableFuture()
             .join();
 
-        assertEquals(2, response.getResponses().length);
+        assertEquals(3, response.getResponses().length);
         assertFalse(response.getResponses()[0].isFailed());
+        assertNull(response.getResponses()[0].cause());
+        assertTrue(response.getResponses()[0] instanceof PutDataObjectResponse);
         assertTrue(response.getResponses()[1].isFailed());
+        assertTrue(response.getResponses()[1].cause() instanceof OpenSearchStatusException);
+        assertEquals("Update failed with conflict", response.getResponses()[1].cause().getMessage());
+        assertEquals(RestStatus.CONFLICT, response.getResponses()[1].status());
+        assertTrue(response.getResponses()[1] instanceof UpdateDataObjectResponse);
+        assertFalse(response.getResponses()[2].isFailed());
+        assertNull(response.getResponses()[0].cause());
+        assertTrue(response.getResponses()[2] instanceof DeleteDataObjectResponse);
     }
 
     @Test

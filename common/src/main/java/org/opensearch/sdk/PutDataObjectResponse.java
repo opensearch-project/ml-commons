@@ -8,6 +8,7 @@
  */
 package org.opensearch.sdk;
 
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentParser;
 
 public class PutDataObjectResponse extends DataObjectResponse {
@@ -16,12 +17,15 @@ public class PutDataObjectResponse extends DataObjectResponse {
      * Instantiate this request with an id and parser representing an IndexResponse
      * <p>
      * For data storage implementations other than OpenSearch, the id may be referred to as a primary key.
+     * @param index the index
      * @param id the document id
      * @param parser a parser that can be used to create an IndexResponse
      * @param failed whether the request failed
+     * @param cause the Exception causing the failure
+     * @param status the RestStatus
      */
-    public PutDataObjectResponse(String id, XContentParser parser, boolean failed) {
-        super(id, parser, failed);
+    public PutDataObjectResponse(String index, String id, XContentParser parser, boolean failed, Exception cause, RestStatus status) {
+        super(index, id, parser, failed, cause, status);
     }
 
     /**
@@ -42,7 +46,7 @@ public class PutDataObjectResponse extends DataObjectResponse {
          * @return A {@link PutDataObjectResponse}
          */
         public PutDataObjectResponse build() {
-            return new PutDataObjectResponse(this.id, this.parser, this.failed);
+            return new PutDataObjectResponse(this.index, this.id, this.parser, this.failed, this.cause, this.status);
         }
     }
 }

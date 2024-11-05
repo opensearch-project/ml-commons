@@ -14,6 +14,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.opensearch.action.support.WriteRequest.RefreshPolicy;
 import org.opensearch.common.Nullable;
 import org.opensearch.core.common.Strings;
 
@@ -21,6 +22,7 @@ public class BulkDataObjectRequest {
 
     private final List<DataObjectRequest> requests = new ArrayList<>();
     private final Set<String> indices = new HashSet<>();
+    private RefreshPolicy refreshPolicy = RefreshPolicy.NONE;
     private String globalIndex;
     private String globalTenantId;
 
@@ -87,6 +89,23 @@ public class BulkDataObjectRequest {
         return this;
     }
 
+    /**
+     * Should this request trigger a refresh ({@linkplain RefreshPolicy#IMMEDIATE}), wait for a refresh (
+     * {@linkplain RefreshPolicy#WAIT_UNTIL}), or proceed ignore refreshes entirely ({@linkplain RefreshPolicy#NONE}, the default).
+     */
+    public BulkDataObjectRequest setRefreshPolicy(RefreshPolicy refreshPolicy) {
+        this.refreshPolicy = refreshPolicy;
+        return this;
+    }
+
+    /**
+     * Should this request trigger a refresh ({@linkplain RefreshPolicy#IMMEDIATE}), wait for a refresh (
+     * {@linkplain RefreshPolicy#WAIT_UNTIL}), or proceed ignore refreshes entirely ({@linkplain RefreshPolicy#NONE}, the default).
+     */
+    public RefreshPolicy getRefreshPolicy() {
+        return refreshPolicy;
+    }
+    
     /**
      * Instantiate a builder for this object
      * @return a builder instance

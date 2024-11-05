@@ -12,6 +12,7 @@ import java.util.Set;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.opensearch.action.support.WriteRequest.RefreshPolicy;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -40,10 +41,12 @@ public class BulkDataObjectRequestTests {
             .build()
             .add(PutDataObjectRequest.builder().index(testIndex).build())
             .add(UpdateDataObjectRequest.builder().build())
-            .add(DeleteDataObjectRequest.builder().index(testIndex).tenantId(testTenantId).build());
+            .add(DeleteDataObjectRequest.builder().index(testIndex).tenantId(testTenantId).build())
+            .setRefreshPolicy(RefreshPolicy.IMMEDIATE);
 
         assertEquals(Set.of(testIndex, testGlobalIndex), request.getIndices());
         assertEquals(3, request.requests().size());
+        assertEquals(RefreshPolicy.IMMEDIATE, request.getRefreshPolicy());
 
         DataObjectRequest r0 = request.requests().get(0);
         assertTrue(r0 instanceof PutDataObjectRequest);

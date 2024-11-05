@@ -29,16 +29,27 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.action.DocWriteRequest.OpType;
+import org.opensearch.action.DocWriteResponse;
+import org.opensearch.action.bulk.BulkItemResponse;
+import org.opensearch.action.bulk.BulkResponse;
+import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.replication.ReplicationResponse.ShardInfo;
+import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
+import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.DeprecationHandler;
 import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.sdkclient.util.JsonTransformer;
 import org.opensearch.sdk.BulkDataObjectRequest;
@@ -53,6 +64,7 @@ import org.opensearch.sdk.PutDataObjectRequest;
 import org.opensearch.sdk.PutDataObjectResponse;
 import org.opensearch.sdk.SdkClient;
 import org.opensearch.sdk.SdkClientDelegate;
+import org.opensearch.sdk.SdkClientUtils;
 import org.opensearch.sdk.SearchDataObjectRequest;
 import org.opensearch.sdk.SearchDataObjectResponse;
 import org.opensearch.sdk.UpdateDataObjectRequest;
@@ -371,7 +383,6 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
             List<DataObjectResponse> responses = new ArrayList<>();
 
             long startNanos = System.nanoTime();
-
             for (DataObjectRequest dataObjectRequest : request.requests()) {
                 try {
                     if (dataObjectRequest instanceof PutDataObjectRequest) {
@@ -397,12 +408,41 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
                             );
                     }
                 } catch (CompletionException e) {
+                    Exception cause = SdkClientUtils.unwrapAndConvertToException(e);
+                    RestStatus status = ExceptionsHelper.status(cause);
                     if (dataObjectRequest instanceof PutDataObjectRequest) {
-                        responses.add(new PutDataObjectResponse.Builder().id(dataObjectRequest.id()).failed(true).build());
+                        responses
+                            .add(
+                                new PutDataObjectResponse.Builder()
+                                    .index(dataObjectRequest.index())
+                                    .id(dataObjectRequest.id())
+                                    .failed(true)
+                                    .cause(cause)
+                                    .status(status)
+                                    .build()
+                            );
                     } else if (dataObjectRequest instanceof UpdateDataObjectRequest) {
-                        responses.add(new UpdateDataObjectResponse.Builder().id(dataObjectRequest.id()).failed(true).build());
+                        responses
+                            .add(
+                                new UpdateDataObjectResponse.Builder()
+                                    .index(dataObjectRequest.index())
+                                    .id(dataObjectRequest.id())
+                                    .failed(true)
+                                    .cause(cause)
+                                    .status(status)
+                                    .build()
+                            );
                     } else if (dataObjectRequest instanceof DeleteDataObjectRequest) {
-                        responses.add(new DeleteDataObjectResponse.Builder().id(dataObjectRequest.id()).failed(true).build());
+                        responses
+                            .add(
+                                new DeleteDataObjectResponse.Builder()
+                                    .index(dataObjectRequest.index())
+                                    .id(dataObjectRequest.id())
+                                    .failed(true)
+                                    .cause(cause)
+                                    .status(status)
+                                    .build()
+                            );
                     }
                     log.error("Error in bulk operation for id {}: {}", dataObjectRequest.id(), e.getCause().getMessage(), e.getCause());
                 }
@@ -411,8 +451,56 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
             long tookMillis = TimeUnit.NANOSECONDS.toMillis(endNanos - startNanos);
 
             log.info("Bulk action complete for {} items, took {} ms", responses.size(), tookMillis);
-            return new BulkDataObjectResponse(responses.toArray(new DataObjectResponse[0]), tookMillis);
+            return buildBulkDataObjectResponse(responses, tookMillis);
         }), executor);
+    }
+
+    private BulkDataObjectResponse buildBulkDataObjectResponse(List<DataObjectResponse> responses, long tookMillis) {
+        // Reconstruct BulkResponse to leverage its parser and hasFailed methods
+        BulkItemResponse[] responseArray = new BulkItemResponse[responses.size()];
+        try {
+            for (int id = 0; id < responses.size(); id++) {
+                responseArray[id] = buildBulkItemResponse(responses, id);
+            }
+            BulkResponse br = new BulkResponse(responseArray, tookMillis);
+            try (XContentBuilder builder = XContentFactory.jsonBuilder()) {
+                br.toXContent(builder, ToXContent.EMPTY_PARAMS);
+                return new BulkDataObjectResponse(
+                    responses.toArray(new DataObjectResponse[0]),
+                    tookMillis,
+                    br.hasFailures(),
+                    createParser(builder.toString())
+                );
+            }
+        } catch (IOException e) {
+            // Rethrow unchecked exception on XContent parsing error
+            throw new OpenSearchStatusException("Failed to parse bulk response", RestStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    private BulkItemResponse buildBulkItemResponse(List<DataObjectResponse> responses, int bulkId) throws IOException {
+        DataObjectResponse response = responses.get(bulkId);
+        OpType opType = null;
+        if (response instanceof PutDataObjectResponse) {
+            opType = OpType.INDEX;
+        } else if (response instanceof UpdateDataObjectResponse) {
+            opType = OpType.UPDATE;
+        } else if (response instanceof DeleteDataObjectResponse) {
+            opType = OpType.DELETE;
+        }
+        // If failed, parser is null, so shortcut response here
+        if (response.isFailed()) {
+            return new BulkItemResponse(bulkId, opType, new BulkItemResponse.Failure(response.index(), response.id(), response.cause()));
+        }
+        DocWriteResponse writeResponse = null;
+        if (response instanceof PutDataObjectResponse) {
+            writeResponse = IndexResponse.fromXContent(response.parser());
+        } else if (response instanceof UpdateDataObjectResponse) {
+            writeResponse = UpdateResponse.fromXContent(response.parser());
+        } else if (response instanceof DeleteDataObjectResponse) {
+            writeResponse = DeleteResponse.fromXContent(response.parser());
+        }
+        return new BulkItemResponse(bulkId, opType, writeResponse);
     }
 
     /**

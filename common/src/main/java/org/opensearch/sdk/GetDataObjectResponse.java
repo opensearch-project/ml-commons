@@ -11,6 +11,7 @@ package org.opensearch.sdk;
 import java.util.Collections;
 import java.util.Map;
 
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentParser;
 
 public class GetDataObjectResponse extends DataObjectResponse {
@@ -20,13 +21,16 @@ public class GetDataObjectResponse extends DataObjectResponse {
      * Instantiate this request with an id and parser/map used to recreate the data object.
      * <p>
      * For data storage implementations other than OpenSearch, the id may be referred to as a primary key.
+     * @param index the index
      * @param id the document id
      * @param parser a parser that can be used to create a GetResponse
      * @param failed whether the request failed
+     * @param cause the Exception causing the failure
+     * @param status the RestStatus
      * @param source the data object as a map
      */
-    public GetDataObjectResponse(String id, XContentParser parser, boolean failed, Map<String, Object> source) {
-        super(id, parser, failed);
+    public GetDataObjectResponse(String index, String id, XContentParser parser, boolean failed, Exception cause, RestStatus status, Map<String, Object> source) {
+        super(index, id, parser, failed, cause, status);
         this.source = source;
     }
 
@@ -67,7 +71,7 @@ public class GetDataObjectResponse extends DataObjectResponse {
          * @return A {@link GetDataObjectResponse}
          */
         public GetDataObjectResponse build() {
-            return new GetDataObjectResponse(this.id, this.parser, this.failed, this.source);
+            return new GetDataObjectResponse(this.index, this.id, this.parser, this.failed, this.cause, this.status, this.source);
         }
     }
 }

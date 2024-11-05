@@ -305,7 +305,13 @@ public class LocalClusterIndicesClient implements SdkClientDelegate {
                             );
                     }
                 }
-                return new BulkDataObjectResponse(responses, bulkResponse.getTook().millis(), bulkResponse.getIngestTookInMillis());
+                return new BulkDataObjectResponse(
+                    responses,
+                    bulkResponse.getTook().millis(),
+                    bulkResponse.getIngestTookInMillis(),
+                    bulkResponse.hasFailures(),
+                    createParser(bulkResponse)
+                );
             } catch (IOException e) {
                 // Rethrow unchecked exception on XContent parsing error
                 throw new OpenSearchStatusException("Failed to parse data object in a bulk response", RestStatus.INTERNAL_SERVER_ERROR);

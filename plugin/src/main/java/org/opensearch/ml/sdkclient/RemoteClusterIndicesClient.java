@@ -343,8 +343,14 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
                     }
                 }
                 return bulkResponse.ingestTook() == null
-                    ? new BulkDataObjectResponse(responses, bulkResponse.took())
-                    : new BulkDataObjectResponse(responses, bulkResponse.took(), bulkResponse.ingestTook().longValue());
+                    ? new BulkDataObjectResponse(responses, bulkResponse.took(), bulkResponse.errors(), createParser(bulkResponse))
+                    : new BulkDataObjectResponse(
+                        responses,
+                        bulkResponse.took(),
+                        bulkResponse.ingestTook().longValue(),
+                        bulkResponse.errors(),
+                        createParser(bulkResponse)
+                    );
             } catch (IOException e) {
                 // Rethrow unchecked exception on XContent parsing error
                 throw new OpenSearchStatusException("Failed to parse data object in a bulk response", RestStatus.INTERNAL_SERVER_ERROR);
