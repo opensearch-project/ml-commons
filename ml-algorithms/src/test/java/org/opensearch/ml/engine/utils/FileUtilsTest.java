@@ -45,16 +45,14 @@ public class FileUtilsTest {
 
         // Split file into chunks.
         int chunkSize = 325;
-        List<String> chunkPaths = FileUtils
-                .splitFileIntoChunks(file, tempDir.newFolder().toPath(), chunkSize);
+        List<String> chunkPaths = FileUtils.splitFileIntoChunks(file, tempDir.newFolder().toPath(), chunkSize);
 
         // Verify.
         int currentPosition = 0;
         for (String chunkPath : chunkPaths) {
             byte[] chunk = Files.readAllBytes(Path.of(chunkPath));
             assertTrue("Chunk size", currentPosition + chunk.length <= data.length);
-            Assert.assertArrayEquals(Arrays
-                    .copyOfRange(data, currentPosition, currentPosition + chunk.length), chunk);
+            Assert.assertArrayEquals(Arrays.copyOfRange(data, currentPosition, currentPosition + chunk.length), chunk);
             currentPosition += chunk.length;
         }
         assertEquals(currentPosition, data.length);
