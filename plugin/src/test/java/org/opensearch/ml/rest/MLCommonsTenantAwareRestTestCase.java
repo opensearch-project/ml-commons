@@ -62,6 +62,8 @@ public abstract class MLCommonsTenantAwareRestTestCase extends MLCommonsRestTest
     // REST Response error reasons
     protected static final String MISSING_TENANT_REASON = "Tenant ID header is missing";
     protected static final String NO_PERMISSION_REASON = "You don't have permission to access this resource";
+    protected static final String DEPLOYED_REASON =
+        "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete";
 
     // Common constants and fields used in subclasses
     protected static final String CONNECTOR_ID = "connector_id";
@@ -165,6 +167,10 @@ public abstract class MLCommonsTenantAwareRestTestCase extends MLCommonsRestTest
                 TestHelper.httpEntityToString(response.getEntity()).getBytes(UTF_8)
             );
         return SearchResponse.fromXContent(parser);
+    }
+
+    protected static void assertBadRequest(Response response) {
+        assertEquals(RestStatus.BAD_REQUEST.getStatus(), response.getStatusLine().getStatusCode());
     }
 
     protected static void assertNotFound(Response response) {
