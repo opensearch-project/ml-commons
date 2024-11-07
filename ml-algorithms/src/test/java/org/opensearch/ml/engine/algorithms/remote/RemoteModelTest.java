@@ -23,6 +23,7 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.MLModel;
@@ -30,20 +31,26 @@ import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.HttpConnector;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.engine.MLEngineClassLoader;
+import org.opensearch.ml.engine.MLStaticMockBase;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 
 import com.google.common.collect.ImmutableMap;
 
-public class RemoteModelTest {
+public class RemoteModelTest extends MLStaticMockBase {
 
     @Mock
     MLInput mlInput;
 
     @Mock
     MLModel mlModel;
+
+    @Mock
+    RemoteConnectorExecutor remoteConnectorExecutor;
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -73,7 +80,7 @@ public class RemoteModelTest {
     }
 
     @Test
-    public void predict_NullConnectorExecutor() {
+    public void asyncPredict_NullConnectorExecutor() {
         ActionListener<MLTaskResponse> actionListener = mock(ActionListener.class);
         remoteModel.asyncPredict(mlInput, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -86,7 +93,7 @@ public class RemoteModelTest {
     }
 
     @Test
-    public void predict_ModelDeployed_WrongInput() {
+    public void asyncPredict_ModelDeployed_WrongInput() {
         Connector connector = createConnector(ImmutableMap.of("Authorization", "Bearer ${credential.key}"));
         when(mlModel.getConnector()).thenReturn(connector);
         remoteModel.initModel(mlModel, ImmutableMap.of(), encryptor);
@@ -99,12 +106,63 @@ public class RemoteModelTest {
     }
 
     @Test
-    public void initModel_RuntimeException() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Tag mismatch!");
+    public void asyncPredict_Failure_With_RuntimeException() {
+        asyncPredict_Failure_With_Throwable(
+            new RuntimeException("Remote Connection Exception!"),
+            RuntimeException.class,
+            "Remote Connection Exception!"
+        );
+    }
+
+    @Test
+    public void asyncPredict_Failure_With_Throwable() {
+        asyncPredict_Failure_With_Throwable(
+            new Error("Remote Connection Error!"),
+            MLException.class,
+            "java.lang.Error: Remote Connection Error!"
+        );
+    }
+
+    private void asyncPredict_Failure_With_Throwable(
+        Throwable actualException,
+        Class<? extends Throwable> expExceptionClass,
+        String expExceptionMessage
+    ) {
+        ActionListener<MLTaskResponse> actionListener = mock(ActionListener.class);
+        doThrow(actualException)
+            .when(remoteConnectorExecutor)
+            .executeAction(ConnectorAction.ActionType.PREDICT.toString(), mlInput, actionListener);
+        try (MockedStatic<MLEngineClassLoader> loader = mockStatic(MLEngineClassLoader.class)) {
+            Connector connector = createConnector(ImmutableMap.of("Authorization", "Bearer ${credential.key}"));
+            when(mlModel.getConnector()).thenReturn(connector);
+            loader
+                .when(() -> MLEngineClassLoader.initInstance(connector.getProtocol(), connector, Connector.class))
+                .thenReturn(remoteConnectorExecutor);
+            remoteModel.initModel(mlModel, ImmutableMap.of(), encryptor);
+            remoteModel.asyncPredict(mlInput, actionListener);
+            ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+            verify(actionListener).onFailure(argumentCaptor.capture());
+            assert expExceptionClass.isInstance(argumentCaptor.getValue());
+            assertEquals(expExceptionMessage, argumentCaptor.getValue().getMessage());
+        }
+    }
+
+    @Test
+    public void initModel_Failure_With_RuntimeException() {
+        initModel_Failure_With_Throwable(new IllegalArgumentException("Tag mismatch!"), IllegalArgumentException.class);
+    }
+
+    @Test
+    public void initModel_Failure_With_Throwable() {
+        initModel_Failure_With_Throwable(new Error("Decryption Error!"), MLException.class);
+    }
+
+    private void initModel_Failure_With_Throwable(Throwable actualException, Class<? extends Throwable> expExcepClass) {
+        exceptionRule.expect(expExcepClass);
+        exceptionRule.expectMessage(actualException.getMessage());
         Connector connector = createConnector(null);
         when(mlModel.getConnector()).thenReturn(connector);
-        doThrow(new IllegalArgumentException("Tag mismatch!")).when(encryptor).decrypt(any());
+        doThrow(actualException).when(encryptor).decrypt(any());
         remoteModel.initModel(mlModel, ImmutableMap.of(), encryptor);
     }
 
@@ -129,7 +187,6 @@ public class RemoteModelTest {
         Assert.assertNotNull(executor.getConnector().getDecryptedHeaders());
         assertEquals(1, executor.getConnector().getDecryptedHeaders().size());
         assertEquals("Bearer test_api_key", executor.getConnector().getDecryptedHeaders().get("Authorization"));
-
         remoteModel.close();
         Assert.assertNull(remoteModel.getConnectorExecutor());
     }
