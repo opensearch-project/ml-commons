@@ -18,7 +18,10 @@ import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -44,6 +47,7 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
@@ -54,6 +58,7 @@ import org.opensearch.index.reindex.DeleteByQueryAction;
 import org.opensearch.index.reindex.DeleteByQueryRequest;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
 import org.opensearch.ml.common.transport.model.MLModelGetRequest;
@@ -138,7 +143,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
 
             }, e -> {
                 if (e instanceof IndexNotFoundException) {
-                    deleteModel(modelId, actionListener);
+                    checkPipelineAndDelete(modelId, actionListener);
                     return;
                 }
                 log.error("Failed to delete ML Model: " + modelId, e);
@@ -154,15 +159,47 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
 
     private void checkPipelineAndDelete(String modelId, ActionListener<DeleteResponse> actionListener){
         GetSearchPipelineRequest getSearchPipelineRequest = new GetSearchPipelineRequest();
-
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            client.execute(GetSearchPipelineAction.INSTANCE, getSearchPipelineRequest, ActionListener.runBefore(ActionListener.wrap(pipelineResponse -> {
-                List<PipelineConfiguration> allIngestPipelines = pipelineResponse.pipelines();
-                if (allIngestPipelines.isEmpty()) {
-                    log.info(allIngestPipelines);
+            client.execute(GetSearchPipelineAction.INSTANCE, getSearchPipelineRequest, ActionListener.runBefore(ActionListener.wrap(ingestPipelineResponse -> {
+                if (!isPipelineContainsModel(Collections.singletonList(ingestPipelineResponse.pipelines()), modelId)) {
+                    GetPipelineRequest getPipelineRequest = new GetPipelineRequest();
+                    client.execute(GetPipelineAction.INSTANCE, getPipelineRequest, ActionListener.runBefore(ActionListener.wrap(searchPipelineResponse -> {
+                        if (!isPipelineContainsModel(Collections.singletonList(searchPipelineResponse.pipelines()), modelId)) {
+                            doDeleteModel(modelId, actionListener);
+                        }
+                        else {
+                            List<String> searchPipelineIds = getAllPipelineIds(Collections.singletonList(searchPipelineResponse.pipelines()));
+                            actionListener
+                                    .onFailure(
+                                            new OpenSearchStatusException(
+                                                    searchPipelineIds.size()
+                                                            + " ingest pipelines are still using this model, please delete or update the pipelines first: "
+                                                            + Arrays.toString(searchPipelineIds.toArray(new String[0])),
+                                                    RestStatus.CONFLICT
+                                            )
+                                    );
+
+                        }
+
+                    }, e -> {
+                        log.error("Failed to delete ML Model: " + modelId, e);
+                        actionListener.onFailure(e);
+
+                    } ), () -> context.restore()));
+                    doDeleteModel(modelId, actionListener);
                 }
                 else {
-                    log.info(allIngestPipelines);
+                    List<String> ingestPipelineIds = getAllPipelineIds(Collections.singletonList(ingestPipelineResponse.pipelines()));
+                    actionListener
+                            .onFailure(
+                                    new OpenSearchStatusException(
+                                            ingestPipelineIds.size()
+                                                    + " ingest pipelines are still using this model, please delete or update the pipelines first: "
+                                                    + Arrays.toString(ingestPipelineIds.toArray(new String[0])),
+                                            RestStatus.CONFLICT
+                                    )
+                            );
+
                 }
 
             }, e -> {
@@ -177,7 +214,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         }
 
 
-    private void deleteModel(String modelId, ActionListener<DeleteResponse> actionListener){
+    private void doDeleteModel(String modelId, ActionListener<DeleteResponse> actionListener){
         MLModelGetRequest mlModelGetRequest = new MLModelGetRequest(modelId, false, false);
         FetchSourceContext fetchSourceContext = getFetchSourceContext(mlModelGetRequest.isReturnContent());
         GetRequest getRequest = new GetRequest(ML_MODEL_INDEX).id(modelId).fetchSourceContext(fetchSourceContext);
@@ -413,6 +450,35 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
             && !mlModelState.equals(MLModelState.DEPLOYED)
             && !mlModelState.equals(MLModelState.DEPLOYING)
             && !mlModelState.equals(MLModelState.PARTIALLY_DEPLOYED);
+    }
+
+    private Boolean isPipelineContainsModel(List<Object> pipelineConfigurations, String candidateModelId) {
+        for (Object pipelineConfiguration: pipelineConfigurations){
+            Map<String, Object> config = new HashMap<>();
+            if (pipelineConfiguration instanceof org.opensearch.ingest.PipelineConfiguration){
+                config = ((org.opensearch.ingest.PipelineConfiguration) pipelineConfiguration).getConfigAsMap();
+            }
+            else if (pipelineConfiguration instanceof org.opensearch.search.pipeline.PipelineConfiguration){
+                config = ((org.opensearch.search.pipeline.PipelineConfiguration) pipelineConfiguration).getConfigAsMap();
+            }
+            if (config.getOrDefault("model_id", "") == candidateModelId) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private List<String> getAllPipelineIds(List<Object> pipelineConfigurations){
+        List<String> pipelineIds = new ArrayList<>();
+        for (Object pipelineConfiguration: pipelineConfigurations){
+            if (pipelineConfiguration instanceof org.opensearch.ingest.PipelineConfiguration){
+                pipelineIds.add(((org.opensearch.ingest.PipelineConfiguration) pipelineConfiguration).getId());
+            }
+            else if (pipelineConfiguration instanceof org.opensearch.search.pipeline.PipelineConfiguration){
+                pipelineIds.add(((org.opensearch.search.pipeline.PipelineConfiguration) pipelineConfiguration).getId());
+            }
+        }
+        return pipelineIds;
     }
 
     // this method is only to stub static method.
