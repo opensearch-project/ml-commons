@@ -29,6 +29,10 @@ import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.ingest.GetPipelineAction;
+import org.opensearch.action.ingest.GetPipelineRequest;
+import org.opensearch.action.search.GetSearchPipelineAction;
+import org.opensearch.action.search.GetSearchPipelineRequest;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
@@ -58,6 +62,7 @@ import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
+import org.opensearch.search.pipeline.PipelineConfiguration;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
@@ -109,11 +114,12 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         MLModelDeleteRequest mlModelDeleteRequest = MLModelDeleteRequest.fromActionRequest(request);
         String modelId = mlModelDeleteRequest.getModelId();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            // check whether agent are using them
             SearchRequest searchAgentRequest = relatedModelIdHelper.constructQueryRequest(modelId);
             client.search(searchAgentRequest, ActionListener.runBefore(ActionListener.wrap(searchResponse -> {
                 SearchHit[] searchHits = searchResponse.getHits().getHits();
                 if (searchHits.length == 0) {
-                    deleteModel(modelId, actionListener);
+                    checkPipelineAndDelete(modelId, actionListener);
                 } else {
                     List<String> relatedAgents = new ArrayList<>();
                     for (SearchHit hit : searchHits) {
@@ -144,11 +150,32 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
             actionListener.onFailure(e);
         }
 
-
-
-
-
     }
+
+    private void checkPipelineAndDelete(String modelId, ActionListener<DeleteResponse> actionListener){
+        GetSearchPipelineRequest getSearchPipelineRequest = new GetSearchPipelineRequest();
+
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            client.execute(GetSearchPipelineAction.INSTANCE, getSearchPipelineRequest, ActionListener.runBefore(ActionListener.wrap(pipelineResponse -> {
+                List<PipelineConfiguration> allIngestPipelines = pipelineResponse.pipelines();
+                if (allIngestPipelines.isEmpty()) {
+                    log.info(allIngestPipelines);
+                }
+                else {
+                    log.info(allIngestPipelines);
+                }
+
+            }, e -> {
+                log.error("Failed to delete ML Model: " + modelId, e);
+                actionListener.onFailure(e);
+
+            } ), () -> context.restore()));
+        } catch (Exception e) {
+            log.error(e.getMessage(), e);
+            actionListener.onFailure(e);
+        }
+        }
+
 
     private void deleteModel(String modelId, ActionListener<DeleteResponse> actionListener){
         MLModelGetRequest mlModelGetRequest = new MLModelGetRequest(modelId, false, false);
