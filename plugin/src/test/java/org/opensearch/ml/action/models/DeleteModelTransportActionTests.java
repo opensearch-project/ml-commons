@@ -55,6 +55,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
+import org.opensearch.ml.engine.tools.RelatedModelIdHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.test.OpenSearchTestCase;
@@ -103,6 +104,9 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     @Mock
     private ModelAccessControlHelper modelAccessControlHelper;
 
+    @Mock
+    private RelatedModelIdHelper relatedModelIdHelper;
+
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
@@ -118,7 +122,8 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
                 settings,
                 xContentRegistry,
                 clusterService,
-                modelAccessControlHelper
+                modelAccessControlHelper,
+                relatedModelIdHelper
             )
         );
 

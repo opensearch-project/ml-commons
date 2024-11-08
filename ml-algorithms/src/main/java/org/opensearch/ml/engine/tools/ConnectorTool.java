@@ -144,5 +144,10 @@ public class ConnectorTool implements Tool {
         public String getDefaultVersion() {
             return null;
         }
+
+        @Override
+        public List<String> getRelatedModelIDKeyFields() {
+            return List.of();
+        }
     }
 }

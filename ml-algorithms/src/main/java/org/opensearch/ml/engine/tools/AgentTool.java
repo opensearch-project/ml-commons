@@ -8,6 +8,7 @@ package org.opensearch.ml.engine.tools;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.opensearch.action.ActionRequest;
@@ -137,6 +138,11 @@ public class AgentTool implements Tool {
         @Override
         public String getDefaultVersion() {
             return null;
+        }
+
+        @Override
+        public List<String> getRelatedModelIDKeyFields() {
+            return List.of();
         }
     }
 

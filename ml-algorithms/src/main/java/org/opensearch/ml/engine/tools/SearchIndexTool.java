@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -194,6 +195,11 @@ public class SearchIndexTool implements Tool {
         @Override
         public String getDefaultVersion() {
             return null;
+        }
+
+        @Override
+        public List<String> getRelatedModelIDKeyFields() {
+            return List.of();
         }
     }
 }

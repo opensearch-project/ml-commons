@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.tools;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -173,6 +174,11 @@ public class VisualizationsTool implements Tool {
         @Override
         public String getDefaultVersion() {
             return null;
+        }
+
+        @Override
+        public List<String> getRelatedModelIDKeyFields() {
+            return List.of();
         }
     }
 }
