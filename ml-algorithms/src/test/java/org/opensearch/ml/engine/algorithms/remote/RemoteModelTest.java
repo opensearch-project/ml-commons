@@ -149,17 +149,21 @@ public class RemoteModelTest extends MLStaticMockBase {
 
     @Test
     public void initModel_Failure_With_RuntimeException() {
-        initModel_Failure_With_Throwable(new IllegalArgumentException("Tag mismatch!"), IllegalArgumentException.class);
+        initModel_Failure_With_Throwable(new IllegalArgumentException("Tag mismatch!"), IllegalArgumentException.class, "Tag mismatch!");
     }
 
     @Test
     public void initModel_Failure_With_Throwable() {
-        initModel_Failure_With_Throwable(new Error("Decryption Error!"), MLException.class);
+        initModel_Failure_With_Throwable(new Error("Decryption Error!"), MLException.class, "Decryption Error!");
     }
 
-    private void initModel_Failure_With_Throwable(Throwable actualException, Class<? extends Throwable> expExcepClass) {
+    private void initModel_Failure_With_Throwable(
+        Throwable actualException,
+        Class<? extends Throwable> expExcepClass,
+        String expExceptionMessage
+    ) {
         exceptionRule.expect(expExcepClass);
-        exceptionRule.expectMessage(actualException.getMessage());
+        exceptionRule.expectMessage(expExceptionMessage);
         Connector connector = createConnector(null);
         when(mlModel.getConnector()).thenReturn(connector);
         doThrow(actualException).when(encryptor).decrypt(any());
