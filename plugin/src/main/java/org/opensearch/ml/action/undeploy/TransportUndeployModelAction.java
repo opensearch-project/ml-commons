@@ -100,12 +100,13 @@ public class TransportUndeployModelAction extends
     @Override
     protected void doExecute(Task task, MLUndeployModelNodesRequest request, ActionListener<MLUndeployModelNodesResponse> listener) {
         ActionListener<MLUndeployModelNodesResponse> wrappedListener = ActionListener.wrap(undeployModelNodesResponse -> {
-            processUndeployModelResponseAndUpdate(undeployModelNodesResponse, listener);
+            processUndeployModelResponseAndUpdate(request, undeployModelNodesResponse, listener);
         }, listener::onFailure);
         super.doExecute(task, request, wrappedListener);
     }
 
     void processUndeployModelResponseAndUpdate(
+        MLUndeployModelNodesRequest undeployModelNodesRequest,
         MLUndeployModelNodesResponse undeployModelNodesResponse,
         ActionListener<MLUndeployModelNodesResponse> listener
     ) {
@@ -152,7 +153,11 @@ public class TransportUndeployModelAction extends
         MLSyncUpNodesRequest syncUpRequest = new MLSyncUpNodesRequest(nodeFilter.getAllNodes(), syncUpInput);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             if (!actualRemovedNodesMap.isEmpty()) {
-                BulkDataObjectRequest bulkRequest = BulkDataObjectRequest.builder().build();
+                BulkDataObjectRequest bulkRequest = BulkDataObjectRequest
+                    .builder()
+                    .globalTenantId(undeployModelNodesRequest.getTenantId())
+                    .globalIndex(ML_MODEL_INDEX)
+                    .build();
                 Map<String, Boolean> deployToAllNodes = new HashMap<>();
                 for (String modelId : actualRemovedNodesMap.keySet()) {
                     List<String> removedNodes = actualRemovedNodesMap.get(modelId);
@@ -185,7 +190,6 @@ public class TransportUndeployModelAction extends
                     }
                     UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
                         .builder()
-                        .index(ML_MODEL_INDEX)
                         .id(modelId)
                         .dataObject(updateDocument)
                         .build();

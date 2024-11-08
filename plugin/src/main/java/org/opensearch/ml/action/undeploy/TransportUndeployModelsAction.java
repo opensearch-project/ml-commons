@@ -131,7 +131,7 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
             String modelId = modelIds[0];
             validateAccess(modelId, tenantId, ActionListener.wrap(hasPermissionToUndeploy -> {
                 if (hasPermissionToUndeploy) {
-                    undeployModels(targetNodeIds, modelIds, listener);
+                    undeployModels(targetNodeIds, modelIds, tenantId, listener);
                 } else {
                     listener.onFailure(new IllegalArgumentException("No permission to undeploy model " + modelId));
                 }
@@ -157,9 +157,9 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
                             .filter(modelId -> !hiddenModelIds.contains(modelId))
                             .toArray(String[]::new);
 
-                        undeployModels(targetNodeIds, modelsIDsToUndeploy, listener);
+                        undeployModels(targetNodeIds, modelsIDsToUndeploy, tenantId, listener);
                     } else {
-                        undeployModels(targetNodeIds, modelIds, listener);
+                        undeployModels(targetNodeIds, modelIds, tenantId, listener);
                     }
                 }, e -> {
                     log.error("Failed to search model index", e);
@@ -169,8 +169,14 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         }
     }
 
-    private void undeployModels(String[] targetNodeIds, String[] modelIds, ActionListener<MLUndeployModelsResponse> listener) {
+    private void undeployModels(
+        String[] targetNodeIds,
+        String[] modelIds,
+        String tenantId,
+        ActionListener<MLUndeployModelsResponse> listener
+    ) {
         MLUndeployModelNodesRequest mlUndeployModelNodesRequest = new MLUndeployModelNodesRequest(targetNodeIds, modelIds);
+        mlUndeployModelNodesRequest.setTenantId(tenantId);
 
         client.execute(MLUndeployModelAction.INSTANCE, mlUndeployModelNodesRequest, ActionListener.wrap(r -> {
             listener.onResponse(new MLUndeployModelsResponse(r));

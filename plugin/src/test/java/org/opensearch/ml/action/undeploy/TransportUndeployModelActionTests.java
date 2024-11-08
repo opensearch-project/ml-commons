@@ -248,7 +248,7 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
 
     public void testProcessUndeployModelResponseAndUpdateNullResponse() {
         when(undeployModelNodesResponse.getNodes()).thenReturn(null);
-        action.processUndeployModelResponseAndUpdate(undeployModelNodesResponse, actionListener);
+        action.processUndeployModelResponseAndUpdate(mock(), undeployModelNodesResponse, actionListener);
     }
 
     public void testProcessUndeployModelResponseAndUpdateResponse() {
@@ -282,7 +282,7 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(MLSyncUpNodesRequest.class), any());
 
-        action.processUndeployModelResponseAndUpdate(response, actionListener);
+        action.processUndeployModelResponseAndUpdate(nodesRequest, response, actionListener);
         verify(actionListener).onResponse(response);
     }
 
@@ -316,7 +316,7 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(MLSyncUpNodesRequest.class), any());
 
-        action.processUndeployModelResponseAndUpdate(response, actionListener);
+        action.processUndeployModelResponseAndUpdate(nodesRequest, response, actionListener);
         verify(actionListener).onResponse(response);
     }
 
@@ -350,7 +350,7 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(MLSyncUpNodesRequest.class), any());
 
-        action.processUndeployModelResponseAndUpdate(response, actionListener);
+        action.processUndeployModelResponseAndUpdate(nodesRequest, response, actionListener);
         verify(actionListener).onResponse(response);
     }
 
@@ -385,7 +385,7 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(MLSyncUpNodesRequest.class), any());
 
-        action.processUndeployModelResponseAndUpdate(response, actionListener);
+        action.processUndeployModelResponseAndUpdate(nodesRequest, response, actionListener);
         verify(actionListener).onResponse(response);
     }
 
@@ -422,7 +422,7 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(MLSyncUpNodesRequest.class), any());
 
-        action.processUndeployModelResponseAndUpdate(response, actionListener);
+        action.processUndeployModelResponseAndUpdate(nodesRequest, response, actionListener);
         verify(actionListener).onResponse(response);
     }
 
@@ -457,7 +457,7 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(MLSyncUpNodesRequest.class), any());
 
-        action.processUndeployModelResponseAndUpdate(response, actionListener);
+        action.processUndeployModelResponseAndUpdate(nodesRequest, response, actionListener);
         verify(actionListener).onResponse(response);
     }
 
@@ -480,7 +480,7 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
         final List<FailedNodeException> failures = new ArrayList<>();
         final MLUndeployModelNodesResponse response = action.newResponse(nodesRequest, responses, failures);
 
-        action.processUndeployModelResponseAndUpdate(response, actionListener);
+        action.processUndeployModelResponseAndUpdate(nodesRequest, response, actionListener);
     }
 
     public void testProcessUndeployModelResponseAndUpdateResponseUndeployModelWorkerNodeBeforeRemovalNull() {
@@ -500,7 +500,7 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
         final List<FailedNodeException> failures = new ArrayList<>();
         final MLUndeployModelNodesResponse response = action.newResponse(nodesRequest, responses, failures);
 
-        action.processUndeployModelResponseAndUpdate(response, actionListener);
+        action.processUndeployModelResponseAndUpdate(nodesRequest, response, actionListener);
     }
 
     public void testNewResponseWithNotFoundModelStatus() {
