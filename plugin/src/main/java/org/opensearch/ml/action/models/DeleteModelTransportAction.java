@@ -22,8 +22,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;
@@ -47,7 +49,6 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
@@ -58,7 +59,6 @@ import org.opensearch.index.reindex.DeleteByQueryAction;
 import org.opensearch.index.reindex.DeleteByQueryRequest;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
-import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
 import org.opensearch.ml.common.transport.model.MLModelGetRequest;
@@ -67,7 +67,6 @@ import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
-import org.opensearch.search.pipeline.PipelineConfiguration;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
@@ -160,15 +159,17 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     private void checkPipelineAndDelete(String modelId, ActionListener<DeleteResponse> actionListener){
         GetSearchPipelineRequest getSearchPipelineRequest = new GetSearchPipelineRequest();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            client.execute(GetSearchPipelineAction.INSTANCE, getSearchPipelineRequest, ActionListener.runBefore(ActionListener.wrap(ingestPipelineResponse -> {
-                if (!isPipelineContainsModel(Collections.singletonList(ingestPipelineResponse.pipelines()), modelId)) {
+            // Search for whether search pipeline uses the model
+            client.execute(GetSearchPipelineAction.INSTANCE, getSearchPipelineRequest, ActionListener.runBefore(ActionListener.wrap(searchPipelineResponse -> {
+                if (!isPipelineContainsModel(searchPipelineResponse.pipelines(), modelId, org.opensearch.search.pipeline.PipelineConfiguration::getConfigAsMap)) {
                     GetPipelineRequest getPipelineRequest = new GetPipelineRequest();
-                    client.execute(GetPipelineAction.INSTANCE, getPipelineRequest, ActionListener.runBefore(ActionListener.wrap(searchPipelineResponse -> {
-                        if (!isPipelineContainsModel(Collections.singletonList(searchPipelineResponse.pipelines()), modelId)) {
+                    // // Search for whether ingest pipeline uses the model
+                    client.execute(GetPipelineAction.INSTANCE, getPipelineRequest, ActionListener.runBefore(ActionListener.wrap(ingestPipelineResponse -> {
+                        if (!isPipelineContainsModel(ingestPipelineResponse.pipelines(), modelId,  org.opensearch.ingest.PipelineConfiguration::getConfigAsMap)) {
                             doDeleteModel(modelId, actionListener);
                         }
                         else {
-                            List<String> searchPipelineIds = getAllPipelineIds(Collections.singletonList(searchPipelineResponse.pipelines()));
+                            List<String> searchPipelineIds = getAllPipelineIds(ingestPipelineResponse.pipelines(), org.opensearch.ingest.PipelineConfiguration::getId);
                             actionListener
                                     .onFailure(
                                             new OpenSearchStatusException(
@@ -186,15 +187,14 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                         actionListener.onFailure(e);
 
                     } ), () -> context.restore()));
-                    doDeleteModel(modelId, actionListener);
                 }
                 else {
-                    List<String> ingestPipelineIds = getAllPipelineIds(Collections.singletonList(ingestPipelineResponse.pipelines()));
+                    List<String> ingestPipelineIds = getAllPipelineIds(searchPipelineResponse.pipelines(), org.opensearch.search.pipeline.PipelineConfiguration::getId);
                     actionListener
                             .onFailure(
                                     new OpenSearchStatusException(
                                             ingestPipelineIds.size()
-                                                    + " ingest pipelines are still using this model, please delete or update the pipelines first: "
+                                                    + " search pipelines are still using this model, please delete or update the pipelines first: "
                                                     + Arrays.toString(ingestPipelineIds.toArray(new String[0])),
                                             RestStatus.CONFLICT
                                     )
@@ -221,8 +221,6 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         User user = RestActionUtils.getUserContext(client);
         boolean isSuperAdmin = isSuperAdminUserWrapper(clusterService, client);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            // Check all agents
-            SearchRequest searchAgentRequest = relatedModelIdHelper.constructQueryRequest(modelId);
             ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(actionListener, () -> context.restore());
             client.get(getRequest, ActionListener.wrap(r -> {
                 if (r != null && r.isExists()) {
@@ -452,31 +450,41 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
             && !mlModelState.equals(MLModelState.PARTIALLY_DEPLOYED);
     }
 
-    private Boolean isPipelineContainsModel(List<Object> pipelineConfigurations, String candidateModelId) {
-        for (Object pipelineConfiguration: pipelineConfigurations){
-            Map<String, Object> config = new HashMap<>();
-            if (pipelineConfiguration instanceof org.opensearch.ingest.PipelineConfiguration){
-                config = ((org.opensearch.ingest.PipelineConfiguration) pipelineConfiguration).getConfigAsMap();
-            }
-            else if (pipelineConfiguration instanceof org.opensearch.search.pipeline.PipelineConfiguration){
-                config = ((org.opensearch.search.pipeline.PipelineConfiguration) pipelineConfiguration).getConfigAsMap();
-            }
-            if (config.getOrDefault("model_id", "") == candidateModelId) {
+    private <T> Boolean isPipelineContainsModel(List<T> pipelineConfigurations, String candidateModelId, Function<T, Map<String, Object>> getConfigFunction) {
+        for (T pipelineConfiguration: pipelineConfigurations){
+            Map<String, Object> config = getConfigFunction.apply(pipelineConfiguration);
+            if (searchConfig(config, candidateModelId, "")) {
                 return true;
             }
         }
         return false;
     }
 
-    private List<String> getAllPipelineIds(List<Object> pipelineConfigurations){
+
+    private Boolean searchConfig(Object searchCandidate, String candidateId, String prefixKey){
+        Boolean flag = false;
+        if (searchCandidate instanceof String && Objects.equals(prefixKey, "model_id") && Objects.equals(candidateId, searchCandidate)){
+            return true;
+        }
+        else if (searchCandidate instanceof List<?>) {
+            for (Object v: (List<?>) searchCandidate) {
+                flag = flag || searchConfig(v, candidateId, prefixKey);
+            }
+        }
+        else if (searchCandidate instanceof Map<?, ?>) {
+            for (Map.Entry<String, Object> entry: ((Map<String, Object>) searchCandidate).entrySet()) {
+                String key = entry.getKey();
+                Object value = entry.getValue();
+                flag = flag || searchConfig(value, candidateId, key);
+            }
+        }
+        return flag;
+    }
+
+    private <T> List<String> getAllPipelineIds(List<T> pipelineConfigurations,  Function<T, String> getIdFunction){
         List<String> pipelineIds = new ArrayList<>();
-        for (Object pipelineConfiguration: pipelineConfigurations){
-            if (pipelineConfiguration instanceof org.opensearch.ingest.PipelineConfiguration){
-                pipelineIds.add(((org.opensearch.ingest.PipelineConfiguration) pipelineConfiguration).getId());
-            }
-            else if (pipelineConfiguration instanceof org.opensearch.search.pipeline.PipelineConfiguration){
-                pipelineIds.add(((org.opensearch.search.pipeline.PipelineConfiguration) pipelineConfiguration).getId());
-            }
+        for (T pipelineConfiguration: pipelineConfigurations){
+            pipelineIds.add(getIdFunction.apply(pipelineConfiguration));
         }
         return pipelineIds;
     }
