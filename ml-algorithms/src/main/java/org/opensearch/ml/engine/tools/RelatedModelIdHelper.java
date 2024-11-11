@@ -1,11 +1,7 @@
 package org.opensearch.ml.engine.tools;
 
-import org.opensearch.action.search.SearchRequest;
-import org.opensearch.index.query.BoolQueryBuilder;
-import org.opensearch.index.query.QueryBuilder;
-import org.opensearch.index.query.QueryBuilders;
-import org.opensearch.ml.common.spi.tools.Tool;
-import org.opensearch.search.builder.SearchSourceBuilder;
+import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
+import static org.opensearch.ml.common.CommonValue.TOOL_MODEL_RELATED_FIELD_PREFIX;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -14,11 +10,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
-import static org.opensearch.ml.common.CommonValue.TOOL_MODEL_RELATED_FIELD_PREFIX;
+import org.opensearch.action.search.SearchRequest;
+import org.opensearch.index.query.BoolQueryBuilder;
+import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.search.builder.SearchSourceBuilder;
 
 public class RelatedModelIdHelper {
-    private Map<String, List<String> > relatedModelIdMap;
+    private Map<String, List<String>> relatedModelIdMap;
 
     public RelatedModelIdHelper(Map<String, Tool.Factory> ToolFactories) {
         relatedModelIdMap = new HashMap<>();
@@ -29,7 +28,7 @@ public class RelatedModelIdHelper {
         }
     }
 
-    public SearchRequest constructQueryRequest(String candidateModelId){
+    public SearchRequest constructQueryRequest(String candidateModelId) {
         SearchRequest searchRequest = new SearchRequest(ML_AGENT_INDEX);
         List<String> allKeyFields = collectAllKeys();
         BoolQueryBuilder shouldQuery = QueryBuilders.boolQuery();
@@ -40,7 +39,7 @@ public class RelatedModelIdHelper {
         return searchRequest;
     }
 
-    private List<String> collectAllKeys(){
+    private List<String> collectAllKeys() {
         Set<String> keys = new HashSet<>();
         for (Map.Entry<String, List<String>> entry : relatedModelIdMap.entrySet()) {
             keys.addAll(entry.getValue());

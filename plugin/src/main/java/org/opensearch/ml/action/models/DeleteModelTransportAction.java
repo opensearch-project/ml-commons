@@ -18,8 +18,6 @@ import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -130,14 +128,14 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                         relatedAgents.add(hit.getId());
                     }
                     actionListener
-                            .onFailure(
-                                    new OpenSearchStatusException(
-                                            searchHits.length
-                                                    + " agents are still using this model, please delete or update the agents first: "
-                                                    + Arrays.toString(relatedAgents.toArray(new String[0])),
-                                            RestStatus.CONFLICT
-                                    )
-                            );
+                        .onFailure(
+                            new OpenSearchStatusException(
+                                searchHits.length
+                                    + " agents are still using this model, please delete or update the agents first: "
+                                    + Arrays.toString(relatedAgents.toArray(new String[0])),
+                                RestStatus.CONFLICT
+                            )
+                        );
                 }
 
             }, e -> {
@@ -148,7 +146,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                 log.error("Failed to delete ML Model: " + modelId, e);
                 actionListener.onFailure(e);
 
-            } ), () -> context.restore()));
+            }), () -> context.restore()));
         } catch (Exception e) {
             log.error(e.getMessage(), e);
             actionListener.onFailure(e);
@@ -156,29 +154,70 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
 
     }
 
-    private void checkPipelineAndDelete(String modelId, ActionListener<DeleteResponse> actionListener){
+    private void checkPipelineAndDelete(String modelId, ActionListener<DeleteResponse> actionListener) {
         GetSearchPipelineRequest getSearchPipelineRequest = new GetSearchPipelineRequest();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             // Search for whether search pipeline uses the model
-            client.execute(GetSearchPipelineAction.INSTANCE, getSearchPipelineRequest, ActionListener.runBefore(ActionListener.wrap(searchPipelineResponse -> {
-                if (!isPipelineContainsModel(searchPipelineResponse.pipelines(), modelId, org.opensearch.search.pipeline.PipelineConfiguration::getConfigAsMap)) {
-                    GetPipelineRequest getPipelineRequest = new GetPipelineRequest();
-                    // // Search for whether ingest pipeline uses the model
-                    client.execute(GetPipelineAction.INSTANCE, getPipelineRequest, ActionListener.runBefore(ActionListener.wrap(ingestPipelineResponse -> {
-                        if (!isPipelineContainsModel(ingestPipelineResponse.pipelines(), modelId,  org.opensearch.ingest.PipelineConfiguration::getConfigAsMap)) {
-                            doDeleteModel(modelId, actionListener);
-                        }
-                        else {
-                            List<String> searchPipelineIds = getAllPipelineIds(ingestPipelineResponse.pipelines(), org.opensearch.ingest.PipelineConfiguration::getId);
-                            actionListener
-                                    .onFailure(
-                                            new OpenSearchStatusException(
-                                                    searchPipelineIds.size()
+            client
+                .execute(
+                    GetSearchPipelineAction.INSTANCE,
+                    getSearchPipelineRequest,
+                    ActionListener.runBefore(ActionListener.wrap(searchPipelineResponse -> {
+                        if (!isPipelineContainsModel(
+                            searchPipelineResponse.pipelines(),
+                            modelId,
+                            org.opensearch.search.pipeline.PipelineConfiguration::getConfigAsMap
+                        )) {
+                            GetPipelineRequest getPipelineRequest = new GetPipelineRequest();
+                            // // Search for whether ingest pipeline uses the model
+                            client
+                                .execute(
+                                    GetPipelineAction.INSTANCE,
+                                    getPipelineRequest,
+                                    ActionListener.runBefore(ActionListener.wrap(ingestPipelineResponse -> {
+                                        if (!isPipelineContainsModel(
+                                            ingestPipelineResponse.pipelines(),
+                                            modelId,
+                                            org.opensearch.ingest.PipelineConfiguration::getConfigAsMap
+                                        )) {
+                                            doDeleteModel(modelId, actionListener);
+                                        } else {
+                                            List<String> searchPipelineIds = getAllPipelineIds(
+                                                ingestPipelineResponse.pipelines(),
+                                                org.opensearch.ingest.PipelineConfiguration::getId
+                                            );
+                                            actionListener
+                                                .onFailure(
+                                                    new OpenSearchStatusException(
+                                                        searchPipelineIds.size()
                                                             + " ingest pipelines are still using this model, please delete or update the pipelines first: "
                                                             + Arrays.toString(searchPipelineIds.toArray(new String[0])),
-                                                    RestStatus.CONFLICT
-                                            )
-                                    );
+                                                        RestStatus.CONFLICT
+                                                    )
+                                                );
+
+                                        }
+
+                                    }, e -> {
+                                        log.error("Failed to delete ML Model: " + modelId, e);
+                                        actionListener.onFailure(e);
+
+                                    }), () -> context.restore())
+                                );
+                        } else {
+                            List<String> ingestPipelineIds = getAllPipelineIds(
+                                searchPipelineResponse.pipelines(),
+                                org.opensearch.search.pipeline.PipelineConfiguration::getId
+                            );
+                            actionListener
+                                .onFailure(
+                                    new OpenSearchStatusException(
+                                        ingestPipelineIds.size()
+                                            + " search pipelines are still using this model, please delete or update the pipelines first: "
+                                            + Arrays.toString(ingestPipelineIds.toArray(new String[0])),
+                                        RestStatus.CONFLICT
+                                    )
+                                );
 
                         }
 
@@ -186,35 +225,15 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                         log.error("Failed to delete ML Model: " + modelId, e);
                         actionListener.onFailure(e);
 
-                    } ), () -> context.restore()));
-                }
-                else {
-                    List<String> ingestPipelineIds = getAllPipelineIds(searchPipelineResponse.pipelines(), org.opensearch.search.pipeline.PipelineConfiguration::getId);
-                    actionListener
-                            .onFailure(
-                                    new OpenSearchStatusException(
-                                            ingestPipelineIds.size()
-                                                    + " search pipelines are still using this model, please delete or update the pipelines first: "
-                                                    + Arrays.toString(ingestPipelineIds.toArray(new String[0])),
-                                            RestStatus.CONFLICT
-                                    )
-                            );
-
-                }
-
-            }, e -> {
-                log.error("Failed to delete ML Model: " + modelId, e);
-                actionListener.onFailure(e);
-
-            } ), () -> context.restore()));
+                    }), () -> context.restore())
+                );
         } catch (Exception e) {
             log.error(e.getMessage(), e);
             actionListener.onFailure(e);
         }
-        }
+    }
 
-
-    private void doDeleteModel(String modelId, ActionListener<DeleteResponse> actionListener){
+    private void doDeleteModel(String modelId, ActionListener<DeleteResponse> actionListener) {
         MLModelGetRequest mlModelGetRequest = new MLModelGetRequest(modelId, false, false);
         FetchSourceContext fetchSourceContext = getFetchSourceContext(mlModelGetRequest.isReturnContent());
         GetRequest getRequest = new GetRequest(ML_MODEL_INDEX).id(modelId).fetchSourceContext(fetchSourceContext);
@@ -237,51 +256,51 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                         if (isHidden != null && isHidden) {
                             if (!isSuperAdmin) {
                                 wrappedListener
-                                        .onFailure(
-                                                new OpenSearchStatusException(
-                                                        "User doesn't have privilege to perform this operation on this model",
-                                                        RestStatus.FORBIDDEN
-                                                )
-                                        );
+                                    .onFailure(
+                                        new OpenSearchStatusException(
+                                            "User doesn't have privilege to perform this operation on this model",
+                                            RestStatus.FORBIDDEN
+                                        )
+                                    );
                             } else {
                                 if (isModelNotDeployed(mlModelState)) {
                                     deleteModel(modelId, isHidden, actionListener);
                                 } else {
                                     wrappedListener
-                                            .onFailure(
-                                                    new OpenSearchStatusException(
-                                                            "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete",
-                                                            RestStatus.BAD_REQUEST
-                                                    )
-                                            );
+                                        .onFailure(
+                                            new OpenSearchStatusException(
+                                                "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete",
+                                                RestStatus.BAD_REQUEST
+                                            )
+                                        );
                                 }
                             }
                         } else {
                             modelAccessControlHelper
-                                    .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
-                                        if (!access) {
-                                            wrappedListener
-                                                    .onFailure(
-                                                            new OpenSearchStatusException(
-                                                                    "User doesn't have privilege to perform this operation on this model",
-                                                                    RestStatus.FORBIDDEN
-                                                            )
-                                                    );
-                                        } else if (isModelNotDeployed(mlModelState)) {
-                                            deleteModel(modelId, isHidden, actionListener);
-                                        } else {
-                                            wrappedListener
-                                                    .onFailure(
-                                                            new OpenSearchStatusException(
-                                                                    "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete",
-                                                                    RestStatus.BAD_REQUEST
-                                                            )
-                                                    );
-                                        }
-                                    }, e -> {
-                                        log.error(getErrorMessage("Failed to validate Access", modelId, isHidden), e);
-                                        wrappedListener.onFailure(e);
-                                    }));
+                                .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
+                                    if (!access) {
+                                        wrappedListener
+                                            .onFailure(
+                                                new OpenSearchStatusException(
+                                                    "User doesn't have privilege to perform this operation on this model",
+                                                    RestStatus.FORBIDDEN
+                                                )
+                                            );
+                                    } else if (isModelNotDeployed(mlModelState)) {
+                                        deleteModel(modelId, isHidden, actionListener);
+                                    } else {
+                                        wrappedListener
+                                            .onFailure(
+                                                new OpenSearchStatusException(
+                                                    "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete",
+                                                    RestStatus.BAD_REQUEST
+                                                )
+                                            );
+                                    }
+                                }, e -> {
+                                    log.error(getErrorMessage("Failed to validate Access", modelId, isHidden), e);
+                                    wrappedListener.onFailure(e);
+                                }));
                         }
                     } catch (Exception e) {
                         log.error("Failed to parse ml model " + r.getId(), e);
@@ -450,8 +469,12 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
             && !mlModelState.equals(MLModelState.PARTIALLY_DEPLOYED);
     }
 
-    private <T> Boolean isPipelineContainsModel(List<T> pipelineConfigurations, String candidateModelId, Function<T, Map<String, Object>> getConfigFunction) {
-        for (T pipelineConfiguration: pipelineConfigurations){
+    private <T> Boolean isPipelineContainsModel(
+        List<T> pipelineConfigurations,
+        String candidateModelId,
+        Function<T, Map<String, Object>> getConfigFunction
+    ) {
+        for (T pipelineConfiguration : pipelineConfigurations) {
             Map<String, Object> config = getConfigFunction.apply(pipelineConfiguration);
             if (searchConfig(config, candidateModelId, "")) {
                 return true;
@@ -460,19 +483,16 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         return false;
     }
 
-
-    private Boolean searchConfig(Object searchCandidate, String candidateId, String prefixKey){
+    private Boolean searchConfig(Object searchCandidate, String candidateId, String prefixKey) {
         Boolean flag = false;
-        if (searchCandidate instanceof String && Objects.equals(prefixKey, "model_id") && Objects.equals(candidateId, searchCandidate)){
+        if (searchCandidate instanceof String && Objects.equals(prefixKey, "model_id") && Objects.equals(candidateId, searchCandidate)) {
             return true;
-        }
-        else if (searchCandidate instanceof List<?>) {
-            for (Object v: (List<?>) searchCandidate) {
+        } else if (searchCandidate instanceof List<?>) {
+            for (Object v : (List<?>) searchCandidate) {
                 flag = flag || searchConfig(v, candidateId, prefixKey);
             }
-        }
-        else if (searchCandidate instanceof Map<?, ?>) {
-            for (Map.Entry<String, Object> entry: ((Map<String, Object>) searchCandidate).entrySet()) {
+        } else if (searchCandidate instanceof Map<?, ?>) {
+            for (Map.Entry<String, Object> entry : ((Map<String, Object>) searchCandidate).entrySet()) {
                 String key = entry.getKey();
                 Object value = entry.getValue();
                 flag = flag || searchConfig(value, candidateId, key);
@@ -481,9 +501,9 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         return flag;
     }
 
-    private <T> List<String> getAllPipelineIds(List<T> pipelineConfigurations,  Function<T, String> getIdFunction){
+    private <T> List<String> getAllPipelineIds(List<T> pipelineConfigurations, Function<T, String> getIdFunction) {
         List<String> pipelineIds = new ArrayList<>();
-        for (T pipelineConfiguration: pipelineConfigurations){
+        for (T pipelineConfiguration : pipelineConfigurations) {
             pipelineIds.add(getIdFunction.apply(pipelineConfiguration));
         }
         return pipelineIds;
