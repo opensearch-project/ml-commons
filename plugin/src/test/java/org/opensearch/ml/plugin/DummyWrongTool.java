@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.plugin;
 
+import java.util.List;
 import java.util.Map;
 
 import org.opensearch.core.action.ActionListener;
@@ -104,5 +105,11 @@ public class DummyWrongTool implements Tool {
         public String getDefaultVersion() {
             return null;
         }
+
+        @Override
+        public List<String> getRelatedModelIDKeyFields() {
+            return List.of();
+        }
+
     }
 }
