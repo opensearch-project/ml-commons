@@ -476,26 +476,26 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     ) {
         for (T pipelineConfiguration : pipelineConfigurations) {
             Map<String, Object> config = getConfigFunction.apply(pipelineConfiguration);
-            if (searchConfig(config, candidateModelId, "")) {
+            if (searchThroughConfig(config, candidateModelId, "")) {
                 return true;
             }
         }
         return false;
     }
 
-    private Boolean searchConfig(Object searchCandidate, String candidateId, String prefixKey) {
+    private Boolean searchThroughConfig(Object searchCandidate, String candidateId, String prefixKey) {
         Boolean flag = false;
         if (searchCandidate instanceof String && Objects.equals(prefixKey, "model_id") && Objects.equals(candidateId, searchCandidate)) {
             return true;
         } else if (searchCandidate instanceof List<?>) {
             for (Object v : (List<?>) searchCandidate) {
-                flag = flag || searchConfig(v, candidateId, prefixKey);
+                flag = flag || searchThroughConfig(v, candidateId, prefixKey);
             }
         } else if (searchCandidate instanceof Map<?, ?>) {
             for (Map.Entry<String, Object> entry : ((Map<String, Object>) searchCandidate).entrySet()) {
                 String key = entry.getKey();
                 Object value = entry.getValue();
-                flag = flag || searchConfig(value, candidateId, key);
+                flag = flag || searchThroughConfig(value, candidateId, key);
             }
         }
         return flag;
