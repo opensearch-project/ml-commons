@@ -1,0 +1,20 @@
+{
+  "last_deployed_time": 1722954415807,
+  "model_version": "619",
+  "created_time": 1722954415642,
+  "deploy_to_all_nodes": true,
+  "is_hidden": false,
+  "description": "This is a test model",
+  "model_state": "DEPLOYED",
+  "planning_worker_node_count": 1,
+  "auto_redeploy_retry_times": 0,
+  "last_updated_time": 1723691017054,
+  "name": "my sagemaker model",
+  "connector_id": "z3kVKJEBAfFjoGUT_Ui7",
+  "current_worker_node_count": 0,
+  "model_group_id": "MiJPJ5EBQM-QzppeWrTJ",
+  "planning_worker_nodes": [
+    "DecGG5pDQYaqelLMLcIV9Q"
+  ],
+  "algorithm": "REMOTE"
+}
