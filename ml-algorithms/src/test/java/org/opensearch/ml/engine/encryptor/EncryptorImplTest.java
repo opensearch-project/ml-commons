@@ -7,7 +7,6 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.CREATE_TIME_FIELD;
 import static org.opensearch.ml.common.CommonValue.MASTER_KEY;
 import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
-import static org.opensearch.ml.engine.encryptor.EncryptorImpl.MASTER_KEY_NOT_READY_ERROR;
 
 import java.time.Instant;
 
@@ -18,7 +17,6 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.opensearch.ResourceNotFoundException;
 import org.opensearch.Version;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.client.Client;
