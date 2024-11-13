@@ -151,7 +151,7 @@ public class RestMLProfileActionTests extends OpenSearchTestCase {
             .build();
 
         clusterName = new ClusterName("test cluster");
-        testState = setupTestClusterState();
+        testState = setupTestClusterState("node");
         when(clusterService.state()).thenReturn(testState);
 
         doAnswer(invocation -> {
