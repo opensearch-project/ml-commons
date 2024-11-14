@@ -34,6 +34,13 @@ public class CohereMultiModalEmbeddingPreProcessFunction extends ConnectorPrePro
     public RemoteInferenceInputDataSet process(MLInput mlInput) {
         TextDocsInputDataSet inputData = (TextDocsInputDataSet) mlInput.getInputDataset();
         Map<String, String> parametersMap = new HashMap<>();
+
+        /**
+         * Cohere multi-modal model expects either image or texts, not both.
+         * For image, customer can use this pre-process function. For texts, customer can use
+         * connector.pre_process.cohere.embedding
+         * Cohere expects An array of image data URIs for the model to embed. Maximum number of images per call is 1.
+         */
         parametersMap.put("images", inputData.getDocs().getFirst());
         return RemoteInferenceInputDataSet
             .builder()
