@@ -35,6 +35,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.TermsQueryBuilder;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
@@ -293,6 +294,7 @@ public class MLSyncUpCron implements Runnable {
             sourceBuilder
                 .fetchSource(
                     new String[] {
+                        CommonValue.TENANT_ID,
                         MLModel.MODEL_STATE_FIELD,
                         MLModel.ALGORITHM_FIELD,
                         MLModel.DEPLOY_TO_ALL_NODES_FIELD,
@@ -314,11 +316,15 @@ public class MLSyncUpCron implements Runnable {
                         try {
                             SearchResponse res = SearchResponse.fromXContent(r.parser());
                             SearchHit[] hits = res.getHits().getHits();
+                            Map<String, String> tenantIds = new HashMap<>();
                             Map<String, MLModelState> newModelStates = new HashMap<>();
                             Map<String, List<String>> newPlanningWorkerNodes = new HashMap<>();
                             for (SearchHit hit : hits) {
                                 String modelId = hit.getId();
                                 Map<String, Object> sourceAsMap = hit.getSourceAsMap();
+                                if (sourceAsMap.containsKey(CommonValue.TENANT_ID)) {
+                                    tenantIds.put(modelId, (String) sourceAsMap.get(CommonValue.TENANT_ID));
+                                }
                                 FunctionName functionName = FunctionName.from((String) sourceAsMap.get(MLModel.ALGORITHM_FIELD));
                                 MLModelState state = MLModelState.from((String) sourceAsMap.get(MLModel.MODEL_STATE_FIELD));
                                 Long lastUpdateTime = sourceAsMap.containsKey(MLModel.LAST_UPDATED_TIME_FIELD)
@@ -360,7 +366,7 @@ public class MLSyncUpCron implements Runnable {
                                     newModelStates.put(modelId, mlModelState);
                                 }
                             }
-                            bulkUpdateModelState(modelWorkerNodes, newModelStates, newPlanningWorkerNodes);
+                            bulkUpdateModelState(modelWorkerNodes, newModelStates, newPlanningWorkerNodes, tenantIds);
                         } catch (Exception e) {
                             log.error("Failed to parse model search response", e);
                             updateModelStateSemaphore.release();
@@ -429,14 +435,15 @@ public class MLSyncUpCron implements Runnable {
     private void bulkUpdateModelState(
         Map<String, Set<String>> modelWorkerNodes,
         Map<String, MLModelState> newModelStates,
-        Map<String, List<String>> newPlanningWorkNodes
+        Map<String, List<String>> newPlanningWorkNodes,
+        Map<String, String> tenantIds
     ) {
         Set<String> updatedModelIds = new HashSet<>();
         updatedModelIds.addAll(newModelStates.keySet());
         updatedModelIds.addAll(newPlanningWorkNodes.keySet());
 
         if (!updatedModelIds.isEmpty()) {
-            BulkDataObjectRequest bulkUpdateRequest = BulkDataObjectRequest.builder().build();
+            BulkDataObjectRequest bulkUpdateRequest = BulkDataObjectRequest.builder().globalIndex(ML_MODEL_INDEX).build();
             for (String modelId : updatedModelIds) {
                 Instant now = Instant.now();
                 Map<String, Object> updateDocument = new HashMap<>();
@@ -453,7 +460,7 @@ public class MLSyncUpCron implements Runnable {
                 updateDocument.put(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD, currentWorkNodeCount);
                 UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
                     .builder()
-                    .index(ML_MODEL_INDEX)
+                    .tenantId(tenantIds.get(modelId))
                     .id(modelId)
                     .dataObject(updateDocument)
                     .build();

@@ -24,18 +24,15 @@ public class BulkDataObjectRequest {
     private final Set<String> indices = new HashSet<>();
     private RefreshPolicy refreshPolicy = RefreshPolicy.NONE;
     private String globalIndex;
-    private String globalTenantId;
 
     /**
      * Instantiate this request with a global index.
      * <p>
      * For data storage implementations other than OpenSearch, an index may be referred to as a table and the id may be referred to as a primary key.
      * @param globalIndex the index location for all the bulk requests as a default if not already specified
-     * @param globalTenantId the tenantId for all the bulk requests, overwriting what's specified if not null
      */
-    public BulkDataObjectRequest(@Nullable String globalIndex, @Nullable String globalTenantId) {
+    public BulkDataObjectRequest(@Nullable String globalIndex) {
         this.globalIndex = globalIndex;
-        this.globalTenantId = globalTenantId;
     }
 
     /**
@@ -52,14 +49,6 @@ public class BulkDataObjectRequest {
      */
     public Set<String> getIndices() {
         return Collections.unmodifiableSet(indices);
-    }
-
-    /**
-     * Return the global tenant id to be applied to all requests
-     * @return the globalTenantId
-     */
-    public String globalTenantId() {
-        return this.globalTenantId;
     }
 
     /**
@@ -81,9 +70,6 @@ public class BulkDataObjectRequest {
             request.index(globalIndex);
         } else {
             indices.add(request.index());
-        }
-        if (!Strings.isNullOrEmpty(globalTenantId)) {
-            request.tenantId(globalTenantId);
         }
         requests.add(request);
         return this;
@@ -119,7 +105,6 @@ public class BulkDataObjectRequest {
      */
     public static class Builder {
         private String globalIndex = null;
-        private String globalTenantId = null;
 
         /**
          * Empty constructor to initialize
@@ -137,21 +122,11 @@ public class BulkDataObjectRequest {
         }
 
         /**
-         * Add a tenant id to this builder
-         * @param tenantId the tenant id
-         * @return the updated builder
-         */
-        public Builder globalTenantId(String tenantId) {
-            this.globalTenantId = tenantId;
-            return this;
-        }
-
-        /**
          * Builds the request
          * @return A {@link BulkDataObjectRequest}
          */
         public BulkDataObjectRequest build() {
-            return new BulkDataObjectRequest(this.globalIndex, this.globalTenantId);
+            return new BulkDataObjectRequest(this.globalIndex);
         }
     }
 }

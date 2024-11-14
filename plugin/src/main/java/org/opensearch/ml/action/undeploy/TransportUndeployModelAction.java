@@ -153,11 +153,8 @@ public class TransportUndeployModelAction extends
         MLSyncUpNodesRequest syncUpRequest = new MLSyncUpNodesRequest(nodeFilter.getAllNodes(), syncUpInput);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             if (!actualRemovedNodesMap.isEmpty()) {
-                BulkDataObjectRequest bulkRequest = BulkDataObjectRequest
-                    .builder()
-                    .globalTenantId(undeployModelNodesRequest.getTenantId())
-                    .globalIndex(ML_MODEL_INDEX)
-                    .build();
+                BulkDataObjectRequest bulkRequest = BulkDataObjectRequest.builder().globalIndex(ML_MODEL_INDEX).build();
+                String tenantId = undeployModelNodesRequest.getTenantId();
                 Map<String, Boolean> deployToAllNodes = new HashMap<>();
                 for (String modelId : actualRemovedNodesMap.keySet()) {
                     List<String> removedNodes = actualRemovedNodesMap.get(modelId);
@@ -191,6 +188,7 @@ public class TransportUndeployModelAction extends
                     UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
                         .builder()
                         .id(modelId)
+                        .tenantId(tenantId)
                         .dataObject(updateDocument)
                         .build();
                     bulkRequest.add(updateRequest).setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);

@@ -74,6 +74,7 @@ import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.action.connector.TransportCreateConnectorActionTests;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
@@ -325,7 +326,7 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         Map<String, Set<String>> modelWorkerNodes = new HashMap<>();
         Map<String, Set<String>> deployingModels = new HashMap<>();
         PlainActionFuture<SearchResponse> future = PlainActionFuture.newFuture();
-        future.onResponse(createSearchModelResponse("modelId", MLModelState.DEPLOYED, 2, null, Instant.now().toEpochMilli()));
+        future.onResponse(createSearchModelResponse("modelId", "tenantId", MLModelState.DEPLOYED, 2, null, Instant.now().toEpochMilli()));
         when(client.search(any(SearchRequest.class))).thenReturn(future);
 
         syncUpCron.refreshModelState(modelWorkerNodes, deployingModels);
@@ -348,7 +349,7 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         modelWorkerNodes.put("modelId", ImmutableSet.of("node1"));
         Map<String, Set<String>> deployingModels = new HashMap<>();
         PlainActionFuture<SearchResponse> future = PlainActionFuture.newFuture();
-        future.onResponse(createSearchModelResponse("modelId", MLModelState.DEPLOYED, 2, 0, Instant.now().toEpochMilli()));
+        future.onResponse(createSearchModelResponse("modelId", "tenantId", MLModelState.DEPLOYED, 2, 0, Instant.now().toEpochMilli()));
         when(client.search(any(SearchRequest.class))).thenReturn(future);
         syncUpCron.refreshModelState(modelWorkerNodes, deployingModels);
         verify(client, times(1)).search(any());
@@ -370,7 +371,10 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         modelWorkerNodes.put("modelId", ImmutableSet.of("node1"));
         Map<String, Set<String>> deployingModels = new HashMap<>();
         PlainActionFuture<SearchResponse> future = PlainActionFuture.newFuture();
-        future.onResponse(createSearchModelResponse("modelId", MLModelState.PARTIALLY_DEPLOYED, 3, 2, Instant.now().toEpochMilli()));
+        future
+            .onResponse(
+                createSearchModelResponse("modelId", "tenantId", MLModelState.PARTIALLY_DEPLOYED, 3, 2, Instant.now().toEpochMilli())
+            );
         when(client.search(any(SearchRequest.class))).thenReturn(future);
         syncUpCron.refreshModelState(modelWorkerNodes, deployingModels);
         verify(client, times(1)).search(any());
@@ -393,7 +397,7 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         Map<String, Set<String>> deployingModels = new HashMap<>();
         deployingModels.put("modelId", ImmutableSet.of("node2"));
         PlainActionFuture<SearchResponse> future = PlainActionFuture.newFuture();
-        future.onResponse(createSearchModelResponse("modelId", MLModelState.DEPLOY_FAILED, 2, 0, Instant.now().toEpochMilli()));
+        future.onResponse(createSearchModelResponse("modelId", "tenantId", MLModelState.DEPLOY_FAILED, 2, 0, Instant.now().toEpochMilli()));
         when(client.search(any(SearchRequest.class))).thenReturn(future);
         syncUpCron.refreshModelState(modelWorkerNodes, deployingModels);
         verify(client, times(1)).search(any());
@@ -415,7 +419,7 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         Map<String, Set<String>> deployingModels = new HashMap<>();
         deployingModels.put("modelId", ImmutableSet.of("node2"));
         PlainActionFuture<SearchResponse> future = PlainActionFuture.newFuture();
-        future.onResponse(createSearchModelResponse("modelId", MLModelState.DEPLOYING, 2, null, Instant.now().toEpochMilli()));
+        future.onResponse(createSearchModelResponse("modelId", "tenantId", MLModelState.DEPLOYING, 2, null, Instant.now().toEpochMilli()));
         when(client.search(any(SearchRequest.class))).thenReturn(future);
         syncUpCron.refreshModelState(modelWorkerNodes, deployingModels);
         verify(client, times(1)).search(any());
@@ -427,7 +431,7 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         Map<String, Set<String>> modelWorkerNodes = new HashMap<>();
         Map<String, Set<String>> deployingModels = new HashMap<>();
         PlainActionFuture<SearchResponse> future = PlainActionFuture.newFuture();
-        future.onResponse(createSearchModelResponse("modelId", MLModelState.DEPLOYING, 2, null, Instant.now().toEpochMilli()));
+        future.onResponse(createSearchModelResponse("modelId", "tenantId", MLModelState.DEPLOYING, 2, null, Instant.now().toEpochMilli()));
         when(client.search(any(SearchRequest.class))).thenReturn(future);
         syncUpCron.refreshModelState(modelWorkerNodes, deployingModels);
         verify(client, times(1)).search(any());
@@ -470,6 +474,7 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
 
     private SearchResponse createSearchModelResponse(
         String modelId,
+        String tenantId,
         MLModelState state,
         Integer planningWorkerNodeCount,
         Integer currentWorkerNodeCount,
@@ -477,6 +482,7 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
     ) throws IOException {
         XContentBuilder content = TestHelper.builder();
         content.startObject();
+        content.field(CommonValue.TENANT_ID, tenantId);
         content.field(MLModel.MODEL_STATE_FIELD, state);
         content.field(MLModel.ALGORITHM_FIELD, FunctionName.KMEANS);
         content.field(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD, planningWorkerNodeCount);

@@ -675,13 +675,22 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
 
     @Test
     public void testBulkDataObject_HappyCase() {
-        PutDataObjectRequest putRequest = PutDataObjectRequest.builder().id(TEST_ID + "1").dataObject(testDataObject).build();
-        UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest.builder().id(TEST_ID + "2").dataObject(testDataObject).build();
-        DeleteDataObjectRequest deleteRequest = DeleteDataObjectRequest.builder().id(TEST_ID + "3").build();
+        PutDataObjectRequest putRequest = PutDataObjectRequest
+            .builder()
+            .id(TEST_ID + "1")
+            .tenantId(TENANT_ID)
+            .dataObject(testDataObject)
+            .build();
+        UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
+            .builder()
+            .id(TEST_ID + "2")
+            .tenantId(TENANT_ID)
+            .dataObject(testDataObject)
+            .build();
+        DeleteDataObjectRequest deleteRequest = DeleteDataObjectRequest.builder().id(TEST_ID + "3").tenantId(TENANT_ID).build();
         BulkDataObjectRequest bulkRequest = BulkDataObjectRequest
             .builder()
             .globalIndex(TEST_INDEX)
-            .globalTenantId(TENANT_ID)
             .build()
             .add(putRequest)
             .add(updateRequest)
@@ -721,13 +730,22 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
 
     @Test
     public void testBulkDataObject_WithFailures() {
-        PutDataObjectRequest putRequest = PutDataObjectRequest.builder().id(TEST_ID + "1").dataObject(testDataObject).build();
-        UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest.builder().id(TEST_ID + "2").dataObject(testDataObject).build();
-        DeleteDataObjectRequest deleteRequest = DeleteDataObjectRequest.builder().id(TEST_ID + "3").build();
+        PutDataObjectRequest putRequest = PutDataObjectRequest
+            .builder()
+            .id(TEST_ID + "1")
+            .tenantId(TENANT_ID)
+            .dataObject(testDataObject)
+            .build();
+        UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
+            .builder()
+            .id(TEST_ID + "2")
+            .tenantId(TENANT_ID)
+            .dataObject(testDataObject)
+            .build();
+        DeleteDataObjectRequest deleteRequest = DeleteDataObjectRequest.builder().id(TEST_ID + "3").tenantId(TENANT_ID).build();
         BulkDataObjectRequest bulkRequest = BulkDataObjectRequest
             .builder()
             .globalIndex(TEST_INDEX)
-            .globalTenantId(TENANT_ID)
             .build()
             .add(putRequest)
             .add(updateRequest)

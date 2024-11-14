@@ -15,6 +15,7 @@ import org.junit.Test;
 import org.opensearch.action.support.WriteRequest.RefreshPolicy;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -23,14 +24,12 @@ public class BulkDataObjectRequestTests {
     private String testIndex;
     private String testGlobalIndex;
     private String testTenantId;
-    private String testGlobalTenantId;
 
     @Before
     public void setUp() {
         testIndex = "test-index";
         testGlobalIndex = "test-global-index";
         testTenantId = "test-tenant-id";
-        testGlobalTenantId = "test-global-tenant-id";
     }
 
     @Test
@@ -68,9 +67,8 @@ public class BulkDataObjectRequestTests {
     public void testBulkDataObjectRequest_Tenant() {
         BulkDataObjectRequest request = BulkDataObjectRequest
             .builder()
-            .globalTenantId(testGlobalTenantId)
             .build()
-            .add(PutDataObjectRequest.builder().index(testIndex).build())
+            .add(PutDataObjectRequest.builder().index(testIndex).tenantId(testTenantId).build())
             .add(DeleteDataObjectRequest.builder().index(testIndex).tenantId(testTenantId).build());
 
         assertEquals(Set.of(testIndex), request.getIndices());
@@ -79,12 +77,12 @@ public class BulkDataObjectRequestTests {
         DataObjectRequest r0 = request.requests().get(0);
         assertTrue(r0 instanceof PutDataObjectRequest);
         assertEquals(testIndex, r0.index());
-        assertEquals(testGlobalTenantId, r0.tenantId());
+        assertEquals(testTenantId, r0.tenantId());
 
         DataObjectRequest r1 = request.requests().get(1);
         assertTrue(r1 instanceof DeleteDataObjectRequest);
         assertEquals(testIndex, r1.index());
-        assertEquals(testGlobalTenantId, r1.tenantId());
+        assertEquals(testTenantId, r1.tenantId());
     }
 
     @Test

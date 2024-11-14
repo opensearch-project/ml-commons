@@ -8,6 +8,7 @@
  */
 package org.opensearch.sdk;
 
+import java.util.List;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
@@ -175,7 +176,7 @@ public class SdkClient {
      * @return A completion stage encapsulating the response or exception
      */
     public CompletionStage<BulkDataObjectResponse> bulkDataObjectAsync(BulkDataObjectRequest request, Executor executor) {
-        validateTenantId(request.globalTenantId());
+        validateTenantIds(request.requests());
         return delegate.bulkDataObjectAsync(request, executor, isMultiTenancyEnabled);
     }
 
@@ -255,4 +256,16 @@ public class SdkClient {
             throw new IllegalArgumentException("A tenant ID is required when multitenancy is enabled.");
         }
     }
+    
+    /**
+     * Throw exception if tenantId is null for any bulk request and multitenancy is enabled
+     * @param tenantId The tenantId from the request
+     */
+    private void validateTenantIds(List<DataObjectRequest> requests) {
+        if (Boolean.TRUE.equals(isMultiTenancyEnabled) && requests.stream().map(DataObjectRequest::tenantId).anyMatch(Strings::isNullOrEmpty)) {
+            throw new IllegalArgumentException("A tenant ID is required for every bulk request when multitenancy is enabled.");            
+        }
+    }
+
+
 }

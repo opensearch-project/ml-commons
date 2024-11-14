@@ -568,14 +568,23 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
     }
 
     public void testBulkDataObject() throws IOException {
-        PutDataObjectRequest putRequest = PutDataObjectRequest.builder().id(TEST_ID + "1").dataObject(testDataObject).build();
-        UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest.builder().id(TEST_ID + "2").dataObject(testDataObject).build();
-        DeleteDataObjectRequest deleteRequest = DeleteDataObjectRequest.builder().id(TEST_ID + "3").build();
+        PutDataObjectRequest putRequest = PutDataObjectRequest
+            .builder()
+            .id(TEST_ID + "1")
+            .tenantId(TEST_TENANT_ID)
+            .dataObject(testDataObject)
+            .build();
+        UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
+            .builder()
+            .id(TEST_ID + "2")
+            .tenantId(TEST_TENANT_ID)
+            .dataObject(testDataObject)
+            .build();
+        DeleteDataObjectRequest deleteRequest = DeleteDataObjectRequest.builder().id(TEST_ID + "3").tenantId(TEST_TENANT_ID).build();
 
         BulkDataObjectRequest bulkRequest = BulkDataObjectRequest
             .builder()
             .globalIndex(TEST_INDEX)
-            .globalTenantId(TEST_TENANT_ID)
             .build()
             .add(putRequest)
             .add(updateRequest)
@@ -634,14 +643,23 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
     }
 
     public void testBulkDataObject_WithFailures() throws IOException {
-        PutDataObjectRequest putRequest = PutDataObjectRequest.builder().id(TEST_ID + "1").dataObject(testDataObject).build();
-        UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest.builder().id(TEST_ID + "2").dataObject(testDataObject).build();
+        PutDataObjectRequest putRequest = PutDataObjectRequest
+            .builder()
+            .id(TEST_ID + "1")
+            .tenantId(TEST_TENANT_ID)
+            .dataObject(testDataObject)
+            .build();
+        UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
+            .builder()
+            .id(TEST_ID + "2")
+            .tenantId(TEST_TENANT_ID)
+            .dataObject(testDataObject)
+            .build();
         DeleteDataObjectRequest deleteRequest = DeleteDataObjectRequest.builder().id(TEST_ID + "3").build();
 
         BulkDataObjectRequest bulkRequest = BulkDataObjectRequest
             .builder()
             .globalIndex(TEST_INDEX)
-            .globalTenantId(TEST_TENANT_ID)
             .build()
             .add(putRequest)
             .add(updateRequest);
@@ -694,9 +712,15 @@ public class RemoteClusterIndicesClientTests extends OpenSearchTestCase {
     }
 
     public void testBulkDataObject_Exception() throws OpenSearchException, IOException {
-        PutDataObjectRequest putRequest = PutDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).dataObject(testDataObject).build();
+        PutDataObjectRequest putRequest = PutDataObjectRequest
+            .builder()
+            .index(TEST_INDEX)
+            .id(TEST_ID)
+            .tenantId(TEST_TENANT_ID)
+            .dataObject(testDataObject)
+            .build();
 
-        BulkDataObjectRequest bulkRequest = BulkDataObjectRequest.builder().globalTenantId(TEST_TENANT_ID).build().add(putRequest);
+        BulkDataObjectRequest bulkRequest = BulkDataObjectRequest.builder().build().add(putRequest);
 
         when(mockedOpenSearchClient.bulk(any(BulkRequest.class)))
             .thenThrow(

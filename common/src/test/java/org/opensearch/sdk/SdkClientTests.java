@@ -16,6 +16,7 @@ import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.core.rest.RestStatus;
 
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
@@ -26,6 +27,7 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -71,7 +73,6 @@ public class SdkClientTests {
         when(getRequest.tenantId()).thenReturn(TENANT_ID);
         when(updateRequest.tenantId()).thenReturn(TENANT_ID);
         when(deleteRequest.tenantId()).thenReturn(TENANT_ID);
-        when(bulkRequest.globalTenantId()).thenReturn(TENANT_ID);
         when(searchRequest.tenantId()).thenReturn(TENANT_ID);
 
         sdkClientImpl = spy(new SdkClientDelegate() {
@@ -280,7 +281,9 @@ public class SdkClientTests {
 
     @Test
     public void testBulkDataObjectNullTenantId() {
-        when(bulkRequest.globalTenantId()).thenReturn(null);
+        DeleteDataObjectRequest deleteRequest = mock(DeleteDataObjectRequest.class);
+        when(deleteRequest.tenantId()).thenReturn(null);
+        when(bulkRequest.requests()).thenReturn(List.of(deleteRequest));
         assertThrows(IllegalArgumentException.class, () -> sdkClient.bulkDataObject(bulkRequest));
     }
 
