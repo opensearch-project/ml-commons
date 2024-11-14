@@ -248,100 +248,17 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
                 log.info("Performing {} bulk actions on indices {}", request.requests().size(), request.getIndices());
                 List<BulkOperation> operations = new ArrayList<>();
                 for (DataObjectRequest dataObjectRequest : request.requests()) {
-                    if (dataObjectRequest instanceof PutDataObjectRequest) {
-                        PutDataObjectRequest putRequest = (PutDataObjectRequest) dataObjectRequest;
-                        if (putRequest.overwriteIfExists()) {
-                            // Use index operation
-                            operations.add(BulkOperation.of(op -> op.index(i -> {
-                                i
-                                    .index(putRequest.index())
-                                    .document(putRequest.dataObject())
-                                    .tDocumentSerializer(new JsonTransformer.XContentObjectJsonpSerializer());
-                                if (!Strings.isNullOrEmpty(putRequest.id())) {
-                                    i.id(putRequest.id());
-                                }
-                                return i;
-                            })));
-                        } else {
-                            // Use create operation
-                            operations.add(BulkOperation.of(op -> op.create(c -> {
-                                c
-                                    .index(putRequest.index())
-                                    .document(putRequest.dataObject())
-                                    .tDocumentSerializer(new JsonTransformer.XContentObjectJsonpSerializer());
-                                if (!Strings.isNullOrEmpty(putRequest.id())) {
-                                    c.id(putRequest.id());
-                                }
-                                return c;
-                            })));
-                        }
-                    } else if (dataObjectRequest instanceof UpdateDataObjectRequest) {
-                        UpdateDataObjectRequest updateDataRequest = (UpdateDataObjectRequest) dataObjectRequest;
-                        try (XContentBuilder builder = XContentFactory.jsonBuilder()) {
-                            updateDataRequest.dataObject().toXContent(builder, ToXContent.EMPTY_PARAMS);
-                            Map<String, Object> docMap = JsonXContent.jsonXContent
-                                .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, builder.toString())
-                                .map();
-                            operations.add(BulkOperation.of(op -> op.update(u -> {
-                                u.index(updateDataRequest.index()).id(updateDataRequest.id()).document(docMap);
-                                if (updateDataRequest.ifSeqNo() != null) {
-                                    u.ifSeqNo(updateDataRequest.ifSeqNo());
-                                }
-                                if (updateDataRequest.ifPrimaryTerm() != null) {
-                                    u.ifPrimaryTerm(updateDataRequest.ifPrimaryTerm());
-                                }
-                                if (updateDataRequest.retryOnConflict() > 0) {
-                                    u.retryOnConflict(updateDataRequest.retryOnConflict());
-                                }
-                                return u;
-                            })));
-                        }
-                    } else if (dataObjectRequest instanceof DeleteDataObjectRequest) {
-                        DeleteDataObjectRequest deleteDataRequest = (DeleteDataObjectRequest) dataObjectRequest;
-                        operations
-                            .add(BulkOperation.of(op -> op.delete(d -> d.index(deleteDataRequest.index()).id(deleteDataRequest.id()))));
-                    }
+                    addBulkOperation(dataObjectRequest, operations);
                 }
                 BulkRequest bulkRequest = new BulkRequest.Builder().operations(operations).refresh(Refresh.True).build();
                 BulkResponse bulkResponse = openSearchClient.bulk(bulkRequest);
-                int responseCount = bulkResponse.items().size();
-                log.info("Bulk action complete for {} items: {}", responseCount, bulkResponse.errors() ? "has failures" : "success");
-                DataObjectResponse[] responses = new DataObjectResponse[responseCount];
-                for (int i = 0; i < responseCount; i++) {
-                    BulkResponseItem itemResponse = bulkResponse.items().get(i);
-                    switch (itemResponse.operationType()) {
-                        case Index:
-                        case Create:
-                            responses[i] = PutDataObjectResponse
-                                .builder()
-                                .id(itemResponse.id())
-                                .parser(createParser(itemResponse))
-                                .failed(itemResponse.error() != null)
-                                .build();
-                            break;
-                        case Update:
-                            responses[i] = UpdateDataObjectResponse
-                                .builder()
-                                .id(itemResponse.id())
-                                .parser(createParser(itemResponse))
-                                .failed(itemResponse.error() != null)
-                                .build();
-                            break;
-                        case Delete:
-                            responses[i] = DeleteDataObjectResponse
-                                .builder()
-                                .id(itemResponse.id())
-                                .parser(createParser(itemResponse))
-                                .failed(itemResponse.error() != null)
-                                .build();
-                            break;
-                        default:
-                            throw new OpenSearchStatusException(
-                                "Invalid operation type for bulk response",
-                                RestStatus.INTERNAL_SERVER_ERROR
-                            );
-                    }
-                }
+                log
+                    .info(
+                        "Bulk action complete for {} items: {}",
+                        bulkResponse.items().size(),
+                        bulkResponse.errors() ? "has failures" : "success"
+                    );
+                DataObjectResponse[] responses = bulkResponseItemsToArray(bulkResponse.items());
                 return bulkResponse.ingestTook() == null
                     ? new BulkDataObjectResponse(responses, bulkResponse.took(), bulkResponse.errors(), createParser(bulkResponse))
                     : new BulkDataObjectResponse(
@@ -356,6 +273,112 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
                 throw new OpenSearchStatusException("Failed to parse data object in a bulk response", RestStatus.INTERNAL_SERVER_ERROR);
             }
         }), executor);
+    }
+
+    private void addBulkOperation(DataObjectRequest dataObjectRequest, List<BulkOperation> operations) {
+        if (dataObjectRequest instanceof PutDataObjectRequest) {
+            addBulkPutOperation((PutDataObjectRequest) dataObjectRequest, operations);
+        } else if (dataObjectRequest instanceof UpdateDataObjectRequest) {
+            addBulkUpdateOperation((UpdateDataObjectRequest) dataObjectRequest, operations);
+        } else if (dataObjectRequest instanceof DeleteDataObjectRequest) {
+            addBulkDeleteOperation((DeleteDataObjectRequest) dataObjectRequest, operations);
+        } else {
+            throw new IllegalArgumentException("Invalid type for bulk request");
+        }
+    }
+
+    private void addBulkPutOperation(PutDataObjectRequest putRequest, List<BulkOperation> operations) {
+        if (putRequest.overwriteIfExists()) {
+            // Use index operation
+            operations.add(BulkOperation.of(op -> op.index(i -> {
+                i
+                    .index(putRequest.index())
+                    .document(putRequest.dataObject())
+                    .tDocumentSerializer(new JsonTransformer.XContentObjectJsonpSerializer());
+                if (!Strings.isNullOrEmpty(putRequest.id())) {
+                    i.id(putRequest.id());
+                }
+                return i;
+            })));
+        } else {
+            // Use create operation
+            operations.add(BulkOperation.of(op -> op.create(c -> {
+                c
+                    .index(putRequest.index())
+                    .document(putRequest.dataObject())
+                    .tDocumentSerializer(new JsonTransformer.XContentObjectJsonpSerializer());
+                if (!Strings.isNullOrEmpty(putRequest.id())) {
+                    c.id(putRequest.id());
+                }
+                return c;
+            })));
+        }
+    }
+
+    private void addBulkUpdateOperation(UpdateDataObjectRequest updateRequest, List<BulkOperation> operations) {
+        try (XContentBuilder builder = XContentFactory.jsonBuilder()) {
+            updateRequest.dataObject().toXContent(builder, ToXContent.EMPTY_PARAMS);
+            Map<String, Object> docMap = JsonXContent.jsonXContent
+                .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, builder.toString())
+                .map();
+            operations.add(BulkOperation.of(op -> op.update(u -> {
+                u.index(updateRequest.index()).id(updateRequest.id()).document(docMap);
+                if (updateRequest.ifSeqNo() != null) {
+                    u.ifSeqNo(updateRequest.ifSeqNo());
+                }
+                if (updateRequest.ifPrimaryTerm() != null) {
+                    u.ifPrimaryTerm(updateRequest.ifPrimaryTerm());
+                }
+                if (updateRequest.retryOnConflict() > 0) {
+                    u.retryOnConflict(updateRequest.retryOnConflict());
+                }
+                return u;
+            })));
+        } catch (IOException e) {
+            // Rethrow unchecked exception on XContent parsing error
+            throw new OpenSearchStatusException("Failed to parse data object in a bulk update request", RestStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    private void addBulkDeleteOperation(DeleteDataObjectRequest deleteRequest, List<BulkOperation> operations) {
+        operations.add(BulkOperation.of(op -> op.delete(d -> d.index(deleteRequest.index()).id(deleteRequest.id()))));
+    }
+
+    private DataObjectResponse[] bulkResponseItemsToArray(List<BulkResponseItem> items) throws IOException {
+        DataObjectResponse[] responses = new DataObjectResponse[items.size()];
+        int i = 0;
+        for (BulkResponseItem itemResponse : items) {
+            switch (itemResponse.operationType()) {
+                case Index:
+                case Create:
+                    responses[i++] = PutDataObjectResponse
+                        .builder()
+                        .id(itemResponse.id())
+                        .parser(createParser(itemResponse))
+                        .failed(itemResponse.error() != null)
+                        .build();
+                    break;
+                case Update:
+                    responses[i++] = UpdateDataObjectResponse
+                        .builder()
+                        .id(itemResponse.id())
+                        .parser(createParser(itemResponse))
+                        .failed(itemResponse.error() != null)
+                        .build();
+                    break;
+                case Delete:
+                    responses[i++] = DeleteDataObjectResponse
+                        .builder()
+                        .id(itemResponse.id())
+                        .parser(createParser(itemResponse))
+                        .failed(itemResponse.error() != null)
+                        .build();
+                    break;
+                default:
+                    throw new OpenSearchStatusException("Invalid operation type for bulk response", RestStatus.INTERNAL_SERVER_ERROR);
+            }
+        }
+        return responses;
     }
 
     @Override
