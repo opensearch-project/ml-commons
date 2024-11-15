@@ -27,8 +27,6 @@ jobs:
     strategy:
       matrix:
         java: [21]
-    env:
-      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
     name: Build and Test MLCommons Plugin on linux
     if: github.repository == 'opensearch-project/ml-commons'
@@ -41,21 +39,23 @@ jobs:
       # this image tag is subject to change as more dependencies and updates will arrive over time
       image: ${{ needs.Get-CI-Image-Tag.outputs.ci-image-version-linux }}
       # need to switch to root so that github actions can install runner binary on container without permission issues.
-      options: --user root
+      options: ${{ needs.Get-CI-Image-Tag.outputs.ci-image-start-options }}
 
     steps:
+      - name: Run start commands
+        run: ${{ needs.Get-CI-Image-Tag.outputs.ci-image-start-command }}
       - name: Setup Java ${{ matrix.java }}
         uses: actions/setup-java@v1
         with:
           java-version: ${{ matrix.java }}
 
-      - uses: aws-actions/configure-aws-credentials@v2
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.ML_ROLE }}
           aws-region: us-west-2
 
       - name: Checkout MLCommons
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
@@ -77,7 +77,7 @@ jobs:
           echo "build-test-linux=$plugin" >> $GITHUB_OUTPUT
 
       - name: Upload Coverage Report
-        uses: codecov/codecov-action@v1
+        uses: codecov/codecov-action@v4
         with:
           flags: ml-commons
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -101,7 +101,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: aws-actions/configure-aws-credentials@v2
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.ML_ROLE }}
           aws-region: us-west-2
@@ -112,11 +112,11 @@ jobs:
           java-version: ${{ matrix.java }}
 
       - name: Checkout MLCommons
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - uses: actions/download-artifact@v4.1.7
+      - uses: actions/download-artifact@v4
         with:
           name: ml-plugin-linux-${{ matrix.java }}
 
@@ -181,7 +181,7 @@ jobs:
           fi
 
       - name: Upload Coverage Report
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           flags: ml-commons
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -202,14 +202,14 @@ jobs:
         with:
           java-version: ${{ matrix.java }}
 
-      - uses: aws-actions/configure-aws-credentials@v2
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.ML_ROLE }}
           aws-region: us-west-2
 
       # ml-commons
       - name: Checkout MLCommons
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
