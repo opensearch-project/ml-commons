@@ -153,7 +153,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
                 xContentRegistry,
                 clusterService,
                 modelAccessControlHelper,
-                    agentModelsSearcher
+                agentModelsSearcher
             )
         );
 

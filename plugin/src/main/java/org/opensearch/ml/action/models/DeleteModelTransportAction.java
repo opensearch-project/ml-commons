@@ -116,121 +116,13 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         MLModelDeleteRequest mlModelDeleteRequest = MLModelDeleteRequest.fromActionRequest(request);
         String modelId = mlModelDeleteRequest.getModelId();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            // check whether agent are using them
-            SearchRequest searchAgentRequest = agentModelsSearcher.constructQueryRequest(modelId);
-            client.search(searchAgentRequest, ActionListener.runBefore(ActionListener.wrap(searchResponse -> {
-                SearchHit[] searchHits = searchResponse.getHits().getHits();
-                if (searchHits.length == 0) {
-                    checkPipelineAndDelete(modelId, actionListener);
-                } else {
-                    List<String> relatedAgents = new ArrayList<>();
-                    for (SearchHit hit : searchHits) {
-                        relatedAgents.add(hit.getId());
-                    }
-                    actionListener
-                        .onFailure(
-                            new OpenSearchStatusException(
-                                searchHits.length
-                                    + " agents are still using this model, please delete or update the agents first: "
-                                    + Arrays.toString(relatedAgents.toArray(new String[0])),
-                                RestStatus.CONFLICT
-                            )
-                        );
-                }
-
-            }, e -> {
-                if (e instanceof IndexNotFoundException) {
-                    checkPipelineAndDelete(modelId, actionListener);
-                    return;
-                }
-                log.error("Failed to delete ML Model: " + modelId, e);
-                actionListener.onFailure(e);
-
-            }), () -> context.restore()));
+            ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(actionListener, () -> context.restore());
+            checkDownstreamTaskBeforeDeleteModel(modelId, wrappedListener);
         } catch (Exception e) {
             log.error(e.getMessage(), e);
             actionListener.onFailure(e);
         }
 
-    }
-
-    private void checkPipelineAndDelete(String modelId, ActionListener<DeleteResponse> actionListener) {
-        GetSearchPipelineRequest getSearchPipelineRequest = new GetSearchPipelineRequest();
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            // Search for whether search pipeline uses the model
-            client
-                .execute(
-                    GetSearchPipelineAction.INSTANCE,
-                    getSearchPipelineRequest,
-                    ActionListener.runBefore(ActionListener.wrap(searchPipelineResponse -> {
-                        if (!isPipelineContainsModel(
-                            searchPipelineResponse.pipelines(),
-                            modelId,
-                            org.opensearch.search.pipeline.PipelineConfiguration::getConfigAsMap
-                        )) {
-                            GetPipelineRequest getPipelineRequest = new GetPipelineRequest();
-                            // // Search for whether ingest pipeline uses the model
-                            client
-                                .execute(
-                                    GetPipelineAction.INSTANCE,
-                                    getPipelineRequest,
-                                    ActionListener.runBefore(ActionListener.wrap(ingestPipelineResponse -> {
-                                        if (!isPipelineContainsModel(
-                                            ingestPipelineResponse.pipelines(),
-                                            modelId,
-                                            org.opensearch.ingest.PipelineConfiguration::getConfigAsMap
-                                        )) {
-                                            doDeleteModel(modelId, actionListener);
-                                        } else {
-                                            List<String> searchPipelineIds = getAllPipelineIds(
-                                                ingestPipelineResponse.pipelines(),
-                                                org.opensearch.ingest.PipelineConfiguration::getId
-                                            );
-                                            actionListener
-                                                .onFailure(
-                                                    new OpenSearchStatusException(
-                                                        searchPipelineIds.size()
-                                                            + " ingest pipelines are still using this model, please delete or update the pipelines first: "
-                                                            + Arrays.toString(searchPipelineIds.toArray(new String[0])),
-                                                        RestStatus.CONFLICT
-                                                    )
-                                                );
-
-                                        }
-
-                                    }, e -> {
-                                        log.error("Failed to delete ML Model: " + modelId, e);
-                                        actionListener.onFailure(e);
-
-                                    }), () -> context.restore())
-                                );
-                        } else {
-                            List<String> ingestPipelineIds = getAllPipelineIds(
-                                searchPipelineResponse.pipelines(),
-                                org.opensearch.search.pipeline.PipelineConfiguration::getId
-                            );
-                            actionListener
-                                .onFailure(
-                                    new OpenSearchStatusException(
-                                        ingestPipelineIds.size()
-                                            + " search pipelines are still using this model, please delete or update the pipelines first: "
-                                            + Arrays.toString(ingestPipelineIds.toArray(new String[0])),
-                                        RestStatus.CONFLICT
-                                    )
-                                );
-
-                        }
-
-                    }, e -> {
-                        log.error("Failed to delete ML Model: " + modelId, e);
-                        actionListener.onFailure(e);
-
-                    }), () -> context.restore())
-                );
-        } catch (Exception e) {
-            log.error(e.getMessage(), e);
-            actionListener.onFailure(e);
-        }
     }
 
     private void doDeleteModel(String modelId, ActionListener<DeleteResponse> actionListener) {
@@ -368,6 +260,130 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                 }
             }
         });
+    }
+
+    private void checkAgentBeforeDeleteModel(String modelId, ActionListener<Boolean> actionListener) {
+        // check whether agent are using them
+        SearchRequest searchAgentRequest = agentModelsSearcher.constructQueryRequest(modelId);
+        client.search(searchAgentRequest, ActionListener.wrap(searchResponse -> {
+            SearchHit[] searchHits = searchResponse.getHits().getHits();
+            if (searchHits.length == 0) {
+                actionListener.onResponse(true);
+            } else {
+                List<String> relatedAgents = new ArrayList<>();
+                for (SearchHit hit : searchHits) {
+                    relatedAgents.add(hit.getId());
+                }
+                actionListener
+                    .onFailure(
+                        new OpenSearchStatusException(
+                            searchHits.length
+                                + " agents are still using this model, please delete or update the agents first: "
+                                + Arrays.toString(relatedAgents.toArray(new String[0])),
+                            RestStatus.CONFLICT
+                        )
+                    );
+            }
+
+        }, e -> {
+            if (e instanceof IndexNotFoundException) {
+                actionListener.onResponse(true);
+                return;
+            }
+            log.error("Failed to delete ML Model: " + modelId, e);
+            actionListener.onFailure(e);
+
+        }));
+    }
+
+    private void checkIngestPipelineBeforeDeleteModel(String modelId, ActionListener<Boolean> actionListener) {
+        GetPipelineRequest getPipelineRequest = new GetPipelineRequest();
+        client.execute(GetPipelineAction.INSTANCE, getPipelineRequest, ActionListener.wrap(ingestPipelineResponse -> {
+            if (!isPipelineContainsModel(
+                ingestPipelineResponse.pipelines(),
+                modelId,
+                org.opensearch.ingest.PipelineConfiguration::getConfigAsMap
+            )) {
+                actionListener.onResponse(true);
+            } else {
+                List<String> searchPipelineIds = getAllPipelineIds(
+                    ingestPipelineResponse.pipelines(),
+                    org.opensearch.ingest.PipelineConfiguration::getId
+                );
+                actionListener
+                    .onFailure(
+                        new OpenSearchStatusException(
+                            searchPipelineIds.size()
+                                + " ingest pipelines are still using this model, please delete or update the pipelines first: "
+                                + Arrays.toString(searchPipelineIds.toArray(new String[0])),
+                            RestStatus.CONFLICT
+                        )
+                    );
+
+            }
+
+        }, e -> {
+            log.error("Failed to delete ML Model: " + modelId, e);
+            actionListener.onFailure(e);
+
+        }));
+
+    }
+
+    private void checkSearchPipelineBeforeDeleteModel(String modelId, ActionListener<Boolean> actionListener) {
+        GetSearchPipelineRequest getSearchPipelineRequest = new GetSearchPipelineRequest();
+        client.execute(GetSearchPipelineAction.INSTANCE, getSearchPipelineRequest, ActionListener.wrap(searchPipelineResponse -> {
+            if (!isPipelineContainsModel(
+                searchPipelineResponse.pipelines(),
+                modelId,
+                org.opensearch.search.pipeline.PipelineConfiguration::getConfigAsMap
+            )) {
+                actionListener.onResponse(true);
+            } else {
+                List<String> searchPipelineIds = getAllPipelineIds(
+                    searchPipelineResponse.pipelines(),
+                    org.opensearch.search.pipeline.PipelineConfiguration::getId
+                );
+                actionListener
+                    .onFailure(
+                        new OpenSearchStatusException(
+                            searchPipelineIds.size()
+                                + " search pipelines are still using this model, please delete or update the pipelines first: "
+                                + Arrays.toString(searchPipelineIds.toArray(new String[0])),
+                            RestStatus.CONFLICT
+                        )
+                    );
+
+            }
+
+        }, e -> {
+            log.error("Failed to delete ML Model: " + modelId, e);
+            actionListener.onFailure(e);
+
+        }));
+
+    }
+
+    private void checkDownstreamTaskBeforeDeleteModel(String modelId, ActionListener<DeleteResponse> actionListener) {
+        CountDownLatch countDownLatch = new CountDownLatch(3);
+        AtomicBoolean noneBlocked = new AtomicBoolean(true);
+        ActionListener<Boolean> countDownActionListener = ActionListener.wrap(b -> {
+            countDownLatch.countDown();
+            noneBlocked.compareAndSet(true, b);
+            if (countDownLatch.getCount() == 0) {
+                if (noneBlocked.get()) {
+                    doDeleteModel(modelId, actionListener);
+                }
+            }
+        }, e -> {
+            countDownLatch.countDown();
+            noneBlocked.compareAndSet(true, false);
+            actionListener.onFailure(e);
+
+        });
+        checkAgentBeforeDeleteModel(modelId, countDownActionListener);
+        checkIngestPipelineBeforeDeleteModel(modelId, countDownActionListener);
+        checkSearchPipelineBeforeDeleteModel(modelId, countDownActionListener);
     }
 
     private void deleteModelChunksAndController(

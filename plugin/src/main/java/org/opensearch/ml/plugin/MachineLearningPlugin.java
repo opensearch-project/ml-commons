@@ -178,12 +178,12 @@ import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.engine.indices.MLInputDatasetHandler;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
+import org.opensearch.ml.engine.tools.AgentModelsSearcher;
 import org.opensearch.ml.engine.tools.AgentTool;
 import org.opensearch.ml.engine.tools.CatIndexTool;
 import org.opensearch.ml.engine.tools.ConnectorTool;
 import org.opensearch.ml.engine.tools.IndexMappingTool;
 import org.opensearch.ml.engine.tools.MLModelTool;
-import org.opensearch.ml.engine.tools.AgentModelsSearcher;
 import org.opensearch.ml.engine.tools.SearchIndexTool;
 import org.opensearch.ml.engine.tools.VisualizationsTool;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
@@ -686,7 +686,7 @@ public class MachineLearningPlugin extends Plugin
                 mlStats,
                 mlTaskManager,
                 mlModelManager,
-                    agentModelsSearcher,
+                agentModelsSearcher,
                 mlIndicesHandler,
                 mlInputDatasetHandler,
                 mlTrainingTaskRunner,
