@@ -25,7 +25,7 @@ public class CohereMultiModalEmbeddingPreProcessFunction extends ConnectorPrePro
     public void validate(MLInput mlInput) {
         validateTextDocsInput(mlInput);
         List<String> docs = ((TextDocsInputDataSet) mlInput.getInputDataset()).getDocs();
-        if (docs.isEmpty() || (docs.size() == 1 && docs.getFirst() == null)) {
+        if (docs == null || docs.isEmpty() || (docs.size() == 1 && docs.get(0) == null)) {
             throw new IllegalArgumentException("No image provided");
         }
     }
@@ -41,7 +41,7 @@ public class CohereMultiModalEmbeddingPreProcessFunction extends ConnectorPrePro
          * connector.pre_process.cohere.embedding
          * Cohere expects An array of image data URIs for the model to embed. Maximum number of images per call is 1.
          */
-        parametersMap.put("images", inputData.getDocs().getFirst());
+        parametersMap.put("images", inputData.getDocs().get(0));
         return RemoteInferenceInputDataSet
             .builder()
             .parameters(convertScriptStringToJsonString(Map.of("parameters", parametersMap)))
