@@ -60,7 +60,7 @@ import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
 import org.opensearch.ml.common.transport.model.MLModelGetRequest;
-import org.opensearch.ml.engine.tools.RelatedModelIdHelper;
+import org.opensearch.ml.engine.tools.AgentModelsSearcher;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.search.SearchHit;
@@ -90,7 +90,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
 
     ModelAccessControlHelper modelAccessControlHelper;
 
-    RelatedModelIdHelper relatedModelIdHelper;
+    AgentModelsSearcher agentModelsSearcher;
 
     @Inject
     public DeleteModelTransportAction(
@@ -101,14 +101,14 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         NamedXContentRegistry xContentRegistry,
         ClusterService clusterService,
         ModelAccessControlHelper modelAccessControlHelper,
-        RelatedModelIdHelper relatedModelIdHelper
+        AgentModelsSearcher agentModelsSearcher
     ) {
         super(MLModelDeleteAction.NAME, transportService, actionFilters, MLModelDeleteRequest::new);
         this.client = client;
         this.xContentRegistry = xContentRegistry;
         this.clusterService = clusterService;
         this.modelAccessControlHelper = modelAccessControlHelper;
-        this.relatedModelIdHelper = relatedModelIdHelper;
+        this.agentModelsSearcher = agentModelsSearcher;
     }
 
     @Override
@@ -117,7 +117,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         String modelId = mlModelDeleteRequest.getModelId();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             // check whether agent are using them
-            SearchRequest searchAgentRequest = relatedModelIdHelper.constructQueryRequest(modelId);
+            SearchRequest searchAgentRequest = agentModelsSearcher.constructQueryRequest(modelId);
             client.search(searchAgentRequest, ActionListener.runBefore(ActionListener.wrap(searchResponse -> {
                 SearchHit[] searchHits = searchResponse.getHits().getHits();
                 if (searchHits.length == 0) {

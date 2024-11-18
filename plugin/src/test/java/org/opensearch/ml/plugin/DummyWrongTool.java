@@ -107,7 +107,7 @@ public class DummyWrongTool implements Tool {
         }
 
         @Override
-        public List<String> getRelatedModelIDKeyFields() {
+        public List<String> getAllModelKeys() {
             return List.of();
         }
 

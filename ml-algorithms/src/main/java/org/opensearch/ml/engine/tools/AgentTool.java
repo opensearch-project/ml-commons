@@ -141,7 +141,7 @@ public class AgentTool implements Tool {
         }
 
         @Override
-        public List<String> getRelatedModelIDKeyFields() {
+        public List<String> getAllModelKeys() {
             return List.of();
         }
     }

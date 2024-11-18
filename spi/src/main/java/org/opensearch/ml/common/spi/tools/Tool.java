@@ -130,6 +130,6 @@ public interface Tool {
          */
         String getDefaultVersion();
 
-        List<String> getRelatedModelIDKeyFields();
+        List<String> getAllModelKeys();
     }
 }

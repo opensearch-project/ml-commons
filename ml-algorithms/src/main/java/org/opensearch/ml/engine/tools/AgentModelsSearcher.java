@@ -16,15 +16,15 @@ import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
-public class RelatedModelIdHelper {
+public class AgentModelsSearcher {
     private Map<String, List<String>> relatedModelIdMap;
 
-    public RelatedModelIdHelper(Map<String, Tool.Factory> ToolFactories) {
+    public AgentModelsSearcher(Map<String, Tool.Factory> toolFactories) {
         relatedModelIdMap = new HashMap<>();
-        for (Map.Entry<String, Tool.Factory> entry : ToolFactories.entrySet()) {
+        for (Map.Entry<String, Tool.Factory> entry : toolFactories.entrySet()) {
             String toolType = entry.getKey();
             Tool.Factory toolFactory = entry.getValue();
-            relatedModelIdMap.put(toolType, toolFactory.getRelatedModelIDKeyFields());
+            relatedModelIdMap.put(toolType, toolFactory.getAllModelKeys());
         }
     }
 
