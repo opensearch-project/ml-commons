@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -188,11 +189,45 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(deleteResponse);
     }
 
+    public void testDeleteModel_BlockedBySearchPipelineAndIngestionPipeline() throws IOException {
+        when(searchPipelineConfiguration.getId()).thenReturn("1");
+        when(searchPipelineConfiguration.getConfigAsMap()).thenReturn(configDataMap);
+        when(getSearchPipelineResponse.pipelines()).thenReturn(List.of(searchPipelineConfiguration));
+        doAnswer(invocation -> {
+            ActionListener<GetSearchPipelineResponse> listener = invocation.getArgument(2);
+            listener.onResponse(getSearchPipelineResponse);
+            return null;
+        }).when(client).execute(eq(GetSearchPipelineAction.INSTANCE), any(), any());
+
+        org.opensearch.ingest.PipelineConfiguration ingestPipelineConfiguration = new org.opensearch.ingest.PipelineConfiguration(
+                "1",
+                new BytesArray("{\"model_id\": \"test_id\"}".getBytes(StandardCharsets.UTF_8)),
+                MediaTypeRegistry.JSON
+        );
+        when(getIngestionPipelineResponse.pipelines()).thenReturn(List.of(ingestPipelineConfiguration));
+        doAnswer(invocation -> {
+            ActionListener<GetPipelineResponse> listener = invocation.getArgument(2);
+            listener.onResponse(getIngestionPipelineResponse);
+            return null;
+        }).when(client).execute(eq(GetPipelineAction.INSTANCE), any(), any());
+
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("1 ingest pipelines are still using this model, please delete or update the pipelines first: [1],1 search pipelines are still using this model, please delete or update the pipelines first: [1]", argumentCaptor.getValue().getMessage());
+    }
+
     public void testDeleteModel_BlockedBySearchPipeline() throws IOException {
         //org.opensearch.search.pipeline.PipelineConfiguration pipelineConfiguration = new PipelineConfiguration();
         when(searchPipelineConfiguration.getId()).thenReturn("1");
         when(searchPipelineConfiguration.getConfigAsMap()).thenReturn(configDataMap);
-        when(getSearchPipelineResponse.pipelines()).thenReturn(List.of(searchPipelineConfiguration));
+
+        org.opensearch.search.pipeline.PipelineConfiguration irrelevantSearchPipelineConfiguration = mock(org.opensearch.search.pipeline.PipelineConfiguration.class);
+        Map<String, Object> irrelevantConfigMap = new HashMap<>();
+        irrelevantConfigMap.put("nothing", "nothing");
+        when(irrelevantSearchPipelineConfiguration.getConfigAsMap()).thenReturn(irrelevantConfigMap);
+        when(irrelevantSearchPipelineConfiguration.getId()).thenReturn("2");
+        when(getSearchPipelineResponse.pipelines()).thenReturn(List.of(searchPipelineConfiguration, irrelevantSearchPipelineConfiguration));
         doAnswer(invocation -> {
             ActionListener<GetSearchPipelineResponse> listener = invocation.getArgument(2);
             listener.onResponse(getSearchPipelineResponse);
@@ -211,7 +246,14 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             new BytesArray("{\"model_id\": \"test_id\"}".getBytes(StandardCharsets.UTF_8)),
             MediaTypeRegistry.JSON
         );
-        when(getIngestionPipelineResponse.pipelines()).thenReturn(List.of(ingestPipelineConfiguration));
+
+        org.opensearch.ingest.PipelineConfiguration irrelevantIngestPipelineConfiguration = new org.opensearch.ingest.PipelineConfiguration(
+                "2",
+                new BytesArray("{\"nothing\": \"test_id\"}".getBytes(StandardCharsets.UTF_8)),
+                MediaTypeRegistry.JSON
+        );
+
+        when(getIngestionPipelineResponse.pipelines()).thenReturn(List.of(ingestPipelineConfiguration, irrelevantIngestPipelineConfiguration));
         doAnswer(invocation -> {
             ActionListener<GetPipelineResponse> listener = invocation.getArgument(2);
             listener.onResponse(getIngestionPipelineResponse);
