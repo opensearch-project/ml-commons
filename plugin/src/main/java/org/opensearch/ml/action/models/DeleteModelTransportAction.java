@@ -367,18 +367,25 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     private void checkDownstreamTaskBeforeDeleteModel(String modelId, ActionListener<DeleteResponse> actionListener) {
         CountDownLatch countDownLatch = new CountDownLatch(3);
         AtomicBoolean noneBlocked = new AtomicBoolean(true);
+        List<String> errorMessages = new ArrayList<>();
         ActionListener<Boolean> countDownActionListener = ActionListener.wrap(b -> {
             countDownLatch.countDown();
             noneBlocked.compareAndSet(true, b);
             if (countDownLatch.getCount() == 0) {
                 if (noneBlocked.get()) {
                     doDeleteModel(modelId, actionListener);
+                } else {
+                    actionListener.onFailure(new OpenSearchStatusException(String.join(",", errorMessages), RestStatus.CONFLICT));
                 }
             }
         }, e -> {
             countDownLatch.countDown();
             noneBlocked.compareAndSet(true, false);
-            actionListener.onFailure(e);
+            // actionListener.onFailure(e);
+            errorMessages.add(e.getMessage());
+            if (countDownLatch.getCount() == 0) {
+                actionListener.onFailure(new OpenSearchStatusException(String.join(",", errorMessages), RestStatus.CONFLICT));
+            }
 
         });
         checkAgentBeforeDeleteModel(modelId, countDownActionListener);
