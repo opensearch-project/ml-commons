@@ -66,7 +66,7 @@ public class CohereMultiModalEmbeddingPreProcessFunctionTest {
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(textDocsInputDataSet).build();
         RemoteInferenceInputDataSet dataSet = function.apply(mlInput);
         assertEquals(1, dataSet.getParameters().size());
-        assertEquals("imageString", dataSet.getParameters().get("images"));
+        assertEquals("[\"imageString\"]", dataSet.getParameters().get("images"));
 
     }
 
