@@ -4,7 +4,6 @@ import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
 import static org.opensearch.ml.common.CommonValue.TOOL_MODEL_RELATED_FIELD_PREFIX;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -17,14 +16,13 @@ import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
 public class AgentModelsSearcher {
-    private Map<String, List<String>> relatedModelIdMap;
+    private Set<String> relatedModelIdSet;
 
     public AgentModelsSearcher(Map<String, Tool.Factory> toolFactories) {
-        relatedModelIdMap = new HashMap<>();
+        relatedModelIdSet = new HashSet<>();
         for (Map.Entry<String, Tool.Factory> entry : toolFactories.entrySet()) {
-            String toolType = entry.getKey();
             Tool.Factory toolFactory = entry.getValue();
-            relatedModelIdMap.put(toolType, toolFactory.getAllModelKeys());
+            relatedModelIdSet.addAll(toolFactory.getAllModelKeys());
         }
     }
 
@@ -41,8 +39,8 @@ public class AgentModelsSearcher {
 
     private List<String> collectAllKeys() {
         Set<String> keys = new HashSet<>();
-        for (Map.Entry<String, List<String>> entry : relatedModelIdMap.entrySet()) {
-            keys.addAll(entry.getValue());
+        for (String modelKey : relatedModelIdSet) {
+            keys.add(modelKey);
         }
         return new ArrayList<>(keys);
     }
