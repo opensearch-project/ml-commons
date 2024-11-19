@@ -82,6 +82,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     static final String BULK_FAILURE_MSG = "Bulk failure while deleting model of ";
     static final String SEARCH_FAILURE_MSG = "Search failure while deleting model of ";
     static final String OS_STATUS_EXCEPTION_MESSAGE = "Failed to delete all model chunks";
+    static final String PIPELINE_TARGET_MODEL_KEY = "model_id";
     Client client;
     NamedXContentRegistry xContentRegistry;
     ClusterService clusterService;
@@ -497,13 +498,15 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         return false;
     }
 
-    private Boolean searchThroughConfig(Object searchCandidate, String candidateId, String prefixKey) {
+    private Boolean searchThroughConfig(Object searchCandidate, String candidateId, String targetModelKey) {
         Boolean flag = false;
-        if (searchCandidate instanceof String && Objects.equals(prefixKey, "model_id") && Objects.equals(candidateId, searchCandidate)) {
+        if (searchCandidate instanceof String
+            && Objects.equals(targetModelKey, PIPELINE_TARGET_MODEL_KEY)
+            && Objects.equals(candidateId, searchCandidate)) {
             return true;
         } else if (searchCandidate instanceof List<?>) {
             for (Object v : (List<?>) searchCandidate) {
-                flag = flag || searchThroughConfig(v, candidateId, prefixKey);
+                flag = flag || searchThroughConfig(v, candidateId, targetModelKey);
             }
         } else if (searchCandidate instanceof Map<?, ?>) {
             for (Map.Entry<String, Object> entry : ((Map<String, Object>) searchCandidate).entrySet()) {

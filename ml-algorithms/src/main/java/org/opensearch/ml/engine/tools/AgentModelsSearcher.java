@@ -3,9 +3,7 @@ package org.opensearch.ml.engine.tools;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
 import static org.opensearch.ml.common.CommonValue.TOOL_MODEL_RELATED_FIELD_PREFIX;
 
-import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -28,20 +26,12 @@ public class AgentModelsSearcher {
 
     public SearchRequest constructQueryRequest(String candidateModelId) {
         SearchRequest searchRequest = new SearchRequest(ML_AGENT_INDEX);
-        List<String> allKeyFields = collectAllKeys();
         BoolQueryBuilder shouldQuery = QueryBuilders.boolQuery();
-        for (String keyField : allKeyFields) {
+        for (String keyField : relatedModelIdSet) {
             shouldQuery.should(QueryBuilders.termsQuery(TOOL_MODEL_RELATED_FIELD_PREFIX + keyField, candidateModelId));
         }
         searchRequest.source(new SearchSourceBuilder().query(shouldQuery));
         return searchRequest;
     }
 
-    private List<String> collectAllKeys() {
-        Set<String> keys = new HashSet<>();
-        for (String modelKey : relatedModelIdSet) {
-            keys.add(modelKey);
-        }
-        return new ArrayList<>(keys);
-    }
 }
