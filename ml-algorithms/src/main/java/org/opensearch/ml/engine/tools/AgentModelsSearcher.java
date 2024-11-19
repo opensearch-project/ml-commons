@@ -14,7 +14,7 @@ import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
 public class AgentModelsSearcher {
-    private Set<String> relatedModelIdSet;
+    private final Set<String> relatedModelIdSet;
 
     public AgentModelsSearcher(Map<String, Tool.Factory> toolFactories) {
         relatedModelIdSet = new HashSet<>();

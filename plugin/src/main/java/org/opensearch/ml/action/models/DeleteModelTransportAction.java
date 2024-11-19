@@ -91,7 +91,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
 
     ModelAccessControlHelper modelAccessControlHelper;
 
-    AgentModelsSearcher agentModelsSearcher;
+    final AgentModelsSearcher agentModelsSearcher;
 
     @Inject
     public DeleteModelTransportAction(
@@ -492,7 +492,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     }
 
     private Boolean searchThroughConfig(Object searchCandidate, String candidateId, String targetModelKey) {
-        Boolean flag = false;
+        boolean flag = false;
         if (searchCandidate instanceof String
             && Objects.equals(targetModelKey, PIPELINE_TARGET_MODEL_KEY)
             && Objects.equals(candidateId, searchCandidate)) {
