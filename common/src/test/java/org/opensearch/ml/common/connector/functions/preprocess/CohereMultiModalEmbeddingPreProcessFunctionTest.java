@@ -5,6 +5,12 @@
 
 package org.opensearch.ml.common.connector.functions.preprocess;
 
+import static org.junit.Assert.assertEquals;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -15,18 +21,11 @@ import org.opensearch.ml.common.dataset.TextSimilarityInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-
-import static org.junit.Assert.assertEquals;
-
-public class MultiModalConnectorPreProcessFunctionTest {
+public class CohereMultiModalEmbeddingPreProcessFunctionTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
-    MultiModalConnectorPreProcessFunction function;
+    CohereMultiModalEmbeddingPreProcessFunction function;
 
     TextSimilarityInputDataSet textSimilarityInputDataSet;
     TextDocsInputDataSet textDocsInputDataSet;
@@ -38,10 +37,10 @@ public class MultiModalConnectorPreProcessFunctionTest {
 
     @Before
     public void setUp() {
-        function = new MultiModalConnectorPreProcessFunction();
+        function = new CohereMultiModalEmbeddingPreProcessFunction();
         textSimilarityInputDataSet = TextSimilarityInputDataSet.builder().queryText("test").textDocs(List.of("hello")).build();
-        textDocsInputDataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("hello", "world")).build();
-        remoteInferenceInputDataSet = RemoteInferenceInputDataSet.builder().parameters(Map.of("inputText", "value1", "inputImage", "value2")).build();
+        textDocsInputDataSet = TextDocsInputDataSet.builder().docs(List.of("imageString")).build();
+        remoteInferenceInputDataSet = RemoteInferenceInputDataSet.builder().parameters(Map.of("images", "value2")).build();
 
         textEmbeddingInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(textDocsInputDataSet).build();
         textSimilarityInput = MLInput.builder().algorithm(FunctionName.TEXT_SIMILARITY).inputDataset(textSimilarityInputDataSet).build();
@@ -66,24 +65,15 @@ public class MultiModalConnectorPreProcessFunctionTest {
     public void testProcess_whenCorrectInput_expectCorrectOutput() {
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(textDocsInputDataSet).build();
         RemoteInferenceInputDataSet dataSet = function.apply(mlInput);
-        assertEquals(2, dataSet.getParameters().size());
-        assertEquals("hello", dataSet.getParameters().get("inputText"));
-        assertEquals("world", dataSet.getParameters().get("inputImage"));
-    }
-
-    @Test
-    public void testProcess_whenInputTextOnly_expectInputTextShowUp() {
-        TextDocsInputDataSet textDocsInputDataSet1 = TextDocsInputDataSet.builder().docs(Arrays.asList("hello")).build();
-        MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(textDocsInputDataSet1).build();
-        RemoteInferenceInputDataSet dataSet = function.apply(mlInput);
         assertEquals(1, dataSet.getParameters().size());
-        assertEquals("hello", dataSet.getParameters().get("inputText"));
+        assertEquals("imageString", dataSet.getParameters().get("images"));
+
     }
 
     @Test
     public void testProcess_whenInputTextIsnull_expectIllegalArgumentException() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("No input text or image provided");
+        exceptionRule.expectMessage("No image provided");
         List<String> docs = new ArrayList<>();
         docs.add(null);
         TextDocsInputDataSet textDocsInputDataSet1 = TextDocsInputDataSet.builder().docs(docs).build();
