@@ -1,6 +1,6 @@
 ### Cohere Embedding Connector Blueprint:
 
-This blueprint will show you how to connect a Cohere multi-modal embedding model to your Opensearch cluster, including creating a k-nn index and your own Embedding pipeline. You will require a Cohere API key to create a connector.
+This blueprint will show you how to connect a Cohere multi-modal embedding model to your OpenSearch cluster, including creating a k-nn index and your own Embedding pipeline. You will require a Cohere API key to create a connector.
 
 Cohere currently offers the following Embedding models (with model name and embedding dimensions). Note that only the following have been tested with the blueprint guide.
 
@@ -97,7 +97,7 @@ The last step is to deploy your model. Use the `model_id` returned by the regist
 POST /_plugins/_ml/models/<MODEL_ID>/_deploy
 ```
 
-This will once again spawn a task to deploy your Model, with a response that will look like:
+This will once again spawn a task to deploy your model, with a response that will look like:
 
 ```json
 {
@@ -113,11 +113,11 @@ You can run the GET tasks request again to verify the status.
 GET /_plugins/_ml/tasks/<TASK_ID>
 ```
 
-Once this is complete, your Model is deployed and ready!
+Once this is complete, your model is deployed and ready!
 
 ##### 1e. Test model
 
-You can try this request to test that the Model behaves correctly:
+You can try this request to test that the model behaves correctly:
 
 ```json
 POST /_plugins/_ml/models/<MODEL_ID_HERE>/_predict
