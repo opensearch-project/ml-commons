@@ -248,12 +248,13 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         );
 
         org.opensearch.ingest.PipelineConfiguration irrelevantIngestPipelineConfiguration = new org.opensearch.ingest.PipelineConfiguration(
-                "2",
-                new BytesArray("{\"nothing\": \"test_id\"}".getBytes(StandardCharsets.UTF_8)),
-                MediaTypeRegistry.JSON
+            "2",
+            new BytesArray("{\"nothing\": \"test_id\"}".getBytes(StandardCharsets.UTF_8)),
+            MediaTypeRegistry.JSON
         );
 
-        when(getIngestionPipelineResponse.pipelines()).thenReturn(List.of(ingestPipelineConfiguration, irrelevantIngestPipelineConfiguration));
+        when(getIngestionPipelineResponse.pipelines())
+            .thenReturn(List.of(ingestPipelineConfiguration, irrelevantIngestPipelineConfiguration));
         doAnswer(invocation -> {
             ActionListener<GetPipelineResponse> listener = invocation.getArgument(2);
             listener.onResponse(getIngestionPipelineResponse);

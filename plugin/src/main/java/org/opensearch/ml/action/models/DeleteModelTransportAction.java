@@ -291,24 +291,23 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         GetPipelineRequest getPipelineRequest = new GetPipelineRequest();
         client.execute(GetPipelineAction.INSTANCE, getPipelineRequest, ActionListener.wrap(ingestPipelineResponse -> {
             List<String> allRelevantPipelineIds = findRelevantPipelines(
-                    ingestPipelineResponse.pipelines(),
-                    modelId,
-                    org.opensearch.ingest.PipelineConfiguration::getConfigAsMap,
-                    org.opensearch.ingest.PipelineConfiguration::getId
+                ingestPipelineResponse.pipelines(),
+                modelId,
+                org.opensearch.ingest.PipelineConfiguration::getConfigAsMap,
+                org.opensearch.ingest.PipelineConfiguration::getId
             );
             if (allRelevantPipelineIds.isEmpty()) {
                 actionListener.onResponse(true);
-            }
-            else {
+            } else {
                 actionListener
-                        .onFailure(
-                                new OpenSearchStatusException(
-                                        allRelevantPipelineIds.size()
-                                                + " ingest pipelines are still using this model, please delete or update the pipelines first: "
-                                                + Arrays.toString(allRelevantPipelineIds.toArray(new String[0])),
-                                        RestStatus.CONFLICT
-                                )
-                        );
+                    .onFailure(
+                        new OpenSearchStatusException(
+                            allRelevantPipelineIds.size()
+                                + " ingest pipelines are still using this model, please delete or update the pipelines first: "
+                                + Arrays.toString(allRelevantPipelineIds.toArray(new String[0])),
+                            RestStatus.CONFLICT
+                        )
+                    );
             }
         }, e -> {
             log.error("Failed to delete ML Model: " + modelId, e);
@@ -322,24 +321,23 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         GetSearchPipelineRequest getSearchPipelineRequest = new GetSearchPipelineRequest();
         client.execute(GetSearchPipelineAction.INSTANCE, getSearchPipelineRequest, ActionListener.wrap(searchPipelineResponse -> {
             List<String> allRelevantPipelineIds = findRelevantPipelines(
-                    searchPipelineResponse.pipelines(),
-                    modelId,
-                    org.opensearch.search.pipeline.PipelineConfiguration::getConfigAsMap,
-                    org.opensearch.search.pipeline.PipelineConfiguration::getId
+                searchPipelineResponse.pipelines(),
+                modelId,
+                org.opensearch.search.pipeline.PipelineConfiguration::getConfigAsMap,
+                org.opensearch.search.pipeline.PipelineConfiguration::getId
             );
             if (allRelevantPipelineIds.isEmpty()) {
                 actionListener.onResponse(true);
-            }
-            else {
+            } else {
                 actionListener
-                        .onFailure(
-                                new OpenSearchStatusException(
-                                        allRelevantPipelineIds.size()
-                                                + " search pipelines are still using this model, please delete or update the pipelines first: "
-                                                + Arrays.toString(allRelevantPipelineIds.toArray(new String[0])),
-                                        RestStatus.CONFLICT
-                                )
-                        );
+                    .onFailure(
+                        new OpenSearchStatusException(
+                            allRelevantPipelineIds.size()
+                                + " search pipelines are still using this model, please delete or update the pipelines first: "
+                                + Arrays.toString(allRelevantPipelineIds.toArray(new String[0])),
+                            RestStatus.CONFLICT
+                        )
+                    );
             }
         }, e -> {
             log.error("Failed to delete ML Model: " + modelId, e);
@@ -512,7 +510,6 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         }
         return flag;
     }
-
 
     // this method is only to stub static method.
     @VisibleForTesting
