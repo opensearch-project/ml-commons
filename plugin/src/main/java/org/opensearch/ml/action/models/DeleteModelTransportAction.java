@@ -115,22 +115,12 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     protected void doExecute(Task task, ActionRequest request, ActionListener<DeleteResponse> actionListener) {
         MLModelDeleteRequest mlModelDeleteRequest = MLModelDeleteRequest.fromActionRequest(request);
         String modelId = mlModelDeleteRequest.getModelId();
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(actionListener, () -> context.restore());
-            checkDownstreamTaskBeforeDeleteModel(modelId, wrappedListener);
-        } catch (Exception e) {
-            log.error(e.getMessage(), e);
-            actionListener.onFailure(e);
-        }
-
-    }
-
-    private void doDeleteModel(String modelId, ActionListener<DeleteResponse> actionListener) {
         MLModelGetRequest mlModelGetRequest = new MLModelGetRequest(modelId, false, false);
         FetchSourceContext fetchSourceContext = getFetchSourceContext(mlModelGetRequest.isReturnContent());
         GetRequest getRequest = new GetRequest(ML_MODEL_INDEX).id(modelId).fetchSourceContext(fetchSourceContext);
         User user = RestActionUtils.getUserContext(client);
         boolean isSuperAdmin = isSuperAdminUserWrapper(clusterService, client);
+
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(actionListener, () -> context.restore());
             client.get(getRequest, ActionListener.wrap(r -> {
@@ -156,7 +146,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                     );
                             } else {
                                 if (isModelNotDeployed(mlModelState)) {
-                                    deleteModel(modelId, isHidden, actionListener);
+                                    checkDownstreamTaskBeforeDeleteModel(modelId, isHidden, actionListener);
                                 } else {
                                     wrappedListener
                                         .onFailure(
@@ -179,7 +169,8 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                                 )
                                             );
                                     } else if (isModelNotDeployed(mlModelState)) {
-                                        deleteModel(modelId, isHidden, actionListener);
+                                        checkDownstreamTaskBeforeDeleteModel(modelId, isHidden, actionListener);
+                                        ;
                                     } else {
                                         wrappedListener
                                             .onFailure(
@@ -364,7 +355,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
 
     }
 
-    private void checkDownstreamTaskBeforeDeleteModel(String modelId, ActionListener<DeleteResponse> actionListener) {
+    private void checkDownstreamTaskBeforeDeleteModel(String modelId, Boolean isHidden, ActionListener<DeleteResponse> actionListener) {
         CountDownLatch countDownLatch = new CountDownLatch(3);
         AtomicBoolean noneBlocked = new AtomicBoolean(true);
         List<String> errorMessages = new ArrayList<>();
@@ -373,7 +364,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
             noneBlocked.compareAndSet(true, b);
             if (countDownLatch.getCount() == 0) {
                 if (noneBlocked.get()) {
-                    doDeleteModel(modelId, actionListener);
+                    deleteModel(modelId, isHidden, actionListener);
                 } else {
                     actionListener.onFailure(new OpenSearchStatusException(String.join(",", errorMessages), RestStatus.CONFLICT));
                 }

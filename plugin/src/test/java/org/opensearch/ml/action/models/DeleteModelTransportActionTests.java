@@ -675,7 +675,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         return getResponse;
     }
 
-    private void prepare() {
+    private void prepare() throws IOException {
         emptyBulkByScrollResponse = new BulkByScrollResponse(new ArrayList<>(), null);
         SearchHits hits = new SearchHits(new SearchHit[] {}, new TotalHits(0, TotalHits.Relation.EQUAL_TO), 0.0f);
         when(searchResponse.getHits()).thenReturn(hits);
@@ -708,5 +708,12 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         configDataMap = Map
             .of("model_id", "test_id", "list_model_id", List.of("test_list_id"), "test_map_id", Map.of("test_key", "test_map_id"));
         doAnswer(invocation -> new SearchRequest()).when(agentModelsSearcher).constructQueryRequest(any());
+
+        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, false);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
     }
 }
