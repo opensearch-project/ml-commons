@@ -274,7 +274,7 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
     public void testRefreshModelState_NoSemaphore() throws InterruptedException {
         syncUpCron.updateModelStateSemaphore.acquire();
         syncUpCron.refreshModelState(null, null);
-        verify(client, never()).search(any());
+        verify(client, Mockito.after(1000).never()).search(any());
         syncUpCron.updateModelStateSemaphore.release();
     }
 
@@ -283,7 +283,8 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         future.onFailure(new RuntimeException("test exception"));
         when(client.search(any(SearchRequest.class))).thenReturn(future);
         syncUpCron.refreshModelState(null, null);
-        verify(client, times(1)).search(any());
+        // Need a small delay due to multithreading
+        verify(client, timeout(1000).times(1)).search(any(SearchRequest.class));
         assertBusy(() -> { assertTrue(syncUpCron.updateModelStateSemaphore.tryAcquire()); }, 5, TimeUnit.SECONDS);
         syncUpCron.updateModelStateSemaphore.release();
     }
@@ -293,7 +294,8 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         future.onFailure(new RuntimeException("search error"));
         when(client.search(any(SearchRequest.class))).thenReturn(future);
         syncUpCron.refreshModelState(null, null);
-        verify(client, times(1)).search(any(SearchRequest.class));
+        // Need a small delay due to multithreading
+        verify(client, timeout(1000).times(1)).search(any(SearchRequest.class));
         assertBusy(() -> { assertTrue(syncUpCron.updateModelStateSemaphore.tryAcquire()); }, 5, TimeUnit.SECONDS);
         syncUpCron.updateModelStateSemaphore.release();
     }
@@ -315,8 +317,8 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         future.onResponse(searchResponse);
         when(client.search(any(SearchRequest.class))).thenReturn(future);
         syncUpCron.refreshModelState(new HashMap<>(), new HashMap<>());
-        verify(client, times(1)).search(any());
         // Need a small delay due to multithreading
+        verify(client, timeout(1000).times(1)).search(any(SearchRequest.class));
         verify(client, Mockito.after(1000).never()).bulk(any());
         assertTrue(syncUpCron.updateModelStateSemaphore.tryAcquire());
         syncUpCron.updateModelStateSemaphore.release();
@@ -330,9 +332,9 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         when(client.search(any(SearchRequest.class))).thenReturn(future);
 
         syncUpCron.refreshModelState(modelWorkerNodes, deployingModels);
-        verify(client, times(1)).search(any(SearchRequest.class));
-        ArgumentCaptor<BulkRequest> bulkRequestCaptor = ArgumentCaptor.forClass(BulkRequest.class);
         // Need a small delay due to multithreading
+        verify(client, timeout(1000).times(1)).search(any(SearchRequest.class));
+        ArgumentCaptor<BulkRequest> bulkRequestCaptor = ArgumentCaptor.forClass(BulkRequest.class);
         verify(client, timeout(1000).times(1)).bulk(bulkRequestCaptor.capture());
         BulkRequest bulkRequest = bulkRequestCaptor.getValue();
         assertEquals(1, bulkRequest.numberOfActions());
@@ -352,9 +354,9 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         future.onResponse(createSearchModelResponse("modelId", "tenantId", MLModelState.DEPLOYED, 2, 0, Instant.now().toEpochMilli()));
         when(client.search(any(SearchRequest.class))).thenReturn(future);
         syncUpCron.refreshModelState(modelWorkerNodes, deployingModels);
-        verify(client, times(1)).search(any());
-        ArgumentCaptor<BulkRequest> bulkRequestCaptor = ArgumentCaptor.forClass(BulkRequest.class);
         // Need a small delay due to multithreading
+        verify(client, timeout(1000).times(1)).search(any(SearchRequest.class));
+        ArgumentCaptor<BulkRequest> bulkRequestCaptor = ArgumentCaptor.forClass(BulkRequest.class);
         verify(client, timeout(1000).times(1)).bulk(bulkRequestCaptor.capture());
         BulkRequest bulkRequest = bulkRequestCaptor.getValue();
         assertEquals(1, bulkRequest.numberOfActions());
@@ -377,9 +379,9 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
             );
         when(client.search(any(SearchRequest.class))).thenReturn(future);
         syncUpCron.refreshModelState(modelWorkerNodes, deployingModels);
-        verify(client, times(1)).search(any());
-        ArgumentCaptor<BulkRequest> bulkRequestCaptor = ArgumentCaptor.forClass(BulkRequest.class);
         // Need a small delay due to multithreading
+        verify(client, timeout(1000).times(1)).search(any(SearchRequest.class));
+        ArgumentCaptor<BulkRequest> bulkRequestCaptor = ArgumentCaptor.forClass(BulkRequest.class);
         verify(client, timeout(1000).times(1)).bulk(bulkRequestCaptor.capture());
         BulkRequest bulkRequest = bulkRequestCaptor.getValue();
         assertEquals(1, bulkRequest.numberOfActions());
@@ -400,9 +402,9 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         future.onResponse(createSearchModelResponse("modelId", "tenantId", MLModelState.DEPLOY_FAILED, 2, 0, Instant.now().toEpochMilli()));
         when(client.search(any(SearchRequest.class))).thenReturn(future);
         syncUpCron.refreshModelState(modelWorkerNodes, deployingModels);
-        verify(client, times(1)).search(any());
-        ArgumentCaptor<BulkRequest> bulkRequestCaptor = ArgumentCaptor.forClass(BulkRequest.class);
         // Need a small delay due to multithreading
+        verify(client, timeout(1000).times(1)).search(any(SearchRequest.class));
+        ArgumentCaptor<BulkRequest> bulkRequestCaptor = ArgumentCaptor.forClass(BulkRequest.class);
         verify(client, timeout(1000).times(1)).bulk(bulkRequestCaptor.capture());
         BulkRequest bulkRequest = bulkRequestCaptor.getValue();
         assertEquals(1, bulkRequest.numberOfActions());
@@ -422,8 +424,8 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         future.onResponse(createSearchModelResponse("modelId", "tenantId", MLModelState.DEPLOYING, 2, null, Instant.now().toEpochMilli()));
         when(client.search(any(SearchRequest.class))).thenReturn(future);
         syncUpCron.refreshModelState(modelWorkerNodes, deployingModels);
-        verify(client, times(1)).search(any());
         // Need a small delay due to multithreading
+        verify(client, timeout(1000).times(1)).search(any(SearchRequest.class));
         verify(client, Mockito.after(1000).never()).bulk(any());
     }
 
@@ -434,8 +436,8 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         future.onResponse(createSearchModelResponse("modelId", "tenantId", MLModelState.DEPLOYING, 2, null, Instant.now().toEpochMilli()));
         when(client.search(any(SearchRequest.class))).thenReturn(future);
         syncUpCron.refreshModelState(modelWorkerNodes, deployingModels);
-        verify(client, times(1)).search(any());
         // Need a small delay due to multithreading
+        verify(client, timeout(1000).times(1)).search(any(SearchRequest.class));
         verify(client, Mockito.after(1000).never()).bulk(any());
     }
 
