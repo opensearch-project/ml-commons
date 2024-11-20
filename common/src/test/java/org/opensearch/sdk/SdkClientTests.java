@@ -16,10 +16,13 @@ import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.core.rest.RestStatus;
 
+import java.security.PrivilegedAction;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -29,6 +32,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -36,7 +40,7 @@ public class SdkClientTests {
 
     private static final String TENANT_ID = "test_id";
     private SdkClient sdkClient;
-    private SdkClientDelegate sdkClientImpl;
+    private AbstractSdkClient sdkClientImpl;
 
     @Mock
     private PutDataObjectRequest putRequest;
@@ -75,7 +79,7 @@ public class SdkClientTests {
         when(deleteRequest.tenantId()).thenReturn(TENANT_ID);
         when(searchRequest.tenantId()).thenReturn(TENANT_ID);
 
-        sdkClientImpl = spy(new SdkClientDelegate() {
+        sdkClientImpl = spy(new AbstractSdkClient() {
             @Override
             public CompletionStage<PutDataObjectResponse> putDataObjectAsync(
                 PutDataObjectRequest request,
@@ -343,5 +347,26 @@ public class SdkClientTests {
         assertEquals(interruptedException, exception.getCause());
         assertTrue(Thread.interrupted());
         verify(sdkClientImpl).searchDataObjectAsync(any(SearchDataObjectRequest.class), any(Executor.class), anyBoolean());
+    }
+
+    @Test
+    public void testExecutePrivilegedAsync() throws Exception {
+        PrivilegedAction<String> action = () -> "Test Result";
+        Executor executor = Executors.newSingleThreadExecutor();
+        CompletionStage<String> result = sdkClientImpl.executePrivilegedAsync(action, executor);
+        verify(sdkClientImpl, timeout(1000)).executePrivilegedAsync(any(), any());
+        String actualResult = result.toCompletableFuture().get();
+        assertEquals("Test Result", actualResult);
+    }
+
+    @Test
+    public void testExecutePrivilegedAsyncWithException() {
+        PrivilegedAction<String> action = () -> { throw new RuntimeException("Test Exception"); };
+        Executor executor = Executors.newSingleThreadExecutor();
+        CompletionStage<String> result = sdkClientImpl.executePrivilegedAsync(action, executor);
+        CompletableFuture<String> future = result.toCompletableFuture();
+        verify(sdkClientImpl, timeout(1000)).executePrivilegedAsync(any(), any());
+        assertTrue(future.isCompletedExceptionally());
+        assertThrows(ExecutionException.class, future::get);
     }
 }
