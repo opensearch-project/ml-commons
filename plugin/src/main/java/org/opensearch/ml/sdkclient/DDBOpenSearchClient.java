@@ -379,6 +379,7 @@ public class DDBOpenSearchClient extends AbstractSdkClient {
 
             List<DataObjectResponse> responses = new ArrayList<>();
 
+            // TODO: Ideally if we only have put and delete requests we can use DynamoDB BatchWriteRequest.
             long startNanos = System.nanoTime();
             for (DataObjectRequest dataObjectRequest : request.requests()) {
                 try {

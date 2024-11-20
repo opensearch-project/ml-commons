@@ -98,26 +98,31 @@ public class LocalClusterIndicesClient extends AbstractSdkClient {
         Boolean isMultiTenancyEnabled
     ) {
         return executePrivilegedAsync(() -> {
-            try (XContentBuilder sourceBuilder = XContentFactory.jsonBuilder()) {
+            try {
                 log.info("Indexing data object in {}", request.index());
-                IndexRequest indexRequest = new IndexRequest(request.index())
-                    .opType(request.overwriteIfExists() ? OpType.INDEX : OpType.CREATE)
-                    .setRefreshPolicy(IMMEDIATE)
-                    .source(request.dataObject().toXContent(sourceBuilder, EMPTY_PARAMS));
-                if (!Strings.isNullOrEmpty(request.id())) {
-                    indexRequest.id(request.id());
-                }
+                IndexRequest indexRequest = createIndexRequest(request).setRefreshPolicy(IMMEDIATE);
                 IndexResponse indexResponse = client.index(indexRequest).actionGet();
                 log.info("Creation status for id {}: {}", indexResponse.getId(), indexResponse.getResult());
                 return PutDataObjectResponse.builder().id(indexResponse.getId()).parser(createParser(indexResponse)).build();
             } catch (IOException e) {
-                // Rethrow unchecked exception on XContent parsing error
                 throw new OpenSearchStatusException(
                     "Failed to parse data object to put in index " + request.index(),
                     RestStatus.BAD_REQUEST
                 );
             }
         }, executor);
+    }
+
+    private IndexRequest createIndexRequest(PutDataObjectRequest putDataObjectRequest) throws IOException {
+        try (XContentBuilder sourceBuilder = XContentFactory.jsonBuilder()) {
+            IndexRequest indexRequest = new IndexRequest(putDataObjectRequest.index())
+                .opType(putDataObjectRequest.overwriteIfExists() ? OpType.INDEX : OpType.CREATE)
+                .source(putDataObjectRequest.dataObject().toXContent(sourceBuilder, EMPTY_PARAMS));
+            if (!Strings.isNullOrEmpty(putDataObjectRequest.id())) {
+                indexRequest.id(putDataObjectRequest.id());
+            }
+            return indexRequest;
+        }
     }
 
     @Override
@@ -157,19 +162,9 @@ public class LocalClusterIndicesClient extends AbstractSdkClient {
         Boolean isMultiTenancyEnabled
     ) {
         return executePrivilegedAsync(() -> {
-            try (XContentBuilder sourceBuilder = XContentFactory.jsonBuilder()) {
+            try {
                 log.info("Updating {} from {}", request.id(), request.index());
-                UpdateRequest updateRequest = new UpdateRequest(request.index(), request.id())
-                    .doc(request.dataObject().toXContent(sourceBuilder, EMPTY_PARAMS));
-                if (request.ifSeqNo() != null) {
-                    updateRequest.setIfSeqNo(request.ifSeqNo());
-                }
-                if (request.ifPrimaryTerm() != null) {
-                    updateRequest.setIfPrimaryTerm(request.ifPrimaryTerm());
-                }
-                if (request.retryOnConflict() > 0) {
-                    updateRequest.retryOnConflict(request.retryOnConflict());
-                }
+                UpdateRequest updateRequest = createUpdateRequest(request);
                 UpdateResponse updateResponse = client.update(updateRequest).actionGet();
                 if (updateResponse == null) {
                     log.info("Null UpdateResponse");
@@ -179,19 +174,34 @@ public class LocalClusterIndicesClient extends AbstractSdkClient {
                 return UpdateDataObjectResponse.builder().id(updateResponse.getId()).parser(createParser(updateResponse)).build();
             } catch (VersionConflictEngineException vcee) {
                 log.error("Document version conflict updating {} in {}: {}", request.id(), request.index(), vcee.getMessage(), vcee);
-                // Rethrow
                 throw new OpenSearchStatusException(
                     "Document version conflict updating " + request.id() + " in index " + request.index(),
                     RestStatus.CONFLICT
                 );
             } catch (IOException e) {
-                // Rethrow unchecked exception on XContent parsing error
                 throw new OpenSearchStatusException(
                     "Failed to parse data object to update in index " + request.index(),
                     RestStatus.BAD_REQUEST
                 );
             }
         }, executor);
+    }
+
+    private UpdateRequest createUpdateRequest(UpdateDataObjectRequest updateDataObjectRequest) throws IOException {
+        try (XContentBuilder sourceBuilder = XContentFactory.jsonBuilder()) {
+            UpdateRequest updateRequest = new UpdateRequest(updateDataObjectRequest.index(), updateDataObjectRequest.id())
+                .doc(updateDataObjectRequest.dataObject().toXContent(sourceBuilder, EMPTY_PARAMS));
+            if (updateDataObjectRequest.ifSeqNo() != null) {
+                updateRequest.setIfSeqNo(updateDataObjectRequest.ifSeqNo());
+            }
+            if (updateDataObjectRequest.ifPrimaryTerm() != null) {
+                updateRequest.setIfPrimaryTerm(updateDataObjectRequest.ifPrimaryTerm());
+            }
+            if (updateDataObjectRequest.retryOnConflict() > 0) {
+                updateRequest.retryOnConflict(updateDataObjectRequest.retryOnConflict());
+            }
+            return updateRequest;
+        }
     }
 
     @Override
@@ -203,19 +213,21 @@ public class LocalClusterIndicesClient extends AbstractSdkClient {
         return executePrivilegedAsync(() -> {
             try {
                 log.info("Deleting {} from {}", request.id(), request.index());
-                DeleteResponse deleteResponse = client
-                    .delete(new DeleteRequest(request.index(), request.id()).setRefreshPolicy(IMMEDIATE))
-                    .actionGet();
+                DeleteRequest deleteRequest = createDeleteRequest(request).setRefreshPolicy(IMMEDIATE);
+                DeleteResponse deleteResponse = client.delete(deleteRequest).actionGet();
                 log.info("Deletion status for id {}: {}", deleteResponse.getId(), deleteResponse.getResult());
                 return DeleteDataObjectResponse.builder().id(deleteResponse.getId()).parser(createParser(deleteResponse)).build();
             } catch (IOException e) {
-                // Rethrow unchecked exception on XContent parsing error
                 throw new OpenSearchStatusException(
                     "Failed to parse data object to deletion response in index " + request.index(),
                     RestStatus.INTERNAL_SERVER_ERROR
                 );
             }
         }, executor);
+    }
+
+    private DeleteRequest createDeleteRequest(DeleteDataObjectRequest deleteDataObjectRequest) {
+        return new DeleteRequest(deleteDataObjectRequest.index(), deleteDataObjectRequest.id());
     }
 
     @Override
@@ -231,90 +243,67 @@ public class LocalClusterIndicesClient extends AbstractSdkClient {
 
                 for (DataObjectRequest dataObjectRequest : request.requests()) {
                     if (dataObjectRequest instanceof PutDataObjectRequest) {
-                        try (XContentBuilder sourceBuilder = XContentFactory.jsonBuilder()) {
-                            PutDataObjectRequest putRequest = (PutDataObjectRequest) dataObjectRequest;
-                            IndexRequest indexRequest = new IndexRequest(putRequest.index())
-                                .opType(putRequest.overwriteIfExists() ? OpType.INDEX : OpType.CREATE)
-                                .source(putRequest.dataObject().toXContent(sourceBuilder, EMPTY_PARAMS));
-                            if (!Strings.isNullOrEmpty(putRequest.id())) {
-                                indexRequest.id(putRequest.id());
-                            }
-                            bulkRequest.add(indexRequest);
-                        }
+                        bulkRequest.add(createIndexRequest((PutDataObjectRequest) dataObjectRequest));
                     } else if (dataObjectRequest instanceof UpdateDataObjectRequest) {
-                        try (XContentBuilder sourceBuilder = XContentFactory.jsonBuilder()) {
-                            UpdateDataObjectRequest updateDataRequest = (UpdateDataObjectRequest) dataObjectRequest;
-                            UpdateRequest updateRequest = new UpdateRequest(updateDataRequest.index(), updateDataRequest.id())
-                                .doc(updateDataRequest.dataObject().toXContent(sourceBuilder, EMPTY_PARAMS));
-                            if (updateDataRequest.ifSeqNo() != null) {
-                                updateRequest.setIfSeqNo(updateDataRequest.ifSeqNo());
-                            }
-                            if (updateDataRequest.ifPrimaryTerm() != null) {
-                                updateRequest.setIfPrimaryTerm(updateDataRequest.ifPrimaryTerm());
-                            }
-                            if (updateDataRequest.retryOnConflict() > 0) {
-                                updateRequest.retryOnConflict(updateDataRequest.retryOnConflict());
-                            }
-                            bulkRequest.add(updateRequest);
-                        }
+                        bulkRequest.add(createUpdateRequest((UpdateDataObjectRequest) dataObjectRequest));
                     } else if (dataObjectRequest instanceof DeleteDataObjectRequest) {
-                        DeleteDataObjectRequest deleteDataRequest = (DeleteDataObjectRequest) dataObjectRequest;
-                        DeleteRequest deleteRequest = new DeleteRequest(deleteDataRequest.index(), deleteDataRequest.id());
-                        bulkRequest.add(deleteRequest);
+                        bulkRequest.add(createDeleteRequest((DeleteDataObjectRequest) dataObjectRequest));
                     }
                 }
 
                 BulkResponse bulkResponse = client.bulk(bulkRequest.setRefreshPolicy(IMMEDIATE)).actionGet();
-                int responseCount = bulkResponse.getItems().length;
-                log.info("Bulk action complete for {} items: {}", responseCount, bulkResponse.hasFailures() ? "has failures" : "success");
-                DataObjectResponse[] responses = new DataObjectResponse[responseCount];
-                for (int i = 0; i < responseCount; i++) {
-                    BulkItemResponse itemResponse = bulkResponse.getItems()[i];
-                    switch (itemResponse.getOpType()) {
-                        case INDEX:
-                        case CREATE:
-                            responses[i] = PutDataObjectResponse
-                                .builder()
-                                .id(itemResponse.getId())
-                                .parser(createParser(itemResponse))
-                                .failed(itemResponse.isFailed())
-                                .build();
-                            break;
-                        case UPDATE:
-                            responses[i] = UpdateDataObjectResponse
-                                .builder()
-                                .id(itemResponse.getId())
-                                .parser(createParser(itemResponse))
-                                .failed(itemResponse.isFailed())
-                                .build();
-                            break;
-                        case DELETE:
-                            responses[i] = DeleteDataObjectResponse
-                                .builder()
-                                .id(itemResponse.getId())
-                                .parser(createParser(itemResponse))
-                                .failed(itemResponse.isFailed())
-                                .build();
-                            break;
-                        default:
-                            throw new OpenSearchStatusException(
-                                "Invalid operation type for bulk response",
-                                RestStatus.INTERNAL_SERVER_ERROR
-                            );
-                    }
-                }
-                return new BulkDataObjectResponse(
-                    responses,
-                    bulkResponse.getTook().millis(),
-                    bulkResponse.getIngestTookInMillis(),
-                    bulkResponse.hasFailures(),
-                    createParser(bulkResponse)
-                );
+                return bulkResponseToDataObjectResponse(bulkResponse);
             } catch (IOException e) {
                 // Rethrow unchecked exception on XContent parsing error
                 throw new OpenSearchStatusException("Failed to parse data object in a bulk response", RestStatus.INTERNAL_SERVER_ERROR);
             }
         }, executor);
+    }
+
+    private BulkDataObjectResponse bulkResponseToDataObjectResponse(BulkResponse bulkResponse) throws IOException {
+        int responseCount = bulkResponse.getItems().length;
+        log.info("Bulk action complete for {} items: {}", responseCount, bulkResponse.hasFailures() ? "has failures" : "success");
+        DataObjectResponse[] responses = new DataObjectResponse[responseCount];
+        for (int i = 0; i < responseCount; i++) {
+            BulkItemResponse itemResponse = bulkResponse.getItems()[i];
+            responses[i] = createDataObjectResponse(itemResponse);
+        }
+        return new BulkDataObjectResponse(
+            responses,
+            bulkResponse.getTook().millis(),
+            bulkResponse.getIngestTookInMillis(),
+            bulkResponse.hasFailures(),
+            createParser(bulkResponse)
+        );
+    }
+
+    private DataObjectResponse createDataObjectResponse(BulkItemResponse itemResponse) throws IOException {
+        switch (itemResponse.getOpType()) {
+            case INDEX:
+            case CREATE:
+                return PutDataObjectResponse
+                    .builder()
+                    .id(itemResponse.getId())
+                    .parser(createParser(itemResponse))
+                    .failed(itemResponse.isFailed())
+                    .build();
+            case UPDATE:
+                return UpdateDataObjectResponse
+                    .builder()
+                    .id(itemResponse.getId())
+                    .parser(createParser(itemResponse))
+                    .failed(itemResponse.isFailed())
+                    .build();
+            case DELETE:
+                return DeleteDataObjectResponse
+                    .builder()
+                    .id(itemResponse.getId())
+                    .parser(createParser(itemResponse))
+                    .failed(itemResponse.isFailed())
+                    .build();
+            default:
+                throw new OpenSearchStatusException("Invalid operation type for bulk response", RestStatus.INTERNAL_SERVER_ERROR);
+        }
     }
 
     @Override
