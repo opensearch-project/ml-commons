@@ -14,15 +14,12 @@ import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_SEQ_NO;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID;
 
 import java.io.IOException;
-import java.security.AccessController;
-import java.security.PrivilegedAction;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
@@ -52,6 +49,7 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.sdkclient.util.JsonTransformer;
+import org.opensearch.sdk.AbstractSdkClient;
 import org.opensearch.sdk.BulkDataObjectRequest;
 import org.opensearch.sdk.BulkDataObjectResponse;
 import org.opensearch.sdk.DataObjectRequest;
@@ -63,7 +61,6 @@ import org.opensearch.sdk.GetDataObjectResponse;
 import org.opensearch.sdk.PutDataObjectRequest;
 import org.opensearch.sdk.PutDataObjectResponse;
 import org.opensearch.sdk.SdkClient;
-import org.opensearch.sdk.SdkClientDelegate;
 import org.opensearch.sdk.SdkClientUtils;
 import org.opensearch.sdk.SearchDataObjectRequest;
 import org.opensearch.sdk.SearchDataObjectResponse;
@@ -92,7 +89,7 @@ import software.amazon.awssdk.services.dynamodb.model.UpdateItemResponse;
  *
  */
 @Log4j2
-public class DDBOpenSearchClient implements SdkClientDelegate {
+public class DDBOpenSearchClient extends AbstractSdkClient {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -139,7 +136,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
         final String tenantId = request.tenantId() != null ? request.tenantId() : DEFAULT_TENANT;
         final String tableName = request.index();
         final GetItemRequest getItemRequest = buildGetItemRequest(tenantId, id, request.index());
-        return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<PutDataObjectResponse>) () -> {
+        return executePrivilegedAsync(() -> {
             try {
                 GetItemResponse getItemResponse = dynamoDbClient.getItem(getItemRequest);
                 Long sequenceNumber = initOrIncrementSeqNo(getItemResponse);
@@ -176,7 +173,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
                 // Rethrow unchecked exception on XContent parsing error
                 throw new OpenSearchStatusException("Failed to parse data object  " + request.id(), RestStatus.BAD_REQUEST);
             }
-        }), executor);
+        }, executor);
     }
 
     /**
@@ -191,7 +188,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
         Boolean isMultiTenancyEnabled
     ) {
         final GetItemRequest getItemRequest = buildGetItemRequest(request.tenantId(), request.id(), request.index());
-        return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<GetDataObjectResponse>) () -> {
+        return executePrivilegedAsync(() -> {
             try {
                 final GetItemResponse getItemResponse = dynamoDbClient.getItem(getItemRequest);
                 ObjectNode sourceObject;
@@ -232,7 +229,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
                 // Rethrow unchecked exception on XContent parsing error
                 throw new OpenSearchStatusException("Failed to parse response", RestStatus.INTERNAL_SERVER_ERROR);
             }
-        }), executor);
+        }, executor);
     }
 
     /**
@@ -247,7 +244,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
         Boolean isMultiTenancyEnabled
     ) {
         final String tenantId = request.tenantId() != null ? request.tenantId() : DEFAULT_TENANT;
-        return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<UpdateDataObjectResponse>) () -> {
+        return executePrivilegedAsync(() -> {
             try {
                 String source = Strings.toString(MediaTypeRegistry.JSON, request.dataObject());
                 JsonNode jsonNode = OBJECT_MAPPER.readTree(source);
@@ -269,7 +266,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
                     RestStatus.BAD_REQUEST
                 );
             }
-        }), executor);
+        }, executor);
     }
 
     private Long updateItemWithRetryOnConflict(String tenantId, JsonNode jsonNode, UpdateDataObjectRequest request) {
@@ -349,7 +346,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
                     )
             )
             .build();
-        return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<DeleteDataObjectResponse>) () -> {
+        return executePrivilegedAsync(() -> {
             try {
                 DeleteItemResponse deleteItemResponse = dynamoDbClient.deleteItem(deleteItemRequest);
                 Long sequenceNumber = null;
@@ -368,7 +365,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
                 // Rethrow unchecked exception on XContent parsing error
                 throw new OpenSearchStatusException("Failed to parse response", RestStatus.INTERNAL_SERVER_ERROR);
             }
-        }), executor);
+        }, executor);
     }
 
     @Override
@@ -377,7 +374,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
         Executor executor,
         Boolean isMultiTenancyEnabled
     ) {
-        return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<BulkDataObjectResponse>) () -> {
+        return executePrivilegedAsync(() -> {
             log.info("Performing {} bulk actions on table {}", request.requests().size(), request.getIndices());
 
             List<DataObjectResponse> responses = new ArrayList<>();
@@ -452,7 +449,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
 
             log.info("Bulk action complete for {} items, took {} ms", responses.size(), tookMillis);
             return buildBulkDataObjectResponse(responses, tookMillis);
-        }), executor);
+        }, executor);
     }
 
     private BulkDataObjectResponse buildBulkDataObjectResponse(List<DataObjectResponse> responses, long tookMillis) {

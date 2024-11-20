@@ -13,13 +13,10 @@ import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import java.io.IOException;
 import java.io.StringReader;
 import java.io.StringWriter;
-import java.security.AccessController;
-import java.security.PrivilegedAction;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
 
@@ -63,6 +60,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.query.MatchPhraseQueryBuilder;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.sdkclient.util.JsonTransformer;
+import org.opensearch.sdk.AbstractSdkClient;
 import org.opensearch.sdk.BulkDataObjectRequest;
 import org.opensearch.sdk.BulkDataObjectResponse;
 import org.opensearch.sdk.DataObjectRequest;
@@ -74,7 +72,6 @@ import org.opensearch.sdk.GetDataObjectResponse;
 import org.opensearch.sdk.PutDataObjectRequest;
 import org.opensearch.sdk.PutDataObjectResponse;
 import org.opensearch.sdk.SdkClient;
-import org.opensearch.sdk.SdkClientDelegate;
 import org.opensearch.sdk.SdkClientUtils;
 import org.opensearch.sdk.SearchDataObjectRequest;
 import org.opensearch.sdk.SearchDataObjectResponse;
@@ -86,10 +83,11 @@ import jakarta.json.stream.JsonParser;
 import lombok.extern.log4j.Log4j2;
 
 /**
- * An implementation of {@link SdkClient} that stores data in a remote OpenSearch cluster using the OpenSearch Java Client.
+ * An implementation of {@link SdkClient} that stores data in a remote
+ * OpenSearch cluster using the OpenSearch Java Client.
  */
 @Log4j2
-public class RemoteClusterIndicesClient implements SdkClientDelegate {
+public class RemoteClusterIndicesClient extends AbstractSdkClient {
 
     @SuppressWarnings("unchecked")
     private static final Class<Map<String, Object>> MAP_DOCTYPE = (Class<Map<String, Object>>) (Class<?>) Map.class;
@@ -99,6 +97,7 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
 
     /**
      * Instantiate this object with an OpenSearch Java client.
+     * 
      * @param openSearchClient The client to wrap
      */
     public RemoteClusterIndicesClient(OpenSearchClient openSearchClient) {
@@ -112,7 +111,7 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
         Executor executor,
         Boolean isMultiTenancyEnabled
     ) {
-        return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<PutDataObjectResponse>) () -> {
+        return executePrivilegedAsync(() -> {
             try {
                 IndexRequest.Builder<?> builder = new IndexRequest.Builder<>()
                     .index(request.index())
@@ -135,7 +134,7 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
                     RestStatus.BAD_REQUEST
                 );
             }
-        }), executor);
+        }, executor);
     }
 
     @Override
@@ -144,7 +143,7 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
         Executor executor,
         Boolean isMultiTenancyEnabled
     ) {
-        return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<GetDataObjectResponse>) () -> {
+        return executePrivilegedAsync(() -> {
             try {
                 GetRequest getRequest = new GetRequest.Builder().index(request.index()).id(request.id()).build();
                 log.info("Getting {} from {}", request.id(), request.index());
@@ -160,7 +159,7 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
                     RestStatus.INTERNAL_SERVER_ERROR
                 );
             }
-        }), executor);
+        }, executor);
     }
 
     @Override
@@ -169,7 +168,7 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
         Executor executor,
         Boolean isMultiTenancyEnabled
     ) {
-        return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<UpdateDataObjectResponse>) () -> {
+        return executePrivilegedAsync(() -> {
             try (XContentBuilder builder = XContentFactory.jsonBuilder()) {
                 request.dataObject().toXContent(builder, ToXContent.EMPTY_PARAMS);
                 Map<String, Object> docMap = JsonXContent.jsonXContent
@@ -210,7 +209,7 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
                     RestStatus.BAD_REQUEST
                 );
             }
-        }), executor);
+        }, executor);
     }
 
     @Override
@@ -219,7 +218,7 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
         Executor executor,
         Boolean isMultiTenancyEnabled
     ) {
-        return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<DeleteDataObjectResponse>) () -> {
+        return executePrivilegedAsync(() -> {
             try {
                 DeleteRequest deleteRequest = new DeleteRequest.Builder().index(request.index()).id(request.id()).build();
                 log.info("Deleting {} from {}", request.id(), request.index());
@@ -234,7 +233,7 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
                     RestStatus.INTERNAL_SERVER_ERROR
                 );
             }
-        }), executor);
+        }, executor);
     }
 
     @Override
@@ -243,7 +242,7 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
         Executor executor,
         Boolean isMultiTenancyEnabled
     ) {
-        return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<BulkDataObjectResponse>) () -> {
+        return executePrivilegedAsync(() -> {
             try {
                 log.info("Performing {} bulk actions on indices {}", request.requests().size(), request.getIndices());
                 List<BulkOperation> operations = new ArrayList<>();
@@ -272,7 +271,7 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
                 // Rethrow unchecked exception on XContent parsing error
                 throw new OpenSearchStatusException("Failed to parse data object in a bulk response", RestStatus.INTERNAL_SERVER_ERROR);
             }
-        }), executor);
+        }, executor);
     }
 
     private void addBulkOperation(DataObjectRequest dataObjectRequest, List<BulkOperation> operations) {
@@ -387,7 +386,7 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
         Executor executor,
         Boolean isMultiTenancyEnabled
     ) {
-        return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<SearchDataObjectResponse>) () -> {
+        return executePrivilegedAsync(() -> {
             try {
                 log.info("Searching {}", Arrays.toString(request.indices()));
                 // work around https://github.com/opensearch-project/opensearch-java/issues/1150
@@ -426,7 +425,7 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
                     RestStatus.INTERNAL_SERVER_ERROR
                 );
             }
-        }), executor);
+        }, executor);
     }
 
     private XContentParser createParser(JsonpSerializable obj) throws IOException {
