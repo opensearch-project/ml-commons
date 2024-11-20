@@ -23,6 +23,7 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -352,21 +353,22 @@ public class SdkClientTests {
     @Test
     public void testExecutePrivilegedAsync() throws Exception {
         PrivilegedAction<String> action = () -> "Test Result";
-        Executor executor = Executors.newSingleThreadExecutor();
-        CompletionStage<String> result = sdkClientImpl.executePrivilegedAsync(action, executor);
-        verify(sdkClientImpl, timeout(1000)).executePrivilegedAsync(any(), any());
-        String actualResult = result.toCompletableFuture().get();
-        assertEquals("Test Result", actualResult);
-    }
-
-    @Test
-    public void testExecutePrivilegedAsyncWithException() {
-        PrivilegedAction<String> action = () -> { throw new RuntimeException("Test Exception"); };
-        Executor executor = Executors.newSingleThreadExecutor();
+        Executor executor = Executors.newCachedThreadPool();
         CompletionStage<String> result = sdkClientImpl.executePrivilegedAsync(action, executor);
         CompletableFuture<String> future = result.toCompletableFuture();
         verify(sdkClientImpl, timeout(1000)).executePrivilegedAsync(any(), any());
+        assertEquals("Test Result", future.get(5, TimeUnit.SECONDS));
+        assertFalse(future.isCompletedExceptionally());
+    }
+
+    @Test
+    public void testExecutePrivilegedAsyncWithException() throws Exception {
+        PrivilegedAction<String> action = () -> { throw new RuntimeException("Test Exception"); };
+        Executor executor = Executors.newCachedThreadPool();
+        CompletionStage<String> result = sdkClientImpl.executePrivilegedAsync(action, executor);
+        CompletableFuture<String> future = result.toCompletableFuture();
+        verify(sdkClientImpl, timeout(1000)).executePrivilegedAsync(any(), any());
+        assertThrows(ExecutionException.class, () -> future.get(5, TimeUnit.SECONDS));
         assertTrue(future.isCompletedExceptionally());
-        assertThrows(ExecutionException.class, future::get);
     }
 }
