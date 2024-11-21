@@ -533,17 +533,15 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
 
     private String formatAgentErrorMessage(SearchHit[] hits) {
         boolean isHidden = false;
+        List<String> agentIds = new ArrayList<>();
         for (SearchHit hit : hits) {
             Map<String, Object> sourceAsMap = hit.getSourceAsMap();
             isHidden = isHidden || Boolean.parseBoolean((String) sourceAsMap.getOrDefault(MLAgent.IS_HIDDEN_FIELD, false));
+            agentIds.add(hit.getId());
         }
         if (isHidden) {
             return String
                 .format(Locale.ROOT, "%d agents are still using this model, please delete or update the agents first", hits.length);
-        }
-        List<String> agentIds = new ArrayList<>();
-        for (SearchHit hit : hits) {
-            agentIds.add(hit.getId());
         }
         return String
             .format(
