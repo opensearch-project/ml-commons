@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -354,7 +355,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     private void checkDownstreamTaskBeforeDeleteModel(String modelId, Boolean isHidden, ActionListener<DeleteResponse> actionListener) {
         CountDownLatch countDownLatch = new CountDownLatch(3);
         AtomicBoolean noneBlocked = new AtomicBoolean(true);
-        CopyOnWriteArrayList<String> errorMessages = new CopyOnWriteArrayList<>();
+        ConcurrentLinkedQueue<String> errorMessages = new ConcurrentLinkedQueue<>();
         ActionListener<Boolean> countDownActionListener = ActionListener.wrap(b -> {
             countDownLatch.countDown();
             noneBlocked.compareAndSet(true, b);
