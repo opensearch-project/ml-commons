@@ -14,30 +14,46 @@ import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_SEQ_NO;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID;
 
 import java.io.IOException;
-import java.security.AccessController;
-import java.security.PrivilegedAction;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.action.DocWriteRequest.OpType;
+import org.opensearch.action.DocWriteResponse;
+import org.opensearch.action.bulk.BulkItemResponse;
+import org.opensearch.action.bulk.BulkResponse;
+import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.replication.ReplicationResponse.ShardInfo;
+import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
+import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.DeprecationHandler;
 import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.sdkclient.util.JsonTransformer;
+import org.opensearch.sdk.AbstractSdkClient;
+import org.opensearch.sdk.BulkDataObjectRequest;
+import org.opensearch.sdk.BulkDataObjectResponse;
+import org.opensearch.sdk.DataObjectRequest;
+import org.opensearch.sdk.DataObjectResponse;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
 import org.opensearch.sdk.GetDataObjectRequest;
@@ -45,7 +61,7 @@ import org.opensearch.sdk.GetDataObjectResponse;
 import org.opensearch.sdk.PutDataObjectRequest;
 import org.opensearch.sdk.PutDataObjectResponse;
 import org.opensearch.sdk.SdkClient;
-import org.opensearch.sdk.SdkClientDelegate;
+import org.opensearch.sdk.SdkClientUtils;
 import org.opensearch.sdk.SearchDataObjectRequest;
 import org.opensearch.sdk.SearchDataObjectResponse;
 import org.opensearch.sdk.UpdateDataObjectRequest;
@@ -73,7 +89,7 @@ import software.amazon.awssdk.services.dynamodb.model.UpdateItemResponse;
  *
  */
 @Log4j2
-public class DDBOpenSearchClient implements SdkClientDelegate {
+public class DDBOpenSearchClient extends AbstractSdkClient {
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -120,7 +136,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
         final String tenantId = request.tenantId() != null ? request.tenantId() : DEFAULT_TENANT;
         final String tableName = request.index();
         final GetItemRequest getItemRequest = buildGetItemRequest(tenantId, id, request.index());
-        return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<PutDataObjectResponse>) () -> {
+        return executePrivilegedAsync(() -> {
             try {
                 GetItemResponse getItemResponse = dynamoDbClient.getItem(getItemRequest);
                 Long sequenceNumber = initOrIncrementSeqNo(getItemResponse);
@@ -157,7 +173,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
                 // Rethrow unchecked exception on XContent parsing error
                 throw new OpenSearchStatusException("Failed to parse data object  " + request.id(), RestStatus.BAD_REQUEST);
             }
-        }), executor);
+        }, executor);
     }
 
     /**
@@ -172,7 +188,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
         Boolean isMultiTenancyEnabled
     ) {
         final GetItemRequest getItemRequest = buildGetItemRequest(request.tenantId(), request.id(), request.index());
-        return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<GetDataObjectResponse>) () -> {
+        return executePrivilegedAsync(() -> {
             try {
                 final GetItemResponse getItemResponse = dynamoDbClient.getItem(getItemRequest);
                 ObjectNode sourceObject;
@@ -213,7 +229,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
                 // Rethrow unchecked exception on XContent parsing error
                 throw new OpenSearchStatusException("Failed to parse response", RestStatus.INTERNAL_SERVER_ERROR);
             }
-        }), executor);
+        }, executor);
     }
 
     /**
@@ -228,7 +244,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
         Boolean isMultiTenancyEnabled
     ) {
         final String tenantId = request.tenantId() != null ? request.tenantId() : DEFAULT_TENANT;
-        return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<UpdateDataObjectResponse>) () -> {
+        return executePrivilegedAsync(() -> {
             try {
                 String source = Strings.toString(MediaTypeRegistry.JSON, request.dataObject());
                 JsonNode jsonNode = OBJECT_MAPPER.readTree(source);
@@ -250,7 +266,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
                     RestStatus.BAD_REQUEST
                 );
             }
-        }), executor);
+        }, executor);
     }
 
     private Long updateItemWithRetryOnConflict(String tenantId, JsonNode jsonNode, UpdateDataObjectRequest request) {
@@ -330,7 +346,7 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
                     )
             )
             .build();
-        return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<DeleteDataObjectResponse>) () -> {
+        return executePrivilegedAsync(() -> {
             try {
                 DeleteItemResponse deleteItemResponse = dynamoDbClient.deleteItem(deleteItemRequest);
                 Long sequenceNumber = null;
@@ -349,7 +365,140 @@ public class DDBOpenSearchClient implements SdkClientDelegate {
                 // Rethrow unchecked exception on XContent parsing error
                 throw new OpenSearchStatusException("Failed to parse response", RestStatus.INTERNAL_SERVER_ERROR);
             }
-        }), executor);
+        }, executor);
+    }
+
+    @Override
+    public CompletionStage<BulkDataObjectResponse> bulkDataObjectAsync(
+        BulkDataObjectRequest request,
+        Executor executor,
+        Boolean isMultiTenancyEnabled
+    ) {
+        return executePrivilegedAsync(() -> {
+            log.info("Performing {} bulk actions on table {}", request.requests().size(), request.getIndices());
+
+            List<DataObjectResponse> responses = new ArrayList<>();
+
+            // TODO: Ideally if we only have put and delete requests we can use DynamoDB BatchWriteRequest.
+            long startNanos = System.nanoTime();
+            for (DataObjectRequest dataObjectRequest : request.requests()) {
+                try {
+                    if (dataObjectRequest instanceof PutDataObjectRequest) {
+                        responses
+                            .add(
+                                putDataObjectAsync((PutDataObjectRequest) dataObjectRequest, executor, isMultiTenancyEnabled)
+                                    .toCompletableFuture()
+                                    .join()
+                            );
+                    } else if (dataObjectRequest instanceof UpdateDataObjectRequest) {
+                        responses
+                            .add(
+                                updateDataObjectAsync((UpdateDataObjectRequest) dataObjectRequest, executor, isMultiTenancyEnabled)
+                                    .toCompletableFuture()
+                                    .join()
+                            );
+                    } else if (dataObjectRequest instanceof DeleteDataObjectRequest) {
+                        responses
+                            .add(
+                                deleteDataObjectAsync((DeleteDataObjectRequest) dataObjectRequest, executor, isMultiTenancyEnabled)
+                                    .toCompletableFuture()
+                                    .join()
+                            );
+                    }
+                } catch (CompletionException e) {
+                    Exception cause = SdkClientUtils.unwrapAndConvertToException(e);
+                    RestStatus status = ExceptionsHelper.status(cause);
+                    if (dataObjectRequest instanceof PutDataObjectRequest) {
+                        responses
+                            .add(
+                                new PutDataObjectResponse.Builder()
+                                    .index(dataObjectRequest.index())
+                                    .id(dataObjectRequest.id())
+                                    .failed(true)
+                                    .cause(cause)
+                                    .status(status)
+                                    .build()
+                            );
+                    } else if (dataObjectRequest instanceof UpdateDataObjectRequest) {
+                        responses
+                            .add(
+                                new UpdateDataObjectResponse.Builder()
+                                    .index(dataObjectRequest.index())
+                                    .id(dataObjectRequest.id())
+                                    .failed(true)
+                                    .cause(cause)
+                                    .status(status)
+                                    .build()
+                            );
+                    } else if (dataObjectRequest instanceof DeleteDataObjectRequest) {
+                        responses
+                            .add(
+                                new DeleteDataObjectResponse.Builder()
+                                    .index(dataObjectRequest.index())
+                                    .id(dataObjectRequest.id())
+                                    .failed(true)
+                                    .cause(cause)
+                                    .status(status)
+                                    .build()
+                            );
+                    }
+                    log.error("Error in bulk operation for id {}: {}", dataObjectRequest.id(), e.getCause().getMessage(), e.getCause());
+                }
+            }
+            long endNanos = System.nanoTime();
+            long tookMillis = TimeUnit.NANOSECONDS.toMillis(endNanos - startNanos);
+
+            log.info("Bulk action complete for {} items, took {} ms", responses.size(), tookMillis);
+            return buildBulkDataObjectResponse(responses, tookMillis);
+        }, executor);
+    }
+
+    private BulkDataObjectResponse buildBulkDataObjectResponse(List<DataObjectResponse> responses, long tookMillis) {
+        // Reconstruct BulkResponse to leverage its parser and hasFailed methods
+        BulkItemResponse[] responseArray = new BulkItemResponse[responses.size()];
+        try {
+            for (int id = 0; id < responses.size(); id++) {
+                responseArray[id] = buildBulkItemResponse(responses, id);
+            }
+            BulkResponse br = new BulkResponse(responseArray, tookMillis);
+            try (XContentBuilder builder = XContentFactory.jsonBuilder()) {
+                br.toXContent(builder, ToXContent.EMPTY_PARAMS);
+                return new BulkDataObjectResponse(
+                    responses.toArray(new DataObjectResponse[0]),
+                    tookMillis,
+                    br.hasFailures(),
+                    createParser(builder.toString())
+                );
+            }
+        } catch (IOException e) {
+            // Rethrow unchecked exception on XContent parsing error
+            throw new OpenSearchStatusException("Failed to parse bulk response", RestStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    private BulkItemResponse buildBulkItemResponse(List<DataObjectResponse> responses, int bulkId) throws IOException {
+        DataObjectResponse response = responses.get(bulkId);
+        OpType opType = null;
+        if (response instanceof PutDataObjectResponse) {
+            opType = OpType.INDEX;
+        } else if (response instanceof UpdateDataObjectResponse) {
+            opType = OpType.UPDATE;
+        } else if (response instanceof DeleteDataObjectResponse) {
+            opType = OpType.DELETE;
+        }
+        // If failed, parser is null, so shortcut response here
+        if (response.isFailed()) {
+            return new BulkItemResponse(bulkId, opType, new BulkItemResponse.Failure(response.index(), response.id(), response.cause()));
+        }
+        DocWriteResponse writeResponse = null;
+        if (response instanceof PutDataObjectResponse) {
+            writeResponse = IndexResponse.fromXContent(response.parser());
+        } else if (response instanceof UpdateDataObjectResponse) {
+            writeResponse = UpdateResponse.fromXContent(response.parser());
+        } else if (response instanceof DeleteDataObjectResponse) {
+            writeResponse = DeleteResponse.fromXContent(response.parser());
+        }
+        return new BulkItemResponse(bulkId, opType, writeResponse);
     }
 
     /**

@@ -8,18 +8,16 @@
  */
 package org.opensearch.sdk;
 
-import org.opensearch.core.xcontent.ToXContentObject;
-import org.opensearch.core.xcontent.XContentBuilder;
-import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_SEQ_NO;
-
 import java.io.IOException;
 import java.util.Map;
 
-public class UpdateDataObjectRequest {
+import org.opensearch.core.xcontent.ToXContentObject;
+import org.opensearch.core.xcontent.XContentBuilder;
 
-    private final String index;
-    private final String id;
-    private final String tenantId;
+import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_SEQ_NO;
+
+public class UpdateDataObjectRequest extends DataObjectRequest {
+
     private final Long ifSeqNo;
     private final Long ifPrimaryTerm;
     private final int retryOnConflict;
@@ -46,37 +44,11 @@ public class UpdateDataObjectRequest {
         int retryOnConflict,
         ToXContentObject dataObject
     ) {
-        this.index = index;
-        this.id = id;
-        this.tenantId = tenantId;
+        super(index, id, tenantId);
         this.ifSeqNo = ifSeqNo;
         this.ifPrimaryTerm = ifPrimaryTerm;
         this.retryOnConflict = retryOnConflict;
         this.dataObject = dataObject;
-    }
-
-    /**
-     * Returns the index
-     * @return the index
-     */
-    public String index() {
-        return this.index;
-    }
-
-    /**
-     * Returns the document id
-     * @return the id
-     */
-    public String id() {
-        return this.id;
-    }
-
-    /**
-     * Returns the tenant id
-     * @return the tenantId
-     */
-    public String tenantId() {
-        return this.tenantId;
     }
 
     /**
@@ -102,13 +74,18 @@ public class UpdateDataObjectRequest {
     public int retryOnConflict() {
         return retryOnConflict;
     }
-    
+
     /**
      * Returns the data object
      * @return the data object
      */
     public ToXContentObject dataObject() {
         return this.dataObject;
+    }
+
+    @Override
+    public boolean isWriteRequest() {
+        return true;
     }
 
     /**
@@ -122,49 +99,11 @@ public class UpdateDataObjectRequest {
     /**
      * Class for constructing a Builder for this Request Object
      */
-    public static class Builder {
-        private String index = null;
-        private String id = null;
-        private String tenantId = null;
+    public static class Builder extends DataObjectRequest.Builder<Builder> {
         private Long ifSeqNo = null;
         private Long ifPrimaryTerm = null;
         private int retryOnConflict = 0;
         private ToXContentObject dataObject = null;
-
-        /**
-         * Empty Constructor for the Builder object
-         */
-        private Builder() {}
-
-        /**
-         * Add an index to this builder
-         * @param index the index to put the object
-         * @return the updated builder
-         */
-        public Builder index(String index) {
-            this.index = index;
-            return this;
-        }
-
-        /**
-         * Add an id to this builder
-         * @param id the document id
-         * @return the updated builder
-         */
-        public Builder id(String id) {
-            this.id = id;
-            return this;
-        }
-
-        /**
-         * Add a tenant ID to this builder
-         * @param tenantId the tenant id
-         * @return the updated builder
-         */
-        public Builder tenantId(String tenantId) {
-            this.tenantId = tenantId;
-            return this;
-        }
 
         /**
          * Only perform this update request if the document's modification was assigned the given

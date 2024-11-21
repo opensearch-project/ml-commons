@@ -8,6 +8,7 @@
  */
 package org.opensearch.sdk;
 
+import java.util.List;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
@@ -20,10 +21,10 @@ import org.opensearch.core.common.Strings;
 import static org.opensearch.sdk.SdkClientUtils.unwrapAndConvertToException;
 
 public class SdkClient {
-    
+
     private final SdkClientDelegate delegate;
     private final Boolean isMultiTenancyEnabled;
-    
+
     public SdkClient(SdkClientDelegate delegate, Boolean multiTenancy) {
         this.delegate = delegate;
         this.isMultiTenancyEnabled = multiTenancy;
@@ -168,6 +169,42 @@ public class SdkClient {
     }
 
     /**
+     * Perform a bulk request for multiple data objects/documents in potentially multiple tables/indices.
+     *
+     * @param request A request identifying the bulk requests to execute
+     * @param executor the executor to use for asynchronous execution
+     * @return A completion stage encapsulating the response or exception
+     */
+    public CompletionStage<BulkDataObjectResponse> bulkDataObjectAsync(BulkDataObjectRequest request, Executor executor) {
+        validateTenantIds(request.requests());
+        return delegate.bulkDataObjectAsync(request, executor, isMultiTenancyEnabled);
+    }
+
+    /**
+     * Perform a bulk request for multiple data objects/documents in potentially multiple tables/indices.
+     *
+     * @param request A request identifying the bulk requests to execute
+     * @return A completion stage encapsulating the response or exception
+     */
+    public CompletionStage<BulkDataObjectResponse> bulkDataObjectAsync(BulkDataObjectRequest request) {
+        return bulkDataObjectAsync(request, ForkJoinPool.commonPool());
+    }
+
+    /**
+     * Perform a bulk request for multiple data objects/documents in potentially multiple tables/indices.
+     *
+     * @param request A request identifying the bulk requests to execute
+     * @return A response on success. Throws unchecked exceptions or {@link OpenSearchException} wrapping the cause on checked exception.
+     */
+    public BulkDataObjectResponse bulkDataObject(BulkDataObjectRequest request) {
+        try {
+            return bulkDataObjectAsync(request).toCompletableFuture().join();
+        } catch (CompletionException e) {
+            throw ExceptionsHelper.convertToRuntime(unwrapAndConvertToException(e));
+        }
+    }
+
+    /**
      * Search for data objects/documents in a table/index.
      *
      * @param request  A request identifying the data objects to search for
@@ -219,4 +256,16 @@ public class SdkClient {
             throw new IllegalArgumentException("A tenant ID is required when multitenancy is enabled.");
         }
     }
+    
+    /**
+     * Throw exception if tenantId is null for any bulk request and multitenancy is enabled
+     * @param tenantId The tenantId from the request
+     */
+    private void validateTenantIds(List<DataObjectRequest> requests) {
+        if (Boolean.TRUE.equals(isMultiTenancyEnabled) && requests.stream().map(DataObjectRequest::tenantId).anyMatch(Strings::isNullOrEmpty)) {
+            throw new IllegalArgumentException("A tenant ID is required for every bulk request when multitenancy is enabled.");            
+        }
+    }
+
+
 }

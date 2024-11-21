@@ -9,6 +9,7 @@
 
 package org.opensearch.ml.sdkclient;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
@@ -50,6 +51,8 @@ import org.opensearch.core.xcontent.DeprecationHandler;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.CommonValue;
+import org.opensearch.sdk.BulkDataObjectRequest;
+import org.opensearch.sdk.BulkDataObjectResponse;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
 import org.opensearch.sdk.GetDataObjectRequest;
@@ -671,6 +674,119 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void testBulkDataObject_HappyCase() {
+        PutDataObjectRequest putRequest = PutDataObjectRequest
+            .builder()
+            .id(TEST_ID + "1")
+            .tenantId(TENANT_ID)
+            .dataObject(testDataObject)
+            .build();
+        UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
+            .builder()
+            .id(TEST_ID + "2")
+            .tenantId(TENANT_ID)
+            .dataObject(testDataObject)
+            .build();
+        DeleteDataObjectRequest deleteRequest = DeleteDataObjectRequest.builder().id(TEST_ID + "3").tenantId(TENANT_ID).build();
+        BulkDataObjectRequest bulkRequest = BulkDataObjectRequest
+            .builder()
+            .globalIndex(TEST_INDEX)
+            .build()
+            .add(putRequest)
+            .add(updateRequest)
+            .add(deleteRequest);
+
+        when(dynamoDbClient.putItem(any(PutItemRequest.class))).thenReturn(PutItemResponse.builder().build());
+        GetItemResponse getItemResponse = GetItemResponse
+            .builder()
+            .item(
+                Map
+                    .ofEntries(
+                        Map.entry(SOURCE, AttributeValue.builder().m(Map.of("data", AttributeValue.builder().s("foo").build())).build()),
+                        Map.entry(SEQ_NUM, AttributeValue.builder().n("0").build())
+                    )
+            )
+            .build();
+        when(dynamoDbClient.getItem(any(GetItemRequest.class))).thenReturn(getItemResponse);
+        when(dynamoDbClient.updateItem(any(UpdateItemRequest.class))).thenReturn(UpdateItemResponse.builder().build());
+        when(dynamoDbClient.deleteItem(any(DeleteItemRequest.class))).thenReturn(DeleteItemResponse.builder().build());
+
+        BulkDataObjectResponse response = sdkClient
+            .bulkDataObjectAsync(bulkRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture()
+            .join();
+
+        assertEquals(3, response.getResponses().length);
+        assertTrue(response.getResponses()[0] instanceof PutDataObjectResponse);
+        assertTrue(response.getResponses()[1] instanceof UpdateDataObjectResponse);
+        assertTrue(response.getResponses()[2] instanceof DeleteDataObjectResponse);
+
+        assertEquals(TEST_ID + "1", response.getResponses()[0].id());
+        assertEquals(TEST_ID + "2", response.getResponses()[1].id());
+        assertEquals(TEST_ID + "3", response.getResponses()[2].id());
+
+        assertTrue(response.getTookInMillis() >= 0);
+    }
+
+    @Test
+    public void testBulkDataObject_WithFailures() {
+        PutDataObjectRequest putRequest = PutDataObjectRequest
+            .builder()
+            .id(TEST_ID + "1")
+            .tenantId(TENANT_ID)
+            .dataObject(testDataObject)
+            .build();
+        UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
+            .builder()
+            .id(TEST_ID + "2")
+            .tenantId(TENANT_ID)
+            .dataObject(testDataObject)
+            .build();
+        DeleteDataObjectRequest deleteRequest = DeleteDataObjectRequest.builder().id(TEST_ID + "3").tenantId(TENANT_ID).build();
+        BulkDataObjectRequest bulkRequest = BulkDataObjectRequest
+            .builder()
+            .globalIndex(TEST_INDEX)
+            .build()
+            .add(putRequest)
+            .add(updateRequest)
+            .add(deleteRequest);
+
+        when(dynamoDbClient.putItem(any(PutItemRequest.class))).thenReturn(PutItemResponse.builder().build());
+        GetItemResponse getItemResponse = GetItemResponse
+            .builder()
+            .item(
+                Map
+                    .ofEntries(
+                        Map.entry(SOURCE, AttributeValue.builder().m(Map.of("data", AttributeValue.builder().s("foo").build())).build()),
+                        Map.entry(SEQ_NUM, AttributeValue.builder().n("0").build())
+                    )
+            )
+            .build();
+        when(dynamoDbClient.getItem(any(GetItemRequest.class))).thenReturn(getItemResponse);
+        Exception cause = new OpenSearchStatusException("Update failed with conflict", RestStatus.CONFLICT);
+        when(dynamoDbClient.updateItem(any(UpdateItemRequest.class))).thenThrow(cause);
+        when(dynamoDbClient.deleteItem(any(DeleteItemRequest.class))).thenReturn(DeleteItemResponse.builder().build());
+
+        BulkDataObjectResponse response = sdkClient
+            .bulkDataObjectAsync(bulkRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture()
+            .join();
+
+        assertEquals(3, response.getResponses().length);
+        assertFalse(response.getResponses()[0].isFailed());
+        assertNull(response.getResponses()[0].cause());
+        assertTrue(response.getResponses()[0] instanceof PutDataObjectResponse);
+        assertTrue(response.getResponses()[1].isFailed());
+        assertTrue(response.getResponses()[1].cause() instanceof OpenSearchStatusException);
+        assertEquals("Update failed with conflict", response.getResponses()[1].cause().getMessage());
+        assertEquals(RestStatus.CONFLICT, response.getResponses()[1].status());
+        assertTrue(response.getResponses()[1] instanceof UpdateDataObjectResponse);
+        assertFalse(response.getResponses()[2].isFailed());
+        assertNull(response.getResponses()[0].cause());
+        assertTrue(response.getResponses()[2] instanceof DeleteDataObjectResponse);
+    }
+
+    @Test
     public void searchDataObjectAsync_HappyCase() {
         SearchSourceBuilder searchSourceBuilder = SearchSourceBuilder.searchSource();
         SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
@@ -729,5 +845,4 @@ public class DDBOpenSearchClientTests extends OpenSearchTestCase {
                 Map.entry("testObject", AttributeValue.builder().m(Map.of("data", AttributeValue.builder().s("foo").build())).build())
             );
     }
-
 }

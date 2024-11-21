@@ -8,46 +8,32 @@
  */
 package org.opensearch.sdk;
 
-import org.opensearch.core.xcontent.XContentParser;
-
 import java.util.Collections;
 import java.util.Map;
 
-public class GetDataObjectResponse {
-    private final String id;
-    private final XContentParser parser;
+import org.opensearch.core.rest.RestStatus;
+import org.opensearch.core.xcontent.XContentParser;
+
+public class GetDataObjectResponse extends DataObjectResponse {
     private final Map<String, Object> source;
 
     /**
      * Instantiate this request with an id and parser/map used to recreate the data object.
      * <p>
      * For data storage implementations other than OpenSearch, the id may be referred to as a primary key.
+     * @param index the index
      * @param id the document id
      * @param parser a parser that can be used to create a GetResponse
+     * @param failed whether the request failed
+     * @param cause the Exception causing the failure
+     * @param status the RestStatus
      * @param source the data object as a map
      */
-    public GetDataObjectResponse(String id, XContentParser parser, Map<String, Object> source) {
-        this.id = id;
-        this.parser = parser;
+    public GetDataObjectResponse(String index, String id, XContentParser parser, boolean failed, Exception cause, RestStatus status, Map<String, Object> source) {
+        super(index, id, parser, failed, cause, status);
         this.source = source;
     }
 
-    /**
-     * Returns the document id
-     * @return the id
-     */
-    public String id() {
-        return this.id;
-    }
-    
-    /**
-     * Returns the parser that can be used to create a GetResponse
-     * @return the parser
-     */
-    public XContentParser parser() {
-        return this.parser;
-    }
-    
     /**
      * Returns the source map. This is a logical representation of the data object.
      * @return the source map
@@ -67,35 +53,8 @@ public class GetDataObjectResponse {
     /**
      * Class for constructing a Builder for this Response Object
      */
-    public static class Builder {
-        private String id = null;
-        private XContentParser parser = null;
+    public static class Builder extends DataObjectResponse.Builder<Builder> {
         private Map<String, Object> source = Collections.emptyMap();
-
-        /**
-         * Empty Constructor for the Builder object
-         */
-        private Builder() {}
-
-        /**
-         * Add an id to this builder
-         * @param id the id to add
-         * @return the updated builder
-         */
-        public Builder id(String id) {
-            this.id = id;
-            return this;
-        }
-        
-        /**
-         * Add a parser to this builder
-         * @param parser a parser that can be used to create a GetResponse
-         * @return the updated builder
-         */
-        public Builder parser(XContentParser parser) {
-            this.parser = parser;
-            return this;
-        }
 
         /**
          * Add a source map to this builder
@@ -106,13 +65,13 @@ public class GetDataObjectResponse {
             this.source = source == null ? Collections.emptyMap() : source;
             return this;
         }
-        
+
         /**
          * Builds the response
          * @return A {@link GetDataObjectResponse}
          */
         public GetDataObjectResponse build() {
-            return new GetDataObjectResponse(this.id, this.parser, this.source);
+            return new GetDataObjectResponse(this.index, this.id, this.parser, this.failed, this.cause, this.status, this.source);
         }
     }
 }

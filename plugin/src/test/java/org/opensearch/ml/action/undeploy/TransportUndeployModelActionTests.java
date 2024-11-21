@@ -28,6 +28,7 @@ import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.mockito.Spy;
 import org.opensearch.Version;
@@ -56,8 +57,10 @@ import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodeResponse;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesRequest;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesResponse;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.sdkclient.SdkClientFactory;
 import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
+import org.opensearch.sdk.SdkClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
@@ -82,6 +85,7 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
 
     @Mock
     private Client client;
+    private SdkClient sdkClient;
 
     @Mock
     ClusterState clusterState;
@@ -132,6 +136,7 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
         Settings settings = Settings.builder().build();
+        sdkClient = Mockito.spy(SdkClientFactory.createSdkClient(client, xContentRegistry, settings));
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
@@ -150,6 +155,7 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
                 clusterService,
                 threadPool,
                 client,
+                sdkClient,
                 nodeFilter,
                 mlStats
             )
@@ -242,7 +248,7 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
 
     public void testProcessUndeployModelResponseAndUpdateNullResponse() {
         when(undeployModelNodesResponse.getNodes()).thenReturn(null);
-        action.processUndeployModelResponseAndUpdate(undeployModelNodesResponse, actionListener);
+        action.processUndeployModelResponseAndUpdate(mock(), undeployModelNodesResponse, actionListener);
     }
 
     public void testProcessUndeployModelResponseAndUpdateResponse() {
@@ -276,7 +282,7 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(MLSyncUpNodesRequest.class), any());
 
-        action.processUndeployModelResponseAndUpdate(response, actionListener);
+        action.processUndeployModelResponseAndUpdate(nodesRequest, response, actionListener);
         verify(actionListener).onResponse(response);
     }
 
@@ -310,7 +316,7 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(MLSyncUpNodesRequest.class), any());
 
-        action.processUndeployModelResponseAndUpdate(response, actionListener);
+        action.processUndeployModelResponseAndUpdate(nodesRequest, response, actionListener);
         verify(actionListener).onResponse(response);
     }
 
@@ -344,7 +350,7 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(MLSyncUpNodesRequest.class), any());
 
-        action.processUndeployModelResponseAndUpdate(response, actionListener);
+        action.processUndeployModelResponseAndUpdate(nodesRequest, response, actionListener);
         verify(actionListener).onResponse(response);
     }
 
@@ -379,7 +385,7 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(MLSyncUpNodesRequest.class), any());
 
-        action.processUndeployModelResponseAndUpdate(response, actionListener);
+        action.processUndeployModelResponseAndUpdate(nodesRequest, response, actionListener);
         verify(actionListener).onResponse(response);
     }
 
@@ -416,7 +422,7 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(MLSyncUpNodesRequest.class), any());
 
-        action.processUndeployModelResponseAndUpdate(response, actionListener);
+        action.processUndeployModelResponseAndUpdate(nodesRequest, response, actionListener);
         verify(actionListener).onResponse(response);
     }
 
@@ -451,7 +457,7 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(MLSyncUpNodesRequest.class), any());
 
-        action.processUndeployModelResponseAndUpdate(response, actionListener);
+        action.processUndeployModelResponseAndUpdate(nodesRequest, response, actionListener);
         verify(actionListener).onResponse(response);
     }
 
@@ -474,7 +480,7 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
         final List<FailedNodeException> failures = new ArrayList<>();
         final MLUndeployModelNodesResponse response = action.newResponse(nodesRequest, responses, failures);
 
-        action.processUndeployModelResponseAndUpdate(response, actionListener);
+        action.processUndeployModelResponseAndUpdate(nodesRequest, response, actionListener);
     }
 
     public void testProcessUndeployModelResponseAndUpdateResponseUndeployModelWorkerNodeBeforeRemovalNull() {
@@ -494,7 +500,7 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
         final List<FailedNodeException> failures = new ArrayList<>();
         final MLUndeployModelNodesResponse response = action.newResponse(nodesRequest, responses, failures);
 
-        action.processUndeployModelResponseAndUpdate(response, actionListener);
+        action.processUndeployModelResponseAndUpdate(nodesRequest, response, actionListener);
     }
 
     public void testNewResponseWithNotFoundModelStatus() {

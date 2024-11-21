@@ -64,11 +64,11 @@ public class SdkClientUtils {
     public static String lowerCaseEnumValues(String field, String json) {
         // Use a matcher to find and replace the field value in lowercase
         Matcher matcher = Pattern.compile("(\"" + Pattern.quote(field) + "\"):(\"[A-Z_]+\")").matcher(json);
-        StringBuffer sb = new StringBuffer();        
+        StringBuffer sb = new StringBuffer();
         while (matcher.find()) {
             matcher.appendReplacement(sb, matcher.group(1) + ":" + matcher.group(2).toLowerCase(Locale.ROOT));
         }
-        matcher.appendTail(sb);        
+        matcher.appendTail(sb);
         return sb.toString();
     }
 }

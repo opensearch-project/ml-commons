@@ -8,40 +8,26 @@
  */
 package org.opensearch.sdk;
 
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentParser;
 
-public class UpdateDataObjectResponse {
-    private final String id;
-    private final XContentParser parser;
+public class UpdateDataObjectResponse extends DataObjectResponse {
 
     /**
      * Instantiate this request with an id and parser representing an UpdateResponse
      * <p>
      * For data storage implementations other than OpenSearch, the id may be referred to as a primary key.
+     * @param index the index
      * @param id the document id
      * @param parser a parser that can be used to create an UpdateResponse
+     * @param failed whether the request failed
+     * @param cause the Exception causing the failure
+     * @param status the RestStatus
      */
-    public UpdateDataObjectResponse(String id, XContentParser parser) {
-        this.id = id;
-        this.parser = parser;
+    public UpdateDataObjectResponse(String index, String id, XContentParser parser, boolean failed, Exception cause, RestStatus status) {
+        super(index, id, parser, failed, cause, status);
     }
 
-    /**
-     * Returns the document id
-     * @return the id
-     */
-    public String id() {
-        return this.id;
-    }
-    
-    /**
-     * Returns the parser that can be used to create an UpdateResponse
-     * @return the parser
-     */
-    public XContentParser parser() {
-        return this.parser;
-    }
-    
     /**
      * Instantiate a builder for this object
      * @return a builder instance
@@ -53,41 +39,14 @@ public class UpdateDataObjectResponse {
     /**
      * Class for constructing a Builder for this Response Object
      */
-    public static class Builder {
-        private String id = null;
-        private XContentParser parser = null;
+    public static class Builder extends DataObjectResponse.Builder<Builder> {
 
-        /**
-         * Empty Constructor for the Builder object
-         */
-        private Builder() {}
-
-        /**
-         * Add an id to this builder
-         * @param id the id to add
-         * @return the updated builder
-         */
-        public Builder id(String id) {
-            this.id = id;
-            return this;
-        }
-        
-        /**
-         * Add a parser to this builder
-         * @param parser a parser that can be used to create an UpdateResponse
-         * @return the updated builder
-         */
-        public Builder parser(XContentParser parser) {
-            this.parser = parser;
-            return this;
-        }
-        
         /**
          * Builds the response
          * @return A {@link UpdateDataObjectResponse}
          */
         public UpdateDataObjectResponse build() {
-            return new UpdateDataObjectResponse(this.id, this.parser);
+            return new UpdateDataObjectResponse(this.index, this.id, this.parser, this.failed, this.cause, this.status);
         }
     }
 }

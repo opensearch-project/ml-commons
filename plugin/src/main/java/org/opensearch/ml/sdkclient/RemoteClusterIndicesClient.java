@@ -13,11 +13,10 @@ import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import java.io.IOException;
 import java.io.StringReader;
 import java.io.StringWriter;
-import java.security.AccessController;
-import java.security.PrivilegedAction;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
 
@@ -28,10 +27,13 @@ import org.opensearch.client.opensearch.OpenSearchClient;
 import org.opensearch.client.opensearch._types.FieldValue;
 import org.opensearch.client.opensearch._types.OpType;
 import org.opensearch.client.opensearch._types.OpenSearchException;
+import org.opensearch.client.opensearch._types.Refresh;
 import org.opensearch.client.opensearch._types.query_dsl.BoolQuery;
 import org.opensearch.client.opensearch._types.query_dsl.MatchAllQuery;
 import org.opensearch.client.opensearch._types.query_dsl.Query;
 import org.opensearch.client.opensearch._types.query_dsl.TermQuery;
+import org.opensearch.client.opensearch.core.BulkRequest;
+import org.opensearch.client.opensearch.core.BulkResponse;
 import org.opensearch.client.opensearch.core.DeleteRequest;
 import org.opensearch.client.opensearch.core.DeleteResponse;
 import org.opensearch.client.opensearch.core.GetRequest;
@@ -43,6 +45,8 @@ import org.opensearch.client.opensearch.core.SearchResponse;
 import org.opensearch.client.opensearch.core.UpdateRequest;
 import org.opensearch.client.opensearch.core.UpdateRequest.Builder;
 import org.opensearch.client.opensearch.core.UpdateResponse;
+import org.opensearch.client.opensearch.core.bulk.BulkOperation;
+import org.opensearch.client.opensearch.core.bulk.BulkResponseItem;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.json.JsonXContent;
@@ -56,6 +60,11 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.query.MatchPhraseQueryBuilder;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.sdkclient.util.JsonTransformer;
+import org.opensearch.sdk.AbstractSdkClient;
+import org.opensearch.sdk.BulkDataObjectRequest;
+import org.opensearch.sdk.BulkDataObjectResponse;
+import org.opensearch.sdk.DataObjectRequest;
+import org.opensearch.sdk.DataObjectResponse;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
 import org.opensearch.sdk.GetDataObjectRequest;
@@ -63,7 +72,6 @@ import org.opensearch.sdk.GetDataObjectResponse;
 import org.opensearch.sdk.PutDataObjectRequest;
 import org.opensearch.sdk.PutDataObjectResponse;
 import org.opensearch.sdk.SdkClient;
-import org.opensearch.sdk.SdkClientDelegate;
 import org.opensearch.sdk.SdkClientUtils;
 import org.opensearch.sdk.SearchDataObjectRequest;
 import org.opensearch.sdk.SearchDataObjectResponse;
@@ -75,10 +83,11 @@ import jakarta.json.stream.JsonParser;
 import lombok.extern.log4j.Log4j2;
 
 /**
- * An implementation of {@link SdkClient} that stores data in a remote OpenSearch cluster using the OpenSearch Java Client.
+ * An implementation of {@link SdkClient} that stores data in a remote
+ * OpenSearch cluster using the OpenSearch Java Client.
  */
 @Log4j2
-public class RemoteClusterIndicesClient implements SdkClientDelegate {
+public class RemoteClusterIndicesClient extends AbstractSdkClient {
 
     @SuppressWarnings("unchecked")
     private static final Class<Map<String, Object>> MAP_DOCTYPE = (Class<Map<String, Object>>) (Class<?>) Map.class;
@@ -88,6 +97,7 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
 
     /**
      * Instantiate this object with an OpenSearch Java client.
+     * 
      * @param openSearchClient The client to wrap
      */
     public RemoteClusterIndicesClient(OpenSearchClient openSearchClient) {
@@ -101,7 +111,7 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
         Executor executor,
         Boolean isMultiTenancyEnabled
     ) {
-        return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<PutDataObjectResponse>) () -> {
+        return executePrivilegedAsync(() -> {
             try {
                 IndexRequest.Builder<?> builder = new IndexRequest.Builder<>()
                     .index(request.index())
@@ -124,7 +134,7 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
                     RestStatus.BAD_REQUEST
                 );
             }
-        }), executor);
+        }, executor);
     }
 
     @Override
@@ -133,7 +143,7 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
         Executor executor,
         Boolean isMultiTenancyEnabled
     ) {
-        return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<GetDataObjectResponse>) () -> {
+        return executePrivilegedAsync(() -> {
             try {
                 GetRequest getRequest = new GetRequest.Builder().index(request.index()).id(request.id()).build();
                 log.info("Getting {} from {}", request.id(), request.index());
@@ -149,7 +159,7 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
                     RestStatus.INTERNAL_SERVER_ERROR
                 );
             }
-        }), executor);
+        }, executor);
     }
 
     @Override
@@ -158,7 +168,7 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
         Executor executor,
         Boolean isMultiTenancyEnabled
     ) {
-        return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<UpdateDataObjectResponse>) () -> {
+        return executePrivilegedAsync(() -> {
             try (XContentBuilder builder = XContentFactory.jsonBuilder()) {
                 request.dataObject().toXContent(builder, ToXContent.EMPTY_PARAMS);
                 Map<String, Object> docMap = JsonXContent.jsonXContent
@@ -199,7 +209,7 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
                     RestStatus.BAD_REQUEST
                 );
             }
-        }), executor);
+        }, executor);
     }
 
     @Override
@@ -208,7 +218,7 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
         Executor executor,
         Boolean isMultiTenancyEnabled
     ) {
-        return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<DeleteDataObjectResponse>) () -> {
+        return executePrivilegedAsync(() -> {
             try {
                 DeleteRequest deleteRequest = new DeleteRequest.Builder().index(request.index()).id(request.id()).build();
                 log.info("Deleting {} from {}", request.id(), request.index());
@@ -223,7 +233,151 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
                     RestStatus.INTERNAL_SERVER_ERROR
                 );
             }
-        }), executor);
+        }, executor);
+    }
+
+    @Override
+    public CompletionStage<BulkDataObjectResponse> bulkDataObjectAsync(
+        BulkDataObjectRequest request,
+        Executor executor,
+        Boolean isMultiTenancyEnabled
+    ) {
+        return executePrivilegedAsync(() -> {
+            try {
+                log.info("Performing {} bulk actions on indices {}", request.requests().size(), request.getIndices());
+                List<BulkOperation> operations = new ArrayList<>();
+                for (DataObjectRequest dataObjectRequest : request.requests()) {
+                    addBulkOperation(dataObjectRequest, operations);
+                }
+                BulkRequest bulkRequest = new BulkRequest.Builder().operations(operations).refresh(Refresh.True).build();
+                BulkResponse bulkResponse = openSearchClient.bulk(bulkRequest);
+                log
+                    .info(
+                        "Bulk action complete for {} items: {}",
+                        bulkResponse.items().size(),
+                        bulkResponse.errors() ? "has failures" : "success"
+                    );
+                DataObjectResponse[] responses = bulkResponseItemsToArray(bulkResponse.items());
+                return bulkResponse.ingestTook() == null
+                    ? new BulkDataObjectResponse(responses, bulkResponse.took(), bulkResponse.errors(), createParser(bulkResponse))
+                    : new BulkDataObjectResponse(
+                        responses,
+                        bulkResponse.took(),
+                        bulkResponse.ingestTook().longValue(),
+                        bulkResponse.errors(),
+                        createParser(bulkResponse)
+                    );
+            } catch (IOException e) {
+                // Rethrow unchecked exception on XContent parsing error
+                throw new OpenSearchStatusException("Failed to parse data object in a bulk response", RestStatus.INTERNAL_SERVER_ERROR);
+            }
+        }, executor);
+    }
+
+    private void addBulkOperation(DataObjectRequest dataObjectRequest, List<BulkOperation> operations) {
+        if (dataObjectRequest instanceof PutDataObjectRequest) {
+            addBulkPutOperation((PutDataObjectRequest) dataObjectRequest, operations);
+        } else if (dataObjectRequest instanceof UpdateDataObjectRequest) {
+            addBulkUpdateOperation((UpdateDataObjectRequest) dataObjectRequest, operations);
+        } else if (dataObjectRequest instanceof DeleteDataObjectRequest) {
+            addBulkDeleteOperation((DeleteDataObjectRequest) dataObjectRequest, operations);
+        } else {
+            throw new IllegalArgumentException("Invalid type for bulk request");
+        }
+    }
+
+    private void addBulkPutOperation(PutDataObjectRequest putRequest, List<BulkOperation> operations) {
+        if (putRequest.overwriteIfExists()) {
+            // Use index operation
+            operations.add(BulkOperation.of(op -> op.index(i -> {
+                i
+                    .index(putRequest.index())
+                    .document(putRequest.dataObject())
+                    .tDocumentSerializer(new JsonTransformer.XContentObjectJsonpSerializer());
+                if (!Strings.isNullOrEmpty(putRequest.id())) {
+                    i.id(putRequest.id());
+                }
+                return i;
+            })));
+        } else {
+            // Use create operation
+            operations.add(BulkOperation.of(op -> op.create(c -> {
+                c
+                    .index(putRequest.index())
+                    .document(putRequest.dataObject())
+                    .tDocumentSerializer(new JsonTransformer.XContentObjectJsonpSerializer());
+                if (!Strings.isNullOrEmpty(putRequest.id())) {
+                    c.id(putRequest.id());
+                }
+                return c;
+            })));
+        }
+    }
+
+    private void addBulkUpdateOperation(UpdateDataObjectRequest updateRequest, List<BulkOperation> operations) {
+        try (XContentBuilder builder = XContentFactory.jsonBuilder()) {
+            updateRequest.dataObject().toXContent(builder, ToXContent.EMPTY_PARAMS);
+            Map<String, Object> docMap = JsonXContent.jsonXContent
+                .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, builder.toString())
+                .map();
+            operations.add(BulkOperation.of(op -> op.update(u -> {
+                u.index(updateRequest.index()).id(updateRequest.id()).document(docMap);
+                if (updateRequest.ifSeqNo() != null) {
+                    u.ifSeqNo(updateRequest.ifSeqNo());
+                }
+                if (updateRequest.ifPrimaryTerm() != null) {
+                    u.ifPrimaryTerm(updateRequest.ifPrimaryTerm());
+                }
+                if (updateRequest.retryOnConflict() > 0) {
+                    u.retryOnConflict(updateRequest.retryOnConflict());
+                }
+                return u;
+            })));
+        } catch (IOException e) {
+            // Rethrow unchecked exception on XContent parsing error
+            throw new OpenSearchStatusException("Failed to parse data object in a bulk update request", RestStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    private void addBulkDeleteOperation(DeleteDataObjectRequest deleteRequest, List<BulkOperation> operations) {
+        operations.add(BulkOperation.of(op -> op.delete(d -> d.index(deleteRequest.index()).id(deleteRequest.id()))));
+    }
+
+    private DataObjectResponse[] bulkResponseItemsToArray(List<BulkResponseItem> items) throws IOException {
+        DataObjectResponse[] responses = new DataObjectResponse[items.size()];
+        int i = 0;
+        for (BulkResponseItem itemResponse : items) {
+            switch (itemResponse.operationType()) {
+                case Index:
+                case Create:
+                    responses[i++] = PutDataObjectResponse
+                        .builder()
+                        .id(itemResponse.id())
+                        .parser(createParser(itemResponse))
+                        .failed(itemResponse.error() != null)
+                        .build();
+                    break;
+                case Update:
+                    responses[i++] = UpdateDataObjectResponse
+                        .builder()
+                        .id(itemResponse.id())
+                        .parser(createParser(itemResponse))
+                        .failed(itemResponse.error() != null)
+                        .build();
+                    break;
+                case Delete:
+                    responses[i++] = DeleteDataObjectResponse
+                        .builder()
+                        .id(itemResponse.id())
+                        .parser(createParser(itemResponse))
+                        .failed(itemResponse.error() != null)
+                        .build();
+                    break;
+                default:
+                    throw new OpenSearchStatusException("Invalid operation type for bulk response", RestStatus.INTERNAL_SERVER_ERROR);
+            }
+        }
+        return responses;
     }
 
     @Override
@@ -232,7 +386,7 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
         Executor executor,
         Boolean isMultiTenancyEnabled
     ) {
-        return CompletableFuture.supplyAsync(() -> AccessController.doPrivileged((PrivilegedAction<SearchDataObjectResponse>) () -> {
+        return executePrivilegedAsync(() -> {
             try {
                 log.info("Searching {}", Arrays.toString(request.indices()));
                 // work around https://github.com/opensearch-project/opensearch-java/issues/1150
@@ -271,7 +425,7 @@ public class RemoteClusterIndicesClient implements SdkClientDelegate {
                     RestStatus.INTERNAL_SERVER_ERROR
                 );
             }
-        }), executor);
+        }, executor);
     }
 
     private XContentParser createParser(JsonpSerializable obj) throws IOException {

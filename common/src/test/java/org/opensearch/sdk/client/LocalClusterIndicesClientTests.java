@@ -8,18 +8,6 @@
  */
 package org.opensearch.sdk.client;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-
 import java.io.IOException;
 import java.util.EnumSet;
 import java.util.Map;
@@ -38,6 +26,9 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.DocWriteRequest.OpType;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.DocWriteResponse.Result;
+import org.opensearch.action.bulk.BulkItemResponse;
+import org.opensearch.action.bulk.BulkRequest;
+import org.opensearch.action.bulk.BulkResponse;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.get.GetRequest;
@@ -69,6 +60,8 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.engine.VersionConflictEngineException;
 import org.opensearch.index.get.GetResult;
+import org.opensearch.sdk.BulkDataObjectRequest;
+import org.opensearch.sdk.BulkDataObjectResponse;
 import org.opensearch.sdk.DeleteDataObjectRequest;
 import org.opensearch.sdk.DeleteDataObjectResponse;
 import org.opensearch.sdk.GetDataObjectRequest;
@@ -85,6 +78,18 @@ import org.opensearch.search.internal.InternalSearchResponse;
 import org.opensearch.threadpool.ScalingExecutorBuilder;
 import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
 public class LocalClusterIndicesClientTests {
 
@@ -135,7 +140,8 @@ public class LocalClusterIndicesClientTests {
         PutDataObjectRequest putRequest = PutDataObjectRequest
             .builder()
             .index(TEST_INDEX)
-            .id(TEST_ID).tenantId(TEST_TENANT_ID)
+            .id(TEST_ID)
+            .tenantId(TEST_TENANT_ID)
             .overwriteIfExists(false)
             .dataObject(testDataObject)
             .build();
@@ -166,7 +172,12 @@ public class LocalClusterIndicesClientTests {
 
     @Test
     public void testPutDataObject_Exception() throws IOException {
-        PutDataObjectRequest putRequest = PutDataObjectRequest.builder().index(TEST_INDEX).tenantId(TEST_TENANT_ID).dataObject(testDataObject).build();
+        PutDataObjectRequest putRequest = PutDataObjectRequest
+            .builder()
+            .index(TEST_INDEX)
+            .tenantId(TEST_TENANT_ID)
+            .dataObject(testDataObject)
+            .build();
 
         when(mockedClient.index(any(IndexRequest.class))).thenThrow(new UnsupportedOperationException("test"));
 
@@ -188,7 +199,12 @@ public class LocalClusterIndicesClientTests {
                 throw new IOException("test");
             }
         };
-        PutDataObjectRequest putRequest = PutDataObjectRequest.builder().index(TEST_INDEX).tenantId(TEST_TENANT_ID).dataObject(badDataObject).build();
+        PutDataObjectRequest putRequest = PutDataObjectRequest
+            .builder()
+            .index(TEST_INDEX)
+            .tenantId(TEST_TENANT_ID)
+            .dataObject(badDataObject)
+            .build();
 
         CompletableFuture<PutDataObjectResponse> future = sdkClient
             .putDataObjectAsync(putRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
@@ -300,7 +316,8 @@ public class LocalClusterIndicesClientTests {
         UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
             .builder()
             .index(TEST_INDEX)
-            .id(TEST_ID).tenantId(TEST_TENANT_ID)
+            .id(TEST_ID)
+            .tenantId(TEST_TENANT_ID)
             .retryOnConflict(3)
             .dataObject(testDataObject)
             .build();
@@ -344,7 +361,8 @@ public class LocalClusterIndicesClientTests {
         UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
             .builder()
             .index(TEST_INDEX)
-            .id(TEST_ID).tenantId(TEST_TENANT_ID)
+            .id(TEST_ID)
+            .tenantId(TEST_TENANT_ID)
             .dataObject(Map.of("foo", "bar"))
             .build();
 
@@ -377,7 +395,8 @@ public class LocalClusterIndicesClientTests {
         UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
             .builder()
             .index(TEST_INDEX)
-            .id(TEST_ID).tenantId(TEST_TENANT_ID)
+            .id(TEST_ID)
+            .tenantId(TEST_TENANT_ID)
             .dataObject(testDataObject)
             .build();
 
@@ -419,7 +438,8 @@ public class LocalClusterIndicesClientTests {
         UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
             .builder()
             .index(TEST_INDEX)
-            .id(TEST_ID).tenantId(TEST_TENANT_ID)
+            .id(TEST_ID)
+            .tenantId(TEST_TENANT_ID)
             .dataObject(testDataObject)
             .build();
 
@@ -445,7 +465,8 @@ public class LocalClusterIndicesClientTests {
         UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
             .builder()
             .index(TEST_INDEX)
-            .id(TEST_ID).tenantId(TEST_TENANT_ID)
+            .id(TEST_ID)
+            .tenantId(TEST_TENANT_ID)
             .dataObject(testDataObject)
             .build();
 
@@ -467,7 +488,8 @@ public class LocalClusterIndicesClientTests {
         UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
             .builder()
             .index(TEST_INDEX)
-            .id(TEST_ID).tenantId(TEST_TENANT_ID)
+            .id(TEST_ID)
+            .tenantId(TEST_TENANT_ID)
             .dataObject(testDataObject)
             .ifSeqNo(5)
             .ifPrimaryTerm(2)
@@ -493,7 +515,12 @@ public class LocalClusterIndicesClientTests {
 
     @Test
     public void testDeleteDataObject() throws IOException {
-        DeleteDataObjectRequest deleteRequest = DeleteDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).tenantId(TEST_TENANT_ID).build();
+        DeleteDataObjectRequest deleteRequest = DeleteDataObjectRequest
+            .builder()
+            .index(TEST_INDEX)
+            .id(TEST_ID)
+            .tenantId(TEST_TENANT_ID)
+            .build();
 
         DeleteResponse deleteResponse = new DeleteResponse(new ShardId(TEST_INDEX, "_na_", 0), TEST_ID, 1, 0, 2, true);
         PlainActionFuture<DeleteResponse> future = PlainActionFuture.newFuture();
@@ -517,7 +544,12 @@ public class LocalClusterIndicesClientTests {
 
     @Test
     public void testDeleteDataObject_Exception() throws IOException {
-        DeleteDataObjectRequest deleteRequest = DeleteDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).tenantId(TEST_TENANT_ID).build();
+        DeleteDataObjectRequest deleteRequest = DeleteDataObjectRequest
+            .builder()
+            .index(TEST_INDEX)
+            .id(TEST_ID)
+            .tenantId(TEST_TENANT_ID)
+            .build();
 
         ArgumentCaptor<DeleteRequest> deleteRequestCaptor = ArgumentCaptor.forClass(DeleteRequest.class);
         when(mockedClient.delete(deleteRequestCaptor.capture())).thenThrow(new UnsupportedOperationException("test"));
@@ -530,6 +562,140 @@ public class LocalClusterIndicesClientTests {
         Throwable cause = ce.getCause();
         assertEquals(UnsupportedOperationException.class, cause.getClass());
         assertEquals("test", cause.getMessage());
+    }
+
+    @Test
+    public void testBulkDataObject() throws IOException {
+        PutDataObjectRequest putRequest = PutDataObjectRequest.builder().id(TEST_ID + "1").tenantId(TEST_TENANT_ID).dataObject(testDataObject).build();
+        UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest.builder().id(TEST_ID + "2").tenantId(TEST_TENANT_ID).dataObject(testDataObject).build();
+        DeleteDataObjectRequest deleteRequest = DeleteDataObjectRequest.builder().id(TEST_ID + "3").tenantId(TEST_TENANT_ID).build();
+
+        BulkDataObjectRequest bulkRequest = BulkDataObjectRequest
+            .builder()
+            .globalIndex(TEST_INDEX)
+            .build()
+            .add(putRequest)
+            .add(updateRequest)
+            .add(deleteRequest);
+
+        ShardId shardId = new ShardId(TEST_INDEX, "_na_", 0);
+        ShardInfo shardInfo = new ShardInfo(1, 1);
+
+        IndexResponse indexResponse = new IndexResponse(shardId, TEST_ID + "1", 1, 1, 1, true);
+        indexResponse.setShardInfo(shardInfo);
+
+        UpdateResponse updateResponse = new UpdateResponse(shardId, TEST_ID + "2", 1, 1, 1, DocWriteResponse.Result.UPDATED);
+        updateResponse.setShardInfo(shardInfo);
+
+        DeleteResponse deleteResponse = new DeleteResponse(shardId, TEST_ID + "3", 1, 1, 1, true);
+        deleteResponse.setShardInfo(shardInfo);
+
+        BulkResponse bulkResponse = new BulkResponse(
+            new BulkItemResponse[] {
+                new BulkItemResponse(0, OpType.INDEX, indexResponse),
+                new BulkItemResponse(1, OpType.UPDATE, updateResponse),
+                new BulkItemResponse(2, OpType.DELETE, deleteResponse) },
+            100L
+        );
+
+        @SuppressWarnings("unchecked")
+        ActionFuture<BulkResponse> future = mock(ActionFuture.class);
+        when(mockedClient.bulk(any(BulkRequest.class))).thenReturn(future);
+        when(future.actionGet()).thenReturn(bulkResponse);
+
+        BulkDataObjectResponse response = sdkClient
+            .bulkDataObjectAsync(bulkRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture()
+            .join();
+
+        ArgumentCaptor<BulkRequest> requestCaptor = ArgumentCaptor.forClass(BulkRequest.class);
+        verify(mockedClient, times(1)).bulk(requestCaptor.capture());
+        assertEquals(3, requestCaptor.getValue().numberOfActions());
+
+        assertEquals(3, response.getResponses().length);
+        assertEquals(100L, response.getTookInMillis());
+
+        assertTrue(response.getResponses()[0] instanceof PutDataObjectResponse);
+        assertTrue(response.getResponses()[1] instanceof UpdateDataObjectResponse);
+        assertTrue(response.getResponses()[2] instanceof DeleteDataObjectResponse);
+
+        assertEquals(TEST_ID + "1", response.getResponses()[0].id());
+        assertEquals(TEST_ID + "2", response.getResponses()[1].id());
+        assertEquals(TEST_ID + "3", response.getResponses()[2].id());
+    }
+
+    @Test
+    public void testBulkDataObject_WithFailures() throws IOException {
+        PutDataObjectRequest putRequest = PutDataObjectRequest
+            .builder()
+            .id(TEST_ID + "1").tenantId(TEST_TENANT_ID)
+            .dataObject(testDataObject)
+            .build();
+        UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
+            .builder()
+            .id(TEST_ID + "2").tenantId(TEST_TENANT_ID)
+            .dataObject(testDataObject)
+            .build();
+        DeleteDataObjectRequest deleteRequest = DeleteDataObjectRequest.builder().id(TEST_ID + "3").tenantId(TEST_TENANT_ID).build();
+
+        BulkDataObjectRequest bulkRequest = BulkDataObjectRequest
+            .builder()
+            .globalIndex(TEST_INDEX)
+            .build()
+            .add(putRequest)
+            .add(updateRequest)
+            .add(deleteRequest);
+
+        BulkResponse bulkResponse = new BulkResponse(
+            new BulkItemResponse[] {
+                new BulkItemResponse(0, OpType.INDEX, new IndexResponse(new ShardId(TEST_INDEX, "_na_", 0), TEST_ID + "1", 1, 1, 1, true)),
+                new BulkItemResponse(
+                    1,
+                    OpType.UPDATE,
+                    new BulkItemResponse.Failure(TEST_INDEX, TEST_ID + "2", new Exception("Update failed"))
+                ),
+                new BulkItemResponse(0, OpType.DELETE, new IndexResponse(new ShardId(TEST_INDEX, "_na_", 0), TEST_ID + "3", 1, 1, 1, true))
+                },
+            100L
+        );
+
+        @SuppressWarnings("unchecked")
+        ActionFuture<BulkResponse> future = mock(ActionFuture.class);
+        when(mockedClient.bulk(any(BulkRequest.class))).thenReturn(future);
+        when(future.actionGet()).thenReturn(bulkResponse);
+
+        BulkDataObjectResponse response = sdkClient
+            .bulkDataObjectAsync(bulkRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture()
+            .join();
+        
+        assertEquals(3, response.getResponses().length);
+        assertFalse(response.getResponses()[0].isFailed());
+        assertTrue(response.getResponses()[0] instanceof PutDataObjectResponse);
+        assertTrue(response.getResponses()[1].isFailed());
+        assertTrue(response.getResponses()[1] instanceof UpdateDataObjectResponse);
+        assertFalse(response.getResponses()[2].isFailed());
+        assertTrue(response.getResponses()[2] instanceof DeleteDataObjectResponse);
+    }
+
+    @Test
+    public void testBulkDataObject_Exception() {
+        PutDataObjectRequest putRequest = PutDataObjectRequest.builder().index(TEST_INDEX).id(TEST_ID).tenantId(TEST_TENANT_ID).dataObject(testDataObject).build();
+
+        BulkDataObjectRequest bulkRequest = BulkDataObjectRequest.builder().build().add(putRequest);
+
+        when(mockedClient.bulk(any(BulkRequest.class)))
+            .thenThrow(new OpenSearchStatusException("Failed to parse data object in a bulk response", RestStatus.INTERNAL_SERVER_ERROR));
+
+        CompletableFuture<BulkDataObjectResponse> future = sdkClient
+            .bulkDataObjectAsync(bulkRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
+            .toCompletableFuture();
+
+        CompletionException ce = assertThrows(CompletionException.class, () -> future.join());
+        Throwable cause = ce.getCause();
+        assertEquals(OpenSearchStatusException.class, cause.getClass());
+        assertEquals(RestStatus.INTERNAL_SERVER_ERROR, ((OpenSearchStatusException) cause).status());
+        assertEquals("Failed to parse data object in a bulk response", cause.getMessage());
     }
 
     @Test
@@ -642,7 +808,7 @@ public class LocalClusterIndicesClientTests {
         PlainActionFuture<SearchResponse> exceptionalFuture = PlainActionFuture.newFuture();
         exceptionalFuture.onFailure(new UnsupportedOperationException("test"));
         when(mockedClient.search(any(SearchRequest.class))).thenReturn(exceptionalFuture);
-        
+
         CompletableFuture<SearchDataObjectResponse> future = sdkClient
             .searchDataObjectAsync(searchRequest, testThreadPool.executor(GENERAL_THREAD_POOL))
             .toCompletableFuture();
@@ -652,7 +818,7 @@ public class LocalClusterIndicesClientTests {
         assertEquals(UnsupportedOperationException.class, cause.getClass());
         assertEquals("test", cause.getMessage());
     }
-    
+
     @Test
     public void testSearchDataObject_NullTenantNoMultitenancy() throws IOException {
         // Tests no status exception if multitenancy not enabled

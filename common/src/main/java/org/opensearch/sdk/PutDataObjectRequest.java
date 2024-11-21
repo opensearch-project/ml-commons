@@ -8,17 +8,12 @@
  */
 package org.opensearch.sdk;
 
-import org.opensearch.core.xcontent.ToXContentObject;
-import org.opensearch.core.xcontent.XContentBuilder;
-
-import java.io.IOException;
 import java.util.Map;
 
-public class PutDataObjectRequest {
+import org.opensearch.core.xcontent.ToXContentObject;
 
-    private final String index;
-    private final String id;
-    private final String tenantId;
+public class PutDataObjectRequest extends DataObjectRequest {
+
     private final boolean overwriteIfExists;
     private final ToXContentObject dataObject;
 
@@ -30,37 +25,11 @@ public class PutDataObjectRequest {
      * @param dataObject the data object
      */
     public PutDataObjectRequest(String index, String id, String tenantId, boolean overwriteIfExists, ToXContentObject dataObject) {
-        this.index = index;
-        this.id = id;
-        this.tenantId = tenantId;
+        super(index, id, tenantId);
         this.overwriteIfExists = overwriteIfExists;
         this.dataObject = dataObject;
     }
 
-    /**
-     * Returns the index
-     * @return the index
-     */
-    public String index() {
-        return this.index;
-    }
-
-    /**
-     * Returns the document id
-     * @return the id
-     */
-    public String id() {
-        return this.id;
-    }
-
-    /**
-     * Returns the tenant id
-     * @return the tenantId
-     */
-    public String tenantId() {
-        return this.tenantId;
-    }
-    
     /**
      * Returns whether to overwrite an existing document (upsert)
      * @return true if this request should overwrite
@@ -77,6 +46,11 @@ public class PutDataObjectRequest {
         return this.dataObject;
     }
 
+    @Override
+    public boolean isWriteRequest() {
+        return true;
+    }
+
     /**
      * Instantiate a builder for this object
      * @return a builder instance
@@ -88,47 +62,9 @@ public class PutDataObjectRequest {
     /**
      * Class for constructing a Builder for this Request Object
      */
-    public static class Builder {
-        private String index = null;
-        private String id = null;
-        private String tenantId = null;
+    public static class Builder extends DataObjectRequest.Builder<Builder> {
         private boolean overwriteIfExists = true;
         private ToXContentObject dataObject = null;
-
-        /**
-         * Empty Constructor for the Builder object
-         */
-        private Builder() {}
-
-        /**
-         * Add an index to this builder
-         * @param index the index to put the object
-         * @return the updated builder
-         */
-        public Builder index(String index) {
-            this.index = index;
-            return this;
-        }
-
-        /**
-         * Add an id to this builder
-         * @param id the documet id
-         * @return the updated builder
-         */
-        public Builder id(String id) {
-            this.id = id;
-            return this;
-        }
-
-        /**
-         * Add a tenant id to this builder
-         * @param tenantId the tenant id
-         * @return the updated builder
-         */
-        public Builder tenantId(String tenantId) {
-            this.tenantId = tenantId;
-            return this;
-        }
 
         /**
          * Specify whether to overwrite an existing document/item (upsert). True by default. 
@@ -139,6 +75,7 @@ public class PutDataObjectRequest {
             this.overwriteIfExists = overwriteIfExists;
             return this;
         }
+
         /**
          * Add a data object to this builder
          * @param dataObject the data object
