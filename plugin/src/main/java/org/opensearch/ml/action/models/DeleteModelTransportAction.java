@@ -61,6 +61,7 @@ import org.opensearch.index.reindex.BulkByScrollResponse;
 import org.opensearch.index.reindex.DeleteByQueryAction;
 import org.opensearch.index.reindex.DeleteByQueryRequest;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
@@ -534,7 +535,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         boolean isHidden = false;
         for (SearchHit hit : hits) {
             Map<String, Object> sourceAsMap = hit.getSourceAsMap();
-            isHidden = isHidden || Boolean.parseBoolean((String) sourceAsMap.getOrDefault(IS_HIDDEN_FIELD, false));
+            isHidden = isHidden || Boolean.parseBoolean((String) sourceAsMap.getOrDefault(MLAgent.IS_HIDDEN_FIELD, false));
         }
         if (isHidden) {
             return String
