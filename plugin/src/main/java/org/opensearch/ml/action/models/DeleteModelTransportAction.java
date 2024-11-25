@@ -367,7 +367,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
             }
         }, e -> {
             countDownLatch.countDown();
-            noneBlocked.compareAndSet(true, false);
+            noneBlocked.set(false);
             errorMessages.add(e.getMessage());
             if (countDownLatch.getCount() == 0) {
                 actionListener.onFailure(new OpenSearchStatusException(String.join(". ", errorMessages), RestStatus.CONFLICT));
