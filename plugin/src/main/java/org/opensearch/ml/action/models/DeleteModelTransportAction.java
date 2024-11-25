@@ -352,6 +352,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     }
 
     private void checkDownstreamTaskBeforeDeleteModel(String modelId, Boolean isHidden, ActionListener<DeleteResponse> actionListener) {
+        // Now 3 is: 1. Agent 2. Search pipeline 3. ingest pipeline
         CountDownLatch countDownLatch = new CountDownLatch(3);
         AtomicBoolean noneBlocked = new AtomicBoolean(true);
         ConcurrentLinkedQueue<String> errorMessages = new ConcurrentLinkedQueue<>();
