@@ -13,7 +13,6 @@ import com.google.common.base.Charsets;
 import com.google.common.io.Resources;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
-import com.google.gson.JsonSyntaxException;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -47,13 +46,9 @@ public class IndexUtils {
             throw new IOException("Resource not found: " + path);
         }
 
-        String mapping = Resources.toString(url, Charsets.UTF_8);
-        if (mapping == null || mapping.isBlank()) {
-            throw new IllegalArgumentException("Empty mapping found at: " + path);
-        }
-
-        if (!StringUtils.isJson(mapping)) {
-            throw new JsonSyntaxException("Mapping is not a valid JSON: " + path);
+        String mapping = Resources.toString(url, Charsets.UTF_8).trim();
+        if (mapping.isEmpty() || !StringUtils.isJson(mapping)) {
+            throw new IllegalArgumentException("Invalid or non-JSON mapping at: " + path);
         }
 
         return mapping;
