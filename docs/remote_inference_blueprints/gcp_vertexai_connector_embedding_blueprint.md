@@ -1,6 +1,6 @@
 ### GCP VertexAI Embedding Connector Blueprint:
 
-## 1. Add VertextAI endpoint to trusted URLs:
+## 1. Add VertexAI endpoint to trusted URLs:
 
 ```json
 PUT /_cluster/settings
@@ -72,7 +72,7 @@ POST /_plugins/_ml/models/_register
     "description": "test vertexAI model",
     "connector": {
         "name": "VertexAI Connector",
-        "description": "The connector to public vertextAI model service for text embedding",
+        "description": "The connector to public vertexAI model service for text embedding",
         "version": 1,
         "protocol": "http",
         "parameters": {

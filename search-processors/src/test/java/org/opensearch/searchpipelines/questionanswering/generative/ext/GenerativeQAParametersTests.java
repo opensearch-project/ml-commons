@@ -26,7 +26,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import org.opensearch.Version;
 import org.opensearch.action.search.SearchRequest;
+import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -177,6 +180,48 @@ public class GenerativeQAParametersTests extends OpenSearchTestCase {
         assertTrue(contextSize == intValues.get(0));
         assertTrue(interactionSize == intValues.get(1));
         assertTrue(timeout == intValues.get(2));
+    }
+
+    public void testWriteToBwcBedrockConverse() throws IOException {
+        String conversationId = "a";
+        String llmModel = "b";
+        String llmQuestion = "c";
+        String systemPrompt = "s";
+        String userInstructions = "u";
+        int contextSize = 1;
+        int interactionSize = 2;
+        int timeout = 10;
+        String llmResponseField = "text";
+        GenerativeQAParameters expected = new GenerativeQAParameters(
+            conversationId,
+            llmModel,
+            llmQuestion,
+            systemPrompt,
+            userInstructions,
+            contextSize,
+            interactionSize,
+            timeout,
+            llmResponseField,
+            messageList
+        );
+
+        // Version.2_18_0 (MINIMAL_SUPPORTED_VERSION_FOR_BEDROCK_CONVERSE_LLM_MESSAGES)
+        BytesStreamOutput output = new BytesStreamOutput();
+        output.setVersion(GenerativeQAParameters.MINIMAL_SUPPORTED_VERSION_FOR_BEDROCK_CONVERSE_LLM_MESSAGES);
+        expected.writeTo(output);
+        StreamInput input = output.bytes().streamInput();
+        input.setVersion(GenerativeQAParameters.MINIMAL_SUPPORTED_VERSION_FOR_BEDROCK_CONVERSE_LLM_MESSAGES);
+        GenerativeQAParameters actual = new GenerativeQAParameters(input);
+        assertEquals(expected, actual);
+
+        // Version.2_17_0 (LlmMessages should be empty list)
+        output = new BytesStreamOutput();
+        output.setVersion(Version.V_2_17_0);
+        expected.writeTo(output);
+        input = output.bytes().streamInput();
+        input.setVersion(Version.V_2_17_0);
+        actual = new GenerativeQAParameters(input);
+        assertTrue(actual.getLlmMessages().isEmpty());
     }
 
     public void testMisc() {

@@ -14,7 +14,6 @@ import java.util.Map;
 import org.junit.Test;
 
 import com.google.gson.JsonParseException;
-import com.google.gson.JsonSyntaxException;
 
 public class IndexUtilsTest {
 
@@ -68,7 +67,8 @@ public class IndexUtilsTest {
             + "}\n";
         try {
             String actualMapping = IndexUtils.getMappingFromFile("index-mappings/test-mapping.json");
-            assertEquals(expectedMapping, actualMapping);
+            // comparing JsonObjects to avoid issues caused by eol character in different OS
+            assertEquals(StringUtils.getJsonObjectFromString(expectedMapping), StringUtils.getJsonObjectFromString(actualMapping));
         } catch (IOException e) {
             throw new RuntimeException("Failed to read file at path: index-mappings/test-mapping.json");
         }
@@ -84,8 +84,8 @@ public class IndexUtilsTest {
     @Test
     public void testGetMappingFromFilesMalformedJson() {
         String path = "index-mappings/test-mapping-malformed.json";
-        JsonSyntaxException e = assertThrows(JsonSyntaxException.class, () -> IndexUtils.getMappingFromFile(path));
-        assertEquals("Mapping is not a valid JSON: " + path, e.getMessage());
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> IndexUtils.getMappingFromFile(path));
+        assertEquals("Invalid or non-JSON mapping at: " + path, e.getMessage());
     }
 
     @Test

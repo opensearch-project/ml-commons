@@ -26,6 +26,7 @@ dependencies {
     compileOnly group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
     compileOnly group: 'com.google.code.gson', name: 'gson', version: '2.10.1'
     compileOnly group: 'org.json', name: 'json', version: '20231013'
+    testImplementation group: 'org.json', name: 'json', version: '20231013'
     implementation('com.google.guava:guava:32.1.2-jre') {
         exclude group: 'com.google.guava', module: 'failureaccess'
         exclude group: 'com.google.code.findbugs', module: 'jsr305'

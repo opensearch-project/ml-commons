@@ -162,7 +162,9 @@ public final class MLCommonsSettings {
                     "^https://api\\.cohere\\.ai/.*$",
                     "^https://bedrock-runtime\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
                     "^https://bedrock-agent-runtime\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
-                    "^https://bedrock\\..*[a-z0-9-]\\.amazonaws\\.com/.*$"
+                    "^https://bedrock\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
+                    "^https://textract\\..*[a-z0-9-]\\.amazonaws\\.com$",
+                    "^https://comprehend\\..*[a-z0-9-]\\.amazonaws\\.com$"
                 ),
             Function.identity(),
             Setting.Property.NodeScope,

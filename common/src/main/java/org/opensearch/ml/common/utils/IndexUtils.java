@@ -15,7 +15,6 @@ import com.google.common.base.Charsets;
 import com.google.common.io.Resources;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParseException;
-import com.google.gson.JsonSyntaxException;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -58,8 +57,8 @@ public class IndexUtils {
             throw new IOException("Resource not found: " + path);
         }
 
-        String mapping = Resources.toString(url, Charsets.UTF_8);
-        if (mapping == null || mapping.isBlank()) {
+        String mapping = Resources.toString(url, Charsets.UTF_8).trim();
+        if (mapping.isEmpty()) {
             throw new IllegalArgumentException("Empty mapping found at: " + path);
         }
 
@@ -104,12 +103,8 @@ public class IndexUtils {
         Note: Validation can be made more strict if a specific schema is defined for each index.
      */
     public static void validateMapping(String mapping) throws IOException {
-        if (mapping == null || mapping.isBlank()) {
-            throw new IllegalArgumentException("Mapping cannot be null or empty");
-        }
-
-        if (!StringUtils.isJson(mapping)) {
-            throw new JsonSyntaxException("Mapping is not a valid JSON: " + mapping);
+        if (mapping.isBlank() || !StringUtils.isJson(mapping)) {
+            throw new IllegalArgumentException("Invalid or non-JSON mapping found: " + mapping);
         }
 
         URL url = IndexUtils.class.getClassLoader().getResource(MAPPING_SCHEMA_PATH);
@@ -136,6 +131,10 @@ public class IndexUtils {
             throw new JsonParseException("Failed to find \"schema_version\" in \"_meta\" object for mapping: " + mapping);
         }
 
-        return metaObject.get("schema_version").getAsInt();
+        try {
+            return metaObject.get("schema_version").getAsInt();
+        } catch (NumberFormatException | ClassCastException e) {
+            throw new JsonParseException("Invalid \"schema_version\" value in mapping: " + mapping, e);
+        }
     }
 }
