@@ -1,5 +1,12 @@
+import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX_MAPPING_PATH;
+import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX_MAPPING_PATH;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX_MAPPING_PATH;
+
+import java.io.IOException;
+
 import org.junit.Test;
 import org.opensearch.ml.common.MLIndex;
+import org.opensearch.ml.common.utils.IndexUtils;
 
 public class MLIndexTest {
 
@@ -13,5 +20,18 @@ public class MLIndexTest {
         for (MLIndex index : MLIndex.values()) {
             String mapping = index.getMapping();
         }
+    }
+
+    // adding an explicit check for critical indices
+    @Test
+    public void testMappings() throws IOException {
+        String model_mapping = IndexUtils.getMappingFromFile(ML_MODEL_INDEX_MAPPING_PATH);
+        IndexUtils.validateMapping(model_mapping);
+
+        String connector_mapping = IndexUtils.getMappingFromFile(ML_CONNECTOR_INDEX_MAPPING_PATH);
+        IndexUtils.validateMapping(connector_mapping);
+
+        String config_mapping = IndexUtils.getMappingFromFile(ML_CONFIG_INDEX_MAPPING_PATH);
+        IndexUtils.validateMapping(config_mapping);
     }
 }
