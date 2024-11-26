@@ -85,8 +85,8 @@ public class IndexUtilsTest {
     @Test
     public void testGetMappingFromFilesMalformedJson() {
         String path = "index-mappings/test-mapping-malformed.json";
-        JsonSyntaxException e = assertThrows(JsonSyntaxException.class, () -> IndexUtils.getMappingFromFile(path));
-        assertEquals("Mapping is not a valid JSON: " + path, e.getMessage());
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> IndexUtils.getMappingFromFile(path));
+        assertEquals("Invalid or non-JSON mapping at: " + path, e.getMessage());
     }
 
     @Test

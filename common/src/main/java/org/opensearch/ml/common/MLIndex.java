@@ -54,6 +54,10 @@ public enum MLIndex {
     }
 
     private String getMapping(String mappingPath) {
+        if (mappingPath == null) {
+            throw new IllegalArgumentException("Mapping path cannot be null");
+        }
+
         try {
             return IndexUtils.getMappingFromFile(mappingPath);
         } catch (IOException e) {

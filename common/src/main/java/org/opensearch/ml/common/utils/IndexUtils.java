@@ -69,6 +69,10 @@ public class IndexUtils {
             throw new JsonParseException("Failed to find \"schema_version\" in \"_meta\" object for mapping: " + mapping);
         }
 
-        return metaObject.get("schema_version").getAsInt();
+        try {
+            return metaObject.get("schema_version").getAsInt();
+        } catch (NumberFormatException | ClassCastException e) {
+            throw new JsonParseException("Invalid \"schema_version\" value in mapping: " + mapping, e);
+        }
     }
 }
