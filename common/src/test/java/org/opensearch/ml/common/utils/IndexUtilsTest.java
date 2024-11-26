@@ -14,7 +14,6 @@ import java.util.Map;
 import org.junit.Test;
 
 import com.google.gson.JsonParseException;
-import com.google.gson.JsonSyntaxException;
 
 public class IndexUtilsTest {
 
