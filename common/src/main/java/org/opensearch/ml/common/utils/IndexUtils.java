@@ -4,7 +4,9 @@
  */
 
 package org.opensearch.ml.common.utils;
+
 import static org.opensearch.ml.common.utils.StringUtils.validateSchema;
+
 import java.io.IOException;
 import java.net.URL;
 import java.util.Map;
