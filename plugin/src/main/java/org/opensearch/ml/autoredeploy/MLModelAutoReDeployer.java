@@ -261,6 +261,7 @@ public class MLModelAutoReDeployer {
     private void triggerModelRedeploy(ModelAutoRedeployArrangement modelAutoRedeployArrangement) {
         if (modelAutoRedeployArrangement == null) {
             log.info("No more models in arrangement, skipping the redeployment");
+            redeployAModel();
             return;
         }
         String modelId = modelAutoRedeployArrangement.getSearchResponse().getId();
@@ -275,10 +276,12 @@ public class MLModelAutoReDeployer {
                     "Model function_name or algorithm is null, model is not in correct status, please check the model, model id is: {}",
                     modelId
                 );
+            redeployAModel();
             return;
         }
         if (FunctionName.REMOTE == FunctionName.from(functionName)) {
             log.info("Skipping redeploying remote model {} as remote model deployment can be done at prediction time.", modelId);
+            redeployAModel();
             return;
         }
         List<String> planningWorkerNodes = (List<String>) sourceAsMap.get(MLModel.PLANNING_WORKER_NODES_FIELD);
@@ -302,6 +305,7 @@ public class MLModelAutoReDeployer {
                 .info(
                     "Allow custom deployment plan is true and deploy to all nodes is false and added nodes are not in planning worker nodes list, not to auto redeploy the model to the new nodes!"
                 );
+            redeployAModel();
             return;
         }
 
