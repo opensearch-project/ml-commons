@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
@@ -58,9 +59,8 @@ public class CatIndexToolIT extends RestBaseAgentToolsIT {
         String responseStr = TestHelper.httpEntityToString(response.getEntity());
         String toolOutput = extractResult(responseStr);
         String[] actualLines = toolOutput.split("\\n");
-        // plus 2 as there are one line of header and one line of system agent index, but sometimes the ml-config index will be created
-        // then there will be one more line.
-        assert actualLines.length == indices.size() + 2 || actualLines.length == indices.size() + 3;
+        long testIndexCount = Arrays.stream(actualLines).filter(x -> x.contains("test")).count();
+        assert testIndexCount == indices.size();
         for (String index : indices) {
             assert Objects.requireNonNull(toolOutput).contains(index);
         }
@@ -72,7 +72,8 @@ public class CatIndexToolIT extends RestBaseAgentToolsIT {
         String responseStr = TestHelper.httpEntityToString(response.getEntity());
         String toolOutput = extractResult(responseStr);
         String[] actualLines = toolOutput.split("\\n");
-        assert actualLines.length == indices.size() + 2 || actualLines.length == indices.size() + 3;
+        long testIndexCount = Arrays.stream(actualLines).filter(x -> x.contains("test")).count();
+        assert testIndexCount == indices.size();
         for (String index : indices) {
             assert Objects.requireNonNull(toolOutput).contains(index);
         }
