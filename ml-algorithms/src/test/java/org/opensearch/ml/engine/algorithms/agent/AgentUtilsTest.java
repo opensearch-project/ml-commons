@@ -613,6 +613,18 @@ public class AgentUtilsTest {
     }
 
     @Test
+    public void testConstructToolParamsNullActionInput() {
+        String question = "dummy question";
+        String actionInput = null;
+        verifyConstructToolParams(question, actionInput, (toolParams) -> {
+            Assert.assertEquals(3, toolParams.size());
+            Assert.assertEquals("value1", toolParams.get("key1"));
+            Assert.assertNull(toolParams.get("llm_generated_action_input"));
+            Assert.assertNull(toolParams.get("input"));
+        });
+    }
+
+    @Test
     public void testConstructToolParams_UseOriginalInput() {
         String question = "dummy question";
         String actionInput = "{'detectorName': 'abc', 'indices': 'sample-data' }";
