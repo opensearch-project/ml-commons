@@ -91,7 +91,7 @@ POST /_plugins/_ml/connectors/_create
     {
       "action_type": "predict",
       "method": "POST",
-      "url": "https://bedrock-runtime.us-west-2.amazonaws.com/model/cohere.rerank-v3-5:0/invoke",
+      "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/cohere.rerank-v3-5:0/invoke",
       "headers": {
         "x-amz-content-sha256": "required",
         "content-type": "application/json"
@@ -162,7 +162,7 @@ POST /_plugins/_ml/connectors/_create
     {
       "action_type": "predict",
       "method": "POST",
-      "url": "https://bedrock-runtime.us-west-2.amazonaws.com/model/cohere.rerank-v3-5:0/invoke",
+      "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/cohere.rerank-v3-5:0/invoke",
       "headers": {
         "x-amz-content-sha256": "required",
         "content-type": "application/json"
