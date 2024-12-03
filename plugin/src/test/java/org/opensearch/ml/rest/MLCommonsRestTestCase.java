@@ -976,15 +976,11 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         String connectorId = (String) responseMap.get("connector_id");
         response = RestMLRemoteInferenceIT.registerRemoteModel(modelName, modelName, connectorId);
         responseMap = parseResponseToMap(response);
-        String taskId = (String) responseMap.get("task_id");
-        waitForTask(taskId, MLTaskState.COMPLETED);
-        response = RestMLRemoteInferenceIT.getTask(taskId);
-        responseMap = parseResponseToMap(response);
         String modelId = (String) responseMap.get("model_id");
         if (deploy) {
             response = RestMLRemoteInferenceIT.deployRemoteModel(modelId);
             responseMap = parseResponseToMap(response);
-            taskId = (String) responseMap.get("task_id");
+            String taskId = (String) responseMap.get("task_id");
             waitForTask(taskId, MLTaskState.COMPLETED);
         }
         return modelId;
