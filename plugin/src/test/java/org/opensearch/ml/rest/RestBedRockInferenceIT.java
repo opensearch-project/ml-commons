@@ -15,6 +15,7 @@ import java.util.Map;
 
 import org.junit.Before;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
@@ -327,9 +328,10 @@ public class RestBedRockInferenceIT extends MLCommonsRestTestCase {
         RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet
             .builder()
             .parameters(Map.of("inputText", "Can you tell me a joke?", "dimensions", "512"))
+            .actionType(ConnectorAction.ActionType.PREDICT)
             .build();
         MLInput mlInput = MLInput.builder().inputDataset(inputDataSet).algorithm(FunctionName.REMOTE).build();
-        Map inferenceResult = predictTextEmbeddingModel(modelId, mlInput);
+        Map inferenceResult = predictTextEmbeddingModelIgnoreFunctionName(modelId, mlInput);
         String errorMsg = String
             .format(Locale.ROOT, "Failing test case name: %s, inference result: %s", testCaseName, gson.toJson(inferenceResult));
         assertTrue(errorMsg, inferenceResult.containsKey("inference_results"));
