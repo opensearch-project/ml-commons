@@ -121,9 +121,46 @@ POST /_plugins/_ml/connectors/_create
       "headers": {
         "content-type": "application/json"
       },
+      "pre_process_function": """
+        def query_text = params.query_text;
+        def text_docs = params.text_docs;
+        def textDocsBuilder = new StringBuilder('[');
+        for (int i=0; i<text_docs.length; i++) {
+          textDocsBuilder.append('\"');
+          textDocsBuilder.append(text_docs[i]);
+          textDocsBuilder.append('\"');
+          if (i<text_docs.length - 1) {
+            textDocsBuilder.append(',');
+          }
+        }
+        textDocsBuilder.append(']');
+        def parameters = '{ \"query\": \"' + query_text + '\",  \"texts\": ' + textDocsBuilder.toString() + ' }';
+        return  '{\"parameters\": ' + parameters + '}';
+      """,
       "request_body": "{ \"query\": \"${parameters.query}\", \"texts\": ${parameters.texts} }",
-      "pre_process_function": "\n    def query_text = params.query_text;\n    def text_docs = params.text_docs;\n    def textDocsBuilder = new StringBuilder('[');\n    for (int i=0; i<text_docs.length; i++) {\n      textDocsBuilder.append('\"');\n      textDocsBuilder.append(text_docs[i]);\n      textDocsBuilder.append('\"');\n      if (i<text_docs.length - 1) {\n        textDocsBuilder.append(',');\n      }\n    }\n    textDocsBuilder.append(']');\n    def parameters = '{ \"query\": \"' + query_text + '\",  \"texts\": ' + textDocsBuilder.toString() + ' }';\n    return  '{\"parameters\": ' + parameters + '}';\n",
-      "post_process_function": "\n      \n      def dataType = \"FLOAT32\";\n      \n      \n      if (params.result == null)\n      {\n          return 'no result generated';\n          //return params.response;\n      }\n      def outputs = params.result;\n      \n      def sorted_outputs = outputs;\n      for (int i=0; i<outputs.length; i++) {\n        def idx = new BigDecimal(outputs[i].index.toString()).intValue();\n        sorted_outputs[idx] = outputs[i];\n      }\n      def resultBuilder = new StringBuilder('[');\n      for (int i=0; i<outputs.length; i++) {\n        resultBuilder.append(' {\"name\": \"similarity\", \"data_type\": \"FLOAT32\", \"shape\": [1],');\n        //resultBuilder.append('{\"name\": \"similarity\"}');\n        \n        resultBuilder.append('\"data\": [');\n        resultBuilder.append(outputs[i].score);\n        resultBuilder.append(']}');\n        if (i<outputs.length - 1) {\n          resultBuilder.append(',');\n        }\n      }\n      resultBuilder.append(']');\n      \n      return resultBuilder.toString();\n    "
+      "post_process_function": """
+        if (params.result == null) {
+          return "no result generated";
+        }
+        def outputs = params.result;
+        def scores = new Double[outputs.length];
+        for (int i=0; i<outputs.length; i++) {
+          def index = new BigDecimal(outputs[i].index.toString()).intValue();
+          scores[index] = outputs[i].score;
+        }
+        def resultBuilder = new StringBuilder('[');
+        for (int i=0; i<scores.length; i++) {
+          resultBuilder.append(' {\"name\": \"similarity\", \"data_type\": \"FLOAT32\", \"shape\": [1],');
+          resultBuilder.append('\"data\": [');
+          resultBuilder.append(scores[i]);
+          resultBuilder.append(']}');
+          if (i<outputs.length - 1) {
+            resultBuilder.append(',');
+          }
+        }
+        resultBuilder.append(']');
+        return resultBuilder.toString();
+      """
     }
   ]
 }
@@ -152,9 +189,46 @@ POST /_plugins/_ml/connectors/_create
       "headers": {
         "content-type": "application/json"
       },
+      "pre_process_function": """
+        def query_text = params.query_text;
+        def text_docs = params.text_docs;
+        def textDocsBuilder = new StringBuilder('[');
+        for (int i=0; i<text_docs.length; i++) {
+          textDocsBuilder.append('\"');
+          textDocsBuilder.append(text_docs[i]);
+          textDocsBuilder.append('\"');
+          if (i<text_docs.length - 1) {
+            textDocsBuilder.append(',');
+          }
+        }
+        textDocsBuilder.append(']');
+        def parameters = '{ \"query\": \"' + query_text + '\",  \"texts\": ' + textDocsBuilder.toString() + ' }';
+        return  '{\"parameters\": ' + parameters + '}';
+      """,
       "request_body": "{ \"query\": \"${parameters.query}\", \"texts\": ${parameters.texts} }",
-      "pre_process_function": "\n    def query_text = params.query_text;\n    def text_docs = params.text_docs;\n    def textDocsBuilder = new StringBuilder('[');\n    for (int i=0; i<text_docs.length; i++) {\n      textDocsBuilder.append('\"');\n      textDocsBuilder.append(text_docs[i]);\n      textDocsBuilder.append('\"');\n      if (i<text_docs.length - 1) {\n        textDocsBuilder.append(',');\n      }\n    }\n    textDocsBuilder.append(']');\n    def parameters = '{ \"query\": \"' + query_text + '\",  \"texts\": ' + textDocsBuilder.toString() + ' }';\n    return  '{\"parameters\": ' + parameters + '}';\n",
-      "post_process_function": "\n      \n      def dataType = \"FLOAT32\";\n      \n      \n      if (params.result == null)\n      {\n          return 'no result generated';\n          //return params.response;\n      }\n      def outputs = params.result;\n      \n      def sorted_outputs = outputs;\n      for (int i=0; i<outputs.length; i++) {\n        def idx = new BigDecimal(outputs[i].index.toString()).intValue();\n        sorted_outputs[idx] = outputs[i];\n      }\n      def resultBuilder = new StringBuilder('[');\n      for (int i=0; i<outputs.length; i++) {\n        resultBuilder.append(' {\"name\": \"similarity\", \"data_type\": \"FLOAT32\", \"shape\": [1],');\n        //resultBuilder.append('{\"name\": \"similarity\"}');\n        \n        resultBuilder.append('\"data\": [');\n        resultBuilder.append(outputs[i].score);\n        resultBuilder.append(']}');\n        if (i<outputs.length - 1) {\n          resultBuilder.append(',');\n        }\n      }\n      resultBuilder.append(']');\n      \n      return resultBuilder.toString();\n    "
+      "post_process_function": """
+        if (params.result == null) {
+          return "no result generated";
+        }
+        def outputs = params.result;
+        def scores = new Double[outputs.length];
+        for (int i=0; i<outputs.length; i++) {
+          def index = new BigDecimal(outputs[i].index.toString()).intValue();
+          scores[index] = outputs[i].score;
+        }
+        def resultBuilder = new StringBuilder('[');
+        for (int i=0; i<scores.length; i++) {
+          resultBuilder.append(' {\"name\": \"similarity\", \"data_type\": \"FLOAT32\", \"shape\": [1],');
+          resultBuilder.append('\"data\": [');
+          resultBuilder.append(scores[i]);
+          resultBuilder.append(']}');
+          if (i<outputs.length - 1) {
+            resultBuilder.append(',');
+          }
+        }
+        resultBuilder.append(']');
+        return resultBuilder.toString();
+      """
     }
   ]
 }
@@ -188,7 +262,7 @@ POST _plugins/_ml/models/your_model_id/_predict
 }
 ```
 
-Each item in the `inputs` array comprises a `query_text` and a `text_docs` string, separated by a ` . `
+Each item in the array comprises a `query_text` and a `text_docs` string, separated by a ` . `
 
 Alternatively, you can test the model as follows:
 ```json
