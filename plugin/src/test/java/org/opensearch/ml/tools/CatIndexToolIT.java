@@ -16,6 +16,7 @@ import java.util.Objects;
 import org.junit.Before;
 import org.opensearch.client.Response;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.ml.engine.tools.CatIndexTool;
 import org.opensearch.ml.rest.RestBaseAgentToolsIT;
 import org.opensearch.ml.utils.TestHelper;
 
@@ -54,7 +55,7 @@ public class CatIndexToolIT extends RestBaseAgentToolsIT {
     }
 
     public void testCatIndexWithFewIndices() throws IOException {
-        List<String> indices = createIndices(10);
+        List<String> indices = createIndices(CatIndexTool.DEFAULT_PAGE_SIZE);
         Response response = TestHelper.makeRequest(client(), "POST", "/_plugins/_ml/agents/" + agentId + "/_execute", null, question, null);
         String responseStr = TestHelper.httpEntityToString(response.getEntity());
         String toolOutput = extractResult(responseStr);
@@ -67,7 +68,7 @@ public class CatIndexToolIT extends RestBaseAgentToolsIT {
     }
 
     public void testCatIndexWithMoreThan100Indices() throws IOException {
-        List<String> indices = createIndices(101);
+        List<String> indices = createIndices(CatIndexTool.DEFAULT_PAGE_SIZE + 1);
         Response response = TestHelper.makeRequest(client(), "POST", "/_plugins/_ml/agents/" + agentId + "/_execute", null, question, null);
         String responseStr = TestHelper.httpEntityToString(response.getEntity());
         String toolOutput = extractResult(responseStr);
@@ -79,6 +80,23 @@ public class CatIndexToolIT extends RestBaseAgentToolsIT {
         }
     }
 
+    /**
+     * An example of responseStr:
+     * {
+     *   "inference_results": [
+     *     {
+     *       "output": [
+     *         {
+     *           "name": "response",
+     *           "result": "row,health,status,index,uuid,pri(number of primary shards),rep(number of replica shards),docs.count(number of available documents),docs.deleted(number of deleted documents),store.size(store size of primary and replica shards),pri.store.size(store size of primary shards)\n1,yellow,open,test4,6ohWskucQ3u3xV9tMjXCkA,1,1,0,0,208b,208b\n2,yellow,open,test5,5AQLe-Z3QKyyLibbZ3Xcng,1,1,0,0,208b,208b\n3,yellow,open,test2,66Cj3zjlQ-G8I3vWeEONpQ,1,1,0,0,208b,208b\n4,yellow,open,test3,6A-aVxPiTj2U9GnupHQ3BA,1,1,0,0,208b,208b\n5,yellow,open,test8,-WKw-SCET3aTFuWCMMixrw,1,1,0,0,208b,208b"
+     *         }
+     *       ]
+     *     }
+     *   ]
+     * }
+     * @param responseStr
+     * @return
+     */
     private String extractResult(String responseStr) {
         JsonArray output = JsonParser
             .parseString(responseStr)
