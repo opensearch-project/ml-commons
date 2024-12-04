@@ -29,6 +29,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.CommonValue;
+import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.exception.MLException;
 
 import lombok.AccessLevel;
