@@ -81,7 +81,7 @@ public class CommonValue {
     public static final String ML_STOP_WORDS_INDEX = ".plugins-ml-stop-words";
     public static final Set<String> stopWordsIndices = ImmutableSet.of(".plugins-ml-stop-words");
     public static final Integer ML_MEMORY_MESSAGE_INDEX_SCHEMA_VERSION = 1;
-    public static final String TOOL_PARAMETERS_PREFIX = "tools.parameters.";
+    public static final String TOOL_MODEL_RELATED_FIELD_PREFIX = "tools.parameters.";
     public static final String USER_FIELD_MAPPING = "      \""
         + CommonValue.USER
         + "\": {\n"
