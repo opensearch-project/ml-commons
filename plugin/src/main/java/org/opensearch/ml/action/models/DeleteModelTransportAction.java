@@ -305,7 +305,6 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     ) {
         ActionRequest request = requestSupplier.get();
         client.execute(actionType, request, ActionListener.wrap(pipelineResponse -> {
-            String responseString = pipelineResponse.toString();
             Map<String, Object> allConfigMap = StringUtils.fromJson(pipelineResponse.toString(), "");
             List<String> allDependentPipelineIds = findDependentPipelinesEasy(allConfigMap, modelId);
             if (allDependentPipelineIds.isEmpty()) {
