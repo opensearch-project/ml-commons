@@ -63,6 +63,8 @@ public class StringUtils {
     }
     public static final String TO_STRING_FUNCTION_NAME = ".toString()";
 
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
     public static boolean isValidJsonString(String json) {
         if (json == null || json.isBlank()) {
             return false;
@@ -346,13 +348,12 @@ public class StringUtils {
     }
 
     public static void validateSchema(String schemaString, String instanceString) throws IOException {
-        ObjectMapper mapper = new ObjectMapper();
         // parse the schema JSON as string
-        JsonNode schemaNode = mapper.readTree(schemaString);
+        JsonNode schemaNode = MAPPER.readTree(schemaString);
         JsonSchema schema = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V202012).getSchema(schemaNode);
 
         // JSON data to validate
-        JsonNode jsonNode = mapper.readTree(instanceString);
+        JsonNode jsonNode = MAPPER.readTree(instanceString);
 
         // Validate JSON node against the schema
         Set<ValidationMessage> errors = schema.validate(jsonNode);

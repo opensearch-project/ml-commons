@@ -1,3 +1,10 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+package org.opensearch.ml.common;
+
 import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX_MAPPING_PATH;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX_MAPPING_PATH;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX_MAPPING_PATH;
@@ -5,7 +12,6 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX_MAPPING_PATH;
 import java.io.IOException;
 
 import org.junit.Test;
-import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.utils.IndexUtils;
 
 public class MLIndexTest {
