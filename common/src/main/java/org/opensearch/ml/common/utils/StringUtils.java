@@ -26,6 +26,7 @@ import org.json.JSONObject;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
 import com.jayway.jsonpath.JsonPath;
@@ -53,12 +54,16 @@ public class StringUtils {
     }
     public static final String TO_STRING_FUNCTION_NAME = ".toString()";
 
-    public static boolean isValidJsonString(String Json) {
+    public static boolean isValidJsonString(String json) {
+        if (json == null || json.isBlank()) {
+            return false;
+        }
+
         try {
-            new JSONObject(Json);
+            new JSONObject(json);
         } catch (JSONException ex) {
             try {
-                new JSONArray(Json);
+                new JSONArray(json);
             } catch (JSONException ex1) {
                 return false;
             }
@@ -67,6 +72,10 @@ public class StringUtils {
     }
 
     public static boolean isJson(String json) {
+        if (json == null || json.isBlank()) {
+            return false;
+        }
+
         try {
             if (!isValidJsonString(json)) {
                 return false;
@@ -317,6 +326,14 @@ public class StringUtils {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    public static JsonObject getJsonObjectFromString(String jsonString) {
+        if (jsonString == null || jsonString.isBlank()) {
+            throw new IllegalArgumentException("Json cannot be null or empty");
+        }
+
+        return JsonParser.parseString(jsonString).getAsJsonObject();
     }
 
 }

@@ -6,10 +6,14 @@
 package org.opensearch.ml.common.utils;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
+import java.io.IOException;
 import java.util.Map;
 
 import org.junit.Test;
+
+import com.google.gson.JsonParseException;
 
 public class IndexUtilsTest {
 
@@ -41,5 +45,111 @@ public class IndexUtilsTest {
         Map<String, Object> updatedIndexSettings = IndexUtils.UPDATED_ALL_NODES_REPLICA_INDEX_SETTINGS;
         assertEquals("index.auto_expand_replicas should be 0-all", updatedIndexSettings.get("index.auto_expand_replicas"), "0-all");
         assertEquals("INDEX_SETTINGS should contain exactly 1 settings", 1, updatedIndexSettings.size());
+    }
+
+    @Test
+    public void testGetMappingFromFile() {
+        String expectedMapping = "{\n"
+            + "  \"_meta\": {\n"
+            + "    \"schema_version\": \"1\"\n"
+            + "  },\n"
+            + "  \"properties\": {\n"
+            + "    \"test_field_1\": {\n"
+            + "      \"type\": \"test_type_1\"\n"
+            + "    },\n"
+            + "    \"test_field_2\": {\n"
+            + "      \"type\": \"test_type_2\"\n"
+            + "    },\n"
+            + "    \"test_field_3\": {\n"
+            + "      \"type\": \"test_type_3\"\n"
+            + "    }\n"
+            + "  }\n"
+            + "}\n";
+        try {
+            String actualMapping = IndexUtils.getMappingFromFile("index-mappings/test-mapping.json");
+            // comparing JsonObjects to avoid issues caused by eol character in different OS
+            assertEquals(StringUtils.getJsonObjectFromString(expectedMapping), StringUtils.getJsonObjectFromString(actualMapping));
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to read file at path: index-mappings/test-mapping.json");
+        }
+    }
+
+    @Test
+    public void testGetMappingFromFileFileNotFound() {
+        String path = "index-mappings/test-mapping-not-found.json";
+        IOException e = assertThrows(IOException.class, () -> IndexUtils.getMappingFromFile(path));
+        assertEquals("Resource not found: " + path, e.getMessage());
+    }
+
+    @Test
+    public void testGetMappingFromFilesMalformedJson() {
+        String path = "index-mappings/test-mapping-malformed.json";
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> IndexUtils.getMappingFromFile(path));
+        assertEquals("Invalid or non-JSON mapping at: " + path, e.getMessage());
+    }
+
+    @Test
+    public void testGetVersionFromMapping() {
+        Integer expectedVersion = 1;
+        String mapping = "{\n"
+            + "  \"_meta\": {\n"
+            + "    \"schema_version\": \"1\"\n"
+            + "  },\n"
+            + "  \"properties\": {\n"
+            + "    \"test_field_1\": {\n"
+            + "      \"type\": \"test_type_1\"\n"
+            + "    },\n"
+            + "    \"test_field_2\": {\n"
+            + "      \"type\": \"test_type_2\"\n"
+            + "    },\n"
+            + "    \"test_field_3\": {\n"
+            + "      \"type\": \"test_type_3\"\n"
+            + "    }\n"
+            + "  }\n"
+            + "}\n";
+
+        assertEquals(expectedVersion, IndexUtils.getVersionFromMapping(mapping));
+    }
+
+    @Test
+    public void testGetVersionFromMappingNoMeta() {
+        String mapping = "{\n"
+            + "  \"properties\": {\n"
+            + "    \"test_field_1\": {\n"
+            + "      \"type\": \"test_type_1\"\n"
+            + "    },\n"
+            + "    \"test_field_2\": {\n"
+            + "      \"type\": \"test_type_2\"\n"
+            + "    },\n"
+            + "    \"test_field_3\": {\n"
+            + "      \"type\": \"test_type_3\"\n"
+            + "    }\n"
+            + "  }\n"
+            + "}\n";
+
+        JsonParseException e = assertThrows(JsonParseException.class, () -> IndexUtils.getVersionFromMapping(mapping));
+        assertEquals("Failed to find \"_meta\" object in mapping: " + mapping, e.getMessage());
+    }
+
+    @Test
+    public void testGetVersionFromMappingNoSchemaVersion() {
+        String mapping = "{\n"
+            + "  \"_meta\": {\n"
+            + "  },\n"
+            + "  \"properties\": {\n"
+            + "    \"test_field_1\": {\n"
+            + "      \"type\": \"test_type_1\"\n"
+            + "    },\n"
+            + "    \"test_field_2\": {\n"
+            + "      \"type\": \"test_type_2\"\n"
+            + "    },\n"
+            + "    \"test_field_3\": {\n"
+            + "      \"type\": \"test_type_3\"\n"
+            + "    }\n"
+            + "  }\n"
+            + "}\n";
+
+        JsonParseException e = assertThrows(JsonParseException.class, () -> IndexUtils.getVersionFromMapping(mapping));
+        assertEquals("Failed to find \"schema_version\" in \"_meta\" object for mapping: " + mapping, e.getMessage());
     }
 }
