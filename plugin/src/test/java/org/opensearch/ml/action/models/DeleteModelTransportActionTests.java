@@ -21,10 +21,8 @@ import static org.opensearch.ml.action.models.DeleteModelTransportAction.TIMEOUT
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -57,9 +55,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.common.bytes.BytesReference;
-import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -72,7 +68,8 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
-import org.opensearch.ml.engine.tools.AgentModelsSearcher;
+import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.engine.utils.AgentModelsSearcher;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.search.SearchHit;
@@ -194,21 +191,18 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testDeleteModel_BlockedBySearchPipelineAndIngestionPipeline() throws IOException {
-        when(searchPipelineConfiguration.getId()).thenReturn("search_1");
-        when(searchPipelineConfiguration.getConfigAsMap()).thenReturn(configDataMap);
-        when(getSearchPipelineResponse.pipelines()).thenReturn(List.of(searchPipelineConfiguration));
+        when(getSearchPipelineResponse.toString()).thenReturn(
+                StringUtils.toJson(Map.of("search_1", configDataMap))
+        );
         doAnswer(invocation -> {
             ActionListener<GetSearchPipelineResponse> listener = invocation.getArgument(2);
             listener.onResponse(getSearchPipelineResponse);
             return null;
         }).when(client).execute(eq(GetSearchPipelineAction.INSTANCE), any(), any());
 
-        org.opensearch.ingest.PipelineConfiguration ingestPipelineConfiguration = new org.opensearch.ingest.PipelineConfiguration(
-                "ingest_1",
-                new BytesArray("{\"model_id\": \"test_id\"}".getBytes(StandardCharsets.UTF_8)),
-                MediaTypeRegistry.JSON
+        when(getIngestionPipelineResponse.toString()).thenReturn(
+                StringUtils.toJson(Map.of("ingest_1", Map.of("model_id", "test_id")))
         );
-        when(getIngestionPipelineResponse.pipelines()).thenReturn(List.of(ingestPipelineConfiguration));
         doAnswer(invocation -> {
             ActionListener<GetPipelineResponse> listener = invocation.getArgument(2);
             listener.onResponse(getIngestionPipelineResponse);
@@ -227,15 +221,10 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
 
     public void testDeleteModel_BlockedBySearchPipeline() throws IOException {
         //org.opensearch.search.pipeline.PipelineConfiguration pipelineConfiguration = new PipelineConfiguration();
-        when(searchPipelineConfiguration.getId()).thenReturn("1");
-        when(searchPipelineConfiguration.getConfigAsMap()).thenReturn(configDataMap);
+        when(getSearchPipelineResponse.toString()).thenReturn(
+                StringUtils.toJson(Map.of("search_1", configDataMap, "indenpendent_search", Map.of("nothing", "nothinh")))
+        );
 
-        org.opensearch.search.pipeline.PipelineConfiguration independentSearchPipelineConfiguration = mock(org.opensearch.search.pipeline.PipelineConfiguration.class);
-        Map<String, Object> independentConfigMap = new HashMap<>();
-        independentConfigMap.put("nothing", "nothing");
-        when(independentSearchPipelineConfiguration.getConfigAsMap()).thenReturn(independentConfigMap);
-        when(independentSearchPipelineConfiguration.getId()).thenReturn("2");
-        when(getSearchPipelineResponse.pipelines()).thenReturn(List.of(searchPipelineConfiguration, independentSearchPipelineConfiguration));
         doAnswer(invocation -> {
             ActionListener<GetSearchPipelineResponse> listener = invocation.getArgument(2);
             listener.onResponse(getSearchPipelineResponse);
@@ -245,24 +234,15 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("1 search pipelines are still using this model, please delete or update the pipelines first: [1]", argumentCaptor.getValue().getMessage());
+        assertEquals("1 search pipelines are still using this model, please delete or update the pipelines first: [search_1]", argumentCaptor.getValue().getMessage());
     }
 
     public void testDeleteModel_BlockedBySearchPipelineSingleModelId() throws IOException {
         Map<String, Object> configDataMapWithSingleModelId = Map
             .of("model_id", "test_id", "list_model_id", List.of("test_id"), "test_map_id", Map.of("map_model_id", "test_id"));
-        when(searchPipelineConfiguration.getId()).thenReturn("search_1");
-        when(searchPipelineConfiguration.getConfigAsMap()).thenReturn(configDataMapWithSingleModelId);
 
-        org.opensearch.search.pipeline.PipelineConfiguration independentSearchPipelineConfiguration = mock(
-            org.opensearch.search.pipeline.PipelineConfiguration.class
-        );
-        Map<String, Object> independentConfigMap = new HashMap<>();
-        independentConfigMap.put("nothing", "nothing");
-        when(independentSearchPipelineConfiguration.getConfigAsMap()).thenReturn(independentConfigMap);
-        when(independentSearchPipelineConfiguration.getId()).thenReturn("2");
-        when(getSearchPipelineResponse.pipelines())
-            .thenReturn(List.of(searchPipelineConfiguration, independentSearchPipelineConfiguration));
+        when(getSearchPipelineResponse.toString()).thenReturn(StringUtils.toJson(Map.of("search_1", configDataMapWithSingleModelId)));
+
         doAnswer(invocation -> {
             ActionListener<GetSearchPipelineResponse> listener = invocation.getArgument(2);
             listener.onResponse(getSearchPipelineResponse);
@@ -279,20 +259,9 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testDeleteModel_BlockedBySearchPipelineListModelId() throws IOException {
-        Map<String, Object> configDataMapWithSingleModelId = Map
+        Map<String, Object> configDataMapWithListModelId = Map
             .of("single_model_id", "test_id", "model_id", List.of("test_id"), "test_map_id", Map.of("map_model_id", "test_id"));
-        when(searchPipelineConfiguration.getId()).thenReturn("search_1");
-        when(searchPipelineConfiguration.getConfigAsMap()).thenReturn(configDataMapWithSingleModelId);
-
-        org.opensearch.search.pipeline.PipelineConfiguration independentSearchPipelineConfiguration = mock(
-            org.opensearch.search.pipeline.PipelineConfiguration.class
-        );
-        Map<String, Object> independentConfigMap = new HashMap<>();
-        independentConfigMap.put("nothing", "nothing");
-        when(independentSearchPipelineConfiguration.getConfigAsMap()).thenReturn(independentConfigMap);
-        when(independentSearchPipelineConfiguration.getId()).thenReturn("2");
-        when(getSearchPipelineResponse.pipelines())
-            .thenReturn(List.of(searchPipelineConfiguration, independentSearchPipelineConfiguration));
+        when(getSearchPipelineResponse.toString()).thenReturn(StringUtils.toJson(Map.of("search_1", configDataMapWithListModelId)));
         doAnswer(invocation -> {
             ActionListener<GetSearchPipelineResponse> listener = invocation.getArgument(2);
             listener.onResponse(getSearchPipelineResponse);
@@ -309,21 +278,12 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testDeleteModel_BlockedByIngestPipeline() throws IOException {
-        org.opensearch.ingest.PipelineConfiguration ingestPipelineConfiguration = new org.opensearch.ingest.PipelineConfiguration(
-            "ingest_1",
-            new BytesArray("{\"model_id\": \"test_id\"}".getBytes(StandardCharsets.UTF_8)),
-            MediaTypeRegistry.JSON
-        );
-
-        org.opensearch.ingest.PipelineConfiguration independentIngestPipelineConfiguration =
-            new org.opensearch.ingest.PipelineConfiguration(
-                "2",
-                new BytesArray("{\"nothing\": \"test_id\"}".getBytes(StandardCharsets.UTF_8)),
-                MediaTypeRegistry.JSON
-            );
-
-        when(getIngestionPipelineResponse.pipelines())
-            .thenReturn(List.of(ingestPipelineConfiguration, independentIngestPipelineConfiguration));
+        Map<String, Object> ingestPipelineConfig1 = Map.of("model_id", "test_id");
+        Map<String, Object> ingestPipelineConfig2 = Map.of("nothing", "test_id");
+        when(getIngestionPipelineResponse.toString())
+            .thenReturn(StringUtils.toJson(Map.of("ingest_1", ingestPipelineConfig1, "ingest_2", ingestPipelineConfig2)));
+        // when(getIngestionPipelineResponse.pipelines())
+        // .thenReturn(List.of(ingestPipelineConfiguration, independentIngestPipelineConfiguration));
         doAnswer(invocation -> {
             ActionListener<GetPipelineResponse> listener = invocation.getArgument(2);
             listener.onResponse(getIngestionPipelineResponse);
@@ -357,7 +317,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "1 agents are still using this model, please delete or update the agents first: [1]",
+            "1 agents are still using this model, please delete or update the agents first, all visible agents are: [1]",
             argumentCaptor.getValue().getMessage()
         );
     }
@@ -365,10 +325,15 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     public void testDeleteModel_BlockedByHiddenAgent() throws IOException {
         XContentBuilder content = XContentBuilder.builder(XContentType.JSON.xContent());
         content.startObject();
-        content.field(MLAgent.IS_HIDDEN_FIELD, "true");
+        content.field(MLAgent.IS_HIDDEN_FIELD, true);
         content.endObject();
         SearchHit hit = new SearchHit(1, "1", null, null).sourceRef(BytesReference.bytes(content));
-        SearchHits searchHits = new SearchHits(new SearchHit[] { hit }, new TotalHits(1, TotalHits.Relation.EQUAL_TO), 1.0f);
+        XContentBuilder content2 = XContentBuilder.builder(XContentType.JSON.xContent());
+        content2.startObject();
+        content2.field(MLAgent.IS_HIDDEN_FIELD, false);
+        content2.endObject();
+        SearchHit hit2 = new SearchHit(2, "2", null, null).sourceRef(BytesReference.bytes(content2));
+        SearchHits searchHits = new SearchHits(new SearchHit[] { hit, hit2 }, new TotalHits(1, TotalHits.Relation.EQUAL_TO), 1.0f);
         when(searchResponse.getHits()).thenReturn(searchHits);
         doAnswer(invocation -> {
             ActionListener<SearchResponse> listener = invocation.getArgument(1);
@@ -380,7 +345,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "1 agents are still using this model, please delete or update the agents first",
+            "2 agents are still using this model, please delete or update the agents first, all visible agents are: [2]",
             argumentCaptor.getValue().getMessage()
         );
     }
@@ -818,8 +783,8 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         emptyBulkByScrollResponse = new BulkByScrollResponse(new ArrayList<>(), null);
         SearchHits hits = new SearchHits(new SearchHit[] {}, new TotalHits(0, TotalHits.Relation.EQUAL_TO), 0.0f);
         when(searchResponse.getHits()).thenReturn(hits);
-        when(getIngestionPipelineResponse.pipelines()).thenReturn(List.of());
-
+        // when(getIngestionPipelineResponse.pipelines()).thenReturn(List.of());
+        when(getIngestionPipelineResponse.toString()).thenReturn(StringUtils.toJson(Map.of()));
         doAnswer(invocation -> {
             ActionListener<SearchResponse> listener = invocation.getArgument(1);
             listener.onResponse(searchResponse);
@@ -838,7 +803,8 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(eq(GetPipelineAction.INSTANCE), any(), any());
 
-        when(getSearchPipelineResponse.pipelines()).thenReturn(List.of());
+        // when(getSearchPipelineResponse.pipelines()).thenReturn(List.of());
+        when(getSearchPipelineResponse.toString()).thenReturn(StringUtils.toJson(Map.of()));
         doAnswer(invocation -> {
             ActionListener<GetSearchPipelineResponse> listener = invocation.getArgument(2);
             listener.onResponse(getSearchPipelineResponse);

@@ -28,11 +28,13 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 import org.apache.commons.lang3.tuple.Pair;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.ActionRequest;
+import org.opensearch.action.ActionType;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.get.GetRequest;
@@ -66,7 +68,8 @@ import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
 import org.opensearch.ml.common.transport.model.MLModelGetRequest;
-import org.opensearch.ml.engine.tools.AgentModelsSearcher;
+import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.engine.utils.AgentModelsSearcher;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.search.SearchHit;
@@ -284,48 +287,27 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     }
 
     private void checkIngestPipelineBeforeDeleteModel(String modelId, ActionListener<Boolean> actionListener) {
-        GetPipelineRequest getPipelineRequest = new GetPipelineRequest();
-        client.execute(GetPipelineAction.INSTANCE, getPipelineRequest, ActionListener.wrap(ingestPipelineResponse -> {
-            List<String> allDependentPipelineIds = findDependentPipelines(
-                ingestPipelineResponse.pipelines(),
-                modelId,
-                org.opensearch.ingest.PipelineConfiguration::getConfigAsMap,
-                org.opensearch.ingest.PipelineConfiguration::getId
-            );
-            if (allDependentPipelineIds.isEmpty()) {
-                actionListener.onResponse(true);
-            } else {
-                actionListener
-                    .onFailure(
-                        new OpenSearchStatusException(
-                            String
-                                .format(
-                                    Locale.ROOT,
-                                    "%d ingest pipelines are still using this model, please delete or update the pipelines first: %s",
-                                    allDependentPipelineIds.size(),
-                                    Arrays.toString(allDependentPipelineIds.toArray(new String[0]))
-                                ),
-                            RestStatus.CONFLICT
-                        )
-                    );
-            }
-        }, e -> {
-            log.error("Failed to delete ML Model: " + modelId, e);
-            actionListener.onFailure(e);
-
-        }));
+        checkPipelineBeforeDeleteModel(modelId, actionListener, "ingest", GetPipelineRequest::new, GetPipelineAction.INSTANCE);
 
     }
 
     private void checkSearchPipelineBeforeDeleteModel(String modelId, ActionListener<Boolean> actionListener) {
-        GetSearchPipelineRequest getSearchPipelineRequest = new GetSearchPipelineRequest();
-        client.execute(GetSearchPipelineAction.INSTANCE, getSearchPipelineRequest, ActionListener.wrap(searchPipelineResponse -> {
-            List<String> allDependentPipelineIds = findDependentPipelines(
-                searchPipelineResponse.pipelines(),
-                modelId,
-                org.opensearch.search.pipeline.PipelineConfiguration::getConfigAsMap,
-                org.opensearch.search.pipeline.PipelineConfiguration::getId
-            );
+        checkPipelineBeforeDeleteModel(modelId, actionListener, "search", GetSearchPipelineRequest::new, GetSearchPipelineAction.INSTANCE);
+
+    }
+
+    private void checkPipelineBeforeDeleteModel(
+        String modelId,
+        ActionListener<Boolean> actionListener,
+        String pipelineType,
+        Supplier<ActionRequest> requestSupplier,
+        ActionType actionType
+    ) {
+        ActionRequest request = requestSupplier.get();
+        client.execute(actionType, request, ActionListener.wrap(pipelineResponse -> {
+            String responseString = pipelineResponse.toString();
+            Map<String, Object> allConfigMap = StringUtils.fromJson(pipelineResponse.toString(), "");
+            List<String> allDependentPipelineIds = findDependentPipelinesEasy(allConfigMap, modelId);
             if (allDependentPipelineIds.isEmpty()) {
                 actionListener.onResponse(true);
             } else {
@@ -335,8 +317,9 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                             String
                                 .format(
                                     Locale.ROOT,
-                                    "%d search pipelines are still using this model, please delete or update the pipelines first: %s",
+                                    "%d %s pipelines are still using this model, please delete or update the pipelines first: %s",
                                     allDependentPipelineIds.size(),
+                                    pipelineType,
                                     Arrays.toString(allDependentPipelineIds.toArray(new String[0]))
                                 ),
                             RestStatus.CONFLICT
@@ -479,6 +462,18 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
             && !mlModelState.equals(MLModelState.PARTIALLY_DEPLOYED);
     }
 
+    private List<String> findDependentPipelinesEasy(Map<String, Object> allConfigMap, String candidateModelId) {
+        List<String> dependentPipelineConfigurations = new ArrayList<>();
+        for (Map.Entry<String, Object> entry : allConfigMap.entrySet()) {
+            String id = entry.getKey();
+            Map<String, Object> config = (Map<String, Object>) entry.getValue();
+            if (searchThroughConfig(config, candidateModelId)) {
+                dependentPipelineConfigurations.add(id);
+            }
+        }
+        return dependentPipelineConfigurations;
+    }
+
     private <T> List<String> findDependentPipelines(
         List<T> pipelineConfigurations,
         String candidateModelId,
@@ -533,24 +528,22 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     }
 
     private String formatAgentErrorMessage(SearchHit[] hits) {
-        boolean isHidden = false;
         List<String> agentIds = new ArrayList<>();
         for (SearchHit hit : hits) {
             Map<String, Object> sourceAsMap = hit.getSourceAsMap();
-            isHidden = isHidden || Boolean.parseBoolean((String) sourceAsMap.getOrDefault(MLAgent.IS_HIDDEN_FIELD, false));
-            agentIds.add(hit.getId());
-        }
-        if (isHidden) {
-            return String
-                .format(Locale.ROOT, "%d agents are still using this model, please delete or update the agents first", hits.length);
+            Boolean isHidden = (Boolean) sourceAsMap.getOrDefault(MLAgent.IS_HIDDEN_FIELD, false);
+            if (!isHidden) {
+                agentIds.add(hit.getId());
+            }
         }
         return String
             .format(
                 Locale.ROOT,
-                "%d agents are still using this model, please delete or update the agents first: %s",
+                "%d agents are still using this model, please delete or update the agents first, all visible agents are: %s",
                 hits.length,
                 Arrays.toString(agentIds.toArray(new String[0]))
             );
+
     }
 
     // this method is only to stub static method.
