@@ -124,17 +124,16 @@ public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
         Response response = createConnector(completionModelConnectorEntity);
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
+
         response = registerRemoteModelWithLocalRegexGuardrails("openAI-GPT-3.5 completions", connectorId);
+        responseMap = parseResponseToMap(response);
+        String modelId = (String) responseMap.get("model_id");
+
+        response = deployRemoteModel(modelId);
         responseMap = parseResponseToMap(response);
         String taskId = (String) responseMap.get("task_id");
         waitForTask(taskId, MLTaskState.COMPLETED);
-        response = getTask(taskId);
-        responseMap = parseResponseToMap(response);
-        String modelId = (String) responseMap.get("model_id");
-        response = deployRemoteModel(modelId);
-        responseMap = parseResponseToMap(response);
-        taskId = (String) responseMap.get("task_id");
-        waitForTask(taskId, MLTaskState.COMPLETED);
+
         String predictInput = "{\n" + "  \"parameters\": {\n" + "      \"prompt\": \"Say this is a test\"\n" + "  }\n" + "}";
         response = predictRemoteModel(modelId, predictInput);
         responseMap = parseResponseToMap(response);
@@ -144,6 +143,7 @@ public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
         responseMap = (Map) responseList.get(0);
         responseMap = (Map) responseMap.get("dataAsMap");
         responseList = (List) responseMap.get("choices");
+
         if (responseList == null) {
             assertTrue(checkThrottlingOpenAI(responseMap));
             return;
@@ -160,18 +160,18 @@ public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
         exceptionRule.expect(ResponseException.class);
         exceptionRule.expectMessage("guardrails triggered for user input");
         Response response = createConnector(completionModelConnectorEntity);
+
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
+
         response = registerRemoteModelWithLocalRegexGuardrails("openAI-GPT-3.5 completions", connectorId);
         responseMap = parseResponseToMap(response);
-        String taskId = (String) responseMap.get("task_id");
-        waitForTask(taskId, MLTaskState.COMPLETED);
-        response = getTask(taskId);
-        responseMap = parseResponseToMap(response);
         String modelId = (String) responseMap.get("model_id");
+
         response = deployRemoteModel(modelId);
         responseMap = parseResponseToMap(response);
-        taskId = (String) responseMap.get("task_id");
+        String taskId = (String) responseMap.get("task_id");
+
         waitForTask(taskId, MLTaskState.COMPLETED);
         String predictInput = "{\n" + "  \"parameters\": {\n" + "      \"prompt\": \"Say this is a test of stop word.\"\n" + "  }\n" + "}";
         predictRemoteModel(modelId, predictInput);
@@ -187,17 +187,16 @@ public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
         Response response = createConnector(completionModelConnectorEntity);
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
+
         response = registerRemoteModelNonTypeGuardrails("openAI-GPT-3.5 completions", connectorId);
+        responseMap = parseResponseToMap(response);
+        String modelId = (String) responseMap.get("model_id");
+
+        response = deployRemoteModel(modelId);
         responseMap = parseResponseToMap(response);
         String taskId = (String) responseMap.get("task_id");
         waitForTask(taskId, MLTaskState.COMPLETED);
-        response = getTask(taskId);
-        responseMap = parseResponseToMap(response);
-        String modelId = (String) responseMap.get("model_id");
-        response = deployRemoteModel(modelId);
-        responseMap = parseResponseToMap(response);
-        taskId = (String) responseMap.get("task_id");
-        waitForTask(taskId, MLTaskState.COMPLETED);
+
         String predictInput = "{\n" + "  \"parameters\": {\n" + "      \"prompt\": \"Say this is a test of stop word.\"\n" + "  }\n" + "}";
         predictRemoteModel(modelId, predictInput);
     }
@@ -211,17 +210,16 @@ public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
         Response response = createConnector(completionModelConnectorEntityWithGuardrail);
         Map responseMap = parseResponseToMap(response);
         String guardrailConnectorId = (String) responseMap.get("connector_id");
+
         response = registerRemoteModel("guardrail model group", "openAI-GPT-3.5 completions", guardrailConnectorId);
+        responseMap = parseResponseToMap(response);
+        String guardrailModelId = (String) responseMap.get("model_id");
+
+        response = deployRemoteModel(guardrailModelId);
         responseMap = parseResponseToMap(response);
         String taskId = (String) responseMap.get("task_id");
         waitForTask(taskId, MLTaskState.COMPLETED);
-        response = getTask(taskId);
-        responseMap = parseResponseToMap(response);
-        String guardrailModelId = (String) responseMap.get("model_id");
-        response = deployRemoteModel(guardrailModelId);
-        responseMap = parseResponseToMap(response);
-        taskId = (String) responseMap.get("task_id");
-        waitForTask(taskId, MLTaskState.COMPLETED);
+
         // Check the response from guardrails model that should be "accept".
         String predictInput = "{\n" + "  \"parameters\": {\n" + "    \"question\": \"hello\"\n" + "  }\n" + "}";
         response = predictRemoteModel(guardrailModelId, predictInput);
@@ -233,21 +231,21 @@ public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
         responseMap = (Map) responseMap.get("dataAsMap");
         String validationResult = (String) responseMap.get("response");
         Assert.assertTrue(validateRegex(validationResult, acceptRegex));
+
         // Create predict model.
         response = createConnector(completionModelConnectorEntity);
         responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
+
         response = registerRemoteModelWithModelGuardrails("openAI with guardrails", connectorId, guardrailModelId);
         responseMap = parseResponseToMap(response);
-        taskId = (String) responseMap.get("task_id");
-        waitForTask(taskId, MLTaskState.COMPLETED);
-        response = getTask(taskId);
-        responseMap = parseResponseToMap(response);
         String modelId = (String) responseMap.get("model_id");
+
         response = deployRemoteModel(modelId);
         responseMap = parseResponseToMap(response);
         taskId = (String) responseMap.get("task_id");
         waitForTask(taskId, MLTaskState.COMPLETED);
+
         // Predict.
         predictInput = "{\n"
             + "  \"parameters\": {\n"
@@ -282,17 +280,17 @@ public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
         Response response = createConnector(completionModelConnectorEntityWithGuardrail);
         Map responseMap = parseResponseToMap(response);
         String guardrailConnectorId = (String) responseMap.get("connector_id");
+
+        //Create the model ID
         response = registerRemoteModel("guardrail model group", "openAI-GPT-3.5 completions", guardrailConnectorId);
+        responseMap = parseResponseToMap(response);
+        String guardrailModelId = (String) responseMap.get("model_id");
+
+        response = deployRemoteModel(guardrailModelId);
         responseMap = parseResponseToMap(response);
         String taskId = (String) responseMap.get("task_id");
         waitForTask(taskId, MLTaskState.COMPLETED);
-        response = getTask(taskId);
-        responseMap = parseResponseToMap(response);
-        String guardrailModelId = (String) responseMap.get("model_id");
-        response = deployRemoteModel(guardrailModelId);
-        responseMap = parseResponseToMap(response);
-        taskId = (String) responseMap.get("task_id");
-        waitForTask(taskId, MLTaskState.COMPLETED);
+
         // Check the response from guardrails model that should be "reject".
         String predictInput = "{\n" + "  \"parameters\": {\n" + "    \"question\": \"I will be executed or tortured.\"\n" + "  }\n" + "}";
         response = predictRemoteModel(guardrailModelId, predictInput);
@@ -304,17 +302,16 @@ public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
         responseMap = (Map) responseMap.get("dataAsMap");
         String validationResult = (String) responseMap.get("response");
         Assert.assertTrue(validateRegex(validationResult, rejectRegex));
+
         // Create predict model.
         response = createConnector(completionModelConnectorEntity);
         responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
+
         response = registerRemoteModelWithModelGuardrails("openAI with guardrails", connectorId, guardrailModelId);
         responseMap = parseResponseToMap(response);
-        taskId = (String) responseMap.get("task_id");
-        waitForTask(taskId, MLTaskState.COMPLETED);
-        response = getTask(taskId);
-        responseMap = parseResponseToMap(response);
         String modelId = (String) responseMap.get("model_id");
+
         response = deployRemoteModel(modelId);
         responseMap = parseResponseToMap(response);
         taskId = (String) responseMap.get("task_id");
