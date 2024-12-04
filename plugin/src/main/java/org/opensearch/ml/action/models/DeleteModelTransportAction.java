@@ -52,6 +52,8 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.XContentHelper;
+import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
@@ -68,7 +70,6 @@ import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
 import org.opensearch.ml.common.transport.model.MLModelGetRequest;
-import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.utils.AgentModelsSearcher;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
@@ -305,7 +306,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     ) {
         ActionRequest request = requestSupplier.get();
         client.execute(actionType, request, ActionListener.wrap(pipelineResponse -> {
-            Map<String, Object> allConfigMap = StringUtils.fromJson(pipelineResponse.toString(), "");
+            Map<String, Object> allConfigMap = XContentHelper.convertToMap(JsonXContent.jsonXContent, pipelineResponse.toString(), true);
             List<String> allDependentPipelineIds = findDependentPipelinesEasy(allConfigMap, modelId);
             if (allDependentPipelineIds.isEmpty()) {
                 actionListener.onResponse(true);

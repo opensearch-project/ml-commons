@@ -302,7 +302,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     public void testDeleteModel_BlockedByAgent() throws IOException {
         XContentBuilder content = XContentBuilder.builder(XContentType.JSON.xContent());
         content.startObject();
-        content.field(MLAgent.IS_HIDDEN_FIELD, "false");
+        content.field(MLAgent.IS_HIDDEN_FIELD, false);
         content.endObject();
         SearchHit hit = new SearchHit(1, "1", null, null).sourceRef(BytesReference.bytes(content));
         SearchHits searchHits = new SearchHits(new SearchHit[] { hit }, new TotalHits(1, TotalHits.Relation.EQUAL_TO), 1.0f);
