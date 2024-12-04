@@ -66,7 +66,7 @@ public class CatIndexTool implements Tool {
     public static final String TYPE = "CatIndexTool";
     // This needs to be changed once it's changed in opensearch core in RestIndicesListAction.
     private static final int MAX_SUPPORTED_LIST_INDICES_PAGE_SIZE = 5000;
-    private static final int DEFAULT_PAGE_SIZE = 1;
+    public static final int DEFAULT_PAGE_SIZE = 100;
     private static final String DEFAULT_DESCRIPTION = String
         .join(
             " ",
