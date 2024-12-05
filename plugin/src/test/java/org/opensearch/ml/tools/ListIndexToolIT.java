@@ -16,7 +16,7 @@ import java.util.Objects;
 import org.junit.Before;
 import org.opensearch.client.Response;
 import org.opensearch.common.settings.Settings;
-import org.opensearch.ml.engine.tools.CatIndexTool;
+import org.opensearch.ml.engine.tools.ListIndexTool;
 import org.opensearch.ml.rest.RestBaseAgentToolsIT;
 import org.opensearch.ml.utils.TestHelper;
 
@@ -27,7 +27,7 @@ import com.google.gson.JsonParser;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
-public class CatIndexToolIT extends RestBaseAgentToolsIT {
+public class ListIndexToolIT extends RestBaseAgentToolsIT {
     private String agentId;
     private final String question = "{\"parameters\":{\"question\":\"please help list all the index status in the current cluster?\"}}";
 
@@ -55,7 +55,7 @@ public class CatIndexToolIT extends RestBaseAgentToolsIT {
     }
 
     public void testCatIndexWithFewIndices() throws IOException {
-        List<String> indices = createIndices(CatIndexTool.DEFAULT_PAGE_SIZE);
+        List<String> indices = createIndices(ListIndexTool.DEFAULT_PAGE_SIZE);
         Response response = TestHelper.makeRequest(client(), "POST", "/_plugins/_ml/agents/" + agentId + "/_execute", null, question, null);
         String responseStr = TestHelper.httpEntityToString(response.getEntity());
         String toolOutput = extractResult(responseStr);
@@ -68,7 +68,7 @@ public class CatIndexToolIT extends RestBaseAgentToolsIT {
     }
 
     public void testCatIndexWithMoreThan100Indices() throws IOException {
-        List<String> indices = createIndices(CatIndexTool.DEFAULT_PAGE_SIZE + 1);
+        List<String> indices = createIndices(ListIndexTool.DEFAULT_PAGE_SIZE + 1);
         Response response = TestHelper.makeRequest(client(), "POST", "/_plugins/_ml/agents/" + agentId + "/_execute", null, question, null);
         String responseStr = TestHelper.httpEntityToString(response.getEntity());
         String toolOutput = extractResult(responseStr);
