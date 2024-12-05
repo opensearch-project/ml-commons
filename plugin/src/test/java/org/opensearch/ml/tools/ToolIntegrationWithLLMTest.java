@@ -9,7 +9,6 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
@@ -32,7 +31,7 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public abstract class ToolIntegrationWithLLMTest extends RestBaseAgentToolsIT {
 
-    private static final int MAX_TASK_RESULT_QUERY_TIME_IN_SECOND = 30;
+    private static final int MAX_RETRIES = 5;
     private static final int DEFAULT_TASK_RESULT_QUERY_INTERVAL_IN_MILLISECOND = 1000;
 
     protected HttpServer server;
@@ -72,16 +71,17 @@ public abstract class ToolIntegrationWithLLMTest extends RestBaseAgentToolsIT {
     @After
     public void deleteModel() throws IOException {
         undeployModel(modelId);
+        checkForModelUndeployedStatus(modelId);
         deleteModel(client(), modelId, null);
     }
 
     @SneakyThrows
-    private void waitModelUndeployed(String modelId) {
+    private void checkForModelUndeployedStatus(String modelId) {
         Predicate<Response> condition = response -> {
             try {
                 Map<String, Object> responseInMap = parseResponseToMap(response);
                 MLModelState state = MLModelState.from(responseInMap.get(MLModel.MODEL_STATE_FIELD).toString());
-                return Set.of(MLModelState.UNDEPLOYED, MLModelState.DEPLOY_FAILED).contains(state);
+                return MLModelState.UNDEPLOYED.equals(state);
             } catch (Exception e) {
                 return false;
             }
@@ -91,16 +91,25 @@ public abstract class ToolIntegrationWithLLMTest extends RestBaseAgentToolsIT {
 
     @SneakyThrows
     protected Response waitResponseMeetingCondition(String method, String endpoint, String jsonEntity, Predicate<Response> condition) {
-        for (int i = 0; i < MAX_TASK_RESULT_QUERY_TIME_IN_SECOND; i++) {
+        for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             Response response = TestHelper.makeRequest(client(), method, endpoint, null, jsonEntity, null);
             assertEquals(RestStatus.OK, RestStatus.fromCode(response.getStatusLine().getStatusCode()));
             if (condition.test(response)) {
                 return response;
             }
-            logger.info("The {}-th response: {}", i, response.toString());
+            logger.info("The {}-th attempt on {}:{} . response: {}", attempt, method, endpoint, response.toString());
             Thread.sleep(DEFAULT_TASK_RESULT_QUERY_INTERVAL_IN_MILLISECOND);
         }
-        fail("The response failed to meet condition after " + MAX_TASK_RESULT_QUERY_TIME_IN_SECOND + " seconds.");
+        fail(
+            String
+                .format(
+                    Locale.ROOT,
+                    "The response failed to meet condition after %d attempts. Attempted to perform %s : %s",
+                    MAX_RETRIES,
+                    method,
+                    endpoint
+                )
+        );
         return null;
     }
 

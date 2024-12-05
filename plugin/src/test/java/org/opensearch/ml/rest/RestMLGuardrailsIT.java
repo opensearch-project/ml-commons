@@ -281,7 +281,7 @@ public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
         Map responseMap = parseResponseToMap(response);
         String guardrailConnectorId = (String) responseMap.get("connector_id");
 
-        //Create the model ID
+        // Create the model ID
         response = registerRemoteModel("guardrail model group", "openAI-GPT-3.5 completions", guardrailConnectorId);
         responseMap = parseResponseToMap(response);
         String guardrailModelId = (String) responseMap.get("model_id");
