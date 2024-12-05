@@ -39,7 +39,7 @@ public class ListIndexToolIT extends RestBaseAgentToolsIT {
     private List<String> createIndices(int count) throws IOException {
         List<String> indices = new ArrayList<>();
         for (int i = 0; i < count; i++) {
-            String indexName = "test" + i;
+            String indexName = "test" + randomAlphaOfLength(5);
             createIndex(indexName, Settings.EMPTY);
             indices.add(indexName);
         }
