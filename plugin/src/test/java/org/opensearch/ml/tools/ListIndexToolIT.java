@@ -13,6 +13,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 
+import org.apache.commons.lang3.StringUtils;
 import org.junit.Before;
 import org.opensearch.client.Response;
 import org.opensearch.common.settings.Settings;
@@ -39,7 +40,7 @@ public class ListIndexToolIT extends RestBaseAgentToolsIT {
     private List<String> createIndices(int count) throws IOException {
         List<String> indices = new ArrayList<>();
         for (int i = 0; i < count; i++) {
-            String indexName = "test" + randomAlphaOfLength(5);
+            String indexName = "test" + StringUtils.toRootLowerCase(randomAlphaOfLength(5));
             createIndex(indexName, Settings.EMPTY);
             indices.add(indexName);
         }
