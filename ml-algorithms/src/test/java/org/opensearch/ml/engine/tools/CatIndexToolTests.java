@@ -150,8 +150,8 @@ public class CatIndexToolTests {
 
         tool.run(otherParams, listener);
         settingsActionListenerCaptor.getValue().onResponse(getSettingsResponse);
-        clusterStateActionListenerCaptor.getValue().onResponse(clusterStateResponse);
         statsActionListenerCaptor.getValue().onResponse(indicesStatsResponse);
+        clusterStateActionListenerCaptor.getValue().onResponse(clusterStateResponse);
         clusterHealthActionListenerCaptor.getValue().onResponse(clusterHealthResponse);
 
         future.join();
@@ -214,8 +214,8 @@ public class CatIndexToolTests {
 
         tool.run(otherParams, listener);
         settingsActionListenerCaptor.getValue().onResponse(getSettingsResponse);
-        clusterStateActionListenerCaptor.getValue().onResponse(clusterStateResponse);
         statsActionListenerCaptor.getValue().onResponse(indicesStatsResponse);
+        clusterStateActionListenerCaptor.getValue().onResponse(clusterStateResponse);
         clusterHealthActionListenerCaptor.getValue().onResponse(clusterHealthResponse);
 
         future.orTimeout(10, TimeUnit.SECONDS).join();
