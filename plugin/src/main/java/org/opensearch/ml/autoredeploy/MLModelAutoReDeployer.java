@@ -186,6 +186,10 @@ public class MLModelAutoReDeployer {
                             modelAutoRedeployArrangements.add(modelAutoRedeployArrangement);
                     });
                 redeployAModel();
+            } else {
+                log.info("Could not find any models in the index, not performing auto reloading!");
+                startCronjobAndClearListener();
+                return;
             }
         }, e -> {
             if (e instanceof IndexNotFoundException) {
@@ -261,7 +265,7 @@ public class MLModelAutoReDeployer {
     private void triggerModelRedeploy(ModelAutoRedeployArrangement modelAutoRedeployArrangement) {
         if (modelAutoRedeployArrangement == null) {
             log.info("No more models in arrangement, skipping the redeployment");
-            redeployAModel();
+            startCronjobAndClearListener();
             return;
         }
         String modelId = modelAutoRedeployArrangement.getSearchResponse().getId();
