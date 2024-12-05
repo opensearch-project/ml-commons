@@ -21,6 +21,7 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 import org.opensearch.ml.common.connector.MLPostProcessFunction;
@@ -254,7 +255,7 @@ public class MLCreateConnectorInputTests {
         MLCreateConnectorInput input = mlCreateConnectorInput; // Assuming mlCreateConnectorInput is already initialized
 
         // Simulate an older version of OpenSearch that does not support connectorClientConfig
-        Version oldVersion = Version.fromString("2.12.0"); // Change this as per your old version
+        Version oldVersion = CommonValue.VERSION_2_12_0; // Change this as per your old version
         BytesStreamOutput output = new BytesStreamOutput();
         output.setVersion(oldVersion);
 
