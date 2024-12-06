@@ -78,7 +78,7 @@ Run the following command in the directory containing these files:
 zip -r intfloat-multilingual-e5-small-onnx.zip model.onnx tokenizer.json sentencepiece.bpe.model
 ```
 
-This command will create a zip file named `intfloat-multilingual-e5-small-onnx.zip`.
+This command will create a zip file named `intfloat-multilingual-e5-small-onnx.zip`, with the previous mentioned files.
 
 ### c. Calculate the Model File Hash
 
@@ -149,7 +149,7 @@ Replace `your_group_id` and `your_model_zip_content_hash_value` with the actual 
 
 To check the status of the registration, run:
 
-```bash
+```
 GET /_plugins/_ml/tasks/your_task_id
 ```
 
