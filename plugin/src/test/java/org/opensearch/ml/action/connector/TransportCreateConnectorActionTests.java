@@ -133,6 +133,7 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
                     .builder()
                     .actionType(ConnectorAction.ActionType.PREDICT)
                     .method("POST")
+                    .requestBody("{ \"inputText\": \"${parameters.inputText}\" }")
                     .url("https://${parameters.endpoint}/v1/completions")
                     .build()
             );
@@ -142,6 +143,7 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         input = MLCreateConnectorInput
             .builder()
             .name("test_name")
+            .description("this is a test connector")
             .version("1")
             .actions(actions)
             .parameters(parameters)
@@ -447,21 +449,24 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
                     .actionType(ConnectorAction.ActionType.PREDICT)
                     .method("POST")
                     .url("https://${parameters.endpoint}/v1/completions")
+                    .requestBody("{ \"inputText\": \"${parameters.inputText}\" }")
                     .build()
             );
 
+        Map<String, String> parameters = ImmutableMap.of("endpoint", "api.openai1.com");
+        Map<String, String> credential = ImmutableMap.of("access_key", "mockKey", "secret_key", "mockSecret");
         MLCreateConnectorInput mlCreateConnectorInput = MLCreateConnectorInput
             .builder()
             .name(randomAlphaOfLength(5))
             .description(randomAlphaOfLength(10))
             .version("1")
             .protocol(ConnectorProtocols.HTTP)
+            .parameters(parameters)
+            .credential(credential)
             .actions(actions)
             .build();
         MLCreateConnectorRequest request = new MLCreateConnectorRequest(mlCreateConnectorInput);
 
-        Map<String, String> parameters = ImmutableMap.of("endpoint", "api.openai1.com");
-        mlCreateConnectorInput.setParameters(parameters);
         TransportCreateConnectorAction action = new TransportCreateConnectorAction(
             transportService,
             actionFilters,

@@ -37,7 +37,8 @@ public class ConnectorActionTest {
         ConnectorAction.ActionType actionType = null;
         String method = "post";
         String url = "https://test.com";
-        new ConnectorAction(actionType, method, url, null, null, null, null);
+        String requestBody = "{\"input\": \"${parameters.input}\"}";
+        new ConnectorAction(actionType, method, url, null, requestBody, null, null);
     }
 
     @Test
@@ -47,7 +48,8 @@ public class ConnectorActionTest {
         ConnectorAction.ActionType actionType = ConnectorAction.ActionType.PREDICT;
         String method = "post";
         String url = null;
-        new ConnectorAction(actionType, method, url, null, null, null, null);
+        String requestBody = "{\"input\": \"${parameters.input}\"}";
+        new ConnectorAction(actionType, method, url, null, requestBody, null, null);
     }
 
     @Test
@@ -57,7 +59,19 @@ public class ConnectorActionTest {
         ConnectorAction.ActionType actionType = ConnectorAction.ActionType.PREDICT;
         String method = null;
         String url = "https://test.com";
-        new ConnectorAction(actionType, method, url, null, null, null, null);
+        String requestBody = "{\"input\": \"${parameters.input}\"}";
+        new ConnectorAction(actionType, method, url, null, requestBody, null, null);
+    }
+
+    @Test
+    public void constructor_NullRequestBody() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("request body can't null");
+        ConnectorAction.ActionType actionType = ConnectorAction.ActionType.PREDICT;
+        String method = "post";
+        String url = "https://test.com";
+        String requestBody = null;
+        new ConnectorAction(actionType, method, url, null, requestBody, null, null);
     }
 
     @Test
@@ -65,7 +79,8 @@ public class ConnectorActionTest {
         ConnectorAction.ActionType actionType = ConnectorAction.ActionType.PREDICT;
         String method = "http";
         String url = "https://test.com";
-        ConnectorAction action = new ConnectorAction(actionType, method, url, null, null, null, null);
+        String requestBody = "{\"input\": \"${parameters.input}\"}";
+        ConnectorAction action = new ConnectorAction(actionType, method, url, null, requestBody, null, null);
         BytesStreamOutput output = new BytesStreamOutput();
         action.writeTo(output);
         ConnectorAction action2 = new ConnectorAction(output.bytes().streamInput());
@@ -103,12 +118,18 @@ public class ConnectorActionTest {
         ConnectorAction.ActionType actionType = ConnectorAction.ActionType.PREDICT;
         String method = "http";
         String url = "https://test.com";
-        ConnectorAction action = new ConnectorAction(actionType, method, url, null, null, null, null);
+        String requestBody = "{\"input\": \"${parameters.input}\"}";
+        ConnectorAction action = new ConnectorAction(actionType, method, url, null, requestBody, null, null);
 
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         action.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String content = TestHelper.xContentBuilderToString(builder);
-        Assert.assertEquals("{\"action_type\":\"PREDICT\",\"method\":\"http\",\"url\":\"https://test.com\"}", content);
+        Assert
+            .assertEquals(
+                "{\"action_type\":\"PREDICT\",\"method\":\"http\",\"url\":\"https://test.com\","
+                    + "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\"}",
+                content
+            );
     }
 
     @Test

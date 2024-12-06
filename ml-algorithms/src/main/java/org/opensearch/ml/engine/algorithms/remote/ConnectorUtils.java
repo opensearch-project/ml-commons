@@ -336,7 +336,7 @@ public class ConnectorUtils {
 
         // Initialize the default method and requestBody
         String method = "POST";
-        String requestBody = null;
+        String requestBody = "{}";
         String url = "";
 
         switch (getRemoteServerFromURL(predictEndpoint)) {

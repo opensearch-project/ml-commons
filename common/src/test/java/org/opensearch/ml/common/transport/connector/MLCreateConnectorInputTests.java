@@ -158,6 +158,101 @@ public class MLCreateConnectorInputTests {
     }
 
     @Test
+    public void constructorMLCreateConnectorInput_NullDescription() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Connector description is null");
+        MLCreateConnectorInput
+            .builder()
+            .name("test_connector_name")
+            .description(null)
+            .version("1")
+            .protocol("http")
+            .parameters(Map.of("input", "test input value"))
+            .credential(Map.of("key", "test_key_value"))
+            .actions(List.of())
+            .access(AccessMode.PUBLIC)
+            .backendRoles(Arrays.asList("role1", "role2"))
+            .addAllBackendRoles(false)
+            .build();
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_NullParameters() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Connector parameters is null or empty list");
+        MLCreateConnectorInput
+            .builder()
+            .name("test_connector_name")
+            .description("this is a test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(null)
+            .credential(Map.of("key", "test_key_value"))
+            .actions(List.of())
+            .access(AccessMode.PUBLIC)
+            .backendRoles(Arrays.asList("role1", "role2"))
+            .addAllBackendRoles(false)
+            .build();
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_EmptyParameters() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Connector parameters is null or empty list");
+        MLCreateConnectorInput
+            .builder()
+            .name("test_connector_name")
+            .description("this is a test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(Map.of())
+            .credential(Map.of("key", "test_key_value"))
+            .actions(List.of())
+            .access(AccessMode.PUBLIC)
+            .backendRoles(Arrays.asList("role1", "role2"))
+            .addAllBackendRoles(false)
+            .build();
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_NullCredential() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Connector credential is null or empty list");
+        MLCreateConnectorInput
+            .builder()
+            .name("test_connector_name")
+            .description("this is a test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(Map.of("input", "test input value"))
+            .credential(null)
+            .actions(List.of())
+            .access(AccessMode.PUBLIC)
+            .backendRoles(Arrays.asList("role1", "role2"))
+            .addAllBackendRoles(false)
+            .build();
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_EmptyCredential() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Connector credential is null or empty list");
+        MLCreateConnectorInput
+            .builder()
+            .name("test_connector_name")
+            .description("this is a test connector")
+            .version("1")
+            .protocol("http")
+            .parameters(Map.of("input", "test input value"))
+            .credential(Map.of())
+            .actions(List.of())
+            .access(AccessMode.PUBLIC)
+            .backendRoles(Arrays.asList("role1", "role2"))
+            .addAllBackendRoles(false)
+            .build();
+    }
+
+    @Test
     public void testToXContent_FullFields() throws Exception {
         XContentBuilder builder = XContentFactory.jsonBuilder();
         mlCreateConnectorInput.toXContent(builder, ToXContent.EMPTY_PARAMS);
@@ -223,8 +318,11 @@ public class MLCreateConnectorInputTests {
         MLCreateConnectorInput mlCreateMinimalConnectorInput = MLCreateConnectorInput
             .builder()
             .name("test_connector_name")
+            .description("this is a test connector")
             .version("1")
             .protocol("http")
+            .parameters(Map.of("input", "test input value"))
+            .credential(Map.of("key", "test_key_value"))
             .build();
         readInputStream(mlCreateMinimalConnectorInput, parsedInput -> {
             assertEquals(mlCreateMinimalConnectorInput.getName(), parsedInput.getName());
