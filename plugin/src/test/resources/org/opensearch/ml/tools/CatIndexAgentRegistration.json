@@ -1,0 +1,19 @@
+{
+  "name": "list index tool flow agent",
+  "type": "flow",
+  "description": "this is a test agent",
+  "llm": {
+    "model_id": "dummy_model",
+    "parameters": {
+      "max_iteration": 5,
+      "stop_when_no_tool_found": true
+    }
+  },
+  "tools": [
+    {
+      "type": "CatIndexTool",
+      "name": "CatIndexTool"
+    }
+  ],
+  "app_type": "my_app"
+}
