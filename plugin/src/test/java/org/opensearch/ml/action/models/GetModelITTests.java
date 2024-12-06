@@ -29,6 +29,7 @@ public class GetModelITTests extends MLCommonsIntegTestCase {
             for (int retryAttempt = 1; retryAttempt <= MAX_RETRIES; retryAttempt++) {
                 try {
                     getModel(modelId);
+                    return;
                 } catch (OpenSearchTimeoutException e) {
                     logger.info("GetModelITTests attempt: {}", retryAttempt);
 
