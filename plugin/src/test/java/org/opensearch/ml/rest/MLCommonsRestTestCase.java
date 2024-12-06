@@ -930,6 +930,25 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         return parseResponseToMap(response);
     }
 
+    public Map predictTextEmbeddingModelIgnoreFunctionName(String modelId, MLInput mlInput) throws IOException {
+        Response response = null;
+        try {
+            response = TestHelper
+                .makeRequest(
+                    client(),
+                    "POST",
+                    "/_plugins/_ml/models/" + modelId + "/_predict",
+                    null,
+                    TestHelper.toJsonString(mlInput),
+                    null
+                );
+        } catch (ResponseException e) {
+            log.error(e.getMessage(), e);
+            response = e.getResponse();
+        }
+        return parseResponseToMap(response);
+    }
+
     public Consumer<Map<String, Object>> verifyTextEmbeddingModelDeployed() {
         return (modelProfile) -> {
             if (modelProfile.containsKey("model_state")) {
