@@ -63,6 +63,9 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         if (method == null) {
             throw new IllegalArgumentException("method can't null");
         }
+        if (requestBody == null) {
+            throw new IllegalArgumentException("request body can't null");
+        }
         this.actionType = actionType;
         this.method = method;
         this.url = url;

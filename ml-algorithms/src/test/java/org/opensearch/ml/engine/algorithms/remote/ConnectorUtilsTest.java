@@ -344,7 +344,7 @@ public class ConnectorUtilsTest {
         assertEquals(ConnectorAction.ActionType.BATCH_PREDICT_STATUS, result.getActionType());
         assertEquals("GET", result.getMethod());
         assertEquals("https://api.openai.com/v1/batches/${parameters.id}", result.getUrl());
-        assertNull(result.getRequestBody());
+        assertEquals("{}", result.getRequestBody());
         assertTrue(result.getHeaders().containsKey("Authorization"));
     }
 
@@ -355,6 +355,7 @@ public class ConnectorUtilsTest {
             .name("test")
             .protocol("http")
             .version("1")
+            .description("this is a test connector")
             .credential(Map.of("api_key", "credential_value"))
             .parameters(Map.of("param1", "value1"))
             .actions(
@@ -384,6 +385,6 @@ public class ConnectorUtilsTest {
             "https://bedrock.${parameters.region}.amazonaws.com/model-invocation-job/${parameters.processedJobArn}/stop",
             result.getUrl()
         );
-        assertNull(result.getRequestBody());
+        assertEquals("{}", result.getRequestBody());
     }
 }
