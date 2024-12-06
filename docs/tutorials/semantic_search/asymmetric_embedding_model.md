@@ -1,19 +1,26 @@
-# Topic
+# Tutorial: Generating Embeddings Using a Local Asymmetric Embedding Model in OpenSearch
 
-This tutorial shows how to generate embeddings using a local asymmetric embedding model in OpenSearch implemented in a Docker container .
+This tutorial demonstrates how to generate text embeddings using an asymmetric embedding model in OpenSearch, implemented within a Docker container. The example model used in this tutorial is the multilingual `intfloat/multilingual-e5-small` model from Hugging Face. You will learn how to prepare the model, register it in OpenSearch, and run inference to generate embeddings.
 
-Note: Replace the placeholders that start with `your_` with your own values.
+> **Note**: Make sure to replace all placeholders (e.g., `your_`) with your specific values.
 
-# Steps
+---
 
-## 1. Spin up a docker OpenSearch Cluster
+## Prerequisites
 
-With docker you can create a multi node cluster follow this docker-compose file as an example https://opensearch.org/docs/latest/install-and-configure/install-opensearch/docker/#sample-docker-compose-file-for-development
-.Make sure you have docker desktop installed
+- Docker Desktop installed and running on your local machine.
+- Basic familiarity with Docker and OpenSearch.
+- Access to the Hugging Face model `intfloat/multilingual-e5-small` (or another model of your choice).
+---
 
-  ### a. Update cluster settings
-The current step uses a docker-compose file that uses two opensearch Non-ML nodes. This requires you to update cluster settings
-so you can run a model.
+## Step 1: Spin Up a Docker OpenSearch Cluster
+
+To run OpenSearch in a local development environment, you can use Docker and a pre-configured `docker-compose` file.
+
+### a. Update Cluster Settings
+
+Before proceeding, ensure your cluster is configured to allow registering models. You can do this by updating the cluster settings via the following request:
+
 ```
 PUT _cluster/settings
 {
@@ -26,48 +33,96 @@ PUT _cluster/settings
 }
 ```
 
-  ###  b. Use a docker compose file
+This configuration ensures that OpenSearch can accept machine learning models from external URLs and can run models across non-ML nodes.
 
-Now that you have the docker-compose file you can use it by having docker dektop running in the background and then running 
-the command (within the same directory of the compose file) `docker-compose up -d` which will start opensearch in the background. 
+### b. Use a Docker Compose File
 
-## 2. Prepare the model for OpenSearch
-In this tutorial you will use a Hugging Face intfloat/multilingual-e5-small model (https://huggingface.co/intfloat/multilingual-e5-small) an asymmetric
-text embedding model capable of handling different languages.
-  
-###  a. Clone the model
-  You can find the steps within the models homepage click on the three dots just left of the train button. Then click **clone repository**
-for this specific tutorial you will have to execture teh following. Making sure you find a approriate place to host the model.
-1. `git lfs install`
-2. `git clone https://huggingface.co/intfloat/multilingual-e5-small`
-  ###  b. Zip the contents
-In order to send the OpenSearch the embedding model make sure to zip the model contents more specifically you will need to zip the following
-items in the directory that has the items `model.onnx, sentencepiece.bpe.model, tokenizer.json`. The **model.onnx** file is found within the 
-onnx directory of the repository you cloned. Now that you have the contents run the following in the relevant directory `zip -r intfloat-multilingual-e5-small-onnx.zip model.onnx tokenizer.json sentencepiece.bpe.model`
-This will create a zip file with the name **intfloat-multilingual-e5-small-onnx.zip**
-  ###  c. Calculate hash
-  Now that you have the zip file you must now calculate its hash so that you can use it on model registration. RUn the following within
-the directory that has the zip `shasum -a 256 intfloat-multilingual-e5-small-onnx.zip`. 
-  ###  d. service the zip file using a python server
-  With the zip file and its hash we should service it so that OpenSearch can find it and download it. Since this is for a local development
-we can simply host this locally using python. Navigate to the directory that has the zip file and run the following `python3 -m http.server 8080 --bind 0.0.0.0           
-` After step 4 you can cancel this server by executing ctrl + c. 
- 
+You can use this sample [file](https://opensearch.org/docs/latest/install-and-configure/install-opensearch/docker/#sample-docker-compose-file-for-development) as an example.
+Once your `docker-compose.yml` file is ready, run the following command to start OpenSearch in the background:
 
-## 3. Register a model group
-We will create a model group to associate the model run the following and take note of the model group id.
+```
+docker-compose up -d
+```
+
+---
+
+## Step 2: Prepare the Model for OpenSearch
+
+In this tutorial, we’ll use the Hugging Face model `intfloat/multilingual-e5-small`, which is capable of generating multilingual embeddings. Follow these steps to prepare and zip the model for use in OpenSearch.
+
+### a. Clone the Model from Hugging Face
+
+To download the model, use the following steps:
+
+1. Install Git Large File Storage (LFS) if you haven’t already:
+
+   ```
+   git lfs install
+   ```
+
+2. Clone the model repository:
+
+   ```
+   git clone https://huggingface.co/intfloat/multilingual-e5-small
+   ```
+
+This will download the model files into a directory on your local machine.
+
+### b. Zip the Model Files
+
+In order to upload the model to OpenSearch, you must zip the necessary model files (`model.onnx`, `sentencepiece.bpe.model`, and `tokenizer.json`). The `model.onnx` file is located in the `onnx` directory of the cloned repository.
+
+Run the following command in the directory containing these files:
+
+```
+zip -r intfloat-multilingual-e5-small-onnx.zip model.onnx tokenizer.json sentencepiece.bpe.model
+```
+
+This command will create a zip file named `intfloat-multilingual-e5-small-onnx.zip`.
+
+### c. Calculate the Model File Hash
+
+Before registering the model, you need to calculate the SHA-256 hash of the zip file. Run this command to generate the hash:
+
+```
+shasum -a 256 intfloat-multilingual-e5-small-onnx.zip
+```
+
+Make a note of the hash value, as you will need it during the model registration process.
+
+### d. Serve the Model File Using a Python HTTP Server
+
+To allow OpenSearch to access the model file, you need to serve it via HTTP. Since this is a local development environment, you can use Python's built-in HTTP server:
+
+Navigate to the directory containing the zip file and run the following command:
+
+```
+python3 -m http.server 8080 --bind 0.0.0.0
+```
+
+This will serve the zip file at `http://0.0.0.0:8080/intfloat-multilingual-e5-small-onnx.zip`. After registering the model, you can stop the server by pressing `Ctrl + C`.
+
+---
+
+## Step 3: Register a Model Group
+
+Before registering the model itself, you need to create a model group. This helps organize models in OpenSearch. Run the following request to create a new model group:
+
 ```
 POST /_plugins/_ml/model_groups/_register
 {
   "name": "Asymmetric Model Group",
-  "description": "A model group for local assymetric models"
+  "description": "A model group for local asymmetric models"
 }
 ```
 
-## 4. Register the model
-Now we can register the model which will retrieve the model from the python server since this is running within a docker
-container you will have to use the url `http://host.docker.internal:8080/intfloat-multilingual-e5-small-onnx.zip`. When
-running the command below make sure to take note of the model id returned by the OpenSearch call after calling the task API.
+Take note of the `model_group_id` returned in the response, as it will be required when registering the model.
+
+---
+
+## Step 4: Register the Model
+
+Now that you have the model zip file and the model group ID, you can register the model in OpenSearch. Run the following request:
 
 ```
 POST /_plugins/_ml/models/_register
@@ -82,45 +137,67 @@ POST /_plugins/_ml/models/_register
         "model_type": "bert",
         "embedding_dimension": 384,
         "framework_type": "sentence_transformers",
-        "query_prefix" : "query: ", 
-        "passage_prefix" : "passage: ",
-        "all_config" : "{  \"_name_or_path\": \"intfloat/multilingual-e5-small\",  \"architectures\": [    \"BertModel\"  ],  \"attention_probs_dropout_prob\": 0.1,  \"classifier_dropout\": null,  \"hidden_act\": \"gelu\",  \"hidden_dropout_prob\": 0.1,  \"hidden_size\": 384,  \"initializer_range\": 0.02,  \"intermediate_size\": 1536,  \"layer_norm_eps\": 1e-12,  \"max_position_embeddings\": 512,  \"model_type\": \"bert\",  \"num_attention_heads\": 12,  \"num_hidden_layers\": 12,  \"pad_token_id\": 0,  \"position_embedding_type\": \"absolute\",  \"tokenizer_class\": \"XLMRobertaTokenizer\",  \"transformers_version\": \"4.30.2\",  \"type_vocab_size\": 2,  \"use_cache\": true,  \"vocab_size\": 250037}"
+        "query_prefix": "query: ",
+        "passage_prefix": "passage: ",
+        "all_config": "{ \"_name_or_path\": \"intfloat/multilingual-e5-small\", \"architectures\": [ \"BertModel\" ], \"attention_probs_dropout_prob\": 0.1, \"hidden_size\": 384, \"num_attention_heads\": 12, \"num_hidden_layers\": 12, \"tokenizer_class\": \"XLMRobertaTokenizer\" }"
     },
     "url": "http://host.docker.internal:8080/intfloat-multilingual-e5-small-onnx.zip"
 }
+```
 
-```
-This returns a task id you can check whether the registration succeeded by running 
-```
+Replace `your_group_id` and `your_model_zip_content_hash_value` with the actual values from earlier. This will initiate the model registration process, and you’ll receive a task ID in the response.
+
+To check the status of the registration, run:
+
+```bash
 GET /_plugins/_ml/tasks/your_task_id
 ```
-After success make sure to take note of the model_id
 
-## 5. Deploy The model
+Once successful, note the `model_id` returned, as you'll need it for deployment and inference.
 
-After the registration is complete you can now deploy it
+---
+
+## Step 5: Deploy the Model
+
+After the model is registered, you can deploy it by running:
+
 ```
 POST /_plugins/_ml/models/your_model_id/_deploy
 ```
-Again this returns a task if run the aforementioned get task endpoint to check the status and after sometime
-the model id is now in the **DEPLOYED** state.
 
-## 6. Run Inference
-Wit the model now deployed you can run inference by seeing embeddings. In this secnario you can specify two types of embeddings
-one for passages and one for queries.
+Check the status of the deployment using the task ID:
 
-For example for embedding a passage you can run this
+```
+GET /_plugins/_ml/tasks/your_task_id
+```
+
+When the model is successfully deployed, it will be in the **DEPLOYED** state, and you can use it for inference.
+
+---
+
+## Step 6: Run Inference
+
+Now that your model is deployed, you can use it to generate text embeddings for both queries and passages.
+
+### a. Generating Passage Embeddings
+
+To generate embeddings for a passage, use the following request:
+
 ```
 POST /_plugins/_ml/_predict/text_embedding/your_model_id
-{                    
-  "parameters" : {
-    "content_type" : "passage"
+{
+  "parameters": {
+    "content_type": "passage"
   },
-  "text_docs":[ "Today is Friday, tomorrow will be my break day, After that I will go to the library, when is lunch?"], 
+  "text_docs": [
+    "Today is Friday, tomorrow will be my break day. After that, I will go to the library. When is lunch?"
+  ],
   "target_response": ["sentence_embedding"]
 }
 ```
-you should see a similar embedding of size 384.
+
+The response will include a sentence embedding of size 384:
+
 ```json
 {
   "inference_results": [
@@ -129,17 +206,8 @@ you should see a similar embedding of size 384.
         {
           "name": "sentence_embedding",
           "data_type": "FLOAT32",
-          "shape": [
-            384
-          ],
-          "data": [
-            0.0419328,
-            0.047480892,
-            ...
-            0.31158513,
-            0.21784715,
-            0.29523832
-          ]
+          "shape": [384],
+          "data": [0.0419328, 0.047480892, ..., 0.31158513, 0.21784715]
         }
       ]
     }
@@ -147,18 +215,23 @@ you should see a similar embedding of size 384.
 }
 ```
 
-Here is an example of a query embedding.
+### b. Generating Query Embeddings
+
+Similarly, you can generate embeddings for a query:
+
 ```
 POST /_plugins/_ml/_predict/text_embedding/your_model_id
-{                    
-  "parameters" : {
-    "content_type" : "query"
+{
+  "parameters": {
+    "content_type": "query"
   },
   "text_docs": ["What day is it today?"],
   "target_response": ["sentence_embedding"]
 }
 ```
-which gives back a result
+
+The response will look like this:
+
 ```json
 {
   "inference_results": [
@@ -167,29 +240,27 @@ which gives back a result
         {
           "name": "sentence_embedding",
           "data_type": "FLOAT32",
-          "shape": [
-            384
-          ],
-          "data": [
-            0.2338349,
-            -0.13603798,
-            ...
-            0.37335885,
-            0.10653384,
-            0.21653183
-          ]
+          "shape": [384],
+          "data": [0.2338349, -0.13603798, ..., 0.37335885, 0.10653384]
         }
       ]
     }
   ]
 }
 ```
-## Next steps
 
-- Create an ingest pipeline for your documents with assymetric embeddings
-- Run a query using KNN with your asymmetric model
+---
 
+## Next Steps
 
-# References
+- Create an ingest pipeline for processing documents using asymmetric embeddings.
+- Run a query using KNN (k-nearest neighbors) to search with your asymmetric model.
 
-Wang, Liang, et al. (2024). *Multilingual E5 Text Embeddings: A Technical Report*. arXiv preprint arXiv:2402.05672. [Link](https://arxiv.org/abs/2402.05672)
+---
+
+## References
+
+- Wang, Liang, et al. (2024). *Multilingual E5 Text Embeddings: A Technical Report*. arXiv preprint arXiv:2402.05672. [Link](https://arxiv.org/abs/2402.05672)
+
+---
+
