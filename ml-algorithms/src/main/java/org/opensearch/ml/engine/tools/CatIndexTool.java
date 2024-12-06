@@ -360,6 +360,11 @@ public class CatIndexTool implements Tool {
         public String getDefaultVersion() {
             return null;
         }
+
+        @Override
+        public List<String> getAllModelKeys() {
+            return List.of();
+        }
     }
 
     private Table getTableWithHeader() {

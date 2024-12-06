@@ -185,6 +185,7 @@ import org.opensearch.ml.engine.tools.IndexMappingTool;
 import org.opensearch.ml.engine.tools.MLModelTool;
 import org.opensearch.ml.engine.tools.SearchIndexTool;
 import org.opensearch.ml.engine.tools.VisualizationsTool;
+import org.opensearch.ml.engine.utils.AgentModelsSearcher;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.memory.ConversationalMemoryHandler;
@@ -351,6 +352,7 @@ public class MachineLearningPlugin extends Plugin
     private IndexUtils indexUtils;
     private ModelHelper modelHelper;
     private DiscoveryNodeHelper nodeHelper;
+    private AgentModelsSearcher agentModelsSearcher;
 
     private MLModelChunkUploader mlModelChunkUploader;
     private MLEngine mlEngine;
@@ -618,6 +620,8 @@ public class MachineLearningPlugin extends Plugin
             toolFactories.putAll(externalToolFactories);
         }
 
+        agentModelsSearcher = new AgentModelsSearcher(toolFactories);
+
         MLMemoryManager memoryManager = new MLMemoryManager(client, clusterService, new ConversationMetaIndex(client, clusterService));
         Map<String, Memory.Factory> memoryFactoryMap = new HashMap<>();
         ConversationIndexMemory.Factory conversationIndexMemoryFactory = new ConversationIndexMemory.Factory();
@@ -682,6 +686,7 @@ public class MachineLearningPlugin extends Plugin
                 mlStats,
                 mlTaskManager,
                 mlModelManager,
+                agentModelsSearcher,
                 mlIndicesHandler,
                 mlInputDatasetHandler,
                 mlTrainingTaskRunner,

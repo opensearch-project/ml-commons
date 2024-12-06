@@ -6,6 +6,8 @@
 package org.opensearch.ml.common.spi.tools;
 
 import org.opensearch.core.action.ActionListener;
+
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -127,5 +129,11 @@ public interface Tool {
          * @return the default tool version
          */
         String getDefaultVersion();
+
+        /**
+         * Get model id related field names
+         * @return the list of all model id related field names
+         */
+        List<String> getAllModelKeys();
     }
 }
