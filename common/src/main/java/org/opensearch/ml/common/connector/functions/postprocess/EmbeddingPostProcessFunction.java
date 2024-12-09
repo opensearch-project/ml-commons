@@ -18,8 +18,8 @@ import com.google.common.collect.ImmutableMap;
 
 /**
  * This is the default embedding post process function, the expected result from the model in two cases:
- * 1. A list of list of float for APIs embedding type is not enabled.
- * 2. A map of string to list of list of number for APIs that embedding type is enabled.
+ * 1. A {@link List} of {@link List} of {@link Float} {@link Float} for APIs embedding type is not enabled.
+ * 2. A map of string to {@link List} of {@link List} of {@link Number} for APIs that embedding type is enabled.
  * An example of enabled embedding type is cohere v2, the embedding API requires embedding_types as a mandatory field in the request body:
  * <a href="https://docs.cohere.com/reference/embed#request.body.embedding_types">...</a>
  * Currently, OpenAI Cohere and default sagemaker embedding models are using this function.
@@ -134,8 +134,8 @@ public class EmbeddingPostProcessFunction implements ConnectorPostProcessFunctio
      *     },
      *     ......
      *   }
-     * 1. When response filter is set to: $.embeddings.float, then the result is a list of list<Number>.
-     * 2. When response filter is set to: $.embeddings, then the result is a map of embedding type to list of list<Number>.
+     * 1. When response filter is set to: $.embeddings.float, then the result is a {@link List} of {@link List} of {@link Number}.
+     * 2. When response filter is set to: $.embeddings, then the result is a map of embedding type to {@link List} of {@link List} of {@link Number}.
      * 3. When response filter is not set which is the default case, and the result is same with case2.
      * @param modelOutput the embedding result of embedding type supported models.
      * @return List of ModelTensor that represent the embedding result including all different embedding types.
