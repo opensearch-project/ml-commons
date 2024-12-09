@@ -172,5 +172,10 @@ public class MLModelTool implements Tool {
         public String getDefaultVersion() {
             return null;
         }
+
+        @Override
+        public List<String> getAllModelKeys() {
+            return List.of(MODEL_ID_FIELD);
+        }
     }
 }

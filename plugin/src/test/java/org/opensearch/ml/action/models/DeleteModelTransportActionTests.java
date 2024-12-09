@@ -23,7 +23,12 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
+import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Rule;
@@ -36,12 +41,19 @@ import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.bulk.BulkItemResponse;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.ingest.GetPipelineAction;
+import org.opensearch.action.ingest.GetPipelineResponse;
+import org.opensearch.action.search.GetSearchPipelineAction;
+import org.opensearch.action.search.GetSearchPipelineResponse;
+import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -53,10 +65,15 @@ import org.opensearch.index.reindex.DeleteByQueryAction;
 import org.opensearch.index.reindex.ScrollableHitSource;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
+import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.engine.utils.AgentModelsSearcher;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.search.SearchHit;
+import org.opensearch.search.SearchHits;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -84,6 +101,9 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     BulkByScrollResponse bulkByScrollResponse;
 
     @Mock
+    SearchResponse searchResponse;
+
+    @Mock
     NamedXContentRegistry xContentRegistry;
 
     @Mock
@@ -103,6 +123,22 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     @Mock
     private ModelAccessControlHelper modelAccessControlHelper;
 
+    @Mock
+    private AgentModelsSearcher agentModelsSearcher;
+
+    @Mock
+    private GetSearchPipelineResponse getSearchPipelineResponse;
+
+    @Mock
+    private org.opensearch.search.pipeline.PipelineConfiguration searchPipelineConfiguration;
+
+    @Mock
+    GetPipelineResponse getIngestionPipelineResponse;
+
+    private BulkByScrollResponse emptyBulkByScrollResponse;
+
+    private Map<String, Object> configDataMap;
+
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
@@ -118,7 +154,8 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
                 settings,
                 xContentRegistry,
                 clusterService,
-                modelAccessControlHelper
+                modelAccessControlHelper,
+                agentModelsSearcher
             )
         );
 
@@ -132,6 +169,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         when(clusterService.getSettings()).thenReturn(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
+        prepare();
     }
 
     public void testDeleteModel_Success() throws IOException {
@@ -140,13 +178,6 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             listener.onResponse(deleteResponse);
             return null;
         }).when(client).delete(any(), any());
-
-        doAnswer(invocation -> {
-            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
-            BulkByScrollResponse response = new BulkByScrollResponse(new ArrayList<>(), null);
-            listener.onResponse(response);
-            return null;
-        }).when(client).execute(any(), any(), any());
 
         GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, false);
         doAnswer(invocation -> {
@@ -159,19 +190,172 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(deleteResponse);
     }
 
+    public void testDeleteModel_BlockedBySearchPipelineAndIngestionPipeline() throws IOException {
+        when(getSearchPipelineResponse.toString()).thenReturn(
+                StringUtils.toJson(Map.of("search_1", configDataMap))
+        );
+        doAnswer(invocation -> {
+            ActionListener<GetSearchPipelineResponse> listener = invocation.getArgument(2);
+            listener.onResponse(getSearchPipelineResponse);
+            return null;
+        }).when(client).execute(eq(GetSearchPipelineAction.INSTANCE), any(), any());
+
+        when(getIngestionPipelineResponse.toString()).thenReturn(
+                StringUtils.toJson(Map.of("ingest_1", Map.of("model_id", "test_id")))
+        );
+        doAnswer(invocation -> {
+            ActionListener<GetPipelineResponse> listener = invocation.getArgument(2);
+            listener.onResponse(getIngestionPipelineResponse);
+            return null;
+        }).when(client).execute(eq(GetPipelineAction.INSTANCE), any(), any());
+
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        String totalErrorMessage = argumentCaptor.getValue().getMessage();
+        String[] separateErrorMessages = totalErrorMessage.split("\\. ");
+        Set<String> generateErrorMessages = new HashSet<>(List.of(separateErrorMessages));
+        Set<String> expectedErrorMessages = new HashSet<>(List.of("1 ingest pipelines are still using this model, please delete or update the pipelines first: [ingest_1]", "1 search pipelines are still using this model, please delete or update the pipelines first: [search_1]"));
+        assertEquals(expectedErrorMessages, generateErrorMessages);
+    }
+
+    public void testDeleteModel_BlockedBySearchPipeline() throws IOException {
+        //org.opensearch.search.pipeline.PipelineConfiguration pipelineConfiguration = new PipelineConfiguration();
+        when(getSearchPipelineResponse.toString()).thenReturn(
+                StringUtils.toJson(Map.of("search_1", configDataMap, "indenpendent_search", Map.of("nothing", "nothinh")))
+        );
+
+        doAnswer(invocation -> {
+            ActionListener<GetSearchPipelineResponse> listener = invocation.getArgument(2);
+            listener.onResponse(getSearchPipelineResponse);
+            return null;
+        }).when(client).execute(eq(GetSearchPipelineAction.INSTANCE), any(), any());
+
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("1 search pipelines are still using this model, please delete or update the pipelines first: [search_1]", argumentCaptor.getValue().getMessage());
+    }
+
+    public void testDeleteModel_BlockedBySearchPipelineSingleModelId() throws IOException {
+        Map<String, Object> configDataMapWithSingleModelId = Map
+            .of("model_id", "test_id", "list_model_id", List.of("test_id"), "test_map_id", Map.of("map_model_id", "test_id"));
+
+        when(getSearchPipelineResponse.toString()).thenReturn(StringUtils.toJson(Map.of("search_1", configDataMapWithSingleModelId)));
+
+        doAnswer(invocation -> {
+            ActionListener<GetSearchPipelineResponse> listener = invocation.getArgument(2);
+            listener.onResponse(getSearchPipelineResponse);
+            return null;
+        }).when(client).execute(eq(GetSearchPipelineAction.INSTANCE), any(), any());
+
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "1 search pipelines are still using this model, please delete or update the pipelines first: [search_1]",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    public void testDeleteModel_BlockedBySearchPipelineListModelId() throws IOException {
+        Map<String, Object> configDataMapWithListModelId = Map
+            .of("single_model_id", "test_id", "model_id", List.of("test_id"), "test_map_id", Map.of("map_model_id", "test_id"));
+        when(getSearchPipelineResponse.toString()).thenReturn(StringUtils.toJson(Map.of("search_1", configDataMapWithListModelId)));
+        doAnswer(invocation -> {
+            ActionListener<GetSearchPipelineResponse> listener = invocation.getArgument(2);
+            listener.onResponse(getSearchPipelineResponse);
+            return null;
+        }).when(client).execute(eq(GetSearchPipelineAction.INSTANCE), any(), any());
+
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "1 search pipelines are still using this model, please delete or update the pipelines first: [search_1]",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    public void testDeleteModel_BlockedByIngestPipeline() throws IOException {
+        Map<String, Object> ingestPipelineConfig1 = Map.of("model_id", "test_id");
+        Map<String, Object> ingestPipelineConfig2 = Map.of("nothing", "test_id");
+        when(getIngestionPipelineResponse.toString())
+            .thenReturn(StringUtils.toJson(Map.of("ingest_1", ingestPipelineConfig1, "ingest_2", ingestPipelineConfig2)));
+        // when(getIngestionPipelineResponse.pipelines())
+        // .thenReturn(List.of(ingestPipelineConfiguration, independentIngestPipelineConfiguration));
+        doAnswer(invocation -> {
+            ActionListener<GetPipelineResponse> listener = invocation.getArgument(2);
+            listener.onResponse(getIngestionPipelineResponse);
+            return null;
+        }).when(client).execute(eq(GetPipelineAction.INSTANCE), any(), any());
+
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "1 ingest pipelines are still using this model, please delete or update the pipelines first: [ingest_1]",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    public void testDeleteModel_BlockedByAgent() throws IOException {
+        XContentBuilder content = XContentBuilder.builder(XContentType.JSON.xContent());
+        content.startObject();
+        content.field(MLAgent.IS_HIDDEN_FIELD, false);
+        content.endObject();
+        SearchHit hit = new SearchHit(1, "1", null, null).sourceRef(BytesReference.bytes(content));
+        SearchHits searchHits = new SearchHits(new SearchHit[] { hit }, new TotalHits(1, TotalHits.Relation.EQUAL_TO), 1.0f);
+        when(searchResponse.getHits()).thenReturn(searchHits);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), any());
+
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "1 agents are still using this model, please delete or update the agents first, all visible agents are: [1]",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    public void testDeleteModel_BlockedByHiddenAgent() throws IOException {
+        XContentBuilder content = XContentBuilder.builder(XContentType.JSON.xContent());
+        content.startObject();
+        content.field(MLAgent.IS_HIDDEN_FIELD, true);
+        content.endObject();
+        SearchHit hit = new SearchHit(1, "1", null, null).sourceRef(BytesReference.bytes(content));
+        XContentBuilder content2 = XContentBuilder.builder(XContentType.JSON.xContent());
+        content2.startObject();
+        content2.field(MLAgent.IS_HIDDEN_FIELD, false);
+        content2.endObject();
+        SearchHit hit2 = new SearchHit(2, "2", null, null).sourceRef(BytesReference.bytes(content2));
+        SearchHits searchHits = new SearchHits(new SearchHit[] { hit, hit2 }, new TotalHits(1, TotalHits.Relation.EQUAL_TO), 1.0f);
+        when(searchResponse.getHits()).thenReturn(searchHits);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), any());
+
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "2 agents are still using this model, please delete or update the agents first, all visible agents are: [2]",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
     public void testDeleteRemoteModel_Success() throws IOException {
         doAnswer(invocation -> {
             ActionListener<DeleteResponse> listener = invocation.getArgument(1);
             listener.onResponse(deleteResponse);
             return null;
         }).when(client).delete(any(), any());
-
-        doAnswer(invocation -> {
-            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
-            BulkByScrollResponse response = new BulkByScrollResponse(new ArrayList<>(), null);
-            listener.onResponse(response);
-            return null;
-        }).when(client).execute(any(), any(), any());
 
         GetResponse getResponse = prepareModelWithFunction(MLModelState.REGISTERED, null, false, FunctionName.REMOTE);
         doAnswer(invocation -> {
@@ -194,13 +378,6 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             listener.onFailure(new RuntimeException("runtime exception"));
             return null;
         }).when(client).delete(any(), any());
-
-        doAnswer(invocation -> {
-            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
-            BulkByScrollResponse response = new BulkByScrollResponse(new ArrayList<>(), null);
-            listener.onResponse(response);
-            return null;
-        }).when(client).execute(any(), any(), any());
 
         GetResponse getResponse = prepareModelWithFunction(MLModelState.REGISTERED, null, false, FunctionName.REMOTE);
         doAnswer(invocation -> {
@@ -225,13 +402,6 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             listener.onFailure(new RuntimeException("runtime exception"));
             return null;
         }).when(client).delete(any(), any());
-
-        doAnswer(invocation -> {
-            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
-            BulkByScrollResponse response = new BulkByScrollResponse(new ArrayList<>(), null);
-            listener.onResponse(response);
-            return null;
-        }).when(client).execute(any(), any(), any());
 
         GetResponse getResponse = prepareModelWithFunction(MLModelState.REGISTERED, null, false, FunctionName.TEXT_EMBEDDING);
         doAnswer(invocation -> {
@@ -279,13 +449,6 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).delete(any(), any());
 
-        doAnswer(invocation -> {
-            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
-            BulkByScrollResponse response = new BulkByScrollResponse(new ArrayList<>(), null);
-            listener.onResponse(response);
-            return null;
-        }).when(client).execute(any(), any(), any());
-
         GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, true);
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = invocation.getArgument(1);
@@ -304,13 +467,6 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             listener.onResponse(deleteResponse);
             return null;
         }).when(client).delete(any(), any());
-
-        doAnswer(invocation -> {
-            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
-            BulkByScrollResponse response = new BulkByScrollResponse(new ArrayList<>(), null);
-            listener.onResponse(response);
-            return null;
-        }).when(client).execute(any(), any(), any());
 
         GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, true);
         doAnswer(invocation -> {
@@ -332,13 +488,6 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             listener.onResponse(deleteResponse);
             return null;
         }).when(client).delete(any(), any());
-
-        doAnswer(invocation -> {
-            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
-            BulkByScrollResponse response = new BulkByScrollResponse(new ArrayList<>(), null);
-            listener.onResponse(response);
-            return null;
-        }).when(client).execute(any(), any(), any());
 
         GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, false);
         doAnswer(invocation -> {
@@ -412,13 +561,6 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).delete(any(), any());
 
-        doAnswer(invocation -> {
-            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
-            BulkByScrollResponse response = new BulkByScrollResponse(new ArrayList<>(), null);
-            listener.onResponse(response);
-            return null;
-        }).when(client).execute(any(), any(), any());
-
         GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, false);
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = invocation.getArgument(1);
@@ -462,13 +604,6 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).delete(any(), any());
 
-        doAnswer(invocation -> {
-            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
-            BulkByScrollResponse response = new BulkByScrollResponse(new ArrayList<>(), null);
-            listener.onResponse(response);
-            return null;
-        }).when(client).execute(any(), any(), any());
-
         GetResponse getResponse = prepareModelWithFunction(MLModelState.REGISTERED, null, false, FunctionName.REMOTE);
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = invocation.getArgument(1);
@@ -492,13 +627,6 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             listener.onResponse(deleteResponse);
             return null;
         }).when(client).delete(any(), any());
-
-        doAnswer(invocation -> {
-            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
-            BulkByScrollResponse response = new BulkByScrollResponse(new ArrayList<>(), null);
-            listener.onResponse(response);
-            return null;
-        }).when(client).execute(any(), any(), any());
 
         GetResponse getResponse = prepareModelWithFunction(MLModelState.REGISTERED, null, false, FunctionName.REMOTE);
         doAnswer(invocation -> {
@@ -526,12 +654,6 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).delete(any(), any());
 
-        doAnswer(invocation -> {
-            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
-            BulkByScrollResponse response = new BulkByScrollResponse(new ArrayList<>(), null);
-            listener.onResponse(response);
-            return null;
-        }).when(client).execute(any(), any(), any());
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
         ArgumentCaptor<OpenSearchStatusException> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -655,5 +777,48 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         GetResult getResult = new GetResult("indexName", "111", 111l, 111l, 111l, true, bytesReference, null, null);
         GetResponse getResponse = new GetResponse(getResult);
         return getResponse;
+    }
+
+    private void prepare() throws IOException {
+        emptyBulkByScrollResponse = new BulkByScrollResponse(new ArrayList<>(), null);
+        SearchHits hits = new SearchHits(new SearchHit[] {}, new TotalHits(0, TotalHits.Relation.EQUAL_TO), 0.0f);
+        when(searchResponse.getHits()).thenReturn(hits);
+        // when(getIngestionPipelineResponse.pipelines()).thenReturn(List.of());
+        when(getIngestionPipelineResponse.toString()).thenReturn(StringUtils.toJson(Map.of()));
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<BulkByScrollResponse> listener = invocation.getArgument(2);
+            listener.onResponse(emptyBulkByScrollResponse);
+            return null;
+        }).when(client).execute(eq(DeleteByQueryAction.INSTANCE), any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<GetPipelineResponse> listener = invocation.getArgument(2);
+            listener.onResponse(getIngestionPipelineResponse);
+            return null;
+        }).when(client).execute(eq(GetPipelineAction.INSTANCE), any(), any());
+
+        // when(getSearchPipelineResponse.pipelines()).thenReturn(List.of());
+        when(getSearchPipelineResponse.toString()).thenReturn(StringUtils.toJson(Map.of()));
+        doAnswer(invocation -> {
+            ActionListener<GetSearchPipelineResponse> listener = invocation.getArgument(2);
+            listener.onResponse(getSearchPipelineResponse);
+            return null;
+        }).when(client).execute(eq(GetSearchPipelineAction.INSTANCE), any(), any());
+        configDataMap = Map
+            .of("single_model_id", "test_id", "list_model_id", List.of("test_id"), "test_map_id", Map.of("model_id", "test_id"));
+        doAnswer(invocation -> new SearchRequest()).when(agentModelsSearcher).constructQueryRequestToSearchModelIdInsideAgent(any());
+
+        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, false);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
     }
 }
