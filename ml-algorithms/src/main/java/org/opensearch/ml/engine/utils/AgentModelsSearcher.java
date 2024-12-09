@@ -24,7 +24,13 @@ public class AgentModelsSearcher {
         }
     }
 
-    public SearchRequest constructQueryRequestToSearchModelId(String candidateModelId) {
+    /**
+     * Construct a should query to search all agent which containing candidate model Id
+    
+     @param candidateModelId the candidate model Id
+     @return a should search request towards agent index.
+     */
+    public SearchRequest constructQueryRequestToSearchModelIdInsideAgent(String candidateModelId) {
         SearchRequest searchRequest = new SearchRequest(ML_AGENT_INDEX);
         BoolQueryBuilder shouldQuery = QueryBuilders.boolQuery();
         for (String keyField : relatedModelIdSet) {

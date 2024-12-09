@@ -264,7 +264,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
 
     private void checkAgentBeforeDeleteModel(String modelId, ActionListener<Boolean> actionListener) {
         // check whether agent are using them
-        SearchRequest searchAgentRequest = agentModelsSearcher.constructQueryRequestToSearchModelId(modelId);
+        SearchRequest searchAgentRequest = agentModelsSearcher.constructQueryRequestToSearchModelIdInsideAgent(modelId);
         client.search(searchAgentRequest, ActionListener.wrap(searchResponse -> {
             SearchHit[] searchHits = searchResponse.getHits().getHits();
             if (searchHits.length == 0) {
