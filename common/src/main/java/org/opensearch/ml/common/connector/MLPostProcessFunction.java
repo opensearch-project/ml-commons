@@ -17,6 +17,7 @@ import org.opensearch.ml.common.connector.functions.postprocess.EmbeddingPostPro
 public class MLPostProcessFunction {
 
     public static final String COHERE_EMBEDDING = "connector.post_process.cohere.embedding";
+    public static final String COHERE_V2_EMBEDDING = "connector.post_process.cohere_v2.embedding";
     public static final String OPENAI_EMBEDDING = "connector.post_process.openai.embedding";
     public static final String BEDROCK_EMBEDDING = "connector.post_process.bedrock.embedding";
     public static final String BEDROCK_BATCH_JOB_ARN = "connector.post_process.bedrock.batch_job_arn";
@@ -35,6 +36,7 @@ public class MLPostProcessFunction {
         CohereRerankPostProcessFunction cohereRerankPostProcessFunction = new CohereRerankPostProcessFunction();
         JSON_PATH_EXPRESSION.put(OPENAI_EMBEDDING, "$.data[*].embedding");
         JSON_PATH_EXPRESSION.put(COHERE_EMBEDDING, "$.embeddings");
+        JSON_PATH_EXPRESSION.put(COHERE_V2_EMBEDDING, "$.embeddings.float");
         JSON_PATH_EXPRESSION.put(DEFAULT_EMBEDDING, "$[*]");
         JSON_PATH_EXPRESSION.put(BEDROCK_EMBEDDING, "$.embedding");
         JSON_PATH_EXPRESSION.put(BEDROCK_BATCH_JOB_ARN, "$");
@@ -42,6 +44,7 @@ public class MLPostProcessFunction {
         JSON_PATH_EXPRESSION.put(DEFAULT_RERANK, "$[*]");
         POST_PROCESS_FUNCTIONS.put(OPENAI_EMBEDDING, embeddingPostProcessFunction);
         POST_PROCESS_FUNCTIONS.put(COHERE_EMBEDDING, embeddingPostProcessFunction);
+        POST_PROCESS_FUNCTIONS.put(COHERE_V2_EMBEDDING, embeddingPostProcessFunction);
         POST_PROCESS_FUNCTIONS.put(DEFAULT_EMBEDDING, embeddingPostProcessFunction);
         POST_PROCESS_FUNCTIONS.put(BEDROCK_EMBEDDING, bedrockEmbeddingPostProcessFunction);
         POST_PROCESS_FUNCTIONS.put(BEDROCK_BATCH_JOB_ARN, batchJobArnPostProcessFunction);

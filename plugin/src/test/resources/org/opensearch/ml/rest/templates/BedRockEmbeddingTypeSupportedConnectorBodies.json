@@ -100,7 +100,7 @@
     "parameters": {
       "region": "%s",
       "service_name": "bedrock",
-      "model_name": "amazon.titan-embed-text-v1"
+      "model_name": "amazon.titan-embed-text-v2:0"
     },
     "credential": {
       "access_key": "%s",

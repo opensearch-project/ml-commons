@@ -321,7 +321,7 @@ public class RestBedRockInferenceIT extends MLCommonsRestTestCase {
                 if (testCaseName.equals("response_filter_to_embedding_concrete_type")) {
                     assertEquals(errorMsg, 1024, ((List) ((Map<?, ?>) outputList.get(0)).get("data")).size());
                 } else {
-                    assertEquals(errorMsg, 1536, ((List) ((Map<?, ?>) outputList.get(0)).get("data")).size());
+                    assertEquals(errorMsg, 1024, ((List) ((Map<?, ?>) outputList.get(0)).get("data")).size());
                 }
             }
         }
