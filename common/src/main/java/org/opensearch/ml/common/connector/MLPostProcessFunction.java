@@ -6,15 +6,13 @@
 package org.opensearch.ml.common.connector;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 
 import org.opensearch.ml.common.connector.functions.postprocess.BedrockBatchJobArnPostProcessFunction;
 import org.opensearch.ml.common.connector.functions.postprocess.BedrockEmbeddingPostProcessFunction;
 import org.opensearch.ml.common.connector.functions.postprocess.CohereRerankPostProcessFunction;
+import org.opensearch.ml.common.connector.functions.postprocess.ConnectorPostProcessFunction;
 import org.opensearch.ml.common.connector.functions.postprocess.EmbeddingPostProcessFunction;
-import org.opensearch.ml.common.output.model.ModelTensor;
 
 public class MLPostProcessFunction {
 
@@ -28,7 +26,7 @@ public class MLPostProcessFunction {
 
     private static final Map<String, String> JSON_PATH_EXPRESSION = new HashMap<>();
 
-    private static final Map<String, Function<Object, List<ModelTensor>>> POST_PROCESS_FUNCTIONS = new HashMap<>();
+    private static final Map<String, ConnectorPostProcessFunction> POST_PROCESS_FUNCTIONS = new HashMap<>();
 
     static {
         EmbeddingPostProcessFunction embeddingPostProcessFunction = new EmbeddingPostProcessFunction();
@@ -55,7 +53,7 @@ public class MLPostProcessFunction {
         return JSON_PATH_EXPRESSION.get(postProcessFunction);
     }
 
-    public static Function<Object, List<ModelTensor>> get(String postProcessFunction) {
+    public static ConnectorPostProcessFunction get(String postProcessFunction) {
         return POST_PROCESS_FUNCTIONS.get(postProcessFunction);
     }
 

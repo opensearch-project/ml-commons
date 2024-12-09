@@ -242,6 +242,91 @@ public class RestBedRockInferenceIT extends MLCommonsRestTestCase {
         }
     }
 
+    public void test_bedrockEmbeddingTypeSupportedModel_withDifferentResponseFilters() throws Exception {
+        if (tokenNotSet()) {
+            return;
+        }
+        String templates = Files
+            .readString(
+                Path
+                    .of(
+                        RestMLPredictionAction.class
+                            .getClassLoader()
+                            .getResource("org/opensearch/ml/rest/templates/BedRockEmbeddingTypeSupportedConnectorBodies.json")
+                            .toURI()
+                    )
+            );
+        Map<String, Object> templateMap = StringUtils.gson.fromJson(templates, Map.class);
+        for (Map.Entry<String, Object> templateEntry : templateMap.entrySet()) {
+            String bedrockEmbeddingModelName = "embedding type supported model " + randomAlphaOfLength(5);
+            String testCaseName = templateEntry.getKey();
+            String modelId = registerRemoteModel(
+                String
+                    .format(
+                        StringUtils.gson.toJson(templateEntry.getValue()),
+                        GITHUB_CI_AWS_REGION,
+                        AWS_ACCESS_KEY_ID,
+                        AWS_SECRET_ACCESS_KEY,
+                        AWS_SESSION_TOKEN
+                    ),
+                bedrockEmbeddingModelName,
+                true
+            );
+
+            List<String> input = new ArrayList<>();
+            input.add("hello world");
+            TextDocsInputDataSet inputDataSet = TextDocsInputDataSet.builder().docs(input).build();
+            MLInput mlInput = MLInput.builder().inputDataset(inputDataSet).algorithm(FunctionName.TEXT_EMBEDDING).build();
+            Map inferenceResult = predictTextEmbeddingModel(modelId, mlInput);
+            String errorMsg = String
+                .format(Locale.ROOT, "Failing test case name: %s, inference result: %s", testCaseName, gson.toJson(inferenceResult));
+
+            // when response filter is to: embedding, and the request embedding types have multiple values, the ModelTensor's data is not
+            // null.
+            if (testCaseName.equals("response_filter_to_embedding")) {
+                assertTrue(errorMsg, inferenceResult.containsKey("inference_results"));
+                List output = (List) inferenceResult.get("inference_results");
+                assertEquals(errorMsg, 1, output.size());
+                assertTrue(errorMsg, output.get(0) instanceof Map);
+                assertTrue(errorMsg, ((Map<?, ?>) output.get(0)).get("output") instanceof List);
+                List outputList = (List) ((Map<?, ?>) output.get(0)).get("output");
+                assertEquals(errorMsg, 1, outputList.size());
+                assertTrue(errorMsg, outputList.get(0) instanceof Map);
+                assertEquals(errorMsg, 1024, ((List) ((Map<?, ?>) outputList.get(0)).get("data")).size());
+            } else if (testCaseName.equals("response_filter_to_embedding_by_type")) {
+                // when response filter is embedding_by_type, then the result should be in ModelTensor's dataAsMap field.
+                assertTrue(errorMsg, inferenceResult.containsKey("inference_results"));
+                List output = (List) inferenceResult.get("inference_results");
+                assertEquals(errorMsg, 1, output.size());
+                assertTrue(errorMsg, output.get(0) instanceof Map);
+                assertTrue(errorMsg, ((Map<?, ?>) output.get(0)).get("output") instanceof List);
+                List outputList = (List) ((Map<?, ?>) output.get(0)).get("output");
+                assertEquals(errorMsg, 1, outputList.size());
+                assertTrue(errorMsg, outputList.get(0) instanceof Map);
+                assertTrue(errorMsg, ((Map<?, ?>) outputList.get(0)).get("dataAsMap") instanceof Map);
+                Map dataAsMap = (Map) ((Map) ((Map<?, ?>) outputList.get(0)).get("dataAsMap")).get("response");
+                assertTrue(errorMsg, dataAsMap.containsKey("float") && dataAsMap.containsKey("binary"));
+            } else if (testCaseName.equals("response_filter_to_embedding_concrete_type")
+                || testCaseName.equals("response_filter_not_set")) {
+                // when response filter is to: concrete embedding type or (not set and the request embedding types have only one value),
+                // the ModelTensor's data is not null.
+                assertTrue(errorMsg, inferenceResult.containsKey("inference_results"));
+                List output = (List) inferenceResult.get("inference_results");
+                assertEquals(errorMsg, 1, output.size());
+                assertTrue(errorMsg, output.get(0) instanceof Map);
+                assertTrue(errorMsg, ((Map<?, ?>) output.get(0)).get("output") instanceof List);
+                List outputList = (List) ((Map<?, ?>) output.get(0)).get("output");
+                assertEquals(errorMsg, 1, outputList.size());
+                assertTrue(errorMsg, outputList.get(0) instanceof Map);
+                if (testCaseName.equals("response_filter_to_embedding_concrete_type")) {
+                    assertEquals(errorMsg, 1024, ((List) ((Map<?, ?>) outputList.get(0)).get("data")).size());
+                } else {
+                    assertEquals(errorMsg, 1536, ((List) ((Map<?, ?>) outputList.get(0)).get("data")).size());
+                }
+            }
+        }
+    }
+
     private boolean tokenNotSet() {
         if (AWS_ACCESS_KEY_ID == null || AWS_SECRET_ACCESS_KEY == null || AWS_SESSION_TOKEN == null) {
             log.info("#### The AWS credentials are not set. Skipping test. ####");

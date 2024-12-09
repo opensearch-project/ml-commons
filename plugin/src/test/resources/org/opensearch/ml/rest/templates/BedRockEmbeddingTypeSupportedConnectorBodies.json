@@ -1,0 +1,125 @@
+{
+  "response_filter_to_embedding": {
+    "name": "Amazon Bedrock Connector with response filter to embedding",
+    "description": "Amazon Bedrock Connector with response filter to embedding",
+    "version": 1,
+    "protocol": "aws_sigv4",
+    "parameters": {
+      "region": "%s",
+      "service_name": "bedrock",
+      "model_name": "amazon.titan-embed-text-v2:0",
+      "response_filter": "$.embedding"
+    },
+    "credential": {
+      "access_key": "%s",
+      "secret_key": "%s",
+      "session_token": "%s"
+    },
+    "actions": [
+      {
+        "action_type": "predict",
+        "method": "POST",
+        "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model_name}/invoke",
+        "headers": {
+          "content-type": "application/json",
+          "x-amz-content-sha256": "required"
+        },
+        "request_body": "{ \"inputText\": \"${parameters.inputText}\", \"embeddingTypes\": [\"float\", \"binary\"] }",
+        "pre_process_function": "connector.pre_process.bedrock.embedding",
+        "post_process_function": "connector.post_process.bedrock.embedding"
+      }
+    ]
+  },
+  "response_filter_to_embedding_by_type": {
+    "name": "Amazon Bedrock Connector with response filter to embeddingByType",
+    "description": "Amazon Bedrock Connector with response filter to embeddingByType",
+    "version": 1,
+    "protocol": "aws_sigv4",
+    "parameters": {
+      "region": "%s",
+      "service_name": "bedrock",
+      "model_name": "amazon.titan-embed-text-v2:0",
+      "response_filter": "$.embeddingsByType"
+    },
+    "credential": {
+      "access_key": "%s",
+      "secret_key": "%s",
+      "session_token": "%s"
+    },
+    "actions": [
+      {
+        "action_type": "predict",
+        "method": "POST",
+        "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model_name}/invoke",
+        "headers": {
+          "content-type": "application/json",
+          "x-amz-content-sha256": "required"
+        },
+        "request_body": "{ \"inputText\": \"${parameters.inputText}\", \"embeddingTypes\": [\"float\", \"binary\"] }",
+        "pre_process_function": "connector.pre_process.bedrock.embedding",
+        "post_process_function": "connector.post_process.bedrock.embedding"
+      }
+    ]
+  },
+  "response_filter_to_embedding_concrete_type": {
+    "name": "Amazon Bedrock Connector with response filter set to concrete embedding type",
+    "description": "Amazon Bedrock Connector with response filter set to concrete embedding type",
+    "version": 1,
+    "protocol": "aws_sigv4",
+    "parameters": {
+      "region": "%s",
+      "service_name": "bedrock",
+      "model_name": "amazon.titan-embed-text-v2:0",
+      "response_filter": "$.embeddingsByType.float"
+    },
+    "credential": {
+      "access_key": "%s",
+      "secret_key": "%s",
+      "session_token": "%s"
+    },
+    "actions": [
+      {
+        "action_type": "predict",
+        "method": "POST",
+        "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model_name}/invoke",
+        "headers": {
+          "content-type": "application/json",
+          "x-amz-content-sha256": "required"
+        },
+        "request_body": "{ \"inputText\": \"${parameters.inputText}\", \"embeddingTypes\": [\"float\", \"binary\"] }",
+        "pre_process_function": "connector.pre_process.bedrock.embedding",
+        "post_process_function": "connector.post_process.bedrock.embedding"
+      }
+    ]
+  },
+  "response_filter_not_set": {
+    "name": "Amazon Bedrock Connector with response filter not set for v1 model",
+    "description": "Amazon Bedrock Connector with response filter not set for v1 model",
+    "version": 1,
+    "protocol": "aws_sigv4",
+    "parameters": {
+      "region": "%s",
+      "service_name": "bedrock",
+      "model_name": "amazon.titan-embed-text-v1"
+    },
+    "credential": {
+      "access_key": "%s",
+      "secret_key": "%s",
+      "session_token": "%s"
+    },
+    "actions": [
+      {
+        "action_type": "predict",
+        "method": "POST",
+        "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model_name}/invoke",
+        "headers": {
+          "content-type": "application/json",
+          "x-amz-content-sha256": "required"
+        },
+        "request_body": "{ \"inputText\": \"${parameters.inputText}\"}",
+        "pre_process_function": "connector.pre_process.bedrock.embedding",
+        "post_process_function": "connector.post_process.bedrock.embedding"
+      }
+    ]
+  }
+}

@@ -12,7 +12,7 @@ import java.util.Map;
 
 import org.opensearch.ml.common.output.model.ModelTensor;
 
-public class BedrockBatchJobArnPostProcessFunction extends ConnectorPostProcessFunction<Map<String, String>> {
+public class BedrockBatchJobArnPostProcessFunction implements ConnectorPostProcessFunction {
     public static final String JOB_ARN = "jobArn";
     public static final String PROCESSED_JOB_ARN = "processedJobArn";
 
@@ -28,7 +28,8 @@ public class BedrockBatchJobArnPostProcessFunction extends ConnectorPostProcessF
     }
 
     @Override
-    public List<ModelTensor> process(Map<String, String> jobInfo) {
+    public List<ModelTensor> process(Object input) {
+        Map<String, String> jobInfo = (Map<String, String>) input;
         List<ModelTensor> modelTensors = new ArrayList<>();
         Map<String, String> processedResult = new HashMap<>();
         processedResult.putAll(jobInfo);
