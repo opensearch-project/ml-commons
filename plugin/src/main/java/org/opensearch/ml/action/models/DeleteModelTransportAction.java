@@ -23,7 +23,6 @@ import java.util.Deque;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -335,7 +334,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     }
 
     private void checkDownstreamTaskBeforeDeleteModel(String modelId, Boolean isHidden, ActionListener<DeleteResponse> actionListener) {
-        // Now 3 is: 1. Agent 2. Search pipeline 3. ingest pipeline
+        // Now checks 3 resources associated with with the model id 1. Agent 2. Search pipeline 3. ingest pipeline
         CountDownLatch countDownLatch = new CountDownLatch(3);
         AtomicBoolean noneBlocked = new AtomicBoolean(true);
         ConcurrentLinkedQueue<String> errorMessages = new ConcurrentLinkedQueue<>();

@@ -23,8 +23,7 @@ public class AgentModelsSearcher {
             relatedModelIdSet.addAll(toolFactory.getAllModelKeys());
         }
     }
-    
-    
+
     public SearchRequest constructQueryRequestToSearchModelId(String candidateModelId) {
         SearchRequest searchRequest = new SearchRequest(ML_AGENT_INDEX);
         BoolQueryBuilder shouldQuery = QueryBuilders.boolQuery();
