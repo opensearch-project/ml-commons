@@ -265,7 +265,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
 
     private void checkAgentBeforeDeleteModel(String modelId, ActionListener<Boolean> actionListener) {
         // check whether agent are using them
-        SearchRequest searchAgentRequest = agentModelsSearcher.constructQueryRequest(modelId);
+        SearchRequest searchAgentRequest = agentModelsSearcher.constructQueryRequestToSearchModelId(modelId);
         client.search(searchAgentRequest, ActionListener.wrap(searchResponse -> {
             SearchHit[] searchHits = searchResponse.getHits().getHits();
             if (searchHits.length == 0) {
@@ -490,7 +490,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         return dependentPipelineConfigurations;
     }
 
-    // This method is to go through the pipeline configs and he configuration is a map of string to objects.
+    // This method is to go through the pipeline configs and the configuration is a map of string to objects.
     // Objects can be a list or a map. we will search exhaustively through the configuration for any match of the candidateId.
     private Boolean searchThroughConfig(Object searchCandidate, String candidateId) {
         // Use a stack to store the elements to be processed
@@ -503,9 +503,9 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
             String currentKey = current.getLeft();
             Object currentCandidate = current.getRight();
 
-            if (currentCandidate instanceof String) {
+            if (currentCandidate instanceof String && candidateId.equals(currentCandidate)) {
                 // Check for a match
-                if (Objects.equals(currentKey, PIPELINE_TARGET_MODEL_KEY) && Objects.equals(candidateId, currentCandidate)) {
+                if (PIPELINE_TARGET_MODEL_KEY.equals(currentKey)) {
                     return true;
                 }
             } else if (currentCandidate instanceof List<?>) {

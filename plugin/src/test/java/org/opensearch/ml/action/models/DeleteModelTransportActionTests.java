@@ -812,7 +812,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         }).when(client).execute(eq(GetSearchPipelineAction.INSTANCE), any(), any());
         configDataMap = Map
             .of("single_model_id", "test_id", "list_model_id", List.of("test_id"), "test_map_id", Map.of("model_id", "test_id"));
-        doAnswer(invocation -> new SearchRequest()).when(agentModelsSearcher).constructQueryRequest(any());
+        doAnswer(invocation -> new SearchRequest()).when(agentModelsSearcher).constructQueryRequestToSearchModelId(any());
 
         GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, false);
         doAnswer(invocation -> {
