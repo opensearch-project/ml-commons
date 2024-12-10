@@ -1,0 +1,25 @@
+{
+  "type": "object",
+  "properties": {
+    "_meta": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "schema_version"
+      ],
+      "additionalProperties": false
+    },
+    "properties": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "_meta",
+    "properties"
+  ],
+  "additionalProperties": false
+}
