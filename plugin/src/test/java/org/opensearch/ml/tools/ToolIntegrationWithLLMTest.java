@@ -30,7 +30,7 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public abstract class ToolIntegrationWithLLMTest extends RestBaseAgentToolsIT {
 
-    private final int MAX_RETRIES = this.getClusterHosts().size();
+    private int MAX_RETRIES;
     private static final int DEFAULT_TASK_RESULT_QUERY_INTERVAL_IN_MILLISECOND = 1000;
 
     protected HttpServer server;
@@ -55,6 +55,7 @@ public abstract class ToolIntegrationWithLLMTest extends RestBaseAgentToolsIT {
         TimeUnit.SECONDS.sleep(1);
         setupConversationalAgent(modelId);
         log.info("model_id: {}, agent_id: {}", modelId, agentId);
+        MAX_RETRIES = this.getClusterHosts().size();
     }
 
     @After
