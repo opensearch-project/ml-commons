@@ -141,8 +141,8 @@ public class CreateConversationRequest extends ActionRequest {
             String applicationType = null;
             Map<String, String> additionalInfo = null;
 
-            for(String key : body.keySet()){
-                switch(key){
+            for (String key : body.keySet()) {
+                switch (key) {
                     case ActionConstants.REQUEST_CONVERSATION_NAME_FIELD:
                         name = (String) body.get(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD);
                         break;

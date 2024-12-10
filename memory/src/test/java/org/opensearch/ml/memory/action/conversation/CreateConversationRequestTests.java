@@ -137,22 +137,18 @@ public class CreateConversationRequestTests extends OpenSearchTestCase {
     public void testRestRequest_UnknownFields_ThenFail() throws IOException {
         String name = "test-name";
         RestRequest req = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
-                .withContent(
-                        new BytesArray(
-                                gson.toJson(Map.of(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD, name, "unknown_field", "some value"))
-                        ),
-                        MediaTypeRegistry.JSON
-                )
-                .build();
+            .withContent(
+                new BytesArray(gson.toJson(Map.of(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD, name, "unknown_field", "some value"))),
+                MediaTypeRegistry.JSON
+            )
+            .build();
 
-        try{
+        try {
             CreateConversationRequest request = CreateConversationRequest.fromRestRequest(req);
             fail("Expected IllegalArgumentException due to unknown field");
-        }
-        catch(OpenSearchParseException e){
+        } catch (OpenSearchParseException e) {
             assertEquals(e.getMessage(), "Invalid field [unknown_field] found in request body");
-        }
-        catch( Exception e){
+        } catch (Exception e) {
             fail("Expected OpenSearchParseException due to unknown field, got " + e.getClass().getName());
         }
 

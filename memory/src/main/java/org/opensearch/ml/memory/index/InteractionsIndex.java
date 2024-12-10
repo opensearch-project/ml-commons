@@ -183,11 +183,7 @@ public class InteractionsIndex {
                         if (additionalInfo != null && !additionalInfo.isEmpty()) {
                             sourceMap.put(ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD, additionalInfo);
                         }
-                        IndexRequest request = Requests
-                            .indexRequest(INTERACTIONS_INDEX_NAME)
-                            .source(
-                                    sourceMap
-                            );
+                        IndexRequest request = Requests.indexRequest(INTERACTIONS_INDEX_NAME).source(sourceMap);
                         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
                             ActionListener<String> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
                             ActionListener<IndexResponse> al = ActionListener.wrap(resp -> {

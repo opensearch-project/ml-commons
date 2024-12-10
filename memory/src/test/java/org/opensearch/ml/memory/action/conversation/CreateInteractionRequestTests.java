@@ -157,34 +157,32 @@ public class CreateInteractionRequestTests extends OpenSearchTestCase {
 
     public void testFromRestRequest_UnknownFields_ThenFail() throws IOException {
         Map<String, Object> params = Map
-                .of(
-                        ActionConstants.INPUT_FIELD,
-                        "input",
-                        ActionConstants.PROMPT_TEMPLATE_FIELD,
-                        "pt",
-                        ActionConstants.AI_RESPONSE_FIELD,
-                        "response",
-                        ActionConstants.RESPONSE_ORIGIN_FIELD,
-                        "origin",
-                        ActionConstants.ADDITIONAL_INFO_FIELD,
-                        Collections.singletonMap("metadata", "some meta"),
-                        "unknown_field",
-                        "some value"
-                );
+            .of(
+                ActionConstants.INPUT_FIELD,
+                "input",
+                ActionConstants.PROMPT_TEMPLATE_FIELD,
+                "pt",
+                ActionConstants.AI_RESPONSE_FIELD,
+                "response",
+                ActionConstants.RESPONSE_ORIGIN_FIELD,
+                "origin",
+                ActionConstants.ADDITIONAL_INFO_FIELD,
+                Collections.singletonMap("metadata", "some meta"),
+                "unknown_field",
+                "some value"
+            );
 
         RestRequest rrequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
-                .withParams(Map.of(ActionConstants.MEMORY_ID, "cid"))
-                .withContent(new BytesArray(gson.toJson(params)), MediaTypeRegistry.JSON)
-                .build();
+            .withParams(Map.of(ActionConstants.MEMORY_ID, "cid"))
+            .withContent(new BytesArray(gson.toJson(params)), MediaTypeRegistry.JSON)
+            .build();
 
-        try{
+        try {
             CreateInteractionRequest request = CreateInteractionRequest.fromRestRequest(rrequest);
             fail("Expected IllegalArgumentException due to unknown field");
-        }
-        catch (IllegalArgumentException e){
+        } catch (IllegalArgumentException e) {
             assertEquals(e.getMessage(), "Invalid field [unknown_field] found in request body");
-        }
-        catch (Exception e){
+        } catch (Exception e) {
             fail("Expected IllegalArgumentException due to unknown field, got " + e.getClass().getName());
         }
     }
@@ -199,22 +197,21 @@ public class CreateInteractionRequestTests extends OpenSearchTestCase {
         params.put(ActionConstants.ADDITIONAL_INFO_FIELD, Collections.emptyMap());
 
         RestRequest rrequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
-                .withParams(Map.of(ActionConstants.MEMORY_ID, "cid"))
-                .withContent(new BytesArray(gson.toJson(params)), MediaTypeRegistry.JSON)
-                .build();
+            .withParams(Map.of(ActionConstants.MEMORY_ID, "cid"))
+            .withContent(new BytesArray(gson.toJson(params)), MediaTypeRegistry.JSON)
+            .build();
 
-        try{
+        try {
             CreateInteractionRequest request = CreateInteractionRequest.fromRestRequest(rrequest);
             fail("Expected IllegalArgumentException due to all fields empty");
-        }
-        catch (IllegalArgumentException e){
-            assertEquals(e.getMessage(), "At least one of the following parameters must be non-empty: input, prompt_template, response, origin, additional_info");
-        }
-        catch (Exception e){
+        } catch (IllegalArgumentException e) {
+            assertEquals(
+                e.getMessage(),
+                "At least one of the following parameters must be non-empty: input, prompt_template, response, origin, additional_info"
+            );
+        } catch (Exception e) {
             fail("Expected IllegalArgumentException due to all fields empty, got " + e.getClass().getName());
         }
     }
-
-
 
 }
