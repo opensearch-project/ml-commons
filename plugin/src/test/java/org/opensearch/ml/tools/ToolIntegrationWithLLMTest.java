@@ -30,7 +30,7 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public abstract class ToolIntegrationWithLLMTest extends RestBaseAgentToolsIT {
 
-    private static final int MAX_RETRIES = 5;
+    private final int MAX_RETRIES = this.getClusterHosts().size();
     private static final int DEFAULT_TASK_RESULT_QUERY_INTERVAL_IN_MILLISECOND = 1000;
 
     protected HttpServer server;
