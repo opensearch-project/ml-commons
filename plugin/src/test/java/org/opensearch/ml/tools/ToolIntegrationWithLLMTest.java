@@ -8,23 +8,31 @@ package org.opensearch.ml.tools;
 import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Predicate;
 
 import org.junit.After;
 import org.junit.Before;
 import org.opensearch.client.Response;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.rest.RestBaseAgentToolsIT;
 import org.opensearch.ml.utils.TestHelper;
 
 import com.sun.net.httpserver.HttpServer;
 
+import lombok.SneakyThrows;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public abstract class ToolIntegrationWithLLMTest extends RestBaseAgentToolsIT {
+
+    private int MAX_RETRIES;
+    private static final int DEFAULT_TASK_RESULT_QUERY_INTERVAL_IN_MILLISECOND = 1000;
+
     protected HttpServer server;
     protected String modelId;
     protected String agentId;
@@ -47,6 +55,7 @@ public abstract class ToolIntegrationWithLLMTest extends RestBaseAgentToolsIT {
         TimeUnit.SECONDS.sleep(1);
         setupConversationalAgent(modelId);
         log.info("model_id: {}, agent_id: {}", modelId, agentId);
+        MAX_RETRIES = this.getClusterHosts().size();
     }
 
     @After
@@ -62,7 +71,46 @@ public abstract class ToolIntegrationWithLLMTest extends RestBaseAgentToolsIT {
     @After
     public void deleteModel() throws IOException {
         undeployModel(modelId);
+        checkForModelUndeployedStatus(modelId);
         deleteModel(client(), modelId, null);
+    }
+
+    @SneakyThrows
+    private void checkForModelUndeployedStatus(String modelId) {
+        Predicate<Response> condition = response -> {
+            try {
+                Map<String, Object> responseInMap = parseResponseToMap(response);
+                MLModelState state = MLModelState.from(responseInMap.get(MLModel.MODEL_STATE_FIELD).toString());
+                return MLModelState.UNDEPLOYED.equals(state);
+            } catch (Exception e) {
+                return false;
+            }
+        };
+        waitResponseMeetingCondition("GET", "/_plugins/_ml/models/" + modelId, null, condition);
+    }
+
+    @SneakyThrows
+    protected Response waitResponseMeetingCondition(String method, String endpoint, String jsonEntity, Predicate<Response> condition) {
+        for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            Response response = TestHelper.makeRequest(client(), method, endpoint, null, jsonEntity, null);
+            assertEquals(RestStatus.OK, RestStatus.fromCode(response.getStatusLine().getStatusCode()));
+            if (condition.test(response)) {
+                return response;
+            }
+            logger.info("The {}-th attempt on {}:{} . response: {}", attempt, method, endpoint, response.toString());
+            Thread.sleep(DEFAULT_TASK_RESULT_QUERY_INTERVAL_IN_MILLISECOND);
+        }
+        fail(
+            String
+                .format(
+                    Locale.ROOT,
+                    "The response failed to meet condition after %d attempts. Attempted to perform %s : %s",
+                    MAX_RETRIES,
+                    method,
+                    endpoint
+                )
+        );
+        return null;
     }
 
     private String setUpConnectorWithRetry(int maxRetryTimes) throws InterruptedException {
