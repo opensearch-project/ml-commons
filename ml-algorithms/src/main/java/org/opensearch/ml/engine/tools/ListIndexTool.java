@@ -109,9 +109,8 @@ public class ListIndexTool implements Tool {
 
     @Override
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
-        // TODO: This logic exactly matches the OpenSearch _cat/indices REST action. If code at
-        // o.o.rest/action/cat/RestIndicesAction.java changes those changes need to be reflected here
-        // https://github.com/opensearch-project/ml-commons/pull/1582#issuecomment-1796962876
+        // TODO: This logic exactly matches the OpenSearch _list/indices REST action. If code at
+        // o.o.rest/action/list/RestIndicesListAction.java changes those changes need to be reflected here
         @SuppressWarnings("unchecked")
         List<String> indexList = parameters.containsKey("indices")
             ? gson.fromJson(parameters.get("indices"), List.class)
