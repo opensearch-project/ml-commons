@@ -472,6 +472,11 @@ public class AgentUtils {
         if (toolSpecConfigMap != null) {
             toolParams.putAll(toolSpecConfigMap);
         }
+        toolParams.put("llm_generated_action_input", actionInput);
+        if (isJson(actionInput)) {
+            Map<String, String> params = getParameterMap(gson.fromJson(actionInput, Map.class));
+            toolParams.putAll(params);
+        }
         if (tools.get(action).useOriginalInput()) {
             toolParams.put("input", question);
             lastActionInput.set(question);
@@ -486,10 +491,6 @@ public class AgentUtils {
             }
         } else {
             toolParams.put("input", actionInput);
-            if (isJson(actionInput)) {
-                Map<String, String> params = getParameterMap(gson.fromJson(actionInput, Map.class));
-                toolParams.putAll(params);
-            }
         }
         return toolParams;
     }
