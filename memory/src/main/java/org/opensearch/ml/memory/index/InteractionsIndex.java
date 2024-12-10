@@ -22,6 +22,7 @@ import static org.opensearch.ml.common.utils.IndexUtils.DEFAULT_INDEX_SETTINGS;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -161,28 +162,28 @@ public class InteractionsIndex {
             if (indexExists) {
                 this.conversationMetaIndex.checkAccess(conversationId, ActionListener.wrap(access -> {
                     if (access) {
-                        IndexRequest request = Requests
-                            .indexRequest(INTERACTIONS_INDEX_NAME)
-                            .source(
-                                ConversationalIndexConstants.INTERACTIONS_ORIGIN_FIELD,
-                                origin,
-                                ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD,
-                                conversationId,
-                                ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD,
-                                input,
-                                ConversationalIndexConstants.INTERACTIONS_PROMPT_TEMPLATE_FIELD,
-                                promptTemplate,
-                                ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD,
-                                response,
-                                ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD,
-                                additionalInfo,
-                                ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD,
-                                timestamp,
-                                ConversationalIndexConstants.PARENT_INTERACTIONS_ID_FIELD,
-                                parintid,
-                                ConversationalIndexConstants.INTERACTIONS_TRACE_NUMBER_FIELD,
-                                traceNumber
-                            );
+                        Map<String, Object> sourceMap = new HashMap<>();
+                        sourceMap.put(ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD, conversationId);
+                        sourceMap.put(ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD, timestamp);
+                        sourceMap.put(ConversationalIndexConstants.PARENT_INTERACTIONS_ID_FIELD, parintid);
+                        sourceMap.put(ConversationalIndexConstants.INTERACTIONS_TRACE_NUMBER_FIELD, traceNumber);
+
+                        if (input != null && !input.trim().isEmpty()) {
+                            sourceMap.put(ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD, input);
+                        }
+                        if (promptTemplate != null && !promptTemplate.trim().isEmpty()) {
+                            sourceMap.put(ConversationalIndexConstants.INTERACTIONS_PROMPT_TEMPLATE_FIELD, promptTemplate);
+                        }
+                        if (response != null && !response.trim().isEmpty()) {
+                            sourceMap.put(ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD, response);
+                        }
+                        if (origin != null && !origin.trim().isEmpty()) {
+                            sourceMap.put(ConversationalIndexConstants.INTERACTIONS_ORIGIN_FIELD, origin);
+                        }
+                        if (additionalInfo != null && !additionalInfo.isEmpty()) {
+                            sourceMap.put(ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD, additionalInfo);
+                        }
+                        IndexRequest request = Requests.indexRequest(INTERACTIONS_INDEX_NAME).source(sourceMap);
                         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
                             ActionListener<String> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
                             ActionListener<IndexResponse> al = ActionListener.wrap(resp -> {

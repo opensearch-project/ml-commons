@@ -27,6 +27,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
+import org.opensearch.OpenSearchParseException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.common.bytes.BytesReference;
@@ -131,5 +132,25 @@ public class CreateConversationRequestTests extends OpenSearchTestCase {
         Assert.assertNull(request.getApplicationType());
         Assert.assertEquals("value1", request.getAdditionalInfos().get("key1"));
         Assert.assertEquals(123, request.getAdditionalInfos().get("key2"));
+    }
+
+    public void testRestRequest_UnknownFields_ThenFail() throws IOException {
+        String name = "test-name";
+        RestRequest req = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withContent(
+                new BytesArray(gson.toJson(Map.of(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD, name, "unknown_field", "some value"))),
+                MediaTypeRegistry.JSON
+            )
+            .build();
+
+        try {
+            CreateConversationRequest request = CreateConversationRequest.fromRestRequest(req);
+            fail("Expected IllegalArgumentException due to unknown field");
+        } catch (OpenSearchParseException e) {
+            assertEquals(e.getMessage(), "Invalid field [unknown_field] found in request body");
+        } catch (Exception e) {
+            fail("Expected OpenSearchParseException due to unknown field, got " + e.getClass().getName());
+        }
+
     }
 }

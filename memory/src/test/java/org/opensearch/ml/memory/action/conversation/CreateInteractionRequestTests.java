@@ -19,6 +19,7 @@ package org.opensearch.ml.memory.action.conversation;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
 import org.junit.Before;
@@ -153,4 +154,64 @@ public class CreateInteractionRequestTests extends OpenSearchTestCase {
         assert (request.getParentIid().equals("parentId"));
         assert (request.getTraceNumber().equals(1));
     }
+
+    public void testFromRestRequest_UnknownFields_ThenFail() throws IOException {
+        Map<String, Object> params = Map
+            .of(
+                ActionConstants.INPUT_FIELD,
+                "input",
+                ActionConstants.PROMPT_TEMPLATE_FIELD,
+                "pt",
+                ActionConstants.AI_RESPONSE_FIELD,
+                "response",
+                ActionConstants.RESPONSE_ORIGIN_FIELD,
+                "origin",
+                ActionConstants.ADDITIONAL_INFO_FIELD,
+                Collections.singletonMap("metadata", "some meta"),
+                "unknown_field",
+                "some value"
+            );
+
+        RestRequest rrequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withParams(Map.of(ActionConstants.MEMORY_ID, "cid"))
+            .withContent(new BytesArray(gson.toJson(params)), MediaTypeRegistry.JSON)
+            .build();
+
+        try {
+            CreateInteractionRequest request = CreateInteractionRequest.fromRestRequest(rrequest);
+            fail("Expected IllegalArgumentException due to unknown field");
+        } catch (IllegalArgumentException e) {
+            assertEquals(e.getMessage(), "Invalid field [unknown_field] found in request body");
+        } catch (Exception e) {
+            fail("Expected IllegalArgumentException due to unknown field, got " + e.getClass().getName());
+        }
+    }
+
+    public void testFromRestRequest_AllFieldsEmpty_ThenFail() throws IOException {
+        Map<String, Object> params = new HashMap<>();
+
+        params.put(ActionConstants.INPUT_FIELD, "");
+        params.put(ActionConstants.PROMPT_TEMPLATE_FIELD, null);
+        params.put(ActionConstants.AI_RESPONSE_FIELD, " ");
+        params.put(ActionConstants.RESPONSE_ORIGIN_FIELD, null);
+        params.put(ActionConstants.ADDITIONAL_INFO_FIELD, Collections.emptyMap());
+
+        RestRequest rrequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withParams(Map.of(ActionConstants.MEMORY_ID, "cid"))
+            .withContent(new BytesArray(gson.toJson(params)), MediaTypeRegistry.JSON)
+            .build();
+
+        try {
+            CreateInteractionRequest request = CreateInteractionRequest.fromRestRequest(rrequest);
+            fail("Expected IllegalArgumentException due to all fields empty");
+        } catch (IllegalArgumentException e) {
+            assertEquals(
+                e.getMessage(),
+                "At least one of the following parameters must be non-empty: input, prompt_template, response, origin, additional_info"
+            );
+        } catch (Exception e) {
+            fail("Expected IllegalArgumentException due to all fields empty, got " + e.getClass().getName());
+        }
+    }
+
 }

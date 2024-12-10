@@ -166,9 +166,19 @@ public class CreateInteractionRequest extends ActionRequest {
                     tracenum = parser.intValue(false);
                     break;
                 default:
-                    parser.skipChildren();
-                    break;
+                    throw new IllegalArgumentException("Invalid field [" + fieldName + "] found in request body");
             }
+        }
+
+        boolean allFieldsEmpty = (input == null || input.trim().isEmpty())
+            && (prompt == null || prompt.trim().isEmpty())
+            && (response == null || response.trim().isEmpty())
+            && (origin == null || origin.trim().isEmpty())
+            && (addinf == null || addinf.isEmpty());
+        if (allFieldsEmpty) {
+            throw new IllegalArgumentException(
+                "At least one of the following parameters must be non-empty: " + "input, prompt_template, response, origin, additional_info"
+            );
         }
 
         return new CreateInteractionRequest(cid, input, prompt, response, origin, addinf, parintid, tracenum);
