@@ -22,16 +22,19 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
 public class FileUtilsTest {
-    private final TemporaryFolder tempDir = new TemporaryFolder();
+    private TemporaryFolder tempDir;
 
     @Before
     public void setUp() throws Exception {
+        tempDir = new TemporaryFolder();
         tempDir.create();
     }
 
     @After
-    public void tearUp() {
-        tempDir.delete();
+    public void tearDown() {
+        if (tempDir != null) {
+            tempDir.delete();
+        }
     }
 
     @Test
