@@ -46,10 +46,10 @@ import org.opensearch.index.IndexSettings;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
+import org.opensearch.ml.common.spi.tools.WithoutModelTool;
 
 import lombok.Getter;
 import lombok.Setter;
-import org.opensearch.ml.common.spi.tools.WithoutModelTool;
 
 @ToolAnnotation(CatIndexTool.TYPE)
 public class CatIndexTool implements WithoutModelTool {

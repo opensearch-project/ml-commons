@@ -25,10 +25,10 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
+import org.opensearch.ml.common.spi.tools.WithoutModelTool;
 
 import lombok.Getter;
 import lombok.Setter;
-import org.opensearch.ml.common.spi.tools.WithoutModelTool;
 
 @ToolAnnotation(IndexMappingTool.TYPE)
 public class IndexMappingTool implements WithoutModelTool {
