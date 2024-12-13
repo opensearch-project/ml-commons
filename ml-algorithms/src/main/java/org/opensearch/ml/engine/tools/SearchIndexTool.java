@@ -11,7 +11,6 @@ import java.io.IOException;
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -24,8 +23,8 @@ import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
+import org.opensearch.ml.common.spi.tools.WithoutModelTool;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
@@ -44,7 +43,7 @@ import lombok.extern.log4j.Log4j2;
 @Setter
 @Log4j2
 @ToolAnnotation(SearchIndexTool.TYPE)
-public class SearchIndexTool implements Tool {
+public class SearchIndexTool implements WithoutModelTool {
 
     public static final String INPUT_FIELD = "input";
     public static final String INDEX_FIELD = "index";
@@ -149,7 +148,7 @@ public class SearchIndexTool implements Tool {
         }
     }
 
-    public static class Factory implements Tool.Factory<SearchIndexTool> {
+    public static class Factory implements WithoutModelTool.Factory<SearchIndexTool> {
 
         private Client client;
         private static Factory INSTANCE;
@@ -197,9 +196,5 @@ public class SearchIndexTool implements Tool {
             return null;
         }
 
-        @Override
-        public List<String> getAllModelKeys() {
-            return List.of();
-        }
     }
 }

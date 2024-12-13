@@ -6,7 +6,6 @@
 package org.opensearch.ml.engine.tools;
 
 import java.util.Arrays;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -21,7 +20,7 @@ import org.opensearch.core.common.Strings;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
-import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.common.spi.tools.WithoutModelTool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.builder.SearchSourceBuilder;
@@ -33,7 +32,7 @@ import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 @ToolAnnotation(VisualizationsTool.TYPE)
-public class VisualizationsTool implements Tool {
+public class VisualizationsTool implements WithoutModelTool {
     public static final String NAME = "FindVisualizations";
     public static final String TYPE = "VisualizationTool";
     public static final String VERSION = "v1.0";
@@ -126,7 +125,7 @@ public class VisualizationsTool implements Tool {
         return parameters.containsKey("input") && !Strings.isNullOrEmpty(parameters.get("input"));
     }
 
-    public static class Factory implements Tool.Factory<VisualizationsTool> {
+    public static class Factory implements WithoutModelTool.Factory<VisualizationsTool> {
         private Client client;
 
         private static Factory INSTANCE;
@@ -174,11 +173,6 @@ public class VisualizationsTool implements Tool {
         @Override
         public String getDefaultVersion() {
             return null;
-        }
-
-        @Override
-        public List<String> getAllModelKeys() {
-            return List.of();
         }
     }
 }
