@@ -86,7 +86,7 @@ public class IndexUtils {
         return mapping;
     }
 
-    /*
+    /**
         - Checks if mapping is a valid json
         - Validates mapping against a schema found in mappings/schema.json
         - Schema validates the following:
