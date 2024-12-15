@@ -59,10 +59,38 @@ result = predictor.predict(data={
     ]
 })
 
-print(json.dumps(sorted(result, key=lambda x: x['index']), indent=2))
+print(json.dumps(result, indent=2))
 ```
 
-The reranking results are as follows:
+The reranking result is ordering by the highest score first:
+```
+[
+  {
+    "index": 2,
+    "score": 0.92879725
+  },
+  {
+    "index": 0,
+    "score": 0.013636836
+  },
+  {
+    "index": 1,
+    "score": 0.000593021
+  },
+  {
+    "index": 3,
+    "score": 0.00012148176
+  }
+]
+```
+
+You can sort the result by index number.
+
+```python
+print(json.dumps(result, indent=2))
+```
+
+The results are as follows:
 
 ```
 [
@@ -139,8 +167,8 @@ POST /_plugins/_ml/connectors/_create
       """,
       "request_body": "{ \"query\": \"${parameters.query}\", \"texts\": ${parameters.texts} }",
       "post_process_function": """
-        if (params.result == null) {
-          return "no result generated";
+        if (params.result == null || params.result.length > 0) {
+          throw new IllegalArgumentException("Post process function input is empty.");
         }
         def outputs = params.result;
         def scores = new Double[outputs.length];
@@ -207,8 +235,8 @@ POST /_plugins/_ml/connectors/_create
       """,
       "request_body": "{ \"query\": \"${parameters.query}\", \"texts\": ${parameters.texts} }",
       "post_process_function": """
-        if (params.result == null) {
-          return "no result generated";
+        if (params.result == null || params.result.length > 0) {
+          throw new IllegalArgumentException("Post process function input is empty.");
         }
         def outputs = params.result;
         def scores = new Double[outputs.length];
@@ -284,6 +312,10 @@ By default, the SageMaker model output has the following format:
 ```json
 [
   {
+    "index": 2,
+    "score": 0.92879725
+  },
+  {
     "index": 0,
     "score": 0.013636836
   },
@@ -292,17 +324,13 @@ By default, the SageMaker model output has the following format:
     "score": 0.000593021
   },
   {
-    "index": 2,
-    "score": 0.92879725
-  },
-  {
     "index": 3,
     "score": 0.00012148176
   }
 ]
 ```
 
-The connector `post_process_function` transforms the model's output into a format that the [Reranker processor](https://opensearch.org/docs/latest/search-plugins/search-pipelines/rerank-processor/) can interpret. This adapted format is as follows:
+The connector `post_process_function` transforms the model's output into a format that the [Reranker processor](https://opensearch.org/docs/latest/search-plugins/search-pipelines/rerank-processor/) can interpretm, and order result by index. This adapted format is as follows:
 ```json
 {
   "inference_results": [
