@@ -114,8 +114,8 @@ POST /_plugins/_ml/connectors/_create
       """,
       "request_body": "{ \"documents\": ${parameters.texts}, \"query\": \"${parameters.query}\", \"api_version\": ${parameters.api_version}}",
       "post_process_function": """
-        if (params.results == null) {
-          return "no result generated";
+        if (params.result == null || params.result.length > 0) {
+          throw new IllegalArgumentException("Post process function input is empty.");
         }
         def outputs = params.results;
         def relevance_scores = new Double[outputs.length];
@@ -185,8 +185,8 @@ POST /_plugins/_ml/connectors/_create
       """,
       "request_body": "{ \"documents\": ${parameters.texts}, \"query\": \"${parameters.query}\", \"api_version\": ${parameters.api_version}}",
       "post_process_function": """
-        if (params.results == null) {
-          return "no result generated";
+        if (params.result == null || params.result.length > 0) {
+          throw new IllegalArgumentException("Post process function input is empty.");
         }
         def outputs = params.results;
         def relevance_scores = new Double[outputs.length];
@@ -280,7 +280,7 @@ By default, Amazon Bedrock Rerank API output has the following format:
 ]
 ```
 
-The connector `post_process_function` transforms the model's output into a format that the [Reranker processor](https://opensearch.org/docs/latest/search-plugins/search-pipelines/rerank-processor/) can interpret. This adapted format is as follows:
+The connector `post_process_function` transforms the model's output into a format that the [Reranker processor](https://opensearch.org/docs/latest/search-plugins/search-pipelines/rerank-processor/) can interpret, and orders result by index. This adapted format is as follows:
 ```json
 {
   "inference_results": [
