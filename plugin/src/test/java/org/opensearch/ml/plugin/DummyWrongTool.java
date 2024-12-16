@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.plugin;
 
-import java.util.List;
 import java.util.Map;
 
 import org.opensearch.core.action.ActionListener;

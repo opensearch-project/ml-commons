@@ -26,7 +26,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Function;
 import java.util.function.Supplier;
 
 import org.apache.commons.lang3.tuple.Pair;
@@ -253,8 +252,6 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
             if (countDownLatch.getCount() == 0) {
                 if (noneBlocked.get()) {
                     deleteModel(modelId, isHidden, actionListener);
-                } else {
-                    actionListener.onFailure(new OpenSearchStatusException(String.join(". ", errorMessages), RestStatus.CONFLICT));
                 }
             }
         }, e -> {
@@ -268,7 +265,6 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         checkIngestPipelineBeforeDeleteModel(modelId, countDownActionListener);
         checkSearchPipelineBeforeDeleteModel(modelId, countDownActionListener);
     }
-
 
     private void deleteModel(String modelId, Boolean isHidden, ActionListener<DeleteResponse> actionListener) {
         DeleteRequest deleteRequest = new DeleteRequest(ML_MODEL_INDEX, modelId).setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
@@ -359,7 +355,6 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         }));
 
     }
-
 
     private void deleteModelChunksAndController(
         ActionListener<DeleteResponse> actionListener,
@@ -471,7 +466,6 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         }
         return dependentPipelineConfigurations;
     }
-
 
     // This method is to go through the pipeline configs and the configuration is a map of string to objects.
     // Objects can be a list or a map. we will search exhaustively through the configuration for any match of the candidateId.

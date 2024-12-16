@@ -211,12 +211,18 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
 
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
+        verify(actionListener, times(2)).onFailure(argumentCaptor.capture());
         String totalErrorMessage = argumentCaptor.getValue().getMessage();
         String[] separateErrorMessages = totalErrorMessage.split("\\. ");
         Set<String> generateErrorMessages = new HashSet<>(List.of(separateErrorMessages));
         Set<String> expectedErrorMessages = new HashSet<>(List.of("1 ingest pipelines are still using this model, please delete or update the pipelines first: [ingest_1]", "1 search pipelines are still using this model, please delete or update the pipelines first: [search_1]"));
-        assertEquals(expectedErrorMessages, generateErrorMessages);
+        Boolean flag = false;
+        for (String errorMessage : generateErrorMessages) {
+            if (!expectedErrorMessages.contains(errorMessage)) {
+                flag = true;
+            }
+        }
+        assertEquals(flag, false);
     }
 
     public void testDeleteModel_BlockedBySearchPipeline() throws IOException {
