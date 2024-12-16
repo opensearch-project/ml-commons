@@ -23,6 +23,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
+import lombok.extern.log4j.Log4j2;
+import org.apache.commons.lang3.math.NumberUtils;
 import org.apache.logging.log4j.util.Strings;
 import org.opensearch.action.admin.cluster.health.ClusterHealthRequest;
 import org.opensearch.action.admin.cluster.health.ClusterHealthResponse;
@@ -58,9 +60,8 @@ import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 
 import lombok.Getter;
 import lombok.Setter;
-import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
+@Log4j2
 @ToolAnnotation(ListIndexTool.TYPE)
 public class ListIndexTool implements Tool {
     public static final String TYPE = "ListIndexTool";
@@ -120,7 +121,10 @@ public class ListIndexTool implements Tool {
         final IndicesOptions indicesOptions = IndicesOptions.strictExpand();
         final boolean local = parameters.containsKey("local") && Boolean.parseBoolean(parameters.get("local"));
         final boolean includeUnloadedSegments = Boolean.parseBoolean(parameters.get("include_unloaded_segments"));
-        final PageParams pageParams = new PageParams(null, PageParams.PARAM_ASC_SORT_VALUE, DEFAULT_PAGE_SIZE);
+        final int pageSize = parameters.containsKey("page_size")
+            ? NumberUtils.toInt(parameters.get("page_size"), DEFAULT_PAGE_SIZE)
+            : DEFAULT_PAGE_SIZE;
+        final PageParams pageParams = new PageParams(null, PageParams.PARAM_ASC_SORT_VALUE, pageSize);
 
         final ActionListener<Table> internalListener = ActionListener.notifyOnce(ActionListener.wrap(table -> {
             // Handle empty table
