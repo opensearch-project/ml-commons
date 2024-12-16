@@ -18,8 +18,8 @@ import org.opensearch.ml.common.input.remote.RemoteInferenceMLInput;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Parser;
+import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
-import org.opensearch.ml.common.spi.tools.WithoutModelTool;
 import org.opensearch.ml.common.transport.connector.MLExecuteConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLExecuteConnectorRequest;
 
@@ -32,7 +32,7 @@ import lombok.extern.log4j.Log4j2;
  */
 @Log4j2
 @ToolAnnotation(ConnectorTool.TYPE)
-public class ConnectorTool implements WithoutModelTool {
+public class ConnectorTool implements Tool {
     public static final String TYPE = "ConnectorTool";
     public static final String CONNECTOR_ID = "connector_id";
     public static final String CONNECTOR_ACTION = "connector_action";
@@ -102,7 +102,7 @@ public class ConnectorTool implements WithoutModelTool {
         return true;
     }
 
-    public static class Factory implements WithoutModelTool.Factory<ConnectorTool> {
+    public static class Factory implements Tool.Factory<ConnectorTool> {
         public static final String TYPE = "ConnectorTool";
         public static final String DEFAULT_DESCRIPTION = "This tool will invoke external service.";
         private Client client;

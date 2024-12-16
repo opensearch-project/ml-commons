@@ -242,6 +242,34 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         actionListener.onFailure(new OpenSearchStatusException(errorMessage, RestStatus.INTERNAL_SERVER_ERROR));
     }
 
+    private void checkDownstreamTaskBeforeDeleteModel(String modelId, Boolean isHidden, ActionListener<DeleteResponse> actionListener) {
+        // Now checks 3 resources associated with the model id 1. Agent 2. Search pipeline 3. ingest pipeline
+        CountDownLatch countDownLatch = new CountDownLatch(3);
+        AtomicBoolean noneBlocked = new AtomicBoolean(true);
+        ConcurrentLinkedQueue<String> errorMessages = new ConcurrentLinkedQueue<>();
+        ActionListener<Boolean> countDownActionListener = ActionListener.wrap(b -> {
+            countDownLatch.countDown();
+            noneBlocked.compareAndSet(true, b);
+            if (countDownLatch.getCount() == 0) {
+                if (noneBlocked.get()) {
+                    deleteModel(modelId, isHidden, actionListener);
+                } else {
+                    actionListener.onFailure(new OpenSearchStatusException(String.join(". ", errorMessages), RestStatus.CONFLICT));
+                }
+            }
+        }, e -> {
+            countDownLatch.countDown();
+            noneBlocked.set(false);
+            errorMessages.add(e.getMessage());
+            actionListener.onFailure(new OpenSearchStatusException(e.getMessage(), RestStatus.CONFLICT));
+
+        });
+        checkAgentBeforeDeleteModel(modelId, countDownActionListener);
+        checkIngestPipelineBeforeDeleteModel(modelId, countDownActionListener);
+        checkSearchPipelineBeforeDeleteModel(modelId, countDownActionListener);
+    }
+
+
     private void deleteModel(String modelId, Boolean isHidden, ActionListener<DeleteResponse> actionListener) {
         DeleteRequest deleteRequest = new DeleteRequest(ML_MODEL_INDEX, modelId).setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
         client.delete(deleteRequest, new ActionListener<>() {
@@ -271,7 +299,6 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                 actionListener.onResponse(true);
             } else {
                 String errorMessage = formatAgentErrorMessage(searchHits);
-
                 actionListener.onFailure(new OpenSearchStatusException(errorMessage, RestStatus.CONFLICT));
             }
 
@@ -333,34 +360,6 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
 
     }
 
-    private void checkDownstreamTaskBeforeDeleteModel(String modelId, Boolean isHidden, ActionListener<DeleteResponse> actionListener) {
-        // Now checks 3 resources associated with with the model id 1. Agent 2. Search pipeline 3. ingest pipeline
-        CountDownLatch countDownLatch = new CountDownLatch(3);
-        AtomicBoolean noneBlocked = new AtomicBoolean(true);
-        ConcurrentLinkedQueue<String> errorMessages = new ConcurrentLinkedQueue<>();
-        ActionListener<Boolean> countDownActionListener = ActionListener.wrap(b -> {
-            countDownLatch.countDown();
-            noneBlocked.compareAndSet(true, b);
-            if (countDownLatch.getCount() == 0) {
-                if (noneBlocked.get()) {
-                    deleteModel(modelId, isHidden, actionListener);
-                } else {
-                    actionListener.onFailure(new OpenSearchStatusException(String.join(". ", errorMessages), RestStatus.CONFLICT));
-                }
-            }
-        }, e -> {
-            countDownLatch.countDown();
-            noneBlocked.set(false);
-            errorMessages.add(e.getMessage());
-            if (countDownLatch.getCount() == 0) {
-                actionListener.onFailure(new OpenSearchStatusException(String.join(". ", errorMessages), RestStatus.CONFLICT));
-            }
-
-        });
-        checkAgentBeforeDeleteModel(modelId, countDownActionListener);
-        checkIngestPipelineBeforeDeleteModel(modelId, countDownActionListener);
-        checkSearchPipelineBeforeDeleteModel(modelId, countDownActionListener);
-    }
 
     private void deleteModelChunksAndController(
         ActionListener<DeleteResponse> actionListener,
@@ -473,21 +472,6 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         return dependentPipelineConfigurations;
     }
 
-    private <T> List<String> findDependentPipelines(
-        List<T> pipelineConfigurations,
-        String candidateModelId,
-        Function<T, Map<String, Object>> getConfigFunction,
-        Function<T, String> getIdFunction
-    ) {
-        List<String> dependentPipelineConfigurations = new ArrayList<>();
-        for (T pipelineConfiguration : pipelineConfigurations) {
-            Map<String, Object> config = getConfigFunction.apply(pipelineConfiguration);
-            if (searchThroughConfig(config, candidateModelId)) {
-                dependentPipelineConfigurations.add(getIdFunction.apply(pipelineConfiguration));
-            }
-        }
-        return dependentPipelineConfigurations;
-    }
 
     // This method is to go through the pipeline configs and the configuration is a map of string to objects.
     // Objects can be a list or a map. we will search exhaustively through the configuration for any match of the candidateId.

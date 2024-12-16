@@ -17,8 +17,8 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Parser;
-import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
+import org.opensearch.ml.common.spi.tools.WithModelTool;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.utils.StringUtils;
@@ -33,7 +33,7 @@ import lombok.extern.log4j.Log4j2;
  */
 @Log4j2
 @ToolAnnotation(MLModelTool.TYPE)
-public class MLModelTool implements Tool {
+public class MLModelTool implements WithModelTool {
     public static final String TYPE = "MLModelTool";
     public static final String RESPONSE_FIELD = "response_field";
     public static final String MODEL_ID_FIELD = "model_id";
@@ -127,7 +127,7 @@ public class MLModelTool implements Tool {
         return true;
     }
 
-    public static class Factory implements Tool.Factory<MLModelTool> {
+    public static class Factory implements WithModelTool.Factory<MLModelTool> {
         private Client client;
 
         private static Factory INSTANCE;

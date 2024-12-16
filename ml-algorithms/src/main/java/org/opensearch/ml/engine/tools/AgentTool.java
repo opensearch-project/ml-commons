@@ -17,8 +17,8 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
-import org.opensearch.ml.common.spi.tools.WithoutModelTool;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
@@ -32,7 +32,7 @@ import lombok.extern.log4j.Log4j2;
  */
 @Log4j2
 @ToolAnnotation(AgentTool.TYPE)
-public class AgentTool implements WithoutModelTool {
+public class AgentTool implements Tool {
     public static final String TYPE = "AgentTool";
     private final Client client;
 
@@ -97,7 +97,7 @@ public class AgentTool implements WithoutModelTool {
         return true;
     }
 
-    public static class Factory implements WithoutModelTool.Factory<AgentTool> {
+    public static class Factory implements Tool.Factory<AgentTool> {
         private Client client;
 
         private static Factory INSTANCE;

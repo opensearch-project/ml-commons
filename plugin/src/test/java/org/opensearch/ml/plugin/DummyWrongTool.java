@@ -106,10 +106,5 @@ public class DummyWrongTool implements Tool {
             return null;
         }
 
-        @Override
-        public List<String> getAllModelKeys() {
-            return List.of();
-        }
-
     }
 }

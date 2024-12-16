@@ -45,14 +45,14 @@ import org.opensearch.core.action.ActionResponse;
 import org.opensearch.index.IndexSettings;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Parser;
+import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
-import org.opensearch.ml.common.spi.tools.WithoutModelTool;
 
 import lombok.Getter;
 import lombok.Setter;
 
 @ToolAnnotation(CatIndexTool.TYPE)
-public class CatIndexTool implements WithoutModelTool {
+public class CatIndexTool implements Tool {
     public static final String TYPE = "CatIndexTool";
     private static final String DEFAULT_DESCRIPTION = String
         .join(
@@ -309,7 +309,7 @@ public class CatIndexTool implements WithoutModelTool {
     /**
      * Factory for the {@link CatIndexTool}
      */
-    public static class Factory implements WithoutModelTool.Factory<CatIndexTool> {
+    public static class Factory implements Tool.Factory<CatIndexTool> {
         private Client client;
         private ClusterService clusterService;
 

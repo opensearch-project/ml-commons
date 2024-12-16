@@ -24,14 +24,14 @@ import org.opensearch.common.unit.TimeValue;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Parser;
+import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
-import org.opensearch.ml.common.spi.tools.WithoutModelTool;
 
 import lombok.Getter;
 import lombok.Setter;
 
 @ToolAnnotation(IndexMappingTool.TYPE)
-public class IndexMappingTool implements WithoutModelTool {
+public class IndexMappingTool implements Tool {
     public static final String TYPE = "IndexMappingTool";
     private static final String DEFAULT_DESCRIPTION = String
         .join(
@@ -158,7 +158,7 @@ public class IndexMappingTool implements WithoutModelTool {
     /**
      * Factory for the {@link IndexMappingTool}
      */
-    public static class Factory implements WithoutModelTool.Factory<IndexMappingTool> {
+    public static class Factory implements Tool.Factory<IndexMappingTool> {
         private Client client;
 
         private static Factory INSTANCE;

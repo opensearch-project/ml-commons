@@ -11,6 +11,7 @@ import org.opensearch.action.search.SearchRequest;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.common.spi.tools.WithModelTool;
 import org.opensearch.search.builder.SearchSourceBuilder;
 
 public class AgentModelsSearcher {
@@ -20,7 +21,9 @@ public class AgentModelsSearcher {
         relatedModelIdSet = new HashSet<>();
         for (Map.Entry<String, Tool.Factory> entry : toolFactories.entrySet()) {
             Tool.Factory toolFactory = entry.getValue();
-            relatedModelIdSet.addAll(toolFactory.getAllModelKeys());
+            if (toolFactory instanceof WithModelTool.Factory withModelTool) {
+                relatedModelIdSet.addAll(withModelTool.getAllModelKeys());
+            }
         }
     }
 
