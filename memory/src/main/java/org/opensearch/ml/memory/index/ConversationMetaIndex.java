@@ -22,6 +22,7 @@ import static org.opensearch.ml.common.utils.IndexUtils.DEFAULT_INDEX_SETTINGS;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -141,22 +142,22 @@ public class ConversationMetaIndex {
             if (indexExists) {
                 String userstr = getUserStrFromThreadContext();
                 Instant now = Instant.now();
-                IndexRequest request = Requests
-                    .indexRequest(META_INDEX_NAME)
-                    .source(
-                        ConversationalIndexConstants.META_CREATED_TIME_FIELD,
-                        now,
-                        ConversationalIndexConstants.META_UPDATED_TIME_FIELD,
-                        now,
-                        ConversationalIndexConstants.META_NAME_FIELD,
-                        name,
-                        ConversationalIndexConstants.USER_FIELD,
-                        userstr == null ? null : User.parse(userstr).getName(),
-                        ConversationalIndexConstants.APPLICATION_TYPE_FIELD,
-                        applicationType,
-                        ConversationalIndexConstants.META_ADDITIONAL_INFO_FIELD,
-                        additionalInfos == null ? Map.of() : additionalInfos
-                    );
+                Map<String, Object> sourceMap = new HashMap<>();
+                sourceMap.put(ConversationalIndexConstants.META_CREATED_TIME_FIELD, now);
+                sourceMap.put(ConversationalIndexConstants.META_UPDATED_TIME_FIELD, now);
+                if (name != null && !name.trim().isEmpty()) {
+                    sourceMap.put(ConversationalIndexConstants.META_NAME_FIELD, name);
+                }
+                if (userstr != null && !userstr.trim().isEmpty()) {
+                    sourceMap.put(ConversationalIndexConstants.USER_FIELD, User.parse(userstr).getName());
+                }
+                if (applicationType != null && !applicationType.trim().isEmpty()) {
+                    sourceMap.put(ConversationalIndexConstants.APPLICATION_TYPE_FIELD, applicationType);
+                }
+                if (additionalInfos != null && !additionalInfos.isEmpty()) {
+                    sourceMap.put(ConversationalIndexConstants.META_ADDITIONAL_INFO_FIELD, additionalInfos);
+                }
+                IndexRequest request = Requests.indexRequest(META_INDEX_NAME).source(sourceMap);
                 try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
                     ActionListener<String> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
                     ActionListener<IndexResponse> al = ActionListener.wrap(resp -> {

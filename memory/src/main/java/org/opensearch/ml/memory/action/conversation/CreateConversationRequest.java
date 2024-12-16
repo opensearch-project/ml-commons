@@ -137,12 +137,27 @@ public class CreateConversationRequest extends ActionRequest {
         }
         try (XContentParser parser = restRequest.contentParser()) {
             Map<String, Object> body = parser.map();
+            String name = null;
+            String applicationType = null;
+            Map<String, String> additionalInfo = null;
+
+            for (String key : body.keySet()) {
+                switch (key) {
+                    case ActionConstants.REQUEST_CONVERSATION_NAME_FIELD:
+                        name = (String) body.get(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD);
+                        break;
+                    case APPLICATION_TYPE_FIELD:
+                        applicationType = (String) body.get(APPLICATION_TYPE_FIELD);
+                        break;
+                    case META_ADDITIONAL_INFO_FIELD:
+                        additionalInfo = (Map<String, String>) body.get(META_ADDITIONAL_INFO_FIELD);
+                        break;
+                    default:
+                        throw new IllegalArgumentException("Invalid field [" + key + "] found in request body");
+                }
+            }
             if (body.get(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD) != null) {
-                return new CreateConversationRequest(
-                    (String) body.get(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD),
-                    body.get(APPLICATION_TYPE_FIELD) == null ? null : (String) body.get(APPLICATION_TYPE_FIELD),
-                    body.get(META_ADDITIONAL_INFO_FIELD) == null ? null : (Map<String, String>) body.get(META_ADDITIONAL_INFO_FIELD)
-                );
+                return new CreateConversationRequest(name, applicationType, additionalInfo);
             } else {
                 return new CreateConversationRequest();
             }

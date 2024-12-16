@@ -124,13 +124,14 @@ public class InteractionTests {
             .origin("amazon bedrock")
             .parentInteractionId("parant id")
             .additionalInfo(Collections.singletonMap("suggestion", "new suggestion"))
+            .response("sample response")
             .traceNum(1)
             .build();
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         interaction.toXContent(builder, EMPTY_PARAMS);
         String interactionContent = TestHelper.xContentBuilderToString(builder);
         assertEquals(
-            "{\"memory_id\":\"conversation id\",\"message_id\":null,\"create_time\":null,\"input\":null,\"prompt_template\":null,\"response\":null,\"origin\":\"amazon bedrock\",\"additional_info\":{\"suggestion\":\"new suggestion\"},\"parent_message_id\":\"parant id\",\"trace_number\":1}",
+            "{\"memory_id\":\"conversation id\",\"message_id\":null,\"create_time\":null,\"response\":\"sample response\",\"origin\":\"amazon bedrock\",\"additional_info\":{\"suggestion\":\"new suggestion\"},\"parent_message_id\":\"parant id\",\"trace_number\":1}",
             interactionContent
         );
     }
