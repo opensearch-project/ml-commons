@@ -182,7 +182,10 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
 
             processor.execute(ingestDocument, handler);
             verify(handler)
-                .accept(isNull(), argThat(exception -> exception instanceof NullPointerException && exception.getMessage().equals(npeMessage)));
+                .accept(
+                    isNull(),
+                    argThat(exception -> exception instanceof NullPointerException && exception.getMessage().equals(npeMessage))
+                );
         } catch (Exception e) {
             assertEquals("this catch block should not get executed.", e.getMessage());
         }
