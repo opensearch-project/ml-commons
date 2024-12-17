@@ -1,6 +1,9 @@
-# Tutorial: Generating Embeddings Using a Local Asymmetric Embedding Model in OpenSearch
+# Tutorial: Running Asymmetric Semnantic Search within OpenSearch
 
-This tutorial demonstrates how to generate text embeddings using an asymmetric embedding model in OpenSearch, implemented within a Docker container. The example model used in this tutorial is the multilingual `intfloat/multilingual-e5-small` model from Hugging Face. You will learn how to prepare the model, register it in OpenSearch, and run inference to generate embeddings.
+This tutorial demonstrates how to generate text embeddings using an asymmetric embedding model in OpenSearch which will be used
+to run semantic search. This is implemented within a Docker container, the example model used in this tutorial is the multilingual
+`intfloat/multilingual-e5-small` model from Hugging Face. 
+You will learn how to prepare the model, register it in OpenSearch, and run inference to generate embeddings.
 
 > **Note**: Make sure to replace all placeholders (e.g., `your_`) with your specific values.
 
@@ -198,7 +201,7 @@ POST /_plugins/_ml/_predict/text_embedding/your_model_id
 
 The response will include a sentence embedding of size 384:
 
-```json
+```
 {
   "inference_results": [
     {
@@ -232,7 +235,7 @@ POST /_plugins/_ml/_predict/text_embedding/your_model_id
 
 The response will look like this:
 
-```json
+```
 {
   "inference_results": [
     {
@@ -251,11 +254,281 @@ The response will look like this:
 
 ---
 
-## Next Steps
+# Applying Semantic Search using an ML Inference processor
 
-- Create an ingest pipeline for processing documents using asymmetric embeddings.
-- Run a query using KNN (k-nearest neighbors) to search with your asymmetric model.
+In this section you are going to apply semantic search on facts about New York City. First you will create an ingest pipeline
+using the ML inference processor to create embeddings on ingestion. Then create a search pipeline to run a search using
+the same asymmetric embedding model. 
 
+
+## 2. Create an ingest pipeline
+
+### 2.1 Create the test KNN index
+```
+PUT nyc_facts
+{
+  "settings": {
+    "index": {
+      "default_pipeline": "asymmetric_embedding_ingest_pipeline",
+      "knn": true,
+      "knn.algo_param.ef_search": 100
+    }
+  },
+  "mappings": {
+    "properties":  {
+      "fact_embedding": {
+        "type": "knn_vector",
+        "dimension": 384,
+        "method": {
+          "name": "hnsw",
+          "space_type": "l2",
+          "engine": "nmslib",
+          "parameters": {
+            "ef_construction": 128,
+            "m": 24
+          }
+        } 
+      }
+    }
+  }
+}
+```
+
+### 2.2 Create an ingest pipeline
+
+```
+PUT _ingest/pipeline/asymmetric_embedding_ingest_pipeline
+{
+	"description": "ingest passage text and generate a embedding using an asymmetric model",
+	"processors": [
+		{
+			"ml_inference": {
+
+				"model_input": "{\"text_docs\":[\"${input_map.text_docs}\"],\"target_response\":[\"sentence_embedding\"],\"parameters\":{\"content_type\":\"query\"}}",
+				"function_name": "text_embedding",
+				"model_id": "{{ _.model_id }}",
+				"input_map": [
+					{
+						"text_docs": "description"
+					}
+				],
+				"output_map": [
+					{
+						"fact_embedding": "$.inference_results[0].output[0].data",
+						"embedding_size": "$.inference_results.*.output.*.shape[0]"
+					}
+				]
+			}
+		}
+	]
+}
+```
+
+### 2.3 Simulate pipeline
+
+- Case1: two book objects with title
+```
+POST /_ingest/pipeline/asymmetric_embedding_ingest_pipeline/_simulate
+{
+   "docs": [
+	  {
+         "_index": "my-index",
+         "_id": "1",
+         "_source": {
+             "title": "Central Park",
+             "description": "A large public park in the heart of New York City, offering a wide range of recreational activities."
+         }
+		}
+	]
+}
+```
+Response
+```
+{
+   "docs": [
+      {
+         "doc": {
+             "_index": "my-index",
+             "_id": "1",
+             "_source": {
+                 "description": "A large public park in the heart of New York City, offering a wide range of recreational activities.",
+                 "fact_embedding": [
+                     [
+                         0.06344555,
+                         0.30067796,
+                         ...
+                         0.014804064,
+                         -0.022822019						
+                     ]
+                 ],
+                 "title": "Central Park",
+                 "embedding_size": [
+                     384.0
+                 ]
+             },
+             "_ingest": {
+                 "timestamp": "2024-12-16T20:59:07.152169Z"
+             }
+         }
+      }
+	]
+}
+```
+
+### 2.4 Test ingest data
+Perform bulk ingestion, this will now trigger the ingest pipeline to have embeddings for each document.
+```
+POST /_bulk
+{ "index": { "_index": "nyc_facts" } }
+{ "title": "Central Park", "description": "A large public park in the heart of New York City, offering a wide range of recreational activities." }
+{ "index": { "_index": "nyc_facts" } }
+{ "title": "Empire State Building", "description": "An iconic skyscraper in New York City offering breathtaking views from its observation deck." }
+{ "index": { "_index": "nyc_facts" } }
+{ "title": "Statue of Liberty", "description": "A colossal neoclassical sculpture on Liberty Island, symbolizing freedom and democracy in the United States." }
+{ "index": { "_index": "nyc_facts" } }
+{ "title": "Brooklyn Bridge", "description": "A historic suspension bridge connecting Manhattan and Brooklyn, offering pedestrian walkways with great views." }
+{ "index": { "_index": "nyc_facts" } }
+{ "title": "Times Square", "description": "A bustling commercial and entertainment hub in Manhattan, known for its neon lights and Broadway theaters." }
+{ "index": { "_index": "nyc_facts" } }
+{ "title": "Yankee Stadium", "description": "Home to the New York Yankees, this baseball stadium is a historic landmark in the Bronx." }
+{ "index": { "_index": "nyc_facts" } }
+{ "title": "The Bronx Zoo", "description": "One of the largest zoos in the world, located in the Bronx, featuring diverse animal exhibits and conservation efforts." }
+{ "index": { "_index": "nyc_facts" } }
+{ "title": "New York Botanical Garden", "description": "A large botanical garden in the Bronx, known for its diverse plant collections and stunning landscapes." }
+{ "index": { "_index": "nyc_facts" } }
+{ "title": "Flushing Meadows-Corona Park", "description": "A major park in Queens, home to the USTA Billie Jean King National Tennis Center and the Unisphere." }
+{ "index": { "_index": "nyc_facts" } }
+{ "title": "Citi Field", "description": "The home stadium of the New York Mets, located in Queens, known for its modern design and fan-friendly atmosphere." }
+{ "index": { "_index": "nyc_facts" } }
+{ "title": "Rockefeller Center", "description": "A famous complex of commercial buildings in Manhattan, home to the NBC studios and the annual ice skating rink." }
+{ "index": { "_index": "nyc_facts" } }
+{ "title": "Queens Botanical Garden", "description": "A peaceful, beautiful botanical garden located in Flushing, Queens, featuring seasonal displays and plant collections." }
+{ "index": { "_index": "nyc_facts" } }
+{ "title": "Arthur Ashe Stadium", "description": "The largest tennis stadium in the world, located in Flushing Meadows-Corona Park, Queens, hosting the U.S. Open." }
+{ "index": { "_index": "nyc_facts" } }
+{ "title": "Wave Hill", "description": "A public garden and cultural center in the Bronx, offering stunning views of the Hudson River and a variety of nature programs." }
+{ "index": { "_index": "nyc_facts" } }
+{ "title": "Louis Armstrong House", "description": "The former home of jazz legend Louis Armstrong, located in Corona, Queens, now a museum celebrating his life and music." }
+
+```
+
+## 3. Run Semantic Search
+
+### 3.1 Create the Search Pipeline
+Create the search pipeline which will convert your query into a embedding and run KNN on the index to return the best documents.
+
+```
+PUT /_search/pipeline/asymmetric_embedding_search_pipeline
+{
+   "description": "ingest passage text and generate a embedding using an asymmetric model",
+   "request_processors": [
+      {
+        "ml_inference": {
+            "query_template": "{\"size\": 3,\"query\": {\"knn\": {\"fact_embedding\": {\"vector\": ${query_embedding},\"k\": 4}}}}",
+            "function_name": "text_embedding",
+            "model_id": "{{ _.model_id }}",
+            "model_input": "{ \"text_docs\": [\"${input_map.query}\"], \"target_response\": [\"sentence_embedding\"], \"parameters\" : {\"content_type\" : \"query\" } }",
+            "input_map": [
+               {
+                  "query": "query.term.fact_embedding.value"
+               }
+            ],
+            "output_map": [
+               {
+                  "query_embedding": "$.inference_results[0].output[0].data",
+                  "embedding_size": "$.inference_results.*.output.*.shape[0]"
+               }
+            ]
+         }
+      }
+   ]
+}
+
+```
+
+### 3.1 Run Semantic Search
+In this scenario we are going to see the top 3 results, when asking about sporting activities in New York City.
+```
+GET /nyc_facts/_search?search_pipeline=asymmetric_embedding_search_pipeline
+{
+  "query": {
+    "term": {
+      "fact_embedding": {
+        "value": "What are some places for sports in NYC?",
+       "boost": 1 
+      }
+    }
+  }
+}
+```
+
+Which yields the following 
+```json
+{
+  "took": 22,
+  "timed_out": false,
+  "_shards": {
+    "total": 1,
+    "successful": 1,
+    "skipped": 0,
+    "failed": 0
+  },
+  "hits": {
+    "total": {
+      "value": 4,
+      "relation": "eq"
+    },
+    "max_score": 0.12496973,
+    "hits": [
+      {
+        "_index": "nyc_facts",
+        "_id": "hb9X0ZMBICPs-TP0ijZX",
+        "_score": 0.12496973,
+        "_source": {
+          "fact_embedding": [
+            ...
+          ],
+          "embedding_size": [
+            384.0
+          ],
+          "description": "A large public park in the heart of New York City, offering a wide range of recreational activities.",
+          "title": "Central Park"
+        }
+      },
+      {
+        "_index": "nyc_facts",
+        "_id": "ir9X0ZMBICPs-TP0ijZX",
+        "_score": 0.114651985,
+        "_source": {
+          "fact_embedding": [
+            ...
+          ],
+          "embedding_size": [
+            384.0
+          ],
+          "description": "Home to the New York Yankees, this baseball stadium is a historic landmark in the Bronx.",
+          "title": "Yankee Stadium"
+        }
+      },
+      {
+        "_index": "nyc_facts",
+        "_id": "j79X0ZMBICPs-TP0ijZX",
+        "_score": 0.110090025,
+        "_source": {
+          "fact_embedding": [
+            ...
+          ],
+          "embedding_size": [
+            384.0
+          ],
+          "description": "A famous complex of commercial buildings in Manhattan, home to the NBC studios and the annual ice skating rink.",
+          "title": "Rockefeller Center"
+        }
+      }
+    ]
+  }
+}
+```
 ---
 
 ## References
