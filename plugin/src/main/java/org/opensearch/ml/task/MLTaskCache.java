@@ -62,4 +62,9 @@ public class MLTaskCache {
     public boolean allNodeFailed() {
         return workerNodeSize != null && errors.size() == workerNodeSize;
     }
+
+    public void updateWorkerNode(Set<String> nodesRemovedFromCluster) {
+        this.workerNodes.removeAll(nodesRemovedFromCluster);
+        this.workerNodeSize = this.workerNodeSize - nodesRemovedFromCluster.size();
+    }
 }
