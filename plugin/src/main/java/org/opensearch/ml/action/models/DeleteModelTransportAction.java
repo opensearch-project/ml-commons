@@ -13,7 +13,6 @@ import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
 import static org.opensearch.ml.common.MLModel.IS_HIDDEN_FIELD;
 import static org.opensearch.ml.common.MLModel.MODEL_ID_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.getErrorMessage;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_SAFE_DELETE_MODEL;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
@@ -164,8 +163,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                 if (isModelNotDeployed(mlModelState)) {
                                     if (isSafeDelete) {
                                         checkDownstreamTaskBeforeDeleteModel(modelId, isHidden, actionListener);
-                                    }
-                                    else {
+                                    } else {
                                         deleteModel(modelId, isHidden, actionListener);
                                     }
                                 } else {
@@ -192,8 +190,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                     } else if (isModelNotDeployed(mlModelState)) {
                                         if (isSafeDelete) {
                                             checkDownstreamTaskBeforeDeleteModel(modelId, isHidden, actionListener);
-                                        }
-                                        else {
+                                        } else {
                                             deleteModel(modelId, isHidden, actionListener);
                                         }
                                     } else {

@@ -981,7 +981,7 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_MAX_BATCH_INFERENCE_TASKS,
                 MLCommonsSettings.ML_COMMONS_MAX_BATCH_INGESTION_TASKS,
                 MLCommonsSettings.ML_COMMONS_BATCH_INGESTION_BULK_SIZE,
-                    MLCommonsSettings.ML_COMMONS_SAFE_DELETE_MODEL
+                MLCommonsSettings.ML_COMMONS_SAFE_DELETE_MODEL
             );
         return settings;
     }

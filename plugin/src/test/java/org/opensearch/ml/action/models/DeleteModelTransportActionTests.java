@@ -20,7 +20,6 @@ import static org.opensearch.ml.action.models.DeleteModelTransportAction.SEARCH_
 import static org.opensearch.ml.action.models.DeleteModelTransportAction.TIMEOUT_MSG;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.settings.MLCommonsSettings.*;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.io.IOException;
@@ -67,7 +66,6 @@ import org.opensearch.index.get.GetResult;
 import org.opensearch.index.reindex.BulkByScrollResponse;
 import org.opensearch.index.reindex.DeleteByQueryAction;
 import org.opensearch.index.reindex.ScrollableHitSource;
-import org.opensearch.ml.action.register.TransportRegisterModelAction;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.agent.MLAgent;
@@ -150,15 +148,9 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
 
         mlModelDeleteRequest = MLModelDeleteRequest.builder().modelId("test_id").build();
 
-        Settings settings = Settings
-                .builder()
-                .put(ML_COMMONS_SAFE_DELETE_MODEL.getKey(), true)
-                .build();
+        Settings settings = Settings.builder().put(ML_COMMONS_SAFE_DELETE_MODEL.getKey(), true).build();
         threadContext = new ThreadContext(settings);
-        ClusterSettings clusterSettings = clusterSetting(
-                settings,
-                ML_COMMONS_SAFE_DELETE_MODEL
-        );
+        ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_SAFE_DELETE_MODEL);
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
         when(clusterService.getSettings()).thenReturn(settings);
         deleteModelTransportAction = spy(
