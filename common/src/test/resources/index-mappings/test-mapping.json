@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "schema_version": "1"
+    "schema_version": 1
   },
   "properties": {
     "test_field_1": {
