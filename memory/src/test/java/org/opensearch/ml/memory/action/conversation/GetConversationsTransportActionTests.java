@@ -114,8 +114,8 @@ public class GetConversationsTransportActionTests extends OpenSearchTestCase {
         log.info("testing get conversations transport");
         List<ConversationMeta> testResult = List
             .of(
-                new ConversationMeta("testcid1", Instant.now(), Instant.now(), "", null, null),
-                new ConversationMeta("testcid2", Instant.now(), Instant.now(), "testname", null, null)
+                new ConversationMeta("testcid1", Instant.now(), Instant.now(), "", null, null, null),
+                new ConversationMeta("testcid2", Instant.now(), Instant.now(), "testname", null, null, null)
             );
         doAnswer(invocation -> {
             ActionListener<List<ConversationMeta>> listener = invocation.getArgument(2);
@@ -132,9 +132,9 @@ public class GetConversationsTransportActionTests extends OpenSearchTestCase {
     public void testPagination() {
         List<ConversationMeta> testResult = List
             .of(
-                new ConversationMeta("testcid1", Instant.now(), Instant.now(), "", null, null),
-                new ConversationMeta("testcid2", Instant.now(), Instant.now(), "testname", null, null),
-                new ConversationMeta("testcid3", Instant.now(), Instant.now(), "testname", null, null)
+                new ConversationMeta("testcid1", Instant.now(), Instant.now(), "", null, null, null),
+                new ConversationMeta("testcid2", Instant.now(), Instant.now(), "testname", null, null, null),
+                new ConversationMeta("testcid3", Instant.now(), Instant.now(), "testname", null, null, null)
             );
         doAnswer(invocation -> {
             ActionListener<List<ConversationMeta>> listener = invocation.getArgument(2);
