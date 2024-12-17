@@ -13,6 +13,8 @@ import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
 import static org.opensearch.ml.common.MLModel.IS_HIDDEN_FIELD;
 import static org.opensearch.ml.common.MLModel.MODEL_ID_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.getErrorMessage;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_SAFE_DELETE_MODEL;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
@@ -97,6 +99,8 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
 
     Settings settings;
 
+    Boolean isSafeDelete;
+
     ModelAccessControlHelper modelAccessControlHelper;
 
     final AgentModelsSearcher agentModelsSearcher;
@@ -118,6 +122,9 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         this.clusterService = clusterService;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.agentModelsSearcher = agentModelsSearcher;
+        this.settings = settings;
+        isSafeDelete = ML_COMMONS_SAFE_DELETE_MODEL.get(settings);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_SAFE_DELETE_MODEL, it -> isSafeDelete = it);
     }
 
     @Override
@@ -155,7 +162,12 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                     );
                             } else {
                                 if (isModelNotDeployed(mlModelState)) {
-                                    checkDownstreamTaskBeforeDeleteModel(modelId, isHidden, actionListener);
+                                    if (isSafeDelete) {
+                                        checkDownstreamTaskBeforeDeleteModel(modelId, isHidden, actionListener);
+                                    }
+                                    else {
+                                        deleteModel(modelId, isHidden, actionListener);
+                                    }
                                 } else {
                                     wrappedListener
                                         .onFailure(
@@ -178,7 +190,12 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                                 )
                                             );
                                     } else if (isModelNotDeployed(mlModelState)) {
-                                        checkDownstreamTaskBeforeDeleteModel(modelId, isHidden, actionListener);
+                                        if (isSafeDelete) {
+                                            checkDownstreamTaskBeforeDeleteModel(modelId, isHidden, actionListener);
+                                        }
+                                        else {
+                                            deleteModel(modelId, isHidden, actionListener);
+                                        }
                                     } else {
                                         wrappedListener
                                             .onFailure(

@@ -263,4 +263,7 @@ public final class MLCommonsSettings {
 
     public static final Setting<Boolean> ML_COMMONS_CONTROLLER_ENABLED = Setting
         .boolSetting("plugins.ml_commons.controller_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    public static final Setting<Boolean> ML_COMMONS_SAFE_DELETE_MODEL = Setting
+            .boolSetting("plugins.ml_commons.safe_delete_model", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 }
