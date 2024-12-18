@@ -140,7 +140,7 @@ public class ConversationMetaIndex {
     ) {
         initConversationMetaIndexIfAbsent(ActionListener.wrap(indexExists -> {
             if (indexExists) {
-                String userstr = getUserStrFromThreadContext();
+                String userStr = getUserStrFromThreadContext();
                 Instant now = Instant.now();
                 Map<String, Object> sourceMap = new HashMap<>();
                 sourceMap.put(ConversationalIndexConstants.META_CREATED_TIME_FIELD, now);
@@ -148,8 +148,8 @@ public class ConversationMetaIndex {
                 if (name != null && !name.trim().isEmpty()) {
                     sourceMap.put(ConversationalIndexConstants.META_NAME_FIELD, name);
                 }
-                if (userstr != null && !userstr.trim().isEmpty()) {
-                    sourceMap.put(ConversationalIndexConstants.USER_FIELD, User.parse(userstr).getName());
+                if (userStr != null && !userStr.trim().isEmpty()) {
+                    sourceMap.put(ConversationalIndexConstants.USER_FIELD, User.parse(userStr).getName());
                 }
                 if (applicationType != null && !applicationType.trim().isEmpty()) {
                     sourceMap.put(ConversationalIndexConstants.APPLICATION_TYPE_FIELD, applicationType);
@@ -211,12 +211,12 @@ public class ConversationMetaIndex {
             return;
         }
         SearchRequest request = Requests.searchRequest(META_INDEX_NAME);
-        String userstr = getUserStrFromThreadContext();
+        String userStr = getUserStrFromThreadContext();
         QueryBuilder queryBuilder;
-        if (userstr == null)
+        if (userStr == null)
             queryBuilder = new MatchAllQueryBuilder();
         else
-            queryBuilder = new TermQueryBuilder(ConversationalIndexConstants.USER_FIELD, User.parse(userstr).getName());
+            queryBuilder = new TermQueryBuilder(ConversationalIndexConstants.USER_FIELD, User.parse(userStr).getName());
         request.source().query(queryBuilder);
         request.source().from(from).size(maxResults);
         request.source().sort(ConversationalIndexConstants.META_UPDATED_TIME_FIELD, SortOrder.DESC);
@@ -265,8 +265,8 @@ public class ConversationMetaIndex {
             return;
         }
         DeleteRequest delRequest = Requests.deleteRequest(META_INDEX_NAME).id(conversationId);
-        String userstr = getUserStrFromThreadContext();
-        String user = User.parse(userstr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userstr).getName();
+        String userStr = getUserStrFromThreadContext();
+        String user = User.parse(userStr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userStr).getName();
         this.checkAccess(conversationId, ActionListener.wrap(access -> {
             if (access) {
                 try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
@@ -309,7 +309,7 @@ public class ConversationMetaIndex {
             listener.onResponse(true);
             return;
         }
-        String userstr = getUserStrFromThreadContext();
+        String userStr = getUserStrFromThreadContext();
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<Boolean> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
             GetRequest getRequest = Requests.getRequest(META_INDEX_NAME).id(conversationId);
@@ -319,12 +319,12 @@ public class ConversationMetaIndex {
                     throw new ResourceNotFoundException("Memory [" + conversationId + "] not found");
                 }
                 // If security is off - User doesn't exist - you have permission
-                if (userstr == null || User.parse(userstr) == null) {
+                if (userStr == null || User.parse(userStr) == null) {
                     internalListener.onResponse(true);
                     return;
                 }
                 ConversationMeta conversation = ConversationMeta.fromMap(conversationId, getResponse.getSourceAsMap());
-                String user = User.parse(userstr).getName();
+                String user = User.parse(userStr).getName();
                 // If you're not the owner of this conversation, you do not have permission
                 if (!user.equals(conversation.getUser())) {
                     internalListener.onResponse(false);
@@ -354,9 +354,9 @@ public class ConversationMetaIndex {
         QueryBuilder originalQuery = request.source().query();
         BoolQueryBuilder newQuery = new BoolQueryBuilder();
         newQuery.must(originalQuery);
-        String userstr = getUserStrFromThreadContext();
-        if (userstr != null) {
-            String user = User.parse(userstr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userstr).getName();
+        String userStr = getUserStrFromThreadContext();
+        if (userStr != null) {
+            String user = User.parse(userStr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userStr).getName();
             newQuery.must(new TermQueryBuilder(ConversationalIndexConstants.USER_FIELD, user));
         }
         request.source().query(newQuery);
@@ -389,11 +389,11 @@ public class ConversationMetaIndex {
             if (access) {
                 innerUpdateConversation(updateRequest, listener);
             } else {
-                String userstr = client
+                String userStr = client
                     .threadPool()
                     .getThreadContext()
                     .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
-                String user = User.parse(userstr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userstr).getName();
+                String user = User.parse(userStr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userStr).getName();
                 throw new OpenSearchStatusException(
                     "User [" + user + "] does not have access to memory " + conversationId,
                     RestStatus.UNAUTHORIZED
@@ -422,7 +422,7 @@ public class ConversationMetaIndex {
             listener.onFailure(new IndexNotFoundException("cannot get memory since the memory index does not exist", META_INDEX_NAME));
             return;
         }
-        String userstr = getUserStrFromThreadContext();
+        String userStr = getUserStrFromThreadContext();
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<ConversationMeta> internalListener = ActionListener.runBefore(listener, () -> threadContext.restore());
             GetRequest request = Requests.getRequest(META_INDEX_NAME).id(conversationId);
@@ -433,12 +433,12 @@ public class ConversationMetaIndex {
                 }
                 ConversationMeta conversation = ConversationMeta.fromMap(conversationId, getResponse.getSourceAsMap());
                 // If no security, return conversation
-                if (userstr == null || User.parse(userstr) == null) {
+                if (userStr == null || User.parse(userStr) == null) {
                     internalListener.onResponse(conversation);
                     return;
                 }
                 // If security and correct user, return conversation
-                String user = User.parse(userstr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userstr).getName();
+                String user = User.parse(userStr) == null ? ActionConstants.DEFAULT_USERNAME_FOR_ERRORS : User.parse(userStr).getName();
                 if (user.equals(conversation.getUser())) {
                     internalListener.onResponse(conversation);
                     log.info("Successfully get the memory for {}", conversationId);
