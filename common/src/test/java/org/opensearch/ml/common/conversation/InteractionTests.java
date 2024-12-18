@@ -122,6 +122,7 @@ public class InteractionTests {
             .builder()
             .conversationId("conversation id")
             .origin("amazon bedrock")
+            .promptTemplate(" ")
             .parentInteractionId("parant id")
             .additionalInfo(Collections.singletonMap("suggestion", "new suggestion"))
             .response("sample response")

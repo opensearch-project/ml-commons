@@ -177,14 +177,13 @@ public class CreateInteractionRequestTests extends OpenSearchTestCase {
             .withContent(new BytesArray(gson.toJson(params)), MediaTypeRegistry.JSON)
             .build();
 
-        try {
-            CreateInteractionRequest request = CreateInteractionRequest.fromRestRequest(rrequest);
-            fail("Expected IllegalArgumentException due to unknown field");
-        } catch (IllegalArgumentException e) {
-            assertEquals(e.getMessage(), "Invalid field [unknown_field] found in request body");
-        } catch (Exception e) {
-            fail("Expected IllegalArgumentException due to unknown field, got " + e.getClass().getName());
-        }
+        IllegalArgumentException exception = assertThrows(
+            "Expected IllegalArgumentException due to unknown field",
+            IllegalArgumentException.class,
+            () -> CreateInteractionRequest.fromRestRequest(rrequest)
+        );
+
+        assertEquals(exception.getMessage(), "Invalid field [unknown_field] found in request body");
     }
 
     public void testFromRestRequest_WithAllFieldsEmpty_Fails() throws IOException {
@@ -201,16 +200,16 @@ public class CreateInteractionRequestTests extends OpenSearchTestCase {
             .withContent(new BytesArray(gson.toJson(params)), MediaTypeRegistry.JSON)
             .build();
 
-        try {
-            CreateInteractionRequest request = CreateInteractionRequest.fromRestRequest(rrequest);
-            fail("Expected IllegalArgumentException due to all fields empty");
-        } catch (IllegalArgumentException e) {
-            assertEquals(
-                e.getMessage(),
-                "At least one of the following parameters must be non-empty: input, prompt_template, response, origin, additional_info"
-            );
-        } catch (Exception e) {
-            fail("Expected IllegalArgumentException due to all fields empty, got " + e.getClass().getName());
-        }
+        IllegalArgumentException exception = assertThrows(
+            "Expected IllegalArgumentException due to all fields empty",
+            IllegalArgumentException.class,
+            () -> CreateInteractionRequest.fromRestRequest(rrequest)
+        );
+
+        assertEquals(
+            exception.getMessage(),
+            "At least one of the following parameters must be non-empty: input, prompt_template, response, origin, additional_info"
+        );
+
     }
 }

@@ -143,14 +143,12 @@ public class CreateConversationRequestTests extends OpenSearchTestCase {
             )
             .build();
 
-        try {
-            CreateConversationRequest request = CreateConversationRequest.fromRestRequest(req);
-            fail("Expected IllegalArgumentException due to unknown field");
-        } catch (OpenSearchParseException e) {
-            assertEquals(e.getMessage(), "Invalid field [unknown_field] found in request body");
-        } catch (Exception e) {
-            fail("Expected OpenSearchParseException due to unknown field, got " + e.getClass().getName());
-        }
+        OpenSearchParseException exception = assertThrows(
+            "Expected OpenSearchParseException due to unknown field",
+            OpenSearchParseException.class,
+            () -> CreateConversationRequest.fromRestRequest(req)
+        );
 
+        assertEquals(exception.getMessage(), "Invalid field [unknown_field] found in request body");
     }
 }
