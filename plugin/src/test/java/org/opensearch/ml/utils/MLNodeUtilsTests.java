@@ -69,24 +69,24 @@ public class MLNodeUtilsTests extends OpenSearchTestCase {
     @Test
     public void testValidateEmbeddingInputWithRemoteSchema() throws IOException {
         String schema = "{\n"
-                + "    \"type\": \"object\",\n"
-                + "    \"properties\": {\n"
-                + "        \"parameters\": {\n"
-                + "            \"type\": \"object\",\n"
-                + "            \"properties\": {\n"
-                + "                \"texts\": {\n"
-                + "                    \"type\": \"array\",\n"
-                + "                    \"items\": {\n"
-                + "                        \"type\": \"string\"\n"
-                + "                    }\n"
-                + "                }\n"
-                + "            },\n"
-                + "            \"required\": [\n"
-                + "                \"texts\"\n"
-                + "            ]\n"
-                + "        }\n"
-                + "    }\n"
-                + "}";
+            + "    \"type\": \"object\",\n"
+            + "    \"properties\": {\n"
+            + "        \"parameters\": {\n"
+            + "            \"type\": \"object\",\n"
+            + "            \"properties\": {\n"
+            + "                \"texts\": {\n"
+            + "                    \"type\": \"array\",\n"
+            + "                    \"items\": {\n"
+            + "                        \"type\": \"string\"\n"
+            + "                    }\n"
+            + "                }\n"
+            + "            },\n"
+            + "            \"required\": [\n"
+            + "                \"texts\"\n"
+            + "            ]\n"
+            + "        }\n"
+            + "    }\n"
+            + "}";
         String json = "{\"text_docs\":[ \"today is sunny\", \"today is sunny\"]}";
         MLNodeUtils.validateSchema(schema, json);
     }
