@@ -211,19 +211,14 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).get(any(), any());
 
-
-        when(getSearchPipelineResponse.toString()).thenReturn(
-                StringUtils.toJson(Map.of("search_1", configDataMap))
-        );
+        when(getSearchPipelineResponse.toString()).thenReturn(StringUtils.toJson(Map.of("search_1", configDataMap)));
         doAnswer(invocation -> {
             ActionListener<GetSearchPipelineResponse> listener = invocation.getArgument(2);
             listener.onResponse(getSearchPipelineResponse);
             return null;
         }).when(client).execute(eq(GetSearchPipelineAction.INSTANCE), any(), any());
 
-        when(getIngestionPipelineResponse.toString()).thenReturn(
-                StringUtils.toJson(Map.of("ingest_1", Map.of("model_id", "test_id")))
-        );
+        when(getIngestionPipelineResponse.toString()).thenReturn(StringUtils.toJson(Map.of("ingest_1", Map.of("model_id", "test_id"))));
         doAnswer(invocation -> {
             ActionListener<GetPipelineResponse> listener = invocation.getArgument(2);
             listener.onResponse(getIngestionPipelineResponse);
@@ -236,7 +231,13 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         String totalErrorMessage = argumentCaptor.getValue().getMessage();
         String[] separateErrorMessages = totalErrorMessage.split("\\. ");
         Set<String> generateErrorMessages = new HashSet<>(List.of(separateErrorMessages));
-        Set<String> expectedErrorMessages = new HashSet<>(List.of("1 ingest pipelines are still using this model, please delete or update the pipelines first: [ingest_1]", "1 search pipelines are still using this model, please delete or update the pipelines first: [search_1]"));
+        Set<String> expectedErrorMessages = new HashSet<>(
+            List
+                .of(
+                    "1 ingest pipelines are still using this model, please delete or update the pipelines first: [ingest_1]",
+                    "1 search pipelines are still using this model, please delete or update the pipelines first: [search_1]"
+                )
+        );
         Boolean flag = false;
         for (String errorMessage : generateErrorMessages) {
             if (!expectedErrorMessages.contains(errorMessage)) {
@@ -311,16 +312,16 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
         when(clusterService.getSettings()).thenReturn(settings);
         deleteModelTransportAction = spy(
-                new DeleteModelTransportAction(
-                        transportService,
-                        actionFilters,
-                        client,
-                        settings,
-                        xContentRegistry,
-                        clusterService,
-                        modelAccessControlHelper,
-                        agentModelsSearcher
-                )
+            new DeleteModelTransportAction(
+                transportService,
+                actionFilters,
+                client,
+                settings,
+                xContentRegistry,
+                clusterService,
+                modelAccessControlHelper,
+                agentModelsSearcher
+            )
         );
 
         threadContext = new ThreadContext(settings);
@@ -334,12 +335,10 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
 
-
-
         Map<String, Object> ingestPipelineConfig1 = Map.of("model_id", "test_id");
         Map<String, Object> ingestPipelineConfig2 = Map.of("nothing", "test_id");
         when(getIngestionPipelineResponse.toString())
-                .thenReturn(StringUtils.toJson(Map.of("ingest_1", ingestPipelineConfig1, "ingest_2", ingestPipelineConfig2)));
+            .thenReturn(StringUtils.toJson(Map.of("ingest_1", ingestPipelineConfig1, "ingest_2", ingestPipelineConfig2)));
         // when(getIngestionPipelineResponse.pipelines())
         // .thenReturn(List.of(ingestPipelineConfiguration, independentIngestPipelineConfiguration));
         doAnswer(invocation -> {
