@@ -153,7 +153,8 @@ public class CreateConversationRequest extends ActionRequest {
                         additionalInfo = (Map<String, String>) body.get(META_ADDITIONAL_INFO_FIELD);
                         break;
                     default:
-                        throw new IllegalArgumentException("Invalid field [" + key + "] found in request body");
+                        parser.skipChildren();
+                        break;
                 }
             }
             if (body.get(ActionConstants.REQUEST_CONVERSATION_NAME_FIELD) != null) {

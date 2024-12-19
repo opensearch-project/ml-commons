@@ -137,7 +137,7 @@ public class InteractionsIndex {
      * @param origin the origin of the response for this interaction
      * @param additionalInfo additional information used for constructing the LLM prompt
      * @param timestamp when this interaction happened
-     * @param parintid the parent interactionId of this interaction
+     * @param parentId the parent interactionId of this interaction
      * @param traceNumber the trace number for a parent interaction
      * @param listener gets the id of the newly created interaction record
      */
@@ -150,7 +150,7 @@ public class InteractionsIndex {
         Map<String, String> additionalInfo,
         Instant timestamp,
         ActionListener<String> listener,
-        String parintid,
+        String parentId,
         Integer traceNumber
     ) {
         initInteractionsIndexIfAbsent(ActionListener.wrap(indexExists -> {
@@ -165,7 +165,7 @@ public class InteractionsIndex {
                         Map<String, Object> sourceMap = new HashMap<>();
                         sourceMap.put(ConversationalIndexConstants.INTERACTIONS_CONVERSATION_ID_FIELD, conversationId);
                         sourceMap.put(ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD, timestamp);
-                        sourceMap.put(ConversationalIndexConstants.PARENT_INTERACTIONS_ID_FIELD, parintid);
+                        sourceMap.put(ConversationalIndexConstants.PARENT_INTERACTIONS_ID_FIELD, parentId);
                         sourceMap.put(ConversationalIndexConstants.INTERACTIONS_TRACE_NUMBER_FIELD, traceNumber);
 
                         if (input != null && !input.trim().isEmpty()) {

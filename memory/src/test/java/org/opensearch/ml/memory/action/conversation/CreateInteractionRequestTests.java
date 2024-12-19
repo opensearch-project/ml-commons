@@ -155,37 +155,6 @@ public class CreateInteractionRequestTests extends OpenSearchTestCase {
         assert (request.getTraceNumber().equals(1));
     }
 
-    public void testRestRequest_WithUnknownFields_Fails() throws IOException {
-        Map<String, Object> params = Map
-            .of(
-                ActionConstants.INPUT_FIELD,
-                "input",
-                ActionConstants.PROMPT_TEMPLATE_FIELD,
-                "pt",
-                ActionConstants.AI_RESPONSE_FIELD,
-                "response",
-                ActionConstants.RESPONSE_ORIGIN_FIELD,
-                "origin",
-                ActionConstants.ADDITIONAL_INFO_FIELD,
-                Collections.singletonMap("metadata", "some meta"),
-                "unknown_field",
-                "some value"
-            );
-
-        RestRequest rrequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
-            .withParams(Map.of(ActionConstants.MEMORY_ID, "cid"))
-            .withContent(new BytesArray(gson.toJson(params)), MediaTypeRegistry.JSON)
-            .build();
-
-        IllegalArgumentException exception = assertThrows(
-            "Expected IllegalArgumentException due to unknown field",
-            IllegalArgumentException.class,
-            () -> CreateInteractionRequest.fromRestRequest(rrequest)
-        );
-
-        assertEquals(exception.getMessage(), "Invalid field [unknown_field] found in request body");
-    }
-
     public void testFromRestRequest_WithAllFieldsEmpty_Fails() throws IOException {
         Map<String, Object> params = new HashMap<>();
 

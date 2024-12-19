@@ -166,7 +166,8 @@ public class CreateInteractionRequest extends ActionRequest {
                     tracenum = parser.intValue(false);
                     break;
                 default:
-                    throw new IllegalArgumentException("Invalid field [" + fieldName + "] found in request body");
+                    parser.skipChildren();
+                    break;
             }
         }
 
