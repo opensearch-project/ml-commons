@@ -67,7 +67,7 @@ public class MLNodeUtilsTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testValidateEmbeddingInputWithRemoteSchema() throws IOException {
+    public void testValidateEmbeddingInputWithGeneralEmbeddingRemoteSchema() throws IOException {
         String schema = "{\n"
             + "    \"type\": \"object\",\n"
             + "    \"properties\": {\n"
@@ -88,6 +88,124 @@ public class MLNodeUtilsTests extends OpenSearchTestCase {
             + "    }\n"
             + "}";
         String json = "{\"text_docs\":[ \"today is sunny\", \"today is sunny\"]}";
+        MLNodeUtils.validateSchema(schema, json);
+    }
+
+    @Test
+    public void testValidateRemoteInputWithGeneralEmbeddingRemoteSchema() throws IOException {
+        String schema = "{\n"
+            + "    \"type\": \"object\",\n"
+            + "    \"properties\": {\n"
+            + "        \"parameters\": {\n"
+            + "            \"type\": \"object\",\n"
+            + "            \"properties\": {\n"
+            + "                \"texts\": {\n"
+            + "                    \"type\": \"array\",\n"
+            + "                    \"items\": {\n"
+            + "                        \"type\": \"string\"\n"
+            + "                    }\n"
+            + "                }\n"
+            + "            },\n"
+            + "            \"required\": [\n"
+            + "                \"texts\"\n"
+            + "            ]\n"
+            + "        }\n"
+            + "    }\n"
+            + "}";
+        String json = "{\"parameters\": {\"texts\": [\"Hello\",\"world\"]}}";
+        MLNodeUtils.validateSchema(schema, json);
+    }
+
+    @Test
+    public void testValidateEmbeddingInputWithTitanTextRemoteSchema() throws IOException {
+        String schema = "{\n"
+            + "    \"type\": \"object\",\n"
+            + "    \"properties\": {\n"
+            + "        \"parameters\": {\n"
+            + "            \"type\": \"object\",\n"
+            + "            \"properties\": {\n"
+            + "                \"inputText\": {\n"
+            + "                    \"type\": \"string\"\n"
+            + "                }\n"
+            + "            },\n"
+            + "            \"required\": [\n"
+            + "                \"inputText\"\n"
+            + "            ]\n"
+            + "        }\n"
+            + "    }\n"
+            + "}";
+        String json = "{\"text_docs\":[ \"today is sunny\", \"today is sunny\"]}";
+        MLNodeUtils.validateSchema(schema, json);
+    }
+
+    @Test
+    public void testValidateRemoteInputWithTitanTextRemoteSchema() throws IOException {
+        String schema = "{\n"
+            + "    \"type\": \"object\",\n"
+            + "    \"properties\": {\n"
+            + "        \"parameters\": {\n"
+            + "            \"type\": \"object\",\n"
+            + "            \"properties\": {\n"
+            + "                \"inputText\": {\n"
+            + "                    \"type\": \"string\"\n"
+            + "                }\n"
+            + "            },\n"
+            + "            \"required\": [\n"
+            + "                \"inputText\"\n"
+            + "            ]\n"
+            + "        }\n"
+            + "    }\n"
+            + "}";
+        String json = "{\"parameters\": {\"inputText\": \"Say this is a test\"}}";
+        MLNodeUtils.validateSchema(schema, json);
+    }
+
+    @Test
+    public void testValidateEmbeddingInputWithTitanImageRemoteSchema() throws IOException {
+        String schema = "{\n"
+            + "    \"type\": \"object\",\n"
+            + "    \"properties\": {\n"
+            + "        \"parameters\": {\n"
+            + "            \"type\": \"object\",\n"
+            + "            \"properties\": {\n"
+            + "                \"inputText\": {\n"
+            + "                    \"type\": \"string\"\n"
+            + "                },\n"
+            + "                \"inputImage\": {\n"
+            + "                    \"type\": \"string\"\n"
+            + "                }\n"
+            + "            }\n"
+            + "        }\n"
+            + "    }\n"
+            + "}";
+        String json = "{\"text_docs\":[ \"today is sunny\", \"today is sunny\"]}";
+        MLNodeUtils.validateSchema(schema, json);
+    }
+
+    @Test
+    public void testValidateRemoteInputWithTitanImageRemoteSchema() throws IOException {
+        String schema = "{\n"
+            + "    \"type\": \"object\",\n"
+            + "    \"properties\": {\n"
+            + "        \"parameters\": {\n"
+            + "            \"type\": \"object\",\n"
+            + "            \"properties\": {\n"
+            + "                \"inputText\": {\n"
+            + "                    \"type\": \"string\"\n"
+            + "                },\n"
+            + "                \"inputImage\": {\n"
+            + "                    \"type\": \"string\"\n"
+            + "                }\n"
+            + "            }\n"
+            + "        }\n"
+            + "    }\n"
+            + "}";
+        String json = "{{\n"
+            + "  \"parameters\": {\n"
+            + "    \"inputText\": \"Say this is a test\",\n"
+            + "    \"inputImage\": \"/9jk=\"\n"
+            + "  }\n"
+            + "}";
         MLNodeUtils.validateSchema(schema, json);
     }
 
