@@ -1,7 +1,7 @@
 # Tutorial: Running Asymmetric Semnantic Search within OpenSearch
 
-This tutorial demonstrates how to generate text embeddings using an asymmetric embedding model in OpenSearch which will be used
-to run semantic search. This is implemented within a Docker container, the example model used in this tutorial is the multilingual
+This tutorial demonstrates how generating text embeddings using an asymmetric embedding model in OpenSearch. The embeddings will be used
+to run semantic search, implemented using a Docker container. The example model used in this tutorial is the multilingual
 `intfloat/multilingual-e5-small` model from Hugging Face. 
 You will learn how to prepare the model, register it in OpenSearch, and run inference to generate embeddings.
 
@@ -13,16 +13,26 @@ You will learn how to prepare the model, register it in OpenSearch, and run infe
 
 - Docker Desktop installed and running on your local machine.
 - Basic familiarity with Docker and OpenSearch.
-- Access to the Hugging Face model `intfloat/multilingual-e5-small` (or another model of your choice).
+- Access to the Hugging Face `intfloat/multilingual-e5-small` model (or another model of your choice).
 ---
 
-## Step 1: Spin Up a Docker OpenSearch Cluster
+## Step 1: Spin up a Docker OpenSearch cluster
 
-To run OpenSearch in a local development environment, you can use Docker and a pre-configured `docker-compose` file.
+To run OpenSearch in a local development environment, you can use Docker and a preconfigured `docker-compose` file.
 
-### a. Update Cluster Settings
+### a. Create a Docker Compose File
 
-Before proceeding, ensure your cluster is configured to allow registering models. You can do this by updating the cluster settings via the following request:
+You can use this sample [file](https://opensearch.org/docs/latest/install-and-configure/install-opensearch/docker/#sample-docker-compose-file-for-development) as an example.
+Once your `docker-compose.yml` file is created, run the following command to start OpenSearch in the background:
+
+```
+docker-compose up -d
+```
+
+
+### b. Update cluster settings
+
+Ensure your cluster is configured to allow registering models. You can do this by updating the cluster settings using the following request:
 
 ```
 PUT _cluster/settings
@@ -38,22 +48,14 @@ PUT _cluster/settings
 
 This configuration ensures that OpenSearch can accept machine learning models from external URLs and can run models across non-ML nodes.
 
-### b. Use a Docker Compose File
-
-You can use this sample [file](https://opensearch.org/docs/latest/install-and-configure/install-opensearch/docker/#sample-docker-compose-file-for-development) as an example.
-Once your `docker-compose.yml` file is ready, run the following command to start OpenSearch in the background:
-
-```
-docker-compose up -d
-```
 
 ---
 
-## Step 2: Prepare the Model for OpenSearch
+## Step 2: Prepare the model for OpenSearch
 
-In this tutorial, we’ll use the Hugging Face model `intfloat/multilingual-e5-small`, which is capable of generating multilingual embeddings. Follow these steps to prepare and zip the model for use in OpenSearch.
+In this tutorial, you’ll use the Hugging Face `intfloat/multilingual-e5-small` model, which is capable of generating multilingual embeddings. Follow these steps to prepare and zip the model for use in OpenSearch.
 
-### a. Clone the Model from Hugging Face
+### a. Clone the model from Hugging Face
 
 To download the model, use the following steps:
 
@@ -71,9 +73,9 @@ To download the model, use the following steps:
 
 This will download the model files into a directory on your local machine.
 
-### b. Zip the Model Files
+### b. Zip the model files
 
-In order to upload the model to OpenSearch, you must zip the necessary model files (`model.onnx`, `sentencepiece.bpe.model`, and `tokenizer.json`). The `model.onnx` file is located in the `onnx` directory of the cloned repository.
+To upload the model to OpenSearch, you must zip the necessary model files (`model.onnx`, `sentencepiece.bpe.model`, and `tokenizer.json`). The `model.onnx` file is located in the `onnx` directory of the cloned repository.
 
 Run the following command in the directory containing these files:
 
@@ -81,9 +83,9 @@ Run the following command in the directory containing these files:
 zip -r intfloat-multilingual-e5-small-onnx.zip model.onnx tokenizer.json sentencepiece.bpe.model
 ```
 
-This command will create a zip file named `intfloat-multilingual-e5-small-onnx.zip`, with the previous mentioned files.
+This command will create a zip file named `intfloat-multilingual-e5-small-onnx.zip`, with the all necessary files.
 
-### c. Calculate the Model File Hash
+### c. Calculate the model file's hash
 
 Before registering the model, you need to calculate the SHA-256 hash of the zip file. Run this command to generate the hash:
 
@@ -91,11 +93,11 @@ Before registering the model, you need to calculate the SHA-256 hash of the zip 
 shasum -a 256 intfloat-multilingual-e5-small-onnx.zip
 ```
 
-Make a note of the hash value, as you will need it during the model registration process.
+Note the hash value; You'll need it during the model registration.
 
-### d. Serve the Model File Using a Python HTTP Server
+### d. Serve the model file using a Python HTTP server
 
-To allow OpenSearch to access the model file, you need to serve it via HTTP. Since this is a local development environment, you can use Python's built-in HTTP server:
+To allow OpenSearch to access the model file, you can serve it through HTTP. Because this tutorial uses a local development environment, you can use Python's built-in HTTP server command:
 
 Navigate to the directory containing the zip file and run the following command:
 
@@ -107,7 +109,7 @@ This will serve the zip file at `http://0.0.0.0:8080/intfloat-multilingual-e5-sm
 
 ---
 
-## Step 3: Register a Model Group
+## Step 3: Register a model group
 
 Before registering the model itself, you need to create a model group. This helps organize models in OpenSearch. Run the following request to create a new model group:
 
@@ -119,13 +121,13 @@ POST /_plugins/_ml/model_groups/_register
 }
 ```
 
-Take note of the `model_group_id` returned in the response, as it will be required when registering the model.
+Note of the `model_group_id` returned in the response; you'll use it to register the model.
 
 ---
 
-## Step 4: Register the Model
+## Step 4: Register the model
 
-Now that you have the model zip file and the model group ID, you can register the model in OpenSearch. Run the following request:
+Now that you have the model zip file and the model group ID, you can register the model in OpenSearch:
 
 ```
 POST /_plugins/_ml/models/_register
@@ -148,21 +150,21 @@ POST /_plugins/_ml/models/_register
 }
 ```
 
-Replace `your_group_id` and `your_model_zip_content_hash_value` with the actual values from earlier. This will initiate the model registration process, and you’ll receive a task ID in the response.
+Replace `your_group_id` and `your_model_zip_content_hash_value` with the values from previous steps. This will initiate the model registration process, and you’ll receive a task ID in the response.
 
-To check the status of the registration, run:
+To check the status of the registration, run the following request:
 
 ```
 GET /_plugins/_ml/tasks/your_task_id
 ```
 
-Once successful, note the `model_id` returned, as you'll need it for deployment and inference.
+Once successful, note the `model_id` returned; you'll need it for deployment and inference.
 
 ---
 
-## Step 5: Deploy the Model
+## Step 5: Deploy the model
 
-After the model is registered, you can deploy it by running:
+After the model is registered, you can deploy it by running the following request:
 
 ```
 POST /_plugins/_ml/models/your_model_id/_deploy
@@ -174,15 +176,15 @@ Check the status of the deployment using the task ID:
 GET /_plugins/_ml/tasks/your_task_id
 ```
 
-When the model is successfully deployed, it will be in the **DEPLOYED** state, and you can use it for inference.
+When the model is successfully deployed, it's state will change to the **DEPLOYED** state, and you can use it for inference.
 
 ---
 
-## Step 6: Run Inference
+## Step 6: Run inference
 
 Now that your model is deployed, you can use it to generate text embeddings for both queries and passages.
 
-### a. Generating Passage Embeddings
+### Generating passage embeddings
 
 To generate embeddings for a passage, use the following request:
 
@@ -218,7 +220,7 @@ The response will include a sentence embedding of size 384:
 }
 ```
 
-### b. Generating Query Embeddings
+### Generating query embeddings
 
 Similarly, you can generate embeddings for a query:
 
@@ -254,16 +256,16 @@ The response will look like this:
 
 ---
 
-# Applying Semantic Search using an ML Inference processor
+# Applying semantic search using an ML Inference processor
 
-In this section you are going to apply semantic search on facts about New York City. First you will create an ingest pipeline
+In this section you'll run semantic search on facts about New York City. First, you'll create an ingest pipeline
 using the ML inference processor to create embeddings on ingestion. Then create a search pipeline to run a search using
 the same asymmetric embedding model. 
 
 
 ## 2. Create an ingest pipeline
 
-### 2.1 Create the test KNN index
+### 2.1 Create a test KNN index
 ```
 PUT nyc_facts
 {
@@ -324,9 +326,9 @@ PUT _ingest/pipeline/asymmetric_embedding_ingest_pipeline
 }
 ```
 
-### 2.3 Simulate pipeline
+### 2.3 Simulate the pipeline
 
-- Case1: two book objects with title
+Simulate the pipeline by running the following request:
 ```
 POST /_ingest/pipeline/asymmetric_embedding_ingest_pipeline/_simulate
 {
@@ -342,7 +344,7 @@ POST /_ingest/pipeline/asymmetric_embedding_ingest_pipeline/_simulate
 	]
 }
 ```
-Response
+The response contains the embedding generated by the model after we "ingested" a document using the pipeline.
 ```
 {
    "docs": [
@@ -375,8 +377,8 @@ Response
 }
 ```
 
-### 2.4 Test ingest data
-Perform bulk ingestion, this will now trigger the ingest pipeline to have embeddings for each document.
+### 2.4 Test data ingestion
+When you perform bulk ingestion, the ingest pipeline will generate embeddings for each document: 
 ```
 POST /_bulk
 { "index": { "_index": "nyc_facts" } }
@@ -414,8 +416,8 @@ POST /_bulk
 
 ## 3. Run Semantic Search
 
-### 3.1 Create the Search Pipeline
-Create the search pipeline which will convert your query into a embedding and run KNN on the index to return the best documents.
+### 3.1 Create a Search Pipeline
+Create a search pipeline that will convert your query into an embedding and run K-NN search on the index to return the best-matching documents:
 
 ```
 PUT /_search/pipeline/asymmetric_embedding_search_pipeline
@@ -447,7 +449,7 @@ PUT /_search/pipeline/asymmetric_embedding_search_pipeline
 ```
 
 ### 3.1 Run Semantic Search
-In this scenario we are going to see the top 3 results, when asking about sporting activities in New York City.
+Run a query about sporting activities in New York City:
 ```
 GET /nyc_facts/_search?search_pipeline=asymmetric_embedding_search_pipeline
 {
@@ -462,7 +464,7 @@ GET /nyc_facts/_search?search_pipeline=asymmetric_embedding_search_pipeline
 }
 ```
 
-Which yields the following 
+The response contains the top 3 matching documents: 
 ```json
 {
   "took": 22,
