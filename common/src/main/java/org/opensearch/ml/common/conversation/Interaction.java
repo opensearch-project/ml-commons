@@ -184,10 +184,18 @@ public class Interaction implements Writeable, ToXContentObject {
         builder.field(ActionConstants.CONVERSATION_ID_FIELD, conversationId);
         builder.field(ActionConstants.RESPONSE_INTERACTION_ID_FIELD, id);
         builder.field(ConversationalIndexConstants.INTERACTIONS_CREATE_TIME_FIELD, createTime);
-        builder.field(ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD, input);
-        builder.field(ConversationalIndexConstants.INTERACTIONS_PROMPT_TEMPLATE_FIELD, promptTemplate);
-        builder.field(ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD, response);
-        builder.field(ConversationalIndexConstants.INTERACTIONS_ORIGIN_FIELD, origin);
+        if (input != null && !input.trim().isEmpty()) {
+            builder.field(ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD, input);
+        }
+        if (promptTemplate != null && !promptTemplate.trim().isEmpty()) {
+            builder.field(ConversationalIndexConstants.INTERACTIONS_PROMPT_TEMPLATE_FIELD, promptTemplate);
+        }
+        if (response != null && !response.trim().isEmpty()) {
+            builder.field(ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD, response);
+        }
+        if (origin != null && !origin.trim().isEmpty()) {
+            builder.field(ConversationalIndexConstants.INTERACTIONS_ORIGIN_FIELD, origin);
+        }
         if (additionalInfo != null) {
             builder.field(ConversationalIndexConstants.INTERACTIONS_ADDITIONAL_INFO_FIELD, additionalInfo);
         }
