@@ -154,20 +154,25 @@ POST /_plugins/_ml/connectors/_create
         def text_docs = params.text_docs;
         def textDocsBuilder = new StringBuilder('[');
         for (int i=0; i<text_docs.length; i++) {
-          textDocsBuilder.append('\"');
+          textDocsBuilder.append('"');
           textDocsBuilder.append(text_docs[i]);
-          textDocsBuilder.append('\"');
+          textDocsBuilder.append('"');
           if (i<text_docs.length - 1) {
             textDocsBuilder.append(',');
           }
         }
         textDocsBuilder.append(']');
-        def parameters = '{ \"query\": \"' + query_text + '\",  \"texts\": ' + textDocsBuilder.toString() + ' }';
-        return  '{\"parameters\": ' + parameters + '}';
+        def parameters = '{ "query": "' + query_text + '",  "texts": ' + textDocsBuilder.toString() + ' }';
+        return  '{"parameters": ' + parameters + '}';
       """,
-      "request_body": "{ \"query\": \"${parameters.query}\", \"texts\": ${parameters.texts} }",
+      "request_body": """
+        { 
+          "query": "${parameters.query}",
+          "texts": ${parameters.texts}
+        }
+      """,
       "post_process_function": """
-        if (params.result == null || params.result.length > 0) {
+        if (params.result == null || params.result.length == 0) {
           throw new IllegalArgumentException("Post process function input is empty.");
         }
         def outputs = params.result;
@@ -178,8 +183,8 @@ POST /_plugins/_ml/connectors/_create
         }
         def resultBuilder = new StringBuilder('[');
         for (int i=0; i<scores.length; i++) {
-          resultBuilder.append(' {\"name\": \"similarity\", \"data_type\": \"FLOAT32\", \"shape\": [1],');
-          resultBuilder.append('\"data\": [');
+          resultBuilder.append(' {"name": "similarity", "data_type": "FLOAT32", "shape": [1],');
+          resultBuilder.append('"data": [');
           resultBuilder.append(scores[i]);
           resultBuilder.append(']}');
           if (i<outputs.length - 1) {
@@ -222,20 +227,25 @@ POST /_plugins/_ml/connectors/_create
         def text_docs = params.text_docs;
         def textDocsBuilder = new StringBuilder('[');
         for (int i=0; i<text_docs.length; i++) {
-          textDocsBuilder.append('\"');
+          textDocsBuilder.append('"');
           textDocsBuilder.append(text_docs[i]);
-          textDocsBuilder.append('\"');
+          textDocsBuilder.append('"');
           if (i<text_docs.length - 1) {
             textDocsBuilder.append(',');
           }
         }
         textDocsBuilder.append(']');
-        def parameters = '{ \"query\": \"' + query_text + '\",  \"texts\": ' + textDocsBuilder.toString() + ' }';
-        return  '{\"parameters\": ' + parameters + '}';
+        def parameters = '{ "query": "' + query_text + '",  "texts": ' + textDocsBuilder.toString() + ' }';
+        return  '{"parameters": ' + parameters + '}';
       """,
-      "request_body": "{ \"query\": \"${parameters.query}\", \"texts\": ${parameters.texts} }",
+      "request_body": """
+        { 
+          "query": "${parameters.query}",
+          "texts": ${parameters.texts}
+        }
+      """,
       "post_process_function": """
-        if (params.result == null || params.result.length > 0) {
+        if (params.result == null || params.result.length == 0) {
           throw new IllegalArgumentException("Post process function input is empty.");
         }
         def outputs = params.result;
@@ -246,8 +256,8 @@ POST /_plugins/_ml/connectors/_create
         }
         def resultBuilder = new StringBuilder('[');
         for (int i=0; i<scores.length; i++) {
-          resultBuilder.append(' {\"name\": \"similarity\", \"data_type\": \"FLOAT32\", \"shape\": [1],');
-          resultBuilder.append('\"data\": [');
+          resultBuilder.append(' {"name": "similarity", "data_type": "FLOAT32", "shape": [1],');
+          resultBuilder.append('"data": [');
           resultBuilder.append(scores[i]);
           resultBuilder.append(']}');
           if (i<outputs.length - 1) {
@@ -330,7 +340,7 @@ By default, the SageMaker model output has the following format:
 ]
 ```
 
-The connector `post_process_function` transforms the model's output into a format that the [Reranker processor](https://opensearch.org/docs/latest/search-plugins/search-pipelines/rerank-processor/) can interpretm, and order result by index. This adapted format is as follows:
+The connector `post_process_function` transforms the model's output into a format that the [Reranker processor](https://opensearch.org/docs/latest/search-plugins/search-pipelines/rerank-processor/) can interpret, and order result by index. This adapted format is as follows:
 ```json
 {
   "inference_results": [
