@@ -249,7 +249,7 @@ public class MLMemoryManagerTests {
     @Test
     public void testGetInteractions_NoAccessNoUser_ThenFail() {
         doReturn(true).when(metadata).hasIndex(anyString());
-        String userstr = "";
+        String userStr = "";
         doAnswer(invocation -> {
             ActionListener<Boolean> al = invocation.getArgument(1);
             al.onResponse(false);
@@ -258,7 +258,7 @@ public class MLMemoryManagerTests {
 
         doAnswer(invocation -> {
             ThreadContext tc = new ThreadContext(Settings.EMPTY);
-            tc.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, userstr);
+            tc.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, userStr);
             return tc;
         }).when(threadPool).getThreadContext();
         mlMemoryManager.getFinalInteractions("cid", 10, interactionListActionListener);
