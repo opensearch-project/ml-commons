@@ -1,9 +1,8 @@
 # Tutorial: Running Asymmetric Semnantic Search within OpenSearch
 
-This tutorial demonstrates how generating text embeddings using an asymmetric embedding model in OpenSearch. The embeddings will be used
-to run semantic search, implemented using a Docker container. The example model used in this tutorial is the multilingual
-`intfloat/multilingual-e5-small` model from Hugging Face. 
-You will learn how to prepare the model, register it in OpenSearch, and run inference to generate embeddings.
+This tutorial demonstrates how generating text embeddings using an asymmetric embedding model in OpenSearch. The example model used in this tutorial is the multilingual
+`intfloat/multilingual-e5-small` model from Hugging Face.
+In this tutorial, you'll learn how to prepare the model, register it in OpenSearch, and run inference to generate embeddings.
 
 > **Note**: Make sure to replace all placeholders (e.g., `your_`) with your specific values.
 
@@ -11,26 +10,18 @@ You will learn how to prepare the model, register it in OpenSearch, and run infe
 
 ## Prerequisites
 
-- Docker Desktop installed and running on your local machine.
-- Basic familiarity with Docker and OpenSearch.
+- OpenSearch installed on your machine
 - Access to the Hugging Face `intfloat/multilingual-e5-small` model (or another model of your choice).
+- Basic knowledge of Linux commands
 ---
 
-## Step 1: Spin up a Docker OpenSearch cluster
+## Step 1: Start OpenSearch locally
 
-To run OpenSearch in a local development environment, you can use Docker and a preconfigured `docker-compose` file.
+See here for directions to install and run [OpenSearch](https://opensearch.org/docs/latest/install-and-configure/install-opensearch/index/). 
 
-### a. Create a Docker Compose File
+Run OpenSearch locally and make sure to do the following.
 
-You can use this sample [file](https://opensearch.org/docs/latest/install-and-configure/install-opensearch/docker/#sample-docker-compose-file-for-development) as an example.
-Once your `docker-compose.yml` file is created, run the following command to start OpenSearch in the background:
-
-```
-docker-compose up -d
-```
-
-
-### b. Update cluster settings
+###  Update cluster settings
 
 Ensure your cluster is configured to allow registering models. You can do this by updating the cluster settings using the following request:
 
@@ -146,7 +137,7 @@ POST /_plugins/_ml/models/_register
         "passage_prefix": "passage: ",
         "all_config": "{ \"_name_or_path\": \"intfloat/multilingual-e5-small\", \"architectures\": [ \"BertModel\" ], \"attention_probs_dropout_prob\": 0.1, \"hidden_size\": 384, \"num_attention_heads\": 12, \"num_hidden_layers\": 12, \"tokenizer_class\": \"XLMRobertaTokenizer\" }"
     },
-    "url": "http://host.docker.internal:8080/intfloat-multilingual-e5-small-onnx.zip"
+    "url": "http://localhost:8080/intfloat-multilingual-e5-small-onnx.zip"
 }
 ```
 
@@ -328,7 +319,7 @@ PUT _ingest/pipeline/asymmetric_embedding_ingest_pipeline
 
 ### 2.3 Simulate the pipeline
 
-Simulate the pipeline by running the following request:
+You can test the pipeline using the simulate endpoint. Simulate the pipeline by running the following request:
 ```
 POST /_ingest/pipeline/asymmetric_embedding_ingest_pipeline/_simulate
 {
