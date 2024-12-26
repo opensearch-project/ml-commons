@@ -153,7 +153,8 @@ public class LinearRegression implements Trainable, Predictable {
                 optimiser = new RMSProp(learningRate, momentumFactor, epsilon, decayRate);
                 break;
             default:
-                // Use AdaGrad by default, reference issue: https://github.com/opensearch-project/ml-commons/issues/3210#issuecomment-2556119802
+                // Use AdaGrad by default, reference issue:
+                // https://github.com/opensearch-project/ml-commons/issues/3210#issuecomment-2556119802
                 optimiser = new AdaGrad(learningRate, epsilon);
                 break;
         }
