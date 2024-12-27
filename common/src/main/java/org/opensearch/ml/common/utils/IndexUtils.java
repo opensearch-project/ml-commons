@@ -101,19 +101,26 @@ public class IndexUtils {
     }
 
     /**
-     * Checks if mapping is a valid json
-     * Validates mapping against a schema found in mappings/schema.json
-     * Schema validates the following:
-        * Below fields are present:
-            * "_meta"
-            * "_meta.schema_version"
-            * "properties"
-         * No additional fields at root level
-         * No additional fields in "_meta" object
-         * "properties" is an object type
-         * "_meta" is an object type
-         * "_meta_.schema_version" provided type is integer
-     * Note: Validation can be made more strict if a specific schema is defined for each index.
+     * Checks if the provided mapping is a valid JSON and validates it against a schema.
+     *
+     * <p>The schema is located at <code>mappings/schema.json</code> and enforces the following validations:</p>
+     *
+     * <ul>
+     *   <li>Mandatory fields:
+     *     <ul>
+     *       <li><code>_meta</code></li>
+     *       <li><code>_meta.schema_version</code></li>
+     *       <li><code>properties</code></li>
+     *     </ul>
+     *   </li>
+     *   <li>No additional fields are allowed at the root level.</li>
+     *   <li>No additional fields are allowed in the <code>_meta</code> object.</li>
+     *   <li><code>properties</code> must be an object type.</li>
+     *   <li><code>_meta</code> must be an object type.</li>
+     *   <li><code>_meta.schema_version</code> must be an integer.</li>
+     * </ul>
+     *
+     * <p><strong>Note:</strong> Validation can be made stricter if a specific schema is defined for each index.</p>
      */
     public static void validateMapping(String mapping) throws IOException {
         if (mapping.isBlank() || !StringUtils.isJson(mapping)) {
