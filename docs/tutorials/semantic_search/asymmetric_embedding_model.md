@@ -15,11 +15,11 @@ In this tutorial, you'll learn how to prepare the model, register it in OpenSear
 - Basic knowledge of Linux commands
 ---
 
-## Step 1: Start OpenSearch locally
+## Step 1: Start OpenSearch
 
 See here for directions to install and run [OpenSearch](https://opensearch.org/docs/latest/install-and-configure/install-opensearch/index/). 
 
-Run OpenSearch locally and make sure to do the following.
+Run OpenSearch and ensure the following steps are completed. In this example, we set up the OS cluster locally.
 
 ###  Update cluster settings
 
