@@ -66,7 +66,7 @@ This will download the model files into a directory on your local machine.
 
 ### b. Zip the model files
 
-To upload the model to OpenSearch, you must zip the necessary model files (`model.onnx`, `sentencepiece.bpe.model`, and `tokenizer.json`). The `model.onnx` file is located in the `onnx` directory of the cloned repository.
+To upload the model to OpenSearch, you must zip the necessary model files (`model.onnx`, `sentencepiece.bpe.model`, and `tokenizer.json`). You can find these files located in the `onnx` directory of the cloned repository.
 
 Run the following command in the directory containing these files:
 
