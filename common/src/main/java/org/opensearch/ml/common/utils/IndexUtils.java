@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.utils.StringUtils.validateSchema;
 
 import java.io.IOException;
 import java.net.URL;
+import java.util.HashMap;
 import java.util.Map;
 
 import com.google.common.base.Charsets;
@@ -73,34 +74,46 @@ public class IndexUtils {
             throw new IllegalArgumentException("Mapping cannot be null or empty");
         }
 
+        // Preload resources into memory to avoid redundant I/O
+        Map<String, String> loadedPlaceholders = new HashMap<>();
         for (Map.Entry<String, String> placeholder : MAPPING_PLACEHOLDERS.entrySet()) {
             URL url = IndexUtils.class.getClassLoader().getResource(placeholder.getValue());
             if (url == null) {
                 throw new IOException("Resource not found: " + placeholder.getValue());
             }
 
-            String placeholderMapping = Resources.toString(url, Charsets.UTF_8);
-            mapping = mapping.replace(placeholder.getKey(), placeholderMapping);
+            loadedPlaceholders.put(placeholder.getKey(), Resources.toString(url, Charsets.UTF_8));
         }
 
-        return mapping;
+        StringBuilder result = new StringBuilder(mapping);
+        for (Map.Entry<String, String> entry : loadedPlaceholders.entrySet()) {
+            String placeholder = entry.getKey();
+            String replacement = entry.getValue();
+
+            // Replace all occurrences of the placeholder
+            int index;
+            while ((index = result.indexOf(placeholder)) != -1) {
+                result.replace(index, index + placeholder.length(), replacement);
+            }
+        }
+
+        return result.toString();
     }
 
     /**
-        - Checks if mapping is a valid json
-        - Validates mapping against a schema found in mappings/schema.json
-        - Schema validates the following:
-            - Below fields are present:
-                - "_meta"
-                    - "_meta.schema_version"
-                - "properties"
-            - No additional fields at root level
-            - No additional fields in "_meta" object
-            - "properties" is an object type
-            - "_meta" is an object type
-            - "_meta_.schema_version" provided type is integer
-    
-        Note: Validation can be made more strict if a specific schema is defined for each index.
+     * Checks if mapping is a valid json
+     * Validates mapping against a schema found in mappings/schema.json
+     * Schema validates the following:
+        * Below fields are present:
+            * "_meta"
+            * "_meta.schema_version"
+            * "properties"
+         * No additional fields at root level
+         * No additional fields in "_meta" object
+         * "properties" is an object type
+         * "_meta" is an object type
+         * "_meta_.schema_version" provided type is integer
+     * Note: Validation can be made more strict if a specific schema is defined for each index.
      */
     public static void validateMapping(String mapping) throws IOException {
         if (mapping.isBlank() || !StringUtils.isJson(mapping)) {

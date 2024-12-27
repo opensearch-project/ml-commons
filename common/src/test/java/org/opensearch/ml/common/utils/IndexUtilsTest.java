@@ -67,23 +67,23 @@ public class IndexUtilsTest {
             + "  }\n"
             + "}\n";
         try {
-            String actualMapping = IndexUtils.getMappingFromFile("index-mappings/test-mapping.json");
+            String actualMapping = IndexUtils.getMappingFromFile("index-mappings/test_mapping.json");
             // comparing JsonObjects to avoid issues caused by eol character in different OS
             assertEquals(StringUtils.getJsonObjectFromString(expectedMapping), StringUtils.getJsonObjectFromString(actualMapping));
         } catch (IOException e) {
-            throw new RuntimeException("Failed to read file at path: index-mappings/test-mapping.json");
+            throw new RuntimeException("Failed to read file at path: index-mappings/test_mapping.json");
         }
     }
 
     @Test
     public void testGetMappingFromFileFileNotFound() {
-        String path = "index-mappings/test-mapping-not-found.json";
+        String path = "index-mappings/test_mapping_not_found.json";
         IOException e = assertThrows(IOException.class, () -> IndexUtils.getMappingFromFile(path));
     }
 
     @Test
     public void testGetMappingFromFilesMalformedJson() {
-        String path = "index-mappings/test-mapping-malformed.json";
+        String path = "index-mappings/test_mapping_malformed.json";
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> IndexUtils.getMappingFromFile(path));
     }
 

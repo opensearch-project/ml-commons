@@ -5,14 +5,12 @@
 
 package org.opensearch.ml.common.utils;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -20,6 +18,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.BooleanUtils;
 import org.json.JSONArray;
@@ -27,6 +26,7 @@ import org.json.JSONException;
 import org.json.JSONObject;
 import org.opensearch.OpenSearchParseException;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.gson.Gson;
@@ -347,25 +347,28 @@ public class StringUtils {
         return JsonParser.parseString(jsonString).getAsJsonObject();
     }
 
-    public static void validateSchema(String schemaString, String instanceString) throws IOException {
-        // parse the schema JSON as string
-        JsonNode schemaNode = MAPPER.readTree(schemaString);
-        JsonSchema schema = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V202012).getSchema(schemaNode);
+    public static void validateSchema(String schemaString, String instanceString) {
+        try {
+            // parse the schema JSON as string
+            JsonNode schemaNode = MAPPER.readTree(schemaString);
+            JsonSchema schema = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V202012).getSchema(schemaNode);
 
-        // JSON data to validate
-        JsonNode jsonNode = MAPPER.readTree(instanceString);
+            // JSON data to validate
+            JsonNode jsonNode = MAPPER.readTree(instanceString);
 
-        // Validate JSON node against the schema
-        Set<ValidationMessage> errors = schema.validate(jsonNode);
-        if (!errors.isEmpty()) {
-            throw new OpenSearchParseException(
-                "Validation failed: "
-                    + Arrays.toString(errors.toArray(new ValidationMessage[0]))
-                    + " for instance: "
-                    + instanceString
-                    + " with schema: "
-                    + schemaString
-            );
+            // Validate JSON node against the schema
+            Set<ValidationMessage> errors = schema.validate(jsonNode);
+            if (!errors.isEmpty()) {
+                String errorMessage = errors.stream().map(ValidationMessage::getMessage).collect(Collectors.joining(", "));
+
+                throw new OpenSearchParseException(
+                    "Validation failed: " + errorMessage + " for instance: " + instanceString + " with schema: " + schemaString
+                );
+            }
+        } catch (JsonProcessingException e) {
+            throw new IllegalArgumentException("Invalid JSON format: " + e.getMessage(), e);
+        } catch (Exception e) {
+            throw new OpenSearchParseException("Schema validation failed: " + e.getMessage(), e);
         }
     }
 }
