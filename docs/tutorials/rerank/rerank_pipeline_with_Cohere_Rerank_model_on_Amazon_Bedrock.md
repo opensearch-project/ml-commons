@@ -393,9 +393,9 @@ POST _bulk
 ```
 ### 2.2 Create a reranking pipeline
 ```json
-PUT /_search/pipeline/rerank_pipeline_sagemaker
+PUT /_search/pipeline/rerank_pipeline_bedrock
 {
-    "description": "Pipeline for reranking with Sagemaker cross-encoder model",
+    "description": "Pipeline for reranking with Bedrock cross-encoder model",
     "response_processors": [
         {
             "rerank": {
@@ -523,7 +523,7 @@ The first document in the response is `Carson City is the capital city of the Am
 
 Next, test the query using the reranking pipeline:
 ```json
-POST my-test-data/_search?search_pipeline=rerank_pipeline_sagemaker
+POST my-test-data/_search?search_pipeline=rerank_pipeline_bedrock
 {
   "query": {
     "match": {
@@ -640,7 +640,7 @@ The first document in the response is `"Washington, D.C. (also known as simply W
 
 Note: You can avoid writing the query twice by using the `query_text_path` instead of `query_text` as follows:
 ```json
-POST my-test-data/_search?search_pipeline=rerank_pipeline_sagemaker
+POST my-test-data/_search?search_pipeline=rerank_pipeline_bedrock
 {
   "query": {
     "match": {
