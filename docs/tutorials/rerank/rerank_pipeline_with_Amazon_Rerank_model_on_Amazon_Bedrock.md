@@ -277,8 +277,6 @@ POST _plugins/_ml/models/your_model_id/_predict
 }
 ```
 
-Each item in the array comprises a `query_text` and a `text_docs` string, separated by a  ` , `.
-
 Alternatively, you can test the model as follows:
 ```json
 POST _plugins/_ml/_predict/text_similarity/your_model_id
@@ -371,7 +369,7 @@ The connector `post_process_function` transforms the model's output into a forma
 ```
 
 Explanation of the response:
-1. The response contains two `similarity` outputs. For each `similarity` output, the `data` array contains a relevance score of each document against the query.
+1. The response contains four `similarity` outputs. For each `similarity` output, the `data` array contains a relevance score of each document against the query.
 2. The `similarity` outputs are provided in the order of the input documents; the first similarity result pertains to the first document.
 
 ## 2. Reranking pipeline
