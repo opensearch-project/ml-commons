@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "schema_version": 11
+    "schema_version": 12
   },
   "properties": {
     "algorithm": {
@@ -62,6 +62,9 @@
     },
     "is_hidden": {
       "type": "boolean"
+    },
+    "tenant_id": {
+      "type": "keyword"
     },
     "model_config": {
       "properties": {

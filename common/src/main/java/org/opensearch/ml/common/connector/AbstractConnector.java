@@ -71,6 +71,8 @@ public abstract class AbstractConnector implements Connector {
     protected Instant lastUpdateTime;
     @Setter
     protected ConnectorClientConfig connectorClientConfig;
+    @Setter
+    protected String tenantId;
 
     protected Map<String, String> createDecryptedHeaders(Map<String, String> headers) {
         if (headers == null) {

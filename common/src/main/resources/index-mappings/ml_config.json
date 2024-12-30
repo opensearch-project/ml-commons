@@ -1,12 +1,15 @@
 {
   "_meta": {
-    "schema_version": 4
+    "schema_version": 5
   },
   "properties": {
     "master_key": {
       "type": "keyword"
     },
     "config_type": {
+      "type": "keyword"
+    },
+    "tenant_id": {
       "type": "keyword"
     },
     "ml_configuration": {

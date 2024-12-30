@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "schema_version": 3
+    "schema_version": 4
   },
   "properties": {
     "model_id": {
@@ -37,6 +37,9 @@
     },
     "error": {
       "type": "text"
+    },
+    "tenant_id": {
+      "type": "keyword"
     },
     "is_async": {
       "type": "boolean"

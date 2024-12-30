@@ -21,6 +21,9 @@ public class CommonValue {
     public static final String UNDEPLOYED = "undeployed";
     public static final String NOT_FOUND = "not_found";
 
+    /** The field name containing the tenant id */
+    public static final String TENANT_ID_FIELD = "tenant_id";
+
     public static final String MASTER_KEY = "master_key";
     public static final String CREATE_TIME_FIELD = "create_time";
     public static final String LAST_UPDATE_TIME_FIELD = "last_update_time";
@@ -63,4 +66,5 @@ public class CommonValue {
     public static final Version VERSION_2_16_0 = Version.fromString("2.16.0");
     public static final Version VERSION_2_17_0 = Version.fromString("2.17.0");
     public static final Version VERSION_2_18_0 = Version.fromString("2.18.0");
+    public static final Version VERSION_2_19_0 = Version.fromString("2.19.0");
 }
