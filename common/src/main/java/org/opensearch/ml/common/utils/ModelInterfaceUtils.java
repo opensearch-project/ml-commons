@@ -52,10 +52,7 @@ public class ModelInterfaceUtils {
         + "                \"texts\"\n"
         + "            ]\n"
         + "        }\n"
-        + "    },\n"
-        + "    \"required\": [\n"
-        + "        \"parameters\"\n"
-        + "    ]\n"
+        + "    }\n"
         + "}";
 
     private static final String TITAN_TEXT_EMBEDDING_MODEL_INTERFACE_INPUT = "{\n"
@@ -72,10 +69,7 @@ public class ModelInterfaceUtils {
         + "                \"inputText\"\n"
         + "            ]\n"
         + "        }\n"
-        + "    },\n"
-        + "    \"required\": [\n"
-        + "        \"parameters\"\n"
-        + "    ]\n"
+        + "    }\n"
         + "}";
 
     private static final String TITAN_MULTI_MODAL_EMBEDDING_MODEL_INTERFACE_INPUT = "{\n"
@@ -92,10 +86,7 @@ public class ModelInterfaceUtils {
         + "                }\n"
         + "            }\n"
         + "        }\n"
-        + "    },\n"
-        + "    \"required\": [\n"
-        + "        \"parameters\"\n"
-        + "    ]\n"
+        + "    }\n"
         + "}";
 
     private static final String AMAZON_COMPREHEND_DETECTDOMAINANTLANGUAGE_API_INTERFACE_INPUT = "{\n"
