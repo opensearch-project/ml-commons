@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "schema_version": 2
+    "schema_version": 3
   },
   "properties": {
     "name": {
@@ -19,6 +19,9 @@
       "type": "integer"
     },
     "model_group_id": {
+      "type": "keyword"
+    },
+    "tenant_id": {
       "type": "keyword"
     },
     "backend_roles": {

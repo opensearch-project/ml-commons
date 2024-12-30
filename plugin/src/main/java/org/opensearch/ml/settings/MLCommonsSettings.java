@@ -5,6 +5,11 @@
 
 package org.opensearch.ml.settings;
 
+import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_ENDPOINT_KEY;
+import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_REGION_KEY;
+import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_SERVICE_NAME_KEY;
+import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_TYPE_KEY;
+
 import java.util.List;
 import java.util.function.Function;
 
@@ -263,4 +268,35 @@ public final class MLCommonsSettings {
 
     public static final Setting<Boolean> ML_COMMONS_CONTROLLER_ENABLED = Setting
         .boolSetting("plugins.ml_commons.controller_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    // Whether multi-tenancy is enabled in ML Commons.
+    // This is a static setting which must be set before starting OpenSearch by (in priority order):
+    // 1. As a command-line argument using the -E flag (overrides other options):
+    // ./bin/opensearch -Eplugins.ml_commons.multi_tenancy_enabled=true
+    // 2. As a system property using OPENSEARCH_JAVA_OPTS (overrides opensearch.yml):
+    // export OPENSEARCH_JAVA_OPTS="-Dplugins.ml_commons.multi_tenancy_enabled=true"
+    // ./bin/opensearch
+    // Or inline when starting OpenSearch:
+    // OPENSEARCH_JAVA_OPTS="-Dplugins.ml_commons.multi_tenancy_enabled=true" ./bin/opensearch
+    // 3. In the opensearch.yml configuration file:
+    // plugins.ml_commons.multi_tenancy_enabled: true
+    // After setting it, a full cluster restart is required for the changes to take effect.
+    public static final Setting<Boolean> ML_COMMONS_MULTI_TENANCY_ENABLED = Setting
+        .boolSetting("plugins.ml_commons.multi_tenancy_enabled", false, Setting.Property.NodeScope);
+
+    /** This setting sets the remote metadata type */
+    public static final Setting<String> REMOTE_METADATA_TYPE = Setting
+        .simpleString("plugins.ml_commons." + REMOTE_METADATA_TYPE_KEY, Setting.Property.NodeScope, Setting.Property.Final);
+
+    /** This setting sets the remote metadata endpoint */
+    public static final Setting<String> REMOTE_METADATA_ENDPOINT = Setting
+        .simpleString("plugins.flow_framework." + REMOTE_METADATA_ENDPOINT_KEY, Setting.Property.NodeScope, Setting.Property.Final);
+
+    /** This setting sets the remote metadata region */
+    public static final Setting<String> REMOTE_METADATA_REGION = Setting
+        .simpleString("plugins.flow_framework." + REMOTE_METADATA_REGION_KEY, Setting.Property.NodeScope, Setting.Property.Final);
+
+    /** This setting sets the remote metadata service name */
+    public static final Setting<String> REMOTE_METADATA_SERVICE_NAME = Setting
+        .simpleString("plugins.flow_framework." + REMOTE_METADATA_SERVICE_NAME_KEY, Setting.Property.NodeScope, Setting.Property.Final);
 }
