@@ -8,6 +8,7 @@ package org.opensearch.ml.engine.algorithms.agent;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_GEN_INPUT;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.PROMPT_PREFIX;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.PROMPT_SUFFIX;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.ACTION;
@@ -608,7 +609,7 @@ public class AgentUtilsTest {
             Assert.assertEquals("abc", toolParams.get("detectorName"));
             Assert.assertEquals("sample-data", toolParams.get("indices"));
             Assert.assertEquals("value1", toolParams.get("key1"));
-            Assert.assertEquals(actionInput, toolParams.get("llm_generated_action_input"));
+            Assert.assertEquals(actionInput, toolParams.get(LLM_GEN_INPUT));
         });
     }
 
@@ -619,7 +620,7 @@ public class AgentUtilsTest {
         verifyConstructToolParams(question, actionInput, (toolParams) -> {
             Assert.assertEquals(3, toolParams.size());
             Assert.assertEquals("value1", toolParams.get("key1"));
-            Assert.assertNull(toolParams.get("llm_generated_action_input"));
+            Assert.assertNull(toolParams.get(LLM_GEN_INPUT));
             Assert.assertNull(toolParams.get("input"));
         });
     }
@@ -633,7 +634,7 @@ public class AgentUtilsTest {
             Assert.assertEquals(5, toolParams.size());
             Assert.assertEquals(question, toolParams.get("input"));
             Assert.assertEquals("value1", toolParams.get("key1"));
-            Assert.assertEquals(actionInput, toolParams.get("llm_generated_action_input"));
+            Assert.assertEquals(actionInput, toolParams.get(LLM_GEN_INPUT));
             Assert.assertEquals("sample-data", toolParams.get("indices"));
             Assert.assertEquals("abc", toolParams.get("detectorName"));
         });
@@ -652,7 +653,7 @@ public class AgentUtilsTest {
                     .builder()
                     .type("tool1")
                     .parameters(Map.of("key1", "value1"))
-                    .configMap(Map.of("input", preConfigInputStr + "${parameters.llm_generated_action_input}"))
+                    .configMap(Map.of("input", preConfigInputStr + "${parameters.llm_generated_input}"))
                     .build()
             );
         AtomicReference<String> lastActionInput = new AtomicReference<>();
@@ -661,7 +662,7 @@ public class AgentUtilsTest {
         Assert.assertEquals(3, toolParams.size());
         Assert.assertEquals(preConfigInputStr + actionInput, toolParams.get("input"));
         Assert.assertEquals("value1", toolParams.get("key1"));
-        Assert.assertEquals(actionInput, toolParams.get("llm_generated_action_input"));
+        Assert.assertEquals(actionInput, toolParams.get(LLM_GEN_INPUT));
     }
 
     @Test
@@ -686,7 +687,7 @@ public class AgentUtilsTest {
         Assert.assertEquals(5, toolParams.size());
         Assert.assertEquals(preConfigInputStr + "abc", toolParams.get("input"));
         Assert.assertEquals("value1", toolParams.get("key1"));
-        Assert.assertEquals(actionInput, toolParams.get("llm_generated_action_input"));
+        Assert.assertEquals(actionInput, toolParams.get(LLM_GEN_INPUT));
     }
 
     private void verifyConstructToolParams(String question, String actionInput, Consumer<Map<String, String>> verify) {
