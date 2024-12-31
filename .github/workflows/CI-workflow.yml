@@ -52,7 +52,17 @@ jobs:
         with:
           role-to-assume: ${{ secrets.ML_ROLE }}
           aws-region: us-west-2
-
+      # TEMPORARY until this is on Maven
+      - name: Checkout Metadata Client
+        uses: actions/checkout@v4
+        with:
+          repository: dbwiddis/opensearch-remote-metadata-sdk
+          ref: main
+          path: opensearch-remote-metadata-sdk
+      - name: Publish to maven local
+        working-directory: opensearch-remote-metadata-sdk
+        run: ./gradlew publishToMavenLocal
+      # end TEMPORARY code
       - name: Checkout MLCommons
         uses: actions/checkout@v4
         with:
@@ -109,6 +119,18 @@ jobs:
         uses: actions/setup-java@v1
         with:
           java-version: ${{ matrix.java }}
+
+      # TEMPORARY until this is on Maven
+      - name: Checkout Metadata Client
+        uses: actions/checkout@v4
+        with:
+          repository: dbwiddis/opensearch-remote-metadata-sdk
+          ref: main
+          path: opensearch-remote-metadata-sdk
+      - name: Publish to maven local
+        working-directory: opensearch-remote-metadata-sdk
+        run: ./gradlew publishToMavenLocal
+      # end TEMPORARY code
 
       - name: Checkout MLCommons
         uses: actions/checkout@v4
@@ -211,6 +233,18 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+
+      # TEMPORARY until this is on Maven
+      - name: Checkout Metadata Client
+        uses: actions/checkout@v4
+        with:
+          repository: dbwiddis/opensearch-remote-metadata-sdk
+          ref: main
+          path: opensearch-remote-metadata-sdk
+      - name: Publish to maven local
+        working-directory: opensearch-remote-metadata-sdk
+        run: ./gradlew publishToMavenLocal
+        # end TEMPORARY code
 
       - name: Build and Run Tests
         shell: bash
