@@ -149,7 +149,7 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
             if (request.source() == null) {
                 throw new IllegalArgumentException("query body is empty, cannot processor inference on empty query request.");
             }
-
+            setRequestContextFromExt(request, requestContext);
             String queryString = request.source().toString();
             rewriteQueryString(request, queryString, requestListener, requestContext);
 
@@ -504,9 +504,8 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
      */
     private static SearchSourceBuilder getSearchSourceBuilder(NamedXContentRegistry xContentRegistry, String queryString)
         throws IOException {
-        // MLInferenceRequestParametersExtBuilder mlInferenceExtBuilder = new MLInferenceRequestParametersExtBuilder();
+
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-        // SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().ext(List.of(mlInferenceExtBuilder));
 
         XContentParser queryParser = XContentType.JSON
             .xContent()
