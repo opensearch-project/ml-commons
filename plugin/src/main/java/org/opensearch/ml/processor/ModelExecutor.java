@@ -8,6 +8,7 @@ package org.opensearch.ml.processor;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
+import static org.opensearch.searchpipelines.questionanswering.generative.ext.GenerativeQAParamExtBuilder.PARAMETER_NAME;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -19,6 +20,7 @@ import java.util.stream.Collectors;
 
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.action.ActionRequest;
+import org.opensearch.action.search.SearchRequest;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -33,6 +35,10 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.searchext.MLInferenceRequestParametersExtBuilder;
+import org.opensearch.search.SearchExtBuilder;
+import org.opensearch.search.pipeline.PipelineProcessingContext;
+import org.opensearch.searchpipelines.questionanswering.generative.ext.GenerativeQAParamExtBuilder;
 
 import com.jayway.jsonpath.Configuration;
 import com.jayway.jsonpath.JsonPath;
@@ -334,5 +340,27 @@ public interface ModelExecutor {
      */
     default String convertToDotPath(String path) {
         return path.replaceAll("\\[(\\d+)\\]", "$1\\.").replaceAll("\\['(.*?)']", "$1\\.").replaceAll("^\\$", "").replaceAll("\\.$", "");
+    }
+
+    default void setRequestContextFromExt(SearchRequest request, PipelineProcessingContext requestContext) {
+
+        List<SearchExtBuilder> extBuilderList = request.source().ext();
+        for (SearchExtBuilder ext : extBuilderList) {
+            if (ext instanceof MLInferenceRequestParametersExtBuilder) {
+                MLInferenceRequestParametersExtBuilder mlExtBuilder = (MLInferenceRequestParametersExtBuilder) ext;
+                Map<String, Object> mlParams = mlExtBuilder.getRequestParameters().getParams();
+                mlParams
+                    .forEach(
+                        (key, value) -> requestContext
+                            .setAttribute(String.format("ext.%s.%s", MLInferenceRequestParametersExtBuilder.NAME, key), value)
+                    );
+            }
+            if (ext instanceof GenerativeQAParamExtBuilder) {
+                GenerativeQAParamExtBuilder qaParamExtBuilder = (GenerativeQAParamExtBuilder) ext;
+                Map<String, Object> mlParams = (Map<String, Object>) qaParamExtBuilder.getParams();
+                mlParams.forEach((key, value) -> requestContext.setAttribute(String.format("ext.%s.%s", PARAMETER_NAME, key), value));
+            }
+        }
+
     }
 }

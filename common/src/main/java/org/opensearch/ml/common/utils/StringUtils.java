@@ -34,10 +34,8 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
-import com.jayway.jsonpath.Configuration;
 import com.jayway.jsonpath.InvalidJsonException;
 import com.jayway.jsonpath.JsonPath;
-import com.jayway.jsonpath.Option;
 import com.jayway.jsonpath.PathNotFoundException;
 import com.networknt.schema.JsonSchema;
 import com.networknt.schema.JsonSchemaFactory;
@@ -389,53 +387,73 @@ public class StringUtils {
     /**
      * Prepares nested structures in a JSON object based on the given field path.
      *
-     * This method ensures that all intermediate nested objects exist in the JSON object
+     * This method ensures that all intermediate nested objects and arrays exist in the JSON object
      * for a given field path. If any part of the path doesn't exist, it creates new empty objects
-     * (HashMaps) for those parts.
+     * (HashMaps) or arrays (ArrayLists) for those parts.
      *
-     * @param jsonObject The JSON object to be updated.
-     * @param fieldPath The full path of the field, potentially including nested structures.
+     * The method can handle complex paths including both object properties and array indices.
+     * For example, it can process paths like "foo.bar[1].baz[0].qux".
+     *
+     * @param jsonObject The JSON object to be updated. If this is not a Map, a new Map will be created.
+     * @param fieldPath The full path of the field, potentially including nested structures and array indices.
+     *                  The path can optionally start with "$." which will be ignored if present.
      * @return The updated JSON object with necessary nested structures in place.
+     *         If the input was not a Map, returns the newly created Map structure.
      *
-     * @throws IllegalArgumentException If there's an issue with JSON parsing or path manipulation.
+     * @throws IllegalArgumentException If the field path is null or not a valid JSON path.
      *
-     * @implNote This method uses JsonPath for JSON manipulation and StringUtils for path existence checks.
-     *           It handles paths both with and without a leading "$." notation.
-     *           Each non-existent intermediate object in the path is created as an empty HashMap.
-     *
-     * @see JsonPath
-     * @see StringUtils
      */
     public static Object prepareNestedStructures(Object jsonObject, String fieldPath) {
-
         if (fieldPath == null) {
-            throw new IllegalArgumentException("the field path is null");
+            throw new IllegalArgumentException("The field path is null");
+        }
+        if (jsonObject == null) {
+            throw new IllegalArgumentException("The object is null");
         }
         if (!isValidJSONPath(fieldPath)) {
-            throw new IllegalArgumentException("the field path is not a valid json path: " + fieldPath);
+            throw new IllegalArgumentException("The field path is not a valid JSON path: " + fieldPath);
         }
-        String path = fieldPath.startsWith("$.") ? fieldPath.substring(2) : fieldPath;
-        String[] pathParts = path.split("\\.");
-        Configuration suppressExceptionConfiguration = Configuration
-            .builder()
-            .options(Option.SUPPRESS_EXCEPTIONS, Option.DEFAULT_PATH_LEAF_TO_NULL)
-            .build();
-        StringBuilder currentPath = new StringBuilder("$");
 
-        for (int i = 0; i < pathParts.length - 1; i++) {
-            currentPath.append(".").append(pathParts[i]);
-            if (!StringUtils.pathExists(jsonObject, currentPath.toString())) {
-                try {
-                    jsonObject = JsonPath
-                        .using(suppressExceptionConfiguration)
-                        .parse(jsonObject)
-                        .set(currentPath.toString(), new java.util.HashMap<>())
-                        .json();
-                } catch (Exception e) {
-                    throw new IllegalArgumentException("Error creating nested structure for path: " + currentPath, e);
+        String path = fieldPath.startsWith("$.") ? fieldPath.substring(2) : fieldPath;
+        String[] pathParts = path.split("(?<!\\\\)\\.");
+
+        Map<String, Object> current = (jsonObject instanceof Map) ? (Map<String, Object>) jsonObject : new HashMap<>();
+
+        for (String part : pathParts) {
+            if (part.contains("[")) {
+                // Handle array notation
+                String[] arrayParts = part.split("\\[");
+                String key = arrayParts[0];
+                int index = Integer.parseInt(arrayParts[1].replaceAll("\\]", ""));
+
+                if (!current.containsKey(key)) {
+                    current.put(key, new ArrayList<>());
                 }
+                if (!(current.get(key) instanceof List)) {
+                    return jsonObject;
+                }
+                List<Object> list = (List<Object>) current.get(key);
+                if (index >= list.size()) {
+                    while (list.size() <= index) {
+                        list.add(null);
+                    }
+                    list.set(index, new HashMap<>());
+                }
+                if (!(list.get(index) instanceof Map)) {
+                    return jsonObject;
+                }
+                current = (Map<String, Object>) list.get(index);
+            } else {
+                // Handle object notation
+                if (!current.containsKey(part)) {
+                    current.put(part, new HashMap<>());
+                } else if (!(current.get(part) instanceof Map)) {
+                    return jsonObject;
+                }
+                current = (Map<String, Object>) current.get(part);
             }
         }
+
         return jsonObject;
     }
 

@@ -4003,6 +4003,105 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
 
     }
 
+    @Test
+    public void testProcessResponseAsyncSetRequestContextFromExt() throws Exception {
+        String documentField = "text";
+        String modelInputField = "context";
+        List<Map<String, String>> inputMap = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        input.put(modelInputField, documentField);
+        inputMap.add(input);
+
+        String newDocumentField = "ext.ml_inference.summary";
+        String modelOutputField = "response";
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+        Map<String, String> modelConfig = new HashMap<>();
+        modelConfig
+            .put(
+                "prompt",
+                "\\n\\nHuman: You are a professional data analyst. You will always answer question based on the given context first. If the answer is not directly shown in the context, you will analyze the data and find the answer. If you don't know the answer, just say I don't know. Context: ${parameters.context}. \\n\\n Human: please summarize the documents \\n\\n Assistant:"
+            );
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            inputMap,
+            outputMap,
+            modelConfig,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            false
+        );
+        SearchResponse response = getSearchResponse(5, true, documentField);
+        Map<String, Object> params = new HashMap<>();
+        params.put("llm_response", "answer");
+        MLInferenceSearchResponse mLInferenceSearchResponse = new MLInferenceSearchResponse(
+            params,
+            response.getInternalResponse(),
+            response.getScrollId(),
+            response.getTotalShards(),
+            response.getSuccessfulShards(),
+            response.getSkippedShards(),
+            response.getSuccessfulShards(),
+            response.getShardFailures(),
+            response.getClusters()
+        );
+
+        Map<String, Object> role = new HashMap<>();
+        role.put("role", "users");
+        MLInferenceRequestParameters requestParameters = new MLInferenceRequestParameters(role);
+        MLInferenceRequestParametersExtBuilder mlInferenceExtBuilder = new MLInferenceRequestParametersExtBuilder();
+        mlInferenceExtBuilder.setRequestParameters(requestParameters);
+        QueryBuilder incomingQuery = new TermQueryBuilder("text", "foo");
+        SearchSourceBuilder source = new SearchSourceBuilder()
+            .query(incomingQuery)
+            .size(5)
+            .sort("text")
+            .ext(List.of(mlInferenceExtBuilder));
+        SearchRequest request = new SearchRequest().source(source);
+
+        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "there is 1 value")).build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                MLInferenceSearchResponse responseAfterProcessor = (MLInferenceSearchResponse) newSearchResponse;
+                assertEquals(responseAfterProcessor.getHits().getHits().length, 5);
+                Map<String, Object> newParams = new HashMap<>();
+                newParams.put("llm_response", "answer");
+                newParams.put("summary", "there is 1 value");
+                assertEquals(responseAfterProcessor.getParams(), newParams);
+                verify(responseContext).setAttribute("ext.ml_inference.role", "users");
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException(e);
+            }
+        };
+
+        responseProcessor.processResponseAsync(request, mLInferenceSearchResponse, responseContext, listener);
+
+    }
+
     private static SearchRequest getSearchRequest() {
         QueryBuilder incomingQuery = new TermQueryBuilder("text", "foo");
         SearchSourceBuilder source = new SearchSourceBuilder().query(incomingQuery).size(5).sort("text");
@@ -4443,4 +4542,5 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
 
         }
     }
+
 }
