@@ -26,7 +26,6 @@ import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.utils.TestHelper;
 
-import com.google.common.collect.ImmutableList;
 import com.jayway.jsonpath.DocumentContext;
 import com.jayway.jsonpath.JsonPath;
 
@@ -659,14 +658,7 @@ public class RestMLInferenceIngestProcessorIT extends MLCommonsRestTestCase {
 
     protected Map simulateIngestPipeline(String pipelineName, String sampleDocuments) throws IOException {
         Response ingestionResponse = TestHelper
-            .makeRequest(
-                client(),
-                "POST",
-                "/_ingest/pipeline/" + pipelineName + "/_simulate",
-                null,
-                sampleDocuments,
-                null
-            );
+            .makeRequest(client(), "POST", "/_ingest/pipeline/" + pipelineName + "/_simulate", null, sampleDocuments, null);
         assertEquals(200, ingestionResponse.getStatusLine().getStatusCode());
 
         return parseResponseToMap(ingestionResponse);
