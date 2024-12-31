@@ -315,7 +315,7 @@ public class OpenSearchConversationalMemoryHandlerTests extends OpenSearchTestCa
     }
 
     public void testGetAConversation_Future() {
-        ConversationMeta response = new ConversationMeta("cid", Instant.now(), Instant.now(), "boring name", null, null, null);
+        ConversationMeta response = new ConversationMeta("cid", Instant.now(), Instant.now(), "boring name", null, null);
         doAnswer(invocation -> {
             ActionListener<ConversationMeta> listener = invocation.getArgument(1);
             listener.onResponse(response);

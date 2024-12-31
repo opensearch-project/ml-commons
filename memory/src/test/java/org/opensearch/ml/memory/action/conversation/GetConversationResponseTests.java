@@ -38,7 +38,7 @@ import org.opensearch.test.OpenSearchTestCase;
 public class GetConversationResponseTests extends OpenSearchTestCase {
 
     public void testGetConversationResponseStreaming() throws IOException {
-        ConversationMeta convo = new ConversationMeta("cid", Instant.now(), Instant.now(), "name", null, null, null);
+        ConversationMeta convo = new ConversationMeta("cid", Instant.now(), Instant.now(), "name", null, null);
         GetConversationResponse response = new GetConversationResponse(convo);
         assert (response.getConversation().equals(convo));
 
@@ -51,7 +51,7 @@ public class GetConversationResponseTests extends OpenSearchTestCase {
     }
 
     public void testToXContent() throws IOException {
-        ConversationMeta convo = new ConversationMeta("cid", Instant.now(), Instant.now(), "name", null, null, null);
+        ConversationMeta convo = new ConversationMeta("cid", Instant.now(), Instant.now(), "name", null, null);
         GetConversationResponse response = new GetConversationResponse(convo);
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
@@ -68,7 +68,7 @@ public class GetConversationResponseTests extends OpenSearchTestCase {
 
     public void testToXContent_withAdditionalInfo() throws IOException {
         Map<String, String> additionalInfos = Map.of("key1", "value1");
-        ConversationMeta convo = new ConversationMeta("cid", Instant.now(), Instant.now(), "name", null, null, additionalInfos);
+        ConversationMeta convo = new ConversationMeta("cid", Instant.now(), Instant.now(), "name", null, additionalInfos);
         GetConversationResponse response = new GetConversationResponse(convo);
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);

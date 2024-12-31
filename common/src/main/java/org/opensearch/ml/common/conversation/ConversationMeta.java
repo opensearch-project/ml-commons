@@ -51,8 +51,6 @@ public class ConversationMeta implements Writeable, ToXContentObject {
     @Getter
     private String user;
     @Getter
-    private String applicationType;
-    @Getter
     private Map<String, String> additionalInfos;
 
     /**
@@ -76,9 +74,8 @@ public class ConversationMeta implements Writeable, ToXContentObject {
         Instant updated = Instant.parse((String) docFields.get(ConversationalIndexConstants.META_UPDATED_TIME_FIELD));
         String name = (String) docFields.get(ConversationalIndexConstants.META_NAME_FIELD);
         String user = (String) docFields.get(ConversationalIndexConstants.USER_FIELD);
-        String applicationType = (String) docFields.get(ConversationalIndexConstants.APPLICATION_TYPE_FIELD);
         Map<String, String> additionalInfos = (Map<String, String>) docFields.get(ConversationalIndexConstants.META_ADDITIONAL_INFO_FIELD);
-        return new ConversationMeta(id, created, updated, name, user, applicationType, additionalInfos);
+        return new ConversationMeta(id, created, updated, name, user, additionalInfos);
     }
 
     /**
@@ -94,14 +91,13 @@ public class ConversationMeta implements Writeable, ToXContentObject {
         Instant updated = in.readInstant();
         String name = in.readString();
         String user = in.readOptionalString();
-        String applicationType = in.readOptionalString();
         Map<String, String> additionalInfos = null;
         if (in.getVersion().onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_ADDITIONAL_INFO)) {
             if (in.readBoolean()) {
                 additionalInfos = in.readMap(StreamInput::readString, StreamInput::readString);
             }
         }
-        return new ConversationMeta(id, created, updated, name, user, applicationType, additionalInfos);
+        return new ConversationMeta(id, created, updated, name, user, additionalInfos);
     }
 
     @Override
@@ -111,7 +107,6 @@ public class ConversationMeta implements Writeable, ToXContentObject {
         out.writeInstant(updatedTime);
         out.writeString(name);
         out.writeOptionalString(user);
-        out.writeOptionalString(applicationType);
         if (out.getVersion().onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_ADDITIONAL_INFO)) {
             if (additionalInfos == null) {
                 out.writeBoolean(false);
@@ -134,10 +129,6 @@ public class ConversationMeta implements Writeable, ToXContentObject {
             + updatedTime.toString()
             + ", user="
             + user
-            + ", applicationType="
-            + applicationType
-            + ", additionalInfos="
-            + additionalInfos
             + "}";
     }
 
@@ -151,10 +142,7 @@ public class ConversationMeta implements Writeable, ToXContentObject {
         if (this.user != null) {
             builder.field(ConversationalIndexConstants.USER_FIELD, this.user);
         }
-        if (this.applicationType != null && !this.applicationType.trim().isEmpty()) {
-            builder.field(ConversationalIndexConstants.APPLICATION_TYPE_FIELD, this.applicationType);
-        }
-        if (this.additionalInfos != null && !additionalInfos.isEmpty()) {
+        if (this.additionalInfos != null) {
             builder.field(ConversationalIndexConstants.META_ADDITIONAL_INFO_FIELD, this.additionalInfos);
         }
         builder.endObject();
@@ -171,9 +159,7 @@ public class ConversationMeta implements Writeable, ToXContentObject {
             && Objects.equals(this.user, otherConversation.user)
             && Objects.equals(this.createdTime, otherConversation.createdTime)
             && Objects.equals(this.updatedTime, otherConversation.updatedTime)
-            && Objects.equals(this.name, otherConversation.name)
-            && Objects.equals(this.applicationType, otherConversation.applicationType)
-            && Objects.equals(this.additionalInfos, otherConversation.additionalInfos);
+            && Objects.equals(this.name, otherConversation.name);
     }
 
 }
