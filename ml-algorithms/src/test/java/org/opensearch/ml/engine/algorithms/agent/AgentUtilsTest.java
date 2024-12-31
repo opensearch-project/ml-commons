@@ -8,6 +8,7 @@ package org.opensearch.ml.engine.algorithms.agent;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_GEN_INPUT;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.PROMPT_PREFIX;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.PROMPT_SUFFIX;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.ACTION;
@@ -603,11 +604,24 @@ public class AgentUtilsTest {
         String question = "dummy question";
         String actionInput = "{'detectorName': 'abc', 'indices': 'sample-data' }";
         verifyConstructToolParams(question, actionInput, (toolParams) -> {
-            Assert.assertEquals(4, toolParams.size());
+            Assert.assertEquals(5, toolParams.size());
             Assert.assertEquals(actionInput, toolParams.get("input"));
             Assert.assertEquals("abc", toolParams.get("detectorName"));
             Assert.assertEquals("sample-data", toolParams.get("indices"));
             Assert.assertEquals("value1", toolParams.get("key1"));
+            Assert.assertEquals(actionInput, toolParams.get(LLM_GEN_INPUT));
+        });
+    }
+
+    @Test
+    public void testConstructToolParamsNullActionInput() {
+        String question = "dummy question";
+        String actionInput = null;
+        verifyConstructToolParams(question, actionInput, (toolParams) -> {
+            Assert.assertEquals(3, toolParams.size());
+            Assert.assertEquals("value1", toolParams.get("key1"));
+            Assert.assertNull(toolParams.get(LLM_GEN_INPUT));
+            Assert.assertNull(toolParams.get("input"));
         });
     }
 
@@ -617,10 +631,63 @@ public class AgentUtilsTest {
         String actionInput = "{'detectorName': 'abc', 'indices': 'sample-data' }";
         when(tool1.useOriginalInput()).thenReturn(true);
         verifyConstructToolParams(question, actionInput, (toolParams) -> {
-            Assert.assertEquals(2, toolParams.size());
+            Assert.assertEquals(5, toolParams.size());
             Assert.assertEquals(question, toolParams.get("input"));
             Assert.assertEquals("value1", toolParams.get("key1"));
+            Assert.assertEquals(actionInput, toolParams.get(LLM_GEN_INPUT));
+            Assert.assertEquals("sample-data", toolParams.get("indices"));
+            Assert.assertEquals("abc", toolParams.get("detectorName"));
         });
+    }
+
+    @Test
+    public void testConstructToolParams_PlaceholderConfigInput() {
+        String question = "dummy question";
+        String actionInput = "action input";
+        String preConfigInputStr = "Config Input: ";
+        Map<String, Tool> tools = Map.of("tool1", tool1);
+        Map<String, MLToolSpec> toolSpecMap = Map
+            .of(
+                "tool1",
+                MLToolSpec
+                    .builder()
+                    .type("tool1")
+                    .parameters(Map.of("key1", "value1"))
+                    .configMap(Map.of("input", preConfigInputStr + "${parameters.llm_generated_input}"))
+                    .build()
+            );
+        AtomicReference<String> lastActionInput = new AtomicReference<>();
+        String action = "tool1";
+        Map<String, String> toolParams = AgentUtils.constructToolParams(tools, toolSpecMap, question, lastActionInput, action, actionInput);
+        Assert.assertEquals(3, toolParams.size());
+        Assert.assertEquals(preConfigInputStr + actionInput, toolParams.get("input"));
+        Assert.assertEquals("value1", toolParams.get("key1"));
+        Assert.assertEquals(actionInput, toolParams.get(LLM_GEN_INPUT));
+    }
+
+    @Test
+    public void testConstructToolParams_PlaceholderConfigInputJson() {
+        String question = "dummy question";
+        String actionInput = "{'detectorName': 'abc', 'indices': 'sample-data' }";
+        String preConfigInputStr = "Config Input: ";
+        Map<String, Tool> tools = Map.of("tool1", tool1);
+        Map<String, MLToolSpec> toolSpecMap = Map
+            .of(
+                "tool1",
+                MLToolSpec
+                    .builder()
+                    .type("tool1")
+                    .parameters(Map.of("key1", "value1"))
+                    .configMap(Map.of("input", preConfigInputStr + "${parameters.detectorName}"))
+                    .build()
+            );
+        AtomicReference<String> lastActionInput = new AtomicReference<>();
+        String action = "tool1";
+        Map<String, String> toolParams = AgentUtils.constructToolParams(tools, toolSpecMap, question, lastActionInput, action, actionInput);
+        Assert.assertEquals(5, toolParams.size());
+        Assert.assertEquals(preConfigInputStr + "abc", toolParams.get("input"));
+        Assert.assertEquals("value1", toolParams.get("key1"));
+        Assert.assertEquals(actionInput, toolParams.get(LLM_GEN_INPUT));
     }
 
     private void verifyConstructToolParams(String question, String actionInput, Consumer<Map<String, String>> verify) {
