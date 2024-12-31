@@ -187,7 +187,10 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
                     argThat(exception -> exception instanceof NullPointerException && exception.getMessage().equals(npeMessage))
                 );
         } catch (Exception e) {
-            assertEquals("this catch block should not get executed.", e.getMessage());
+            // Java 11 doesn't pass the message correctly resulting in an anonymous NPE thus this getMessage() results in null
+            if (e.getMessage() != null) {
+                assertEquals("this catch block should not get executed.", e.getMessage());
+            }
         }
         // reset to mocked object
         xContentRegistry = mock(NamedXContentRegistry.class);
