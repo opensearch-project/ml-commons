@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.utils;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.opensearch.ml.common.utils.StringUtils.TO_STRING_FUNCTION_NAME;
 import static org.opensearch.ml.common.utils.StringUtils.collectToStringPrefixes;
 import static org.opensearch.ml.common.utils.StringUtils.getJsonPath;
@@ -14,6 +15,7 @@ import static org.opensearch.ml.common.utils.StringUtils.obtainFieldNameFromJson
 import static org.opensearch.ml.common.utils.StringUtils.parseParameters;
 import static org.opensearch.ml.common.utils.StringUtils.toJson;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -25,6 +27,7 @@ import java.util.Set;
 import org.apache.commons.text.StringSubstitutor;
 import org.junit.Assert;
 import org.junit.Test;
+import org.opensearch.OpenSearchParseException;
 
 public class StringUtilsTest {
 
@@ -506,5 +509,22 @@ public class StringUtilsTest {
         Assert.assertTrue(isValidJSONPath("$.store.book[0,1]"));
         Assert.assertTrue(isValidJSONPath("$['store','warehouse']"));
         Assert.assertTrue(isValidJSONPath("$..book[?(@.price > 20)].title"));
+    }
+
+    @Test
+    public void testValidateSchema() throws IOException {
+        String schema = "{"
+            + "\"type\": \"object\","
+            + "\"properties\": {"
+            + "    \"key1\": {\"type\": \"string\"},"
+            + "    \"key2\": {\"type\": \"integer\"}"
+            + "},"
+            + "\"required\": [\"key1\", \"key2\"]"
+            + "}";
+        String json = "{\"key1\": \"foo\", \"key2\": 123}";
+        StringUtils.validateSchema(schema, json);
+
+        String json2 = "{\"key1\": \"foo\"}";
+        assertThrows(OpenSearchParseException.class, () -> StringUtils.validateSchema(schema, json2));
     }
 }

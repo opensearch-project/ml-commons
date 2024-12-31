@@ -75,6 +75,9 @@ dependencies {
     implementation 'com.jayway.jsonpath:json-path:2.9.0'
     implementation group: 'org.json', name: 'json', version: '20231013'
     implementation group: 'software.amazon.awssdk', name: 'netty-nio-client', version: '2.25.40'
+    testImplementation("com.fasterxml.jackson.core:jackson-annotations:${versions.jackson}")
+    testImplementation("com.fasterxml.jackson.core:jackson-databind:${versions.jackson_databind}")
+    testImplementation group: 'com.networknt' , name: 'json-schema-validator', version: '1.4.0'
 }
 
 lombok {
