@@ -739,7 +739,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         responseMap = (Map) responseList.get(0);
         assertFalse(((String) responseMap.get("text")).isEmpty());
     }
-    
+
     public void testCohereClassifyModel() throws IOException, InterruptedException {
         // Skip test if key is null
         if (COHERE_KEY == null) {
