@@ -347,6 +347,7 @@ configurations.all {
     resolutionStrategy.force 'commons-codec:commons-codec:1.15'
     resolutionStrategy.force 'org.slf4j:slf4j-api:1.7.36'
     resolutionStrategy.force 'org.codehaus.plexus:plexus-utils:3.3.0'
+    resolutionStrategy.force 'org.eclipse.platform:org.eclipse.core.runtime:3.29.0'
     exclude group: "org.jetbrains", module: "annotations"
 }
 
