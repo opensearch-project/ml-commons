@@ -55,13 +55,13 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         String postProcessFunction
     ) {
         if (actionType == null) {
-            throw new IllegalArgumentException("action type can't null");
+            throw new IllegalArgumentException("action type can't be null");
         }
         if (url == null) {
-            throw new IllegalArgumentException("url can't null");
+            throw new IllegalArgumentException("url can't be null");
         }
         if (method == null) {
-            throw new IllegalArgumentException("method can't null");
+            throw new IllegalArgumentException("method can't be null");
         }
         this.actionType = actionType;
         this.method = method;
