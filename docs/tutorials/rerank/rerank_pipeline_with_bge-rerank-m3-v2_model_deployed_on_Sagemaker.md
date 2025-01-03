@@ -87,7 +87,8 @@ The reranking result is ordering by the highest score first:
 You can sort the result by index number.
 
 ```python
-print(json.dumps(sorted(results, key=lambda x: x['index']),indent=2))
+print(json.dumps(sorted(result, key=lambda x: x['index']),indent=2))
+
 ```
 
 The results are as follows:
