@@ -393,7 +393,7 @@ POST _bulk
 ```json
 PUT /_search/pipeline/rerank_pipeline_bedrock
 {
-    "description": "Pipeline for reranking with Bedrock cross-encoder model",
+    "description": "Pipeline for reranking with Bedrock Cohere rerank model",
     "response_processors": [
         {
             "rerank": {

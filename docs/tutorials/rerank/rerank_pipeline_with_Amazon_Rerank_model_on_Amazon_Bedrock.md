@@ -98,8 +98,8 @@ To create a connector for the model, send the following request. If you are usin
 ```json
 POST /_plugins/_ml/connectors/_create
 {
-  "name": "Amazon Bedrock cross-encoder model",
-  "description": "Test connector for Amazon Bedrock cross-encoder model",
+  "name": "Amazon Bedrock rerank model",
+  "description": "Test connector for Amazon Bedrock rerank model",
   "version": 1,
   "protocol": "aws_sigv4",
   "credential": {
@@ -177,8 +177,8 @@ If using the Amazon Opensearch Service, you can provide an IAM role ARN that all
 ```json
 POST /_plugins/_ml/connectors/_create
 {
-  "name": "Amazon Bedrock cross-encoder model",
-  "description": "Test connector for Amazon Bedrock cross-encoder model",
+  "name": "Amazon Bedrock rerank model",
+  "description": "Test connector for Amazon Bedrock rerank model",
   "version": 1,
   "protocol": "aws_sigv4",
   "credential": {
@@ -253,7 +253,7 @@ Use the connector ID from the response to register and deploy the model:
 ```json
 POST /_plugins/_ml/models/_register?deploy=true
 {
-    "name": "Amazon Bedrock Cross-Encoder model",
+    "name": "Amazon Bedrock rerank model",
     "function_name": "remote",
     "description": "test rerank model",
     "connector_id": "your_connector_id"
@@ -390,7 +390,7 @@ POST _bulk
 ```json
 PUT /_search/pipeline/rerank_pipeline_bedrock
 {
-    "description": "Pipeline for reranking with Bedrock cross-encoder model",
+    "description": "Pipeline for reranking with Bedrock rerank model",
     "response_processors": [
         {
             "rerank": {
