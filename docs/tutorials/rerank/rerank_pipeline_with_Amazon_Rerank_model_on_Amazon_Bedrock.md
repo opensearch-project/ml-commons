@@ -109,15 +109,15 @@ POST /_plugins/_ml/connectors/_create
   },
   "parameters": {
     "service_name": "bedrock",
-    "service_code": "bedrock-runtime",
-    "region": "your_bedrock_model_region_like_us",
+    "endpoint": "bedrock-runtime",
+    "region": "your_bedrock_model_region_like_us-west-2",
     "model_name": "amazon.rerank-v1:0" 
   },
   "actions": [
     {
       "action_type": "PREDICT",
       "method": "POST",
-      "url": "https://${parameters.service_code}.${parameters.region}.amazonaws.com/model/${parameters.model_name}/invoke",
+      "url": "https://${parameters. endpoint}.${parameters.region}.amazonaws.com/model/${parameters.model_name}/invoke",
       "headers": {
         "x-amz-content-sha256": "required",
         "content-type": "application/json"
@@ -186,15 +186,15 @@ POST /_plugins/_ml/connectors/_create
   },
   "parameters": {
     "service_name": "bedrock",
-    "service_code": "bedrock-runtime",
-    "region": "your_bedrock_model_region_like_us",
+    "endpoint": "bedrock-runtime",
+    "region": "your_bedrock_model_region_like_us-west-2",
     "model_name": "amazon.rerank-v1:0" 
   },
   "actions": [
     {
       "action_type": "PREDICT",
       "method": "POST",
-      "url": "https://${parameters.service_code}.${parameters.region}.amazonaws.com/model/${parameters.model_name}/invoke",
+      "url": "https://${parameters.endpoint}.${parameters.region}.amazonaws.com/model/${parameters.model_name}/invoke",
       "headers": {
         "x-amz-content-sha256": "required",
         "content-type": "application/json"
@@ -267,7 +267,7 @@ POST _plugins/_ml/models/your_model_id/_predict
 {
   "parameters": {
     "query": "What is the capital city of America?",
-    "texts": [
+    "documents": [
       "Carson City is the capital city of the American state of Nevada.",
       "The Commonwealth of the Northern Mariana Islands is a group of islands in the Pacific Ocean. Its capital is Saipan.",
       "Washington, D.C. (also known as simply Washington or D.C., and officially as the District of Columbia) is the capital of the United States. It is a federal district.",
