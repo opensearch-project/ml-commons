@@ -100,11 +100,11 @@ public class ConnectorActionTest {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         action.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String content = TestHelper.xContentBuilderToString(builder);
-        String expctedContent = """
-            {"action_type":"PREDICT","method":"http","url":"https://test.com",\
-            "request_body":"{\\"input\\": \\"${parameters.input}\\"}"}\
-            """;
-        assertEquals(expctedContent, content);
+        assertEquals(
+            "{\"action_type\":\"PREDICT\",\"method\":\"http\",\"url\":\"https://test.com\","
+                + "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\"}",
+            content
+        );
     }
 
     @Test
@@ -127,23 +127,21 @@ public class ConnectorActionTest {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         action.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String content = TestHelper.xContentBuilderToString(builder);
-        String expctedContent = """
-            {"action_type":"PREDICT","method":"http","url":"https://test.com","headers":{"key1":"value1"},\
-            "request_body":"{\\"input\\": \\"${parameters.input}\\"}",\
-            "pre_process_function":"connector.pre_process.openai.embedding",\
-            "post_process_function":"connector.post_process.openai.embedding"}\
-            """;
-        assertEquals(expctedContent, content);
+        assertEquals(
+            "{\"action_type\":\"PREDICT\",\"method\":\"http\",\"url\":\"https://test.com\","
+                + "\"headers\":{\"key1\":\"value1\"},\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\","
+                + "\"pre_process_function\":\"connector.pre_process.openai.embedding\","
+                + "\"post_process_function\":\"connector.post_process.openai.embedding\"}",
+            content
+        );
     }
 
     @Test
     public void parse() throws IOException {
-        String jsonStr = """
-            {"action_type":"PREDICT","method":"http","url":"https://test.com","headers":{"key1":"value1"},\
-            "request_body":"{\\"input\\": \\"${parameters.input}\\"}",\
-            "pre_process_function":"connector.pre_process.openai.embedding",\
-            "post_process_function":"connector.post_process.openai.embedding"}"\
-            """;
+        String jsonStr = "{\"action_type\":\"PREDICT\",\"method\":\"http\",\"url\":\"https://test.com\","
+            + "\"headers\":{\"key1\":\"value1\"},\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\","
+            + "\"pre_process_function\":\"connector.pre_process.openai.embedding\","
+            + "\"post_process_function\":\"connector.post_process.openai.embedding\"}";
         XContentParser parser = XContentType.JSON
             .xContent()
             .createParser(
