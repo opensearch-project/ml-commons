@@ -54,7 +54,7 @@ public interface Memory<T extends Message> {
          * Create an instance of this Memory.
          *
          * @param params Parameters for the memory
-         * @param listener Action listern for the memory creation action
+         * @param listener Action listen for the memory creation action
          */
         void create(Map<String, Object> params, ActionListener<T> listener);
     }
