@@ -30,7 +30,7 @@ public class ConversationMetaTests {
     @Before
     public void setUp() {
         time = Instant.now();
-        conversationMeta = new ConversationMeta("test_id", time, time, "test_name", "admin", "conversational-search", null);
+        conversationMeta = new ConversationMeta("test_id", time, time, "test_name", "admin", null);
     }
 
     @Test
@@ -41,7 +41,6 @@ public class ConversationMetaTests {
         content.field(ConversationalIndexConstants.META_UPDATED_TIME_FIELD, time);
         content.field(ConversationalIndexConstants.META_NAME_FIELD, "meta name");
         content.field(ConversationalIndexConstants.USER_FIELD, "admin");
-        content.field(ConversationalIndexConstants.APPLICATION_TYPE_FIELD, "conversational-search");
         content.field(ConversationalIndexConstants.META_ADDITIONAL_INFO_FIELD, Map.of("test_key", "test_value"));
         content.endObject();
 
@@ -52,7 +51,6 @@ public class ConversationMetaTests {
         assertEquals(conversationMeta.getId(), "cId");
         assertEquals(conversationMeta.getName(), "meta name");
         assertEquals(conversationMeta.getUser(), "admin");
-        assertEquals(conversationMeta.getApplicationType(), "conversational-search");
         assertEquals(conversationMeta.getAdditionalInfos().get("test_key"), "test_value");
     }
 
@@ -85,7 +83,6 @@ public class ConversationMetaTests {
         assertEquals(meta.getId(), conversationMeta.getId());
         assertEquals(meta.getName(), conversationMeta.getName());
         assertEquals(meta.getUser(), conversationMeta.getUser());
-        assertEquals(meta.getApplicationType(), conversationMeta.getApplicationType());
     }
 
     @Test
@@ -96,7 +93,6 @@ public class ConversationMetaTests {
             Instant.ofEpochMilli(123),
             "test meta",
             "admin",
-            "neural-search",
             null
         );
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
@@ -104,7 +100,7 @@ public class ConversationMetaTests {
         String content = TestHelper.xContentBuilderToString(builder);
         assertEquals(
             content,
-            "{\"memory_id\":\"test_id\",\"create_time\":\"1970-01-01T00:00:00.123Z\",\"updated_time\":\"1970-01-01T00:00:00.123Z\",\"name\":\"test meta\",\"user\":\"admin\",\"application_type\":\"neural-search\"}"
+            "{\"memory_id\":\"test_id\",\"create_time\":\"1970-01-01T00:00:00.123Z\",\"updated_time\":\"1970-01-01T00:00:00.123Z\",\"name\":\"test meta\",\"user\":\"admin\"}"
         );
     }
 
@@ -116,11 +112,10 @@ public class ConversationMetaTests {
             Instant.ofEpochMilli(123),
             "test meta",
             "admin",
-            "conversational-search",
             null
         );
         assertEquals(
-            "{id=test_id, name=test meta, created=1970-01-01T00:00:00.123Z, updated=1970-01-01T00:00:00.123Z, user=admin, applicationType=conversational-search, additionalInfos=null}",
+            "{id=test_id, name=test meta, created=1970-01-01T00:00:00.123Z, updated=1970-01-01T00:00:00.123Z, user=admin}",
             conversationMeta.toString()
         );
     }
@@ -133,7 +128,6 @@ public class ConversationMetaTests {
             Instant.ofEpochMilli(123),
             "test meta",
             "admin",
-            "conversational-search",
             null
         );
         assertEquals(meta.equals(conversationMeta), false);
