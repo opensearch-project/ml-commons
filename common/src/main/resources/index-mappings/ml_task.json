@@ -44,43 +44,6 @@
     "remote_job": {
       "type": "flat_object"
     },
-    "user": {
-      "type": "nested",
-      "properties": {
-        "name": {
-          "type": "text",
-          "fields": {
-            "keyword": {
-              "type": "keyword",
-              "ignore_above": 256
-            }
-          }
-        },
-        "backend_roles": {
-          "type": "text",
-          "fields": {
-            "keyword": {
-              "type": "keyword"
-            }
-          }
-        },
-        "roles": {
-          "type": "text",
-          "fields": {
-            "keyword": {
-              "type": "keyword"
-            }
-          }
-        },
-        "custom_attribute_names": {
-          "type": "text",
-          "fields": {
-            "keyword": {
-              "type": "keyword"
-            }
-          }
-        }
-      }
-    }
+    "user": USER_MAPPING_PLACEHOLDER
   }
 }

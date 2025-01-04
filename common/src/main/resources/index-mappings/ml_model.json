@@ -167,77 +167,7 @@
         }
       }
     },
-    "connector": {
-      "properties": {
-        "name": {
-          "type": "text",
-          "fields": {
-            "keyword": {
-              "type": "keyword",
-              "ignore_above": 256
-            }
-          }
-        },
-        "version": {
-          "type": "keyword"
-        },
-        "description": {
-          "type": "text"
-        },
-        "protocol": {
-          "type": "keyword"
-        },
-        "parameters": {
-          "type": "flat_object"
-        },
-        "credential": {
-          "type": "flat_object"
-        },
-        "client_config": {
-          "type": "flat_object"
-        },
-        "actions": {
-          "type": "flat_object"
-        }
-      }
-    },
-    "user": {
-      "type": "nested",
-      "properties": {
-        "name": {
-          "type": "text",
-          "fields": {
-            "keyword": {
-              "type": "keyword",
-              "ignore_above": 256
-            }
-          }
-        },
-        "backend_roles": {
-          "type": "text",
-          "fields": {
-            "keyword": {
-              "type": "keyword"
-            }
-          }
-        },
-        "roles": {
-          "type": "text",
-          "fields": {
-            "keyword": {
-              "type": "keyword"
-            }
-          }
-        },
-        "custom_attribute_names": {
-          "type": "text",
-          "fields": {
-            "keyword": {
-              "type": "keyword"
-            }
-          }
-        }
-      }
-    }
+    "connector": CONNECTOR_MAPPING_PLACEHOLDER,
+    "user": USER_MAPPING_PLACEHOLDER
   }
 }
