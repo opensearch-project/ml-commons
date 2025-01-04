@@ -150,11 +150,11 @@ public class MLMemoryManager {
                 if (access) {
                     innerGetFinalInteractions(conversationId, lastNInteraction, actionListener);
                 } else {
-                    String userstr = client
+                    String userStr = client
                         .threadPool()
                         .getThreadContext()
                         .getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
-                    String user = User.parse(userstr) == null ? "" : User.parse(userstr).getName();
+                    String user = User.parse(userStr) == null ? "" : User.parse(userStr).getName();
                     throw new OpenSearchSecurityException("User [" + user + "] does not have access to conversation " + conversationId);
                 }
             }, e -> { actionListener.onFailure(e); });
