@@ -273,6 +273,7 @@ import org.opensearch.ml.rest.RestMemorySearchConversationsAction;
 import org.opensearch.ml.rest.RestMemorySearchInteractionsAction;
 import org.opensearch.ml.rest.RestMemoryUpdateConversationAction;
 import org.opensearch.ml.rest.RestMemoryUpdateInteractionAction;
+import org.opensearch.ml.searchext.MLInferenceRequestParametersExtBuilder;
 import org.opensearch.ml.settings.MLCommonsSettings;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.stats.MLClusterLevelStat;
@@ -996,6 +997,15 @@ public class MachineLearningPlugin extends Plugin
                     GenerativeQAParamExtBuilder.PARAMETER_NAME,
                     input -> new GenerativeQAParamExtBuilder(input),
                     parser -> GenerativeQAParamExtBuilder.parse(parser)
+                )
+            );
+
+        searchExts
+            .add(
+                new SearchPlugin.SearchExtSpec<>(
+                    MLInferenceRequestParametersExtBuilder.NAME,
+                    input -> new MLInferenceRequestParametersExtBuilder(input),
+                    parser -> MLInferenceRequestParametersExtBuilder.parse(parser)
                 )
             );
 
