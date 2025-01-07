@@ -46,8 +46,9 @@ public class BedrockRerankPostProcessFunction extends ConnectorPostProcessFuncti
                     case BigDecimal bd -> bd.doubleValue();
                     case Double d -> d;
                     case null -> throw new IllegalArgumentException("relevanceScore is null");
-                    default -> throw new IllegalArgumentException("Unexpected type for relevanceScore: " +
-                            relevanceScore.getClass().getName());
+                    default -> throw new IllegalArgumentException(
+                        "Unexpected type for relevanceScore: " + relevanceScore.getClass().getName()
+                    );
                 };
             }
 
