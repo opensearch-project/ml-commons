@@ -450,12 +450,14 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
                     .build()
             );
 
+        Map<String, String> credential = ImmutableMap.of("access_key", "mockKey", "secret_key", "mockSecret");
         MLCreateConnectorInput mlCreateConnectorInput = MLCreateConnectorInput
             .builder()
             .name(randomAlphaOfLength(5))
             .description(randomAlphaOfLength(10))
             .version("1")
             .protocol(ConnectorProtocols.HTTP)
+            .credential(credential)
             .actions(actions)
             .build();
         MLCreateConnectorRequest request = new MLCreateConnectorRequest(mlCreateConnectorInput);
