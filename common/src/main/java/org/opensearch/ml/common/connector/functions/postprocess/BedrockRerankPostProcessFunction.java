@@ -17,18 +17,34 @@ public class BedrockRerankPostProcessFunction extends ConnectorPostProcessFuncti
 
     @Override
     public void validate(Object input) {
+
         if (!(input instanceof List)) {
             throw new IllegalArgumentException("Post process function input is not a List.");
         }
-        List<?> outerList = (List<?>) input;
-        if (!outerList.isEmpty()) {
-            if (!(outerList.get(0) instanceof Map)) {
-                throw new IllegalArgumentException("Post process function input is not a List of Map.");
-            }
-            Map innerMap = (Map) outerList.get(0);
 
-            if (innerMap.isEmpty() || !innerMap.containsKey("index") || !innerMap.containsKey("relevanceScore")) {
-                throw new IllegalArgumentException("The rerank result should contain index and relevanceScore.");
+        List<?> outerList = (List<?>) input;
+
+        if (outerList.isEmpty()) {
+            throw new IllegalArgumentException("Post process function input is empty.");
+        }
+
+        for (Object item : outerList) {
+            if (!(item instanceof Map)) {
+                throw new IllegalArgumentException("Rerank result is not a Map.");
+            }
+
+            Map<?, ?> innerMap = (Map<?, ?>) item;
+
+            if (innerMap.isEmpty()) {
+                throw new IllegalArgumentException("Rerank result is empty.");
+            }
+
+            if (!innerMap.containsKey("index") || !innerMap.containsKey("relevanceScore")) {
+                throw new IllegalArgumentException("Rerank result should have both index and relevanceScore.");
+            }
+
+            if (!(innerMap.get("relevanceScore") instanceof BigDecimal || innerMap.get("relevanceScore") instanceof Double)) {
+                throw new IllegalArgumentException("relevanceScore is not BigDecimal or Double.");
             }
         }
     }
@@ -37,29 +53,25 @@ public class BedrockRerankPostProcessFunction extends ConnectorPostProcessFuncti
     public List<ModelTensor> process(List<Map<String, Object>> rerankResults) {
         List<ModelTensor> modelTensors = new ArrayList<>();
 
-        if (rerankResults.size() > 0) {
+        if (!rerankResults.isEmpty()) {
             Double[] scores = new Double[rerankResults.size()];
-            for (int i = 0; i < rerankResults.size(); i++) {
-                Integer index = (Integer) rerankResults.get(i).get("index");
-                Object relevanceScore = rerankResults.get(i).get("relevanceScore");
-                scores[index] = switch (relevanceScore) {
-                    case BigDecimal bd -> bd.doubleValue();
-                    case Double d -> d;
-                    case null -> throw new IllegalArgumentException("relevanceScore is null");
-                    default -> throw new IllegalArgumentException(
-                        "Unexpected type for relevanceScore: " + relevanceScore.getClass().getName()
-                    );
-                };
+            for (Map<?, ?> rerankResult : rerankResults) {
+                Integer index = (Integer) rerankResult.get("index");
+                Object relevanceScore = rerankResult.get("relevanceScore");
+                if (relevanceScore instanceof BigDecimal) {
+                    scores[index] = ((BigDecimal) relevanceScore).doubleValue();
+                } else if (relevanceScore instanceof Double) {
+                    scores[index] = (Double) relevanceScore;
+                }
             }
-
-            for (int i = 0; i < scores.length; i++) {
+            for (Double score : scores) {
                 modelTensors
                     .add(
                         ModelTensor
                             .builder()
                             .name("similarity")
                             .shape(new long[] { 1 })
-                            .data(new Number[] { scores[i] })
+                            .data(new Number[] { score })
                             .dataType(MLResultDataType.FLOAT32)
                             .build()
                     );

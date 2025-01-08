@@ -23,6 +23,11 @@ public class BedrockRerankPreProcessFunction extends ConnectorPreProcessFunction
 
     @Override
     public void validate(MLInput mlInput) {
+
+        if (mlInput.getInputDataset() == null) {
+            throw new IllegalArgumentException("Input dataset cannot be null.");
+        }
+
         if (!(mlInput.getInputDataset() instanceof TextSimilarityInputDataSet)) {
             throw new IllegalArgumentException("This pre_process_function can only support TextSimilarityInputDataSet");
         }

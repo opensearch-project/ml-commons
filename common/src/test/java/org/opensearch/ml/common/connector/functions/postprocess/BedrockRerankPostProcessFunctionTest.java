@@ -36,17 +36,52 @@ public class BedrockRerankPostProcessFunctionTest {
     }
 
     @Test
+    public void process_EmptyInput() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Post process function input is empty.");
+        function.apply(Arrays.asList());
+    }
+
+    @Test
     public void process_WrongInput_NotCorrectList() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Post process function input is not a List of Map.");
+        exceptionRule.expectMessage("Rerank result is not a Map.");
         function.apply(Arrays.asList("abc"));
+    }
+
+    @Test
+    public void process_EmptyMapInput() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Rerank result is empty.");
+        function.apply(Arrays.asList(Map.of()));
     }
 
     @Test
     public void process_WrongInput_NotCorrectMap() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("The rerank result should contain index and relevance_score.");
-        function.apply(Arrays.asList(Map.of("test1", "value1")));
+        exceptionRule.expectMessage("Rerank result should have both index and relevanceScore.");
+        List<Map<String, Object>> rerankResults = List
+            .of(
+                Map.of("index", 2, "relevanceScore", 0.7711548805236816),
+                Map.of("index", 0, "relevanceScore", 0.0025114635936915874),
+                Map.of("index", 1, "relevanceScore", 2.4876489987946115e-05),
+                Map.of("test1", "value1")
+            );
+        function.apply(rerankResults);
+    }
+
+    @Test
+    public void process_WrongInput_NotCorrectRelevanceScore() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("relevanceScore is not BigDecimal or Double.");
+        List<Map<String, Object>> rerankResults = List
+            .of(
+                Map.of("index", 2, "relevanceScore", 0.7711548805236816),
+                Map.of("index", 0, "relevanceScore", 0.0025114635936915874),
+                Map.of("index", 1, "relevanceScore", 2.4876489987946115e-05),
+                Map.of("index", 3, "relevanceScore", "value1")
+            );
+        function.apply(rerankResults);
     }
 
     @Test
