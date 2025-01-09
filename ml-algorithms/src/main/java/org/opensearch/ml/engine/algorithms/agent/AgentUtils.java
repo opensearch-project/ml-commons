@@ -60,6 +60,7 @@ public class AgentUtils {
     public static final String PROMPT_CHAT_HISTORY_PREFIX = "prompt.chat_history_prefix";
     public static final String DISABLE_TRACE = "disable_trace";
     public static final String VERBOSE = "verbose";
+    public static final String LLM_GEN_INPUT = "llm_generated_input";
 
     public static String addExamplesToPrompt(Map<String, String> parameters, String prompt) {
         Map<String, String> examplesMap = new HashMap<>();
@@ -472,6 +473,11 @@ public class AgentUtils {
         if (toolSpecConfigMap != null) {
             toolParams.putAll(toolSpecConfigMap);
         }
+        toolParams.put(LLM_GEN_INPUT, actionInput);
+        if (isJson(actionInput)) {
+            Map<String, String> params = getParameterMap(gson.fromJson(actionInput, Map.class));
+            toolParams.putAll(params);
+        }
         if (tools.get(action).useOriginalInput()) {
             toolParams.put("input", question);
             lastActionInput.set(question);
@@ -486,10 +492,6 @@ public class AgentUtils {
             }
         } else {
             toolParams.put("input", actionInput);
-            if (isJson(actionInput)) {
-                Map<String, String> params = getParameterMap(gson.fromJson(actionInput, Map.class));
-                toolParams.putAll(params);
-            }
         }
         return toolParams;
     }

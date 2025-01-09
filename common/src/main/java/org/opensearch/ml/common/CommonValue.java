@@ -45,15 +45,15 @@ public class CommonValue {
     public static final String TOOL_PARAMETERS_PREFIX = "tools.parameters.";
 
     // Index mapping paths
-    public static final String ML_MODEL_GROUP_INDEX_MAPPING_PATH = "index-mappings/ml-model-group.json";
-    public static final String ML_MODEL_INDEX_MAPPING_PATH = "index-mappings/ml-model.json";
-    public static final String ML_TASK_INDEX_MAPPING_PATH = "index-mappings/ml-task.json";
-    public static final String ML_CONNECTOR_INDEX_MAPPING_PATH = "index-mappings/ml-connector.json";
-    public static final String ML_CONFIG_INDEX_MAPPING_PATH = "index-mappings/ml-config.json";
-    public static final String ML_CONTROLLER_INDEX_MAPPING_PATH = "index-mappings/ml-controller.json";
-    public static final String ML_AGENT_INDEX_MAPPING_PATH = "index-mappings/ml-agent.json";
-    public static final String ML_MEMORY_META_INDEX_MAPPING_PATH = "index-mappings/ml-memory-meta.json";
-    public static final String ML_MEMORY_MESSAGE_INDEX_MAPPING_PATH = "index-mappings/ml-memory-message.json";
+    public static final String ML_MODEL_GROUP_INDEX_MAPPING_PATH = "index-mappings/ml_model_group.json";
+    public static final String ML_MODEL_INDEX_MAPPING_PATH = "index-mappings/ml_model.json";
+    public static final String ML_TASK_INDEX_MAPPING_PATH = "index-mappings/ml_task.json";
+    public static final String ML_CONNECTOR_INDEX_MAPPING_PATH = "index-mappings/ml_connector.json";
+    public static final String ML_CONFIG_INDEX_MAPPING_PATH = "index-mappings/ml_config.json";
+    public static final String ML_CONTROLLER_INDEX_MAPPING_PATH = "index-mappings/ml_controller.json";
+    public static final String ML_AGENT_INDEX_MAPPING_PATH = "index-mappings/ml_agent.json";
+    public static final String ML_MEMORY_META_INDEX_MAPPING_PATH = "index-mappings/ml_memory_meta.json";
+    public static final String ML_MEMORY_MESSAGE_INDEX_MAPPING_PATH = "index-mappings/ml_memory_message.json";
 
     // Calculate Versions independently of OpenSearch core version
     public static final Version VERSION_2_11_0 = Version.fromString("2.11.0");

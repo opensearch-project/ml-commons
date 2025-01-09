@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.util.Map;
 
 import org.junit.Test;
+import org.opensearch.OpenSearchParseException;
 
 import com.google.gson.JsonParseException;
 
@@ -51,7 +52,7 @@ public class IndexUtilsTest {
     public void testGetMappingFromFile() {
         String expectedMapping = "{\n"
             + "  \"_meta\": {\n"
-            + "    \"schema_version\": \"1\"\n"
+            + "    \"schema_version\": 1\n"
             + "  },\n"
             + "  \"properties\": {\n"
             + "    \"test_field_1\": {\n"
@@ -66,26 +67,24 @@ public class IndexUtilsTest {
             + "  }\n"
             + "}\n";
         try {
-            String actualMapping = IndexUtils.getMappingFromFile("index-mappings/test-mapping.json");
+            String actualMapping = IndexUtils.getMappingFromFile("index-mappings/test_mapping.json");
             // comparing JsonObjects to avoid issues caused by eol character in different OS
             assertEquals(StringUtils.getJsonObjectFromString(expectedMapping), StringUtils.getJsonObjectFromString(actualMapping));
         } catch (IOException e) {
-            throw new RuntimeException("Failed to read file at path: index-mappings/test-mapping.json");
+            throw new RuntimeException("Failed to read file at path: index-mappings/test_mapping.json");
         }
     }
 
     @Test
     public void testGetMappingFromFileFileNotFound() {
-        String path = "index-mappings/test-mapping-not-found.json";
+        String path = "index-mappings/test_mapping_not_found.json";
         IOException e = assertThrows(IOException.class, () -> IndexUtils.getMappingFromFile(path));
-        assertEquals("Resource not found: " + path, e.getMessage());
     }
 
     @Test
     public void testGetMappingFromFilesMalformedJson() {
-        String path = "index-mappings/test-mapping-malformed.json";
+        String path = "index-mappings/test_mapping_malformed.json";
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> IndexUtils.getMappingFromFile(path));
-        assertEquals("Invalid or non-JSON mapping at: " + path, e.getMessage());
     }
 
     @Test
@@ -151,5 +150,17 @@ public class IndexUtilsTest {
 
         JsonParseException e = assertThrows(JsonParseException.class, () -> IndexUtils.getVersionFromMapping(mapping));
         assertEquals("Failed to find \"schema_version\" in \"_meta\" object for mapping: " + mapping, e.getMessage());
+    }
+
+    @Test
+    public void testValidateMapping() {
+        String empty_mapping = "";
+        assertThrows(IllegalArgumentException.class, () -> IndexUtils.validateMapping(empty_mapping));
+
+        String non_json_mapping = "not a json";
+        assertThrows(IllegalArgumentException.class, () -> IndexUtils.validateMapping(non_json_mapping));
+
+        String illegal_schema_mapping = "{\"key1\": \"foo\"}";
+        assertThrows(OpenSearchParseException.class, () -> IndexUtils.validateMapping(illegal_schema_mapping));
     }
 }

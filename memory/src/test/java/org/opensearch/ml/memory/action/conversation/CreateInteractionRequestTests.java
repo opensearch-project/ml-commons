@@ -19,6 +19,7 @@ package org.opensearch.ml.memory.action.conversation;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
 import org.junit.Before;
@@ -152,5 +153,32 @@ public class CreateInteractionRequestTests extends OpenSearchTestCase {
         assert (request.getAdditionalInfo().equals(Collections.singletonMap("metadata", "some meta")));
         assert (request.getParentIid().equals("parentId"));
         assert (request.getTraceNumber().equals(1));
+    }
+
+    public void testFromRestRequest_WithAllFieldsEmpty_Fails() throws IOException {
+        Map<String, Object> params = new HashMap<>();
+
+        params.put(ActionConstants.INPUT_FIELD, "");
+        params.put(ActionConstants.PROMPT_TEMPLATE_FIELD, null);
+        params.put(ActionConstants.AI_RESPONSE_FIELD, " ");
+        params.put(ActionConstants.RESPONSE_ORIGIN_FIELD, null);
+        params.put(ActionConstants.ADDITIONAL_INFO_FIELD, Collections.emptyMap());
+
+        RestRequest rrequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withParams(Map.of(ActionConstants.MEMORY_ID, "cid"))
+            .withContent(new BytesArray(gson.toJson(params)), MediaTypeRegistry.JSON)
+            .build();
+
+        IllegalArgumentException exception = assertThrows(
+            "Expected IllegalArgumentException due to all fields empty",
+            IllegalArgumentException.class,
+            () -> CreateInteractionRequest.fromRestRequest(rrequest)
+        );
+
+        assertEquals(
+            exception.getMessage(),
+            "At least one of the following parameters must be non-empty: input, prompt_template, response, origin, additional_info"
+        );
+
     }
 }
