@@ -93,12 +93,14 @@ public abstract class ToolIntegrationWithLLMTest extends RestBaseAgentToolsIT {
     protected Response waitResponseMeetingCondition(String method, String endpoint, String jsonEntity, Predicate<Response> condition) {
         for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
             Response response = TestHelper.makeRequest(client(), method, endpoint, null, jsonEntity, null);
-            assertEquals(RestStatus.OK, RestStatus.fromCode(response.getStatusLine().getStatusCode()));
-            if (condition.test(response)) {
+            RestStatus status = RestStatus.fromCode(response.getStatusLine().getStatusCode());
+            assertEquals(RestStatus.OK, status);
+            logger.info("Attempt {}: Status: {}, Response: {}", attempt, status, response);
+            if (status == RestStatus.OK && condition.test(response)) {
                 return response;
             }
             logger.info("The {}-th attempt on {}:{} . response: {}", attempt, method, endpoint, response.toString());
-            Thread.sleep(DEFAULT_TASK_RESULT_QUERY_INTERVAL_IN_MILLISECOND);
+            Thread.sleep(DEFAULT_TASK_RESULT_QUERY_INTERVAL_IN_MILLISECOND * attempt);
         }
         fail(
             String
