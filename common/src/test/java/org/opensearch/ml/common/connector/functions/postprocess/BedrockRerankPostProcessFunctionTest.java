@@ -43,7 +43,7 @@ public class BedrockRerankPostProcessFunctionTest {
     }
 
     @Test
-    public void process_WrongInput_NotCorrectList() {
+    public void process_WrongInput_NotCorrectListOfMapsFormat() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Rerank result is not a Map.");
         function.apply(Arrays.asList("abc"));
