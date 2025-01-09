@@ -269,18 +269,36 @@ public final class MLCommonsSettings {
     public static final Setting<Boolean> ML_COMMONS_CONTROLLER_ENABLED = Setting
         .boolSetting("plugins.ml_commons.controller_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
-    // Whether multi-tenancy is enabled in ML Commons.
-    // This is a static setting which must be set before starting OpenSearch by (in priority order):
-    // 1. As a command-line argument using the -E flag (overrides other options):
-    // ./bin/opensearch -Eplugins.ml_commons.multi_tenancy_enabled=true
-    // 2. As a system property using OPENSEARCH_JAVA_OPTS (overrides opensearch.yml):
-    // export OPENSEARCH_JAVA_OPTS="-Dplugins.ml_commons.multi_tenancy_enabled=true"
-    // ./bin/opensearch
-    // Or inline when starting OpenSearch:
-    // OPENSEARCH_JAVA_OPTS="-Dplugins.ml_commons.multi_tenancy_enabled=true" ./bin/opensearch
-    // 3. In the opensearch.yml configuration file:
-    // plugins.ml_commons.multi_tenancy_enabled: true
-    // After setting it, a full cluster restart is required for the changes to take effect.
+    /**
+     * Indicates whether multi-tenancy is enabled in ML Commons.
+     *
+     * This is a static setting that must be configured before starting OpenSearch. It can be set in the following ways, in priority order:
+     *
+     * <ol>
+     *   <li>As a command-line argument using the <code>-E</code> flag (this overrides other options):
+     *       <pre>
+     *       ./bin/opensearch -Eplugins.ml_commons.multi_tenancy_enabled=true
+     *       </pre>
+     *   </li>
+     *   <li>As a system property using <code>OPENSEARCH_JAVA_OPTS</code> (this overrides <code>opensearch.yml</code>):
+     *       <pre>
+     *       export OPENSEARCH_JAVA_OPTS="-Dplugins.ml_commons.multi_tenancy_enabled=true"
+     *       ./bin/opensearch
+     *       </pre>
+     *       Or inline when starting OpenSearch:
+     *       <pre>
+     *       OPENSEARCH_JAVA_OPTS="-Dplugins.ml_commons.multi_tenancy_enabled=true" ./bin/opensearch
+     *       </pre>
+     *   </li>
+     *   <li>In the <code>opensearch.yml</code> configuration file:
+     *       <pre>
+     *       plugins.ml_commons.multi_tenancy_enabled: true
+     *       </pre>
+     *   </li>
+     * </ol>
+     *
+     * After setting this option, a full cluster restart is required for the changes to take effect.
+     */
     public static final Setting<Boolean> ML_COMMONS_MULTI_TENANCY_ENABLED = Setting
         .boolSetting("plugins.ml_commons.multi_tenancy_enabled", false, Setting.Property.NodeScope);
 

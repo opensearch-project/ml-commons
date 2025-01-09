@@ -75,29 +75,25 @@ public class TenantAwareHelper {
     }
 
     public static String getTenantID(Boolean isMultiTenancyEnabled, RestRequest restRequest) {
-        if (isMultiTenancyEnabled) {
-            Map<String, List<String>> headers = restRequest.getHeaders();
-            if (headers != null) {
-                if (headers.containsKey(Constants.TENANT_ID_HEADER)) {
-                    List<String> tenantIdList = headers.get(Constants.TENANT_ID_HEADER);
-                    if (tenantIdList != null && !tenantIdList.isEmpty()) {
-                        String tenantId = tenantIdList.get(0);
-                        if (tenantId != null) {
-                            return tenantId;
-                        } else {
-                            throw new OpenSearchStatusException("Tenant ID can't be null", RestStatus.FORBIDDEN);
-                        }
-                    } else {
-                        throw new OpenSearchStatusException("Tenant ID header is present but has no value", RestStatus.FORBIDDEN);
-                    }
-                } else {
-                    throw new OpenSearchStatusException("Tenant ID header is missing", RestStatus.FORBIDDEN);
-                }
-            } else {
-                throw new OpenSearchStatusException("Rest request header can't be null", RestStatus.FORBIDDEN);
-            }
-        } else {
+        if (!isMultiTenancyEnabled) {
             return null;
         }
+
+        Map<String, List<String>> headers = restRequest.getHeaders();
+        if (headers == null) {
+            throw new OpenSearchStatusException("Rest request headers can't be null", RestStatus.FORBIDDEN);
+        }
+
+        List<String> tenantIdList = headers.get(Constants.TENANT_ID_HEADER);
+        if (tenantIdList == null || tenantIdList.isEmpty()) {
+            throw new OpenSearchStatusException("Tenant ID header is missing or has no value", RestStatus.FORBIDDEN);
+        }
+
+        String tenantId = tenantIdList.get(0);
+        if (tenantId == null) {
+            throw new OpenSearchStatusException("Tenant ID can't be null", RestStatus.FORBIDDEN);
+        }
+
+        return tenantId;
     }
 }
