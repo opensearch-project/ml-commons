@@ -104,6 +104,5 @@ public class DummyWrongTool implements Tool {
         public String getDefaultVersion() {
             return null;
         }
-
     }
 }

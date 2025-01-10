@@ -195,6 +195,5 @@ public class SearchIndexTool implements Tool {
         public String getDefaultVersion() {
             return null;
         }
-
     }
 }

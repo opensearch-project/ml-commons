@@ -6,8 +6,6 @@
 package org.opensearch.ml.common.spi.tools;
 
 import org.opensearch.core.action.ActionListener;
-
-import java.util.List;
 import java.util.Map;
 
 /**
