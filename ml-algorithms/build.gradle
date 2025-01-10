@@ -84,7 +84,9 @@ lombok {
 configurations.all {
     resolutionStrategy.force 'com.google.protobuf:protobuf-java:3.25.5'
     resolutionStrategy.force 'org.apache.commons:commons-compress:1.26.0'
+    resolutionStrategy.force 'software.amazon.awssdk:bom:2.29.12'
 }
+
 
 jacocoTestReport {
     reports {
