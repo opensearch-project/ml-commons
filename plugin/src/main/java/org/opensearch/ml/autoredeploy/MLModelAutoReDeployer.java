@@ -12,7 +12,6 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -31,7 +30,6 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.TermsQueryBuilder;
-import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
@@ -186,10 +184,6 @@ public class MLModelAutoReDeployer {
                             modelAutoRedeployArrangements.add(modelAutoRedeployArrangement);
                     });
                 redeployAModel();
-            } else {
-                log.info("Could not find any models in the index, not performing auto reloading!");
-                startCronjobAndClearListener();
-                return;
             }
         }, e -> {
             if (e instanceof IndexNotFoundException) {
@@ -221,7 +215,7 @@ public class MLModelAutoReDeployer {
                     client.execute(MLUndeployModelAction.INSTANCE, undeployModelNodesRequest, undeployModelListener);
                 }
             }
-        }, e -> { log.error("Failed to query need undeploy models, no action will be performed", e); });
+        }, e -> { log.error("Failed to query need undeploy models, no action will be performed"); });
         queryRunningModels(listener);
     }
 
@@ -245,9 +239,7 @@ public class MLModelAutoReDeployer {
         String[] includes = new String[] {
             MLModel.AUTO_REDEPLOY_RETRY_TIMES_FIELD,
             MLModel.PLANNING_WORKER_NODES_FIELD,
-            MLModel.DEPLOY_TO_ALL_NODES_FIELD,
-            MLModel.FUNCTION_NAME_FIELD,
-            MLModel.ALGORITHM_FIELD };
+            MLModel.DEPLOY_TO_ALL_NODES_FIELD };
 
         String[] excludes = new String[] { MLModel.MODEL_CONTENT_FIELD, MLModel.OLD_MODEL_CONTENT_FIELD };
         FetchSourceContext fetchContext = new FetchSourceContext(true, includes, excludes);
@@ -263,34 +255,19 @@ public class MLModelAutoReDeployer {
 
     @SuppressWarnings("unchecked")
     private void triggerModelRedeploy(ModelAutoRedeployArrangement modelAutoRedeployArrangement) {
-        if (modelAutoRedeployArrangement == null) {
-            log.info("No more models in arrangement, skipping the redeployment");
-            startCronjobAndClearListener();
-            return;
-        }
         String modelId = modelAutoRedeployArrangement.getSearchResponse().getId();
         List<String> addedNodes = modelAutoRedeployArrangement.getAddedNodes();
-        Map<String, Object> sourceAsMap = modelAutoRedeployArrangement.getSearchResponse().getSourceAsMap();
-        String functionName = (String) Optional
-            .ofNullable(sourceAsMap.get(MLModel.FUNCTION_NAME_FIELD))
-            .orElse(sourceAsMap.get(MLModel.ALGORITHM_FIELD));
-        if (functionName == null) {
-            log
-                .error(
-                    "Model function_name or algorithm is null, model is not in correct status, please check the model, model id is: {}",
-                    modelId
-                );
-            redeployAModel();
-            return;
-        }
-        if (FunctionName.REMOTE == FunctionName.from(functionName)) {
-            log.info("Skipping redeploying remote model {} as remote model deployment can be done at prediction time.", modelId);
-            redeployAModel();
-            return;
-        }
-        List<String> planningWorkerNodes = (List<String>) sourceAsMap.get(MLModel.PLANNING_WORKER_NODES_FIELD);
-        Integer autoRedeployRetryTimes = (Integer) sourceAsMap.get(MLModel.AUTO_REDEPLOY_RETRY_TIMES_FIELD);
-        Boolean deployToAllNodes = (Boolean) Optional.ofNullable(sourceAsMap.get(MLModel.DEPLOY_TO_ALL_NODES_FIELD)).orElse(false);
+        List<String> planningWorkerNodes = (List<String>) modelAutoRedeployArrangement
+            .getSearchResponse()
+            .getSourceAsMap()
+            .get(MLModel.PLANNING_WORKER_NODES_FIELD);
+        Integer autoRedeployRetryTimes = (Integer) modelAutoRedeployArrangement
+            .getSearchResponse()
+            .getSourceAsMap()
+            .get(MLModel.AUTO_REDEPLOY_RETRY_TIMES_FIELD);
+        Boolean deployToAllNodes = (Boolean) Optional
+            .ofNullable(modelAutoRedeployArrangement.getSearchResponse().getSourceAsMap().get(MLModel.DEPLOY_TO_ALL_NODES_FIELD))
+            .orElse(false);
         // calculate node ids.
         String[] nodeIds = null;
         if (deployToAllNodes || !allowCustomDeploymentPlan) {
@@ -309,7 +286,6 @@ public class MLModelAutoReDeployer {
                 .info(
                     "Allow custom deployment plan is true and deploy to all nodes is false and added nodes are not in planning worker nodes list, not to auto redeploy the model to the new nodes!"
                 );
-            redeployAModel();
             return;
         }
 
