@@ -14,6 +14,7 @@ import java.util.List;
 
 import org.junit.Before;
 import org.junit.Rule;
+import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.action.ActionFuture;
@@ -80,16 +81,19 @@ public class PredictionITTests extends MLCommonsIntegTestCase {
         assertNotNull(batchRcfModel);
     }
 
+    @Test
     public void testPredictionWithSearchInput_KMeans() {
         MLInputDataset inputDataset = new SearchQueryInputDataset(ImmutableList.of(irisIndexName), irisDataQuery());
         predictAndVerify(kMeansModelId, inputDataset, FunctionName.KMEANS, null, IRIS_DATA_SIZE);
     }
 
+    @Test
     public void testPredictionWithDataInput_KMeans() {
         MLInputDataset inputDataset = new DataFrameInputDataset(irisDataFrame());
         predictAndVerify(kMeansModelId, inputDataset, FunctionName.KMEANS, null, IRIS_DATA_SIZE);
     }
 
+    @Test
     public void testPredictionWithoutDataset_KMeans() {
         exceptionRule.expect(ActionRequestValidationException.class);
         exceptionRule.expectMessage("input data can't be null");
@@ -99,6 +103,7 @@ public class PredictionITTests extends MLCommonsIntegTestCase {
         predictionFuture.actionGet();
     }
 
+    @Test
     public void testPredictionWithEmptyDataset_KMeans() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("No document found");
@@ -109,6 +114,7 @@ public class PredictionITTests extends MLCommonsIntegTestCase {
         predictionFuture.actionGet();
     }
 
+    @Test
     public void testPredictionWithSearchInput_LogisticRegression() {
         MLInputDataset inputDataset = new SearchQueryInputDataset(
             ImmutableList.of(irisIndexName),
@@ -117,11 +123,13 @@ public class PredictionITTests extends MLCommonsIntegTestCase {
         predictAndVerify(logisticRegressionModelId, inputDataset, FunctionName.LOGISTIC_REGRESSION, null, IRIS_DATA_SIZE);
     }
 
+    @Test
     public void testPredictionWithDataFrame_BatchRCF() {
         MLInputDataset inputDataset = new DataFrameInputDataset(TestData.constructTestDataFrame(batchRcfDataSize));
         predictAndVerify(batchRcfModelId, inputDataset, FunctionName.BATCH_RCF, null, batchRcfDataSize);
     }
 
+    @Test
     public void testPredictionWithDataFrame_FitRCF() {
         MLInputDataset inputDataset = new DataFrameInputDataset(TestData.constructTestDataFrame(batchRcfDataSize, true));
         DataFrame dataFrame = predictAndVerify(
@@ -133,6 +141,7 @@ public class PredictionITTests extends MLCommonsIntegTestCase {
         );
     }
 
+    @Test
     public void testPredictionWithDataFrame_LinearRegression() {
         int size = 1;
         int feet = 20;
