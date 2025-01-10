@@ -55,7 +55,7 @@ public class BedrockRerankPostProcessFunction extends ConnectorPostProcessFuncti
 
         if (!rerankResults.isEmpty()) {
             Double[] scores = new Double[rerankResults.size()];
-            for (Map<?, ?> rerankResult : rerankResults) {
+            for (Map rerankResult : rerankResults) {
                 Integer index = (Integer) rerankResult.get("index");
                 Object relevanceScore = rerankResult.get("relevanceScore");
                 if (relevanceScore instanceof BigDecimal) {
