@@ -26,6 +26,7 @@ import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentHelper;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.Strings;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
@@ -65,6 +66,7 @@ public class MLAgentExecutor implements Executable {
 
     public static final String MEMORY_ID = "memory_id";
     public static final String QUESTION = "question";
+    public static final String CONVERSATION_NAME = "conversation_name";
     public static final String PARENT_INTERACTION_ID = "parent_interaction_id";
     public static final String REGENERATE_INTERACTION_ID = "regenerate_interaction_id";
     public static final String MESSAGE_HISTORY_LIMIT = "message_history_limit";
@@ -122,6 +124,7 @@ public class MLAgentExecutor implements Executable {
                             String regenerateInteractionId = inputDataSet.getParameters().get(REGENERATE_INTERACTION_ID);
                             String appType = mlAgent.getAppType();
                             String question = inputDataSet.getParameters().get(QUESTION);
+                            String conversationName = inputDataSet.getParameters().get(CONVERSATION_NAME);
 
                             if (memoryId == null && regenerateInteractionId != null) {
                                 throw new IllegalArgumentException("A memory ID must be provided to regenerate.");
@@ -133,7 +136,8 @@ public class MLAgentExecutor implements Executable {
                                 && (memoryId == null || parentInteractionId == null)) {
                                 ConversationIndexMemory.Factory conversationIndexMemoryFactory =
                                     (ConversationIndexMemory.Factory) memoryFactoryMap.get(memorySpec.getType());
-                                conversationIndexMemoryFactory.create(question, memoryId, appType, ActionListener.wrap(memory -> {
+                                String title = Strings.isEmpty(conversationName) ? question : conversationName;
+                                conversationIndexMemoryFactory.create(title, memoryId, appType, ActionListener.wrap(memory -> {
                                     inputDataSet.getParameters().put(MEMORY_ID, memory.getConversationId());
                                     ActionListener<Object> agentActionListener = createAgentActionListener(
                                         listener,
