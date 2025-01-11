@@ -41,6 +41,7 @@ import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesRequest;
+import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesResponse;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsRequest;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsResponse;
@@ -185,15 +186,20 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         MLUndeployModelNodesRequest mlUndeployModelNodesRequest = new MLUndeployModelNodesRequest(targetNodeIds, modelIds);
         mlUndeployModelNodesRequest.setTenantId(tenantId);
 
-        client.execute(MLUndeployModelAction.INSTANCE, mlUndeployModelNodesRequest, ActionListener.wrap(r -> {
-            if (r.getNodes().isEmpty()) {
-                bulkSetModelIndexToUndeploy(modelIds);
+        client.execute(MLUndeployModelAction.INSTANCE, mlUndeployModelNodesRequest, ActionListener.wrap(response -> {
+            if (response.getNodes().isEmpty()) {
+                bulkSetModelIndexToUndeploy(modelIds, listener, response);
+                return;
             }
-            listener.onResponse(new MLUndeployModelsResponse(r));
+            listener.onResponse(new MLUndeployModelsResponse(response));
         }, listener::onFailure));
     }
 
-    private void bulkSetModelIndexToUndeploy(String[] modelIds) {
+    private void bulkSetModelIndexToUndeploy(
+        String[] modelIds,
+        ActionListener<MLUndeployModelsResponse> listener,
+        MLUndeployModelNodesResponse response
+    ) {
         BulkRequest bulkUpdateRequest = new BulkRequest();
         for (String modelId : modelIds) {
             UpdateRequest updateRequest = new UpdateRequest();
@@ -209,10 +215,16 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
             updateRequest.index(ML_MODEL_INDEX).id(modelId).doc(builder.build());
             bulkUpdateRequest.add(updateRequest);
         }
+
         bulkUpdateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-        log.info("No models service: {}", modelIds.toString());
-        client.bulk(bulkUpdateRequest, ActionListener.wrap(br -> { log.debug("Successfully set modelIds to UNDEPLOY in index"); }, e -> {
+        log.info("No nodes service: {}", modelIds.toString());
+
+        client.bulk(bulkUpdateRequest, ActionListener.wrap(br -> {
+            log.debug("Successfully set modelIds to UNDEPLOY in index");
+            listener.onResponse(new MLUndeployModelsResponse(response));
+        }, e -> {
             log.error("Failed to set modelIds to UNDEPLOY in index", e);
+            listener.onFailure(e);
         }));
     }
 
