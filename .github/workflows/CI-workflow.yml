@@ -100,7 +100,7 @@ jobs:
 
 
   Test-ml-linux-docker:
-    needs: [Get-Require-Approval, Build-ml-linux]
+    needs: [Get-Require-Approval, Build-ml-linux, spotless]
     strategy:
       matrix:
         java: [11, 17, 21]
@@ -197,7 +197,7 @@ jobs:
         java: [11, 17, 21]
     name: Build and Test MLCommons Plugin on Windows
     if: github.repository == 'opensearch-project/ml-commons'
-    needs: [Get-Require-Approval]
+    needs: [Get-Require-Approval, spotless]
     environment: ${{ needs.Get-Require-Approval.outputs.is-require-approval }}
     runs-on: windows-latest
 
