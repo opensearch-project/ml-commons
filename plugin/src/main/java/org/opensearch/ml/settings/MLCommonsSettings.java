@@ -308,13 +308,13 @@ public final class MLCommonsSettings {
 
     /** This setting sets the remote metadata endpoint */
     public static final Setting<String> REMOTE_METADATA_ENDPOINT = Setting
-        .simpleString("plugins.flow_framework." + REMOTE_METADATA_ENDPOINT_KEY, Setting.Property.NodeScope, Setting.Property.Final);
+        .simpleString("plugins.ml_commons." + REMOTE_METADATA_ENDPOINT_KEY, Setting.Property.NodeScope, Setting.Property.Final);
 
     /** This setting sets the remote metadata region */
     public static final Setting<String> REMOTE_METADATA_REGION = Setting
-        .simpleString("plugins.flow_framework." + REMOTE_METADATA_REGION_KEY, Setting.Property.NodeScope, Setting.Property.Final);
+        .simpleString("plugins.ml_commons." + REMOTE_METADATA_REGION_KEY, Setting.Property.NodeScope, Setting.Property.Final);
 
     /** This setting sets the remote metadata service name */
     public static final Setting<String> REMOTE_METADATA_SERVICE_NAME = Setting
-        .simpleString("plugins.flow_framework." + REMOTE_METADATA_SERVICE_NAME_KEY, Setting.Property.NodeScope, Setting.Property.Final);
+        .simpleString("plugins.ml_commons." + REMOTE_METADATA_SERVICE_NAME_KEY, Setting.Property.NodeScope, Setting.Property.Final);
 }

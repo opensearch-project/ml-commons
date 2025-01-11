@@ -35,6 +35,10 @@ public class MLConnectorGetResponse extends ActionResponse implements ToXContent
         mlConnector = Connector.fromStream(in);
     }
 
+    public Connector getMlConnector() {
+        return mlConnector;
+    }
+
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         mlConnector.writeTo(out);

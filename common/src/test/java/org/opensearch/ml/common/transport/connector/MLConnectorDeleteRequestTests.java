@@ -18,6 +18,7 @@ import org.junit.Test;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 
 public class MLConnectorDeleteRequestTests {
@@ -93,5 +94,28 @@ public class MLConnectorDeleteRequestTests {
             .fromActionRequest(mlConnectorDeleteRequest);
         assertSame(mlConnectorDeleteRequest, mlConnectorDeleteRequestFromActionRequest);
         assertEquals(mlConnectorDeleteRequest.getConnectorId(), mlConnectorDeleteRequestFromActionRequest.getConnectorId());
+    }
+
+    @Test
+    public void testConstructorWithTenantId() {
+        String tenantId = "test_tenant";
+        MLConnectorDeleteRequest request = MLConnectorDeleteRequest.builder().connectorId(connectorId).tenantId(tenantId).build();
+
+        assertEquals(connectorId, request.getConnectorId());
+        assertEquals(tenantId, request.getTenantId());
+    }
+
+    @Test
+    public void testWriteToWithTenantId() throws IOException {
+        String tenantId = "test_tenant";
+        MLConnectorDeleteRequest request = MLConnectorDeleteRequest.builder().connectorId(connectorId).tenantId(tenantId).build();
+        BytesStreamOutput output = new BytesStreamOutput();
+        request.writeTo(output);
+
+        StreamInput input = output.bytes().streamInput();
+        MLConnectorDeleteRequest parsedRequest = new MLConnectorDeleteRequest(input);
+
+        assertEquals(connectorId, parsedRequest.getConnectorId());
+        assertEquals(tenantId, parsedRequest.getTenantId());
     }
 }
