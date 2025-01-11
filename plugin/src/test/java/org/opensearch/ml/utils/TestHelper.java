@@ -424,11 +424,11 @@ public class TestHelper {
         return state(new ClusterName("test"), indexName, mapping, clusterManagerNode, clusterManagerNode, allNodes);
     }
 
-    public static ClusterState setupTestClusterState() {
+    public static ClusterState setupTestClusterState(String nodeId) {
         Set<DiscoveryNodeRole> roleSet = new HashSet<>();
         roleSet.add(DiscoveryNodeRole.DATA_ROLE);
         DiscoveryNode node = new DiscoveryNode(
-            "node",
+            nodeId,
             new TransportAddress(TransportAddress.META_ADDRESS, new AtomicInteger().incrementAndGet()),
             new HashMap<>(),
             roleSet,
