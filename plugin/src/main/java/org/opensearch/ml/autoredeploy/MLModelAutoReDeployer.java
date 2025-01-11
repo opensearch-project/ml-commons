@@ -12,7 +12,6 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -31,7 +30,6 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.TermsQueryBuilder;
-import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
@@ -189,7 +187,6 @@ public class MLModelAutoReDeployer {
             } else {
                 log.info("Could not find any models in the index, not performing auto reloading!");
                 startCronjobAndClearListener();
-                return;
             }
         }, e -> {
             if (e instanceof IndexNotFoundException) {
@@ -245,9 +242,7 @@ public class MLModelAutoReDeployer {
         String[] includes = new String[] {
             MLModel.AUTO_REDEPLOY_RETRY_TIMES_FIELD,
             MLModel.PLANNING_WORKER_NODES_FIELD,
-            MLModel.DEPLOY_TO_ALL_NODES_FIELD,
-            MLModel.FUNCTION_NAME_FIELD,
-            MLModel.ALGORITHM_FIELD };
+            MLModel.DEPLOY_TO_ALL_NODES_FIELD };
 
         String[] excludes = new String[] { MLModel.MODEL_CONTENT_FIELD, MLModel.OLD_MODEL_CONTENT_FIELD };
         FetchSourceContext fetchContext = new FetchSourceContext(true, includes, excludes);
@@ -270,27 +265,17 @@ public class MLModelAutoReDeployer {
         }
         String modelId = modelAutoRedeployArrangement.getSearchResponse().getId();
         List<String> addedNodes = modelAutoRedeployArrangement.getAddedNodes();
-        Map<String, Object> sourceAsMap = modelAutoRedeployArrangement.getSearchResponse().getSourceAsMap();
-        String functionName = (String) Optional
-            .ofNullable(sourceAsMap.get(MLModel.FUNCTION_NAME_FIELD))
-            .orElse(sourceAsMap.get(MLModel.ALGORITHM_FIELD));
-        if (functionName == null) {
-            log
-                .error(
-                    "Model function_name or algorithm is null, model is not in correct status, please check the model, model id is: {}",
-                    modelId
-                );
-            redeployAModel();
-            return;
-        }
-        if (FunctionName.REMOTE == FunctionName.from(functionName)) {
-            log.info("Skipping redeploying remote model {} as remote model deployment can be done at prediction time.", modelId);
-            redeployAModel();
-            return;
-        }
-        List<String> planningWorkerNodes = (List<String>) sourceAsMap.get(MLModel.PLANNING_WORKER_NODES_FIELD);
-        Integer autoRedeployRetryTimes = (Integer) sourceAsMap.get(MLModel.AUTO_REDEPLOY_RETRY_TIMES_FIELD);
-        Boolean deployToAllNodes = (Boolean) Optional.ofNullable(sourceAsMap.get(MLModel.DEPLOY_TO_ALL_NODES_FIELD)).orElse(false);
+        List<String> planningWorkerNodes = (List<String>) modelAutoRedeployArrangement
+            .getSearchResponse()
+            .getSourceAsMap()
+            .get(MLModel.PLANNING_WORKER_NODES_FIELD);
+        Integer autoRedeployRetryTimes = (Integer) modelAutoRedeployArrangement
+            .getSearchResponse()
+            .getSourceAsMap()
+            .get(MLModel.AUTO_REDEPLOY_RETRY_TIMES_FIELD);
+        Boolean deployToAllNodes = (Boolean) Optional
+            .ofNullable(modelAutoRedeployArrangement.getSearchResponse().getSourceAsMap().get(MLModel.DEPLOY_TO_ALL_NODES_FIELD))
+            .orElse(false);
         // calculate node ids.
         String[] nodeIds = null;
         if (deployToAllNodes || !allowCustomDeploymentPlan) {
