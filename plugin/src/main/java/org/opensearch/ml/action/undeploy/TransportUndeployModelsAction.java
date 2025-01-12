@@ -217,7 +217,7 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         }
 
         bulkUpdateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-        log.info("No nodes service: {}", modelIds.toString());
+        log.info("No nodes service: {}", Arrays.toString(modelIds));
 
         client.bulk(bulkUpdateRequest, ActionListener.wrap(br -> {
             log.debug("Successfully set modelIds to UNDEPLOY in index");
