@@ -187,6 +187,16 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         mlUndeployModelNodesRequest.setTenantId(tenantId);
 
         client.execute(MLUndeployModelAction.INSTANCE, mlUndeployModelNodesRequest, ActionListener.wrap(response -> {
+            /*
+             * The method TransportUndeployModelsAction.processUndeployModelResponseAndUpdate(...) performs
+             * undeploy action of models by removing the models from the nodes cache and updating the index when it's able to find it.
+             *
+             * The problem becomes when the models index is incorrect and no node(s) are servicing the model. This results in
+             * `{}` responses (on undeploy action), with no update to the model index thus, causing incorrect model state status.
+             *
+             * Having this change enables a check that this edge case occurs along with having access to the model id
+             * allowing us to update the stale model index correctly to `UNDEPLOYED` since no nodes service the model.
+             */
             if (response.getNodes().isEmpty()) {
                 bulkSetModelIndexToUndeploy(modelIds, listener, response);
                 return;
@@ -203,14 +213,14 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         BulkRequest bulkUpdateRequest = new BulkRequest();
         for (String modelId : modelIds) {
             UpdateRequest updateRequest = new UpdateRequest();
-            Instant now = Instant.now();
+
             ImmutableMap.Builder<String, Object> builder = ImmutableMap.builder();
             builder.put(MLModel.MODEL_STATE_FIELD, MLModelState.UNDEPLOYED.name());
 
             builder.put(MLModel.PLANNING_WORKER_NODES_FIELD, List.of());
             builder.put(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD, 0);
 
-            builder.put(MLModel.LAST_UPDATED_TIME_FIELD, now.toEpochMilli());
+            builder.put(MLModel.LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
             builder.put(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD, 0);
             updateRequest.index(ML_MODEL_INDEX).id(modelId).doc(builder.build());
             bulkUpdateRequest.add(updateRequest);
