@@ -314,6 +314,36 @@ public class MLCreateConnectorInputTests {
     }
 
     @Test
+    public void testParseWithTenantId() throws Exception {
+        String inputWithTenantId =
+            "{\"name\":\"test_connector_name\",\"credential\":{\"key\":\"test_key_value\"},\"version\":\"1\",\"protocol\":\"http\",\"tenant_id\":\"test_tenant\"}";
+        testParseFromJsonString(inputWithTenantId, parsedInput -> {
+            assertEquals("test_connector_name", parsedInput.getName());
+            assertEquals("test_tenant", parsedInput.getTenantId());
+        });
+    }
+
+    @Test
+    public void testParseWithUnknownFields() throws Exception {
+        String inputWithUnknownFields =
+            "{\"name\":\"test_connector_name\",\"credential\":{\"key\":\"test_key_value\"},\"version\":\"1\",\"protocol\":\"http\",\"unknown_field\":\"unknown_value\"}";
+        testParseFromJsonString(inputWithUnknownFields, parsedInput -> {
+            assertEquals("test_connector_name", parsedInput.getName());
+            assertNull(parsedInput.getTenantId());
+        });
+    }
+
+    @Test
+    public void testParseWithEmptyActions() throws Exception {
+        String inputWithEmptyActions =
+            "{\"name\":\"test_connector_name\",\"credential\":{\"key\":\"test_key_value\"},\"version\":\"1\",\"protocol\":\"http\",\"actions\":[]}";
+        testParseFromJsonString(inputWithEmptyActions, parsedInput -> {
+            assertEquals("test_connector_name", parsedInput.getName());
+            assertTrue(parsedInput.getActions().isEmpty());
+        });
+    }
+
+    @Test
     public void testWriteToVersionCompatibility() throws IOException {
         MLCreateConnectorInput input = mlCreateConnectorInput; // Assuming mlCreateConnectorInput is already initialized
 

@@ -76,6 +76,7 @@ import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
+import org.opensearch.ml.common.input.Constants;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.execute.metricscorrelation.MetricsCorrelationInput;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
@@ -245,7 +246,12 @@ public class TestHelper {
         return request;
     }
 
-    public static RestRequest getCreateConnectorRestRequest() {
+    public static RestRequest getCreateConnectorRestRequest(String tenantId) {
+        Map<String, List<String>> headers = new HashMap<>();
+        if (tenantId != null) {
+            headers.put(Constants.TENANT_ID_HEADER, Collections.singletonList(tenantId));
+        }
+
         final String requestContent = "{\n"
             + "    \"name\": \"OpenAI Connector\",\n"
             + "    \"description\": \"The connector to public OpenAI model service for GPT 3.5\",\n"
@@ -276,6 +282,7 @@ public class TestHelper {
             + "    \"access_mode\": \"public\"\n"
             + "}";
         RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
+            .withHeaders(headers)
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .build();
         return request;
