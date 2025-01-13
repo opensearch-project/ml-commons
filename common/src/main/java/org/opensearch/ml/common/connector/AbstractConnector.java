@@ -65,10 +65,14 @@ public abstract class AbstractConnector implements Connector {
     protected User owner;
     @Setter
     protected AccessMode access;
+    @Setter
     protected Instant createdTime;
+    @Setter
     protected Instant lastUpdateTime;
     @Setter
     protected ConnectorClientConfig connectorClientConfig;
+    @Setter
+    protected String tenantId;
 
     protected Map<String, String> createDecryptedHeaders(Map<String, String> headers) {
         if (headers == null) {
@@ -121,6 +125,11 @@ public abstract class AbstractConnector implements Connector {
             return actions.stream().filter(a -> a.getActionType().name().equalsIgnoreCase(action)).findFirst();
         }
         return Optional.empty();
+    }
+
+    @Override
+    public void addAction(ConnectorAction action) {
+        actions.add(action);
     }
 
     @Override

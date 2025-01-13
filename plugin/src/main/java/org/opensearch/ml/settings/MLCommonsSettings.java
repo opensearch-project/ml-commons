@@ -5,6 +5,11 @@
 
 package org.opensearch.ml.settings;
 
+import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_ENDPOINT_KEY;
+import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_REGION_KEY;
+import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_SERVICE_NAME_KEY;
+import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_TYPE_KEY;
+
 import java.util.List;
 import java.util.function.Function;
 
@@ -34,6 +39,15 @@ public final class MLCommonsSettings {
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );
+
+    public static final Setting<Integer> ML_COMMONS_MAX_BATCH_INFERENCE_TASKS = Setting
+        .intSetting("plugins.ml_commons.max_batch_inference_tasks", 10, 0, 500, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    public static final Setting<Integer> ML_COMMONS_MAX_BATCH_INGESTION_TASKS = Setting
+        .intSetting("plugins.ml_commons.max_batch_ingestion_tasks", 10, 0, 500, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    public static final Setting<Integer> ML_COMMONS_BATCH_INGESTION_BULK_SIZE = Setting
+        .intSetting("plugins.ml_commons.batch_ingestion_bulk_size", 500, 100, 100000, Setting.Property.NodeScope, Setting.Property.Dynamic);
     public static final Setting<Integer> ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE = Setting
         .intSetting("plugins.ml_commons.max_deploy_model_tasks_per_node", 10, 0, 10, Setting.Property.NodeScope, Setting.Property.Dynamic);
     public static final Setting<Integer> ML_COMMONS_MAX_ML_TASK_PER_NODE = Setting
@@ -136,6 +150,12 @@ public final class MLCommonsSettings {
     public static final Setting<Boolean> ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED = Setting
         .boolSetting("plugins.ml_commons.connector_access_control_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
+    public static final Setting<Boolean> ML_COMMONS_OFFLINE_BATCH_INGESTION_ENABLED = Setting
+        .boolSetting("plugins.ml_commons.offline_batch_ingestion_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    public static final Setting<Boolean> ML_COMMONS_OFFLINE_BATCH_INFERENCE_ENABLED = Setting
+        .boolSetting("plugins.ml_commons.offline_batch_inference_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
     public static final Setting<List<String>> ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX = Setting
         .listSetting(
             "plugins.ml_commons.trusted_connector_endpoints_regex",
@@ -147,7 +167,9 @@ public final class MLCommonsSettings {
                     "^https://api\\.cohere\\.ai/.*$",
                     "^https://bedrock-runtime\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
                     "^https://bedrock-agent-runtime\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
-                    "^https://bedrock\\..*[a-z0-9-]\\.amazonaws\\.com/.*$"
+                    "^https://bedrock\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
+                    "^https://textract\\..*[a-z0-9-]\\.amazonaws\\.com$",
+                    "^https://comprehend\\..*[a-z0-9-]\\.amazonaws\\.com$"
                 ),
             Function.identity(),
             Setting.Property.NodeScope,
@@ -246,4 +268,53 @@ public final class MLCommonsSettings {
 
     public static final Setting<Boolean> ML_COMMONS_CONTROLLER_ENABLED = Setting
         .boolSetting("plugins.ml_commons.controller_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
+
+    /**
+     * Indicates whether multi-tenancy is enabled in ML Commons.
+     *
+     * This is a static setting that must be configured before starting OpenSearch. It can be set in the following ways, in priority order:
+     *
+     * <ol>
+     *   <li>As a command-line argument using the <code>-E</code> flag (this overrides other options):
+     *       <pre>
+     *       ./bin/opensearch -Eplugins.ml_commons.multi_tenancy_enabled=true
+     *       </pre>
+     *   </li>
+     *   <li>As a system property using <code>OPENSEARCH_JAVA_OPTS</code> (this overrides <code>opensearch.yml</code>):
+     *       <pre>
+     *       export OPENSEARCH_JAVA_OPTS="-Dplugins.ml_commons.multi_tenancy_enabled=true"
+     *       ./bin/opensearch
+     *       </pre>
+     *       Or inline when starting OpenSearch:
+     *       <pre>
+     *       OPENSEARCH_JAVA_OPTS="-Dplugins.ml_commons.multi_tenancy_enabled=true" ./bin/opensearch
+     *       </pre>
+     *   </li>
+     *   <li>In the <code>opensearch.yml</code> configuration file:
+     *       <pre>
+     *       plugins.ml_commons.multi_tenancy_enabled: true
+     *       </pre>
+     *   </li>
+     * </ol>
+     *
+     * After setting this option, a full cluster restart is required for the changes to take effect.
+     */
+    public static final Setting<Boolean> ML_COMMONS_MULTI_TENANCY_ENABLED = Setting
+        .boolSetting("plugins.ml_commons.multi_tenancy_enabled", false, Setting.Property.NodeScope);
+
+    /** This setting sets the remote metadata type */
+    public static final Setting<String> REMOTE_METADATA_TYPE = Setting
+        .simpleString("plugins.ml_commons." + REMOTE_METADATA_TYPE_KEY, Setting.Property.NodeScope, Setting.Property.Final);
+
+    /** This setting sets the remote metadata endpoint */
+    public static final Setting<String> REMOTE_METADATA_ENDPOINT = Setting
+        .simpleString("plugins.flow_framework." + REMOTE_METADATA_ENDPOINT_KEY, Setting.Property.NodeScope, Setting.Property.Final);
+
+    /** This setting sets the remote metadata region */
+    public static final Setting<String> REMOTE_METADATA_REGION = Setting
+        .simpleString("plugins.flow_framework." + REMOTE_METADATA_REGION_KEY, Setting.Property.NodeScope, Setting.Property.Final);
+
+    /** This setting sets the remote metadata service name */
+    public static final Setting<String> REMOTE_METADATA_SERVICE_NAME = Setting
+        .simpleString("plugins.flow_framework." + REMOTE_METADATA_SERVICE_NAME_KEY, Setting.Property.NodeScope, Setting.Property.Final);
 }

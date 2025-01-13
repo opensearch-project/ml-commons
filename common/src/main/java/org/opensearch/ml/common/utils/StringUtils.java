@@ -18,16 +18,27 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.BooleanUtils;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.opensearch.OpenSearchParseException;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
+import com.jayway.jsonpath.JsonPath;
+import com.networknt.schema.JsonSchema;
+import com.networknt.schema.JsonSchemaFactory;
+import com.networknt.schema.SpecVersion;
+import com.networknt.schema.ValidationMessage;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -52,12 +63,18 @@ public class StringUtils {
     }
     public static final String TO_STRING_FUNCTION_NAME = ".toString()";
 
-    public static boolean isValidJsonString(String Json) {
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    public static boolean isValidJsonString(String json) {
+        if (json == null || json.isBlank()) {
+            return false;
+        }
+
         try {
-            new JSONObject(Json);
+            new JSONObject(json);
         } catch (JSONException ex) {
             try {
-                new JSONArray(Json);
+                new JSONArray(json);
             } catch (JSONException ex1) {
                 return false;
             }
@@ -66,6 +83,10 @@ public class StringUtils {
     }
 
     public static boolean isJson(String json) {
+        if (json == null || json.isBlank()) {
+            return false;
+        }
+
         try {
             if (!isValidJsonString(json)) {
                 return false;
@@ -292,5 +313,62 @@ public class StringUtils {
 
         // Extract the substring from the startIndex to the end of the input string
         return (startIndex != -1) ? jsonPathWithSource.substring(startIndex) : jsonPathWithSource;
+    }
+
+    /**
+     * Checks if the given input string matches the JSONPath format.
+     *
+     * <p>The JSONPath format is a way to navigate and extract data from JSON documents.
+     * It uses a syntax similar to XPath for XML documents. This method attempts to compile
+     * the input string as a JSONPath expression using the {@link com.jayway.jsonpath.JsonPath}
+     * library. If the compilation succeeds, it means the input string is a valid JSONPath
+     * expression.
+     *
+     * @param input the input string to be checked for JSONPath format validity
+     * @return true if the input string is a valid JSONPath expression, false otherwise
+     */
+    public static boolean isValidJSONPath(String input) {
+        if (input == null || input.isBlank()) {
+            return false;
+        }
+        try {
+            JsonPath.compile(input); // This will throw an exception if the path is invalid
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    public static JsonObject getJsonObjectFromString(String jsonString) {
+        if (jsonString == null || jsonString.isBlank()) {
+            throw new IllegalArgumentException("Json cannot be null or empty");
+        }
+
+        return JsonParser.parseString(jsonString).getAsJsonObject();
+    }
+
+    public static void validateSchema(String schemaString, String instanceString) {
+        try {
+            // parse the schema JSON as string
+            JsonNode schemaNode = MAPPER.readTree(schemaString);
+            JsonSchema schema = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V202012).getSchema(schemaNode);
+
+            // JSON data to validate
+            JsonNode jsonNode = MAPPER.readTree(instanceString);
+
+            // Validate JSON node against the schema
+            Set<ValidationMessage> errors = schema.validate(jsonNode);
+            if (!errors.isEmpty()) {
+                String errorMessage = errors.stream().map(ValidationMessage::getMessage).collect(Collectors.joining(", "));
+
+                throw new OpenSearchParseException(
+                    "Validation failed: " + errorMessage + " for instance: " + instanceString + " with schema: " + schemaString
+                );
+            }
+        } catch (JsonProcessingException e) {
+            throw new IllegalArgumentException("Invalid JSON format: " + e.getMessage(), e);
+        } catch (Exception e) {
+            throw new OpenSearchParseException("Schema validation failed: " + e.getMessage(), e);
+        }
     }
 }

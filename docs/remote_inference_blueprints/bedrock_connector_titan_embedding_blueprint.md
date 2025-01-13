@@ -16,10 +16,9 @@ PUT /_cluster/settings
 ```
 
 ## 2. Create connector for Amazon Bedrock:
-
+### 2.1 Titan text embedding model v1
 If you are using self-managed Opensearch, you should supply AWS credentials:
 
-If you are using Titan Text Embedding V2, change "model" to `amazon.titan-embed-text-v2:0`
 ```json
 POST /_plugins/_ml/connectors/_create
 {
@@ -130,6 +129,55 @@ Sample response:
 {
   "connector_id": "nzh9PIsBnGXNcxYpPEcv"
 }
+```
+### 2.2 Titan text embedding model v2
+
+Follow Titan text embedding model v1, just change "model" to `amazon.titan-embed-text-v2:0` and configure extra parameters and request body as:
+
+
+```
+POST /_plugins/_ml/connectors/_create
+{
+  "name": "Amazon Bedrock Connector: embedding",
+  "description": "The connector to bedrock Titan embedding model",
+  "version": 1,
+  "protocol": "aws_sigv4",
+  "parameters": {
+    "region": "<PLEASE ADD YOUR AWS REGION HERE>",
+    "service_name": "bedrock",
+    "model": "amazon.titan-embed-text-v2:0",
+    "dimensions": 1024,
+    "normalize": true,
+    "embeddingTypes": ["float"]
+  },
+  "credential": {
+    "access_key": "<PLEASE ADD YOUR AWS ACCESS KEY HERE>",
+    "secret_key": "<PLEASE ADD YOUR AWS SECRET KEY HERE>",
+    "session_token": "<PLEASE ADD YOUR AWS SECURITY TOKEN HERE>"
+  },
+  "actions": [
+    {
+      "action_type": "predict",
+      "method": "POST",
+      "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/invoke",
+      "headers": {
+        "content-type": "application/json",
+        "x-amz-content-sha256": "required"
+      },
+      "request_body": "{ \"inputText\": \"${parameters.inputText}\", \"dimensions\": ${parameters.dimensions}, \"normalize\": ${parameters.normalize}, \"embeddingTypes\": ${parameters.embeddingTypes} }",
+      "pre_process_function": "connector.pre_process.bedrock.embedding",
+      "post_process_function": "connector.post_process.bedrock.embedding"
+    }
+  ]
+}
+```
+
+Note:
+1. neural-search plugin only support one embedding for one document now. So you should configure one embedding type in `embeddingTypes`
+2. similar to v1, you should use `roleArn` in credential part on AWS OpenSearch Service
+3. `binary` type not supported yet in built-in post process function `connector.post_process.bedrock.embedding`. You can use this painless script
+```
+"post_process_function":"\n      def name = \"sentence_embedding\";\n      def dataType = \"FLOAT32\";\n      if (params.embeddingsByType == null || params.embeddingsByType.length == 0) {\n        return params.message;\n      }\n      def shape = [params.embeddingsByType.length];\n      def json = \"{\" +\n                 \"\\\"name\\\":\\\"\" + name + \"\\\",\" +\n                 \"\\\"data_type\\\":\\\"\" + dataType + \"\\\",\" +\n                 \"\\\"shape\\\":\" + shape + \",\" +\n                 \"\\\"data\\\":\" + params.embeddingsByType +\n                 \"}\";\n      return json;\n    "
 ```
 
 ## 3. Create model group:

@@ -24,7 +24,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 
 public class RestMLGetTaskAction extends BaseRestHandler {
-    private static final String ML_GET_Task_ACTION = "ml_get_task_action";
+    private static final String ML_GET_TASK_ACTION = "ml_get_task_action";
 
     /**
      * Constructor
@@ -33,7 +33,7 @@ public class RestMLGetTaskAction extends BaseRestHandler {
 
     @Override
     public String getName() {
-        return ML_GET_Task_ACTION;
+        return ML_GET_TASK_ACTION;
     }
 
     @Override

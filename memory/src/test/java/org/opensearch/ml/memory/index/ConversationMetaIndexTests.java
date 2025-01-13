@@ -134,10 +134,10 @@ public class ConversationMetaIndexTests extends OpenSearchTestCase {
     }
 
     private void setupUser(String user) {
-        String userstr = user == null ? "" : user + "||";
+        String userStr = user == null ? "" : user + "||";
         doAnswer(invocation -> {
             ThreadContext tc = new ThreadContext(Settings.EMPTY);
-            tc.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, userstr);
+            tc.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, userStr);
             return tc;
         }).when(threadPool).getThreadContext();
     }

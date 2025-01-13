@@ -13,6 +13,7 @@ import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import org.opensearch.ResourceNotFoundException;
@@ -134,7 +135,12 @@ public class MLAgentExecutor implements Executable {
                                     (ConversationIndexMemory.Factory) memoryFactoryMap.get(memorySpec.getType());
                                 conversationIndexMemoryFactory.create(question, memoryId, appType, ActionListener.wrap(memory -> {
                                     inputDataSet.getParameters().put(MEMORY_ID, memory.getConversationId());
-                                    ActionListener<Object> agentActionListener = createAgentActionListener(listener, outputs, modelTensors);
+                                    ActionListener<Object> agentActionListener = createAgentActionListener(
+                                        listener,
+                                        outputs,
+                                        modelTensors,
+                                        mlAgent.getType()
+                                    );
                                     // get question for regenerate
                                     if (regenerateInteractionId != null) {
                                         log.info("Regenerate for existing interaction {}", regenerateInteractionId);
@@ -160,7 +166,12 @@ public class MLAgentExecutor implements Executable {
                                     listener.onFailure(ex);
                                 }));
                             } else {
-                                ActionListener<Object> agentActionListener = createAgentActionListener(listener, outputs, modelTensors);
+                                ActionListener<Object> agentActionListener = createAgentActionListener(
+                                    listener,
+                                    outputs,
+                                    modelTensors,
+                                    mlAgent.getType()
+                                );
                                 executeAgent(inputDataSet, mlAgent, agentActionListener);
                             }
                         }
@@ -234,7 +245,8 @@ public class MLAgentExecutor implements Executable {
     private ActionListener<Object> createAgentActionListener(
         ActionListener<Output> listener,
         List<ModelTensors> outputs,
-        List<ModelTensor> modelTensors
+        List<ModelTensor> modelTensors,
+        String agentType
     ) {
         return ActionListener.wrap(output -> {
             if (output != null) {
@@ -274,14 +286,14 @@ public class MLAgentExecutor implements Executable {
                 listener.onResponse(null);
             }
         }, ex -> {
-            log.error("Failed to run flow agent", ex);
+            log.error("Failed to run " + agentType + " agent", ex);
             listener.onFailure(ex);
         });
     }
 
     @VisibleForTesting
     protected MLAgentRunner getAgentRunner(MLAgent mlAgent) {
-        final MLAgentType agentType = MLAgentType.from(mlAgent.getType().toUpperCase());
+        final MLAgentType agentType = MLAgentType.from(mlAgent.getType().toUpperCase(Locale.ROOT));
         switch (agentType) {
             case FLOW:
                 return new MLFlowAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryFactoryMap);

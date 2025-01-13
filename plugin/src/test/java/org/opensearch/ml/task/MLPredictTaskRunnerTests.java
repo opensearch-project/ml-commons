@@ -229,6 +229,11 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
 
         GetResult getResult = new GetResult(indexName, "1.1.1", 111l, 111l, 111l, true, bytesReference, null, null);
         getResponse = new GetResponse(getResult);
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(1);
+            listener.onResponse(false);
+            return null;
+        }).when(mlModelManager).checkMaxBatchJobTask(any(MLTask.class), isA(ActionListener.class));
     }
 
     public void testExecuteTask_OnLocalNode() {

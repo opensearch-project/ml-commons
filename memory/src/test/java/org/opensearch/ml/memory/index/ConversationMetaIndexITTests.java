@@ -564,8 +564,8 @@ public class ConversationMetaIndexITTests extends OpenSearchIntegTestCase {
             assert (cid2.result().equals(get2.result().getId()));
             assert (get1.result().getName().equals("convo1"));
             assert (get2.result().getName().equals("convo2"));
-            Assert.assertTrue(convo2.getAdditionalInfos().isEmpty());
-            Assert.assertTrue(get1.result().getAdditionalInfos().isEmpty());
+            Assert.assertTrue(convo2.getAdditionalInfos() == null);
+            Assert.assertTrue(get1.result().getAdditionalInfos() == null);
             cdl.countDown();
         }, e -> {
             cdl.countDown();

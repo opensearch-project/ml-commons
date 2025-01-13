@@ -41,7 +41,7 @@ dependencies {
     implementation group: 'io.protostuff', name: 'protostuff-collectionschema', version: '1.8.0'
     testImplementation group: 'junit', name: 'junit', version: '4.13.2'
     testImplementation group: 'org.mockito', name: 'mockito-core', version: '5.7.0'
-    implementation group: 'com.google.guava', name: 'guava', version: '32.1.2-jre'
+    implementation group: 'com.google.guava', name: 'guava', version: '32.1.3-jre'
     implementation group: 'com.google.code.gson', name: 'gson', version: '2.10.1'
     implementation platform("ai.djl:bom:0.28.0")
     implementation group: 'ai.djl.pytorch', name: 'pytorch-model-zoo'
@@ -62,19 +62,22 @@ dependencies {
         }
     }
 
-    implementation platform('software.amazon.awssdk:bom:2.25.40')
-    api 'software.amazon.awssdk:auth:2.25.40'
+    implementation platform('software.amazon.awssdk:bom:2.29.12')
+    api 'software.amazon.awssdk:auth:2.29.12'
     implementation 'software.amazon.awssdk:apache-client'
     implementation ('com.amazonaws:aws-encryption-sdk-java:2.4.1') {
         exclude group: 'org.bouncycastle', module: 'bcprov-ext-jdk18on'
     }
     implementation 'org.bouncycastle:bcprov-jdk18on:1.78.1'
-    implementation group: 'software.amazon.awssdk', name: 'aws-core', version: '2.25.40'
-    implementation group: 'software.amazon.awssdk', name: 's3', version: '2.25.40'
-    implementation group: 'software.amazon.awssdk', name: 'regions', version: '2.25.40'
+    implementation group: 'software.amazon.awssdk', name: 'aws-core', version: '2.29.12'
+    implementation group: 'software.amazon.awssdk', name: 's3', version: '2.29.12'
+    implementation group: 'software.amazon.awssdk', name: 'regions', version: '2.29.12'
     implementation 'com.jayway.jsonpath:json-path:2.9.0'
     implementation group: 'org.json', name: 'json', version: '20231013'
-    implementation group: 'software.amazon.awssdk', name: 'netty-nio-client', version: '2.25.40'
+    implementation group: 'software.amazon.awssdk', name: 'netty-nio-client', version: '2.29.12'
+    testImplementation("com.fasterxml.jackson.core:jackson-annotations:${versions.jackson}")
+    testImplementation("com.fasterxml.jackson.core:jackson-databind:${versions.jackson_databind}")
+    testImplementation group: 'com.networknt' , name: 'json-schema-validator', version: '1.4.0'
 }
 
 lombok {
@@ -82,9 +85,11 @@ lombok {
 }
 
 configurations.all {
-    resolutionStrategy.force 'com.google.protobuf:protobuf-java:3.21.9'
+    resolutionStrategy.force 'com.google.protobuf:protobuf-java:3.25.5'
     resolutionStrategy.force 'org.apache.commons:commons-compress:1.26.0'
+    resolutionStrategy.force 'software.amazon.awssdk:bom:2.29.12'
 }
+
 
 jacocoTestReport {
     reports {

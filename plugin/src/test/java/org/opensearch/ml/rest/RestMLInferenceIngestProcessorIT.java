@@ -6,6 +6,7 @@
 package org.opensearch.ml.rest;
 
 import static org.opensearch.ml.common.MLTask.MODEL_ID_FIELD;
+import static org.opensearch.ml.utils.TestData.SENTENCE_TRANSFORMER_MODEL_HASH_VALUE;
 import static org.opensearch.ml.utils.TestData.SENTENCE_TRANSFORMER_MODEL_URL;
 import static org.opensearch.ml.utils.TestHelper.makeRequest;
 
@@ -28,6 +29,7 @@ import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.utils.TestHelper;
 
 import com.google.common.collect.ImmutableList;
+import com.jayway.jsonpath.DocumentContext;
 import com.jayway.jsonpath.JsonPath;
 
 public class RestMLInferenceIngestProcessorIT extends MLCommonsRestTestCase {
@@ -434,6 +436,110 @@ public class RestMLInferenceIngestProcessorIT extends MLCommonsRestTestCase {
         Assert.assertEquals(0.49191704, (Double) embedding2.get(0), 0.005);
     }
 
+    public void testMLInferenceIngestProcessor_simulatesIngestPipelineSuccessfully_withAsymmetricEmbeddingModelUsingPassageContentType()
+        throws Exception {
+        String taskId = registerModel(TestHelper.toJsonString(registerAsymmetricEmbeddingModelInput()));
+        waitForTask(taskId, MLTaskState.COMPLETED);
+        getTask(client(), taskId, response -> {
+            assertNotNull(response.get(MODEL_ID_FIELD));
+            this.localModelId = (String) response.get(MODEL_ID_FIELD);
+            try {
+                String deployTaskID = deployModel(this.localModelId);
+                waitForTask(deployTaskID, MLTaskState.COMPLETED);
+
+                getModel(client(), this.localModelId, model -> { assertEquals("DEPLOYED", model.get("model_state")); });
+            } catch (IOException | InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        });
+
+        String asymmetricPipelineName = "asymmetric_embedding_pipeline";
+        String createPipelineRequestBody = "{\n"
+            + "  \"description\": \"ingest PASSAGE text and generate a embedding using an asymmetric model\",\n"
+            + "  \"processors\": [\n"
+            + "    {\n"
+            + "      \"ml_inference\": {\n"
+            + "\n"
+            + "        \"model_input\": \"{\\\"text_docs\\\":[\\\"${input_map.text_docs}\\\"],\\\"target_response\\\":[\\\"sentence_embedding\\\"],\\\"parameters\\\":{\\\"content_type\\\":\\\"passage\\\"}}\",\n"
+            + "        \"function_name\": \"text_embedding\",\n"
+            + "        \"model_id\": \""
+            + this.localModelId
+            + "\",\n"
+            + "        \"input_map\": [\n"
+            + "          {\n"
+            + "            \"text_docs\": \"description\"\n"
+            + "          }\n"
+            + "        ],\n"
+            + "        \"output_map\": [\n"
+            + "          {\n"
+            + "\n"
+            + "            "
+            + "            \"fact_embedding\": \"$.inference_results[0].output[0].data\"\n"
+            + "          }\n"
+            + "        ]\n"
+            + "      }\n"
+            + "    }\n"
+            + "  ]\n"
+            + "}";
+
+        createPipelineProcessor(createPipelineRequestBody, asymmetricPipelineName);
+        String sampleDocuments = "{\n"
+            + "  \"docs\": [\n"
+            + "    {\n"
+            + "      \"_index\": \"my-index\",\n"
+            + "      \"_id\": \"1\",\n"
+            + "      \"_source\": {\n"
+            + "        \"title\": \"Central Park\",\n"
+            + "        \"description\": \"A large public park in the heart of New York City, offering a wide range of recreational activities.\"\n"
+            + "      }\n"
+            + "    },\n"
+            + "    {\n"
+            + "      \"_index\": \"my-index\",\n"
+            + "      \"_id\": \"2\",\n"
+            + "      \"_source\": {\n"
+            + "        \"title\": \"Empire State Building\",\n"
+            + "        \"description\": \"An iconic skyscraper in New York City offering breathtaking views from its observation deck.\"\n"
+            + "      }\n"
+            + "    }\n"
+            + "  ]\n"
+            + "}\n";
+
+        Map simulateResponseDocuments = simulateIngestPipeline(asymmetricPipelineName, sampleDocuments);
+
+        DocumentContext documents = JsonPath.parse(simulateResponseDocuments);
+
+        List centralParkFactEmbedding = documents.read("docs.[0].*._source.fact_embedding.*");
+        assertEquals(768, centralParkFactEmbedding.size());
+        Assert.assertEquals(0.5137818, (Double) centralParkFactEmbedding.get(0), 0.005);
+
+        List empireStateBuildingFactEmbedding = documents.read("docs.[1].*._source.fact_embedding.*");
+        assertEquals(768, empireStateBuildingFactEmbedding.size());
+        Assert.assertEquals(0.4493039, (Double) empireStateBuildingFactEmbedding.get(0), 0.005);
+    }
+
+    private MLRegisterModelInput registerAsymmetricEmbeddingModelInput() {
+        MLModelConfig modelConfig = TextEmbeddingModelConfig
+            .builder()
+            .modelType("bert")
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .embeddingDimension(768)
+            .queryPrefix("query >>")
+            .passagePrefix("passage >> ")
+            .build();
+
+        return MLRegisterModelInput
+            .builder()
+            .modelName("test_model_name")
+            .version("1.0.0")
+            .functionName(FunctionName.TEXT_EMBEDDING)
+            .modelFormat(MLModelFormat.TORCH_SCRIPT)
+            .modelConfig(modelConfig)
+            .url(SENTENCE_TRANSFORMER_MODEL_URL)
+            .deployModel(false)
+            .hashValue(SENTENCE_TRANSFORMER_MODEL_HASH_VALUE)
+            .build();
+    }
+
     // TODO: add tests for other local model types such as sparse/cross encoders
     public void testMLInferenceProcessorLocalModelNestedField() throws Exception {
 
@@ -560,6 +666,21 @@ public class RestMLInferenceIngestProcessorIT extends MLCommonsRestTestCase {
 
     }
 
+    protected Map simulateIngestPipeline(String pipelineName, String sampleDocuments) throws IOException {
+        Response ingestionResponse = TestHelper
+            .makeRequest(
+                client(),
+                "POST",
+                "/_ingest/pipeline/" + pipelineName + "/_simulate",
+                null,
+                sampleDocuments,
+                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
+            );
+        assertEquals(200, ingestionResponse.getStatusLine().getStatusCode());
+
+        return parseResponseToMap(ingestionResponse);
+    }
+
     protected void createIndex(String indexName, String requestBody) throws Exception {
         Response response = makeRequest(
             client(),
@@ -602,7 +723,7 @@ public class RestMLInferenceIngestProcessorIT extends MLCommonsRestTestCase {
             .modelConfig(modelConfig)
             .url(SENTENCE_TRANSFORMER_MODEL_URL)
             .deployModel(false)
-            .hashValue("e13b74006290a9d0f58c1376f9629d4ebc05a0f9385f40db837452b167ae9021")
+            .hashValue(SENTENCE_TRANSFORMER_MODEL_HASH_VALUE)
             .build();
     }
 

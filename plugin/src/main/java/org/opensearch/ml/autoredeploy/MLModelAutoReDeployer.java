@@ -184,6 +184,9 @@ public class MLModelAutoReDeployer {
                             modelAutoRedeployArrangements.add(modelAutoRedeployArrangement);
                     });
                 redeployAModel();
+            } else {
+                log.info("Could not find any models in the index, not performing auto reloading!");
+                startCronjobAndClearListener();
             }
         }, e -> {
             if (e instanceof IndexNotFoundException) {
@@ -215,7 +218,7 @@ public class MLModelAutoReDeployer {
                     client.execute(MLUndeployModelAction.INSTANCE, undeployModelNodesRequest, undeployModelListener);
                 }
             }
-        }, e -> { log.error("Failed to query need undeploy models, no action will be performed"); });
+        }, e -> { log.error("Failed to query need undeploy models, no action will be performed", e); });
         queryRunningModels(listener);
     }
 
@@ -255,6 +258,11 @@ public class MLModelAutoReDeployer {
 
     @SuppressWarnings("unchecked")
     private void triggerModelRedeploy(ModelAutoRedeployArrangement modelAutoRedeployArrangement) {
+        if (modelAutoRedeployArrangement == null) {
+            log.info("No more models in arrangement, skipping the redeployment");
+            startCronjobAndClearListener();
+            return;
+        }
         String modelId = modelAutoRedeployArrangement.getSearchResponse().getId();
         List<String> addedNodes = modelAutoRedeployArrangement.getAddedNodes();
         List<String> planningWorkerNodes = (List<String>) modelAutoRedeployArrangement
@@ -286,6 +294,7 @@ public class MLModelAutoReDeployer {
                 .info(
                     "Allow custom deployment plan is true and deploy to all nodes is false and added nodes are not in planning worker nodes list, not to auto redeploy the model to the new nodes!"
                 );
+            redeployAModel();
             return;
         }
 

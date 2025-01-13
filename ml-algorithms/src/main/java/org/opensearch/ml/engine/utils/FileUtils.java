@@ -45,16 +45,16 @@ public class FileUtils {
      * @throws IOException
      */
     public static List<String> splitFileIntoChunks(File file, Path outputPath, int chunkSize) throws IOException {
-        int fileSize = (int) file.length();
+        long fileSize = file.length();
         ArrayList<String> nameList = new ArrayList<>();
         try (InputStream inStream = new BufferedInputStream(new FileInputStream(file))) {
             int numberOfChunk = 0;
-            int totalBytesRead = 0;
+            long totalBytesRead = 0;
             while (totalBytesRead < fileSize) {
                 String partName = numberOfChunk + "";
-                int bytesRemaining = fileSize - totalBytesRead;
+                long bytesRemaining = fileSize - totalBytesRead;
                 if (bytesRemaining < chunkSize) {
-                    chunkSize = bytesRemaining;
+                    chunkSize = (int) bytesRemaining;
                 }
                 byte[] temporary = new byte[chunkSize];
                 int bytesRead = inStream.read(temporary, 0, chunkSize);

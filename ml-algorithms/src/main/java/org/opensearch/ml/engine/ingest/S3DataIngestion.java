@@ -53,7 +53,7 @@ public class S3DataIngestion extends AbstractIngestion {
     }
 
     @Override
-    public double ingest(MLBatchIngestionInput mlBatchIngestionInput) {
+    public double ingest(MLBatchIngestionInput mlBatchIngestionInput, int bulkSize) {
         S3Client s3 = initS3Client(mlBatchIngestionInput);
 
         List<String> s3Uris = (List<String>) mlBatchIngestionInput.getDataSources().get(SOURCE);
@@ -63,7 +63,7 @@ public class S3DataIngestion extends AbstractIngestion {
         boolean isSoleSource = s3Uris.size() == 1;
         List<Double> successRates = Collections.synchronizedList(new ArrayList<>());
         for (int sourceIndex = 0; sourceIndex < s3Uris.size(); sourceIndex++) {
-            successRates.add(ingestSingleSource(s3, s3Uris.get(sourceIndex), mlBatchIngestionInput, sourceIndex, isSoleSource));
+            successRates.add(ingestSingleSource(s3, s3Uris.get(sourceIndex), mlBatchIngestionInput, sourceIndex, isSoleSource, bulkSize));
         }
 
         return calculateSuccessRate(successRates);
@@ -74,7 +74,8 @@ public class S3DataIngestion extends AbstractIngestion {
         String s3Uri,
         MLBatchIngestionInput mlBatchIngestionInput,
         int sourceIndex,
-        boolean isSoleSource
+        boolean isSoleSource,
+        int bulkSize
     ) {
         String bucketName = getS3BucketName(s3Uri);
         String keyName = getS3KeyName(s3Uri);
@@ -99,8 +100,8 @@ public class S3DataIngestion extends AbstractIngestion {
                 linesBuffer.add(line);
                 lineCount++;
 
-                // Process every 100 lines
-                if (lineCount % 100 == 0) {
+                // Process every bulkSize lines
+                if (lineCount % bulkSize == 0) {
                     // Create a CompletableFuture that will be completed by the bulkResponseListener
                     CompletableFuture<Void> future = new CompletableFuture<>();
                     batchIngest(

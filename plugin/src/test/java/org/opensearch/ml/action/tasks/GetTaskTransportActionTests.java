@@ -70,7 +70,9 @@ import org.opensearch.ml.common.transport.task.MLTaskGetRequest;
 import org.opensearch.ml.common.transport.task.MLTaskGetResponse;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
+import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.script.ScriptService;
 import org.opensearch.test.OpenSearchTestCase;
@@ -106,6 +108,9 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
     private ConnectorAccessControlHelper connectorAccessControlHelper;
 
     @Mock
+    private ModelAccessControlHelper modelAccessControlHelper;
+
+    @Mock
     private EncryptorImpl encryptor;
 
     @Mock
@@ -115,6 +120,9 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
 
     @Mock
     private MLTaskManager mlTaskManager;
+
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -169,9 +177,11 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
                 clusterService,
                 scriptService,
                 connectorAccessControlHelper,
+                modelAccessControlHelper,
                 encryptor,
                 mlTaskManager,
                 mlModelManager,
+                mlFeatureEnabledSetting,
                 settings
             )
         );
@@ -188,6 +198,14 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
             .actions(
                 Arrays
                     .asList(
+                        ConnectorAction
+                            .builder()
+                            .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
+                            .method("POST")
+                            .url("https://api.sagemaker.us-east-1.amazonaws.com/CreateTransformJob")
+                            .headers(Map.of("Authorization", "Bearer ${credential.api_key}"))
+                            .requestBody("{ \"TransformJobName\" : \"${parameters.TransformJobName}\"}")
+                            .build(),
                         ConnectorAction
                             .builder()
                             .actionType(ConnectorAction.ActionType.BATCH_PREDICT_STATUS)
@@ -208,14 +226,18 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(mlModelManager).getModel(eq("testModelID"), any(), any(), isA(ActionListener.class));
 
-        when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(true);
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ActionListener<Connector> listener = invocation.getArgument(2);
             listener.onResponse(connector);
             return null;
         }).when(connectorAccessControlHelper).getConnector(eq(client), anyString(), any());
-
+        when(mlFeatureEnabledSetting.isOfflineBatchInferenceEnabled()).thenReturn(true);
     }
 
     public void testGetTask_NullResponse() {
@@ -278,12 +300,16 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(any(MLTaskGetResponse.class));
     }
 
-    public void test_BatchPredictStatus_NoConnector() throws IOException {
+    public void test_BatchPredictStatus_NoModelGroupAccess() throws IOException {
         Map<String, Object> remoteJob = new HashMap<>();
         remoteJob.put("Status", "IN PROGRESS");
         remoteJob.put("TransformJobName", "SM-offline-batch-transform13");
 
-        when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(false);
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(false);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
 
         GetResponse getResponse = prepareMLTask(FunctionName.REMOTE, MLTaskType.BATCH_PREDICTION, remoteJob);
 
@@ -296,10 +322,39 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         getTaskTransportAction.doExecute(null, mlTaskGetRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("You don't have permission to access this connector", argumentCaptor.getValue().getMessage());
+        assertEquals("You don't have permission to access this batch job", argumentCaptor.getValue().getMessage());
     }
 
-    public void test_BatchPredictStatus_NoAccessToConnector() throws IOException {
+    public void test_BatchPredictStatus_FeatureFlagDisabled() throws IOException {
+        Map<String, Object> remoteJob = new HashMap<>();
+        remoteJob.put("Status", "IN PROGRESS");
+        remoteJob.put("TransformJobName", "SM-offline-batch-transform13");
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(false);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+
+        GetResponse getResponse = prepareMLTask(FunctionName.REMOTE, MLTaskType.BATCH_PREDICTION, remoteJob);
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+        when(mlFeatureEnabledSetting.isOfflineBatchInferenceEnabled()).thenReturn(false);
+
+        getTaskTransportAction.doExecute(null, mlTaskGetRequest, actionListener);
+        ArgumentCaptor<IllegalStateException> argumentCaptor = ArgumentCaptor.forClass(IllegalStateException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "Offline Batch Inference is currently disabled. To enable it, update the setting \"plugins.ml_commons.offline_batch_inference_enabled\" to true.",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    public void test_BatchPredictStatus_NoConnectorFound() throws IOException {
         Map<String, Object> remoteJob = new HashMap<>();
         remoteJob.put("Status", "IN PROGRESS");
         remoteJob.put("TransformJobName", "SM-offline-batch-transform13");

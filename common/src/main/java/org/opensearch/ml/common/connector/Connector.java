@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -42,7 +43,15 @@ public interface Connector extends ToXContentObject, Writeable {
 
     String getName();
 
+    String getTenantId();
+
+    void setTenantId(String tenantId);
+
     String getProtocol();
+
+    void setCreatedTime(Instant createdTime);
+
+    void setLastUpdateTime(Instant lastUpdateTime);
 
     User getOwner();
 
@@ -59,6 +68,8 @@ public interface Connector extends ToXContentObject, Writeable {
     Map<String, String> getParameters();
 
     List<ConnectorAction> getActions();
+
+    void addAction(ConnectorAction action);
 
     ConnectorClientConfig getConnectorClientConfig();
 
@@ -177,4 +188,6 @@ public interface Connector extends ToXContentObject, Writeable {
     }
 
     Map<String, String> getDecryptedHeaders();
+
+    Map<String, String> getDecryptedCredential();
 }

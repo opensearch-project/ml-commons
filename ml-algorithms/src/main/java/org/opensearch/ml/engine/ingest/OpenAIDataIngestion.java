@@ -39,7 +39,7 @@ public class OpenAIDataIngestion extends AbstractIngestion {
     }
 
     @Override
-    public double ingest(MLBatchIngestionInput mlBatchIngestionInput) {
+    public double ingest(MLBatchIngestionInput mlBatchIngestionInput, int bulkSize) {
         List<String> sources = (List<String>) mlBatchIngestionInput.getDataSources().get(SOURCE);
         if (Objects.isNull(sources) || sources.isEmpty()) {
             return 100;
@@ -48,13 +48,19 @@ public class OpenAIDataIngestion extends AbstractIngestion {
         boolean isSoleSource = sources.size() == 1;
         List<Double> successRates = Collections.synchronizedList(new ArrayList<>());
         for (int sourceIndex = 0; sourceIndex < sources.size(); sourceIndex++) {
-            successRates.add(ingestSingleSource(sources.get(sourceIndex), mlBatchIngestionInput, sourceIndex, isSoleSource));
+            successRates.add(ingestSingleSource(sources.get(sourceIndex), mlBatchIngestionInput, sourceIndex, isSoleSource, bulkSize));
         }
 
         return calculateSuccessRate(successRates);
     }
 
-    private double ingestSingleSource(String fileId, MLBatchIngestionInput mlBatchIngestionInput, int sourceIndex, boolean isSoleSource) {
+    private double ingestSingleSource(
+        String fileId,
+        MLBatchIngestionInput mlBatchIngestionInput,
+        int sourceIndex,
+        boolean isSoleSource,
+        int bulkSize
+    ) {
         double successRate = 0;
         try {
             String apiKey = mlBatchIngestionInput.getCredential().get(API_KEY);
@@ -82,8 +88,8 @@ public class OpenAIDataIngestion extends AbstractIngestion {
                     linesBuffer.add(line);
                     lineCount++;
 
-                    // Process every 100 lines
-                    if (lineCount % 100 == 0) {
+                    // Process every bulkSize lines
+                    if (lineCount % bulkSize == 0) {
                         // Create a CompletableFuture that will be completed by the bulkResponseListener
                         CompletableFuture<Void> future = new CompletableFuture<>();
                         batchIngest(
