@@ -41,7 +41,8 @@ public class AwsConnector extends HttpConnector {
         List<String> backendRoles,
         AccessMode accessMode,
         User owner,
-        ConnectorClientConfig connectorClientConfig
+        ConnectorClientConfig connectorClientConfig,
+        String tenantId
     ) {
         super(
             name,
@@ -54,7 +55,8 @@ public class AwsConnector extends HttpConnector {
             backendRoles,
             accessMode,
             owner,
-            connectorClientConfig
+            connectorClientConfig,
+            tenantId
         );
         validate();
     }

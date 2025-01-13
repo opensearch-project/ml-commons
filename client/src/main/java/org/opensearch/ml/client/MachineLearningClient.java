@@ -323,7 +323,20 @@ public interface MachineLearningClient {
         return actionFuture;
     }
 
+    /**
+     * Delete connector for remote model
+     * @param connectorId The id of the connector to delete
+     * @return the result future
+     */
+    default ActionFuture<DeleteResponse> deleteConnector(String connectorId, String tenantId) {
+        PlainActionFuture<DeleteResponse> actionFuture = PlainActionFuture.newFuture();
+        deleteConnector(connectorId, tenantId, actionFuture);
+        return actionFuture;
+    }
+
     void deleteConnector(String connectorId, ActionListener<DeleteResponse> listener);
+
+    void deleteConnector(String connectorId, String tenantId, ActionListener<DeleteResponse> listener);
 
     /**
      * Register model group

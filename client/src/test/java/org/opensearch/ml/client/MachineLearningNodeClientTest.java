@@ -17,6 +17,7 @@ import static org.mockito.Mockito.verify;
 import static org.opensearch.ml.common.CommonValue.MASTER_KEY;
 import static org.opensearch.ml.common.input.Constants.ACTION;
 import static org.opensearch.ml.common.input.Constants.ALGORITHM;
+import static org.opensearch.ml.common.input.Constants.ASYNC;
 import static org.opensearch.ml.common.input.Constants.KMEANS;
 import static org.opensearch.ml.common.input.Constants.MODELID;
 import static org.opensearch.ml.common.input.Constants.PREDICT;
@@ -252,6 +253,42 @@ public class MachineLearningNodeClientTest {
     }
 
     @Test
+    public void execute_train_asyncTask() {
+        String modelId = "test_model_id";
+        String status = "InProgress";
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            MLTrainingOutput output = MLTrainingOutput.builder().status(status).modelId(modelId).build();
+            actionListener.onResponse(MLTaskResponse.builder().output(output).build());
+            return null;
+        }).when(client).execute(eq(MLTrainingTaskAction.INSTANCE), any(), any());
+
+        ArgumentCaptor<MLOutput> argumentCaptor = ArgumentCaptor.forClass(MLOutput.class);
+        Map<String, Object> args = new HashMap<>();
+        args.put(ACTION, TRAIN);
+        args.put(ALGORITHM, KMEANS);
+        args.put(ASYNC, true);
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.SAMPLE_ALGO).inputDataset(input).build();
+        machineLearningNodeClient.run(mlInput, args, trainingActionListener);
+
+        verify(client).execute(eq(MLTrainingTaskAction.INSTANCE), isA(MLTrainingTaskRequest.class), any());
+        verify(trainingActionListener).onResponse(argumentCaptor.capture());
+        assertEquals(modelId, ((MLTrainingOutput) argumentCaptor.getValue()).getModelId());
+        assertEquals(status, ((MLTrainingOutput) argumentCaptor.getValue()).getStatus());
+    }
+
+    @Test
+    public void execute_predict_missing_modelId() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("The model ID is required for prediction.");
+        Map<String, Object> args = new HashMap<>();
+        args.put(ACTION, PREDICT);
+        args.put(ALGORITHM, KMEANS);
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.SAMPLE_ALGO).inputDataset(input).build();
+        machineLearningNodeClient.run(mlInput, args, dataFrameActionListener);
+    }
+
+    @Test
     public void predict_Exception_WithNullAlgorithm() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("algorithm can't be null");
@@ -286,6 +323,27 @@ public class MachineLearningNodeClientTest {
         verify(trainingActionListener).onResponse(argumentCaptor.capture());
         assertEquals(modelId, ((MLTrainingOutput) argumentCaptor.getValue()).getModelId());
         assertEquals(status, ((MLTrainingOutput) argumentCaptor.getValue()).getStatus());
+    }
+
+    @Test
+    public void registerModelGroup_withValidInput() {
+        doAnswer(invocation -> {
+            ActionListener<MLRegisterModelGroupResponse> actionListener = invocation.getArgument(2);
+            MLRegisterModelGroupResponse output = new MLRegisterModelGroupResponse("groupId", "created");
+            actionListener.onResponse(output);
+            return null;
+        }).when(client).execute(eq(MLRegisterModelGroupAction.INSTANCE), any(), any());
+
+        MLRegisterModelGroupInput input = MLRegisterModelGroupInput
+            .builder()
+            .name("test")
+            .description("description")
+            .backendRoles(Arrays.asList("role1", "role2"))
+            .modelAccessMode(AccessMode.PUBLIC)
+            .build();
+
+        machineLearningNodeClient.registerModelGroup(input, registerModelGroupResponseActionListener);
+        verify(client).execute(eq(MLRegisterModelGroupAction.INSTANCE), isA(MLRegisterModelGroupRequest.class), any());
     }
 
     @Test
@@ -497,6 +555,26 @@ public class MachineLearningNodeClientTest {
         verify(getModelActionListener).onResponse(argumentCaptor.capture());
         assertEquals(FunctionName.KMEANS, argumentCaptor.getValue().getAlgorithm());
         assertEquals(modelContent, argumentCaptor.getValue().getContent());
+    }
+
+    @Test
+    public void deleteConnector_withTenantId() {
+        String connectorId = "connectorId";
+        String tenantId = "tenantId";
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> actionListener = invocation.getArgument(2);
+            ShardId shardId = new ShardId(new Index("indexName", "uuid"), 1);
+            DeleteResponse output = new DeleteResponse(shardId, connectorId, 1, 1, 1, true);
+            actionListener.onResponse(output);
+            return null;
+        }).when(client).execute(eq(MLConnectorDeleteAction.INSTANCE), any(), any());
+
+        ArgumentCaptor<DeleteResponse> argumentCaptor = ArgumentCaptor.forClass(DeleteResponse.class);
+        machineLearningNodeClient.deleteConnector(connectorId, tenantId, deleteConnectorActionListener);
+
+        verify(client).execute(eq(MLConnectorDeleteAction.INSTANCE), isA(MLConnectorDeleteRequest.class), any());
+        verify(deleteConnectorActionListener).onResponse(argumentCaptor.capture());
+        assertEquals(connectorId, (argumentCaptor.getValue()).getId());
     }
 
     @Test
