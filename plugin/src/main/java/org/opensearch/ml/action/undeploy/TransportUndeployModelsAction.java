@@ -231,7 +231,8 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         log.info("No nodes service: {}", Arrays.toString(modelIds));
 
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<MLUndeployModelsResponse> listenerWithContextRestoration = ActionListener.runBefore(listener, () -> threadContext.restore());
+            ActionListener<MLUndeployModelsResponse> listenerWithContextRestoration = ActionListener
+                .runBefore(listener, () -> threadContext.restore());
             ActionListener<BulkResponse> bulkResponseListener = ActionListener.wrap(br -> {
                 log.debug("Successfully set modelIds to UNDEPLOY in index");
                 listenerWithContextRestoration.onResponse(new MLUndeployModelsResponse(response));
