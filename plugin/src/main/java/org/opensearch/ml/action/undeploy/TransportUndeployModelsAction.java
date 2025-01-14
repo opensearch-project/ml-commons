@@ -228,22 +228,22 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         }
 
         bulkUpdateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-        log.info("No nodes service: {}", Arrays.toString(modelIds));
+        log.info("No nodes running these models: {}", Arrays.toString(modelIds));
 
         try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<MLUndeployModelsResponse> listenerWithContextRestoration = ActionListener
                 .runBefore(listener, () -> threadContext.restore());
             ActionListener<BulkResponse> bulkResponseListener = ActionListener.wrap(br -> {
-                log.debug("Successfully set modelIds to UNDEPLOY in index");
+                log.debug("Successfully set the following modelId(s) to UNDEPLOY in index: {}", Arrays.toString(modelIds));
                 listenerWithContextRestoration.onResponse(new MLUndeployModelsResponse(response));
             }, e -> {
-                log.error("Failed to set modelIds to UNDEPLOY in index", e);
+                log.error("Failed to set the following modelId(s) to UNDEPLOY in index: {}", Arrays.toString(modelIds), e);
                 listenerWithContextRestoration.onFailure(e);
             });
 
             client.bulk(bulkUpdateRequest, bulkResponseListener);
         } catch (Exception e) {
-            log.error("Unexpected error while setting modelIds to UNDEPLOY status to index", e);
+            log.error("Unexpected error while setting the following modelId(s) to UNDEPLOY in index: {}", Arrays.toString(modelIds), e);
             listener.onFailure(e);
         }
 
