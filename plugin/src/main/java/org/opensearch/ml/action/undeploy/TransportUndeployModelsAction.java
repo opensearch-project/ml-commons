@@ -237,8 +237,15 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
                 log.debug("Successfully set the following modelId(s) to UNDEPLOY in index: {}", Arrays.toString(modelIds));
                 listenerWithContextRestoration.onResponse(new MLUndeployModelsResponse(response));
             }, e -> {
-                log.error("Failed to set the following modelId(s) to UNDEPLOY in index: {}", Arrays.toString(modelIds), e);
-                listenerWithContextRestoration.onFailure(e);
+                String modelsNotFoundMessage = String
+                    .format("Failed to set the following modelId(s) to UNDEPLOY in index: %s", Arrays.toString(modelIds));
+                log.error(modelsNotFoundMessage, e);
+
+                OpenSearchStatusException exception = new OpenSearchStatusException(
+                    modelsNotFoundMessage + e.getMessage(),
+                    RestStatus.INTERNAL_SERVER_ERROR
+                );
+                listenerWithContextRestoration.onFailure(exception);
             });
 
             client.bulk(bulkUpdateRequest, bulkResponseListener);
