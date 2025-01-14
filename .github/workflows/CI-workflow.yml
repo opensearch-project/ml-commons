@@ -22,8 +22,19 @@ jobs:
     with:
       product: opensearch
 
+  spotless:
+    steps:
+      - uses: actions/checkout@v4
+      # Spotless requires JDK 17+
+      - name: Setup Java 21
+        uses: actions/setup-java@v1
+        with:
+          java-version: 21
+      - name: Spotless Check
+        run: ./gradlew spotlessCheck
+
   Build-ml-linux:
-    needs: [Get-Require-Approval, Get-CI-Image-Tag]
+    needs: [Get-Require-Approval, Get-CI-Image-Tag, spotless]
     strategy:
       matrix:
         java: [11, 17, 21]
@@ -66,9 +77,9 @@ jobs:
                                export COHERE_KEY=`aws secretsmanager get-secret-value --secret-id github_cohere_key --query SecretString --output text` &&
                                echo "::add-mask::$OPENAI_KEY" &&
                                echo "::add-mask::$COHERE_KEY" &&
-                               echo "build and run tests" && ./gradlew build &&
-                               echo "Publish to Maven Local" && ./gradlew publishToMavenLocal &&
-                               echo "Multi Nodes Integration Testing" && ./gradlew integTest -PnumNodes=3'
+                               echo "build and run tests" && ./gradlew build -x spotlessJava &&
+                               echo "Publish to Maven Local" && ./gradlew publishToMavenLocal -x spotlessJava &&
+                               echo "Multi Nodes Integration Testing" && ./gradlew integTest -PnumNodes=3 -x spotlessJava'
           plugin=`basename $(ls plugin/build/distributions/*.zip)`
           echo $plugin
           mv -v plugin/build/distributions/$plugin ./
@@ -88,7 +99,7 @@ jobs:
 
 
   Test-ml-linux-docker:
-    needs: [Get-Require-Approval, Build-ml-linux]
+    needs: [Get-Require-Approval, Build-ml-linux, spotless]
     strategy:
       matrix:
         java: [11, 17, 21]
@@ -167,10 +178,10 @@ jobs:
           if [ $security -gt 0 ]
           then
             echo "Security plugin is available"
-            ./gradlew integTest -Dtests.rest.cluster=localhost:9200 -Dtests.cluster=localhost:9200 -Dtests.clustername="docker-cluster" -Dhttps=true -Duser=admin -Dpassword=${{ steps.genpass.outputs.password }}
+            ./gradlew integTest -Dtests.rest.cluster=localhost:9200 -Dtests.cluster=localhost:9200 -Dtests.clustername="docker-cluster" -Dhttps=true -Duser=admin -Dpassword=${{ steps.genpass.outputs.password }} -x spotlessJava
           else
             echo "Security plugin is NOT available"
-            ./gradlew integTest -Dtests.rest.cluster=localhost:9200 -Dtests.cluster=localhost:9200 -Dtests.clustername="docker-cluster"
+            ./gradlew integTest -Dtests.rest.cluster=localhost:9200 -Dtests.cluster=localhost:9200 -Dtests.clustername="docker-cluster" -x spotlessJava
           fi
 
       - name: Upload Coverage Report
@@ -185,7 +196,7 @@ jobs:
         java: [11, 17, 21]
     name: Build and Test MLCommons Plugin on Windows
     if: github.repository == 'opensearch-project/ml-commons'
-    needs: [Get-Require-Approval]
+    needs: [Get-Require-Approval, spotless]
     environment: ${{ needs.Get-Require-Approval.outputs.is-require-approval }}
     runs-on: windows-latest
 
@@ -213,10 +224,10 @@ jobs:
           export COHERE_KEY=$(aws secretsmanager get-secret-value --secret-id github_cohere_key --query SecretString --output text)
           echo "::add-mask::$OPENAI_KEY"
           echo "::add-mask::$COHERE_KEY"
-          ./gradlew.bat build
+          ./gradlew.bat build -x spotlessJava
       - name: Publish to Maven Local
         run: |
-          ./gradlew publishToMavenLocal
+          ./gradlew publishToMavenLocal -x spotlessJava
 #      - name: Multi Nodes Integration Testing
 #        shell: bash
 #        run: |
