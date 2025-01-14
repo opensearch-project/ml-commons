@@ -56,7 +56,7 @@ dependencies {
     implementation group: 'org.opensearch', name: 'opensearch', version: "${opensearch_version}"
     implementation "org.opensearch.client:opensearch-rest-client:${opensearch_version}"
     // Multi-tenant SDK Client
-    implementation "org.opensearch:opensearch-remote-metadata-sdk:${opensearch_version}"
+    implementation "org.opensearch:opensearch-remote-metadata-sdk:${opensearch_build}"
 
     implementation "org.opensearch:common-utils:${common_utils_version}"
     implementation("com.fasterxml.jackson.core:jackson-annotations:${versions.jackson}")
