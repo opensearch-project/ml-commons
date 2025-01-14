@@ -732,7 +732,8 @@ public class MachineLearningPlugin extends Plugin
                 clusterManagerEventListener,
                 mlCircuitBreakerService,
                 mlModelAutoRedeployer,
-                cmHandler
+                cmHandler,
+                sdkClient
             );
     }
 
@@ -776,7 +777,7 @@ public class MachineLearningPlugin extends Plugin
         RestMLDeleteModelGroupAction restMLDeleteModelGroupAction = new RestMLDeleteModelGroupAction();
         RestMLCreateConnectorAction restMLCreateConnectorAction = new RestMLCreateConnectorAction(mlFeatureEnabledSetting);
         RestMLGetConnectorAction restMLGetConnectorAction = new RestMLGetConnectorAction(clusterService, settings, mlFeatureEnabledSetting);
-        RestMLDeleteConnectorAction restMLDeleteConnectorAction = new RestMLDeleteConnectorAction();
+        RestMLDeleteConnectorAction restMLDeleteConnectorAction = new RestMLDeleteConnectorAction(mlFeatureEnabledSetting);
         RestMLSearchConnectorAction restMLSearchConnectorAction = new RestMLSearchConnectorAction();
         RestMemoryCreateConversationAction restCreateConversationAction = new RestMemoryCreateConversationAction();
         RestMemoryGetConversationsAction restListConversationsAction = new RestMemoryGetConversationsAction();

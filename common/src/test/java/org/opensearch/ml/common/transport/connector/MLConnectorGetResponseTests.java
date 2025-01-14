@@ -9,6 +9,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 
 import java.io.IOException;
@@ -107,5 +108,11 @@ public class MLConnectorGetResponseTests {
             }
         };
         MLConnectorGetResponse.fromActionResponse(actionResponse);
+    }
+
+    @Test
+    public void testNullConnector() {
+        MLConnectorGetResponse response = MLConnectorGetResponse.builder().build();
+        assertNull(response.getMlConnector());
     }
 }

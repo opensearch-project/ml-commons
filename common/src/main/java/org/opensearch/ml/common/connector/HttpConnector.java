@@ -6,6 +6,8 @@
 package org.opensearch.ml.common.connector;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.validateProtocol;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
@@ -24,6 +26,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.apache.commons.text.StringSubstitutor;
+import org.opensearch.Version;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -63,7 +66,8 @@ public class HttpConnector extends AbstractConnector {
         List<String> backendRoles,
         AccessMode accessMode,
         User owner,
-        ConnectorClientConfig connectorClientConfig
+        ConnectorClientConfig connectorClientConfig,
+        String tenantId
     ) {
         validateProtocol(protocol);
         this.name = name;
@@ -77,6 +81,7 @@ public class HttpConnector extends AbstractConnector {
         this.access = accessMode;
         this.owner = owner;
         this.connectorClientConfig = connectorClientConfig;
+        this.tenantId = tenantId;
 
     }
 
@@ -138,6 +143,9 @@ public class HttpConnector extends AbstractConnector {
                 case CLIENT_CONFIG_FIELD:
                     connectorClientConfig = ConnectorClientConfig.parse(parser);
                     break;
+                case TENANT_ID_FIELD:
+                    tenantId = parser.text();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -187,6 +195,9 @@ public class HttpConnector extends AbstractConnector {
         if (connectorClientConfig != null) {
             builder.field(CLIENT_CONFIG_FIELD, connectorClientConfig);
         }
+        if (tenantId != null) {
+            builder.field(TENANT_ID_FIELD, tenantId);
+        }
         builder.endObject();
         return builder;
     }
@@ -202,6 +213,7 @@ public class HttpConnector extends AbstractConnector {
     }
 
     private void parseFromStream(StreamInput input) throws IOException {
+        Version streamInputVersion = input.getVersion();
         this.name = input.readOptionalString();
         this.version = input.readOptionalString();
         this.description = input.readOptionalString();
@@ -230,10 +242,14 @@ public class HttpConnector extends AbstractConnector {
         if (input.readBoolean()) {
             this.connectorClientConfig = new ConnectorClientConfig(input);
         }
+        if (streamInputVersion.onOrAfter(VERSION_2_19_0)) {
+            this.tenantId = input.readOptionalString();
+        }
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
+        Version streamOutputVersion = out.getVersion();
         out.writeString(protocol);
         out.writeOptionalString(name);
         out.writeOptionalString(version);
@@ -280,6 +296,9 @@ public class HttpConnector extends AbstractConnector {
         } else {
             out.writeBoolean(false);
         }
+        if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
+            out.writeOptionalString(tenantId);
+        }
     }
 
     @Override
@@ -296,10 +315,10 @@ public class HttpConnector extends AbstractConnector {
         if (updateContent.getProtocol() != null) {
             this.protocol = updateContent.getProtocol();
         }
-        if (updateContent.getParameters() != null && updateContent.getParameters().size() > 0) {
+        if (updateContent.getParameters() != null && !updateContent.getParameters().isEmpty()) {
             getParameters().putAll(updateContent.getParameters());
         }
-        if (updateContent.getCredential() != null && updateContent.getCredential().size() > 0) {
+        if (updateContent.getCredential() != null && !updateContent.getCredential().isEmpty()) {
             this.credential = updateContent.getCredential();
             encrypt(function);
         }
@@ -367,7 +386,7 @@ public class HttpConnector extends AbstractConnector {
         }
         this.decryptedCredential = decrypted;
         Optional<ConnectorAction> connectorAction = findAction(action);
-        Map<String, String> headers = connectorAction.isPresent() ? connectorAction.get().getHeaders() : null;
+        Map<String, String> headers = connectorAction.map(ConnectorAction::getHeaders).orElse(null);
         this.decryptedHeaders = createDecryptedHeaders(headers);
     }
 
