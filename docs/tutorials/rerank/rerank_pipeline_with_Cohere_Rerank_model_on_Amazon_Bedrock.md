@@ -196,7 +196,7 @@ POST /_plugins/_ml/connectors/_create
     {
       "action_type": "PREDICT",
       "method": "POST",
-      "url": "https://${parameters. endpoint}.${parameters.region}.amazonaws.com/model/${parameters.model_name}/invoke",
+      "url": "https://${parameters.endpoint}.${parameters.region}.amazonaws.com/model/${parameters.model_name}/invoke",
       "headers": {
         "x-amz-content-sha256": "required",
         "content-type": "application/json"
