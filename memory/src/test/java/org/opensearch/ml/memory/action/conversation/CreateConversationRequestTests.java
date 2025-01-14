@@ -132,4 +132,5 @@ public class CreateConversationRequestTests extends OpenSearchTestCase {
         Assert.assertEquals("value1", request.getAdditionalInfos().get("key1"));
         Assert.assertEquals(123, request.getAdditionalInfos().get("key2"));
     }
+
 }
