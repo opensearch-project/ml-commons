@@ -21,7 +21,7 @@ public class MLPreProcessFunction {
     public static final String TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT = "connector.pre_process.openai.embedding";
     public static final String TEXT_DOCS_TO_BEDROCK_EMBEDDING_INPUT = "connector.pre_process.bedrock.embedding";
     public static final String TEXT_IMAGE_TO_BEDROCK_EMBEDDING_INPUT = "connector.pre_process.bedrock.multimodal_embedding";
-    public static final String TEXT_DOCS_TO_BEDROCK_RERANK_INPUT = "connector.pre_process.bedrock.cohere.rerank";
+    public static final String TEXT_SIMILARITY_TO_BEDROCK_RERANK_INPUT = "connector.pre_process.bedrock.cohere.rerank";
     public static final String TEXT_DOCS_TO_DEFAULT_EMBEDDING_INPUT = "connector.pre_process.default.embedding";
     public static final String TEXT_SIMILARITY_TO_COHERE_RERANK_INPUT = "connector.pre_process.cohere.rerank";
     public static final String TEXT_SIMILARITY_TO_DEFAULT_INPUT = "connector.pre_process.default.rerank";
@@ -38,7 +38,7 @@ public class MLPreProcessFunction {
         CohereMultiModalEmbeddingPreProcessFunction cohereMultiModalEmbeddingPreProcessFunction =
             new CohereMultiModalEmbeddingPreProcessFunction();
         BedrockCohereRerankPreProcessFunction bedrockCohereRerankPreProcessFunction = new BedrockCohereRerankPreProcessFunction();
-        PRE_PROCESS_FUNCTIONS.put(TEXT_DOCS_TO_BEDROCK_RERANK_INPUT, bedrockCohereRerankPreProcessFunction);
+        PRE_PROCESS_FUNCTIONS.put(TEXT_SIMILARITY_TO_BEDROCK_RERANK_INPUT, bedrockCohereRerankPreProcessFunction);
         PRE_PROCESS_FUNCTIONS.put(TEXT_DOCS_TO_COHERE_EMBEDDING_INPUT, cohereEmbeddingPreProcessFunction);
         PRE_PROCESS_FUNCTIONS.put(IMAGE_TO_COHERE_MULTI_MODAL_EMBEDDING_INPUT, cohereMultiModalEmbeddingPreProcessFunction);
         PRE_PROCESS_FUNCTIONS.put(TEXT_IMAGE_TO_BEDROCK_EMBEDDING_INPUT, multiModalEmbeddingPreProcessFunction);
