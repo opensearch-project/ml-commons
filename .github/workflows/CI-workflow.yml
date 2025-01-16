@@ -23,6 +23,8 @@ jobs:
       product: opensearch
 
   spotless:
+    if: github.repository == 'opensearch-project/ml-commons'
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       # Spotless requires JDK 17+
