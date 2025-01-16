@@ -314,16 +314,17 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
                         newQueryField = outputMapEntry.getKey();
                         String modelOutputFieldName = outputMapEntry.getValue();
                         Object modelOutputValue = getModelOutputValue(mlOutput, modelOutputFieldName, ignoreMissing, fullResponsePath);
+                        requestContext.setAttribute(newQueryField, modelOutputValue);
 
                         if (newQueryField.startsWith("$.ext.") || newQueryField.startsWith("ext.")) {
                             incomeQueryObject = StringUtils.prepareNestedStructures(incomeQueryObject, newQueryField);
                         }
-
-                        JsonPath.using(suppressExceptionConfiguration).parse(incomeQueryObject).set(newQueryField, modelOutputValue);
-
-                        requestContext.setAttribute(newQueryField, modelOutputValue);
+                        if (StringUtils.pathExists(incomeQueryObject, newQueryField)) {
+                            JsonPath.using(suppressExceptionConfiguration).parse(incomeQueryObject).set(newQueryField, modelOutputValue);
+                        }
 
                     } catch (PathNotFoundException e) {
+                        logger.error("Failed to set {} in query string: {}", newQueryField, e.getMessage(), e);
                         throw new IllegalArgumentException("can not find path " + newQueryField + "in query string");
                     }
                 }
@@ -374,7 +375,6 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
 
     /**
      * Validates that the query fields specified in the input and output mappings exist in the query string.
-     *
      * @param processInputMap  the list of input mappings
      * @param processOutputMap the list of output mappings
      * @param queryString      the query string to be validated
@@ -405,15 +405,18 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
                 for (Map.Entry<String, String> entry : outputMap.entrySet()) {
                     String queryField = entry.getKey();
                     // output writing to search extension can be new field
-                    if (!queryField.startsWith("ext.") && !queryField.startsWith("$.ext.")) {
+                    if (queryField.startsWith("query.") || queryField.startsWith("$.query.")) {
                         Object pathData = jsonData.read(queryField);
                         if (pathData == null) {
-                            throw new IllegalArgumentException();
+                            throw new IllegalArgumentException(
+                                "cannot find field: " + queryField + " in query string: " + jsonData.jsonString()
+                            );
                         }
                     }
                 }
             }
         }
+
         return true;
 
     }

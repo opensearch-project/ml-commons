@@ -13,6 +13,15 @@ import java.util.stream.Collectors;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.search.SearchExtBuilder;
 
+/**
+ * Utility class for handling ML Inference Request Parameters.
+ *
+ * This class provides utility methods to extract ML Inference Request Parameters
+ * from a SearchRequest. It is designed to work with the OpenSearch ML plugin
+ * and facilitates the retrieval of ML-specific parameters that are embedded
+ * within search requests.
+ *
+ */
 public class MLInferenceRequestParametersUtil {
 
     public static MLInferenceRequestParameters getMLInferenceRequestParameters(SearchRequest searchRequest) {
@@ -27,12 +36,14 @@ public class MLInferenceRequestParametersUtil {
 
             if (!extBuilders.isEmpty()) {
                 mLInferenceRequestParametersExtBuilder = (MLInferenceRequestParametersExtBuilder) extBuilders.get(0);
+                MLInferenceRequestParameters mlInferenceRequestParameters = null;
+                if (mLInferenceRequestParametersExtBuilder != null) {
+                    mlInferenceRequestParameters = mLInferenceRequestParametersExtBuilder.getRequestParameters();
+                }
+                return mlInferenceRequestParameters;
             }
+
         }
-        MLInferenceRequestParameters mlInferenceRequestParameters = null;
-        if (mLInferenceRequestParametersExtBuilder != null) {
-            mlInferenceRequestParameters = mLInferenceRequestParametersExtBuilder.getRequestParameters();
-        }
-        return mlInferenceRequestParameters;
+        return null;
     }
 }

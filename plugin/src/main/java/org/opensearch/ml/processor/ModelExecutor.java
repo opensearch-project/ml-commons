@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -352,13 +353,16 @@ public interface ModelExecutor {
                 mlParams
                     .forEach(
                         (key, value) -> requestContext
-                            .setAttribute(String.format("ext.%s.%s", MLInferenceRequestParametersExtBuilder.NAME, key), value)
+                            .setAttribute(String.format(Locale.ROOT, "ext.%s.%s", MLInferenceRequestParametersExtBuilder.NAME, key), value)
                     );
             }
             if (ext instanceof GenerativeQAParamExtBuilder) {
                 GenerativeQAParamExtBuilder qaParamExtBuilder = (GenerativeQAParamExtBuilder) ext;
                 Map<String, Object> mlParams = (Map<String, Object>) qaParamExtBuilder.getParams();
-                mlParams.forEach((key, value) -> requestContext.setAttribute(String.format("ext.%s.%s", PARAMETER_NAME, key), value));
+                mlParams
+                    .forEach(
+                        (key, value) -> requestContext.setAttribute(String.format(Locale.ROOT, "ext.%s.%s", PARAMETER_NAME, key), value)
+                    );
             }
         }
 
