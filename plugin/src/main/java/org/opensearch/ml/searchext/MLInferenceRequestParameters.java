@@ -19,16 +19,21 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 
-import lombok.Getter;
+import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 
+/**
+ * Represents the parameters for an ML inference request.
+ *
+ * The parameters are stored as a Map of String keys to Object values, allowing
+ * for flexible parameter structures.
+ *
+ */
+@Data
 @NoArgsConstructor
 public class MLInferenceRequestParameters implements Writeable, ToXContentObject {
     static final String ML_INFERENCE_FIELD = "ml_inference";
 
-    @Setter
-    @Getter
     private Map<String, Object> params;
 
     public MLInferenceRequestParameters(Map<String, Object> params) {

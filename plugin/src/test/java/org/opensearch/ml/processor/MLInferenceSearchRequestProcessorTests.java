@@ -6,13 +6,24 @@
 package org.opensearch.ml.processor;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
-import static org.opensearch.ml.processor.InferenceProcessorAttributes.*;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.verify;
+import static org.opensearch.ml.processor.InferenceProcessorAttributes.INPUT_MAP;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.MAX_PREDICTION_TASKS;
-import static org.opensearch.ml.processor.MLInferenceSearchRequestProcessor.*;
+import static org.opensearch.ml.processor.InferenceProcessorAttributes.MODEL_CONFIG;
+import static org.opensearch.ml.processor.InferenceProcessorAttributes.MODEL_ID;
+import static org.opensearch.ml.processor.InferenceProcessorAttributes.OUTPUT_MAP;
+import static org.opensearch.ml.processor.MLInferenceSearchRequestProcessor.DEFAULT_MAX_PREDICTION_TASKS;
+import static org.opensearch.ml.processor.MLInferenceSearchRequestProcessor.FULL_RESPONSE_PATH;
+import static org.opensearch.ml.processor.MLInferenceSearchRequestProcessor.FUNCTION_NAME;
 import static org.opensearch.ml.processor.MLInferenceSearchRequestProcessor.MODEL_INPUT;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import org.junit.Before;
 import org.mockito.Mock;
@@ -1048,7 +1059,7 @@ public class MLInferenceSearchRequestProcessorTests extends AbstractBuilderTestC
          */
         String modelInputField = "inputs";
         String originalQueryField = "query.term.text.value";
-        String newQueryField = "$.ext.ml_inference.llm_response";
+        String newQueryField = "ext.ml_inference.llm_response";
         String modelOutputField = "response";
         MLInferenceSearchRequestProcessor requestProcessor = getMlInferenceSearchRequestProcessor(
             null,
@@ -1095,7 +1106,7 @@ public class MLInferenceSearchRequestProcessorTests extends AbstractBuilderTestC
         };
 
         requestProcessor.processRequestAsync(request, requestContext, Listener);
-
+        verify(requestContext).setAttribute("ext.ml_inference.llm_response", "eng");
     }
 
     /**
@@ -1167,6 +1178,77 @@ public class MLInferenceSearchRequestProcessorTests extends AbstractBuilderTestC
 
         requestProcessor.processRequestAsync(request, requestContext, Listener);
 
+    }
+
+    /**
+     * Tests the successful writing a new field in requestContext based on the model output.
+     *
+     * @throws Exception if an error occurs during the test
+     */
+    public void testExecute_rewriteTermQueryReadWriteToRequestContextSuccess() throws Exception {
+
+        /**
+         * example term query: {"query":{"term":{"text":{"value":"foo","boost":1.0}}}}
+         */
+        String modelInputField = "inputs";
+        String originalQueryField = "ext.ml_inference.question";
+        String newQueryField = "llm_response";
+        String modelOutputField = "response";
+        MLInferenceSearchRequestProcessor requestProcessor = getMlInferenceSearchRequestProcessor(
+            null,
+            modelInputField,
+            originalQueryField,
+            newQueryField,
+            modelOutputField,
+            false,
+            false
+        );
+        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "eng")).build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        QueryBuilder incomingQuery = new TermQueryBuilder("text", "foo");
+
+        Map<String, Object> llmQuestion = new HashMap<>();
+        llmQuestion.put("question", "what language is this text in?");
+        MLInferenceRequestParameters requestParameters = new MLInferenceRequestParameters(llmQuestion);
+        MLInferenceRequestParametersExtBuilder mlInferenceExtBuilder = new MLInferenceRequestParametersExtBuilder();
+        mlInferenceExtBuilder.setRequestParameters(requestParameters);
+        SearchSourceBuilder source = new SearchSourceBuilder().query(incomingQuery).ext(List.of(mlInferenceExtBuilder));
+
+        SearchRequest request = new SearchRequest().source(source);
+
+        // expecting new request with ml inference search extensions
+        Map<String, Object> params = new HashMap<>();
+        params.put("question", "what language is this text in?");
+        MLInferenceRequestParameters expectedRequestParameters = new MLInferenceRequestParameters(params);
+        MLInferenceRequestParametersExtBuilder expectedMlInferenceExtBuilder = new MLInferenceRequestParametersExtBuilder();
+        expectedMlInferenceExtBuilder.setRequestParameters(expectedRequestParameters);
+        SearchSourceBuilder expectedSource = new SearchSourceBuilder().query(incomingQuery).ext(List.of(expectedMlInferenceExtBuilder));
+        SearchRequest expectRequest = new SearchRequest().source(expectedSource);
+
+        ActionListener<SearchRequest> Listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchRequest newSearchRequest) {
+                assertEquals(incomingQuery, newSearchRequest.source().query());
+                assertEquals(expectRequest.toString(), newSearchRequest.toString());
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException("Failed in executing processRequestAsync." + e.getMessage());
+            }
+        };
+
+        requestProcessor.processRequestAsync(request, requestContext, Listener);
+
+        verify(requestContext).setAttribute("llm_response", "eng");
     }
 
     /**

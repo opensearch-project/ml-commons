@@ -20,6 +20,10 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.search.SearchExtBuilder;
 
+/**
+ * This class extends SearchExtBuilder to handle ML inference request parameters.
+ * Ml inference request parameters contain an object of params
+ */
 public class MLInferenceRequestParametersExtBuilder extends SearchExtBuilder {
     private static final Logger logger = LogManager.getLogger(MLInferenceRequestParametersExtBuilder.class);
     public static final String NAME = ML_INFERENCE_FIELD;
