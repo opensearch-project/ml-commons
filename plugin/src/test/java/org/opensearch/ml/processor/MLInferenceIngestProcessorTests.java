@@ -6,7 +6,14 @@
 package org.opensearch.ml.processor;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.argThat;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.isNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.utils.StringUtils.toJson;
 import static org.opensearch.ml.processor.MLInferenceIngestProcessor.DEFAULT_OUTPUT_FIELD_NAME;
 
@@ -31,6 +38,7 @@ import org.opensearch.client.Client;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ingest.IngestDocument;
+import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.MLResultDataType;
@@ -136,6 +144,63 @@ public class MLInferenceIngestProcessorTests extends OpenSearchTestCase {
             assertEquals("this method should not get executed.", e.getMessage());
         }
 
+    }
+
+    /**
+     * Models that use the parameters field need to have a valid NamedXContentRegistry object to create valid MLInputs. For example
+     * <pre>
+     * PUT   /_plugins/_ml/_predict/text_embedding/model_id
+     *  {
+     *     "parameters": {
+     *         "content_type" : "query"
+     *     },
+     *     "text_docs" : ["what day is it today?"],
+     *     "target_response" : ["sentence_embedding"]
+     *   }
+     * </pre>
+     * These types of models like Local Asymmetric embedding models use the parameters field.
+     * And as such we need to test that having the contentRegistry throws an exception as it can not
+     * properly create a valid MLInput to perform prediction
+     *
+     * @implNote If you check the stack trace of the test you will see it tells you that it's a direct consequence of xContentRegistry being null
+     */
+    public void testExecute_xContentRegistryNullWithLocalModel_throwsException() throws Exception {
+        // Set the registry to null and reset after exiting the test
+        xContentRegistry = null;
+
+        String localModelInput =
+            "{ \"text_docs\": [\"What day is it today?\"],\"target_response\": [\"sentence_embedding\"], \"parameters\": { \"contentType\" : \"query\"} }";
+
+        MLInferenceIngestProcessor processor = createMLInferenceProcessor(
+            "local_model_id",
+            null,
+            null,
+            null,
+            false,
+            FunctionName.TEXT_EMBEDDING.toString(),
+            false,
+            false,
+            false,
+            localModelInput
+        );
+        try {
+            String npeMessage =
+                "Cannot invoke \"org.opensearch.ml.common.input.MLInput.setAlgorithm(org.opensearch.ml.common.FunctionName)\" because \"mlInput\" is null";
+
+            processor.execute(ingestDocument, handler);
+            verify(handler)
+                .accept(
+                    isNull(),
+                    argThat(exception -> exception instanceof NullPointerException && exception.getMessage().equals(npeMessage))
+                );
+        } catch (Exception e) {
+            // Java 11 doesn't pass the message correctly resulting in an anonymous NPE thus this getMessage() results in null
+            if (e.getMessage() != null) {
+                assertEquals("this catch block should not get executed.", e.getMessage());
+            }
+        }
+        // reset to mocked object
+        xContentRegistry = mock(NamedXContentRegistry.class);
     }
 
     /**
