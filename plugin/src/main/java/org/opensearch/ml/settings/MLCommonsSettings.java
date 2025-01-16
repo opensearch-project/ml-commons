@@ -265,5 +265,5 @@ public final class MLCommonsSettings {
         .boolSetting("plugins.ml_commons.controller_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
     public static final Setting<Boolean> ML_COMMONS_SAFE_DELETE_MODEL = Setting
-        .boolSetting("plugins.ml_commons.safe_delete_model", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
+        .boolSetting("plugins.ml_commons.safe_delete_model", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
 }

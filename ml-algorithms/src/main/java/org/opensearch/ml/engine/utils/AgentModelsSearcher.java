@@ -21,7 +21,8 @@ public class AgentModelsSearcher {
         relatedModelIdSet = new HashSet<>();
         for (Map.Entry<String, Tool.Factory> entry : toolFactories.entrySet()) {
             Tool.Factory toolFactory = entry.getValue();
-            if (toolFactory instanceof WithModelTool.Factory withModelTool) {
+            if (toolFactory instanceof WithModelTool.Factory) {
+                WithModelTool.Factory withModelTool = (WithModelTool.Factory) toolFactory;
                 relatedModelIdSet.addAll(withModelTool.getAllModelKeys());
             }
         }
