@@ -35,7 +35,14 @@ public class UpdateModelGroupITTests extends MLCommonsIntegTestCase {
     }
 
     private void registerModelGroup() {
-        MLRegisterModelGroupInput input = new MLRegisterModelGroupInput("mock_model_group_name", "mock_model_group_desc", null, null, null);
+        MLRegisterModelGroupInput input = new MLRegisterModelGroupInput(
+            "mock_model_group_name",
+            "mock_model_group_desc",
+            null,
+            null,
+            null,
+            null
+        );
         MLRegisterModelGroupRequest createModelGroupRequest = new MLRegisterModelGroupRequest(input);
         MLRegisterModelGroupResponse response = client().execute(MLRegisterModelGroupAction.INSTANCE, createModelGroupRequest).actionGet();
         this.modelGroupId = response.getModelGroupId();
@@ -49,7 +56,8 @@ public class UpdateModelGroupITTests extends MLCommonsIntegTestCase {
             "mock_model_group_desc",
             null,
             AccessMode.PUBLIC,
-            false
+            false,
+            null
         );
         MLUpdateModelGroupRequest createModelGroupRequest = new MLUpdateModelGroupRequest(input);
         client().execute(MLUpdateModelGroupAction.INSTANCE, createModelGroupRequest).actionGet();
@@ -63,7 +71,8 @@ public class UpdateModelGroupITTests extends MLCommonsIntegTestCase {
             "mock_model_group_desc",
             null,
             AccessMode.PRIVATE,
-            false
+            false,
+            null
         );
         MLUpdateModelGroupRequest createModelGroupRequest = new MLUpdateModelGroupRequest(input);
         client().execute(MLUpdateModelGroupAction.INSTANCE, createModelGroupRequest).actionGet();
@@ -74,6 +83,7 @@ public class UpdateModelGroupITTests extends MLCommonsIntegTestCase {
             modelGroupId,
             "mock_model_group_name2",
             "mock_model_group_desc",
+            null,
             null,
             null,
             null
@@ -90,7 +100,8 @@ public class UpdateModelGroupITTests extends MLCommonsIntegTestCase {
             "mock_model_group_desc",
             null,
             AccessMode.RESTRICTED,
-            true
+            true,
+            null
         );
         MLUpdateModelGroupRequest createModelGroupRequest = new MLUpdateModelGroupRequest(input);
         client().execute(MLUpdateModelGroupAction.INSTANCE, createModelGroupRequest).actionGet();
@@ -104,6 +115,7 @@ public class UpdateModelGroupITTests extends MLCommonsIntegTestCase {
             "mock_model_group_desc",
             ImmutableList.of("role-1"),
             AccessMode.RESTRICTED,
+            null,
             null
         );
         MLUpdateModelGroupRequest createModelGroupRequest = new MLUpdateModelGroupRequest(input);

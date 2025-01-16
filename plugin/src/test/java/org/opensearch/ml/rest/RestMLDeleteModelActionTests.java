@@ -18,6 +18,7 @@ import java.util.Map;
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.settings.Settings;
@@ -26,6 +27,7 @@ import org.opensearch.core.common.Strings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
@@ -44,9 +46,14 @@ public class RestMLDeleteModelActionTests extends OpenSearchTestCase {
     @Mock
     RestChannel channel;
 
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Before
     public void setup() {
-        restMLDeleteModelAction = new RestMLDeleteModelAction();
+        MockitoAnnotations.openMocks(this);
+        when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(false);
+        restMLDeleteModelAction = new RestMLDeleteModelAction(mlFeatureEnabledSetting);
 
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
@@ -66,7 +73,7 @@ public class RestMLDeleteModelActionTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        RestMLDeleteModelAction mlDeleteModelAction = new RestMLDeleteModelAction();
+        RestMLDeleteModelAction mlDeleteModelAction = new RestMLDeleteModelAction(mlFeatureEnabledSetting);
         assertNotNull(mlDeleteModelAction);
     }
 

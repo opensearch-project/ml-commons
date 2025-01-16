@@ -393,13 +393,13 @@ public class MLCommonsIntegTestCase extends ParameterizedStaticSettingsOpenSearc
     }
 
     public MLModel getModel(String modelId) {
-        MLModelGetRequest getRequest = new MLModelGetRequest(modelId, false, true);
+        MLModelGetRequest getRequest = new MLModelGetRequest(modelId, false, true, null);
         MLModelGetResponse response = client().execute(MLModelGetAction.INSTANCE, getRequest).actionGet(5000);
         return response.getMlModel();
     }
 
     public MLModelGroup getModelGroup(String modelGroupId) {
-        MLModelGroupGetRequest getRequest = new MLModelGroupGetRequest(modelGroupId);
+        MLModelGroupGetRequest getRequest = new MLModelGroupGetRequest(modelGroupId, null);
         MLModelGroupGetResponse response = client().execute(MLModelGroupGetAction.INSTANCE, getRequest).actionGet(5000);
         return response.getMlModelGroup();
     }

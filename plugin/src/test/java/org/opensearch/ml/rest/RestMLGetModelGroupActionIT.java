@@ -23,7 +23,7 @@ public class RestMLGetModelGroupActionIT extends MLCommonsRestTestCase {
 
     public void testGetModelAPI_EmptyResources() throws IOException {
         exceptionRule.expect(ResponseException.class);
-        exceptionRule.expectMessage("Fail to find model group index");
+        exceptionRule.expectMessage("Failed to find model group index");
         TestHelper.makeRequest(client(), "GET", "/_plugins/_ml/model_groups/111222333", null, "", null);
     }
 

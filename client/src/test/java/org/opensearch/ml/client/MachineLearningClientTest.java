@@ -167,6 +167,11 @@ public class MachineLearningClientTest {
             }
 
             @Override
+            public void getModel(String modelId, String tenantId, ActionListener<MLModel> listener) {
+                listener.onResponse(mlModel);
+            }
+
+            @Override
             public void deleteModel(String modelId, ActionListener<DeleteResponse> listener) {
                 listener.onResponse(deleteResponse);
             }

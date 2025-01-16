@@ -6,7 +6,9 @@
 package org.opensearch.ml.common;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.USER;
+import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 import static org.opensearch.ml.common.connector.Connector.createConnector;
 import static org.opensearch.ml.common.utils.StringUtils.filteredParameterMap;
 
@@ -20,6 +22,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
+import org.opensearch.Version;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -142,6 +145,7 @@ public class MLModel implements ToXContentObject {
     private Connector connector;
     private String connectorId;
     private Guardrails guardrails;
+    private String tenantId;
 
     /**
      * Model interface is a map that contains the input and output fields of the model, with JSON schema as the value.
@@ -208,7 +212,8 @@ public class MLModel implements ToXContentObject {
         Connector connector,
         String connectorId,
         Guardrails guardrails,
-        Map<String, String> modelInterface
+        Map<String, String> modelInterface,
+        String tenantId
     ) {
         this.name = name;
         this.modelGroupId = modelGroupId;
@@ -244,9 +249,11 @@ public class MLModel implements ToXContentObject {
         this.connectorId = connectorId;
         this.guardrails = guardrails;
         this.modelInterface = modelInterface;
+        this.tenantId = tenantId;
     }
 
     public MLModel(StreamInput input) throws IOException {
+        Version streamInputVersion = input.getVersion();
         name = input.readOptionalString();
         algorithm = input.readEnum(FunctionName.class);
         version = input.readString();
@@ -308,10 +315,14 @@ public class MLModel implements ToXContentObject {
             if (input.readBoolean()) {
                 modelInterface = input.readMap(StreamInput::readString, StreamInput::readString);
             }
+            if (streamInputVersion.onOrAfter(VERSION_2_19_0)) {
+                tenantId = input.readOptionalString();
+            }
         }
     }
 
     public void writeTo(StreamOutput out) throws IOException {
+        Version streamOutputVersion = out.getVersion();
         out.writeOptionalString(name);
         out.writeEnum(algorithm);
         out.writeString(version);
@@ -390,6 +401,9 @@ public class MLModel implements ToXContentObject {
             out.writeMap(modelInterface, StreamOutput::writeString, StreamOutput::writeString);
         } else {
             out.writeBoolean(false);
+        }
+        if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
+            out.writeOptionalString(tenantId);
         }
     }
 
@@ -498,6 +512,9 @@ public class MLModel implements ToXContentObject {
         if (modelInterface != null) {
             builder.field(INTERFACE_FIELD, modelInterface);
         }
+        if (tenantId != null) {
+            builder.field(TENANT_ID_FIELD, tenantId);
+        }
         builder.endObject();
         return builder;
     }
@@ -543,6 +560,7 @@ public class MLModel implements ToXContentObject {
         String connectorId = null;
         Guardrails guardrails = null;
         Map<String, String> modelInterface = null;
+        String tenantId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -677,6 +695,9 @@ public class MLModel implements ToXContentObject {
                 case INTERFACE_FIELD:
                     modelInterface = filteredParameterMap(parser.map(), allowedInterfaceFieldKeys);
                     break;
+                case TENANT_ID_FIELD:
+                    tenantId = parser.text();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -718,6 +739,7 @@ public class MLModel implements ToXContentObject {
             .connectorId(connectorId)
             .guardrails(guardrails)
             .modelInterface(modelInterface)
+            .tenantId(tenantId)
             .build();
     }
 

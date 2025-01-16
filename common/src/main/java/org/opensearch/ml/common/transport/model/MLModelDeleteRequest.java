@@ -6,12 +6,14 @@
 package org.opensearch.ml.common.transport.model;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
+import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 
+import org.opensearch.Version;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
@@ -26,20 +28,32 @@ public class MLModelDeleteRequest extends ActionRequest {
     @Getter
     String modelId;
 
+    @Getter
+    String tenantId;
+
     @Builder
-    public MLModelDeleteRequest(String modelId) {
+    public MLModelDeleteRequest(String modelId, String tenantId) {
         this.modelId = modelId;
+        this.tenantId = tenantId;
     }
 
     public MLModelDeleteRequest(StreamInput input) throws IOException {
         super(input);
+        Version streamInputVersion = input.getVersion();
         this.modelId = input.readString();
+        if (streamInputVersion.onOrAfter(VERSION_2_19_0)) {
+            this.tenantId = input.readOptionalString();
+        }
     }
 
     @Override
     public void writeTo(StreamOutput output) throws IOException {
         super.writeTo(output);
+        Version streamOutputVersion = output.getVersion();
         output.writeString(modelId);
+        if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
+            output.writeOptionalString(tenantId);
+        }
     }
 
     @Override
