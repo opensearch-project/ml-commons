@@ -13,7 +13,7 @@ import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
 import static org.opensearch.ml.common.MLModel.IS_HIDDEN_FIELD;
 import static org.opensearch.ml.common.MLModel.MODEL_ID_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.getErrorMessage;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_SAFE_DELETE_MODEL;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_SAFE_DELETE_WITH_USAGE_CHECK;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
@@ -122,8 +122,8 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.agentModelsSearcher = agentModelsSearcher;
         this.settings = settings;
-        isSafeDelete = ML_COMMONS_SAFE_DELETE_MODEL.get(settings);
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_SAFE_DELETE_MODEL, it -> isSafeDelete = it);
+        isSafeDelete = ML_COMMONS_SAFE_DELETE_WITH_USAGE_CHECK.get(settings);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_SAFE_DELETE_WITH_USAGE_CHECK, it -> isSafeDelete = it);
     }
 
     @Override

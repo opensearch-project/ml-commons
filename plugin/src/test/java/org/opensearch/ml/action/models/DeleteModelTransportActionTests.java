@@ -148,9 +148,9 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
 
         mlModelDeleteRequest = MLModelDeleteRequest.builder().modelId("test_id").build();
 
-        Settings settings = Settings.builder().put(ML_COMMONS_SAFE_DELETE_MODEL.getKey(), true).build();
+        Settings settings = Settings.builder().put(ML_COMMONS_SAFE_DELETE_WITH_USAGE_CHECK.getKey(), true).build();
         threadContext = new ThreadContext(settings);
-        ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_SAFE_DELETE_MODEL);
+        ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_SAFE_DELETE_WITH_USAGE_CHECK);
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
         when(clusterService.getSettings()).thenReturn(settings);
         deleteModelTransportAction = spy(
@@ -306,9 +306,9 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testDeleteModel_UseSettingToSkipBlockedByIngestPipeline() throws IOException {
-        Settings settings = Settings.builder().put(ML_COMMONS_SAFE_DELETE_MODEL.getKey(), false).build();
+        Settings settings = Settings.builder().put(ML_COMMONS_SAFE_DELETE_WITH_USAGE_CHECK.getKey(), false).build();
         threadContext = new ThreadContext(settings);
-        ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_SAFE_DELETE_MODEL);
+        ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_SAFE_DELETE_WITH_USAGE_CHECK);
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
         when(clusterService.getSettings()).thenReturn(settings);
         deleteModelTransportAction = spy(

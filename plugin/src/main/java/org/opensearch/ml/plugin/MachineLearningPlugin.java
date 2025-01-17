@@ -1015,7 +1015,7 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_MAX_BATCH_INFERENCE_TASKS,
                 MLCommonsSettings.ML_COMMONS_MAX_BATCH_INGESTION_TASKS,
                 MLCommonsSettings.ML_COMMONS_BATCH_INGESTION_BULK_SIZE,
-                MLCommonsSettings.ML_COMMONS_SAFE_DELETE_MODEL,
+                MLCommonsSettings.ML_COMMONS_SAFE_DELETE_WITH_USAGE_CHECK,
                 MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
                 MLCommonsSettings.REMOTE_METADATA_TYPE,
                 MLCommonsSettings.REMOTE_METADATA_ENDPOINT,
