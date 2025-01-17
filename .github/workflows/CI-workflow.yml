@@ -88,7 +88,7 @@ jobs:
           echo "build-test-linux=$plugin" >> $GITHUB_OUTPUT
 
       - name: Upload Coverage Report
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v3
         with:
           flags: ml-commons
           token: ${{ secrets.CODECOV_TOKEN }}
