@@ -15,6 +15,18 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_STOP_WORDS_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
+import static org.opensearch.ml.settings.MLCommonsSettings.REMOTE_METADATA_ENDPOINT;
+import static org.opensearch.ml.settings.MLCommonsSettings.REMOTE_METADATA_REGION;
+import static org.opensearch.ml.settings.MLCommonsSettings.REMOTE_METADATA_SERVICE_NAME;
+import static org.opensearch.ml.settings.MLCommonsSettings.REMOTE_METADATA_TYPE;
+import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_ENDPOINT_KEY;
+import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_REGION_KEY;
+import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_SERVICE_NAME_KEY;
+import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_TYPE_KEY;
+import static org.opensearch.remote.metadata.common.CommonValue.TENANT_AWARE_KEY;
+import static org.opensearch.remote.metadata.common.CommonValue.TENANT_ID_FIELD_KEY;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -300,6 +312,8 @@ import org.opensearch.plugins.Plugin;
 import org.opensearch.plugins.SearchPipelinePlugin;
 import org.opensearch.plugins.SearchPlugin;
 import org.opensearch.plugins.SystemIndexPlugin;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.repositories.RepositoriesService;
 import org.opensearch.rest.RestController;
 import org.opensearch.rest.RestHandler;
@@ -481,6 +495,25 @@ public class MachineLearningPlugin extends Plugin
 
         mlIndicesHandler = new MLIndicesHandler(clusterService, client);
         encryptor = new EncryptorImpl(clusterService, client, mlIndicesHandler);
+
+        SdkClient sdkClient = SdkClientFactory
+            .createSdkClient(
+                client,
+                xContentRegistry,
+                // Here we assume remote metadata client is only used with tenant awareness.
+                // This may change in the future allowing more options for this map
+                ML_COMMONS_MULTI_TENANCY_ENABLED.get(settings)
+                    ? Map
+                        .ofEntries(
+                            Map.entry(REMOTE_METADATA_TYPE_KEY, REMOTE_METADATA_TYPE.get(settings)),
+                            Map.entry(REMOTE_METADATA_ENDPOINT_KEY, REMOTE_METADATA_ENDPOINT.get(settings)),
+                            Map.entry(REMOTE_METADATA_REGION_KEY, REMOTE_METADATA_REGION.get(settings)),
+                            Map.entry(REMOTE_METADATA_SERVICE_NAME_KEY, REMOTE_METADATA_SERVICE_NAME.get(settings)),
+                            Map.entry(TENANT_AWARE_KEY, "true"),
+                            Map.entry(TENANT_ID_FIELD_KEY, TENANT_ID_FIELD)
+                        )
+                    : Collections.emptyMap()
+            );
 
         mlEngine = new MLEngine(dataPath, encryptor);
         nodeHelper = new DiscoveryNodeHelper(clusterService, settings);
@@ -704,7 +737,8 @@ public class MachineLearningPlugin extends Plugin
                 clusterManagerEventListener,
                 mlCircuitBreakerService,
                 mlModelAutoRedeployer,
-                cmHandler
+                cmHandler,
+                sdkClient
             );
     }
 
@@ -747,8 +781,8 @@ public class MachineLearningPlugin extends Plugin
         RestMLUpdateModelAction restMLUpdateModelAction = new RestMLUpdateModelAction();
         RestMLDeleteModelGroupAction restMLDeleteModelGroupAction = new RestMLDeleteModelGroupAction();
         RestMLCreateConnectorAction restMLCreateConnectorAction = new RestMLCreateConnectorAction(mlFeatureEnabledSetting);
-        RestMLGetConnectorAction restMLGetConnectorAction = new RestMLGetConnectorAction();
-        RestMLDeleteConnectorAction restMLDeleteConnectorAction = new RestMLDeleteConnectorAction();
+        RestMLGetConnectorAction restMLGetConnectorAction = new RestMLGetConnectorAction(clusterService, settings, mlFeatureEnabledSetting);
+        RestMLDeleteConnectorAction restMLDeleteConnectorAction = new RestMLDeleteConnectorAction(mlFeatureEnabledSetting);
         RestMLSearchConnectorAction restMLSearchConnectorAction = new RestMLSearchConnectorAction();
         RestMemoryCreateConversationAction restCreateConversationAction = new RestMemoryCreateConversationAction();
         RestMemoryGetConversationsAction restListConversationsAction = new RestMemoryGetConversationsAction();
@@ -981,7 +1015,12 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_MAX_BATCH_INFERENCE_TASKS,
                 MLCommonsSettings.ML_COMMONS_MAX_BATCH_INGESTION_TASKS,
                 MLCommonsSettings.ML_COMMONS_BATCH_INGESTION_BULK_SIZE,
-                MLCommonsSettings.ML_COMMONS_SAFE_DELETE_MODEL
+                MLCommonsSettings.ML_COMMONS_SAFE_DELETE_MODEL,
+                MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
+                MLCommonsSettings.REMOTE_METADATA_TYPE,
+                MLCommonsSettings.REMOTE_METADATA_ENDPOINT,
+                MLCommonsSettings.REMOTE_METADATA_REGION,
+                MLCommonsSettings.REMOTE_METADATA_SERVICE_NAME
             );
         return settings;
     }

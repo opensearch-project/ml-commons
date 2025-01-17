@@ -5,6 +5,11 @@
 
 package org.opensearch.ml.settings;
 
+import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_ENDPOINT_KEY;
+import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_REGION_KEY;
+import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_SERVICE_NAME_KEY;
+import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_TYPE_KEY;
+
 import java.util.List;
 import java.util.function.Function;
 
@@ -266,4 +271,52 @@ public final class MLCommonsSettings {
 
     public static final Setting<Boolean> ML_COMMONS_SAFE_DELETE_MODEL = Setting
         .boolSetting("plugins.ml_commons.safe_delete_model", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+    /**
+     * Indicates whether multi-tenancy is enabled in ML Commons.
+     *
+     * This is a static setting that must be configured before starting OpenSearch. It can be set in the following ways, in priority order:
+     *
+     * <ol>
+     *   <li>As a command-line argument using the <code>-E</code> flag (this overrides other options):
+     *       <pre>
+     *       ./bin/opensearch -Eplugins.ml_commons.multi_tenancy_enabled=true
+     *       </pre>
+     *   </li>
+     *   <li>As a system property using <code>OPENSEARCH_JAVA_OPTS</code> (this overrides <code>opensearch.yml</code>):
+     *       <pre>
+     *       export OPENSEARCH_JAVA_OPTS="-Dplugins.ml_commons.multi_tenancy_enabled=true"
+     *       ./bin/opensearch
+     *       </pre>
+     *       Or inline when starting OpenSearch:
+     *       <pre>
+     *       OPENSEARCH_JAVA_OPTS="-Dplugins.ml_commons.multi_tenancy_enabled=true" ./bin/opensearch
+     *       </pre>
+     *   </li>
+     *   <li>In the <code>opensearch.yml</code> configuration file:
+     *       <pre>
+     *       plugins.ml_commons.multi_tenancy_enabled: true
+     *       </pre>
+     *   </li>
+     * </ol>
+     *
+     * After setting this option, a full cluster restart is required for the changes to take effect.
+     */
+    public static final Setting<Boolean> ML_COMMONS_MULTI_TENANCY_ENABLED = Setting
+        .boolSetting("plugins.ml_commons.multi_tenancy_enabled", false, Setting.Property.NodeScope);
+
+    /** This setting sets the remote metadata type */
+    public static final Setting<String> REMOTE_METADATA_TYPE = Setting
+        .simpleString("plugins.ml_commons." + REMOTE_METADATA_TYPE_KEY, Setting.Property.NodeScope, Setting.Property.Final);
+
+    /** This setting sets the remote metadata endpoint */
+    public static final Setting<String> REMOTE_METADATA_ENDPOINT = Setting
+        .simpleString("plugins.ml_commons." + REMOTE_METADATA_ENDPOINT_KEY, Setting.Property.NodeScope, Setting.Property.Final);
+
+    /** This setting sets the remote metadata region */
+    public static final Setting<String> REMOTE_METADATA_REGION = Setting
+        .simpleString("plugins.ml_commons." + REMOTE_METADATA_REGION_KEY, Setting.Property.NodeScope, Setting.Property.Final);
+
+    /** This setting sets the remote metadata service name */
+    public static final Setting<String> REMOTE_METADATA_SERVICE_NAME = Setting
+        .simpleString("plugins.ml_commons." + REMOTE_METADATA_SERVICE_NAME_KEY, Setting.Property.NodeScope, Setting.Property.Final);
 }
