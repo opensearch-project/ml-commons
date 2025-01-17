@@ -133,4 +133,55 @@ public class MLUpdateConnectorRequestTests {
         };
         MLUpdateConnectorRequest.fromActionRequest(actionRequest);
     }
+
+    @Test
+    public void parse_withTenantId_success() throws IOException {
+        String tenantId = "test-tenant";
+        String jsonStr = "{\"version\":\"new version\",\"description\":\"new description\"}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
+        parser.nextToken();
+        MLUpdateConnectorRequest updateConnectorRequest = MLUpdateConnectorRequest.parse(parser, connectorId, tenantId);
+        assertEquals(updateConnectorRequest.getConnectorId(), connectorId);
+        assertEquals(tenantId, updateConnectorRequest.getUpdateContent().getTenantId());
+        assertEquals("new version", updateConnectorRequest.getUpdateContent().getVersion());
+        assertEquals("new description", updateConnectorRequest.getUpdateContent().getDescription());
+    }
+
+    @Test
+    public void parse_withoutTenantId_success() throws IOException {
+        String jsonStr = "{\"version\":\"new version\",\"description\":\"new description\"}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
+        parser.nextToken();
+        MLUpdateConnectorRequest updateConnectorRequest = MLUpdateConnectorRequest.parse(parser, connectorId, null);
+        assertEquals(updateConnectorRequest.getConnectorId(), connectorId);
+        assertNull(updateConnectorRequest.getUpdateContent().getTenantId());
+        assertEquals("new version", updateConnectorRequest.getUpdateContent().getVersion());
+        assertEquals("new description", updateConnectorRequest.getUpdateContent().getDescription());
+    }
+
+    @Test
+    public void writeTo_withTenantId_Success() throws IOException {
+        updateContent.setTenantId("tenant-1");
+        MLUpdateConnectorRequest request = MLUpdateConnectorRequest.builder().connectorId(connectorId).updateContent(updateContent).build();
+
+        BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
+        request.writeTo(bytesStreamOutput);
+        MLUpdateConnectorRequest parsedRequest = new MLUpdateConnectorRequest(bytesStreamOutput.bytes().streamInput());
+
+        assertEquals("tenant-1", parsedRequest.getUpdateContent().getTenantId());
+        assertEquals(connectorId, parsedRequest.getConnectorId());
+    }
+
 }

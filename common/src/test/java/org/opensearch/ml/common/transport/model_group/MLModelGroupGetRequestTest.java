@@ -9,6 +9,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
+import static org.opensearch.ml.common.CommonValue.VERSION_2_18_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -18,6 +20,7 @@ import org.junit.Test;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 
 public class MLModelGroupGetRequestTest {
@@ -94,4 +97,45 @@ public class MLModelGroupGetRequestTest {
         assertSame(mlModelGroupGetRequest, mlModelGroupGetRequestFromActionRequest);
         assertEquals(mlModelGroupGetRequest.getModelGroupId(), mlModelGroupGetRequestFromActionRequest.getModelGroupId());
     }
+
+    @Test
+    public void writeToAndReadFrom_withOlderVersion_TenantIdIgnored() throws IOException {
+        String tenantId = "tenant-1";
+        MLModelGroupGetRequest request = MLModelGroupGetRequest.builder().modelGroupId(modelGroupId).tenantId(tenantId).build();
+
+        // Serialize with newer version
+        BytesStreamOutput out = new BytesStreamOutput();
+        out.setVersion(VERSION_2_19_0); // Newer version with tenantId support
+        request.writeTo(out);
+
+        // Deserialize with older version
+        StreamInput in = out.bytes().streamInput();
+        in.setVersion(VERSION_2_18_0); // Older version without tenantId support
+        MLModelGroupGetRequest parsedRequest = new MLModelGroupGetRequest(in);
+
+        // Validate
+        assertEquals(modelGroupId, parsedRequest.getModelGroupId());
+        assertNull(parsedRequest.getTenantId()); // tenantId should not be deserialized
+    }
+
+    @Test
+    public void writeToAndReadFrom_withNewerVersion_TenantIdIncluded() throws IOException {
+        String tenantId = "tenant-1";
+        MLModelGroupGetRequest request = MLModelGroupGetRequest.builder().modelGroupId(modelGroupId).tenantId(tenantId).build();
+
+        // Serialize with newer version
+        BytesStreamOutput out = new BytesStreamOutput();
+        out.setVersion(VERSION_2_19_0); // Newer version with tenantId support
+        request.writeTo(out);
+
+        // Deserialize with newer version
+        StreamInput in = out.bytes().streamInput();
+        in.setVersion(VERSION_2_19_0); // Newer version with tenantId support
+        MLModelGroupGetRequest parsedRequest = new MLModelGroupGetRequest(in);
+
+        // Validate
+        assertEquals(modelGroupId, parsedRequest.getModelGroupId());
+        assertEquals(tenantId, parsedRequest.getTenantId());
+    }
+
 }

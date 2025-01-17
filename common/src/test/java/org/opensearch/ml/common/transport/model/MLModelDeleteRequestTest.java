@@ -15,9 +15,11 @@ import java.io.UncheckedIOException;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.opensearch.Version;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 
 public class MLModelDeleteRequestTest {
@@ -94,4 +96,90 @@ public class MLModelDeleteRequestTest {
         assertSame(mlModelDeleteRequest, mlModelDeleteRequestFromActionRequest);
         assertEquals(mlModelDeleteRequest.getModelId(), mlModelDeleteRequestFromActionRequest.getModelId());
     }
+
+    @Test
+    public void writeTo_withTenantId_Success() throws IOException {
+        String tenantId = "tenant-1";
+        MLModelDeleteRequest request = MLModelDeleteRequest.builder().modelId(modelId).tenantId(tenantId).build();
+
+        BytesStreamOutput out = new BytesStreamOutput();
+        request.writeTo(out);
+        MLModelDeleteRequest parsedRequest = new MLModelDeleteRequest(out.bytes().streamInput());
+
+        assertEquals(modelId, parsedRequest.getModelId());
+        assertEquals(tenantId, parsedRequest.getTenantId());
+    }
+
+    @Test
+    public void writeTo_withoutTenantId_Success() throws IOException {
+        MLModelDeleteRequest request = MLModelDeleteRequest.builder().modelId(modelId).build();
+
+        BytesStreamOutput out = new BytesStreamOutput();
+        request.writeTo(out);
+        MLModelDeleteRequest parsedRequest = new MLModelDeleteRequest(out.bytes().streamInput());
+
+        assertEquals(modelId, parsedRequest.getModelId());
+        assertNull(parsedRequest.getTenantId());
+    }
+
+    @Test
+    public void serialization_withOlderVersion_Success() throws IOException {
+        MLModelDeleteRequest request = MLModelDeleteRequest.builder().modelId(modelId).tenantId("tenant-1").build();
+
+        // Serialize with an older version
+        BytesStreamOutput out = new BytesStreamOutput();
+        out.setVersion(Version.V_2_18_0); // Older version without tenantId support
+        request.writeTo(out);
+
+        // Deserialize with the same older version
+        StreamInput in = out.bytes().streamInput();
+        in.setVersion(Version.V_2_18_0); // Ensure the version matches
+        MLModelDeleteRequest parsedRequest = new MLModelDeleteRequest(in);
+
+        // Validate
+        assertEquals(modelId, parsedRequest.getModelId());
+        assertNull(parsedRequest.getTenantId()); // tenantId should not be read
+    }
+
+    @Test
+    public void serialization_withNewVersion_Success() throws IOException {
+        String tenantId = "tenant-1";
+        MLModelDeleteRequest request = MLModelDeleteRequest.builder().modelId(modelId).tenantId(tenantId).build();
+
+        // Serialize with a newer version
+        BytesStreamOutput out = new BytesStreamOutput();
+        out.setVersion(Version.V_2_19_0);
+        request.writeTo(out);
+
+        // Deserialize with the same newer version
+        StreamInput in = out.bytes().streamInput();
+        in.setVersion(Version.V_2_19_0);
+        MLModelDeleteRequest parsedRequest = new MLModelDeleteRequest(in);
+
+        // Validate
+        assertEquals(modelId, parsedRequest.getModelId());
+        assertEquals(tenantId, parsedRequest.getTenantId()); // tenantId should be preserved
+    }
+
+    @Test
+    public void fromActionRequest_withTenantId_Success() {
+        MLModelDeleteRequest originalRequest = MLModelDeleteRequest.builder().modelId(modelId).tenantId("tenant-1").build();
+        ActionRequest actionRequest = new ActionRequest() {
+            @Override
+            public ActionRequestValidationException validate() {
+                return null;
+            }
+
+            @Override
+            public void writeTo(StreamOutput out) throws IOException {
+                originalRequest.writeTo(out);
+            }
+        };
+
+        MLModelDeleteRequest parsedRequest = MLModelDeleteRequest.fromActionRequest(actionRequest);
+        assertNotSame(originalRequest, parsedRequest);
+        assertEquals(originalRequest.getModelId(), parsedRequest.getModelId());
+        assertEquals(originalRequest.getTenantId(), parsedRequest.getTenantId());
+    }
+
 }

@@ -233,9 +233,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                 this.modelInterface = in.readMap(StreamInput::readString, StreamInput::readString);
             }
         }
-        if (streamInputVersion.onOrAfter(VERSION_2_19_0)) {
-            this.tenantId = in.readOptionalString();
-        }
+        this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? in.readOptionalString() : null;
     }
 
     @Override
@@ -495,7 +493,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     modelInterface = filteredParameterMap(parser.map(), allowedInterfaceFieldKeys);
                     break;
                 case TENANT_ID_FIELD:
-                    tenantId = parser.text();
+                    tenantId = parser.textOrNull();
                     break;
                 default:
                     parser.skipChildren();
@@ -638,7 +636,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     modelInterface = filteredParameterMap(parser.map(), allowedInterfaceFieldKeys);
                     break;
                 case TENANT_ID_FIELD:
-                    tenantId = parser.text();
+                    tenantId = parser.textOrNull();
                     break;
                 default:
                     parser.skipChildren();

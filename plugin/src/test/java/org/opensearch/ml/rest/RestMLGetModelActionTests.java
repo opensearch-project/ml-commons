@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.times;
+import static org.opensearch.ml.common.input.Constants.TENANT_ID_HEADER;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
 
@@ -108,6 +109,24 @@ public class RestMLGetModelActionTests extends OpenSearchTestCase {
         assertEquals("/_plugins/_ml/models/{model_id}", route.getPath());
     }
 
+    public void test_PrepareRequest_WithTenantId() throws Exception {
+        // Enable multi-tenancy
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
+
+        // Create RestRequest with tenantId in the header
+        RestRequest request = getRestRequestWithTenantId("test_tenant");
+        restMLGetModelAction.handleRequest(request, channel, client);
+
+        // Capture request sent to client
+        ArgumentCaptor<MLModelGetRequest> argumentCaptor = ArgumentCaptor.forClass(MLModelGetRequest.class);
+        verify(client, times(1)).execute(eq(MLModelGetAction.INSTANCE), argumentCaptor.capture(), any());
+
+        // Verify modelId and tenantId
+        MLModelGetRequest capturedRequest = argumentCaptor.getValue();
+        assertEquals("test_id", capturedRequest.getModelId());
+        assertEquals("test_tenant", capturedRequest.getTenantId());
+    }
+
     public void test_PrepareRequest() throws Exception {
         RestRequest request = getRestRequest();
         restMLGetModelAction.handleRequest(request, channel, client);
@@ -116,6 +135,16 @@ public class RestMLGetModelActionTests extends OpenSearchTestCase {
         verify(client, times(1)).execute(eq(MLModelGetAction.INSTANCE), argumentCaptor.capture(), any());
         String taskId = argumentCaptor.getValue().getModelId();
         assertEquals(taskId, "test_id");
+    }
+
+    private RestRequest getRestRequestWithTenantId(String tenantId) {
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_MODEL_ID, "test_id");
+
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put(TENANT_ID_HEADER, List.of(tenantId)); // Add tenant ID to headers
+
+        return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(params).withHeaders(headers).build();
     }
 
     private RestRequest getRestRequest() {

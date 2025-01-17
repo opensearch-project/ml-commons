@@ -696,7 +696,7 @@ public class MLModel implements ToXContentObject {
                     modelInterface = filteredParameterMap(parser.map(), allowedInterfaceFieldKeys);
                     break;
                 case TENANT_ID_FIELD:
-                    tenantId = parser.text();
+                    tenantId = parser.textOrNull();
                     break;
                 default:
                     parser.skipChildren();

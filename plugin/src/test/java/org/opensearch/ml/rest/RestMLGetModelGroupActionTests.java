@@ -12,6 +12,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.input.Constants.TENANT_ID_HEADER;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_GROUP_ID;
 
@@ -110,6 +111,25 @@ public class RestMLGetModelGroupActionTests extends OpenSearchTestCase {
         assertEquals("/_plugins/_ml/model_groups/{model_group_id}", route.getPath());
     }
 
+    public void test_PrepareRequest_WithTenantId() throws Exception {
+        // Mock multi-tenancy enabled
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
+
+        // Create a RestRequest with tenant ID in the headers
+        RestRequest request = getRestRequestWithTenantId("test_tenant");
+        restMLGetModelGroupAction.handleRequest(request, channel, client);
+
+        // Capture the request sent to the client
+        ArgumentCaptor<MLModelGroupGetRequest> argumentCaptor = ArgumentCaptor.forClass(MLModelGroupGetRequest.class);
+        verify(client, times(1)).execute(eq(MLModelGroupGetAction.INSTANCE), argumentCaptor.capture(), any());
+
+        // Verify modelGroupId and tenantId
+        MLModelGroupGetRequest capturedRequest = argumentCaptor.getValue();
+        assertEquals("test_id", capturedRequest.getModelGroupId());
+        assertEquals("test_tenant", capturedRequest.getTenantId());
+
+    }
+
     public void test_PrepareRequest() throws Exception {
         RestRequest request = getRestRequest();
         restMLGetModelGroupAction.handleRequest(request, channel, client);
@@ -118,6 +138,14 @@ public class RestMLGetModelGroupActionTests extends OpenSearchTestCase {
         verify(client, times(1)).execute(eq(MLModelGroupGetAction.INSTANCE), argumentCaptor.capture(), any());
         String taskId = argumentCaptor.getValue().getModelGroupId();
         assertEquals(taskId, "test_id");
+    }
+
+    private RestRequest getRestRequestWithTenantId(String tenantId) {
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_MODEL_GROUP_ID, "test_id");
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put(TENANT_ID_HEADER, List.of(tenantId));
+        return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(params).withHeaders(headers).build();
     }
 
     private RestRequest getRestRequest() {

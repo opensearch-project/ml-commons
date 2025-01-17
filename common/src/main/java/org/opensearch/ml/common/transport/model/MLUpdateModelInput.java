@@ -148,9 +148,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
                 modelInterface = in.readMap(StreamInput::readString, StreamInput::readString);
             }
         }
-        if (streamInputVersion.onOrAfter(VERSION_2_19_0)) {
-            this.tenantId = in.readOptionalString();
-        }
+        this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? in.readOptionalString() : null;
     }
 
     @Override
@@ -290,6 +288,9 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
             String fieldName = parser.currentName();
             parser.nextToken();
             switch (fieldName) {
+                case MODEL_ID_FIELD:
+                    modelId = parser.text();
+                    break;
                 case DESCRIPTION_FIELD:
                     description = parser.text();
                     break;
@@ -324,7 +325,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
                     modelInterface = filteredParameterMap(parser.map(), allowedInterfaceFieldKeys);
                     break;
                 case TENANT_ID_FIELD:
-                    tenantId = parser.text();
+                    tenantId = parser.textOrNull();
                     break;
                 default:
                     parser.skipChildren();

@@ -8,6 +8,7 @@ package org.opensearch.ml.model;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 
+import java.io.IOException;
 import java.time.Instant;
 import java.util.HashSet;
 
@@ -43,6 +44,7 @@ import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
+import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.PutDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
@@ -252,7 +254,7 @@ public class MLModelGroupManager {
                         SearchResponse searchResponse = SearchResponse.fromXContent(r.parser());
                         log.info("Model group search complete: {}", searchResponse.getHits().getTotalHits());
                         listener.onResponse(searchResponse);
-                    } catch (Exception e) {
+                    } catch (IOException e) {
                         log.error("Failed to parse search response", e);
                         listener
                             .onFailure(new OpenSearchStatusException("Failed to parse search response", RestStatus.INTERNAL_SERVER_ERROR));
@@ -268,40 +270,64 @@ public class MLModelGroupManager {
     /**
      * Get model group from model group index.
      *
-     * @param modelGroupId  model group id
-     * @param listener action listener
+     * @param sdkClient    SDK client
+     * @param modelGroupId Model group ID
+     * @param listener     Action listener
      */
     public void getModelGroupResponse(SdkClient sdkClient, String modelGroupId, ActionListener<GetResponse> listener) {
-        GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(ML_MODEL_GROUP_INDEX).id(modelGroupId).build();
-        sdkClient.getDataObjectAsync(getRequest).whenComplete((r, throwable) -> {
-            if (throwable == null) {
-                try {
-                    GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
-                    if (gr != null && gr.isExists()) {
-                        try (
-                            XContentParser parser = jsonXContent
-                                .createParser(
-                                    NamedXContentRegistry.EMPTY,
-                                    LoggingDeprecationHandler.INSTANCE,
-                                    Strings.toString(MediaTypeRegistry.JSON, gr)
-                                )
-                        ) {
-                            listener.onResponse(GetResponse.fromXContent(parser));
-                        } catch (Exception e) {
-                            log.error("Failed to parse model group response: {}", r.id(), e);
-                            listener.onFailure(e);
-                        }
-                    } else {
-                        listener.onFailure(new MLResourceNotFoundException("Failed to find model group with ID: " + modelGroupId));
-                    }
-                } catch (Exception e) {
-                    listener.onFailure(e);
-                }
-            } else {
-                Exception e = SdkClientUtils.unwrapAndConvertToException(throwable);
-                listener.onFailure(e);
+        GetDataObjectRequest getRequest = buildGetModelGroupRequest(modelGroupId);
+
+        sdkClient.getDataObjectAsync(getRequest).whenComplete((response, throwable) -> {
+            if (throwable != null) {
+                handleError(throwable, listener);
+                return;
             }
+
+            processModelGroupResponse(response, modelGroupId, listener);
         });
+    }
+
+    private GetDataObjectRequest buildGetModelGroupRequest(String modelGroupId) {
+        return GetDataObjectRequest.builder().index(ML_MODEL_GROUP_INDEX).id(modelGroupId).build();
+    }
+
+    private void handleError(Throwable throwable, ActionListener<GetResponse> listener) {
+        Exception exception = SdkClientUtils.unwrapAndConvertToException(throwable);
+        listener.onFailure(exception);
+    }
+
+    private void processModelGroupResponse(GetDataObjectResponse response, String modelGroupId, ActionListener<GetResponse> listener) {
+        try {
+            GetResponse getResponse = parseGetResponse(response);
+            if (getResponse == null || !getResponse.isExists()) {
+                listener.onFailure(new MLResourceNotFoundException("Failed to find model group with ID: " + modelGroupId));
+                return;
+            }
+
+            parseAndRespond(getResponse, listener);
+        } catch (Exception e) {
+            listener.onFailure(e);
+        }
+    }
+
+    private GetResponse parseGetResponse(GetDataObjectResponse response) throws IOException {
+        return response.parser() == null ? null : GetResponse.fromXContent(response.parser());
+    }
+
+    private void parseAndRespond(GetResponse getResponse, ActionListener<GetResponse> listener) {
+        try (
+            XContentParser parser = jsonXContent
+                .createParser(
+                    NamedXContentRegistry.EMPTY,
+                    LoggingDeprecationHandler.INSTANCE,
+                    Strings.toString(MediaTypeRegistry.JSON, getResponse)
+                )
+        ) {
+            listener.onResponse(GetResponse.fromXContent(parser));
+        } catch (Exception e) {
+            log.error("Failed to parse model group response: {}", getResponse.getId(), e);
+            listener.onFailure(e);
+        }
     }
 
     private void validateSecurityDisabledOrModelAccessControlDisabled(MLRegisterModelGroupInput input) {

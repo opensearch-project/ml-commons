@@ -12,6 +12,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.input.Constants.TENANT_ID_HEADER;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_GROUP_ID;
 
@@ -117,9 +118,37 @@ public class RestMLDeleteModelGroupActionTests extends OpenSearchTestCase {
         assertEquals(taskId, "test_id");
     }
 
+    public void test_PrepareRequest_WithTenantId() throws Exception {
+        // Enable multi-tenancy
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
+
+        // Create RestRequest with tenantId in header
+        RestRequest request = getRestRequestWithTenantId("test_tenant");
+        restMLDeleteModelGroupAction.handleRequest(request, channel, client);
+
+        // Capture request sent to client
+        ArgumentCaptor<MLModelGroupDeleteRequest> argumentCaptor = ArgumentCaptor.forClass(MLModelGroupDeleteRequest.class);
+        verify(client, times(1)).execute(eq(MLModelGroupDeleteAction.INSTANCE), argumentCaptor.capture(), any());
+
+        // Verify modelGroupId and tenantId
+        MLModelGroupDeleteRequest capturedRequest = argumentCaptor.getValue();
+        assertEquals("test_id", capturedRequest.getModelGroupId());
+        assertEquals("test_tenant", capturedRequest.getTenantId());
+    }
+
     private RestRequest getRestRequest() {
         Map<String, String> params = new HashMap<>();
         params.put(PARAMETER_MODEL_GROUP_ID, "test_id");
         return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(params).build();
+    }
+
+    private RestRequest getRestRequestWithTenantId(String tenantId) {
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_MODEL_GROUP_ID, "test_id");
+
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put(TENANT_ID_HEADER, List.of(tenantId)); // Add tenant ID to headers
+
+        return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(params).withHeaders(headers).build();
     }
 }

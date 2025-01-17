@@ -147,6 +147,7 @@ import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.MLExceptionUtils;
 import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
+import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.PutDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.UpdateDataObjectRequest;
@@ -1949,43 +1950,64 @@ public class MLModelManager {
      * @param listener action listener
      */
     public void getModel(String modelId, String tenantId, String[] includes, String[] excludes, ActionListener<MLModel> listener) {
-        GetDataObjectRequest getRequest = GetDataObjectRequest
+        GetDataObjectRequest getRequest = buildGetRequest(modelId, tenantId, includes, excludes);
+
+        sdkClient.getDataObjectAsync(getRequest).whenComplete((response, throwable) -> {
+            if (throwable != null) {
+                handleError(throwable, listener);
+                return;
+            }
+
+            processGetResponse(response, modelId, listener);
+        });
+    }
+
+    private GetDataObjectRequest buildGetRequest(String modelId, String tenantId, String[] includes, String[] excludes) {
+        return GetDataObjectRequest
             .builder()
             .index(ML_MODEL_INDEX)
             .id(modelId)
             .tenantId(tenantId)
             .fetchSourceContext(new FetchSourceContext(true, includes, excludes))
             .build();
-        sdkClient.getDataObjectAsync(getRequest).whenComplete((r, throwable) -> {
-            if (throwable == null) {
-                try {
-                    GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
-                    if (gr != null && gr.isExists()) {
-                        try (
-                            XContentParser parser = jsonXContent
-                                .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, gr.getSourceAsString())
-                        ) {
-                            ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                            String algorithmName = r.source().get(ALGORITHM_FIELD).toString();
+    }
 
-                            MLModel mlModel = MLModel.parse(parser, algorithmName);
-                            mlModel.setModelId(modelId);
-                            listener.onResponse(mlModel);
-                        } catch (Exception e) {
-                            log.error("Failed to parse ml task{}", r.id(), e);
-                            listener.onFailure(e);
-                        }
-                    } else {
-                        listener.onFailure(new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND));
-                    }
-                } catch (Exception e) {
-                    listener.onFailure(e);
-                }
-            } else {
-                Exception e = SdkClientUtils.unwrapAndConvertToException(throwable);
-                listener.onFailure(e);
+    private void handleError(Throwable throwable, ActionListener<MLModel> listener) {
+        Exception exception = SdkClientUtils.unwrapAndConvertToException(throwable);
+        listener.onFailure(exception);
+    }
+
+    private void processGetResponse(GetDataObjectResponse response, String modelId, ActionListener<MLModel> listener) {
+        try {
+            GetResponse getResponse = parseGetResponse(response);
+            if (getResponse == null || !getResponse.isExists()) {
+                listener.onFailure(new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND));
+                return;
             }
-        });
+
+            parseAndReturnModel(getResponse, response.source().get(ALGORITHM_FIELD).toString(), modelId, listener);
+        } catch (Exception e) {
+            listener.onFailure(e);
+        }
+    }
+
+    private GetResponse parseGetResponse(GetDataObjectResponse response) throws IOException {
+        return response.parser() == null ? null : GetResponse.fromXContent(response.parser());
+    }
+
+    private void parseAndReturnModel(GetResponse getResponse, String algorithmName, String modelId, ActionListener<MLModel> listener) {
+        try (
+            XContentParser parser = jsonXContent
+                .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, getResponse.getSourceAsString())
+        ) {
+            ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+            MLModel mlModel = MLModel.parse(parser, algorithmName);
+            mlModel.setModelId(modelId);
+            listener.onResponse(mlModel);
+        } catch (Exception e) {
+            log.error("Failed to parse ml model {}", modelId, e);
+            listener.onFailure(e);
+        }
     }
 
     /**
