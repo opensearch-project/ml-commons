@@ -17,6 +17,7 @@ import org.apache.hc.core5.http.HttpHeaders;
 import org.apache.hc.core5.http.message.BasicHeader;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Test;
 import org.opensearch.client.Request;
 import org.opensearch.client.Response;
 import org.opensearch.ml.common.FunctionName;
@@ -256,6 +257,7 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
      *
      * @throws Exception if any error occurs during the test
      */
+    @Test
     public void testMLInferenceProcessorRemoteModelStringField() throws Exception {
         // Skip test if key is null
         if (AWS_ACCESS_KEY_ID == null) {

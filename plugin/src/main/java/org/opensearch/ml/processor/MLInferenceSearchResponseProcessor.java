@@ -162,6 +162,8 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
                 return;
             }
 
+            setRequestContextFromExt(request, responseContext);
+
             // if many to one, run rewriteResponseDocuments
             if (!oneToOne) {
                 // use MLInferenceSearchResponseProcessor to allow writing to extension
