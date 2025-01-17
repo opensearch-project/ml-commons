@@ -269,6 +269,9 @@ public final class MLCommonsSettings {
     public static final Setting<Boolean> ML_COMMONS_CONTROLLER_ENABLED = Setting
         .boolSetting("plugins.ml_commons.controller_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
+    // This flag is the determine whether we need to check downstream task before deleting a model.
+    public static final Setting<Boolean> ML_COMMONS_SAFE_DELETE_WITH_USAGE_CHECK = Setting
+        .boolSetting("plugins.ml_commons.safe_delete_model", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
     /**
      * Indicates whether multi-tenancy is enabled in ML Commons.
      *
