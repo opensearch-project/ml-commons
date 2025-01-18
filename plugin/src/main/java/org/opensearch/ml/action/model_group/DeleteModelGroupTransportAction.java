@@ -16,7 +16,6 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.delete.DeleteResponse;
-import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
@@ -42,8 +41,8 @@ import org.opensearch.remote.metadata.client.DeleteDataObjectRequest;
 import org.opensearch.remote.metadata.client.DeleteDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
+import org.opensearch.remote.metadata.client.SearchDataObjectResponse;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
-import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
@@ -86,93 +85,117 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<DeleteResponse> actionListener) {
-        MLModelGroupDeleteRequest mlModelGroupDeleteRequest = MLModelGroupDeleteRequest.fromActionRequest(request);
-        String modelGroupId = mlModelGroupDeleteRequest.getModelGroupId();
-        String tenantId = mlModelGroupDeleteRequest.getTenantId();
+        MLModelGroupDeleteRequest deleteRequest = MLModelGroupDeleteRequest.fromActionRequest(request);
+        String modelGroupId = deleteRequest.getModelGroupId();
+        String tenantId = deleteRequest.getTenantId();
+
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
             return;
         }
-        DeleteRequest deleteRequest = new DeleteRequest(ML_MODEL_GROUP_INDEX, modelGroupId);
-        User user = RestActionUtils.getUserContext(client);
+
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
-            modelAccessControlHelper
-                .validateModelGroupAccess(
-                    user,
-                    mlFeatureEnabledSetting,
-                    tenantId,
-                    modelGroupId,
-                    client,
-                    sdkClient,
-                    ActionListener.wrap(access -> {
-                        if (!access) {
-                            wrappedListener.onFailure(new MLValidationException("User doesn't have privilege to delete this model group"));
-                        } else {
-                            BoolQueryBuilder query = new BoolQueryBuilder();
-                            query.filter(new TermQueryBuilder(PARAMETER_MODEL_GROUP_ID, modelGroupId));
-
-                            SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(query);
-                            SearchRequest searchRequest = new SearchRequest(ML_MODEL_INDEX).source(searchSourceBuilder);
-
-                            SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
-                                .builder()
-                                .indices(ML_MODEL_INDEX)
-                                .tenantId(tenantId)
-                                .searchSourceBuilder(searchSourceBuilder)
-                                .build();
-
-                            sdkClient.searchDataObjectAsync(searchDataObjectRequest).whenComplete((sr, st) -> {
-                                if (sr != null) {
-                                    try {
-                                        SearchResponse searchResponse = SearchResponse.fromXContent(sr.parser());
-                                        SearchHit[] searchHits = searchResponse.getHits().getHits();
-                                        if (searchHits.length == 0) {
-                                            deleteModelGroup(deleteRequest, tenantId, wrappedListener);
-                                        } else {
-                                            actionListener
-                                                .onFailure(
-                                                    new OpenSearchStatusException(
-                                                        "Cannot delete the model group when it has associated model versions",
-                                                        RestStatus.CONFLICT
-                                                    )
-                                                );
-                                        }
-                                    } catch (Exception e) {
-                                        log.error("Failed to parse search response", e);
-                                        actionListener
-                                            .onFailure(
-                                                new OpenSearchStatusException(
-                                                    "Failed to parse search response",
-                                                    RestStatus.INTERNAL_SERVER_ERROR
-                                                )
-                                            );
-                                    }
-                                } else {
-                                    Exception cause = SdkClientUtils.unwrapAndConvertToException(st);
-                                    handleModelSearchFailure(modelGroupId, tenantId, cause, actionListener);
-                                }
-                            });
-
-                        }
-                    }, e -> {
-                        log.error("Failed to validate Access for Model Group {}", modelGroupId, e);
-                        wrappedListener.onFailure(e);
-                    })
-                );
+            validateAndDeleteModelGroup(modelGroupId, tenantId, wrappedListener);
         }
     }
 
-    private void deleteModelGroup(DeleteRequest deleteRequest, String tenantId, ActionListener<DeleteResponse> actionListener) {
+    private void validateAndDeleteModelGroup(String modelGroupId, String tenantId, ActionListener<DeleteResponse> listener) {
+        User user = RestActionUtils.getUserContext(client);
+        modelAccessControlHelper
+            .validateModelGroupAccess(
+                user,
+                mlFeatureEnabledSetting,
+                tenantId,
+                modelGroupId,
+                client,
+                sdkClient,
+                ActionListener
+                    .wrap(
+                        hasAccess -> handleAccessValidation(hasAccess, modelGroupId, tenantId, listener),
+                        error -> handleValidationError(error, modelGroupId, listener)
+                    )
+            );
+    }
+
+    private void handleAccessValidation(boolean hasAccess, String modelGroupId, String tenantId, ActionListener<DeleteResponse> listener) {
+        if (!hasAccess) {
+            listener.onFailure(new MLValidationException("User doesn't have privilege to delete this model group"));
+            return;
+        }
+        checkForAssociatedModels(modelGroupId, tenantId, listener);
+    }
+
+    private void checkForAssociatedModels(String modelGroupId, String tenantId, ActionListener<DeleteResponse> listener) {
+        SearchDataObjectRequest searchRequest = buildModelSearchRequest(modelGroupId, tenantId);
+
+        sdkClient
+            .searchDataObjectAsync(searchRequest)
+            .whenComplete(
+                (searchResponse, throwable) -> handleModelSearchResponse(searchResponse, throwable, modelGroupId, tenantId, listener)
+            );
+    }
+
+    private SearchDataObjectRequest buildModelSearchRequest(String modelGroupId, String tenantId) {
+        BoolQueryBuilder query = new BoolQueryBuilder().filter(new TermQueryBuilder(PARAMETER_MODEL_GROUP_ID, modelGroupId));
+        SearchSourceBuilder searchSource = new SearchSourceBuilder().query(query);
+
+        return SearchDataObjectRequest.builder().indices(ML_MODEL_INDEX).tenantId(tenantId).searchSourceBuilder(searchSource).build();
+    }
+
+    private void handleModelSearchResponse(
+        SearchDataObjectResponse searchResponse,
+        Throwable throwable,
+        String modelGroupId,
+        String tenantId,
+        ActionListener<DeleteResponse> listener
+    ) {
+        if (searchResponse == null) {
+            Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+            handleModelSearchFailure(modelGroupId, tenantId, cause, listener);
+            return;
+        }
+
         try {
+            SearchResponse response = SearchResponse.fromXContent(searchResponse.parser());
+            if (response.getHits().getHits().length == 0) {
+                DeleteRequest deleteRequest = new DeleteRequest(ML_MODEL_GROUP_INDEX, modelGroupId);
+                deleteModelGroup(deleteRequest, tenantId, listener);
+            } else {
+                listener
+                    .onFailure(
+                        new OpenSearchStatusException(
+                            "Cannot delete the model group when it has associated model versions",
+                            RestStatus.CONFLICT
+                        )
+                    );
+            }
+        } catch (Exception e) {
+            log.error("Failed to parse search response", e);
+            listener.onFailure(new OpenSearchStatusException("Failed to parse search response", RestStatus.INTERNAL_SERVER_ERROR));
+        }
+    }
+
+    private void deleteModelGroup(DeleteRequest deleteRequest, String tenantId, ActionListener<DeleteResponse> listener) {
+        try {
+            DeleteDataObjectRequest request = DeleteDataObjectRequest
+                .builder()
+                .index(deleteRequest.index())
+                .id(deleteRequest.id())
+                .tenantId(tenantId)
+                .build();
+
             sdkClient
-                .deleteDataObjectAsync(
-                    DeleteDataObjectRequest.builder().index(deleteRequest.index()).id(deleteRequest.id()).tenantId(tenantId).build()
-                )
-                .whenComplete((response, throwable) -> handleDeleteResponse(response, throwable, deleteRequest.id(), actionListener));
+                .deleteDataObjectAsync(request)
+                .whenComplete((response, throwable) -> handleDeleteResponse(response, throwable, deleteRequest.id(), listener));
         } catch (Exception e) {
             log.error("Failed to delete Model group : {}", deleteRequest.id(), e);
-            actionListener.onFailure(e);
+            listener.onFailure(e);
         }
+    }
+
+    private void handleValidationError(Exception error, String modelGroupId, ActionListener<DeleteResponse> listener) {
+        log.error("Failed to validate Access for Model Group {}", modelGroupId, error);
+        listener.onFailure(error);
     }
 
     private void handleDeleteResponse(

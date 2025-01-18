@@ -10,7 +10,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
-import static org.opensearch.ml.common.CommonValue.VERSION_2_18_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 
 import java.io.IOException;
@@ -194,16 +193,16 @@ public class MLUpdateModelInputTest {
     @Test
     public void parseWithIllegalFieldWithoutModel() throws Exception {
         String expectedInputStrWithIllegalField =
-                "{\"model_id\":\"test-model_id\",\"name\":\"name\",\"description\":\"description\",\"model_version\":"
-                        + "\"2\",\"model_group_id\":\"modelGroupId\",\"is_enabled\":false,\"rate_limiter\":"
-                        + "{\"limit\":\"1\",\"unit\":\"MILLISECONDS\"},\"model_config\":"
-                        + "{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\""
-                        + "{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"},\"updated_connector\":"
-                        + "{\"name\":\"test\",\"version\":\"1\",\"protocol\":\"http\",\"parameters\":{\"param1\":\"value1\"},\"credential\":"
-                        + "{\"api_key\":\"credential_value\"},\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":"
-                        + "\"https://api.openai.com/v1/chat/completions\",\"headers\":{\"Authorization\":\"Bearer ${credential.api_key}\"},\"request_body\":"
-                        + "\"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": ${parameters.messages} }\"}]},\"connector_id\":"
-                        + "\"test-connector_id\",\"connector\":{\"description\":\"updated description\",\"version\":\"1\"},\"last_updated_time\":1,\"illegal_field\":\"This field need to be skipped.\"}";
+            "{\"model_id\":\"test-model_id\",\"name\":\"name\",\"description\":\"description\",\"model_version\":"
+                + "\"2\",\"model_group_id\":\"modelGroupId\",\"is_enabled\":false,\"rate_limiter\":"
+                + "{\"limit\":\"1\",\"unit\":\"MILLISECONDS\"},\"model_config\":"
+                + "{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\""
+                + "{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\"},\"updated_connector\":"
+                + "{\"name\":\"test\",\"version\":\"1\",\"protocol\":\"http\",\"parameters\":{\"param1\":\"value1\"},\"credential\":"
+                + "{\"api_key\":\"credential_value\"},\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":"
+                + "\"https://api.openai.com/v1/chat/completions\",\"headers\":{\"Authorization\":\"Bearer ${credential.api_key}\"},\"request_body\":"
+                + "\"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": ${parameters.messages} }\"}]},\"connector_id\":"
+                + "\"test-connector_id\",\"connector\":{\"description\":\"updated description\",\"version\":\"1\"},\"last_updated_time\":1,\"illegal_field\":\"This field need to be skipped.\"}";
         testParseFromJsonString(expectedInputStrWithIllegalField, parsedInput -> {
             try {
                 String jsonStr = serializationWithToXContent(parsedInput);
@@ -253,6 +252,19 @@ public class MLUpdateModelInputTest {
             assertEquals("tenant-1", parsedInput.getTenantId());
             assertEquals("test-model_id", parsedInput.getModelId());
         });
+    }
+
+    @Test
+    public void toXContentWithTenantId_Success() throws IOException {
+        MLUpdateModelInput input = updateModelInput.toBuilder().tenantId("tenant-1").build();
+
+        XContentBuilder builder = XContentFactory.jsonBuilder();
+        input.toXContent(builder, ToXContent.EMPTY_PARAMS);
+
+        String jsonOutput = builder.toString();
+
+        // Validate that tenantId is present in the serialized JSON
+        assertTrue(jsonOutput.contains("\"tenant_id\":\"tenant-1\""));
     }
 
     private void testParseFromJsonString(String expectedInputStr, Consumer<MLUpdateModelInput> verify) throws Exception {

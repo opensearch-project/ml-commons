@@ -138,4 +138,5 @@ public class MLRegisterModelGroupInputTest {
         assertEquals("name", parsedInput.getName());
         assertNull(parsedInput.getTenantId()); // tenantId is not provided in the JSON
     }
+
 }

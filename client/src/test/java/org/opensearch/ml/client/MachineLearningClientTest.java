@@ -77,6 +77,9 @@ public class MachineLearningClientTest {
     ActionListener<MLOutput> dataFrameActionListener;
 
     @Mock
+    ActionListener<MLModel> mlModelActionListener;
+
+    @Mock
     DeleteResponse deleteResponse;
 
     @Mock
@@ -173,6 +176,11 @@ public class MachineLearningClientTest {
 
             @Override
             public void deleteModel(String modelId, ActionListener<DeleteResponse> listener) {
+                listener.onResponse(deleteResponse);
+            }
+
+            @Override
+            public void deleteModel(String modelId, String tenantId, ActionListener<DeleteResponse> listener) {
                 listener.onResponse(deleteResponse);
             }
 
@@ -358,6 +366,22 @@ public class MachineLearningClientTest {
     }
 
     @Test
+    public void getModelActionListener() {
+        ArgumentCaptor<MLModel> dataFrameArgumentCaptor = ArgumentCaptor.forClass(MLModel.class);
+        machineLearningClient.getModel("modelId", mlModelActionListener);
+        verify(mlModelActionListener).onResponse(dataFrameArgumentCaptor.capture());
+        assertEquals(mlModel, dataFrameArgumentCaptor.getValue());
+        assertEquals(mlModel.getTenantId(), dataFrameArgumentCaptor.getValue().getTenantId());
+    }
+
+    @Test
+    public void undeploy_WithSpecificNodes() {
+        String[] modelIds = new String[] { "model1", "model2" };
+        String[] nodeIds = new String[] { "node1", "node2" };
+        assertEquals(undeployModelsResponse, machineLearningClient.undeploy(modelIds, nodeIds).actionGet());
+    }
+
+    @Test
     public void deleteModel() {
         assertEquals(deleteResponse, machineLearningClient.deleteModel("modelId").actionGet());
     }
@@ -365,6 +389,11 @@ public class MachineLearningClientTest {
     @Test
     public void searchModel() {
         assertEquals(searchResponse, machineLearningClient.searchModel(new SearchRequest()).actionGet());
+    }
+
+    @Test
+    public void deleteConnector_WithTenantId() {
+        assertEquals(deleteResponse, machineLearningClient.deleteConnector("connectorId").actionGet());
     }
 
     @Test

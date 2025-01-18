@@ -162,5 +162,4 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable {
         }
         return new MLRegisterModelGroupInput(name, description, backendRoles, modelAccessMode, isAddAllBackendRoles, tenantId);
     }
-
 }

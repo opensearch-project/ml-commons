@@ -41,6 +41,7 @@ import org.opensearch.remote.metadata.client.DeleteDataObjectRequest;
 import org.opensearch.remote.metadata.client.DeleteDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
+import org.opensearch.remote.metadata.client.SearchDataObjectResponse;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
@@ -120,41 +121,54 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
     private void checkForModelsUsingConnector(String connectorId, String tenantId, ActionListener<DeleteResponse> actionListener) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<DeleteResponse> restoringListener = ActionListener.runBefore(actionListener, context::restore);
-            SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
-            sourceBuilder.query(QueryBuilders.matchQuery(MLModel.CONNECTOR_ID_FIELD, connectorId));
-            if (mlFeatureEnabledSetting.isMultiTenancyEnabled()) {
-                sourceBuilder.query(QueryBuilders.matchQuery(TENANT_ID_FIELD, tenantId));
-            }
+            SearchDataObjectRequest searchRequest = buildModelSearchRequest(connectorId, tenantId);
 
-            SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
-                .builder()
-                .indices(ML_MODEL_INDEX)
-                .tenantId(tenantId)
-                .searchSourceBuilder(sourceBuilder)
-                .build();
-            sdkClient.searchDataObjectAsync(searchDataObjectRequest).whenComplete((sr, st) -> {
-                if (sr != null) {
-                    try {
-                        SearchResponse searchResponse = SearchResponse.fromXContent(sr.parser());
-                        SearchHit[] searchHits = searchResponse.getHits().getHits();
-                        if (searchHits.length == 0) {
-                            deleteConnector(connectorId, tenantId, restoringListener);
-                        } else {
-                            handleModelsUsingConnector(searchHits, connectorId, restoringListener);
-                        }
-                    } catch (Exception e) {
-                        log.error("Failed to parse search response", e);
-                        restoringListener
-                            .onFailure(new OpenSearchStatusException("Failed to parse search response", RestStatus.INTERNAL_SERVER_ERROR));
-                    }
-                } else {
-                    Exception cause = SdkClientUtils.unwrapAndConvertToException(st);
-                    handleSearchFailure(connectorId, tenantId, cause, restoringListener);
-                }
-            });
+            sdkClient
+                .searchDataObjectAsync(searchRequest)
+                .whenComplete(
+                    (searchResponse, throwable) -> handleSearchResponse(connectorId, tenantId, restoringListener, searchResponse, throwable)
+                );
         } catch (Exception e) {
             log.error("Failed to check for models using connector: {}", connectorId, e);
             actionListener.onFailure(e);
+        }
+    }
+
+    private SearchDataObjectRequest buildModelSearchRequest(String connectorId, String tenantId) {
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+        sourceBuilder.query(QueryBuilders.matchQuery(MLModel.CONNECTOR_ID_FIELD, connectorId));
+        if (mlFeatureEnabledSetting.isMultiTenancyEnabled()) {
+            sourceBuilder.query(QueryBuilders.matchQuery(TENANT_ID_FIELD, tenantId));
+        }
+
+        return SearchDataObjectRequest.builder().indices(ML_MODEL_INDEX).tenantId(tenantId).searchSourceBuilder(sourceBuilder).build();
+    }
+
+    private void handleSearchResponse(
+        String connectorId,
+        String tenantId,
+        ActionListener<DeleteResponse> restoringListener,
+        SearchDataObjectResponse searchResponse,
+        Throwable throwable
+    ) {
+        if (searchResponse == null) {
+            Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+            handleSearchFailure(connectorId, tenantId, cause, restoringListener);
+            return;
+        }
+
+        try {
+            SearchResponse response = SearchResponse.fromXContent(searchResponse.parser());
+            SearchHit[] searchHits = response.getHits().getHits();
+
+            if (searchHits.length == 0) {
+                deleteConnector(connectorId, tenantId, restoringListener);
+            } else {
+                handleModelsUsingConnector(searchHits, connectorId, restoringListener);
+            }
+        } catch (Exception e) {
+            log.error("Failed to parse search response", e);
+            restoringListener.onFailure(new OpenSearchStatusException("Failed to parse search response", RestStatus.INTERNAL_SERVER_ERROR));
         }
     }
 

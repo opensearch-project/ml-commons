@@ -43,6 +43,8 @@ public class MLModelDeleteRequest extends ActionRequest {
         this.modelId = input.readString();
         if (streamInputVersion.onOrAfter(VERSION_2_19_0)) {
             this.tenantId = input.readOptionalString();
+        } else {
+            this.tenantId = null;
         }
     }
 

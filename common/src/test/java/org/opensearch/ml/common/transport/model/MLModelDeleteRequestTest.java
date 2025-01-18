@@ -182,4 +182,22 @@ public class MLModelDeleteRequestTest {
         assertEquals(originalRequest.getTenantId(), parsedRequest.getTenantId());
     }
 
+    @Test
+    public void writeTo_withOlderVersion_withoutTenantId_Success() throws IOException {
+        MLModelDeleteRequest request = MLModelDeleteRequest.builder().modelId(modelId).tenantId("xyz").build();
+
+        // Serialize with an older version
+        BytesStreamOutput out = new BytesStreamOutput();
+        out.setVersion(Version.V_2_19_0);
+        request.writeTo(out);
+
+        // Deserialize
+        StreamInput in = out.bytes().streamInput();
+        in.setVersion(Version.V_2_18_0);
+        MLModelDeleteRequest parsedRequest = new MLModelDeleteRequest(in);
+
+        assertEquals(modelId, parsedRequest.getModelId());
+        assertNull(parsedRequest.getTenantId());
+    }
+
 }
