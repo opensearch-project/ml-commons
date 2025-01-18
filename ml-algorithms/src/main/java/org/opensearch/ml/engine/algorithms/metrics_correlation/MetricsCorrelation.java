@@ -364,7 +364,7 @@ public class MetricsCorrelation extends DLModelExecute {
     }
 
     public MLModel getModel(String modelId) {
-        MLModelGetRequest getRequest = new MLModelGetRequest(modelId, false, false);
+        MLModelGetRequest getRequest = new MLModelGetRequest(modelId, false, false, null);
         ActionFuture<MLModelGetResponse> future = client.execute(MLModelGetAction.INSTANCE, getRequest);
         MLModelGetResponse response = future.actionGet(5000);
         return response.getMlModel();

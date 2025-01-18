@@ -145,4 +145,95 @@ public class MLModelGroupTest {
         Assert.assertNull(modelGroup.getAccess());
         Assert.assertNull(modelGroup.getOwner());
     }
+
+    @Test
+    public void toXContent_WithTenantId() throws IOException {
+        MLModelGroup modelGroup = MLModelGroup
+            .builder()
+            .name("test")
+            .description("this is test group")
+            .latestVersion(1)
+            .backendRoles(Arrays.asList("role1", "role2"))
+            .owner(new User())
+            .access(AccessMode.PUBLIC.name())
+            .tenantId("test_tenant")
+            .build();
+
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        modelGroup.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String content = TestHelper.xContentBuilderToString(builder);
+        Assert
+            .assertEquals(
+                "{\"name\":\"test\",\"latest_version\":1,\"description\":\"this is test group\","
+                    + "\"backend_roles\":[\"role1\",\"role2\"],"
+                    + "\"owner\":{\"name\":\"\",\"backend_roles\":[],\"roles\":[],\"custom_attribute_names\":[],\"user_requested_tenant\":null},"
+                    + "\"access\":\"PUBLIC\",\"tenant_id\":\"test_tenant\"}",
+                content
+            );
+    }
+
+    @Test
+    public void parse_WithTenantId() throws IOException {
+        String jsonStr = "{\"name\":\"test\",\"latest_version\":1,\"description\":\"this is test group\","
+            + "\"backend_roles\":[\"role1\",\"role2\"],"
+            + "\"owner\":{\"name\":\"\",\"backend_roles\":[],\"roles\":[],\"custom_attribute_names\":[],\"user_requested_tenant\":null},"
+            + "\"access\":\"PUBLIC\",\"tenant_id\":\"test_tenant\"}";
+
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
+        parser.nextToken();
+        MLModelGroup modelGroup = MLModelGroup.parse(parser);
+        Assert.assertEquals("test", modelGroup.getName());
+        Assert.assertEquals("this is test group", modelGroup.getDescription());
+        Assert.assertEquals("PUBLIC", modelGroup.getAccess());
+        Assert.assertEquals("test_tenant", modelGroup.getTenantId());
+        Assert.assertEquals(2, modelGroup.getBackendRoles().size());
+        Assert.assertEquals("role1", modelGroup.getBackendRoles().get(0));
+        Assert.assertEquals("role2", modelGroup.getBackendRoles().get(1));
+    }
+
+    @Test
+    public void parse_WithoutTenantId() throws IOException {
+        String jsonStr = "{\"name\":\"test\",\"latest_version\":1,\"description\":\"this is test group\","
+            + "\"backend_roles\":[\"role1\",\"role2\"],"
+            + "\"owner\":{\"name\":\"\",\"backend_roles\":[],\"roles\":[],\"custom_attribute_names\":[],\"user_requested_tenant\":null},"
+            + "\"access\":\"PUBLIC\"}";
+
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
+        parser.nextToken();
+        MLModelGroup modelGroup = MLModelGroup.parse(parser);
+        Assert.assertEquals("test", modelGroup.getName());
+        Assert.assertEquals("this is test group", modelGroup.getDescription());
+        Assert.assertEquals("PUBLIC", modelGroup.getAccess());
+        Assert.assertNull(modelGroup.getTenantId());
+        Assert.assertEquals(2, modelGroup.getBackendRoles().size());
+        Assert.assertEquals("role1", modelGroup.getBackendRoles().get(0));
+        Assert.assertEquals("role2", modelGroup.getBackendRoles().get(1));
+    }
+
+    @Test
+    public void toBuilder_WithTenantId() {
+        MLModelGroup originalModelGroup = MLModelGroup
+            .builder()
+            .name("test")
+            .description("this is test group")
+            .latestVersion(1)
+            .tenantId("test_tenant")
+            .build();
+
+        MLModelGroup newModelGroup = originalModelGroup.toBuilder().build();
+        Assert.assertEquals("test_tenant", newModelGroup.getTenantId());
+    }
+
 }

@@ -12,6 +12,7 @@ import static org.opensearch.ml.utils.MLExceptionUtils.REMOTE_INFERENCE_DISABLED
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_DEPLOY_MODEL;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_VERSION;
+import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
 import java.io.IOException;
 import java.util.List;
@@ -93,10 +94,12 @@ public class RestMLRegisterModelAction extends BaseRestHandler {
      */
     @VisibleForTesting
     MLRegisterModelRequest getRequest(RestRequest request) throws IOException {
+        String tenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
         boolean loadModel = request.paramAsBoolean(PARAMETER_DEPLOY_MODEL, false);
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
         MLRegisterModelInput mlInput = MLRegisterModelInput.parse(parser, loadModel);
+        mlInput.setTenantId(tenantId);
         if (mlInput.getFunctionName() == FunctionName.REMOTE && !mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
             throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
         } else if (FunctionName.isDLModel(mlInput.getFunctionName()) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {

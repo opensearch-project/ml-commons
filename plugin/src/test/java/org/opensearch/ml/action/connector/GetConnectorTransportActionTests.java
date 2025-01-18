@@ -6,20 +6,14 @@
 package org.opensearch.ml.action.connector;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
-import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_THREAD_POOL_PREFIX;
 
 import java.io.IOException;
 import java.util.Collections;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
-import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -28,15 +22,10 @@ import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
-import org.opensearch.action.LatchedActionListener;
-import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
-import org.opensearch.action.support.PlainActionFuture;
 import org.opensearch.client.Client;
 import org.opensearch.common.settings.Settings;
-import org.opensearch.common.unit.TimeValue;
-import org.opensearch.common.util.concurrent.OpenSearchExecutors;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.action.ActionListener;
@@ -56,8 +45,6 @@ import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.test.OpenSearchTestCase;
-import org.opensearch.threadpool.ScalingExecutorBuilder;
-import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
@@ -65,17 +52,6 @@ public class GetConnectorTransportActionTests extends OpenSearchTestCase {
     private static final String CONNECTOR_ID = "connector_id";
 
     private static final String TENANT_ID = "_tenant_id";
-
-    private static final TestThreadPool testThreadPool = new TestThreadPool(
-        GetConnectorTransportActionTests.class.getName(),
-        new ScalingExecutorBuilder(
-            GENERAL_THREAD_POOL,
-            1,
-            Math.max(1, OpenSearchExecutors.allocatedProcessors(Settings.EMPTY) - 1),
-            TimeValue.timeValueMinutes(1),
-            ML_THREAD_POOL_PREFIX + GENERAL_THREAD_POOL
-        )
-    );
 
     @Mock
     ThreadPool threadPool;
@@ -135,12 +111,6 @@ public class GetConnectorTransportActionTests extends OpenSearchTestCase {
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
-        when(threadPool.executor(anyString())).thenReturn(testThreadPool.executor(GENERAL_THREAD_POOL));
-    }
-
-    @AfterClass
-    public static void cleanup() {
-        ThreadPool.terminate(testThreadPool, 500, TimeUnit.MILLISECONDS);
     }
 
     @Test
@@ -153,15 +123,7 @@ public class GetConnectorTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any());
 
-        GetResponse getResponse = prepareConnector(null);
-        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
-        future.onResponse(getResponse);
-        when(client.get(any(GetRequest.class))).thenReturn(future);
-
-        CountDownLatch latch = new CountDownLatch(1);
-        LatchedActionListener<MLConnectorGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
-        getConnectorTransportAction.doExecute(null, mlConnectorGetRequest, latchedActionListener);
-        latch.await(500, TimeUnit.MILLISECONDS);
+        getConnectorTransportAction.doExecute(null, mlConnectorGetRequest, actionListener);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -182,10 +144,7 @@ public class GetConnectorTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any());
 
-        CountDownLatch latch = new CountDownLatch(1);
-        LatchedActionListener<MLConnectorGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
-        getConnectorTransportAction.doExecute(null, mlConnectorGetRequest, latchedActionListener);
-        latch.await(500, TimeUnit.MILLISECONDS);
+        getConnectorTransportAction.doExecute(null, mlConnectorGetRequest, actionListener);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -207,10 +166,7 @@ public class GetConnectorTransportActionTests extends OpenSearchTestCase {
         }).when(connectorAccessControlHelper).getConnector(any(), any(), any(),
                 getDataObjectRequestArgumentCaptor.capture(), any(), any());
 
-        CountDownLatch latch = new CountDownLatch(1);
-        LatchedActionListener<MLConnectorGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
-        getConnectorTransportAction.doExecute(null, mlConnectorGetRequest, latchedActionListener);
-        latch.await(500, TimeUnit.MILLISECONDS);
+        getConnectorTransportAction.doExecute(null, mlConnectorGetRequest, actionListener);
 
         Assert.assertEquals(tenantId, getDataObjectRequestArgumentCaptor.getValue().tenantId());
         Assert.assertEquals(CONNECTOR_ID, getDataObjectRequestArgumentCaptor.getValue().id());
@@ -234,10 +190,7 @@ public class GetConnectorTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(connectorAccessControlHelper).getConnector(any(), any(), any(), any(), any(), any());
 
-        CountDownLatch latch = new CountDownLatch(1);
-        LatchedActionListener<MLConnectorGetResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
-        getConnectorTransportAction.doExecute(null, mlConnectorGetRequest, latchedActionListener);
-        latch.await(500, TimeUnit.MILLISECONDS);
+        getConnectorTransportAction.doExecute(null, mlConnectorGetRequest, actionListener);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());

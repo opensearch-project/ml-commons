@@ -107,7 +107,7 @@ public class MLIndicesHandler {
                         log.info("Skip creating the Index:{} that is already created by another parallel request", indexName);
                         internalListener.onResponse(true);
                     } else {
-                        log.error("Failed to create index " + indexName, e);
+                        log.error("Failed to create index {}", indexName, e);
                         internalListener.onFailure(e);
                     }
                 });
@@ -148,14 +148,14 @@ public class MLIndicesHandler {
                                                             .onFailure(new MLException("Failed to update index setting for: " + indexName));
                                                     }
                                                 }, exception -> {
-                                                    log.error("Failed to update index setting for: " + indexName, exception);
+                                                    log.error("Failed to update index setting for: {}", indexName, exception);
                                                     internalListener.onFailure(exception);
                                                 }));
                                         } else {
                                             internalListener.onFailure(new MLException("Failed to update index: " + indexName));
                                         }
                                     }, exception -> {
-                                        log.error("Failed to update index " + indexName, exception);
+                                        log.error("Failed to update index {}", indexName, exception);
                                         internalListener.onFailure(exception);
                                     })
                                 );
@@ -175,7 +175,7 @@ public class MLIndicesHandler {
                 }
             }
         } catch (Exception e) {
-            log.error("Failed to init index " + indexName, e);
+            log.error("Failed to init index {}", indexName, e);
             listener.onFailure(e);
         }
     }
@@ -197,7 +197,7 @@ public class MLIndicesHandler {
         Integer oldVersion = CommonValue.NO_SCHEMA_VERSION;
         Map<String, Object> indexMapping = indexMetaData.mapping().getSourceAsMap();
         Object meta = indexMapping.get(META);
-        if (meta != null && meta instanceof Map) {
+        if (meta instanceof Map) {
             @SuppressWarnings("unchecked")
             Map<String, Object> metaMapping = (Map<String, Object>) meta;
             Object schemaVersion = metaMapping.get(SCHEMA_VERSION_FIELD);

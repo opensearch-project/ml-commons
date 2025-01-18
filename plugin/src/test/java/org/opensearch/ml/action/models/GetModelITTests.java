@@ -5,10 +5,10 @@
 
 package org.opensearch.ml.action.models;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.OpenSearchTimeoutException;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.ml.action.MLCommonsIntegTestCase;
-import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
 @OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.SUITE, numDataNodes = 2)
@@ -17,7 +17,7 @@ public class GetModelITTests extends MLCommonsIntegTestCase {
     private static final int MAX_RETRIES = 3;
 
     public void testGetModel_IndexNotFound() {
-        testGetModelExceptionsWithRetry(MLResourceNotFoundException.class, "test_id");
+        testGetModelExceptionsWithRetry(OpenSearchStatusException.class, "test_id");
     }
 
     public void testGetModel_NullModelIdException() {

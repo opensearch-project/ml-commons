@@ -4,6 +4,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -383,6 +385,52 @@ public class MLRegisterModelInputTest {
             assertEquals(parsedInput.getModelName(), FunctionName.METRICS_CORRELATION.name());
             assertEquals(parsedInput.getModelGroupId(), modelGroupId);
         });
+    }
+
+    @Test
+    public void readInputStream_withTenantId_Success() throws IOException {
+        // Add tenantId to input
+        input = input.toBuilder().tenantId("tenant-1").build();
+
+        // Serialize with newer version
+        BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
+        bytesStreamOutput.setVersion(VERSION_2_19_0);
+        input.writeTo(bytesStreamOutput);
+
+        // Deserialize and verify tenantId
+        StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
+        streamInput.setVersion(VERSION_2_19_0);
+        MLRegisterModelInput parsedInput = new MLRegisterModelInput(streamInput);
+
+        assertEquals("tenant-1", parsedInput.getTenantId());
+    }
+
+    @Test
+    public void toXContent_withTenantId_Success() throws IOException {
+        // Add tenantId to input
+        input = input.toBuilder().tenantId("tenant-1").build();
+
+        // Convert to XContent
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        input.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String jsonStr = builder.toString();
+
+        // Verify tenantId is serialized correctly
+        assertTrue(jsonStr.contains("\"tenant_id\":\"tenant-1\""));
+    }
+
+    @Test
+    public void toXContent_withoutTenantId_Success() throws IOException {
+        // Ensure input does not have tenantId
+        input = input.toBuilder().tenantId(null).build();
+
+        // Convert to XContent
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        input.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String jsonStr = builder.toString();
+
+        // Verify tenantId is not present
+        assertFalse(jsonStr.contains("\"tenant_id\""));
     }
 
     private void readInputStream(MLRegisterModelInput input, Consumer<MLRegisterModelInput> verify) throws IOException {

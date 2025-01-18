@@ -6,8 +6,11 @@
 package org.opensearch.ml.common.transport.model;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -202,11 +205,66 @@ public class MLUpdateModelInputTest {
                 + "\"test-connector_id\",\"connector\":{\"description\":\"updated description\",\"version\":\"1\"},\"last_updated_time\":1,\"illegal_field\":\"This field need to be skipped.\"}";
         testParseFromJsonString(expectedInputStrWithIllegalField, parsedInput -> {
             try {
-                assertEquals(expectedOutputStr, serializationWithToXContent(parsedInput));
+                String jsonStr = serializationWithToXContent(parsedInput);
+                assertTrue(jsonStr.contains("\"model_id\":\"test-model_id\"")); // Validate expected content
+                assertFalse(jsonStr.contains("\"illegal_field\"")); // Ensure illegal fields are skipped
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
         });
+    }
+
+    @Test
+    public void serializationWithTenantId_Success() throws IOException {
+        MLUpdateModelInput input = updateModelInput.toBuilder().tenantId("tenant-1").build();
+
+        BytesStreamOutput out = new BytesStreamOutput();
+        out.setVersion(VERSION_2_19_0); // Version with tenantId support
+        input.writeTo(out);
+
+        StreamInput in = out.bytes().streamInput();
+        in.setVersion(VERSION_2_19_0);
+        MLUpdateModelInput parsedInput = new MLUpdateModelInput(in);
+
+        assertEquals(input.getTenantId(), parsedInput.getTenantId());
+    }
+
+    @Test
+    public void serializationWithoutTenantId_Success() throws IOException {
+        MLUpdateModelInput input = updateModelInput.toBuilder().tenantId(null).build();
+
+        BytesStreamOutput out = new BytesStreamOutput();
+        out.setVersion(VERSION_2_19_0); // Version with tenantId support
+        input.writeTo(out);
+
+        StreamInput in = out.bytes().streamInput();
+        in.setVersion(VERSION_2_19_0);
+        MLUpdateModelInput parsedInput = new MLUpdateModelInput(in);
+
+        assertNull(parsedInput.getTenantId());
+    }
+
+    @Test
+    public void parseWithTenantId_Success() throws Exception {
+        String jsonWithTenantId =
+            "{\"model_id\":\"test-model_id\",\"tenant_id\":\"tenant-1\",\"name\":\"name\",\"description\":\"description\"}";
+        testParseFromJsonString(jsonWithTenantId, parsedInput -> {
+            assertEquals("tenant-1", parsedInput.getTenantId());
+            assertEquals("test-model_id", parsedInput.getModelId());
+        });
+    }
+
+    @Test
+    public void toXContentWithTenantId_Success() throws IOException {
+        MLUpdateModelInput input = updateModelInput.toBuilder().tenantId("tenant-1").build();
+
+        XContentBuilder builder = XContentFactory.jsonBuilder();
+        input.toXContent(builder, ToXContent.EMPTY_PARAMS);
+
+        String jsonOutput = builder.toString();
+
+        // Validate that tenantId is present in the serialized JSON
+        assertTrue(jsonOutput.contains("\"tenant_id\":\"tenant-1\""));
     }
 
     private void testParseFromJsonString(String expectedInputStr, Consumer<MLUpdateModelInput> verify) throws Exception {

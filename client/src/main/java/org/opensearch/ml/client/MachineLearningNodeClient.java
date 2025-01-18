@@ -164,8 +164,8 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     }
 
     @Override
-    public void getModel(String modelId, ActionListener<MLModel> listener) {
-        MLModelGetRequest mlModelGetRequest = MLModelGetRequest.builder().modelId(modelId).build();
+    public void getModel(String modelId, String tenantId, ActionListener<MLModel> listener) {
+        MLModelGetRequest mlModelGetRequest = MLModelGetRequest.builder().modelId(modelId).tenantId(tenantId).build();
 
         client.execute(MLModelGetAction.INSTANCE, mlModelGetRequest, getMlGetModelResponseActionListener(listener));
     }
@@ -178,8 +178,8 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     }
 
     @Override
-    public void deleteModel(String modelId, ActionListener<DeleteResponse> listener) {
-        MLModelDeleteRequest mlModelDeleteRequest = MLModelDeleteRequest.builder().modelId(modelId).build();
+    public void deleteModel(String modelId, String tenantId, ActionListener<DeleteResponse> listener) {
+        MLModelDeleteRequest mlModelDeleteRequest = MLModelDeleteRequest.builder().modelId(modelId).tenantId(tenantId).build();
 
         client.execute(MLModelDeleteAction.INSTANCE, mlModelDeleteRequest, ActionListener.wrap(listener::onResponse, listener::onFailure));
     }
@@ -257,17 +257,6 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     public void createConnector(MLCreateConnectorInput mlCreateConnectorInput, ActionListener<MLCreateConnectorResponse> listener) {
         MLCreateConnectorRequest createConnectorRequest = new MLCreateConnectorRequest(mlCreateConnectorInput);
         client.execute(MLCreateConnectorAction.INSTANCE, createConnectorRequest, getMlCreateConnectorResponseActionListener(listener));
-    }
-
-    @Override
-    public void deleteConnector(String connectorId, ActionListener<DeleteResponse> listener) {
-        MLConnectorDeleteRequest connectorDeleteRequest = new MLConnectorDeleteRequest(connectorId);
-        client
-            .execute(
-                MLConnectorDeleteAction.INSTANCE,
-                connectorDeleteRequest,
-                ActionListener.wrap(listener::onResponse, listener::onFailure)
-            );
     }
 
     @Override

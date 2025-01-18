@@ -64,7 +64,9 @@ public class TransportRegisterModelMetaAction extends HandledTransportAction<Act
         MLRegisterModelMetaInput mlUploadInput = registerModelMetaRequest.getMlRegisterModelMetaInput();
 
         if (StringUtils.isEmpty(mlUploadInput.getModelGroupId())) {
-            mlModelGroupManager.validateUniqueModelGroupName(mlUploadInput.getName(), ActionListener.wrap(modelGroups -> {
+
+            // Local models are out of scope for multi-tenancy. Therefore, null is used as the default tenant for single tenancy.
+            mlModelGroupManager.validateUniqueModelGroupName(mlUploadInput.getName(), null, ActionListener.wrap(modelGroups -> {
                 if (modelGroups != null
                     && modelGroups.getHits().getTotalHits() != null
                     && modelGroups.getHits().getTotalHits().value != 0) {

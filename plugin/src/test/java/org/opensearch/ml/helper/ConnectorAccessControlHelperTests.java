@@ -12,8 +12,6 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
-import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_THREAD_POOL_PREFIX;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
 import static org.opensearch.ml.task.MLPredictTaskRunnerTests.USER_STRING;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
@@ -22,26 +20,18 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
-import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
-import org.opensearch.action.LatchedActionListener;
-import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
-import org.opensearch.action.support.PlainActionFuture;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
-import org.opensearch.common.unit.TimeValue;
-import org.opensearch.common.util.concurrent.OpenSearchExecutors;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.ConfigConstants;
@@ -67,8 +57,6 @@ import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchTestCase;
-import org.opensearch.threadpool.ScalingExecutorBuilder;
-import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
 
 import com.google.common.collect.ImmutableList;
@@ -106,17 +94,6 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
     @Mock
     MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
-    private static TestThreadPool testThreadPool = new TestThreadPool(
-        ConnectorAccessControlHelperTests.class.getName(),
-        new ScalingExecutorBuilder(
-            GENERAL_THREAD_POOL,
-            1,
-            Math.max(1, OpenSearchExecutors.allocatedProcessors(Settings.EMPTY) - 1),
-            TimeValue.timeValueMinutes(1),
-            ML_THREAD_POOL_PREFIX + GENERAL_THREAD_POOL
-        )
-    );
-
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
@@ -138,12 +115,6 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
 
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
-        when(threadPool.executor(any())).thenReturn(testThreadPool.executor(GENERAL_THREAD_POOL));
-    }
-
-    @AfterClass
-    public static void cleanup() {
-        ThreadPool.terminate(testThreadPool, 500, TimeUnit.MILLISECONDS);
     }
 
     @Test
@@ -442,12 +413,12 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
         GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(CommonValue.ML_CONNECTOR_INDEX).id("connectorId").build();
         GetResponse getResponse = prepareConnector();
 
-        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
-        future.onResponse(getResponse);
-        when(client.get(any(GetRequest.class))).thenReturn(future);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
 
-        CountDownLatch latch = new CountDownLatch(1);
-        LatchedActionListener<Connector> latchedActionListener = new LatchedActionListener<>(getConnectorActionListener, latch);
         connectorAccessControlHelper
             .getConnector(
                 sdkClient,
@@ -455,25 +426,27 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
                 client.threadPool().getThreadContext().newStoredContext(true),
                 getRequest,
                 "connectorId",
-                latchedActionListener
+                getConnectorActionListener
             );
-        latch.await(500, TimeUnit.MILLISECONDS);
+        ArgumentCaptor<Connector> argumentCaptor = ArgumentCaptor.forClass(Connector.class);
+        verify(getConnectorActionListener).onResponse(argumentCaptor.capture());
 
-        ArgumentCaptor<GetRequest> requestCaptor = ArgumentCaptor.forClass(GetRequest.class);
-        verify(client, times(1)).get(requestCaptor.capture());
-        assertEquals(CommonValue.ML_CONNECTOR_INDEX, requestCaptor.getValue().index());
+        // Verify the captured connector
+        Connector capturedConnector = argumentCaptor.getValue();
+        assertNotNull(capturedConnector);
+        assertEquals("test_connector", capturedConnector.getName());
     }
 
     @Test
     public void testGetConnectorException() throws IOException, InterruptedException {
         GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(CommonValue.ML_CONNECTOR_INDEX).id("connectorId").build();
 
-        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
-        future.onFailure(new RuntimeException("Failed to get connector"));
-        when(client.get(any(GetRequest.class))).thenReturn(future);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException("Failed to get connector"));
+            return null;
+        }).when(client).get(any(), any());
 
-        CountDownLatch latch = new CountDownLatch(1);
-        LatchedActionListener<Connector> latchedActionListener = new LatchedActionListener<>(getConnectorActionListener, latch);
         connectorAccessControlHelper
             .getConnector(
                 sdkClient,
@@ -481,25 +454,24 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
                 client.threadPool().getThreadContext().newStoredContext(true),
                 getRequest,
                 "connectorId",
-                latchedActionListener
+                getConnectorActionListener
             );
-        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(getConnectorActionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Failed to get connector", argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to get data object from index .plugins-ml-connector", argumentCaptor.getValue().getMessage());
     }
 
     @Test
     public void testGetConnectorIndexNotFound() throws IOException, InterruptedException {
         GetDataObjectRequest getRequest = GetDataObjectRequest.builder().index(CommonValue.ML_CONNECTOR_INDEX).id("connectorId").build();
 
-        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
-        future.onFailure(new IndexNotFoundException("Index not found"));
-        when(client.get(any(GetRequest.class))).thenReturn(future);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new IndexNotFoundException("Index not found"));
+            return null;
+        }).when(client).get(any(), any());
 
-        CountDownLatch latch = new CountDownLatch(1);
-        LatchedActionListener<Connector> latchedActionListener = new LatchedActionListener<>(getConnectorActionListener, latch);
         connectorAccessControlHelper
             .getConnector(
                 sdkClient,
@@ -507,9 +479,8 @@ public class ConnectorAccessControlHelperTests extends OpenSearchTestCase {
                 client.threadPool().getThreadContext().newStoredContext(true),
                 getRequest,
                 "connectorId",
-                latchedActionListener
+                getConnectorActionListener
             );
-        latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<OpenSearchStatusException> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(getConnectorActionListener).onFailure(argumentCaptor.capture());

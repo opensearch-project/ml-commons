@@ -9,6 +9,7 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
 import static org.opensearch.ml.utils.RestActionUtils.getParameterId;
+import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
 import java.io.IOException;
 import java.util.List;
@@ -22,6 +23,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.transport.model.MLUpdateModelAction;
 import org.opensearch.ml.common.transport.model.MLUpdateModelInput;
 import org.opensearch.ml.common.transport.model.MLUpdateModelRequest;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
@@ -31,6 +33,11 @@ import com.google.common.collect.ImmutableList;
 public class RestMLUpdateModelAction extends BaseRestHandler {
 
     private static final String ML_UPDATE_MODEL_ACTION = "ml_update_model_action";
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
+    public RestMLUpdateModelAction(MLFeatureEnabledSetting mlFeatureEnabledSetting) {
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+    }
 
     @Override
     public String getName() {
@@ -61,6 +68,7 @@ public class RestMLUpdateModelAction extends BaseRestHandler {
         }
 
         String modelId = getParameterId(request, PARAMETER_MODEL_ID);
+        String tenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
 
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
@@ -76,6 +84,7 @@ public class RestMLUpdateModelAction extends BaseRestHandler {
             input.setModelId(modelId);
             input.setVersion(null);
             input.setUpdatedConnector(null);
+            input.setTenantId(tenantId);
             return new MLUpdateModelRequest(input);
         } catch (IllegalStateException e) {
             throw new OpenSearchParseException(e.getMessage());

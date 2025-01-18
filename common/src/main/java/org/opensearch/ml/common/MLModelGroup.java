@@ -6,6 +6,8 @@
 package org.opensearch.ml.common;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -13,6 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
+import org.opensearch.Version;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -51,6 +54,7 @@ public class MLModelGroup implements ToXContentObject {
 
     private Instant createdTime;
     private Instant lastUpdatedTime;
+    private String tenantId;
 
     @Builder(toBuilder = true)
     public MLModelGroup(
@@ -62,7 +66,8 @@ public class MLModelGroup implements ToXContentObject {
         String access,
         String modelGroupId,
         Instant createdTime,
-        Instant lastUpdatedTime
+        Instant lastUpdatedTime,
+        String tenantId
     ) {
         this.name = Objects.requireNonNull(name, "model group name must not be null");
         this.description = description;
@@ -73,9 +78,11 @@ public class MLModelGroup implements ToXContentObject {
         this.modelGroupId = modelGroupId;
         this.createdTime = createdTime;
         this.lastUpdatedTime = lastUpdatedTime;
+        this.tenantId = tenantId;
     }
 
     public MLModelGroup(StreamInput input) throws IOException {
+        Version streamInputVersion = input.getVersion();
         name = input.readString();
         description = input.readOptionalString();
         latestVersion = input.readInt();
@@ -91,9 +98,11 @@ public class MLModelGroup implements ToXContentObject {
         modelGroupId = input.readOptionalString();
         createdTime = input.readOptionalInstant();
         lastUpdatedTime = input.readOptionalInstant();
+        this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
     }
 
     public void writeTo(StreamOutput out) throws IOException {
+        Version streamOutputVersion = out.getVersion();
         out.writeString(name);
         out.writeOptionalString(description);
         out.writeInt(latestVersion);
@@ -113,6 +122,9 @@ public class MLModelGroup implements ToXContentObject {
         out.writeOptionalString(modelGroupId);
         out.writeOptionalInstant(createdTime);
         out.writeOptionalInstant(lastUpdatedTime);
+        if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
+            out.writeOptionalString(tenantId);
+        }
     }
 
     @Override
@@ -141,6 +153,9 @@ public class MLModelGroup implements ToXContentObject {
         if (lastUpdatedTime != null) {
             builder.field(LAST_UPDATED_TIME_FIELD, lastUpdatedTime.toEpochMilli());
         }
+        if (tenantId != null) {
+            builder.field(TENANT_ID_FIELD, tenantId);
+        }
         builder.endObject();
         return builder;
     }
@@ -155,6 +170,7 @@ public class MLModelGroup implements ToXContentObject {
         String modelGroupId = null;
         Instant createdTime = null;
         Instant lastUpdateTime = null;
+        String tenantId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -193,6 +209,9 @@ public class MLModelGroup implements ToXContentObject {
                 case LAST_UPDATED_TIME_FIELD:
                     lastUpdateTime = Instant.ofEpochMilli(parser.longValue());
                     break;
+                case TENANT_ID_FIELD:
+                    tenantId = parser.textOrNull();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -209,11 +228,11 @@ public class MLModelGroup implements ToXContentObject {
             .modelGroupId(modelGroupId)
             .createdTime(createdTime)
             .lastUpdatedTime(lastUpdateTime)
+            .tenantId(tenantId)
             .build();
     }
 
     public static MLModelGroup fromStream(StreamInput in) throws IOException {
-        MLModelGroup mlModel = new MLModelGroup(in);
-        return mlModel;
+        return new MLModelGroup(in);
     }
 }

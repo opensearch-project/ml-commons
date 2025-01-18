@@ -34,7 +34,8 @@ public class RegisterModelGroupITTests extends MLCommonsIntegTestCase {
             "mock_model_group_desc",
             null,
             AccessMode.PUBLIC,
-            false
+            false,
+            null
         );
         MLRegisterModelGroupRequest createModelGroupRequest = new MLRegisterModelGroupRequest(input);
         client().execute(MLRegisterModelGroupAction.INSTANCE, createModelGroupRequest).actionGet();
@@ -47,14 +48,22 @@ public class RegisterModelGroupITTests extends MLCommonsIntegTestCase {
             "mock_model_group_desc",
             null,
             AccessMode.PRIVATE,
-            false
+            false,
+            null
         );
         MLRegisterModelGroupRequest createModelGroupRequest = new MLRegisterModelGroupRequest(input);
         client().execute(MLRegisterModelGroupAction.INSTANCE, createModelGroupRequest).actionGet();
     }
 
     public void test_register_model_group_without_access_fields() {
-        MLRegisterModelGroupInput input = new MLRegisterModelGroupInput("mock_model_group_name", "mock_model_group_desc", null, null, null);
+        MLRegisterModelGroupInput input = new MLRegisterModelGroupInput(
+            "mock_model_group_name",
+            "mock_model_group_desc",
+            null,
+            null,
+            null,
+            null
+        );
         MLRegisterModelGroupRequest createModelGroupRequest = new MLRegisterModelGroupRequest(input);
         client().execute(MLRegisterModelGroupAction.INSTANCE, createModelGroupRequest).actionGet();
     }
@@ -66,7 +75,8 @@ public class RegisterModelGroupITTests extends MLCommonsIntegTestCase {
             "mock_model_group_desc",
             null,
             AccessMode.RESTRICTED,
-            true
+            true,
+            null
         );
         MLRegisterModelGroupRequest createModelGroupRequest = new MLRegisterModelGroupRequest(input);
         client().execute(MLRegisterModelGroupAction.INSTANCE, createModelGroupRequest).actionGet();
@@ -79,6 +89,7 @@ public class RegisterModelGroupITTests extends MLCommonsIntegTestCase {
             "mock_model_group_desc",
             ImmutableList.of("role-1"),
             AccessMode.RESTRICTED,
+            null,
             null
         );
         MLRegisterModelGroupRequest createModelGroupRequest = new MLRegisterModelGroupRequest(input);

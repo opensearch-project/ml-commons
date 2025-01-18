@@ -190,7 +190,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                     connectorClientConfig = ConnectorClientConfig.parse(parser);
                     break;
                 case TENANT_ID_FIELD:
-                    tenantId = parser.text();
+                    tenantId = parser.textOrNull();
                     break;
                 default:
                     parser.skipChildren();

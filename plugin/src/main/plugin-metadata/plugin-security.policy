@@ -30,4 +30,7 @@ grant {
 
     // aws credential file access
     permission java.io.FilePermission "<<ALL FILES>>", "read";
+
+    // AWS credentials needed for clients
+    permission java.io.FilePermission "${user.home}/.aws/-", "read";
 };

@@ -10,6 +10,7 @@ import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 
 import com.google.common.collect.ImmutableList;
 
@@ -19,9 +20,12 @@ import com.google.common.collect.ImmutableList;
 public class RestMLSearchModelGroupAction extends AbstractMLSearchAction<MLModelGroup> {
     private static final String ML_SEARCH_MODEL_GROUP_ACTION = "ml_search_model_group_action";
     private static final String SEARCH_MODEL_GROUP_PATH = ML_BASE_URI + "/model_groups/_search";
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
-    public RestMLSearchModelGroupAction() {
+    public RestMLSearchModelGroupAction(MLFeatureEnabledSetting mlFeatureEnabledSetting) {
         super(ImmutableList.of(SEARCH_MODEL_GROUP_PATH), ML_MODEL_GROUP_INDEX, MLModelGroup.class, MLModelGroupSearchAction.INSTANCE);
+
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override

@@ -11,11 +11,14 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -25,6 +28,8 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.client.node.NodeClient;
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
@@ -34,6 +39,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupAction;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupRequest;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
@@ -53,6 +59,13 @@ public class RestMLUpdateModelGroupActionTests extends OpenSearchTestCase {
     private ThreadPool threadPool;
 
     @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
+    @Mock
+    private ClusterService clusterService;
+    Settings settings;
+
+    @Mock
     RestChannel channel;
 
     @Before
@@ -60,7 +73,11 @@ public class RestMLUpdateModelGroupActionTests extends OpenSearchTestCase {
         MockitoAnnotations.openMocks(this);
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
-        restMLUpdateModelGroupAction = new RestMLUpdateModelGroupAction();
+        settings = Settings.builder().put(ML_COMMONS_MULTI_TENANCY_ENABLED.getKey(), false).build();
+        when(clusterService.getSettings()).thenReturn(settings);
+        when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MULTI_TENANCY_ENABLED)));
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
+        restMLUpdateModelGroupAction = new RestMLUpdateModelGroupAction(mlFeatureEnabledSetting);
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = invocation.getArgument(2);
             return null;
@@ -75,7 +92,7 @@ public class RestMLUpdateModelGroupActionTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        RestMLUpdateModelGroupAction UpdateModelGroupAction = new RestMLUpdateModelGroupAction();
+        RestMLUpdateModelGroupAction UpdateModelGroupAction = new RestMLUpdateModelGroupAction(mlFeatureEnabledSetting);
         assertNotNull(UpdateModelGroupAction);
     }
 

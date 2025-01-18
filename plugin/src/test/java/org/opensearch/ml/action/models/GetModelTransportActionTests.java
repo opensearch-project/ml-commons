@@ -13,6 +13,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.IOException;
+import java.util.Collections;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -40,11 +41,15 @@ import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.model.MLModelGetRequest;
 import org.opensearch.ml.common.transport.model.MLModelGetResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
 public class GetModelTransportActionTests extends OpenSearchTestCase {
+
     @Mock
     ThreadPool threadPool;
 
@@ -59,6 +64,8 @@ public class GetModelTransportActionTests extends OpenSearchTestCase {
 
     @Mock
     ActionFilters actionFilters;
+
+    SdkClient sdkClient;
 
     @Mock
     ActionListener<MLModelGetResponse> actionListener;
@@ -78,21 +85,28 @@ public class GetModelTransportActionTests extends OpenSearchTestCase {
     @Mock
     private ModelAccessControlHelper modelAccessControlHelper;
 
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
         mlModelGetRequest = MLModelGetRequest.builder().modelId("test_id").build();
         settings = Settings.builder().build();
+        sdkClient = SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap());
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
 
         getModelTransportAction = spy(
             new GetModelTransportAction(
                 transportService,
                 actionFilters,
                 client,
+                sdkClient,
                 settings,
                 xContentRegistry,
                 clusterService,
-                modelAccessControlHelper
+                modelAccessControlHelper,
+                mlFeatureEnabledSetting
             )
         );
 
@@ -108,27 +122,28 @@ public class GetModelTransportActionTests extends OpenSearchTestCase {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
     }
 
-    public void testGetModel_UserHasNodeAccess() throws IOException {
+    public void testGetModel_UserHasNodeAccess() throws IOException, InterruptedException {
+        GetResponse getResponse = prepareMLModel(false);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(3);
             listener.onResponse(false);
             return null;
         }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
 
-        GetResponse getResponse = prepareMLModel(false);
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(), any());
-
         getModelTransportAction.doExecute(null, mlModelGetRequest, actionListener);
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("User doesn't have privilege to perform this operation on this model", argumentCaptor.getValue().getMessage());
     }
 
-    public void testGetModel_Success() throws IOException {
+    public void testGetModel_Success() throws IOException, InterruptedException {
         GetResponse getResponse = prepareMLModel(false);
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
@@ -137,23 +152,28 @@ public class GetModelTransportActionTests extends OpenSearchTestCase {
         }).when(client).get(any(), any());
 
         getModelTransportAction.doExecute(null, mlModelGetRequest, actionListener);
-        verify(actionListener).onResponse(any(MLModelGetResponse.class));
+
+        ArgumentCaptor<MLModelGetResponse> argumentCaptor = ArgumentCaptor.forClass(MLModelGetResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
     }
 
-    public void testGetModelHidden_Success() throws IOException {
+    public void testGetModelHidden_Success() throws IOException, InterruptedException {
         GetResponse getResponse = prepareMLModel(true);
-        mlModelGetRequest = MLModelGetRequest.builder().modelId("test_id").isUserInitiatedGetRequest(true).build();
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
             listener.onResponse(getResponse);
             return null;
         }).when(client).get(any(), any());
+
         doReturn(true).when(getModelTransportAction).isSuperAdminUserWrapper(clusterService, client);
+
         getModelTransportAction.doExecute(null, mlModelGetRequest, actionListener);
-        verify(actionListener).onResponse(any(MLModelGetResponse.class));
+
+        ArgumentCaptor<MLModelGetResponse> argumentCaptor = ArgumentCaptor.forClass(MLModelGetResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
     }
 
-    public void testGetModelHidden_SuperUserPermissionError() throws IOException {
+    public void testGetModelHidden_SuperUserPermissionError() throws IOException, InterruptedException {
         GetResponse getResponse = prepareMLModel(true);
         mlModelGetRequest = MLModelGetRequest.builder().modelId("test_id").isUserInitiatedGetRequest(true).build();
         doAnswer(invocation -> {
@@ -161,14 +181,17 @@ public class GetModelTransportActionTests extends OpenSearchTestCase {
             listener.onResponse(getResponse);
             return null;
         }).when(client).get(any(), any());
+
         doReturn(false).when(getModelTransportAction).isSuperAdminUserWrapper(clusterService, client);
+
         getModelTransportAction.doExecute(null, mlModelGetRequest, actionListener);
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("User doesn't have privilege to perform this operation on this model", argumentCaptor.getValue().getMessage());
     }
 
-    public void testGetModel_ValidateAccessFailed() throws IOException {
+    public void testGetModel_ValidateAccessFailed() throws IOException, InterruptedException {
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(3);
             listener.onFailure(new Exception("Failed to validate access"));
@@ -183,6 +206,7 @@ public class GetModelTransportActionTests extends OpenSearchTestCase {
         }).when(client).get(any(), any());
 
         getModelTransportAction.doExecute(null, mlModelGetRequest, actionListener);
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to validate access", argumentCaptor.getValue().getMessage());
@@ -194,19 +218,23 @@ public class GetModelTransportActionTests extends OpenSearchTestCase {
             listener.onResponse(null);
             return null;
         }).when(client).get(any(), any());
+
         getModelTransportAction.doExecute(null, mlModelGetRequest, actionListener);
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to find model with the provided model id: test_id", argumentCaptor.getValue().getMessage());
     }
 
-    public void testGetModel_IndexNotFoundException() {
+    public void testGetModel_IndexNotFoundException() throws InterruptedException {
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
             listener.onFailure(new IndexNotFoundException("Fail to find model"));
             return null;
         }).when(client).get(any(), any());
+
         getModelTransportAction.doExecute(null, mlModelGetRequest, actionListener);
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Fail to find model", argumentCaptor.getValue().getMessage());
@@ -218,10 +246,12 @@ public class GetModelTransportActionTests extends OpenSearchTestCase {
             listener.onFailure(new RuntimeException("errorMessage"));
             return null;
         }).when(client).get(any(), any());
+
         getModelTransportAction.doExecute(null, mlModelGetRequest, actionListener);
+
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("errorMessage", argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to get data object from index .plugins-ml-model", argumentCaptor.getValue().getMessage());
     }
 
     public GetResponse prepareMLModel(boolean isHidden) throws IOException {
@@ -235,7 +265,6 @@ public class GetModelTransportActionTests extends OpenSearchTestCase {
         XContentBuilder content = mlModel.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
         BytesReference bytesReference = BytesReference.bytes(content);
         GetResult getResult = new GetResult("indexName", "111", 111l, 111l, 111l, true, bytesReference, null, null);
-        GetResponse getResponse = new GetResponse(getResult);
-        return getResponse;
+        return new GetResponse(getResult);
     }
 }

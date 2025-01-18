@@ -144,7 +144,7 @@ public class HttpConnector extends AbstractConnector {
                     connectorClientConfig = ConnectorClientConfig.parse(parser);
                     break;
                 case TENANT_ID_FIELD:
-                    tenantId = parser.text();
+                    tenantId = parser.textOrNull();
                     break;
                 default:
                     parser.skipChildren();

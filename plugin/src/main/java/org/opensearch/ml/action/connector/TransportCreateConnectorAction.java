@@ -6,7 +6,6 @@
 package org.opensearch.ml.action.connector;
 
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
-import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 
 import java.io.IOException;
@@ -153,8 +152,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                             .tenantId(connector.getTenantId())
                             .index(ML_CONNECTOR_INDEX)
                             .dataObject(connector)
-                            .build(),
-                        client.threadPool().executor(GENERAL_THREAD_POOL)
+                            .build()
                     )
                     .whenComplete((r, throwable) -> {
                         context.restore();

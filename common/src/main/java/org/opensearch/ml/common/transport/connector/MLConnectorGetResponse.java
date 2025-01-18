@@ -21,7 +21,9 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.connector.Connector;
 
 import lombok.Builder;
+import lombok.Getter;
 
+@Getter
 public class MLConnectorGetResponse extends ActionResponse implements ToXContentObject {
     Connector mlConnector;
 
@@ -33,10 +35,6 @@ public class MLConnectorGetResponse extends ActionResponse implements ToXContent
     public MLConnectorGetResponse(StreamInput in) throws IOException {
         super(in);
         mlConnector = Connector.fromStream(in);
-    }
-
-    public Connector getMlConnector() {
-        return mlConnector;
     }
 
     @Override
