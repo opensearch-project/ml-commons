@@ -180,7 +180,7 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
     }
 
     private void handleSearchFailure(String connectorId, String tenantId, Exception cause, ActionListener<DeleteResponse> actionListener) {
-        if (cause instanceof IndexNotFoundException) {
+        if (cause instanceof IndexNotFoundException || cause.getCause() instanceof IndexNotFoundException) {
             deleteConnector(connectorId, tenantId, actionListener);
             return;
         }
