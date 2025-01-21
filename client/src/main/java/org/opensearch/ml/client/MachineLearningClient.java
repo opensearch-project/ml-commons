@@ -142,7 +142,18 @@ public interface MachineLearningClient {
      * @param modelId id of the model
      * @param listener action listener
      */
-    void getModel(String modelId, ActionListener<MLModel> listener);
+    default void getModel(String modelId, ActionListener<MLModel> listener) {
+        getModel(modelId, null, listener);
+    }
+
+    /**
+     * Get MLModel and return model in listener
+     * For more info on get model, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#get-model-information
+     * @param modelId id of the model
+     * @param tenantId id of the tenant
+     * @param listener action listener
+     */
+    void getModel(String modelId, String tenantId, ActionListener<MLModel> listener);
 
     /**
      * Get MLTask and return ActionFuture.
@@ -182,7 +193,18 @@ public interface MachineLearningClient {
      * @param modelId id of the model
      * @param listener action listener
      */
-    void deleteModel(String modelId, ActionListener<DeleteResponse> listener);
+    default void deleteModel(String modelId, ActionListener<DeleteResponse> listener) {
+        deleteModel(modelId, null, listener);
+    }
+
+    /**
+     * Delete MLModel
+     * For more info on delete model, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#delete-model
+     * @param modelId id of the model
+     * @param tenantId the tenant id. This is necessary for multi-tenancy.
+     * @param listener action listener
+     */
+    void deleteModel(String modelId, String tenantId, ActionListener<DeleteResponse> listener);
 
     /**
      *  Delete the task with taskId.
@@ -323,18 +345,9 @@ public interface MachineLearningClient {
         return actionFuture;
     }
 
-    /**
-     * Delete connector for remote model
-     * @param connectorId The id of the connector to delete
-     * @return the result future
-     */
-    default ActionFuture<DeleteResponse> deleteConnector(String connectorId, String tenantId) {
-        PlainActionFuture<DeleteResponse> actionFuture = PlainActionFuture.newFuture();
-        deleteConnector(connectorId, tenantId, actionFuture);
-        return actionFuture;
+    default void deleteConnector(String connectorId, ActionListener<DeleteResponse> listener) {
+        deleteConnector(connectorId, null, listener);
     }
-
-    void deleteConnector(String connectorId, ActionListener<DeleteResponse> listener);
 
     void deleteConnector(String connectorId, String tenantId, ActionListener<DeleteResponse> listener);
 

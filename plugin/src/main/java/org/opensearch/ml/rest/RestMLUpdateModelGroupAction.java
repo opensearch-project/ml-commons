@@ -9,6 +9,7 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_GROUP_ID;
 import static org.opensearch.ml.utils.RestActionUtils.getParameterId;
+import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
 import java.io.IOException;
 import java.util.List;
@@ -19,6 +20,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupAction;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupRequest;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
@@ -28,6 +30,15 @@ import com.google.common.collect.ImmutableList;
 public class RestMLUpdateModelGroupAction extends BaseRestHandler {
 
     private static final String ML_UPDATE_MODEL_GROUP_ACTION = "ml_update_model_group_action";
+
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
+    /**
+     * Constructor
+     */
+    public RestMLUpdateModelGroupAction(MLFeatureEnabledSetting mlFeatureEnabledSetting) {
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+    }
 
     @Override
     public String getName() {
@@ -50,6 +61,7 @@ public class RestMLUpdateModelGroupAction extends BaseRestHandler {
 
     private MLUpdateModelGroupRequest getRequest(RestRequest request) throws IOException {
         String modelGroupID = getParameterId(request, PARAMETER_MODEL_GROUP_ID);
+        String tenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
         boolean hasContent = request.hasContent();
         if (!hasContent) {
             throw new IOException("Model group request has empty body");
@@ -58,6 +70,7 @@ public class RestMLUpdateModelGroupAction extends BaseRestHandler {
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
         MLUpdateModelGroupInput input = MLUpdateModelGroupInput.parse(parser);
         input.setModelGroupID(modelGroupID);
+        input.setTenantId(tenantId);
         return new MLUpdateModelGroupRequest(input);
     }
 

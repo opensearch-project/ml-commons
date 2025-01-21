@@ -7,6 +7,7 @@ package org.opensearch.ml.rest;
 
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_GROUP_ID;
+import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
 import java.io.IOException;
 import java.util.List;
@@ -15,6 +16,7 @@ import java.util.Locale;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteRequest;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
@@ -26,8 +28,11 @@ import com.google.common.collect.ImmutableList;
  */
 public class RestMLDeleteModelGroupAction extends BaseRestHandler {
     private static final String ML_DELETE_MODEL_GROUP_ACTION = "ml_delete_model_group_action";
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
-    public void RestMLDeleteModelGroupAction() {}
+    public RestMLDeleteModelGroupAction(MLFeatureEnabledSetting mlFeatureEnabledSetting) {
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+    }
 
     @Override
     public String getName() {
@@ -48,8 +53,8 @@ public class RestMLDeleteModelGroupAction extends BaseRestHandler {
     @Override
     protected RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
         String modelGroupId = request.param(PARAMETER_MODEL_GROUP_ID);
-
-        MLModelGroupDeleteRequest mlModelGroupDeleteRequest = new MLModelGroupDeleteRequest(modelGroupId);
+        String tenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
+        MLModelGroupDeleteRequest mlModelGroupDeleteRequest = new MLModelGroupDeleteRequest(modelGroupId, tenantId);
         return channel -> client
             .execute(MLModelGroupDeleteAction.INSTANCE, mlModelGroupDeleteRequest, new RestToXContentListener<>(channel));
     }

@@ -325,4 +325,86 @@ public class HttpConnectorTest {
         return connector;
     }
 
+    @Test
+    public void writeToAndReadFrom_WithTenantId() throws IOException {
+        HttpConnector originalConnector = HttpConnector
+            .builder()
+            .name("test_connector_name")
+            .description("this is a test connector")
+            .protocol("http")
+            .tenantId("test_tenant")
+            .build();
+
+        BytesStreamOutput output = new BytesStreamOutput();
+        originalConnector.writeTo(output);
+
+        HttpConnector deserializedConnector = new HttpConnector(output.bytes().streamInput());
+        Assert.assertEquals("test_tenant", deserializedConnector.getTenantId());
+        Assert.assertEquals(originalConnector, deserializedConnector);
+    }
+
+    @Test
+    public void writeToAndReadFrom_WithoutTenantId() throws IOException {
+        HttpConnector originalConnector = HttpConnector
+            .builder()
+            .name("test_connector_name")
+            .description("this is a test connector")
+            .protocol("http")
+            .build();
+
+        BytesStreamOutput output = new BytesStreamOutput();
+        originalConnector.writeTo(output);
+
+        HttpConnector deserializedConnector = new HttpConnector(output.bytes().streamInput());
+        Assert.assertNull(deserializedConnector.getTenantId());
+        Assert.assertEquals(originalConnector, deserializedConnector);
+    }
+
+    @Test
+    public void toXContent_WithTenantId() throws IOException {
+        HttpConnector connector = HttpConnector
+            .builder()
+            .name("test_connector_name")
+            .description("this is a test connector")
+            .protocol("http")
+            .tenantId("test_tenant")
+            .build();
+
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        connector.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String content = TestHelper.xContentBuilderToString(builder);
+
+        Assert.assertTrue(content.contains("\"tenant_id\":\"test_tenant\""));
+    }
+
+    @Test
+    public void constructor_WithTenantId() {
+        HttpConnector connector = HttpConnector
+            .builder()
+            .name("test_connector_name")
+            .description("this is a test connector")
+            .protocol("http")
+            .tenantId("test_tenant")
+            .build();
+
+        Assert.assertEquals("test_tenant", connector.getTenantId());
+    }
+
+    @Test
+    public void parse_WithTenantId() throws IOException {
+        String jsonStr = "{\"name\":\"test_connector_name\",\"protocol\":\"http\",\"tenant_id\":\"test_tenant\"}";
+
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
+        parser.nextToken();
+
+        HttpConnector connector = new HttpConnector("http", parser);
+        Assert.assertEquals("test_tenant", connector.getTenantId());
+    }
+
 }

@@ -10,6 +10,7 @@ import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.utils.MLExceptionUtils.REMOTE_INFERENCE_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_CONNECTOR_ID;
 import static org.opensearch.ml.utils.RestActionUtils.getParameterId;
+import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
 import java.io.IOException;
 import java.util.List;
@@ -65,11 +66,12 @@ public class RestMLUpdateConnectorAction extends BaseRestHandler {
         }
 
         String connectorId = getParameterId(request, PARAMETER_CONNECTOR_ID);
+        String tenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
 
         try {
             XContentParser parser = request.contentParser();
             ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-            return MLUpdateConnectorRequest.parse(parser, connectorId);
+            return MLUpdateConnectorRequest.parse(parser, connectorId, tenantId);
         } catch (IllegalStateException illegalStateException) {
             throw new OpenSearchParseException(illegalStateException.getMessage());
         }
