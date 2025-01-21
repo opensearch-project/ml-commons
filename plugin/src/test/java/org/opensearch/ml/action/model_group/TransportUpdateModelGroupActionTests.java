@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import org.apache.lucene.search.TotalHits;
@@ -49,7 +50,10 @@ import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupRequest;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TestHelper;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.tasks.Task;
@@ -76,6 +80,9 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
 
     @Mock
     private Client client;
+
+    SdkClient sdkClient;
+
     @Mock
     private ActionFilters actionFilters;
 
@@ -97,6 +104,9 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
     @Mock
     private MLModelGroupManager mlModelGroupManager;
 
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     private String ownerString = "bob|IT,HR|myTenant";
     private List<String> backendRoles = Arrays.asList("IT");
 
@@ -104,15 +114,18 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
         Settings settings = Settings.builder().build();
+        sdkClient = SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap());
         threadContext = new ThreadContext(settings);
         transportUpdateModelGroupAction = new TransportUpdateModelGroupAction(
             transportService,
             actionFilters,
             client,
+            sdkClient,
             xContentRegistry,
             clusterService,
             modelAccessControlHelper,
-            mlModelGroupManager
+            mlModelGroupManager,
+            mlFeatureEnabledSetting
         );
         assertNotNull(transportUpdateModelGroupAction);
 
@@ -143,10 +156,10 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
 
         SearchResponse searchResponse = createModelGroupSearchResponse(0);
         doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onResponse(searchResponse);
             return null;
-        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any());
+        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any(), any());
 
         when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(true);
         when(client.threadPool()).thenReturn(threadPool);
@@ -351,7 +364,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Failed to find model group", argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to get data object from index .plugins-ml-model-group", argumentCaptor.getValue().getMessage());
     }
 
     public void test_FailedToGetModelGroupException() {
@@ -365,7 +378,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Failed to get model group", argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to get data object from index .plugins-ml-model-group", argumentCaptor.getValue().getMessage());
     }
 
     public void test_ModelGroupIndexNotFoundException() {
@@ -379,7 +392,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Fail to find model group", argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to find model group", argumentCaptor.getValue().getMessage());
     }
 
     public void test_FailedToUpdatetModelGroupException() {
@@ -413,10 +426,10 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
 
         SearchResponse searchResponse = createModelGroupSearchResponse(1);
         doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onResponse(searchResponse);
             return null;
-        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any());
+        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any(), any());
 
         MLUpdateModelGroupRequest actionRequest = prepareRequest(null, null, null);
         transportUpdateModelGroupAction.doExecute(task, actionRequest, actionListener);

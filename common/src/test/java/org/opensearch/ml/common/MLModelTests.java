@@ -136,4 +136,45 @@ public class MLModelTests {
         assertEquals(mlModel.getChunkNumber(), parsedMLModel.getChunkNumber());
         assertEquals(mlModel.getTotalChunks(), parsedMLModel.getTotalChunks());
     }
+
+    @Test
+    public void toXContent_WithTenantId() throws IOException {
+        MLModel mlModel = MLModel
+            .builder()
+            .algorithm(FunctionName.KMEANS)
+            .name("model_name")
+            .version("1.0.0")
+            .content("test_content")
+            .isHidden(true)
+            .tenantId("test_tenant")
+            .build();
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        mlModel.toXContent(builder, EMPTY_PARAMS);
+        String mlModelContent = TestHelper.xContentBuilderToString(builder);
+        assertEquals(
+            "{\"name\":\"model_name\",\"algorithm\":\"KMEANS\",\"model_version\":\"1.0.0\",\"model_content\":\"test_content\",\"is_hidden\":true,\"tenant_id\":\"test_tenant\"}",
+            mlModelContent
+        );
+    }
+
+    @Test
+    public void parse_WithTenantId() throws IOException {
+        String modelJson = "{"
+                + "\"name\": \"model_name\","
+                + "\"algorithm\": \"KMEANS\","
+                + "\"model_version\": \"1.0.0\","
+                + "\"model_content\": \"test_content\","
+                + "\"is_hidden\": true,"
+                + "\"tenant_id\": \"test_tenant\""
+                + "}";
+        TestHelper.testParseFromString(config, modelJson, function);
+    }
+
+
+    @Test
+    public void toBuilder_WithTenantId() {
+        MLModel mlModelWithTenantId = mlModel.toBuilder().tenantId("test_tenant").build();
+        assertEquals("test_tenant", mlModelWithTenantId.getTenantId());
+    }
+
 }
