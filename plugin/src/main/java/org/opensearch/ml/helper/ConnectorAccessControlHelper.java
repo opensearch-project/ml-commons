@@ -10,11 +10,11 @@ package org.opensearch.ml.helper;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
-import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
 import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
 import org.apache.lucene.search.join.ScoreMode;
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
@@ -85,7 +85,7 @@ public class ConnectorAccessControlHelper {
                 wrappedListener.onResponse(hasPermission);
             }, wrappedListener::onFailure));
         } catch (Exception e) {
-            log.error("Failed to validate Access for connector:" + connectorId, e);
+            log.error("Failed to validate Access for connector:{}", connectorId, e);
             listener.onFailure(e);
         }
     }
@@ -150,7 +150,7 @@ public class ConnectorAccessControlHelper {
                     Connector connector = Connector.createConnector(parser);
                     listener.onResponse(connector);
                 } catch (Exception e) {
-                    log.error("Failed to parse connector:" + connectorId);
+                    log.error("Failed to parse connector:{}", connectorId);
                     listener.onFailure(e);
                 }
             } else {
@@ -180,50 +180,48 @@ public class ConnectorAccessControlHelper {
         ActionListener<Connector> listener
     ) {
 
-        sdkClient
-            .getDataObjectAsync(getDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
-            .whenComplete((r, throwable) -> {
-                context.restore();
-                log.debug("Completed Get Connector Request, id:{}", connectorId);
-                if (throwable != null) {
-                    Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                    if (cause instanceof IndexNotFoundException) {
-                        log.error("Failed to get connector index", cause);
-                        listener.onFailure(new OpenSearchStatusException("Failed to find connector", RestStatus.NOT_FOUND));
-                    } else {
-                        log.error("Failed to get ML connector " + connectorId, cause);
-                        listener.onFailure(cause);
-                    }
+        sdkClient.getDataObjectAsync(getDataObjectRequest).whenComplete((r, throwable) -> {
+            context.restore();
+            log.debug("Completed Get Connector Request, id:{}", connectorId);
+            if (throwable != null) {
+                Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                if (ExceptionsHelper.unwrap(throwable, IndexNotFoundException.class) != null) {
+                    log.error("Failed to get connector index", cause);
+                    listener.onFailure(new OpenSearchStatusException("Failed to find connector", RestStatus.NOT_FOUND));
                 } else {
-                    try {
-                        GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
-                        if (gr != null && gr.isExists()) {
-                            try (
-                                XContentParser parser = jsonXContent
-                                    .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, gr.getSourceAsString())
-                            ) {
-                                ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                                Connector mlConnector = Connector.createConnector(parser);
-                                mlConnector.removeCredential();
-                                listener.onResponse(mlConnector);
-                            } catch (Exception e) {
-                                log.error("Failed to parse ml connector {}", r.id(), e);
-                                listener.onFailure(e);
-                            }
-                        } else {
-                            listener
-                                .onFailure(
-                                    new OpenSearchStatusException(
-                                        "Failed to find connector with the provided connector id: " + connectorId,
-                                        RestStatus.NOT_FOUND
-                                    )
-                                );
-                        }
-                    } catch (Exception e) {
-                        listener.onFailure(e);
-                    }
+                    log.error("Failed to get ML connector {}", connectorId, cause);
+                    listener.onFailure(cause);
                 }
-            });
+            } else {
+                try {
+                    GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
+                    if (gr != null && gr.isExists()) {
+                        try (
+                            XContentParser parser = jsonXContent
+                                .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, gr.getSourceAsString())
+                        ) {
+                            ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                            Connector mlConnector = Connector.createConnector(parser);
+                            mlConnector.removeCredential();
+                            listener.onResponse(mlConnector);
+                        } catch (Exception e) {
+                            log.error("Failed to parse ml connector {}", r.id(), e);
+                            listener.onFailure(e);
+                        }
+                    } else {
+                        listener
+                            .onFailure(
+                                new OpenSearchStatusException(
+                                    "Failed to find connector with the provided connector id: " + connectorId,
+                                    RestStatus.NOT_FOUND
+                                )
+                            );
+                    }
+                } catch (Exception e) {
+                    listener.onFailure(e);
+                }
+            }
+        });
 
     }
 
