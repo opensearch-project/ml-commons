@@ -188,11 +188,8 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                                 )
                                             );
                                     } else if (isModelNotDeployed(mlModelState)) {
-                                        if (isSafeDelete) {
-                                            checkDownstreamTaskBeforeDeleteModel(modelId, isHidden, actionListener);
-                                        } else {
-                                            deleteModel(modelId, isHidden, actionListener);
-                                        }
+                                        // We don't check downstream task for hidden model. We directly delete it.
+                                        deleteModel(modelId, isHidden, actionListener);
                                     } else {
                                         wrappedListener
                                             .onFailure(
