@@ -109,12 +109,12 @@ public class MachineLearningClientTest {
     @Mock
     MLConfigGetResponse configGetResponse;
 
-    private String modekId = "test_model_id";
+    private final String modekId = "test_model_id";
     private MLModel mlModel;
     private MLTask mlTask;
     private MLConfig mlConfig;
     private ToolMetadata toolMetadata;
-    private List<ToolMetadata> toolsList = new ArrayList<>();
+    private final List<ToolMetadata> toolsList = new ArrayList<>();
 
     @Before
     public void setUp() {
@@ -195,7 +195,17 @@ public class MachineLearningClientTest {
             }
 
             @Override
+            public void getTask(String taskId, String tenantId, ActionListener<MLTask> listener) {
+                listener.onResponse(mlTask);
+            }
+
+            @Override
             public void deleteTask(String taskId, ActionListener<DeleteResponse> listener) {
+                listener.onResponse(deleteResponse);
+            }
+
+            @Override
+            public void deleteTask(String taskId, String tenantId, ActionListener<DeleteResponse> listener) {
                 listener.onResponse(deleteResponse);
             }
 
@@ -211,6 +221,11 @@ public class MachineLearningClientTest {
 
             @Override
             public void deploy(String modelId, ActionListener<MLDeployModelResponse> listener) {
+                listener.onResponse(deployModelResponse);
+            }
+
+            @Override
+            public void deploy(String modelId, String tenantId, ActionListener<MLDeployModelResponse> listener) {
                 listener.onResponse(deployModelResponse);
             }
 
@@ -487,8 +502,8 @@ public class MachineLearningClientTest {
     @Test
     public void executeMetricsCorrelation() {
         List<float[]> inputData = new ArrayList<>(
-            Arrays
-                .asList(
+            List
+                .of(
                     new float[] {
                         0.89451003f,
                         4.2006273f,

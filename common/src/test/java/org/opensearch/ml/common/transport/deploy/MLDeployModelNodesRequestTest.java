@@ -7,8 +7,8 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -72,7 +72,7 @@ public class MLDeployModelNodesRequestTest {
             .functionName(FunctionName.LINEAR_REGRESSION)
             .state(MLTaskState.RUNNING)
             .inputType(MLInputDataType.DATA_FRAME)
-            .workerNodes(Arrays.asList("node1"))
+            .workerNodes(List.of("node1"))
             .progress(0.0f)
             .outputIndex("test_index")
             .error("test_error")
@@ -88,6 +88,7 @@ public class MLDeployModelNodesRequestTest {
         MLDeployModelInput deployModelInput = new MLDeployModelInput(
             "modelId",
             "taskId",
+            null,
             "modelContentHash",
             3,
             "coordinatingNodeId",
@@ -125,6 +126,7 @@ public class MLDeployModelNodesRequestTest {
         MLDeployModelInput deployModelInput = new MLDeployModelInput(
             "modelId",
             "taskId",
+            null,
             "modelContentHash",
             3,
             "coordinatingNodeId",
@@ -193,6 +195,7 @@ public class MLDeployModelNodesRequestTest {
         MLDeployModelInput deployModelInput = new MLDeployModelInput(
             "modelId",
             "taskId",
+            null,
             "modelContentHash",
             3,
             "coordinatingNodeId",

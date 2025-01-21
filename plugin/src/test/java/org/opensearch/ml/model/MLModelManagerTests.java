@@ -345,7 +345,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         expectedEx.expect(MLException.class);
         expectedEx.expectMessage(error);
         modelManager.registerMLModel(registerModelInput, mlTask);
-        verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
+        verify(mlTaskManager).updateMLTask(anyString(), any(), anyMap(), anyLong(), anyBoolean());
     }
 
     public void testRegisterMLModel_CircuitBreakerOpen() {
@@ -356,7 +356,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         expectedEx.expect(CircuitBreakingException.class);
         expectedEx.expectMessage("Disk Circuit Breaker is open, please check your resources!");
         modelManager.registerMLModel(registerModelInput, mlTask);
-        verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
+        verify(mlTaskManager).updateMLTask(anyString(), any(), anyMap(), anyLong(), anyBoolean());
     }
 
     public void testRegisterMLModel_InitModelIndexFailure() {
@@ -366,7 +366,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         mock_MLIndicesHandler_initModelIndex_failure(mlIndicesHandler);
 
         modelManager.registerMLModel(registerModelInput, mlTask);
-        verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
+        verify(mlTaskManager).updateMLTask(anyString(), any(), anyMap(), anyLong(), anyBoolean());
         verify(modelHelper, never()).downloadAndSplit(any(), any(), any(), any(), any(), any(), any(), any());
         verify(client, never()).index(any(), any());
     }
@@ -455,6 +455,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         verify(mlTaskManager)
             .updateMLTask(
                 eq("pretrained"),
+                any(),
                 eq(ImmutableMap.of(FUNCTION_NAME_FIELD, FunctionName.SPARSE_ENCODING)),
                 eq((long) TIMEOUT_IN_MILLIS),
                 eq(false)
@@ -488,7 +489,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         when(indexResponse.getId()).thenReturn("mockIndexId");
         modelManager.registerMLRemoteModel(sdkClient, pretrainedInput, pretrainedTask, listener);
         assertEquals(pretrainedTask.getFunctionName(), FunctionName.REMOTE);
-        verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
+        verify(mlTaskManager).updateMLTask(anyString(), any(), anyMap(), anyLong(), anyBoolean());
     }
 
     public void testRegisterMLRemoteModel_SkipMemoryCBOpen() throws IOException {
@@ -522,7 +523,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         when(indexResponse.getId()).thenReturn("mockIndexId");
         modelManager.registerMLRemoteModel(sdkClient, pretrainedInput, pretrainedTask, listener);
         assertEquals(pretrainedTask.getFunctionName(), FunctionName.REMOTE);
-        verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
+        verify(mlTaskManager).updateMLTask(anyString(), any(), anyMap(), anyLong(), anyBoolean());
     }
 
     public void testIndexRemoteModel() throws PrivilegedActionException, IOException {
@@ -552,7 +553,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         }).when(client).index(any(), any());
         modelManager.indexRemoteModel(pretrainedInput, pretrainedTask, "1.0.0");
         assertEquals(pretrainedTask.getFunctionName(), FunctionName.REMOTE);
-        verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
+        verify(mlTaskManager).updateMLTask(anyString(), any(), anyMap(), anyLong(), anyBoolean());
         verify(modelManager).deployModelAfterRegistering(any(), anyString());
 
     }

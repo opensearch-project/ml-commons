@@ -23,6 +23,7 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -74,6 +75,8 @@ import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.task.MLTaskManager;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.script.ScriptService;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
@@ -85,6 +88,7 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
 
     @Mock
     Client client;
+    SdkClient sdkClient;
 
     @Mock
     NamedXContentRegistry xContentRegistry;
@@ -135,7 +139,7 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
         mlTaskGetRequest = MLTaskGetRequest.builder().taskId("test_id").build();
-
+        sdkClient = SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap());
         Settings settings = Settings
             .builder()
             .putList(ML_COMMONS_REMOTE_JOB_STATUS_FIELD.getKey(), List.of("status", "TransformJobStatus"))
@@ -173,6 +177,7 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
                 transportService,
                 actionFilters,
                 client,
+                sdkClient,
                 xContentRegistry,
                 clusterService,
                 scriptService,
@@ -249,7 +254,7 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         getTaskTransportAction.doExecute(null, mlTaskGetRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Fail to find task", argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to find task", argumentCaptor.getValue().getMessage());
     }
 
     public void testGetTask_RuntimeException() {
@@ -261,7 +266,7 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         getTaskTransportAction.doExecute(null, mlTaskGetRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("errorMessage", argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to get data object from index .plugins-ml-task", argumentCaptor.getValue().getMessage());
     }
 
     public void testGetTask_IndexNotFoundException() {
@@ -273,7 +278,7 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         getTaskTransportAction.doExecute(null, mlTaskGetRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Fail to find task", argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to find task", argumentCaptor.getValue().getMessage());
     }
 
     @Ignore
@@ -306,10 +311,10 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         remoteJob.put("TransformJobName", "SM-offline-batch-transform13");
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onResponse(false);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
 
         GetResponse getResponse = prepareMLTask(FunctionName.REMOTE, MLTaskType.BATCH_PREDICTION, remoteJob);
 
@@ -360,6 +365,12 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         remoteJob.put("TransformJobName", "SM-offline-batch-transform13");
 
         doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(6);
+            listener.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
+
+        doAnswer(invocation -> {
             ActionListener<Connector> listener = invocation.getArgument(2);
             listener.onFailure(new ResourceNotFoundException("Failed to get connector"));
             return null;
@@ -383,6 +394,12 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         Map<String, Object> remoteJob = new HashMap<>();
         remoteJob.put("Status", "IN PROGRESS");
         remoteJob.put("TransformJobName", "SM-offline-batch-transform13");
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(6);
+            listener.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ActionListener<Connector> listener = invocation.getArgument(2);

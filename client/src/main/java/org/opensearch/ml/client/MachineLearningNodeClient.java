@@ -224,8 +224,22 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     }
 
     @Override
+    public void getTask(String taskId, String tenantId, ActionListener<MLTask> listener) {
+        MLTaskGetRequest mlTaskGetRequest = MLTaskGetRequest.builder().taskId(taskId).tenantId(tenantId).build();
+
+        client.execute(MLTaskGetAction.INSTANCE, mlTaskGetRequest, getMLTaskResponseActionListener(listener));
+    }
+
+    @Override
     public void deleteTask(String taskId, ActionListener<DeleteResponse> listener) {
         MLTaskDeleteRequest mlTaskDeleteRequest = MLTaskDeleteRequest.builder().taskId(taskId).build();
+
+        client.execute(MLTaskDeleteAction.INSTANCE, mlTaskDeleteRequest, ActionListener.wrap(listener::onResponse, listener::onFailure));
+    }
+
+    @Override
+    public void deleteTask(String taskId, String tenantId, ActionListener<DeleteResponse> listener) {
+        MLTaskDeleteRequest mlTaskDeleteRequest = MLTaskDeleteRequest.builder().taskId(taskId).tenantId(tenantId).build();
 
         client.execute(MLTaskDeleteAction.INSTANCE, mlTaskDeleteRequest, ActionListener.wrap(listener::onResponse, listener::onFailure));
     }
@@ -242,8 +256,8 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     }
 
     @Override
-    public void deploy(String modelId, ActionListener<MLDeployModelResponse> listener) {
-        MLDeployModelRequest deployModelRequest = new MLDeployModelRequest(modelId, false);
+    public void deploy(String modelId, String tenantId, ActionListener<MLDeployModelResponse> listener) {
+        MLDeployModelRequest deployModelRequest = new MLDeployModelRequest(modelId, tenantId, false);
         client.execute(MLDeployModelAction.INSTANCE, deployModelRequest, getMlDeployModelResponseActionListener(listener));
     }
 

@@ -15,9 +15,11 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -28,6 +30,7 @@ import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.opensearch.action.DocWriteResponse;
+import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
@@ -36,10 +39,13 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.index.Index;
 import org.opensearch.core.index.shard.ShardId;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 
@@ -49,10 +55,13 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
     MLTaskManager mlTaskManager;
     MLTask mlTask;
     Client client;
+    private SdkClient sdkClient;
     ThreadPool threadPool;
     ExecutorService executorService;
     ThreadContext threadContext;
     MLIndicesHandler mlIndicesHandler;
+    private NamedXContentRegistry xContentRegistry;
+    IndexResponse indexResponse;
 
     @Rule
     public ExpectedException expectedEx = ExpectedException.none();
@@ -60,6 +69,7 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
     @Before
     public void setup() {
         this.client = mock(Client.class);
+        sdkClient = SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap());
         this.threadPool = mock(ThreadPool.class);
         this.executorService = mock(ExecutorService.class);
         Settings settings = Settings.builder().build();
@@ -74,7 +84,7 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
         }).when(executorService).execute(any(Runnable.class));
 
         this.mlIndicesHandler = mock(MLIndicesHandler.class);
-        this.mlTaskManager = spy(new MLTaskManager(client, threadPool, mlIndicesHandler));
+        this.mlTaskManager = spy(new MLTaskManager(client, sdkClient, threadPool, mlIndicesHandler));
         this.mlTask = MLTask
             .builder()
             .taskId("task id")
@@ -82,6 +92,7 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
             .createTime(Instant.now())
             .state(MLTaskState.CREATED)
             .build();
+        indexResponse = new IndexResponse(new ShardId(ML_TASK_INDEX, "_na_", 0), "AGENT_ID", 1, 0, 2, true);
     }
 
     public void testAdd() {
@@ -95,11 +106,11 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
     public void testUpdateMLTaskWithNullOrEmptyMap() {
         mlTaskManager.add(mlTask);
         ActionListener<UpdateResponse> listener = mock(ActionListener.class);
-        mlTaskManager.updateMLTask(mlTask.getTaskId(), null, listener, 0, false);
+        mlTaskManager.updateMLTask(mlTask.getTaskId(), null, new HashMap<>(), listener, 0, false);
         verify(client, never()).update(any(), any());
         verify(listener, times(1)).onFailure(any());
 
-        mlTaskManager.updateMLTask(mlTask.getTaskId(), new HashMap<>(), listener, 0, false);
+        mlTaskManager.updateMLTask(mlTask.getTaskId(), null, new HashMap<>(), listener, 0, false);
         verify(client, never()).update(any(), any());
         verify(listener, times(2)).onFailure(any());
     }
@@ -107,7 +118,7 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
     public void testUpdateMLTask_NonExistingTask() {
         ActionListener<UpdateResponse> listener = mock(ActionListener.class);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        mlTaskManager.updateMLTask(mlTask.getTaskId(), null, listener, 0, false);
+        mlTaskManager.updateMLTask(mlTask.getTaskId(), null, new HashMap<>(), listener, 0, false);
         verify(client, never()).update(any(), any());
         verify(listener, times(1)).onFailure(argumentCaptor.capture());
         assertEquals("Can't find task in cache: task id", argumentCaptor.getValue().getMessage());
@@ -126,20 +137,21 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
         }).when(client).update(any(UpdateRequest.class), any());
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        mlTaskManager.updateMLTask(asyncMlTask.getTaskId(), ImmutableMap.of(MLTask.ERROR_FIELD, "test error"), ActionListener.wrap(r -> {
-            ActionListener<UpdateResponse> listener = mock(ActionListener.class);
-            mlTaskManager.updateMLTask(asyncMlTask.getTaskId(), null, listener, 0, false);
-            verify(client, times(1)).update(any(), any());
-            verify(listener, times(1)).onFailure(argumentCaptor.capture());
-            assertEquals("Other updating request not finished yet", argumentCaptor.getValue().getMessage());
-        }, e -> { assertNull(e); }), 0, false);
+        mlTaskManager
+            .updateMLTask(asyncMlTask.getTaskId(), null, ImmutableMap.of(MLTask.ERROR_FIELD, "test error"), ActionListener.wrap(r -> {
+                ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+                mlTaskManager.updateMLTask(asyncMlTask.getTaskId(), null, new HashMap<>(), listener, 0, false);
+                verify(client, times(1)).update(any(), any());
+                verify(listener, times(1)).onFailure(argumentCaptor.capture());
+                assertEquals("Other updating request not finished yet", argumentCaptor.getValue().getMessage());
+            }, Assert::assertNull), 0, false);
     }
 
     public void testUpdateMLTask_FailedToUpdate() {
         MLTask asyncMlTask = mlTask.toBuilder().async(true).build();
         mlTaskManager.add(asyncMlTask);
 
-        String errorMessage = "test error message";
+        String errorMessage = "Failed to update data object in index .plugins-ml-task";
         doAnswer(invocation -> {
             ActionListener<UpdateResponse> actionListener = invocation.getArgument(1);
             actionListener.onFailure(new RuntimeException(errorMessage));
@@ -148,7 +160,7 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         ActionListener<UpdateResponse> listener = mock(ActionListener.class);
-        mlTaskManager.updateMLTask(asyncMlTask.getTaskId(), ImmutableMap.of(MLTask.ERROR_FIELD, "test error"), listener, 0, false);
+        mlTaskManager.updateMLTask(asyncMlTask.getTaskId(), null, ImmutableMap.of(MLTask.ERROR_FIELD, "test error"), listener, 0, false);
         verify(client, times(1)).update(any(), any());
         verify(listener, times(1)).onFailure(argumentCaptor.capture());
         assertEquals(errorMessage, argumentCaptor.getValue().getMessage());
@@ -163,7 +175,7 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         ActionListener<UpdateResponse> listener = mock(ActionListener.class);
-        mlTaskManager.updateMLTask(asyncMlTask.getTaskId(), ImmutableMap.of(MLTask.ERROR_FIELD, "test error"), listener, 0, true);
+        mlTaskManager.updateMLTask(asyncMlTask.getTaskId(), null, ImmutableMap.of(MLTask.ERROR_FIELD, "test error"), listener, 0, true);
         verify(client, times(1)).update(any(), any());
         verify(listener, times(1)).onFailure(argumentCaptor.capture());
         assertEquals(errorMessage, argumentCaptor.getValue().getMessage());

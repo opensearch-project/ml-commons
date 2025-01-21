@@ -550,7 +550,7 @@ public class MachineLearningPlugin extends Plugin
         stats.put(MLNodeLevelStat.ML_CIRCUIT_BREAKER_TRIGGER_COUNT, new MLStat<>(false, new CounterSupplier()));
         this.mlStats = new MLStats(stats);
 
-        mlTaskManager = new MLTaskManager(client, threadPool, mlIndicesHandler);
+        mlTaskManager = new MLTaskManager(client, sdkClient, threadPool, mlIndicesHandler);
         modelHelper = new ModelHelper(mlEngine);
 
         mlInputDatasetHandler = new MLInputDatasetHandler(client);
@@ -761,8 +761,8 @@ public class MachineLearningPlugin extends Plugin
         RestMLGetModelAction restMLGetModelAction = new RestMLGetModelAction(mlFeatureEnabledSetting);
         RestMLDeleteModelAction restMLDeleteModelAction = new RestMLDeleteModelAction(mlFeatureEnabledSetting);
         RestMLSearchModelAction restMLSearchModelAction = new RestMLSearchModelAction();
-        RestMLGetTaskAction restMLGetTaskAction = new RestMLGetTaskAction();
-        RestMLDeleteTaskAction restMLDeleteTaskAction = new RestMLDeleteTaskAction();
+        RestMLGetTaskAction restMLGetTaskAction = new RestMLGetTaskAction(mlFeatureEnabledSetting);
+        RestMLDeleteTaskAction restMLDeleteTaskAction = new RestMLDeleteTaskAction(mlFeatureEnabledSetting);
         RestMLSearchTaskAction restMLSearchTaskAction = new RestMLSearchTaskAction();
         RestMLProfileAction restMLProfileAction = new RestMLProfileAction(clusterService);
         RestMLRegisterModelAction restMLRegisterModelAction = new RestMLRegisterModelAction(
@@ -771,7 +771,7 @@ public class MachineLearningPlugin extends Plugin
             mlFeatureEnabledSetting
         );
         RestMLRegisterAgentAction restMLRegisterAgentAction = new RestMLRegisterAgentAction(mlFeatureEnabledSetting);
-        RestMLDeployModelAction restMLDeployModelAction = new RestMLDeployModelAction();
+        RestMLDeployModelAction restMLDeployModelAction = new RestMLDeployModelAction(mlFeatureEnabledSetting);
         RestMLUndeployModelAction restMLUndeployModelAction = new RestMLUndeployModelAction(clusterService, settings);
         RestMLRegisterModelMetaAction restMLRegisterModelMetaAction = new RestMLRegisterModelMetaAction(clusterService, settings);
         RestMLUploadModelChunkAction restMLUploadModelChunkAction = new RestMLUploadModelChunkAction(clusterService, settings);

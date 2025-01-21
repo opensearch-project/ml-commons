@@ -5,8 +5,11 @@
 
 package org.opensearch.ml.common.transport.deploy;
 
+import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
+
 import java.io.IOException;
 
+import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -18,6 +21,7 @@ import lombok.Data;
 @Data
 public class MLDeployModelInput implements Writeable {
     private String modelId;
+    private String tenantId;
     private String taskId;
     private String modelContentHash;
     private Integer nodeCount;
@@ -26,8 +30,10 @@ public class MLDeployModelInput implements Writeable {
     private MLTask mlTask;
 
     public MLDeployModelInput(StreamInput in) throws IOException {
+        Version streamInputVersion = in.getVersion();
         this.modelId = in.readString();
         this.taskId = in.readString();
+        this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? in.readOptionalString() : null;
         this.modelContentHash = in.readOptionalString();
         this.nodeCount = in.readInt();
         this.coordinatingNodeId = in.readString();
@@ -39,6 +45,7 @@ public class MLDeployModelInput implements Writeable {
     public MLDeployModelInput(
         String modelId,
         String taskId,
+        String tenantId,
         String modelContentHash,
         Integer nodeCount,
         String coordinatingNodeId,
@@ -47,6 +54,7 @@ public class MLDeployModelInput implements Writeable {
     ) {
         this.modelId = modelId;
         this.taskId = taskId;
+        this.tenantId = tenantId;
         this.modelContentHash = modelContentHash;
         this.nodeCount = nodeCount;
         this.coordinatingNodeId = coordinatingNodeId;
@@ -58,8 +66,12 @@ public class MLDeployModelInput implements Writeable {
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
+        Version streamOutputVersion = out.getVersion();
         out.writeString(modelId);
         out.writeString(taskId);
+        if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
+            out.writeOptionalString(tenantId);
+        }
         out.writeOptionalString(modelContentHash);
         out.writeInt(nodeCount);
         out.writeString(coordinatingNodeId);

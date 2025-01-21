@@ -744,8 +744,7 @@ public class MLModel implements ToXContentObject {
     }
 
     public static MLModel fromStream(StreamInput in) throws IOException {
-        MLModel mlModel = new MLModel(in);
-        return mlModel;
+        return new MLModel(in);
     }
 
 }
