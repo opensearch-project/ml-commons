@@ -13,6 +13,7 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
+import static org.opensearch.ml.settings.MLCommonsSettings.REKOGNITION_TRUST_ENDPOINT_REGEX;
 import static org.opensearch.ml.task.MLPredictTaskRunnerTests.USER_STRING;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
@@ -118,7 +119,8 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
     private ArgumentCaptor<PutDataObjectRequest> putDataObjectRequestArgumentCaptor;
 
     private static final List<String> TRUSTED_CONNECTOR_ENDPOINTS_REGEXES = ImmutableList
-        .of("^https://runtime\\.sagemaker\\..*\\.amazonaws\\.com/.*$", "^https://api\\.openai\\.com/.*$", "^https://api\\.cohere\\.ai/.*$");
+        .of("^https://runtime\\.sagemaker\\..*\\.amazonaws\\.com/.*$", "^https://api\\.openai\\.com/.*$",
+                "^https://api\\.cohere\\.ai/.*$", REKOGNITION_TRUST_ENDPOINT_REGEX);
 
     @Before
     public void setup() {
@@ -538,5 +540,70 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
             "Connector URL is not matching the trusted connector endpoint regex, URL is: https://api.openai1.com/v1/completions",
             argumentCaptor.getValue().getMessage()
         );
+    }
+
+
+    public void test_connector_creation_success_rekognition() {
+        TransportCreateConnectorAction action = new TransportCreateConnectorAction(
+                transportService,
+                actionFilters,
+                mlIndicesHandler,
+                client,
+                sdkClient,
+                mlEngine,
+                connectorAccessControlHelper,
+                settings,
+                clusterService,
+                mlModelManager,
+                mlFeatureEnabledSetting
+        );
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConnectorIndex(isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(IndexRequest.class), isA(ActionListener.class));
+
+        List<ConnectorAction> actions = new ArrayList<>();
+        actions
+                .add(
+                        ConnectorAction
+                                .builder()
+                                .actionType(ConnectorAction.ActionType.PREDICT)
+                                .method("POST")
+                                .url("https://rekognition.test-region-1.amazonaws.com")
+                                .build()
+                );
+        actions
+                .add(
+                        ConnectorAction
+                                .builder()
+                                .actionType(ConnectorAction.ActionType.PREDICT)
+                                .method("POST")
+                                .url("https://rekognition-fips.test-region-1.amazonaws.com")
+                                .build()
+                );
+
+        Map<String, String> credential = ImmutableMap.of("access_key", "mockKey", "secret_key", "mockSecret");
+        MLCreateConnectorInput mlCreateConnectorInput = MLCreateConnectorInput
+                .builder()
+                .name(randomAlphaOfLength(5))
+                .description(randomAlphaOfLength(10))
+                .version("1")
+                .protocol(ConnectorProtocols.HTTP)
+                .credential(credential)
+                .actions(actions)
+                .build();
+
+        MLCreateConnectorRequest request = new MLCreateConnectorRequest(mlCreateConnectorInput);
+
+        action.doExecute(task, request, actionListener);
+        verify(actionListener).onResponse(any(MLCreateConnectorResponse.class));
     }
 }
