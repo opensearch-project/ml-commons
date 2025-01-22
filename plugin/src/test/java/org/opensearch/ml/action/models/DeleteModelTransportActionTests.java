@@ -197,174 +197,6 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(deleteResponse);
     }
 
-    public void testDeleteModel_BlockedBySearchPipelineAndIngestionPipeline() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
-            listener.onResponse(deleteResponse);
-            return null;
-        }).when(client).delete(any(), any());
-
-        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, false);
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(), any());
-
-        when(getSearchPipelineResponse.toString()).thenReturn(StringUtils.toJson(Map.of("search_1", configDataMap)));
-        doAnswer(invocation -> {
-            ActionListener<GetSearchPipelineResponse> listener = invocation.getArgument(2);
-            listener.onResponse(getSearchPipelineResponse);
-            return null;
-        }).when(client).execute(eq(GetSearchPipelineAction.INSTANCE), any(), any());
-
-        when(getIngestionPipelineResponse.toString()).thenReturn(StringUtils.toJson(Map.of("ingest_1", Map.of("model_id", "test_id"))));
-        doAnswer(invocation -> {
-            ActionListener<GetPipelineResponse> listener = invocation.getArgument(2);
-            listener.onResponse(getIngestionPipelineResponse);
-            return null;
-        }).when(client).execute(eq(GetPipelineAction.INSTANCE), any(), any());
-
-        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener, times(2)).onFailure(argumentCaptor.capture());
-        String totalErrorMessage = argumentCaptor.getValue().getMessage();
-        String[] separateErrorMessages = totalErrorMessage.split("\\. ");
-        Set<String> generateErrorMessages = new HashSet<>(List.of(separateErrorMessages));
-        Set<String> expectedErrorMessages = new HashSet<>(
-            List
-                .of(
-                    "1 ingest pipelines are still using this model, please delete or update the pipelines first: [ingest_1]",
-                    "1 search pipelines are still using this model, please delete or update the pipelines first: [search_1]"
-                )
-        );
-        Boolean flag = false;
-        for (String errorMessage : generateErrorMessages) {
-            if (!expectedErrorMessages.contains(errorMessage)) {
-                flag = true;
-            }
-        }
-        assertEquals(flag, false);
-    }
-
-    public void testDeleteModel_BlockedBySearchPipeline() throws IOException {
-        //org.opensearch.search.pipeline.PipelineConfiguration pipelineConfiguration = new PipelineConfiguration();
-        when(getSearchPipelineResponse.toString()).thenReturn(
-                StringUtils.toJson(Map.of("search_1", configDataMap, "indenpendent_search", Map.of("nothing", "nothinh")))
-        );
-
-        doAnswer(invocation -> {
-            ActionListener<GetSearchPipelineResponse> listener = invocation.getArgument(2);
-            listener.onResponse(getSearchPipelineResponse);
-            return null;
-        }).when(client).execute(eq(GetSearchPipelineAction.INSTANCE), any(), any());
-
-        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("1 search pipelines are still using this model, please delete or update the pipelines first: [search_1]", argumentCaptor.getValue().getMessage());
-    }
-
-    public void testDeleteModel_BlockedBySearchPipelineSingleModelId() throws IOException {
-        Map<String, Object> configDataMapWithSingleModelId = Map
-            .of("model_id", "test_id", "list_model_id", List.of("test_id"), "test_map_id", Map.of("map_model_id", "test_id"));
-
-        when(getSearchPipelineResponse.toString()).thenReturn(StringUtils.toJson(Map.of("search_1", configDataMapWithSingleModelId)));
-
-        doAnswer(invocation -> {
-            ActionListener<GetSearchPipelineResponse> listener = invocation.getArgument(2);
-            listener.onResponse(getSearchPipelineResponse);
-            return null;
-        }).when(client).execute(eq(GetSearchPipelineAction.INSTANCE), any(), any());
-
-        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "1 search pipelines are still using this model, please delete or update the pipelines first: [search_1]",
-            argumentCaptor.getValue().getMessage()
-        );
-    }
-
-    public void testDeleteModel_BlockedBySearchPipelineListModelId() throws IOException {
-        Map<String, Object> configDataMapWithListModelId = Map
-            .of("single_model_id", "test_id", "model_id", List.of("test_id"), "test_map_id", Map.of("map_model_id", "test_id"));
-        when(getSearchPipelineResponse.toString()).thenReturn(StringUtils.toJson(Map.of("search_1", configDataMapWithListModelId)));
-        doAnswer(invocation -> {
-            ActionListener<GetSearchPipelineResponse> listener = invocation.getArgument(2);
-            listener.onResponse(getSearchPipelineResponse);
-            return null;
-        }).when(client).execute(eq(GetSearchPipelineAction.INSTANCE), any(), any());
-
-        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "1 search pipelines are still using this model, please delete or update the pipelines first: [search_1]",
-            argumentCaptor.getValue().getMessage()
-        );
-    }
-
-    public void testDeleteModel_UseSettingToSkipBlockedByIngestPipeline() throws IOException {
-        Settings settings = Settings.builder().put(ML_COMMONS_SAFE_DELETE_WITH_USAGE_CHECK.getKey(), false).build();
-        threadContext = new ThreadContext(settings);
-        ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_SAFE_DELETE_WITH_USAGE_CHECK);
-        when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
-        when(clusterService.getSettings()).thenReturn(settings);
-        deleteModelTransportAction = spy(
-            new DeleteModelTransportAction(
-                transportService,
-                actionFilters,
-                client,
-                settings,
-                xContentRegistry,
-                clusterService,
-                modelAccessControlHelper,
-                agentModelsSearcher
-            )
-        );
-
-        threadContext = new ThreadContext(settings);
-        when(clusterService.getSettings()).thenReturn(settings);
-        when(client.threadPool()).thenReturn(threadPool);
-        when(threadPool.getThreadContext()).thenReturn(threadContext);
-
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
-            listener.onResponse(true);
-            return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
-
-        Map<String, Object> ingestPipelineConfig1 = Map.of("model_id", "test_id");
-        Map<String, Object> ingestPipelineConfig2 = Map.of("nothing", "test_id");
-        when(getIngestionPipelineResponse.toString())
-            .thenReturn(StringUtils.toJson(Map.of("ingest_1", ingestPipelineConfig1, "ingest_2", ingestPipelineConfig2)));
-        // when(getIngestionPipelineResponse.pipelines())
-        // .thenReturn(List.of(ingestPipelineConfiguration, independentIngestPipelineConfiguration));
-        doAnswer(invocation -> {
-            ActionListener<GetPipelineResponse> listener = invocation.getArgument(2);
-            listener.onResponse(getIngestionPipelineResponse);
-            return null;
-        }).when(client).execute(eq(GetPipelineAction.INSTANCE), any(), any());
-
-        doAnswer(invocation -> {
-            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
-            listener.onResponse(deleteResponse);
-            return null;
-        }).when(client).delete(any(), any());
-
-        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, false);
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(getResponse);
-            return null;
-        }).when(client).get(any(), any());
-
-        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
-        verify(actionListener).onResponse(deleteResponse);
-
-    }
-
 
 
     public void testDeleteRemoteModel_Success() throws IOException {
@@ -835,6 +667,176 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
                 "2 agents are still using this model, please delete or update the agents first, all visible agents are: [2]",
                 argumentCaptor.getValue().getMessage()
         );
+    }
+
+
+
+    public void testDeleteModel_BlockedBySearchPipelineAndIngestionPipeline() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
+            listener.onResponse(deleteResponse);
+            return null;
+        }).when(client).delete(any(), any());
+
+        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, false);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        when(getSearchPipelineResponse.toString()).thenReturn(StringUtils.toJson(Map.of("search_1", configDataMap)));
+        doAnswer(invocation -> {
+            ActionListener<GetSearchPipelineResponse> listener = invocation.getArgument(2);
+            listener.onResponse(getSearchPipelineResponse);
+            return null;
+        }).when(client).execute(eq(GetSearchPipelineAction.INSTANCE), any(), any());
+
+        when(getIngestionPipelineResponse.toString()).thenReturn(StringUtils.toJson(Map.of("ingest_1", Map.of("model_id", "test_id"))));
+        doAnswer(invocation -> {
+            ActionListener<GetPipelineResponse> listener = invocation.getArgument(2);
+            listener.onResponse(getIngestionPipelineResponse);
+            return null;
+        }).when(client).execute(eq(GetPipelineAction.INSTANCE), any(), any());
+
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, times(2)).onFailure(argumentCaptor.capture());
+        String totalErrorMessage = argumentCaptor.getValue().getMessage();
+        String[] separateErrorMessages = totalErrorMessage.split("\\. ");
+        Set<String> generateErrorMessages = new HashSet<>(List.of(separateErrorMessages));
+        Set<String> expectedErrorMessages = new HashSet<>(
+                List
+                        .of(
+                                "1 ingest pipelines are still using this model, please delete or update the pipelines first: [ingest_1]",
+                                "1 search pipelines are still using this model, please delete or update the pipelines first: [search_1]"
+                        )
+        );
+        Boolean flag = false;
+        for (String errorMessage : generateErrorMessages) {
+            if (!expectedErrorMessages.contains(errorMessage)) {
+                flag = true;
+            }
+        }
+        assertEquals(flag, false);
+    }
+
+    public void testDeleteModel_BlockedBySearchPipeline() throws IOException {
+        //org.opensearch.search.pipeline.PipelineConfiguration pipelineConfiguration = new PipelineConfiguration();
+        when(getSearchPipelineResponse.toString()).thenReturn(
+                StringUtils.toJson(Map.of("search_1", configDataMap, "indenpendent_search", Map.of("nothing", "nothinh")))
+        );
+
+        doAnswer(invocation -> {
+            ActionListener<GetSearchPipelineResponse> listener = invocation.getArgument(2);
+            listener.onResponse(getSearchPipelineResponse);
+            return null;
+        }).when(client).execute(eq(GetSearchPipelineAction.INSTANCE), any(), any());
+
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("1 search pipelines are still using this model, please delete or update the pipelines first: [search_1]", argumentCaptor.getValue().getMessage());
+    }
+
+    public void testDeleteModel_BlockedBySearchPipelineSingleModelId() throws IOException {
+        Map<String, Object> configDataMapWithSingleModelId = Map
+                .of("model_id", "test_id", "list_model_id", List.of("test_id"), "test_map_id", Map.of("map_model_id", "test_id"));
+
+        when(getSearchPipelineResponse.toString()).thenReturn(StringUtils.toJson(Map.of("search_1", configDataMapWithSingleModelId)));
+
+        doAnswer(invocation -> {
+            ActionListener<GetSearchPipelineResponse> listener = invocation.getArgument(2);
+            listener.onResponse(getSearchPipelineResponse);
+            return null;
+        }).when(client).execute(eq(GetSearchPipelineAction.INSTANCE), any(), any());
+
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+                "1 search pipelines are still using this model, please delete or update the pipelines first: [search_1]",
+                argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    public void testDeleteModel_BlockedBySearchPipelineListModelId() throws IOException {
+        Map<String, Object> configDataMapWithListModelId = Map
+                .of("single_model_id", "test_id", "model_id", List.of("test_id"), "test_map_id", Map.of("map_model_id", "test_id"));
+        when(getSearchPipelineResponse.toString()).thenReturn(StringUtils.toJson(Map.of("search_1", configDataMapWithListModelId)));
+        doAnswer(invocation -> {
+            ActionListener<GetSearchPipelineResponse> listener = invocation.getArgument(2);
+            listener.onResponse(getSearchPipelineResponse);
+            return null;
+        }).when(client).execute(eq(GetSearchPipelineAction.INSTANCE), any(), any());
+
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+                "1 search pipelines are still using this model, please delete or update the pipelines first: [search_1]",
+                argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    public void testDeleteModel_UseSettingToSkipBlockedByIngestPipeline() throws IOException {
+        Settings settings = Settings.builder().put(ML_COMMONS_SAFE_DELETE_WITH_USAGE_CHECK.getKey(), false).build();
+        threadContext = new ThreadContext(settings);
+        ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_SAFE_DELETE_WITH_USAGE_CHECK);
+        when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
+        when(clusterService.getSettings()).thenReturn(settings);
+        deleteModelTransportAction = spy(
+                new DeleteModelTransportAction(
+                        transportService,
+                        actionFilters,
+                        client,
+                        settings,
+                        xContentRegistry,
+                        clusterService,
+                        modelAccessControlHelper,
+                        agentModelsSearcher
+                )
+        );
+
+        threadContext = new ThreadContext(settings);
+        when(clusterService.getSettings()).thenReturn(settings);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+
+        Map<String, Object> ingestPipelineConfig1 = Map.of("model_id", "test_id");
+        Map<String, Object> ingestPipelineConfig2 = Map.of("nothing", "test_id");
+        when(getIngestionPipelineResponse.toString())
+                .thenReturn(StringUtils.toJson(Map.of("ingest_1", ingestPipelineConfig1, "ingest_2", ingestPipelineConfig2)));
+        // when(getIngestionPipelineResponse.pipelines())
+        // .thenReturn(List.of(ingestPipelineConfiguration, independentIngestPipelineConfiguration));
+        doAnswer(invocation -> {
+            ActionListener<GetPipelineResponse> listener = invocation.getArgument(2);
+            listener.onResponse(getIngestionPipelineResponse);
+            return null;
+        }).when(client).execute(eq(GetPipelineAction.INSTANCE), any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
+            listener.onResponse(deleteResponse);
+            return null;
+        }).when(client).delete(any(), any());
+
+        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, false);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        verify(actionListener).onResponse(deleteResponse);
+
     }
 
 
