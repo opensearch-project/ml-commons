@@ -6,12 +6,14 @@
 package org.opensearch.ml.common.transport.task;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
+import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 
+import org.opensearch.Version;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
@@ -25,21 +27,30 @@ import lombok.Getter;
 public class MLTaskGetRequest extends ActionRequest {
     @Getter
     String taskId;
+    @Getter
+    String tenantId;
 
     @Builder
-    public MLTaskGetRequest(String taskId) {
+    public MLTaskGetRequest(String taskId, String tenantId) {
         this.taskId = taskId;
+        this.tenantId = tenantId;
     }
 
     public MLTaskGetRequest(StreamInput in) throws IOException {
         super(in);
+        Version streamInputVersion = in.getVersion();
         this.taskId = in.readString();
+        this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? in.readOptionalString() : null;
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
+        Version streamOutputVersion = out.getVersion();
         out.writeString(this.taskId);
+        if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
+            out.writeOptionalString(tenantId);
+        }
     }
 
     @Override

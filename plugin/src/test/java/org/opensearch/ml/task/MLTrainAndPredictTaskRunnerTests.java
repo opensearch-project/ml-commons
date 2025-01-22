@@ -222,7 +222,7 @@ public class MLTrainAndPredictTaskRunnerTests extends OpenSearchTestCase {
             actionListener.onResponse(localNode);
             return null;
         }).when(mlTaskDispatcher).dispatch(any(), any());
-        doThrow(new RuntimeException(errorMessage)).when(mlTaskManager).updateTaskStateAsRunning(anyString(), anyBoolean());
+        doThrow(new RuntimeException(errorMessage)).when(mlTaskManager).updateTaskStateAsRunning(anyString(), null, anyBoolean());
         taskRunner.dispatchTask(FunctionName.REMOTE, requestWithDataFrame, transportService, listener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());

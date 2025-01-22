@@ -398,6 +398,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                     mlTaskManager
                         .updateMLTask(
                             taskId,
+                            registerModelInput.getTenantId(),
                             ImmutableMap.of(MLTask.ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(ex), STATE_FIELD, FAILED),
                             TASK_SEMAPHORE_TIMEOUT,
                             true

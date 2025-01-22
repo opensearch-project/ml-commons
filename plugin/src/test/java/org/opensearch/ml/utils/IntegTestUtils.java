@@ -164,7 +164,7 @@ public class IntegTestUtils extends OpenSearchIntegTestCase {
     }
 
     public static MLTask waitModelAvailable(String taskId) throws InterruptedException {
-        MLTaskGetRequest getTaskRequest = new MLTaskGetRequest(taskId);
+        MLTaskGetRequest getTaskRequest = new MLTaskGetRequest(taskId, null);
         MLTask mlTask = null;
         int i = 0;
         while ((mlTask == null || mlTask.getModelId() == null) && i < 500) {
@@ -185,7 +185,7 @@ public class IntegTestUtils extends OpenSearchIntegTestCase {
     // Predict with the model generated, and verify the prediction result.
     public static void predictAndVerifyResult(String taskId, MLInputDataset inputDataset) throws IOException {
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).inputDataset(inputDataset).build();
-        MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest(taskId, mlInput, null);
+        MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest(taskId, mlInput, null, null);
         ActionFuture<MLTaskResponse> predictionFuture = client().execute(MLPredictionTaskAction.INSTANCE, predictionRequest);
         MLTaskResponse predictionResponse = predictionFuture.actionGet();
         XContentBuilder builder = XContentFactory.jsonBuilder();

@@ -173,7 +173,18 @@ public interface MachineLearningClient {
      * @param taskId id of the model
      * @param listener action listener
      */
-    void getTask(String taskId, ActionListener<MLTask> listener);
+    default void getTask(String taskId, ActionListener<MLTask> listener) {
+        getTask(taskId, null, listener);
+    }
+
+    /**
+     * Get MLTask and return task in listener
+     * For more info on get task, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#get-task-information
+     * @param taskId id of the model
+     * @param tenantId the tenant id. This is necessary for multi-tenancy.
+     * @param listener action listener
+     */
+    void getTask(String taskId, String tenantId, ActionListener<MLTask> listener);
 
     /**
      *  Delete the model with modelId.
@@ -224,7 +235,18 @@ public interface MachineLearningClient {
      * @param taskId id of the task
      * @param listener action listener
      */
-    void deleteTask(String taskId, ActionListener<DeleteResponse> listener);
+    default void deleteTask(String taskId, ActionListener<DeleteResponse> listener) {
+        deleteTask(taskId, null, listener);
+    }
+
+    /**
+     * Delete MLTask
+     * For more info on delete task, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#delete-task
+     * @param taskId id of the task
+     * @param tenantId the tenant id. This is necessary for multi-tenancy.
+     * @param listener action listener
+     */
+    void deleteTask(String taskId, String tenantId, ActionListener<DeleteResponse> listener);
 
     /**
      * For more info on search model, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#search-model
@@ -298,7 +320,18 @@ public interface MachineLearningClient {
      * @param modelId the model id
      * @param listener a listener to be notified of the result
      */
-    void deploy(String modelId, ActionListener<MLDeployModelResponse> listener);
+    default void deploy(String modelId, ActionListener<MLDeployModelResponse> listener) {
+        deploy(modelId, null, listener);
+    }
+
+    /**
+     * Deploy model
+     * For additional info on deploy, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/model-apis/deploy-model/
+     * @param modelId the model id
+     * @param tenantId the tenant id. This is necessary for multi-tenancy.
+     * @param listener a listener to be notified of the result
+     */
+    void deploy(String modelId, String tenantId, ActionListener<MLDeployModelResponse> listener);
 
     /**
      * Undeploy models
