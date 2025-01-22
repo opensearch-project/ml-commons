@@ -252,6 +252,27 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         actionListener.onFailure(new OpenSearchStatusException(errorMessage, RestStatus.INTERNAL_SERVER_ERROR));
     }
 
+    private void deleteModel(String modelId, Boolean isHidden, ActionListener<DeleteResponse> actionListener) {
+        DeleteRequest deleteRequest = new DeleteRequest(ML_MODEL_INDEX, modelId).setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+        client.delete(deleteRequest, new ActionListener<>() {
+            @Override
+            public void onResponse(DeleteResponse deleteResponse) {
+                deleteModelChunksAndController(actionListener, modelId, isHidden, deleteResponse);
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                if (e instanceof ResourceNotFoundException) {
+                    deleteModelChunksAndController(actionListener, modelId, isHidden, null);
+                } else {
+                    log.error(getErrorMessage("Model is not all cleaned up, please try again.", modelId, isHidden), e);
+                    actionListener.onFailure(e);
+                }
+            }
+        });
+    }
+
+
     private void checkDownstreamTaskBeforeDeleteModel(String modelId, Boolean isHidden, ActionListener<DeleteResponse> actionListener) {
         // Now checks 3 resources associated with the model id 1. Agent 2. Search pipeline 3. ingest pipeline
         CountDownLatch countDownLatch = new CountDownLatch(3);
@@ -277,25 +298,6 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         checkSearchPipelineBeforeDeleteModel(modelId, countDownActionListener);
     }
 
-    private void deleteModel(String modelId, Boolean isHidden, ActionListener<DeleteResponse> actionListener) {
-        DeleteRequest deleteRequest = new DeleteRequest(ML_MODEL_INDEX, modelId).setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-        client.delete(deleteRequest, new ActionListener<>() {
-            @Override
-            public void onResponse(DeleteResponse deleteResponse) {
-                deleteModelChunksAndController(actionListener, modelId, isHidden, deleteResponse);
-            }
-
-            @Override
-            public void onFailure(Exception e) {
-                if (e instanceof ResourceNotFoundException) {
-                    deleteModelChunksAndController(actionListener, modelId, isHidden, null);
-                } else {
-                    log.error(getErrorMessage("Model is not all cleaned up, please try again.", modelId, isHidden), e);
-                    actionListener.onFailure(e);
-                }
-            }
-        });
-    }
 
     private void checkAgentBeforeDeleteModel(String modelId, ActionListener<Boolean> actionListener) {
         // check whether agent are using them
