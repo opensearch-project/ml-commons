@@ -20,6 +20,9 @@ import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupRespon
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.utils.TenantAwareHelper;
+import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -34,10 +37,12 @@ public class TransportRegisterModelGroupAction extends HandledTransportAction<Ac
     private final MLIndicesHandler mlIndicesHandler;
     private final ThreadPool threadPool;
     private final Client client;
+    private final SdkClient sdkClient;
     ClusterService clusterService;
 
     ModelAccessControlHelper modelAccessControlHelper;
     MLModelGroupManager mlModelGroupManager;
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Inject
     public TransportRegisterModelGroupAction(
@@ -46,9 +51,11 @@ public class TransportRegisterModelGroupAction extends HandledTransportAction<Ac
         MLIndicesHandler mlIndicesHandler,
         ThreadPool threadPool,
         Client client,
+        SdkClient sdkClient,
         ClusterService clusterService,
         ModelAccessControlHelper modelAccessControlHelper,
-        MLModelGroupManager mlModelGroupManager
+        MLModelGroupManager mlModelGroupManager,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLRegisterModelGroupAction.NAME, transportService, actionFilters, MLRegisterModelGroupRequest::new);
         this.transportService = transportService;
@@ -56,14 +63,19 @@ public class TransportRegisterModelGroupAction extends HandledTransportAction<Ac
         this.mlIndicesHandler = mlIndicesHandler;
         this.threadPool = threadPool;
         this.client = client;
+        this.sdkClient = sdkClient;
         this.clusterService = clusterService;
         this.mlModelGroupManager = mlModelGroupManager;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLRegisterModelGroupResponse> listener) {
         MLRegisterModelGroupRequest createModelGroupRequest = MLRegisterModelGroupRequest.fromActionRequest(request);
         MLRegisterModelGroupInput createModelGroupInput = createModelGroupRequest.getRegisterModelGroupInput();
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, createModelGroupInput.getTenantId(), listener)) {
+            return;
+        }
         mlModelGroupManager.createModelGroup(createModelGroupInput, ActionListener.wrap(modelGroupId -> {
             listener.onResponse(new MLRegisterModelGroupResponse(modelGroupId, MLTaskState.CREATED.name()));
         }, ex -> {

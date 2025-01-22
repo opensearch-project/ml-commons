@@ -6,12 +6,14 @@
 package org.opensearch.ml.common.transport.model_group;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
+import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 
+import org.opensearch.Version;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
@@ -31,21 +33,29 @@ import lombok.experimental.FieldDefaults;
 public class MLModelGroupGetRequest extends ActionRequest {
 
     String modelGroupId;
+    String tenantId;
 
     @Builder
-    public MLModelGroupGetRequest(String modelGroupId) {
+    public MLModelGroupGetRequest(String modelGroupId, String tenantId) {
         this.modelGroupId = modelGroupId;
+        this.tenantId = tenantId;
     }
 
     public MLModelGroupGetRequest(StreamInput in) throws IOException {
         super(in);
+        Version streamInputVersion = in.getVersion();
         this.modelGroupId = in.readString();
+        this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? in.readOptionalString() : null;
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
+        Version streamOutputVersion = out.getVersion();
         out.writeString(this.modelGroupId);
+        if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
+            out.writeOptionalString(tenantId);
+        }
     }
 
     @Override

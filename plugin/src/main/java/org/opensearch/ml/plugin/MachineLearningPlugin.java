@@ -344,6 +344,7 @@ public class MachineLearningPlugin extends Plugin
         SystemIndexPlugin {
     public static final String ML_THREAD_POOL_PREFIX = "thread_pool.ml_commons.";
     public static final String GENERAL_THREAD_POOL = "opensearch_ml_general";
+    public static final String SDK_CLIENT_THREAD_POOL = "opensearch_ml_sdkclient";
     public static final String EXECUTE_THREAD_POOL = "opensearch_ml_execute";
     public static final String TRAIN_THREAD_POOL = "opensearch_ml_train";
     public static final String PREDICT_THREAD_POOL = "opensearch_ml_predict";
@@ -512,7 +513,11 @@ public class MachineLearningPlugin extends Plugin
                             Map.entry(TENANT_AWARE_KEY, "true"),
                             Map.entry(TENANT_ID_FIELD_KEY, TENANT_ID_FIELD)
                         )
-                    : Collections.emptyMap()
+                    : Collections.emptyMap(),
+                // For node client / local cluster it won't use this thread pool
+                // but we haven't update the ddbclient to async for which we are keeping it like this
+                // todo: need to update this when ddbclient async is going to be implemented.
+                client.threadPool().executor(ThreadPool.Names.GENERIC)
             );
 
         mlEngine = new MLEngine(dataPath, encryptor);
@@ -558,6 +563,7 @@ public class MachineLearningPlugin extends Plugin
             clusterService,
             scriptService,
             client,
+            sdkClient,
             threadPool,
             xContentRegistry,
             modelHelper,
@@ -757,8 +763,8 @@ public class MachineLearningPlugin extends Plugin
         RestMLTrainAndPredictAction restMLTrainAndPredictAction = new RestMLTrainAndPredictAction();
         RestMLPredictionAction restMLPredictionAction = new RestMLPredictionAction(mlModelManager, mlFeatureEnabledSetting);
         RestMLExecuteAction restMLExecuteAction = new RestMLExecuteAction(mlFeatureEnabledSetting);
-        RestMLGetModelAction restMLGetModelAction = new RestMLGetModelAction();
-        RestMLDeleteModelAction restMLDeleteModelAction = new RestMLDeleteModelAction();
+        RestMLGetModelAction restMLGetModelAction = new RestMLGetModelAction(mlFeatureEnabledSetting);
+        RestMLDeleteModelAction restMLDeleteModelAction = new RestMLDeleteModelAction(mlFeatureEnabledSetting);
         RestMLSearchModelAction restMLSearchModelAction = new RestMLSearchModelAction();
         RestMLGetTaskAction restMLGetTaskAction = new RestMLGetTaskAction();
         RestMLDeleteTaskAction restMLDeleteTaskAction = new RestMLDeleteTaskAction();
@@ -774,12 +780,12 @@ public class MachineLearningPlugin extends Plugin
         RestMLUndeployModelAction restMLUndeployModelAction = new RestMLUndeployModelAction(clusterService, settings);
         RestMLRegisterModelMetaAction restMLRegisterModelMetaAction = new RestMLRegisterModelMetaAction(clusterService, settings);
         RestMLUploadModelChunkAction restMLUploadModelChunkAction = new RestMLUploadModelChunkAction(clusterService, settings);
-        RestMLRegisterModelGroupAction restMLCreateModelGroupAction = new RestMLRegisterModelGroupAction();
-        RestMLUpdateModelGroupAction restMLUpdateModelGroupAction = new RestMLUpdateModelGroupAction();
-        RestMLGetModelGroupAction restMLGetModelGroupAction = new RestMLGetModelGroupAction();
-        RestMLSearchModelGroupAction restMLSearchModelGroupAction = new RestMLSearchModelGroupAction();
-        RestMLUpdateModelAction restMLUpdateModelAction = new RestMLUpdateModelAction();
-        RestMLDeleteModelGroupAction restMLDeleteModelGroupAction = new RestMLDeleteModelGroupAction();
+        RestMLRegisterModelGroupAction restMLCreateModelGroupAction = new RestMLRegisterModelGroupAction(mlFeatureEnabledSetting);
+        RestMLUpdateModelGroupAction restMLUpdateModelGroupAction = new RestMLUpdateModelGroupAction(mlFeatureEnabledSetting);
+        RestMLGetModelGroupAction restMLGetModelGroupAction = new RestMLGetModelGroupAction(mlFeatureEnabledSetting);
+        RestMLSearchModelGroupAction restMLSearchModelGroupAction = new RestMLSearchModelGroupAction(mlFeatureEnabledSetting);
+        RestMLUpdateModelAction restMLUpdateModelAction = new RestMLUpdateModelAction(mlFeatureEnabledSetting);
+        RestMLDeleteModelGroupAction restMLDeleteModelGroupAction = new RestMLDeleteModelGroupAction(mlFeatureEnabledSetting);
         RestMLCreateConnectorAction restMLCreateConnectorAction = new RestMLCreateConnectorAction(mlFeatureEnabledSetting);
         RestMLGetConnectorAction restMLGetConnectorAction = new RestMLGetConnectorAction(clusterService, settings, mlFeatureEnabledSetting);
         RestMLDeleteConnectorAction restMLDeleteConnectorAction = new RestMLDeleteConnectorAction(mlFeatureEnabledSetting);
@@ -877,6 +883,16 @@ public class MachineLearningPlugin extends Plugin
             ML_THREAD_POOL_PREFIX + GENERAL_THREAD_POOL,
             false
         );
+
+        FixedExecutorBuilder sdkClientThreadPool = new FixedExecutorBuilder(
+            settings,
+            SDK_CLIENT_THREAD_POOL,
+            OpenSearchExecutors.allocatedProcessors(settings) * 4,
+            10000,
+            ML_THREAD_POOL_PREFIX + SDK_CLIENT_THREAD_POOL,
+            false
+        );
+
         FixedExecutorBuilder registerModelThreadPool = new FixedExecutorBuilder(
             settings,
             REGISTER_THREAD_POOL,
@@ -943,7 +959,8 @@ public class MachineLearningPlugin extends Plugin
                 trainThreadPool,
                 predictThreadPool,
                 remotePredictThreadPool,
-                batchIngestThreadPool
+                batchIngestThreadPool,
+                sdkClientThreadPool
             );
     }
 

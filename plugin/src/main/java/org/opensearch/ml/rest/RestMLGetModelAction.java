@@ -9,6 +9,7 @@ import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
 import static org.opensearch.ml.utils.RestActionUtils.getParameterId;
 import static org.opensearch.ml.utils.RestActionUtils.returnContent;
+import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
 import java.io.IOException;
 import java.util.List;
@@ -17,6 +18,7 @@ import java.util.Locale;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.ml.common.transport.model.MLModelGetAction;
 import org.opensearch.ml.common.transport.model.MLModelGetRequest;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
@@ -27,10 +29,14 @@ import com.google.common.collect.ImmutableList;
 public class RestMLGetModelAction extends BaseRestHandler {
     private static final String ML_GET_MODEL_ACTION = "ml_get_model_action";
 
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     /**
      * Constructor
      */
-    public RestMLGetModelAction() {}
+    public RestMLGetModelAction(MLFeatureEnabledSetting mlFeatureEnabledSetting) {
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+    }
 
     @Override
     public String getName() {
@@ -59,7 +65,7 @@ public class RestMLGetModelAction extends BaseRestHandler {
     MLModelGetRequest getRequest(RestRequest request) throws IOException {
         String modelId = getParameterId(request, PARAMETER_MODEL_ID);
         boolean returnContent = returnContent(request);
-
-        return new MLModelGetRequest(modelId, returnContent, true);
+        String tenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
+        return new MLModelGetRequest(modelId, returnContent, true, tenantId);
     }
 }
