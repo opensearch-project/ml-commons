@@ -16,6 +16,7 @@ import java.util.Optional;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 import org.opensearch.action.search.SearchAction;
 import org.opensearch.action.search.SearchRequestBuilder;
@@ -284,7 +285,7 @@ public class MLModelAutoReDeployer {
             List<String> needRedeployPlanningWorkerNodes = Arrays
                 .stream(planningWorkerNodes.toArray(new String[0]))
                 .filter(addedNodes::contains)
-                .toList();
+                .collect(Collectors.toList());
             nodeIds = !needRedeployPlanningWorkerNodes.isEmpty() ? planningWorkerNodes.toArray(new String[0]) : null;
         }
 

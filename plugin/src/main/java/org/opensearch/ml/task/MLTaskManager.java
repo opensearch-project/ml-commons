@@ -288,8 +288,7 @@ public class MLTaskManager {
 
                 sdkClient
                     .putDataObjectAsync(
-                        PutDataObjectRequest.builder().index(ML_TASK_INDEX).tenantId(mlTask.getTenantId()).dataObject(mlTask).build(),
-                        client.threadPool().executor(GENERAL_THREAD_POOL)
+                        PutDataObjectRequest.builder().index(ML_TASK_INDEX).tenantId(mlTask.getTenantId()).dataObject(mlTask).build()
                     )
                     .whenComplete((r, throwable) -> {
                         context.restore();
@@ -416,15 +415,13 @@ public class MLTaskManager {
                     ? listener
                     : ActionListener.runAfter(listener, semaphore::release);
                 try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                    sdkClient
-                        .updateDataObjectAsync(updateDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
-                        .whenComplete((r, throwable) -> {
-                            context.restore(); // Restore the context once the operation is done
-                            if (semaphore != null) {
-                                semaphore.release();
-                            }
-                            handleUpdateDataObjectCompletionStage(r, throwable, getUpdateResponseListener(taskId, listener));
-                        });
+                    sdkClient.updateDataObjectAsync(updateDataObjectRequest).whenComplete((r, throwable) -> {
+                        context.restore(); // Restore the context once the operation is done
+                        if (semaphore != null) {
+                            semaphore.release();
+                        }
+                        handleUpdateDataObjectCompletionStage(r, throwable, getUpdateResponseListener(taskId, listener));
+                    });
                 } catch (Exception e) {
                     log.error("Failed to update ML task {}", taskId, e);
                     actionListener.onFailure(e);

@@ -88,12 +88,12 @@ public class MLDeployModelNodesRequestTest {
         MLDeployModelInput deployModelInput = new MLDeployModelInput(
             "modelId",
             "taskId",
-            null,
             "modelContentHash",
             3,
             "coordinatingNodeId",
             true,
-            mlTask
+            mlTask,
+            null
         );
         MLDeployModelNodeRequest MLDeployModelNodeRequest = new MLDeployModelNodeRequest(
             new MLDeployModelNodesRequest(nodeIds, deployModelInput)
@@ -126,12 +126,13 @@ public class MLDeployModelNodesRequestTest {
         MLDeployModelInput deployModelInput = new MLDeployModelInput(
             "modelId",
             "taskId",
-            null,
+
             "modelContentHash",
             3,
             "coordinatingNodeId",
             true,
-            mlTask
+            mlTask,
+            null
         );
         MLDeployModelNodeRequest MLDeployModelNodeRequest = new MLDeployModelNodeRequest(
             new MLDeployModelNodesRequest(nodeIds, deployModelInput)
@@ -195,12 +196,13 @@ public class MLDeployModelNodesRequestTest {
         MLDeployModelInput deployModelInput = new MLDeployModelInput(
             "modelId",
             "taskId",
-            null,
+
             "modelContentHash",
             3,
             "coordinatingNodeId",
             true,
-            mlTask
+            mlTask,
+            null
         );
         MLDeployModelNodeRequest MLDeployModelNodeRequest = new MLDeployModelNodeRequest(
             new MLDeployModelNodesRequest(nodeIds, deployModelInput)

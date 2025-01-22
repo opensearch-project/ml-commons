@@ -65,7 +65,6 @@ public class MLForwardInput implements Writeable {
         Version streamInputVersion = in.getVersion();
         this.taskId = in.readOptionalString();
         this.modelId = in.readOptionalString();
-        this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? in.readOptionalString() : null;
         this.workerNodeId = in.readOptionalString();
         this.requestType = in.readEnum(MLForwardRequestType.class);
         if (in.readBoolean()) {
@@ -79,6 +78,7 @@ public class MLForwardInput implements Writeable {
         if (in.readBoolean()) {
             this.registerModelInput = new MLRegisterModelInput(in);
         }
+        this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? in.readOptionalString() : null;
     }
 
     @Override
@@ -86,9 +86,6 @@ public class MLForwardInput implements Writeable {
         Version streamOutputVersion = out.getVersion();
         out.writeOptionalString(taskId);
         out.writeOptionalString(modelId);
-        if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
-            out.writeOptionalString(tenantId);
-        }
         out.writeOptionalString(workerNodeId);
         out.writeEnum(requestType);
         if (this.mlTask != null) {
@@ -110,6 +107,9 @@ public class MLForwardInput implements Writeable {
             registerModelInput.writeTo(out);
         } else {
             out.writeBoolean(false);
+        }
+        if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
+            out.writeOptionalString(tenantId);
         }
     }
 

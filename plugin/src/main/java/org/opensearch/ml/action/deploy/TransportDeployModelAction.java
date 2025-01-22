@@ -162,7 +162,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                 }
                 if (!isUserInitiatedDeployRequest) {
                     deployModel(deployModelRequest, mlModel, modelId, tenantId, wrappedListener, listener);
-                } else if (isHidden != null && isHidden) {
+                } else if (Boolean.TRUE.equals(isHidden)) {
                     if (isSuperAdmin) {
                         deployModel(deployModelRequest, mlModel, modelId, tenantId, wrappedListener, listener);
                     } else {
@@ -341,12 +341,12 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         MLDeployModelInput deployModelInput = new MLDeployModelInput(
             mlModel.getModelId(),
             mlTask.getTaskId(),
-            mlModel.getTenantId(),
             mlModel.getModelContentHash(),
             eligibleNodes.size(),
             localNodeId,
             deployToAllNodes,
-            mlTask
+            mlTask,
+            mlModel.getTenantId()
         );
 
         MLDeployModelNodesRequest deployModelRequest = new MLDeployModelNodesRequest(
@@ -426,12 +426,12 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         MLDeployModelInput deployModelInput = new MLDeployModelInput(
             modelId,
             taskId,
-            tenantId,
             mlModel.getModelContentHash(),
             eligibleNodes.size(),
             localNodeId,
             deployToAllNodes,
-            mlTask
+            mlTask,
+            tenantId
         );
         MLDeployModelNodesRequest deployModelRequest = new MLDeployModelNodesRequest(
             eligibleNodes.toArray(new DiscoveryNode[0]),

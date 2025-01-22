@@ -237,8 +237,7 @@ public class MLTask implements ToXContentObject, Writeable {
     }
 
     public static MLTask fromStream(StreamInput in) throws IOException {
-        MLTask mlTask = new MLTask(in);
-        return mlTask;
+        return new MLTask(in);
     }
 
     public static MLTask parse(XContentParser parser) throws IOException {
@@ -320,6 +319,7 @@ public class MLTask implements ToXContentObject, Writeable {
                     break;
                 case TENANT_ID_FIELD:
                     tenantId = parser.textOrNull();
+                    break;
                 default:
                     parser.skipChildren();
                     break;

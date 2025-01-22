@@ -377,12 +377,12 @@ public class TransportDeployModelOnNodeActionTests extends OpenSearchTestCase {
         MLDeployModelInput deployModelInput = new MLDeployModelInput(
             "modelId",
             "taskId",
-            null,
             "modelContentHash",
             3,
             coordinatingNodeId,
             true,
-            mlTask
+            mlTask,
+            null
         );
         return new MLDeployModelNodesRequest(nodeIds, deployModelInput);
     }

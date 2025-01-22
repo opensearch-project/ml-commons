@@ -8,7 +8,6 @@ package org.opensearch.ml.action.tasks;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
-import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 
 import java.io.IOException;
 
@@ -93,15 +92,13 @@ public class DeleteTaskTransportAction extends HandledTransportAction<ActionRequ
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
 
-            sdkClient
-                .getDataObjectAsync(getDataObjectRequest, client.threadPool().executor(GENERAL_THREAD_POOL))
-                .whenComplete((getDataObjectResponse, throwable) -> {
-                    if (throwable != null) {
-                        handleGetError(throwable, taskId, wrappedListener);
-                        return;
-                    }
-                    processGetDataObjectResponse(getDataObjectResponse, taskId, tenantId, wrappedListener);
-                });
+            sdkClient.getDataObjectAsync(getDataObjectRequest).whenComplete((getDataObjectResponse, throwable) -> {
+                if (throwable != null) {
+                    handleGetError(throwable, taskId, wrappedListener);
+                    return;
+                }
+                processGetDataObjectResponse(getDataObjectResponse, taskId, tenantId, wrappedListener);
+            });
         } catch (Exception e) {
             log.error("Failed to delete ML task {}", taskId, e);
             actionListener.onFailure(e);
@@ -172,10 +169,7 @@ public class DeleteTaskTransportAction extends HandledTransportAction<ActionRequ
 
         try {
             sdkClient
-                .deleteDataObjectAsync(
-                    DeleteDataObjectRequest.builder().index(deleteRequest.index()).id(deleteRequest.id()).build(),
-                    client.threadPool().executor(GENERAL_THREAD_POOL)
-                )
+                .deleteDataObjectAsync(DeleteDataObjectRequest.builder().index(deleteRequest.index()).id(deleteRequest.id()).build())
                 .whenComplete((deleteDataObjectResponse, throwable) -> {
                     if (throwable != null) {
                         handleDeleteError(throwable, taskId, actionListener);
