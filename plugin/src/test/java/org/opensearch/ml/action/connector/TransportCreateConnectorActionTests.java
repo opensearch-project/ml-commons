@@ -119,8 +119,12 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
     private ArgumentCaptor<PutDataObjectRequest> putDataObjectRequestArgumentCaptor;
 
     private static final List<String> TRUSTED_CONNECTOR_ENDPOINTS_REGEXES = ImmutableList
-        .of("^https://runtime\\.sagemaker\\..*\\.amazonaws\\.com/.*$", "^https://api\\.openai\\.com/.*$",
-                "^https://api\\.cohere\\.ai/.*$", REKOGNITION_TRUST_ENDPOINT_REGEX);
+        .of(
+            "^https://runtime\\.sagemaker\\..*\\.amazonaws\\.com/.*$",
+            "^https://api\\.openai\\.com/.*$",
+            "^https://api\\.cohere\\.ai/.*$",
+            REKOGNITION_TRUST_ENDPOINT_REGEX
+        );
 
     @Before
     public void setup() {
@@ -542,20 +546,19 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         );
     }
 
-
     public void test_connector_creation_success_rekognition() {
         TransportCreateConnectorAction action = new TransportCreateConnectorAction(
-                transportService,
-                actionFilters,
-                mlIndicesHandler,
-                client,
-                sdkClient,
-                mlEngine,
-                connectorAccessControlHelper,
-                settings,
-                clusterService,
-                mlModelManager,
-                mlFeatureEnabledSetting
+            transportService,
+            actionFilters,
+            mlIndicesHandler,
+            client,
+            sdkClient,
+            mlEngine,
+            connectorAccessControlHelper,
+            settings,
+            clusterService,
+            mlModelManager,
+            mlFeatureEnabledSetting
         );
 
         doAnswer(invocation -> {
@@ -572,34 +575,34 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
 
         List<ConnectorAction> actions = new ArrayList<>();
         actions
-                .add(
-                        ConnectorAction
-                                .builder()
-                                .actionType(ConnectorAction.ActionType.PREDICT)
-                                .method("POST")
-                                .url("https://rekognition.test-region-1.amazonaws.com")
-                                .build()
-                );
+            .add(
+                ConnectorAction
+                    .builder()
+                    .actionType(ConnectorAction.ActionType.PREDICT)
+                    .method("POST")
+                    .url("https://rekognition.test-region-1.amazonaws.com")
+                    .build()
+            );
         actions
-                .add(
-                        ConnectorAction
-                                .builder()
-                                .actionType(ConnectorAction.ActionType.PREDICT)
-                                .method("POST")
-                                .url("https://rekognition-fips.test-region-1.amazonaws.com")
-                                .build()
-                );
+            .add(
+                ConnectorAction
+                    .builder()
+                    .actionType(ConnectorAction.ActionType.PREDICT)
+                    .method("POST")
+                    .url("https://rekognition-fips.test-region-1.amazonaws.com")
+                    .build()
+            );
 
         Map<String, String> credential = ImmutableMap.of("access_key", "mockKey", "secret_key", "mockSecret");
         MLCreateConnectorInput mlCreateConnectorInput = MLCreateConnectorInput
-                .builder()
-                .name(randomAlphaOfLength(5))
-                .description(randomAlphaOfLength(10))
-                .version("1")
-                .protocol(ConnectorProtocols.HTTP)
-                .credential(credential)
-                .actions(actions)
-                .build();
+            .builder()
+            .name(randomAlphaOfLength(5))
+            .description(randomAlphaOfLength(10))
+            .version("1")
+            .protocol(ConnectorProtocols.HTTP)
+            .credential(credential)
+            .actions(actions)
+            .build();
 
         MLCreateConnectorRequest request = new MLCreateConnectorRequest(mlCreateConnectorInput);
 
