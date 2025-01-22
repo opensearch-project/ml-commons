@@ -67,6 +67,7 @@ import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.index.reindex.BulkByScrollResponse;
 import org.opensearch.index.reindex.DeleteByQueryAction;
@@ -717,6 +718,96 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             "1 agents are still using this model, please delete or update the agents first, all visible agents are: [1]",
             argumentCaptor.getValue().getMessage()
         );
+    }
+
+    public void testDeleteModel_NoAgentIndex() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
+            listener.onResponse(deleteResponse);
+            return null;
+        }).when(client).delete(any(), any());
+
+        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, false);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        doReturn(true).when(deleteModelTransportAction).isSuperAdminUserWrapper(clusterService, client);
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new IndexNotFoundException("", ""));
+            return null;
+        }).when(client).search(any(), any());
+
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        ArgumentCaptor<DeleteResponse> captor = forClass(DeleteResponse.class);
+        verify(actionListener).onResponse(captor.capture());
+
+        // Assert the captured response matches the expected values
+        DeleteResponse actualResponse = captor.getValue();
+        assertEquals(deleteResponse.getId(), actualResponse.getId());
+        assertEquals(deleteResponse.getIndex(), actualResponse.getIndex());
+        assertEquals(deleteResponse.getVersion(), actualResponse.getVersion());
+        assertEquals(deleteResponse.getResult(), actualResponse.getResult());
+    }
+
+    public void testDeleteModel_failToCheckAgent() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
+            listener.onResponse(deleteResponse);
+            return null;
+        }).when(client).delete(any(), any());
+
+        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, false);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        doReturn(true).when(deleteModelTransportAction).isSuperAdminUserWrapper(clusterService, client);
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new IllegalArgumentException("fail to search agent index."));
+            return null;
+        }).when(client).search(any(), any());
+
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("fail to search agent index.", argumentCaptor.getValue().getMessage());
+    }
+
+    public void testDeleteModel_failToCheckPipeline() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
+            listener.onResponse(deleteResponse);
+            return null;
+        }).when(client).delete(any(), any());
+
+        GetResponse getResponse = prepareMLModel(MLModelState.REGISTERED, null, false);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        doReturn(true).when(deleteModelTransportAction).isSuperAdminUserWrapper(clusterService, client);
+
+        doAnswer(invocation -> {
+            ActionListener<GetSearchPipelineResponse> listener = invocation.getArgument(2);
+            listener.onFailure(new IllegalArgumentException("fail to search pipeline index."));
+            return null;
+        }).when(client).execute(eq(GetSearchPipelineAction.INSTANCE), any(), any());
+
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("fail to search pipeline index.", argumentCaptor.getValue().getMessage());
     }
 
     public void testDeleteModel_BlockedByHiddenAgent() throws IOException {
