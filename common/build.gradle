@@ -23,6 +23,10 @@ dependencies {
     testImplementation group: 'org.mockito', name: 'mockito-core', version: '5.7.0'
     testImplementation "org.opensearch.test:framework:${opensearch_version}"
 
+    compileOnly group: 'software.amazon.awssdk', name: 'aws-core', version: '2.29.12'
+    compileOnly group: 'software.amazon.awssdk', name: 's3', version: '2.29.12'
+    compileOnly group: 'software.amazon.awssdk', name: 'regions', version: '2.29.12'
+
     compileOnly group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
     compileOnly group: 'com.google.code.gson', name: 'gson', version: '2.10.1'
     compileOnly group: 'org.json', name: 'json', version: '20231013'

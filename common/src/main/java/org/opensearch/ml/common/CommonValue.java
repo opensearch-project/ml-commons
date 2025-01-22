@@ -44,6 +44,7 @@ public class CommonValue {
     public static final String ML_MEMORY_META_INDEX = ".plugins-ml-memory-meta";
     public static final String ML_MEMORY_MESSAGE_INDEX = ".plugins-ml-memory-message";
     public static final String ML_STOP_WORDS_INDEX = ".plugins-ml-stop-words";
+    public static final String TASK_POLLING_JOB_INDEX = ".ml_commons_task_polling_job";
     public static final Set<String> stopWordsIndices = ImmutableSet.of(".plugins-ml-stop-words");
 
     // Index mapping paths

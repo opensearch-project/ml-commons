@@ -199,6 +199,7 @@ import org.opensearch.ml.engine.tools.SearchIndexTool;
 import org.opensearch.ml.engine.tools.VisualizationsTool;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
+import org.opensearch.ml.jobs.MLBatchTaskUpdateJobRunner;
 import org.opensearch.ml.memory.ConversationalMemoryHandler;
 import org.opensearch.ml.memory.action.conversation.CreateConversationAction;
 import org.opensearch.ml.memory.action.conversation.CreateConversationTransportAction;
@@ -712,6 +713,8 @@ public class MachineLearningPlugin extends Plugin
             .getClusterSettings()
             .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED, it -> ragSearchPipelineEnabled = it);
 
+        MLBatchTaskUpdateJobRunner.getJobRunnerInstance().initialize(clusterService, threadPool, client, mlTaskManager);
+
         return ImmutableList
             .of(
                 encryptor,
@@ -1021,6 +1024,7 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_CANCELLED_REGEX,
                 MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_CANCELLING_REGEX,
                 MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_EXPIRED_REGEX,
+                MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_FAILED_REGEX,
                 MLCommonsSettings.ML_COMMONS_CONTROLLER_ENABLED,
                 MLCommonsSettings.ML_COMMONS_OFFLINE_BATCH_INGESTION_ENABLED,
                 MLCommonsSettings.ML_COMMONS_OFFLINE_BATCH_INFERENCE_ENABLED,

@@ -240,7 +240,7 @@ public final class MLCommonsSettings {
     public static final Setting<String> ML_COMMONS_REMOTE_JOB_STATUS_COMPLETED_REGEX = Setting
         .simpleString(
             "plugins.ml_commons.remote_job.status_regex.completed",
-            "(complete|completed)",
+            "(complete|completed|partiallyCompleted)",
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );
@@ -262,6 +262,14 @@ public final class MLCommonsSettings {
         .simpleString(
             "plugins.ml_commons.remote_job.status_regex.expired",
             "(expired|timeout)",
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+    public static final Setting<String> ML_COMMONS_REMOTE_JOB_STATUS_FAILED_REGEX = Setting
+        .simpleString(
+            "plugins.ml_commons.remote_job.status_regex.failed",
+            "(failed)",
             Setting.Property.NodeScope,
             Setting.Property.Dynamic
         );

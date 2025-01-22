@@ -69,9 +69,10 @@ dependencies {
         exclude group: 'org.bouncycastle', module: 'bcprov-ext-jdk18on'
     }
     implementation 'org.bouncycastle:bcprov-jdk18on:1.78.1'
-    implementation group: 'software.amazon.awssdk', name: 'aws-core', version: '2.29.12'
-    implementation group: 'software.amazon.awssdk', name: 's3', version: '2.29.12'
-    implementation group: 'software.amazon.awssdk', name: 'regions', version: '2.29.12'
+    compileOnly group: 'software.amazon.awssdk', name: 'aws-core', version: '2.29.12'
+    compileOnly group: 'software.amazon.awssdk', name: 's3', version: '2.29.12'
+    compileOnly group: 'software.amazon.awssdk', name: 'regions', version: '2.29.12'
+
     implementation 'com.jayway.jsonpath:json-path:2.9.0'
     implementation group: 'org.json', name: 'json', version: '20231013'
     implementation group: 'software.amazon.awssdk', name: 'netty-nio-client', version: '2.29.12'
