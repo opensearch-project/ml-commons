@@ -365,78 +365,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
 
     }
 
-    public void testDeleteModel_BlockedByIngestPipeline() throws IOException {
-        Map<String, Object> ingestPipelineConfig1 = Map.of("model_id", "test_id");
-        Map<String, Object> ingestPipelineConfig2 = Map.of("nothing", "test_id");
-        when(getIngestionPipelineResponse.toString())
-            .thenReturn(StringUtils.toJson(Map.of("ingest_1", ingestPipelineConfig1, "ingest_2", ingestPipelineConfig2)));
-        // when(getIngestionPipelineResponse.pipelines())
-        // .thenReturn(List.of(ingestPipelineConfiguration, independentIngestPipelineConfiguration));
-        doAnswer(invocation -> {
-            ActionListener<GetPipelineResponse> listener = invocation.getArgument(2);
-            listener.onResponse(getIngestionPipelineResponse);
-            return null;
-        }).when(client).execute(eq(GetPipelineAction.INSTANCE), any(), any());
 
-        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "1 ingest pipelines are still using this model, please delete or update the pipelines first: [ingest_1]",
-            argumentCaptor.getValue().getMessage()
-        );
-    }
-
-    public void testDeleteModel_BlockedByAgent() throws IOException {
-        XContentBuilder content = XContentBuilder.builder(XContentType.JSON.xContent());
-        content.startObject();
-        content.field(MLAgent.IS_HIDDEN_FIELD, false);
-        content.endObject();
-        SearchHit hit = new SearchHit(1, "1", null, null).sourceRef(BytesReference.bytes(content));
-        SearchHits searchHits = new SearchHits(new SearchHit[] { hit }, new TotalHits(1, TotalHits.Relation.EQUAL_TO), 1.0f);
-        when(searchResponse.getHits()).thenReturn(searchHits);
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
-            listener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(), any());
-
-        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "1 agents are still using this model, please delete or update the agents first, all visible agents are: [1]",
-            argumentCaptor.getValue().getMessage()
-        );
-    }
-
-    public void testDeleteModel_BlockedByHiddenAgent() throws IOException {
-        XContentBuilder content = XContentBuilder.builder(XContentType.JSON.xContent());
-        content.startObject();
-        content.field(MLAgent.IS_HIDDEN_FIELD, true);
-        content.endObject();
-        SearchHit hit = new SearchHit(1, "1", null, null).sourceRef(BytesReference.bytes(content));
-        XContentBuilder content2 = XContentBuilder.builder(XContentType.JSON.xContent());
-        content2.startObject();
-        content2.field(MLAgent.IS_HIDDEN_FIELD, false);
-        content2.endObject();
-        SearchHit hit2 = new SearchHit(2, "2", null, null).sourceRef(BytesReference.bytes(content2));
-        SearchHits searchHits = new SearchHits(new SearchHit[] { hit, hit2 }, new TotalHits(1, TotalHits.Relation.EQUAL_TO), 1.0f);
-        when(searchResponse.getHits()).thenReturn(searchHits);
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
-            listener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(), any());
-
-        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "2 agents are still using this model, please delete or update the agents first, all visible agents are: [2]",
-            argumentCaptor.getValue().getMessage()
-        );
-    }
 
     public void testDeleteRemoteModel_Success() throws IOException {
         doAnswer(invocation -> {
@@ -834,6 +763,80 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         verify(deleteChunksListener).onFailure(argumentCaptor.capture());
         assertEquals(OS_STATUS_EXCEPTION_MESSAGE + ", " + SEARCH_FAILURE_MSG + "test_id", argumentCaptor.getValue().getMessage());
     }
+
+    public void testDeleteModel_BlockedByIngestPipeline() throws IOException {
+        Map<String, Object> ingestPipelineConfig1 = Map.of("model_id", "test_id");
+        Map<String, Object> ingestPipelineConfig2 = Map.of("nothing", "test_id");
+        when(getIngestionPipelineResponse.toString())
+                .thenReturn(StringUtils.toJson(Map.of("ingest_1", ingestPipelineConfig1, "ingest_2", ingestPipelineConfig2)));
+        // when(getIngestionPipelineResponse.pipelines())
+        // .thenReturn(List.of(ingestPipelineConfiguration, independentIngestPipelineConfiguration));
+        doAnswer(invocation -> {
+            ActionListener<GetPipelineResponse> listener = invocation.getArgument(2);
+            listener.onResponse(getIngestionPipelineResponse);
+            return null;
+        }).when(client).execute(eq(GetPipelineAction.INSTANCE), any(), any());
+
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+                "1 ingest pipelines are still using this model, please delete or update the pipelines first: [ingest_1]",
+                argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    public void testDeleteModel_BlockedByAgent() throws IOException {
+        XContentBuilder content = XContentBuilder.builder(XContentType.JSON.xContent());
+        content.startObject();
+        content.field(MLAgent.IS_HIDDEN_FIELD, false);
+        content.endObject();
+        SearchHit hit = new SearchHit(1, "1", null, null).sourceRef(BytesReference.bytes(content));
+        SearchHits searchHits = new SearchHits(new SearchHit[] { hit }, new TotalHits(1, TotalHits.Relation.EQUAL_TO), 1.0f);
+        when(searchResponse.getHits()).thenReturn(searchHits);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), any());
+
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+                "1 agents are still using this model, please delete or update the agents first, all visible agents are: [1]",
+                argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    public void testDeleteModel_BlockedByHiddenAgent() throws IOException {
+        XContentBuilder content = XContentBuilder.builder(XContentType.JSON.xContent());
+        content.startObject();
+        content.field(MLAgent.IS_HIDDEN_FIELD, true);
+        content.endObject();
+        SearchHit hit = new SearchHit(1, "1", null, null).sourceRef(BytesReference.bytes(content));
+        XContentBuilder content2 = XContentBuilder.builder(XContentType.JSON.xContent());
+        content2.startObject();
+        content2.field(MLAgent.IS_HIDDEN_FIELD, false);
+        content2.endObject();
+        SearchHit hit2 = new SearchHit(2, "2", null, null).sourceRef(BytesReference.bytes(content2));
+        SearchHits searchHits = new SearchHits(new SearchHit[] { hit, hit2 }, new TotalHits(1, TotalHits.Relation.EQUAL_TO), 1.0f);
+        when(searchResponse.getHits()).thenReturn(searchHits);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), any());
+
+        deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+                "2 agents are still using this model, please delete or update the agents first, all visible agents are: [2]",
+                argumentCaptor.getValue().getMessage()
+        );
+    }
+
 
     public GetResponse prepareMLModel(MLModelState mlModelState, String modelGroupID, boolean isHidden) throws IOException {
         MLModel mlModel = MLModel
