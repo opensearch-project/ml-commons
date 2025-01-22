@@ -70,6 +70,7 @@ import java.util.function.Supplier;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Rule;
+import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -85,15 +86,22 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.breaker.CircuitBreaker;
 import org.opensearch.core.common.breaker.CircuitBreakingException;
+import org.opensearch.core.common.bytes.BytesReference;
+import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.breaker.ThresholdCircuitBreaker;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
@@ -121,6 +129,8 @@ import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.stats.suppliers.CounterSupplier;
 import org.opensearch.ml.task.MLTaskManager;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.script.ScriptService;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
@@ -137,6 +147,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     private ClusterService clusterService;
     @Mock
     private Client client;
+    private SdkClient sdkClient;
     @Mock
     private ThreadPool threadPool;
     private NamedXContentRegistry xContentRegistry;
@@ -212,7 +223,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         );
         clusterService = spy(new ClusterService(settings, clusterSettings, null, clusterApplierService));
         xContentRegistry = NamedXContentRegistry.EMPTY;
-
+        sdkClient = SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap());
         modelName = "model_name1";
         modelId = randomAlphaOfLength(10);
         modelContentHashValue = "c446f747520bcc6af053813cb1e8d34944a7c4686bbb405aeaa23883b5a806c8";
@@ -273,6 +284,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
                 clusterService,
                 scriptService,
                 client,
+                sdkClient,
                 threadPool,
                 xContentRegistry,
                 modelHelper,
@@ -326,6 +338,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
     }
 
+    @Test
     public void testRegisterMLModel_ExceedMaxRunningTask() {
         String error = "exceed max running task limit";
         doThrow(new MLLimitExceededException(error)).when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
@@ -448,7 +461,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
             );
     }
 
-    public void testRegisterMLRemoteModel() throws PrivilegedActionException {
+    public void testRegisterMLRemoteModel() throws PrivilegedActionException, IOException {
         ActionListener<MLRegisterModelResponse> listener = mock(ActionListener.class);
         doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
@@ -458,18 +471,27 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         MLRegisterModelInput pretrainedInput = mockRemoteModelInput(true);
         MLTask pretrainedTask = MLTask.builder().taskId("pretrained").modelId("pretrained").functionName(FunctionName.REMOTE).build();
         mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
+
+        GetResponse getResponse = prepareMLModelGroup();
         doAnswer(invocation -> {
-            ActionListener<IndexResponse> indexResponseActionListener = (ActionListener<IndexResponse>) invocation.getArguments()[1];
+            ActionListener<GetResponse> getModelGrouplistener = invocation.getArgument(1);
+            getModelGrouplistener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> indexResponseActionListener = invocation.getArgument(1);
             indexResponseActionListener.onResponse(indexResponse);
             return null;
         }).when(client).index(any(), any());
+
         when(indexResponse.getId()).thenReturn("mockIndexId");
-        modelManager.registerMLRemoteModel(pretrainedInput, pretrainedTask, listener);
+        modelManager.registerMLRemoteModel(sdkClient, pretrainedInput, pretrainedTask, listener);
         assertEquals(pretrainedTask.getFunctionName(), FunctionName.REMOTE);
         verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
     }
 
-    public void testRegisterMLRemoteModel_SkipMemoryCBOpen() {
+    public void testRegisterMLRemoteModel_SkipMemoryCBOpen() throws IOException {
         ActionListener<MLRegisterModelResponse> listener = mock(ActionListener.class);
         doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         when(mlCircuitBreakerService.checkOpenCB())
@@ -484,18 +506,26 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         MLRegisterModelInput pretrainedInput = mockRemoteModelInput(true);
         MLTask pretrainedTask = MLTask.builder().taskId("pretrained").modelId("pretrained").functionName(FunctionName.REMOTE).build();
         mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
+
+        GetResponse getResponse = prepareMLModelGroup();
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> getModelGrouplistener = invocation.getArgument(1);
+            getModelGrouplistener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
         doAnswer(invocation -> {
             ActionListener<IndexResponse> indexResponseActionListener = (ActionListener<IndexResponse>) invocation.getArguments()[1];
             indexResponseActionListener.onResponse(indexResponse);
             return null;
         }).when(client).index(any(), any());
         when(indexResponse.getId()).thenReturn("mockIndexId");
-        modelManager.registerMLRemoteModel(pretrainedInput, pretrainedTask, listener);
+        modelManager.registerMLRemoteModel(sdkClient, pretrainedInput, pretrainedTask, listener);
         assertEquals(pretrainedTask.getFunctionName(), FunctionName.REMOTE);
         verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
     }
 
-    public void testIndexRemoteModel() throws PrivilegedActionException {
+    public void testIndexRemoteModel() throws PrivilegedActionException, IOException {
         ActionListener<MLRegisterModelResponse> listener = mock(ActionListener.class);
         doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
@@ -505,12 +535,21 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         MLRegisterModelInput pretrainedInput = mockRemoteModelInput(true);
         MLTask pretrainedTask = MLTask.builder().taskId("pretrained").modelId("pretrained").functionName(FunctionName.REMOTE).build();
         mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
+
+        GetResponse getResponse = prepareMLModelGroup();
+
+        IndexResponse indexResponse = new IndexResponse(new ShardId("test", "test", 1), "mockIndexId", 1l, 1l, 1l, true);
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> getModelGrouplistener = invocation.getArgument(1);
+            getModelGrouplistener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
         doAnswer(invocation -> {
             ActionListener<IndexResponse> indexResponseActionListener = (ActionListener<IndexResponse>) invocation.getArguments()[1];
             indexResponseActionListener.onResponse(indexResponse);
             return null;
         }).when(client).index(any(), any());
-        when(indexResponse.getId()).thenReturn("mockIndexId");
         modelManager.indexRemoteModel(pretrainedInput, pretrainedTask, "1.0.0");
         assertEquals(pretrainedTask.getFunctionName(), FunctionName.REMOTE);
         verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
@@ -621,12 +660,19 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         when(modelCacheHelper.getLocalDeployedModels()).thenReturn(new String[] {});
         mock_threadpool(threadPool, taskExecutorService);
         mock_client_get_failure(client);
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener1 = invocation.getArgument(1);
+            listener1.onFailure(new RuntimeException("get doc failure"));
+            return null;
+        }).when(client).get(any(), any());
+
         mock_client_ThreadContext(client, threadPool, threadContext);
         modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, false, mlTask, listener);
         assertFalse(modelManager.isModelRunningOnNode(modelId));
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
-        assertEquals("get doc failure", exception.getValue().getMessage());
+        assertEquals("Failed to get data object from index .plugins-ml-model", exception.getValue().getMessage());
         verify(mlStats)
             .createCounterStatIfAbsent(
                 eq(FunctionName.TEXT_EMBEDDING),
@@ -1280,5 +1326,20 @@ public class MLModelManagerTests extends OpenSearchTestCase {
             .isHidden(isHidden)
             .deployModel(true)
             .build();
+    }
+
+    public GetResponse prepareMLModelGroup() throws IOException {
+        MLModelGroup mlModelGroup = MLModelGroup
+            .builder()
+            .modelGroupId("test_id")
+            .name("modelGroup")
+            .description("this is an example description")
+            .latestVersion(1)
+            .access("private")
+            .build();
+        XContentBuilder content = mlModelGroup.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
+        BytesReference bytesReference = BytesReference.bytes(content);
+        GetResult getResult = new GetResult("indexName", "111", 111l, 111l, 111l, true, bytesReference, null, null);
+        return new GetResponse(getResult);
     }
 }
