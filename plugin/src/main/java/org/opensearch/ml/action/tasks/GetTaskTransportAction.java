@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.action.tasks;
 
+import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
@@ -22,7 +23,6 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_FIELD;
 import static org.opensearch.ml.utils.MLExceptionUtils.BATCH_INFERENCE_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
-import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
 import java.util.HashMap;
 import java.util.List;
@@ -32,11 +32,12 @@ import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.ActionRequest;
-import org.opensearch.action.get.GetRequest;
+import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
@@ -45,8 +46,10 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.settings.Setting;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
@@ -59,7 +62,6 @@ import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorAction.ActionType;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
-import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
@@ -78,7 +80,13 @@ import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.ml.utils.TenantAwareHelper;
+import org.opensearch.remote.metadata.client.GetDataObjectRequest;
+import org.opensearch.remote.metadata.client.GetDataObjectResponse;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.script.ScriptService;
+import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
@@ -88,6 +96,7 @@ import lombok.extern.log4j.Log4j2;
 public class GetTaskTransportAction extends HandledTransportAction<ActionRequest, MLTaskGetResponse> {
 
     Client client;
+    SdkClient sdkClient;
     NamedXContentRegistry xContentRegistry;
 
     ClusterService clusterService;
@@ -99,7 +108,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
     MLModelManager mlModelManager;
 
     MLTaskManager mlTaskManager;
-    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     volatile List<String> remoteJobStatusFields;
     volatile Pattern remoteJobCompletedStatusRegexPattern;
@@ -112,6 +121,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
+        SdkClient sdkClient,
         NamedXContentRegistry xContentRegistry,
         ClusterService clusterService,
         ScriptService scriptService,
@@ -125,6 +135,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
     ) {
         super(MLTaskGetAction.NAME, transportService, actionFilters, MLTaskGetRequest::new);
         this.client = client;
+        this.sdkClient = sdkClient;
         this.xContentRegistry = xContentRegistry;
         this.clusterService = clusterService;
         this.scriptService = scriptService;
@@ -178,49 +189,115 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLTaskGetResponse> actionListener) {
         MLTaskGetRequest mlTaskGetRequest = MLTaskGetRequest.fromActionRequest(request);
         String taskId = mlTaskGetRequest.getTaskId();
-        GetRequest getRequest = new GetRequest(ML_TASK_INDEX).id(taskId);
+        String tenantId = mlTaskGetRequest.getTenantId();
+
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
+            return;
+        }
+
+        FetchSourceContext fetchSourceContext = new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);
+        GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
+            .builder()
+            .index(ML_TASK_INDEX)
+            .id(taskId)
+            .tenantId(tenantId)
+            .fetchSourceContext(fetchSourceContext)
+            .build();
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            client.get(getRequest, ActionListener.runBefore(ActionListener.wrap(r -> {
-                log.debug("Completed Get Task Request, id:{}", taskId);
-
-                if (r != null && r.isExists()) {
-                    try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, r.getSourceAsBytesRef())) {
-                        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                        MLTask mlTask = MLTask.parse(parser);
-
-                        // check if function is remote and task is of type batch prediction
-                        if (mlTask.getTaskType() == MLTaskType.BATCH_PREDICTION
-                            && !mlFeatureEnabledSetting.isOfflineBatchInferenceEnabled()) {
-                            throw new IllegalStateException(BATCH_INFERENCE_DISABLED_ERR_MSG);
-                        }
-                        if (mlTask.getTaskType() == MLTaskType.BATCH_PREDICTION && mlTask.getFunctionName() == FunctionName.REMOTE) {
-                            processRemoteBatchPrediction(mlTask, taskId, actionListener);
-                        } else {
-                            actionListener.onResponse(MLTaskGetResponse.builder().mlTask(mlTask).build());
-                        }
-                    } catch (Exception e) {
-                        log.error("Failed to parse ml task " + r.getId(), e);
-                        actionListener.onFailure(e);
-                    }
-                } else {
-                    actionListener.onFailure(new OpenSearchStatusException("Fail to find task", RestStatus.NOT_FOUND));
-                }
-            }, e -> {
-                if (e instanceof IndexNotFoundException) {
-                    actionListener.onFailure(new MLResourceNotFoundException("Fail to find task"));
-                } else {
-                    log.error("Failed to get ML task " + taskId, e);
-                    actionListener.onFailure(e);
-                }
-            }), () -> context.restore()));
+            sdkClient.getDataObjectAsync(getDataObjectRequest).whenComplete((r, throwable) -> {
+                context.restore();
+                handleAsyncResponse(r, throwable, taskId, tenantId, actionListener);
+            });
         } catch (Exception e) {
-            log.error("Failed to get ML task " + taskId, e);
+            log.error("Failed to get ML task {}", taskId, e);
             actionListener.onFailure(e);
         }
     }
 
-    private void processRemoteBatchPrediction(MLTask mlTask, String taskId, ActionListener<MLTaskGetResponse> actionListener) {
+    private void handleAsyncResponse(
+        GetDataObjectResponse response,
+        Throwable throwable,
+        String taskId,
+        String tenantId,
+        ActionListener<MLTaskGetResponse> actionListener
+    ) {
+        log.debug("Completed Get task Request, id:{}", taskId);
+
+        if (throwable != null) {
+            handleThrowable(throwable, taskId, actionListener);
+            return;
+        }
+
+        processResponse(response, taskId, tenantId, actionListener);
+    }
+
+    private void handleThrowable(Throwable throwable, String taskId, ActionListener<MLTaskGetResponse> actionListener) {
+        Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+
+        if (ExceptionsHelper.unwrap(cause, IndexNotFoundException.class) != null) {
+            log.error("Failed to get task index", cause);
+            actionListener.onFailure(new OpenSearchStatusException("Failed to find task", RestStatus.NOT_FOUND));
+        } else {
+            log.error("Failed to get ML task {}", taskId, cause);
+            actionListener.onFailure(cause);
+        }
+    }
+
+    private void processResponse(
+        GetDataObjectResponse response,
+        String taskId,
+        String tenantId,
+        ActionListener<MLTaskGetResponse> actionListener
+    ) {
+        try {
+            GetResponse gr = response.parser() == null ? null : GetResponse.fromXContent(response.parser());
+
+            if (gr == null || !gr.isExists()) {
+                actionListener.onFailure(new OpenSearchStatusException("Failed to find task", RestStatus.NOT_FOUND));
+                return;
+            }
+
+            parseAndHandleTask(gr, taskId, tenantId, actionListener);
+        } catch (Exception e) {
+            log.error("Failed to parse GetDataObjectResponse for task {}", taskId, e);
+            actionListener.onFailure(e);
+        }
+    }
+
+    private void parseAndHandleTask(GetResponse gr, String taskId, String tenantId, ActionListener<MLTaskGetResponse> actionListener) {
+        try (
+            XContentParser parser = jsonXContent.createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, gr.getSourceAsString())
+        ) {
+
+            ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+            MLTask mlTask = MLTask.parse(parser);
+
+            if (!TenantAwareHelper.validateTenantResource(mlFeatureEnabledSetting, tenantId, mlTask.getTenantId(), actionListener)) {
+                return;
+            }
+
+            if (mlTask.getTaskType() == MLTaskType.BATCH_PREDICTION && !mlFeatureEnabledSetting.isOfflineBatchInferenceEnabled()) {
+                throw new IllegalStateException(BATCH_INFERENCE_DISABLED_ERR_MSG);
+            }
+
+            if (mlTask.getTaskType() == MLTaskType.BATCH_PREDICTION && mlTask.getFunctionName() == FunctionName.REMOTE) {
+                processRemoteBatchPrediction(mlTask, taskId, tenantId, actionListener);
+            } else {
+                actionListener.onResponse(MLTaskGetResponse.builder().mlTask(mlTask).build());
+            }
+        } catch (Exception e) {
+            log.error("Failed to parse ML task {}", taskId, e);
+            actionListener.onFailure(e);
+        }
+    }
+
+    private void processRemoteBatchPrediction(
+        MLTask mlTask,
+        String taskId,
+        String tenantId,
+        ActionListener<MLTaskGetResponse> actionListener
+    ) {
         Map<String, Object> remoteJob = mlTask.getRemoteJob();
 
         Map<String, String> parameters = new HashMap<>();
@@ -228,7 +305,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
             if (entry.getValue() instanceof String) {
                 parameters.put(entry.getKey(), (String) entry.getValue());
             } else {
-                log.debug("Value for key " + entry.getKey() + " is not a String");
+                log.debug("Value for key {} is not a String", entry.getKey());
             }
         }
 
@@ -248,44 +325,62 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         User user = RestActionUtils.getUserContext(client);
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<MLModel> getModelListener = ActionListener.wrap(model -> {
-                modelAccessControlHelper.validateModelGroupAccess(user, model.getModelGroupId(), client, ActionListener.wrap(access -> {
-                    if (!access) {
-                        actionListener.onFailure(new MLValidationException("You don't have permission to access this batch job"));
-                    } else {
-                        if (model.getConnector() != null) {
-                            Connector connector = model.getConnector();
-                            executeConnector(connector, mlInput, taskId, mlTask, remoteJob, actionListener);
-                        } else if (clusterService.state().metadata().hasIndex(ML_CONNECTOR_INDEX)) {
-                            ActionListener<Connector> listener = ActionListener.wrap(connector -> {
-                                executeConnector(connector, mlInput, taskId, mlTask, remoteJob, actionListener);
+            ActionListener<MLModel> getModelListener = ActionListener
+                .wrap(
+                    model -> modelAccessControlHelper
+                        .validateModelGroupAccess(
+                            user,
+                            mlFeatureEnabledSetting,
+                            tenantId,
+                            model.getModelGroupId(),
+                            client,
+                            sdkClient,
+                            ActionListener.wrap(access -> {
+                                if (!access) {
+                                    actionListener
+                                        .onFailure(new MLValidationException("You don't have permission to access this batch job"));
+                                } else {
+                                    if (model.getConnector() != null) {
+                                        Connector connector = model.getConnector();
+                                        executeConnector(connector, mlInput, taskId, mlTask, remoteJob, actionListener);
+                                    } else if (clusterService.state().metadata().hasIndex(ML_CONNECTOR_INDEX)) {
+                                        ActionListener<Connector> listener = ActionListener.wrap(connector -> {
+                                            executeConnector(connector, mlInput, taskId, mlTask, remoteJob, actionListener);
+                                        }, e -> {
+                                            log.error("Failed to get connector {}", model.getConnectorId(), e);
+                                            actionListener.onFailure(e);
+                                        });
+                                        try (
+                                            ThreadContext.StoredContext threadContext = client
+                                                .threadPool()
+                                                .getThreadContext()
+                                                .stashContext()
+                                        ) {
+                                            connectorAccessControlHelper
+                                                .getConnector(
+                                                    client,
+                                                    model.getConnectorId(),
+                                                    ActionListener.runBefore(listener, threadContext::restore)
+                                                );
+                                        }
+                                    } else {
+                                        actionListener
+                                            .onFailure(new ResourceNotFoundException("Can't find connector " + model.getConnectorId()));
+                                    }
+                                }
                             }, e -> {
-                                log.error("Failed to get connector " + model.getConnectorId(), e);
+                                log.error("Failed to validate Access for Model Group {}", model.getModelGroupId(), e);
                                 actionListener.onFailure(e);
-                            });
-                            try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
-                                connectorAccessControlHelper
-                                    .getConnector(
-                                        client,
-                                        model.getConnectorId(),
-                                        ActionListener.runBefore(listener, threadContext::restore)
-                                    );
-                            }
-                        } else {
-                            actionListener.onFailure(new ResourceNotFoundException("Can't find connector " + model.getConnectorId()));
-                        }
+                            })
+                        ),
+                    e -> {
+                        log.error("Failed to retrieve the ML model for the given task ID", e);
+                        actionListener
+                            .onFailure(
+                                new OpenSearchStatusException("Failed to retrieve the ML model for the given task ID", RestStatus.NOT_FOUND)
+                            );
                     }
-                }, e -> {
-                    log.error("Failed to validate Access for Model Group " + model.getModelGroupId(), e);
-                    actionListener.onFailure(e);
-                }));
-            }, e -> {
-                log.error("Failed to retrieve the ML model for the given task ID", e);
-                actionListener
-                    .onFailure(
-                        new OpenSearchStatusException("Failed to retrieve the ML model for the given task ID", RestStatus.NOT_FOUND)
-                    );
-            });
+                );
             mlModelManager.getModel(modelId, null, null, ActionListener.runBefore(getModelListener, context::restore));
         } catch (Exception e) {
             log.error("Unable to fetch status for ml task ", e);
@@ -302,7 +397,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         ActionListener<MLTaskGetResponse> actionListener
     ) {
         Optional<ConnectorAction> batchPredictStatusAction = connector.findAction(BATCH_PREDICT_STATUS.name());
-        if (!batchPredictStatusAction.isPresent() || batchPredictStatusAction.get().getRequestBody() == null) {
+        if (batchPredictStatusAction.isEmpty() || batchPredictStatusAction.get().getRequestBody() == null) {
             ConnectorAction connectorAction = ConnectorUtils.createConnectorAction(connector, BATCH_PREDICT_STATUS);
             connector.addAction(connectorAction);
         }
@@ -314,7 +409,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         connectorExecutor.setXContentRegistry(xContentRegistry);
         connectorExecutor.executeAction(BATCH_PREDICT_STATUS.name(), mlInput, ActionListener.wrap(taskResponse -> {
             processTaskResponse(mlTask, taskId, taskResponse, remoteJob, actionListener);
-        }, e -> { actionListener.onFailure(e); }));
+        }, actionListener::onFailure));
     }
 
     protected void processTaskResponse(
