@@ -26,11 +26,11 @@ import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.Collections;
 
 import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
@@ -80,11 +80,11 @@ import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.utils.AgentModelsSearcher;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.search.SearchHit;
-import org.opensearch.search.SearchHits;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
+import org.opensearch.search.SearchHit;
+import org.opensearch.search.SearchHits;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -159,7 +159,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
 
-        //Settings settings = Settings.builder().build();
+        // Settings settings = Settings.builder().build();
         sdkClient = SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap());
         mlModelDeleteRequest = MLModelDeleteRequest.builder().modelId("test_id").build();
 
@@ -678,7 +678,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         Map<String, Object> ingestPipelineConfig1 = Map.of("model_id", "test_id");
         Map<String, Object> ingestPipelineConfig2 = Map.of("nothing", "test_id");
         when(getIngestionPipelineResponse.toString())
-                .thenReturn(StringUtils.toJson(Map.of("ingest_1", ingestPipelineConfig1, "ingest_2", ingestPipelineConfig2)));
+            .thenReturn(StringUtils.toJson(Map.of("ingest_1", ingestPipelineConfig1, "ingest_2", ingestPipelineConfig2)));
         // when(getIngestionPipelineResponse.pipelines())
         // .thenReturn(List.of(ingestPipelineConfiguration, independentIngestPipelineConfiguration));
         doAnswer(invocation -> {
@@ -691,8 +691,8 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-                "1 ingest pipelines are still using this model, please delete or update the pipelines first: [ingest_1]",
-                argumentCaptor.getValue().getMessage()
+            "1 ingest pipelines are still using this model, please delete or update the pipelines first: [ingest_1]",
+            argumentCaptor.getValue().getMessage()
         );
     }
 
@@ -714,8 +714,8 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-                "1 agents are still using this model, please delete or update the agents first, all visible agents are: [1]",
-                argumentCaptor.getValue().getMessage()
+            "1 agents are still using this model, please delete or update the agents first, all visible agents are: [1]",
+            argumentCaptor.getValue().getMessage()
         );
     }
 
@@ -742,12 +742,10 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-                "2 agents are still using this model, please delete or update the agents first, all visible agents are: [2]",
-                argumentCaptor.getValue().getMessage()
+            "2 agents are still using this model, please delete or update the agents first, all visible agents are: [2]",
+            argumentCaptor.getValue().getMessage()
         );
     }
-
-
 
     public void testDeleteModel_BlockedBySearchPipelineAndIngestionPipeline() throws IOException {
         doAnswer(invocation -> {
@@ -784,11 +782,11 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         String[] separateErrorMessages = totalErrorMessage.split("\\. ");
         Set<String> generateErrorMessages = new HashSet<>(List.of(separateErrorMessages));
         Set<String> expectedErrorMessages = new HashSet<>(
-                List
-                        .of(
-                                "1 ingest pipelines are still using this model, please delete or update the pipelines first: [ingest_1]",
-                                "1 search pipelines are still using this model, please delete or update the pipelines first: [search_1]"
-                        )
+            List
+                .of(
+                    "1 ingest pipelines are still using this model, please delete or update the pipelines first: [ingest_1]",
+                    "1 search pipelines are still using this model, please delete or update the pipelines first: [search_1]"
+                )
         );
         Boolean flag = false;
         for (String errorMessage : generateErrorMessages) {
@@ -819,7 +817,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
 
     public void testDeleteModel_BlockedBySearchPipelineSingleModelId() throws IOException {
         Map<String, Object> configDataMapWithSingleModelId = Map
-                .of("model_id", "test_id", "list_model_id", List.of("test_id"), "test_map_id", Map.of("map_model_id", "test_id"));
+            .of("model_id", "test_id", "list_model_id", List.of("test_id"), "test_map_id", Map.of("map_model_id", "test_id"));
 
         when(getSearchPipelineResponse.toString()).thenReturn(StringUtils.toJson(Map.of("search_1", configDataMapWithSingleModelId)));
 
@@ -833,14 +831,14 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-                "1 search pipelines are still using this model, please delete or update the pipelines first: [search_1]",
-                argumentCaptor.getValue().getMessage()
+            "1 search pipelines are still using this model, please delete or update the pipelines first: [search_1]",
+            argumentCaptor.getValue().getMessage()
         );
     }
 
     public void testDeleteModel_BlockedBySearchPipelineListModelId() throws IOException {
         Map<String, Object> configDataMapWithListModelId = Map
-                .of("single_model_id", "test_id", "model_id", List.of("test_id"), "test_map_id", Map.of("map_model_id", "test_id"));
+            .of("single_model_id", "test_id", "model_id", List.of("test_id"), "test_map_id", Map.of("map_model_id", "test_id"));
         when(getSearchPipelineResponse.toString()).thenReturn(StringUtils.toJson(Map.of("search_1", configDataMapWithListModelId)));
         doAnswer(invocation -> {
             ActionListener<GetSearchPipelineResponse> listener = invocation.getArgument(2);
@@ -852,8 +850,8 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-                "1 search pipelines are still using this model, please delete or update the pipelines first: [search_1]",
-                argumentCaptor.getValue().getMessage()
+            "1 search pipelines are still using this model, please delete or update the pipelines first: [search_1]",
+            argumentCaptor.getValue().getMessage()
         );
     }
 
@@ -864,18 +862,18 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
         when(clusterService.getSettings()).thenReturn(settings);
         deleteModelTransportAction = spy(
-                new DeleteModelTransportAction(
-                        transportService,
-                        actionFilters,
-                        client,
-                        sdkClient,
-                        settings,
-                        xContentRegistry,
-                        clusterService,
-                        modelAccessControlHelper,
-                        agentModelsSearcher,
-                        mlFeatureEnabledSetting
-                )
+            new DeleteModelTransportAction(
+                transportService,
+                actionFilters,
+                client,
+                sdkClient,
+                settings,
+                xContentRegistry,
+                clusterService,
+                modelAccessControlHelper,
+                agentModelsSearcher,
+                mlFeatureEnabledSetting
+            )
         );
 
         threadContext = new ThreadContext(settings);
@@ -886,7 +884,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         Map<String, Object> ingestPipelineConfig1 = Map.of("model_id", "test_id");
         Map<String, Object> ingestPipelineConfig2 = Map.of("nothing", "test_id");
         when(getIngestionPipelineResponse.toString())
-                .thenReturn(StringUtils.toJson(Map.of("ingest_1", ingestPipelineConfig1, "ingest_2", ingestPipelineConfig2)));
+            .thenReturn(StringUtils.toJson(Map.of("ingest_1", ingestPipelineConfig1, "ingest_2", ingestPipelineConfig2)));
         // when(getIngestionPipelineResponse.pipelines())
         // .thenReturn(List.of(ingestPipelineConfiguration, independentIngestPipelineConfiguration));
         doAnswer(invocation -> {
@@ -927,7 +925,6 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         assertEquals(deleteResponse.getVersion(), actualResponse.getVersion());
         assertEquals(deleteResponse.getResult(), actualResponse.getResult());
     }
-
 
     public GetResponse prepareMLModel(MLModelState mlModelState, String modelGroupID, boolean isHidden) throws IOException {
         MLModel mlModel = MLModel
