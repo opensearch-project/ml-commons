@@ -6,10 +6,8 @@
 package org.opensearch.ml.engine.utils;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.common.CommonValue.TOOL_PARAMETERS_PREFIX;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -19,10 +17,6 @@ import java.util.Map;
 import org.junit.Test;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.index.query.BoolQueryBuilder;
-import org.opensearch.index.query.ExistsQueryBuilder;
-import org.opensearch.index.query.QueryBuilder;
-import org.opensearch.index.query.TermsQueryBuilder;
-import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.WithModelTool;
 
