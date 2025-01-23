@@ -38,12 +38,14 @@ public class AgentModelsSearcher {
     public SearchRequest constructQueryRequestToSearchModelIdInsideAgent(String candidateModelId) {
         SearchRequest searchRequest = new SearchRequest(ML_AGENT_INDEX);
         BoolQueryBuilder searchAgentQuery = QueryBuilders.boolQuery();
+        BoolQueryBuilder modelIdQuery = QueryBuilders.boolQuery();
         for (String keyField : relatedModelIdSet) {
-            searchAgentQuery.should(QueryBuilders.termsQuery(TOOL_PARAMETERS_PREFIX + keyField, candidateModelId));
+            modelIdQuery.should(QueryBuilders.termsQuery(TOOL_PARAMETERS_PREFIX + keyField, candidateModelId));
         }
 
         searchAgentQuery.must(QueryBuilders.termsQuery(MLAgent.IS_HIDDEN_FIELD, false));
         searchAgentQuery.must(QueryBuilders.existsQuery(MLAgent.IS_HIDDEN_FIELD));
+        searchAgentQuery.must(modelIdQuery);
         searchRequest.source(new SearchSourceBuilder().query(searchAgentQuery));
         return searchRequest;
     }
