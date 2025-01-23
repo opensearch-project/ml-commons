@@ -810,7 +810,6 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
         assertEquals("fail to search pipeline index.", argumentCaptor.getValue().getMessage());
     }
 
-
     public void testDeleteModel_BlockedBySearchPipelineAndIngestionPipeline() throws IOException {
         doAnswer(invocation -> {
             ActionListener<DeleteResponse> listener = invocation.getArgument(1);

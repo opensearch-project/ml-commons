@@ -10,7 +10,6 @@ import java.util.Set;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
-import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.WithModelTool;
@@ -38,12 +37,13 @@ public class AgentModelsSearcher {
      */
     public SearchRequest constructQueryRequestToSearchModelIdInsideAgent(String candidateModelId) {
         SearchRequest searchRequest = new SearchRequest(ML_AGENT_INDEX);
-        BoolQueryBuilder shouldQuery = QueryBuilders.boolQuery();
+        BoolQueryBuilder searchAgentQuery = QueryBuilders.boolQuery();
         for (String keyField : relatedModelIdSet) {
-            shouldQuery.should(QueryBuilders.termsQuery(TOOL_PARAMETERS_PREFIX + keyField, candidateModelId));
+            searchAgentQuery.should(QueryBuilders.termsQuery(TOOL_PARAMETERS_PREFIX + keyField, candidateModelId));
         }
-        shouldQuery.should(QueryBuilders.termsQuery(MLAgent.IS_HIDDEN_FIELD, false));
-        searchRequest.source(new SearchSourceBuilder().query(shouldQuery));
+
+        searchAgentQuery.must(QueryBuilders.termsQuery(MLAgent.IS_HIDDEN_FIELD, false));
+        searchRequest.source(new SearchSourceBuilder().query(searchAgentQuery));
         return searchRequest;
     }
 

@@ -20,6 +20,7 @@ import org.junit.Test;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.TermsQueryBuilder;
+import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.WithModelTool;
 
@@ -68,6 +69,21 @@ public class AgentModelSearcherTests {
 
             // Each TermsQueryBuilder should contain candidateModelId
             assertTrue(termsQuery.values().contains("candidateId"));
+        });
+
+        assertEquals(1, boolQueryBuilder.must().size());
+        boolQueryBuilder.must().forEach(query -> {
+            assertTrue(query instanceof TermsQueryBuilder);
+            TermsQueryBuilder termsQuery = (TermsQueryBuilder) query;
+            String fieldName = termsQuery.fieldName();
+
+            // The field name should be 'TOOL_PARAMETERS_PREFIX + keyField'
+            // We had "modelKeyA" and "modelKeyB" as keys:
+            boolean isCorrectField = fieldName.equals(MLAgent.IS_HIDDEN_FIELD);
+            assertTrue(isCorrectField);
+
+            // Each TermsQueryBuilder should contain candidateModelId
+            assertTrue(termsQuery.values().contains(false));
         });
     }
 }
