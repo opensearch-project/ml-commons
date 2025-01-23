@@ -205,7 +205,7 @@ public class MLModelAutoReDeployer {
     private void triggerUndeployModelsOnDataNodes(List<String> dataNodeIds) {
         List<String> modelIds = new ArrayList<>();
         ActionListener<SearchResponse> listener = ActionListener.wrap(res -> {
-            if (res != null && res.getHits() != null && res.getHits().getTotalHits() != null && res.getHits().getTotalHits().value > 0) {
+            if (res != null && res.getHits() != null && res.getHits().getTotalHits() != null && res.getHits().getTotalHits().value() > 0) {
                 Arrays.stream(res.getHits().getHits()).forEach(x -> modelIds.add(x.getId()));
                 if (!modelIds.isEmpty()) {
                     ActionListener<MLUndeployModelNodesResponse> undeployModelListener = ActionListener.wrap(r -> {

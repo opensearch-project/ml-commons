@@ -909,7 +909,7 @@ public class MachineLearningNodeClientTest {
 
         verify(client).execute(eq(MLTaskSearchAction.INSTANCE), isA(SearchRequest.class), any());
         verify(searchTaskActionListener).onResponse(argumentCaptor.capture());
-        assertEquals(1, argumentCaptor.getValue().getHits().getTotalHits().value);
+        assertEquals(1, argumentCaptor.getValue().getHits().getTotalHits().value());
         Map<String, Object> source = argumentCaptor.getValue().getHits().getAt(0).getSourceAsMap();
         assertEquals(taskId, source.get(MLTask.TASK_ID_FIELD));
         assertEquals(modelId, source.get(MLTask.MODEL_ID_FIELD));

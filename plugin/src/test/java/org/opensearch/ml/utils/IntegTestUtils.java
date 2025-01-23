@@ -148,7 +148,7 @@ public class IntegTestUtils extends OpenSearchIntegTestCase {
         SearchRequest modelSearchRequest = new SearchRequest(new String[] { ML_MODEL_INDEX }, modelSearchSourceBuilder);
         SearchResponse modelSearchResponse = null;
         int i = 0;
-        while ((modelSearchResponse == null || modelSearchResponse.getHits().getTotalHits().value == 0) && i < 500) {
+        while ((modelSearchResponse == null || modelSearchResponse.getHits().getTotalHits().value() == 0) && i < 500) {
             try {
                 ActionFuture<SearchResponse> searchFuture = client().execute(SearchAction.INSTANCE, modelSearchRequest);
                 modelSearchResponse = searchFuture.actionGet();
@@ -159,7 +159,7 @@ public class IntegTestUtils extends OpenSearchIntegTestCase {
             i++;
         }
         assertNotNull(modelSearchResponse);
-        assertTrue(modelSearchResponse.getHits().getTotalHits().value > 0);
+        assertTrue(modelSearchResponse.getHits().getTotalHits().value() > 0);
         return modelSearchResponse;
     }
 
