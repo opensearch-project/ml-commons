@@ -184,6 +184,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
 
                                 MLDeployModelRequest deployModelRequest = new MLDeployModelRequest(
                                     modelId,
+                                    request.getTenantId(),
                                     planningWorkerNodes,
                                     false,
                                     true,
@@ -481,7 +482,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                         }
                         // run predict
                         if (mlTaskManager.contains(mlTask.getTaskId())) {
-                            mlTaskManager.updateTaskStateAsRunning(mlTask.getTaskId(), mlTask.isAsync());
+                            mlTaskManager.updateTaskStateAsRunning(mlTask.getTaskId(), mlTask.getTenantId(), mlTask.isAsync());
                         }
                         MLOutput output = mlEngine.predict(mlInput, mlModel);
                         if (output instanceof MLPredictionOutput) {

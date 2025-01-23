@@ -32,6 +32,7 @@ import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 import static org.opensearch.ml.utils.TestHelper.setupTestClusterState;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -50,6 +51,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.autoredeploy.MLModelAutoReDeployer;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
@@ -65,8 +67,11 @@ import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodesRequest;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.task.MLTaskCache;
 import org.opensearch.ml.task.MLTaskManager;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.transport.TransportService;
@@ -84,6 +89,7 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
     MLTaskManager mlTaskManager;
     @Mock
     Client client;
+    SdkClient sdkClient;
     @Mock
     MLModelManager mlModelManager;
     @Mock
@@ -108,6 +114,9 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
     @Mock
     MLModelAutoReDeployer mlModelAutoReDeployer;
 
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     DiscoveryNode node1;
     DiscoveryNode node2;
     String nodeId1 = "test_node_id1";
@@ -119,6 +128,7 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
+        sdkClient = SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap());
         ClusterSettings clusterSettings = clusterSetting(
             settings,
             ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE,
@@ -133,11 +143,13 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
                 actionFilters,
                 mlTaskManager,
                 client,
+                sdkClient,
                 mlModelManager,
                 nodeHelper,
                 settings,
                 clusterService,
-                mlModelAutoReDeployer
+                mlModelAutoReDeployer,
+                mlFeatureEnabledSetting
             )
         );
 
@@ -177,7 +189,7 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
         assertEquals("ok", response.getValue().getStatus());
         assertNull(response.getValue().getMlOutput());
         verify(mlTaskManager).addNodeError(eq(taskId), eq(nodeId1), eq(error));
-        verify(mlTaskManager, never()).updateMLTask(anyString(), any(), anyLong(), anyBoolean());
+        verify(mlTaskManager, never()).updateMLTask(anyString(), anyString(), any(), anyLong(), anyBoolean());
     }
 
     public void testDoExecute_DeployModelDone_NoError() {
@@ -205,7 +217,7 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
         verify(listener).onResponse(response.capture());
         assertEquals("ok", response.getValue().getStatus());
         assertNull(response.getValue().getMlOutput());
-        verify(mlTaskManager, never()).updateMLTask(anyString(), any(), anyLong(), anyBoolean());
+        verify(mlTaskManager, never()).updateMLTask(anyString(), anyString(), any(), anyLong(), anyBoolean());
     }
 
     public void testDoExecute_DeployModelDone_successDeploy_ratio_exceed_configuration() {
@@ -235,7 +247,7 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
         verify(listener).onResponse(response.capture());
         assertEquals("ok", response.getValue().getStatus());
         assertNull(response.getValue().getMlOutput());
-        verify(mlTaskManager, times(1)).updateMLTask(anyString(), any(), anyLong(), anyBoolean());
+        verify(mlTaskManager, times(1)).updateMLTask(anyString(), any(), any(), anyLong(), anyBoolean());
     }
 
     public void testDoExecute_DeployModelDone_Error_NullTaskWorkerNodes() {
@@ -291,7 +303,7 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
         verify(client, never()).execute(eq(MLSyncUpAction.INSTANCE), any(), any());
         verify(mlTaskManager).addNodeError(eq(taskId), eq(nodeId1), eq(error));
         ArgumentCaptor<Map<String, Object>> updatedFields = ArgumentCaptor.forClass(Map.class);
-        verify(mlTaskManager).updateMLTask(anyString(), updatedFields.capture(), anyLong(), anyBoolean());
+        verify(mlTaskManager).updateMLTask(anyString(), any(), updatedFields.capture(), anyLong(), anyBoolean());
         assertEquals(FAILED, (MLTaskState) updatedFields.getValue().get(MLTask.STATE_FIELD));
     }
 
@@ -341,7 +353,7 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
     }
 
     private MLRegisterModelInput prepareInput() {
-        MLRegisterModelInput registerModelInput = MLRegisterModelInput
+        return MLRegisterModelInput
             .builder()
             .functionName(FunctionName.BATCH_RCF)
             .deployModel(true)
@@ -362,6 +374,5 @@ public class TransportForwardActionTests extends OpenSearchTestCase {
             .modelFormat(MLModelFormat.TORCH_SCRIPT)
             .url("http://test_url")
             .build();
-        return registerModelInput;
     }
 }

@@ -80,17 +80,15 @@ public class MLUpdateModelGroupInputTest {
 
     @Test
     public void parse_withTenantId_Success() throws IOException {
-        String jsonWithTenantId = """
-                {
-                    "model_group_id": "modelGroupId",
-                    "name": "name",
-                    "description": "description",
-                    "backend_roles": ["IT"],
-                    "access_mode": "restricted",
-                    "add_all_backend_roles": true,
-                    "tenant_id": "tenant-1"
-                }
-            """;
+        String jsonWithTenantId = "{"
+            + "\"model_group_id\": \"modelGroupId\","
+            + "\"name\": \"name\","
+            + "\"description\": \"description\","
+            + "\"backend_roles\": [\"IT\"],"
+            + "\"access_mode\": \"restricted\","
+            + "\"add_all_backend_roles\": true,"
+            + "\"tenant_id\": \"tenant-1\""
+            + "}";
 
         XContentParser parser = XContentType.JSON
             .xContent()
@@ -105,16 +103,14 @@ public class MLUpdateModelGroupInputTest {
 
     @Test
     public void parse_withoutTenantId_Success() throws IOException {
-        String jsonWithoutTenantId = """
-                {
-                    "model_group_id": "modelGroupId",
-                    "name": "name",
-                    "description": "description",
-                    "backend_roles": ["IT"],
-                    "access_mode": "restricted",
-                    "add_all_backend_roles": true
-                }
-            """;
+        String jsonWithoutTenantId = "{"
+            + "\"model_group_id\": \"modelGroupId\","
+            + "\"name\": \"name\","
+            + "\"description\": \"description\","
+            + "\"backend_roles\": [\"IT\"],"
+            + "\"access_mode\": \"restricted\","
+            + "\"add_all_backend_roles\": true"
+            + "}";
 
         XContentParser parser = XContentType.JSON
             .xContent()

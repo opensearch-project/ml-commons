@@ -6,12 +6,9 @@
 package org.opensearch.ml.helper;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
-import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_THREAD_POOL_PREFIX;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
@@ -22,7 +19,6 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-import org.junit.AfterClass;
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -34,8 +30,6 @@ import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
-import org.opensearch.common.unit.TimeValue;
-import org.opensearch.common.util.concurrent.OpenSearchExecutors;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.authuser.User;
@@ -56,22 +50,9 @@ import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchTestCase;
-import org.opensearch.threadpool.ScalingExecutorBuilder;
-import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
 
 public class ModelAccessControlHelperTests extends OpenSearchTestCase {
-
-    private static final TestThreadPool testThreadPool = new TestThreadPool(
-        ModelAccessControlHelperTests.class.getName(),
-        new ScalingExecutorBuilder(
-            GENERAL_THREAD_POOL,
-            1,
-            Math.max(1, OpenSearchExecutors.allocatedProcessors(Settings.EMPTY) - 1),
-            TimeValue.timeValueMinutes(1),
-            ML_THREAD_POOL_PREFIX + GENERAL_THREAD_POOL
-        )
-    );
 
     @Mock
     ClusterService clusterService;
@@ -120,12 +101,6 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
 
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
-        when(threadPool.executor(anyString())).thenReturn(testThreadPool.executor(GENERAL_THREAD_POOL));
-    }
-
-    @AfterClass
-    public static void cleanup() {
-        ThreadPool.terminate(testThreadPool, 500, TimeUnit.MILLISECONDS);
     }
 
     public void setupModelGroup(String owner, String access, List<String> backendRoles) throws IOException {

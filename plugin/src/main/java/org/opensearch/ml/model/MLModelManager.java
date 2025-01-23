@@ -642,7 +642,14 @@ public class MLModelManager {
                     String modelId = modelMetaRes.getId();
                     mlTask.setModelId(modelId);
                     log.info("create new model meta doc {} for upload task {}", modelId, taskId);
-                    mlTaskManager.updateMLTask(taskId, Map.of(MODEL_ID_FIELD, modelId, STATE_FIELD, COMPLETED), 5000, true);
+                    mlTaskManager
+                        .updateMLTask(
+                            taskId,
+                            registerModelInput.getTenantId(),
+                            Map.of(MODEL_ID_FIELD, modelId, STATE_FIELD, COMPLETED),
+                            5000,
+                            true
+                        );
                     if (registerModelInput.isDeployModel()) {
                         deployModelAfterRegistering(registerModelInput, modelId);
                     }
@@ -740,7 +747,14 @@ public class MLModelManager {
                     String modelId = modelMetaRes.getId();
                     mlTask.setModelId(modelId);
                     log.info("create new model meta doc {} for upload task {}", modelId, taskId);
-                    mlTaskManager.updateMLTask(taskId, Map.of(MODEL_ID_FIELD, modelId, STATE_FIELD, COMPLETED), 5000, true);
+                    mlTaskManager
+                        .updateMLTask(
+                            taskId,
+                            registerModelInput.getTenantId(),
+                            Map.of(MODEL_ID_FIELD, modelId, STATE_FIELD, COMPLETED),
+                            5000,
+                            true
+                        );
                     if (registerModelInput.isDeployModel()) {
                         deployModelAfterRegistering(registerModelInput, modelId);
                     }
@@ -961,7 +975,13 @@ public class MLModelManager {
         modelHelper.downloadPrebuiltModelConfig(taskId, registerModelInput, ActionListener.wrap(mlRegisterModelInput -> {
             mlTask.setFunctionName(mlRegisterModelInput.getFunctionName());
             mlTaskManager
-                .updateMLTask(taskId, Map.of(FUNCTION_NAME_FIELD, mlRegisterModelInput.getFunctionName()), TIMEOUT_IN_MILLIS, false);
+                .updateMLTask(
+                    taskId,
+                    registerModelInput.getTenantId(),
+                    Map.of(FUNCTION_NAME_FIELD, mlRegisterModelInput.getFunctionName()),
+                    TIMEOUT_IN_MILLIS,
+                    false
+                );
             registerModelFromUrl(mlRegisterModelInput, mlTask, modelVersion);
         }, e -> {
             log.error("Failed to register prebuilt model", e);
@@ -1036,7 +1056,14 @@ public class MLModelManager {
 
         // For local model we don't support multi-tenancy. So we are providing tenant Id null by default.
         updateModel(modelId, null, updatedFields, ActionListener.wrap(updateResponse -> {
-            mlTaskManager.updateMLTask(taskId, Map.of(STATE_FIELD, COMPLETED, MODEL_ID_FIELD, modelId), TIMEOUT_IN_MILLIS, true);
+            mlTaskManager
+                .updateMLTask(
+                    taskId,
+                    registerModelInput.getTenantId(),
+                    Map.of(STATE_FIELD, COMPLETED, MODEL_ID_FIELD, modelId),
+                    TIMEOUT_IN_MILLIS,
+                    true
+                );
             if (registerModelInput.isDeployModel()) {
                 deployModelAfterRegistering(registerModelInput, modelId);
             }
@@ -1051,7 +1078,7 @@ public class MLModelManager {
     void deployModelAfterRegistering(MLRegisterModelInput registerModelInput, String modelId) {
         String[] modelNodeIds = registerModelInput.getModelNodeIds();
         log.debug("start deploying model after registering, modelId: {} on nodes: {}", modelId, Arrays.toString(modelNodeIds));
-        MLDeployModelRequest request = new MLDeployModelRequest(modelId, modelNodeIds, false, true, true);
+        MLDeployModelRequest request = new MLDeployModelRequest(modelId, registerModelInput.getTenantId(), modelNodeIds, false, true, true);
         ActionListener<MLDeployModelResponse> listener = ActionListener
             .wrap(r -> log.debug("model deployed, response {}", r), e -> log.error("Failed to deploy model", e));
         client.execute(MLDeployModelAction.INSTANCE, request, listener);
@@ -1111,7 +1138,7 @@ public class MLModelManager {
             mlStats.getStat(MLNodeLevelStat.ML_FAILURE_COUNT).increment();
         }
         Map<String, Object> updated = Map.of(ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(e), STATE_FIELD, FAILED);
-        mlTaskManager.updateMLTask(taskId, updated, TIMEOUT_IN_MILLIS, true);
+        mlTaskManager.updateMLTask(taskId, tenantId, updated, TIMEOUT_IN_MILLIS, true);
     }
 
     /**
