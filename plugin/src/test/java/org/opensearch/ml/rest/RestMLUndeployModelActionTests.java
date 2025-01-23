@@ -37,6 +37,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.transport.model.MLModelGetResponse;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsRequest;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
@@ -58,6 +59,9 @@ public class RestMLUndeployModelActionTests extends OpenSearchTestCase {
     ClusterState testState;
 
     @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
+    @Mock
     RestChannel channel;
 
     private final Settings settings = Settings.builder().put(ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN.getKey(), true).build();
@@ -70,7 +74,7 @@ public class RestMLUndeployModelActionTests extends OpenSearchTestCase {
         testState = setupTestClusterState("node");
         when(clusterService.state()).thenReturn(testState);
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
-        restMLUndeployModelAction = new RestMLUndeployModelAction(clusterService, settings);
+        restMLUndeployModelAction = new RestMLUndeployModelAction(clusterService, settings, mlFeatureEnabledSetting);
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
         doAnswer(invocation -> {
@@ -88,7 +92,7 @@ public class RestMLUndeployModelActionTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        RestMLUndeployModelAction undeployModel = new RestMLUndeployModelAction(clusterService, settings);
+        RestMLUndeployModelAction undeployModel = new RestMLUndeployModelAction(clusterService, settings, mlFeatureEnabledSetting);
         assertNotNull(undeployModel);
     }
 

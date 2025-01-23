@@ -68,7 +68,7 @@ public class MLInputDatasetHandler {
             listener.onResponse(dfInputDataset);
             return;
         }, e -> {
-            log.error("Failed to search" + e);
+            log.error("Failed to search{}", e);
             listener.onFailure(e);
         }));
         return;

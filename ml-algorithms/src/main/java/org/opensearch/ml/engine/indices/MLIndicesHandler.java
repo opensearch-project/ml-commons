@@ -190,7 +190,7 @@ public class MLIndicesHandler {
      */
     public void shouldUpdateIndex(String indexName, Integer newVersion, ActionListener<Boolean> listener) {
         IndexMetadata indexMetaData = clusterService.state().getMetadata().indices().get(indexName);
-        if (indexMetaData == null) {
+        if (indexMetaData == null || indexMetaData.mapping() == null) {
             listener.onResponse(Boolean.FALSE);
             return;
         }

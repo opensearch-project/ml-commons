@@ -101,7 +101,7 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     Client client;
 
     @Override
-    public void predict(String modelId, MLInput mlInput, ActionListener<MLOutput> listener) {
+    public void predict(String modelId, String tenantId, MLInput mlInput, ActionListener<MLOutput> listener) {
         validateMLInput(mlInput, true);
 
         MLPredictionTaskRequest predictionRequest = MLPredictionTaskRequest
@@ -109,6 +109,7 @@ public class MachineLearningNodeClient implements MachineLearningClient {
             .mlInput(mlInput)
             .modelId(modelId)
             .dispatchTask(true)
+            .tenantId(tenantId)
             .build();
         client.execute(MLPredictionTaskAction.INSTANCE, predictionRequest, getMlPredictionTaskResponseActionListener(listener));
     }
@@ -262,8 +263,8 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     }
 
     @Override
-    public void undeploy(String[] modelIds, String[] nodeIds, ActionListener<MLUndeployModelsResponse> listener) {
-        MLUndeployModelsRequest undeployModelRequest = new MLUndeployModelsRequest(modelIds, nodeIds);
+    public void undeploy(String[] modelIds, String[] nodeIds, String tenantId, ActionListener<MLUndeployModelsResponse> listener) {
+        MLUndeployModelsRequest undeployModelRequest = new MLUndeployModelsRequest(modelIds, nodeIds, tenantId);
         client.execute(MLUndeployModelsAction.INSTANCE, undeployModelRequest, getMlUndeployModelsResponseActionListener(listener));
     }
 

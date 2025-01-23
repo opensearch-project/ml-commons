@@ -39,6 +39,8 @@ import org.opensearch.ml.task.MLPredictTaskRunner;
 import org.opensearch.ml.task.MLTaskRunner;
 import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.ml.utils.TenantAwareHelper;
+import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
@@ -54,6 +56,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
     MLModelCacheHelper modelCacheHelper;
 
     Client client;
+    SdkClient sdkClient;
 
     ClusterService clusterService;
 
@@ -75,6 +78,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         MLPredictTaskRunner mlPredictTaskRunner,
         ClusterService clusterService,
         Client client,
+        SdkClient sdkClient,
         NamedXContentRegistry xContentRegistry,
         MLModelManager mlModelManager,
         ModelAccessControlHelper modelAccessControlHelper,
@@ -87,6 +91,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         this.modelCacheHelper = modelCacheHelper;
         this.clusterService = clusterService;
         this.client = client;
+        this.sdkClient = sdkClient;
         this.xContentRegistry = xContentRegistry;
         this.mlModelManager = mlModelManager;
         this.modelAccessControlHelper = modelAccessControlHelper;
@@ -101,7 +106,10 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLTaskResponse> listener) {
         MLPredictionTaskRequest mlPredictionTaskRequest = MLPredictionTaskRequest.fromActionRequest(request);
         String modelId = mlPredictionTaskRequest.getModelId();
-
+        String tenantId = mlPredictionTaskRequest.getTenantId();
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, listener)) {
+            return;
+        }
         User user = mlPredictionTaskRequest.getUser();
         if (user == null) {
             user = RestActionUtils.getUserContext(client);
@@ -110,7 +118,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         final User userInfo = user;
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<MLTaskResponse> wrappedListener = ActionListener.runBefore(listener, () -> context.restore());
+            ActionListener<MLTaskResponse> wrappedListener = ActionListener.runBefore(listener, context::restore);
             MLModel cachedMlModel = modelCacheHelper.getModelInfo(modelId);
             ActionListener<MLModel> modelActionListener = new ActionListener<>() {
                 @Override
@@ -123,78 +131,88 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                     }
                     mlPredictionTaskRequest.getMlInput().setAlgorithm(functionName);
                     modelAccessControlHelper
-                        .validateModelGroupAccess(userInfo, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
-                            if (!access) {
-                                wrappedListener
-                                    .onFailure(
-                                        new OpenSearchStatusException(
-                                            "User Doesn't have privilege to perform this operation on this model",
-                                            RestStatus.FORBIDDEN
-                                        )
-                                    );
-                            } else {
-                                if (modelCacheHelper.getIsModelEnabled(modelId) != null && !modelCacheHelper.getIsModelEnabled(modelId)) {
-                                    wrappedListener.onFailure(new OpenSearchStatusException("Model is disabled.", RestStatus.FORBIDDEN));
+                        .validateModelGroupAccess(
+                            userInfo,
+                            mlFeatureEnabledSetting,
+                            tenantId,
+                            mlModel.getModelGroupId(),
+                            client,
+                            sdkClient,
+                            ActionListener.wrap(access -> {
+                                if (!access) {
+                                    wrappedListener
+                                        .onFailure(
+                                            new OpenSearchStatusException(
+                                                "User Doesn't have privilege to perform this operation on this model",
+                                                RestStatus.FORBIDDEN
+                                            )
+                                        );
                                 } else {
-                                    if (FunctionName.isDLModel(functionName)) {
-                                        if (modelCacheHelper.getRateLimiter(modelId) != null
-                                            && !modelCacheHelper.getRateLimiter(modelId).request()) {
-                                            wrappedListener
-                                                .onFailure(
-                                                    new OpenSearchStatusException(
-                                                        "Request is throttled at model level.",
-                                                        RestStatus.TOO_MANY_REQUESTS
-                                                    )
-                                                );
-                                        } else if (userInfo != null
-                                            && modelCacheHelper.getUserRateLimiter(modelId, userInfo.getName()) != null
-                                            && !modelCacheHelper.getUserRateLimiter(modelId, userInfo.getName()).request()) {
-                                            wrappedListener
-                                                .onFailure(
-                                                    new OpenSearchStatusException(
-                                                        "Request is throttled at user level. If you think there's an issue, please contact your cluster admin.",
-                                                        RestStatus.TOO_MANY_REQUESTS
-                                                    )
-                                                );
+                                    if (modelCacheHelper.getIsModelEnabled(modelId) != null
+                                        && !modelCacheHelper.getIsModelEnabled(modelId)) {
+                                        wrappedListener
+                                            .onFailure(new OpenSearchStatusException("Model is disabled.", RestStatus.FORBIDDEN));
+                                    } else {
+                                        if (FunctionName.isDLModel(functionName)) {
+                                            if (modelCacheHelper.getRateLimiter(modelId) != null
+                                                && !modelCacheHelper.getRateLimiter(modelId).request()) {
+                                                wrappedListener
+                                                    .onFailure(
+                                                        new OpenSearchStatusException(
+                                                            "Request is throttled at model level.",
+                                                            RestStatus.TOO_MANY_REQUESTS
+                                                        )
+                                                    );
+                                            } else if (userInfo != null
+                                                && modelCacheHelper.getUserRateLimiter(modelId, userInfo.getName()) != null
+                                                && !modelCacheHelper.getUserRateLimiter(modelId, userInfo.getName()).request()) {
+                                                wrappedListener
+                                                    .onFailure(
+                                                        new OpenSearchStatusException(
+                                                            "Request is throttled at user level. If you think there's an issue, please contact your cluster admin.",
+                                                            RestStatus.TOO_MANY_REQUESTS
+                                                        )
+                                                    );
+                                            } else {
+                                                validateInputSchema(modelId, mlPredictionTaskRequest.getMlInput());
+                                                executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
+                                            }
                                         } else {
                                             validateInputSchema(modelId, mlPredictionTaskRequest.getMlInput());
                                             executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
                                         }
-                                    } else {
-                                        validateInputSchema(modelId, mlPredictionTaskRequest.getMlInput());
-                                        executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
                                     }
                                 }
-                            }
-                        }, e -> {
-                            log.error("Failed to Validate Access for ModelId " + modelId, e);
-                            if (e instanceof OpenSearchStatusException) {
-                                wrappedListener
-                                    .onFailure(
-                                        new OpenSearchStatusException(
-                                            e.getMessage(),
-                                            RestStatus.fromCode(((OpenSearchStatusException) e).status().getStatus())
-                                        )
-                                    );
-                            } else if (e instanceof MLResourceNotFoundException) {
-                                wrappedListener.onFailure(new OpenSearchStatusException(e.getMessage(), RestStatus.NOT_FOUND));
-                            } else if (e instanceof CircuitBreakingException) {
-                                wrappedListener.onFailure(e);
-                            } else {
-                                wrappedListener
-                                    .onFailure(
-                                        new OpenSearchStatusException(
-                                            "Failed to Validate Access for ModelId " + modelId,
-                                            RestStatus.FORBIDDEN
-                                        )
-                                    );
-                            }
-                        }));
+                            }, e -> {
+                                log.error("Failed to Validate Access for ModelId {}", modelId, e);
+                                if (e instanceof OpenSearchStatusException) {
+                                    wrappedListener
+                                        .onFailure(
+                                            new OpenSearchStatusException(
+                                                e.getMessage(),
+                                                RestStatus.fromCode(((OpenSearchStatusException) e).status().getStatus())
+                                            )
+                                        );
+                                } else if (e instanceof MLResourceNotFoundException) {
+                                    wrappedListener.onFailure(new OpenSearchStatusException(e.getMessage(), RestStatus.NOT_FOUND));
+                                } else if (e instanceof CircuitBreakingException) {
+                                    wrappedListener.onFailure(e);
+                                } else {
+                                    wrappedListener
+                                        .onFailure(
+                                            new OpenSearchStatusException(
+                                                "Failed to Validate Access for ModelId " + modelId,
+                                                RestStatus.FORBIDDEN
+                                            )
+                                        );
+                                }
+                            })
+                        );
                 }
 
                 @Override
                 public void onFailure(Exception e) {
-                    log.error("Failed to find model " + modelId, e);
+                    log.error("Failed to find model {}", modelId, e);
                     wrappedListener.onFailure(e);
                 }
             };
@@ -203,7 +221,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                 modelActionListener.onResponse(cachedMlModel);
             } else {
                 // For multi-node cluster, the function name is null in cache, so should always get model first.
-                mlModelManager.getModel(modelId, modelActionListener);
+                mlModelManager.getModel(modelId, tenantId, modelActionListener);
             }
         }
     }
@@ -214,7 +232,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         String modelId
     ) {
         String requestId = mlPredictionTaskRequest.getRequestID();
-        log.debug("receive predict request " + requestId + " for model " + mlPredictionTaskRequest.getModelId());
+        log.debug("receive predict request {} for model {}", requestId, mlPredictionTaskRequest.getModelId());
         long startTime = System.nanoTime();
         // For remote text embedding model, neural search will set mlPredictionTaskRequest.getMlInput().getAlgorithm() as
         // TEXT_EMBEDDING. In ml-commons we should always use the real function name of model: REMOTE. So we try to get
@@ -233,7 +251,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                     double durationInMs = (endTime - startTime) / 1e6;
                     modelCacheHelper.addPredictRequestDuration(modelId, durationInMs);
                     modelCacheHelper.refreshLastAccessTime(modelId);
-                    log.debug("completed predict request " + requestId + " for model " + modelId);
+                    log.debug("completed predict request {} for model {}", requestId, modelId);
                 })
             );
     }
