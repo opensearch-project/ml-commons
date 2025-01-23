@@ -31,7 +31,7 @@ public class AgentModelsSearcher {
 
     /**
      * Construct a should query to search all agent which containing candidate model Id
-
+    
      @param candidateModelId the candidate model Id
      @return a should search request towards agent index.
      */
@@ -49,4 +49,3 @@ public class AgentModelsSearcher {
     }
 
 }
-

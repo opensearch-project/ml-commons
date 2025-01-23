@@ -65,8 +65,8 @@ public class AgentModelSearcherTests {
             // The field name should be 'TOOL_PARAMETERS_PREFIX + keyField'
             // We had "modelKeyA" and "modelKeyB" as keys:
             boolean isCorrectField = fieldName.equals(TOOL_PARAMETERS_PREFIX + "modelKey1")
-                    || fieldName.equals(TOOL_PARAMETERS_PREFIX + "modelKey2")
-                    || fieldName.equals(TOOL_PARAMETERS_PREFIX + "anotherModelKey");
+                || fieldName.equals(TOOL_PARAMETERS_PREFIX + "modelKey2")
+                || fieldName.equals(TOOL_PARAMETERS_PREFIX + "anotherModelKey");
             assertTrue(isCorrectField);
 
             // Each TermsQueryBuilder should contain candidateModelId
