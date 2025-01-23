@@ -10,6 +10,8 @@ import java.util.Set;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.WithModelTool;
 import org.opensearch.search.builder.SearchSourceBuilder;
@@ -40,6 +42,7 @@ public class AgentModelsSearcher {
         for (String keyField : relatedModelIdSet) {
             shouldQuery.should(QueryBuilders.termsQuery(TOOL_PARAMETERS_PREFIX + keyField, candidateModelId));
         }
+        shouldQuery.should(QueryBuilders.termsQuery(MLAgent.IS_HIDDEN_FIELD, false));
         searchRequest.source(new SearchSourceBuilder().query(shouldQuery));
         return searchRequest;
     }

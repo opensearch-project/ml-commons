@@ -609,10 +609,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         List<String> agentIds = new ArrayList<>();
         for (SearchHit hit : hits) {
             Map<String, Object> sourceAsMap = hit.getSourceAsMap();
-            Boolean isHidden = (Boolean) sourceAsMap.getOrDefault(MLAgent.IS_HIDDEN_FIELD, false);
-            if (!isHidden) {
-                agentIds.add(hit.getId());
-            }
+            agentIds.add(hit.getId());
         }
         return String
             .format(
