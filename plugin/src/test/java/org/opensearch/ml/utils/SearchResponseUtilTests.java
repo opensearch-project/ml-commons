@@ -105,7 +105,7 @@ public class SearchResponseUtilTests {
         assertNotNull(newResponse);
         assertEquals(newHits.length, newResponse.getHits().getHits().length);
         assertEquals(15, newResponse.getHits().getTotalHits().value());
-        assertEquals(TotalHits.Relation.EQUAL_TO, newResponse.getHits().getTotalHits().relation);
+        assertEquals(TotalHits.Relation.EQUAL_TO, newResponse.getHits().getTotalHits().relation());
         assertEquals(0.7f, newResponse.getHits().getMaxScore(), 0.0001f);
     }
 
@@ -132,7 +132,7 @@ public class SearchResponseUtilTests {
         assertNotNull(newResponse);
         assertEquals(newHits.length, newResponse.getHits().getHits().length);
         assertEquals(15, newResponse.getHits().getTotalHits().value());
-        assertEquals(TotalHits.Relation.EQUAL_TO, newResponse.getHits().getTotalHits().relation);
+        assertEquals(TotalHits.Relation.EQUAL_TO, newResponse.getHits().getTotalHits().relation());
         assertEquals(0.7f, newResponse.getHits().getMaxScore(), 0.0001f);
     }
 
