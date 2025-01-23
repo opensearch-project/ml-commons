@@ -56,21 +56,11 @@ public class AgentModelSearcherTests {
         // Verify the searchRequest uses all keys from the WithModelTool factories
         BoolQueryBuilder boolQueryBuilder = (BoolQueryBuilder) request.source().query();
         // We expect modelKey1, modelKey2, anotherModelKey => total 3 "should" clauses
-        assertEquals(3, boolQueryBuilder.must().size());
-
+        assertEquals(2, boolQueryBuilder.must().size());
         for (QueryBuilder query : boolQueryBuilder.must()) {
-            if (query instanceof TermsQueryBuilder) {
-                TermsQueryBuilder termsQuery = (TermsQueryBuilder) query;
-                String fieldName = termsQuery.fieldName();
-                assertTrue(fieldName.equals(MLAgent.IS_HIDDEN_FIELD));
-                assertTrue(termsQuery.values().contains(false));
-            } else if (query instanceof ExistsQueryBuilder) {
-                ExistsQueryBuilder existsQuery = (ExistsQueryBuilder) query;
-                String fieldName = existsQuery.fieldName();
-                assertTrue(fieldName.equals(MLAgent.IS_HIDDEN_FIELD));
-            } else {
-                assertTrue(query instanceof BoolQueryBuilder);
-                assertEquals(3, boolQueryBuilder.must().size());
+            BoolQueryBuilder subBoolQueryBuilder = (BoolQueryBuilder) query;
+            assertTrue(subBoolQueryBuilder.should().size() == 2 || subBoolQueryBuilder.should().size() == 3);
+            if (subBoolQueryBuilder.should().size() == 3) {
                 boolQueryBuilder.should().forEach(subQuery -> {
                     assertTrue(subQuery instanceof TermsQueryBuilder);
                     TermsQueryBuilder termsQuery = (TermsQueryBuilder) subQuery;
@@ -86,8 +76,31 @@ public class AgentModelSearcherTests {
                     // Each TermsQueryBuilder should contain candidateModelId
                     assertTrue(termsQuery.values().contains("candidateId"));
                 });
-
+            } else {
+                boolQueryBuilder.should().forEach(subQuery -> {
+                    assertTrue(subQuery instanceof BoolQueryBuilder);
+                    BoolQueryBuilder boolQuery = (BoolQueryBuilder) subQuery;
+                    assertTrue(boolQuery.must().size() == 2 || boolQuery.mustNot().size() == 1);
+                    if (boolQuery.must().size() == 2) {
+                        boolQuery.must().forEach(existSubQuery -> {
+                            assertTrue(existSubQuery instanceof ExistsQueryBuilder || existSubQuery instanceof TermsQueryBuilder);
+                            if (existSubQuery instanceof TermsQueryBuilder) {
+                                TermsQueryBuilder termsQuery = (TermsQueryBuilder) existSubQuery;
+                                assertTrue(termsQuery.fieldName().equals(MLAgent.IS_HIDDEN_FIELD));
+                                assertTrue(termsQuery.values().contains(false));
+                            } else {
+                                ExistsQueryBuilder existsQuery = (ExistsQueryBuilder) existSubQuery;
+                                assertTrue(existsQuery.fieldName().equals(MLAgent.IS_HIDDEN_FIELD));
+                            }
+                        });
+                    } else {
+                        QueryBuilder mustNotQuery = boolQuery.mustNot().get(0);
+                        assertTrue(mustNotQuery instanceof ExistsQueryBuilder);
+                        assertEquals(MLAgent.IS_HIDDEN_FIELD, ((ExistsQueryBuilder) mustNotQuery).fieldName());
+                    }
+                });
             }
         }
+
     }
 }

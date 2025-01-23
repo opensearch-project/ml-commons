@@ -37,14 +37,27 @@ public class AgentModelsSearcher {
      */
     public SearchRequest constructQueryRequestToSearchModelIdInsideAgent(String candidateModelId) {
         SearchRequest searchRequest = new SearchRequest(ML_AGENT_INDEX);
+        // Two conditions here
+        // 1. {[(exists hidden field) and (hidden field = false)] or (not exist hidden field)} and
+        // 2. Any model field contains candidate ID
         BoolQueryBuilder searchAgentQuery = QueryBuilders.boolQuery();
+
+        BoolQueryBuilder hiddenFieldQuery = QueryBuilders.boolQuery();
+        // not exist hidden
+        hiddenFieldQuery.should(QueryBuilders.boolQuery().mustNot(QueryBuilders.existsQuery(MLAgent.IS_HIDDEN_FIELD)));
+        // exist but equal to false
+        BoolQueryBuilder existHiddenFieldQuery = QueryBuilders.boolQuery();
+        existHiddenFieldQuery.must(QueryBuilders.termsQuery(MLAgent.IS_HIDDEN_FIELD, false));
+        existHiddenFieldQuery.must(QueryBuilders.existsQuery(MLAgent.IS_HIDDEN_FIELD));
+        hiddenFieldQuery.should(existHiddenFieldQuery);
+
+        //
         BoolQueryBuilder modelIdQuery = QueryBuilders.boolQuery();
         for (String keyField : relatedModelIdSet) {
             modelIdQuery.should(QueryBuilders.termsQuery(TOOL_PARAMETERS_PREFIX + keyField, candidateModelId));
         }
 
-        searchAgentQuery.must(QueryBuilders.termsQuery(MLAgent.IS_HIDDEN_FIELD, false));
-        searchAgentQuery.must(QueryBuilders.existsQuery(MLAgent.IS_HIDDEN_FIELD));
+        searchAgentQuery.must(hiddenFieldQuery);
         searchAgentQuery.must(modelIdQuery);
         searchRequest.source(new SearchSourceBuilder().query(searchAgentQuery));
         return searchRequest;
