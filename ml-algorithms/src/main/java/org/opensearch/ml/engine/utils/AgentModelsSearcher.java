@@ -44,7 +44,7 @@ public class AgentModelsSearcher {
 
         BoolQueryBuilder hiddenFieldQuery = QueryBuilders.boolQuery();
         // not exist hidden
-        //hiddenFieldQuery.should(QueryBuilders.boolQuery().mustNot(QueryBuilders.existsQuery(MLAgent.IS_HIDDEN_FIELD)));
+        // hiddenFieldQuery.should(QueryBuilders.boolQuery().mustNot(QueryBuilders.existsQuery(MLAgent.IS_HIDDEN_FIELD)));
         // exist but equal to false
         BoolQueryBuilder existHiddenFieldQuery = QueryBuilders.boolQuery();
         existHiddenFieldQuery.must(QueryBuilders.termsQuery(MLAgent.IS_HIDDEN_FIELD, false));
