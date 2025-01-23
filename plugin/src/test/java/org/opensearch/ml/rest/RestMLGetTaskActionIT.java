@@ -20,7 +20,7 @@ public class RestMLGetTaskActionIT extends MLCommonsRestTestCase {
 
     public void testGetModelAPI_EmptyResources() throws IOException {
         exceptionRule.expect(ResponseException.class);
-        exceptionRule.expectMessage("Fail to find task");
+        exceptionRule.expectMessage("Failed to find task");
         TestHelper.makeRequest(client(), "GET", "/_plugins/_ml/tasks/111222333", null, "", null);
     }
 

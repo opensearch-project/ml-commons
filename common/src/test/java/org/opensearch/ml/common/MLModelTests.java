@@ -160,16 +160,15 @@ public class MLModelTests {
     @Test
     public void parse_WithTenantId() throws IOException {
         String modelJson = "{"
-                + "\"name\": \"model_name\","
-                + "\"algorithm\": \"KMEANS\","
-                + "\"model_version\": \"1.0.0\","
-                + "\"model_content\": \"test_content\","
-                + "\"is_hidden\": true,"
-                + "\"tenant_id\": \"test_tenant\""
-                + "}";
+            + "\"name\": \"model_name\","
+            + "\"algorithm\": \"KMEANS\","
+            + "\"model_version\": \"1.0.0\","
+            + "\"model_content\": \"test_content\","
+            + "\"is_hidden\": true,"
+            + "\"tenant_id\": \"test_tenant\""
+            + "}";
         TestHelper.testParseFromString(config, modelJson, function);
     }
-
 
     @Test
     public void toBuilder_WithTenantId() {

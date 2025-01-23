@@ -5,8 +5,11 @@
 
 package org.opensearch.ml.common.transport.forward;
 
+import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
+
 import java.io.IOException;
 
+import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -24,6 +27,7 @@ public class MLForwardInput implements Writeable {
 
     private String taskId;
     private String modelId;
+    private String tenantId;
     private String workerNodeId;
     private MLForwardRequestType requestType;
     private MLTask mlTask;
@@ -36,6 +40,7 @@ public class MLForwardInput implements Writeable {
     public MLForwardInput(
         String taskId,
         String modelId,
+        String tenantId,
         String workerNodeId,
         MLForwardRequestType requestType,
         MLTask mlTask,
@@ -46,6 +51,7 @@ public class MLForwardInput implements Writeable {
     ) {
         this.taskId = taskId;
         this.modelId = modelId;
+        this.tenantId = tenantId;
         this.workerNodeId = workerNodeId;
         this.requestType = requestType;
         this.mlTask = mlTask;
@@ -56,6 +62,7 @@ public class MLForwardInput implements Writeable {
     }
 
     public MLForwardInput(StreamInput in) throws IOException {
+        Version streamInputVersion = in.getVersion();
         this.taskId = in.readOptionalString();
         this.modelId = in.readOptionalString();
         this.workerNodeId = in.readOptionalString();
@@ -71,10 +78,12 @@ public class MLForwardInput implements Writeable {
         if (in.readBoolean()) {
             this.registerModelInput = new MLRegisterModelInput(in);
         }
+        this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? in.readOptionalString() : null;
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
+        Version streamOutputVersion = out.getVersion();
         out.writeOptionalString(taskId);
         out.writeOptionalString(modelId);
         out.writeOptionalString(workerNodeId);
@@ -98,6 +107,9 @@ public class MLForwardInput implements Writeable {
             registerModelInput.writeTo(out);
         } else {
             out.writeBoolean(false);
+        }
+        if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
+            out.writeOptionalString(tenantId);
         }
     }
 

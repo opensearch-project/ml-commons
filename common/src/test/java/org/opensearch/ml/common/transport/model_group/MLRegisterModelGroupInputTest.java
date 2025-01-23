@@ -95,17 +95,17 @@ public class MLRegisterModelGroupInputTest {
     @Test
     public void parse_withTenantId_Success() throws IOException {
         String jsonWithTenantId = "{"
-                + "\"name\": \"name\","
-                + "\"description\": \"description\","
-                + "\"backend_roles\": [\"IT\"],"
-                + "\"access_mode\": \"restricted\","
-                + "\"add_all_backend_roles\": true,"
-                + "\"tenant_id\": \"tenant-1\""
-                + "}";
+            + "\"name\": \"name\","
+            + "\"description\": \"description\","
+            + "\"backend_roles\": [\"IT\"],"
+            + "\"access_mode\": \"restricted\","
+            + "\"add_all_backend_roles\": true,"
+            + "\"tenant_id\": \"tenant-1\""
+            + "}";
 
         XContentParser parser = XContentType.JSON
-                .xContent()
-                .createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.THROW_UNSUPPORTED_OPERATION, jsonWithTenantId);
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.THROW_UNSUPPORTED_OPERATION, jsonWithTenantId);
 
         parser.nextToken(); // Start parsing
         MLRegisterModelGroupInput parsedInput = MLRegisterModelGroupInput.parse(parser);
@@ -117,16 +117,16 @@ public class MLRegisterModelGroupInputTest {
     @Test
     public void parse_withoutTenantId_Success() throws IOException {
         String jsonWithoutTenantId = "{"
-                + "\"name\": \"name\","
-                + "\"description\": \"description\","
-                + "\"backend_roles\": [\"IT\"],"
-                + "\"access_mode\": \"restricted\","
-                + "\"add_all_backend_roles\": true"
-                + "}";
+            + "\"name\": \"name\","
+            + "\"description\": \"description\","
+            + "\"backend_roles\": [\"IT\"],"
+            + "\"access_mode\": \"restricted\","
+            + "\"add_all_backend_roles\": true"
+            + "}";
 
         XContentParser parser = XContentType.JSON
-                .xContent()
-                .createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.THROW_UNSUPPORTED_OPERATION, jsonWithoutTenantId);
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.THROW_UNSUPPORTED_OPERATION, jsonWithoutTenantId);
 
         parser.nextToken(); // Start parsing
         MLRegisterModelGroupInput parsedInput = MLRegisterModelGroupInput.parse(parser);
