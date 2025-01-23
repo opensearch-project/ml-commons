@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.utils;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -17,6 +18,10 @@ import java.util.Map;
 import org.junit.Test;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.index.query.BoolQueryBuilder;
+import org.opensearch.index.query.ExistsQueryBuilder;
+import org.opensearch.index.query.QueryBuilder;
+import org.opensearch.index.query.TermsQueryBuilder;
+import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.WithModelTool;
 
@@ -51,6 +56,41 @@ public class AgentModelSearcherTests {
         BoolQueryBuilder boolQueryBuilder = (BoolQueryBuilder) request.source().query();
         // We expect modelKey1, modelKey2, anotherModelKey => total 3 "should" clauses
         assertEquals(2, boolQueryBuilder.must().size());
+        for (QueryBuilder query : boolQueryBuilder.must()) {
+            BoolQueryBuilder subBoolQueryBuilder = (BoolQueryBuilder) query;
+            assertTrue(subBoolQueryBuilder.should().size() == 2 || subBoolQueryBuilder.should().size() == 3);
+            if (subBoolQueryBuilder.should().size() == 3) {
+                boolQueryBuilder.should().forEach(subQuery -> {
+                    assertTrue(subQuery instanceof TermsQueryBuilder);
+                    TermsQueryBuilder termsQuery = (TermsQueryBuilder) subQuery;
+                    // Each TermsQueryBuilder should contain candidateModelId
+                    assertTrue(termsQuery.values().contains("candidateId"));
+                });
+            } else {
+                boolQueryBuilder.should().forEach(subQuery -> {
+                    assertTrue(subQuery instanceof BoolQueryBuilder);
+                    BoolQueryBuilder boolQuery = (BoolQueryBuilder) subQuery;
+                    assertTrue(boolQuery.must().size() == 2 || boolQuery.mustNot().size() == 1);
+                    if (boolQuery.must().size() == 2) {
+                        boolQuery.must().forEach(existSubQuery -> {
+                            assertTrue(existSubQuery instanceof ExistsQueryBuilder || existSubQuery instanceof TermsQueryBuilder);
+                            if (existSubQuery instanceof TermsQueryBuilder) {
+                                TermsQueryBuilder termsQuery = (TermsQueryBuilder) existSubQuery;
+                                assertTrue(termsQuery.fieldName().equals(MLAgent.IS_HIDDEN_FIELD));
+                                assertTrue(termsQuery.values().contains(false));
+                            } else {
+                                ExistsQueryBuilder existsQuery = (ExistsQueryBuilder) existSubQuery;
+                                assertTrue(existsQuery.fieldName().equals(MLAgent.IS_HIDDEN_FIELD));
+                            }
+                        });
+                    } else {
+                        QueryBuilder mustNotQuery = boolQuery.mustNot().get(0);
+                        assertTrue(mustNotQuery instanceof ExistsQueryBuilder);
+                        assertEquals(MLAgent.IS_HIDDEN_FIELD, ((ExistsQueryBuilder) mustNotQuery).fieldName());
+                    }
+                });
+            }
+        }
 
     }
 }
