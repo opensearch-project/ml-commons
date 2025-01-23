@@ -538,6 +538,21 @@ public class MLModelCacheHelper {
     }
 
     /**
+     * Get target worker nodes of model.
+     *
+     * @param modelId model id
+     * @return array of node id; return null if model not exists in cache
+     */
+    public String[] getTargetWorkerNodes(String modelId) {
+        MLModelCache modelCache = modelCaches.get(modelId);
+        if (modelCache == null) {
+            return null;
+        }
+        return modelCache.getTargetWorkerNodes();
+    }
+
+
+    /**
      * Add worker node of model.
      * 
      * @param modelId model id
