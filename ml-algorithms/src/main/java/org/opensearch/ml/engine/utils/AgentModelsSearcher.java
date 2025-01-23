@@ -43,6 +43,7 @@ public class AgentModelsSearcher {
         }
 
         searchAgentQuery.must(QueryBuilders.termsQuery(MLAgent.IS_HIDDEN_FIELD, false));
+        searchAgentQuery.must(QueryBuilders.existsQuery(MLAgent.IS_HIDDEN_FIELD));
         searchRequest.source(new SearchSourceBuilder().query(searchAgentQuery));
         return searchRequest;
     }
