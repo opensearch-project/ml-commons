@@ -163,7 +163,7 @@ public class MLModelAutoReDeployer {
 
     private void triggerAutoDeployModels(List<String> addedNodes) {
         ActionListener<SearchResponse> listener = ActionListener.wrap(res -> {
-            if (res != null && res.getHits() != null && res.getHits().getTotalHits() != null && res.getHits().getTotalHits().value > 0) {
+            if (res != null && res.getHits() != null && res.getHits().getTotalHits() != null && res.getHits().getTotalHits().value() > 0) {
                 Arrays
                     .stream(res.getHits().getHits())
                     .filter(
