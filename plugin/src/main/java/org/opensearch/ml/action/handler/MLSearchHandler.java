@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import org.apache.lucene.search.TotalHits;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
@@ -148,7 +149,7 @@ public class MLSearchHandler {
                         .ofNullable(r)
                         .map(SearchResponse::getHits)
                         .map(SearchHits::getTotalHits)
-                        .map(x -> x.value)
+                        .map(TotalHits::value)
                         .orElse(0L) > 0) {
                         List<String> modelGroupIds = new ArrayList<>();
                         Arrays.stream(r.getHits().getHits()).forEach(hit -> { modelGroupIds.add(hit.getId()); });
