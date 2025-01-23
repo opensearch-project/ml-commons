@@ -69,7 +69,7 @@ public class TransportRegisterModelMetaAction extends HandledTransportAction<Act
             mlModelGroupManager.validateUniqueModelGroupName(mlUploadInput.getName(), null, ActionListener.wrap(modelGroups -> {
                 if (modelGroups != null
                     && modelGroups.getHits().getTotalHits() != null
-                    && modelGroups.getHits().getTotalHits().value != 0) {
+                    && modelGroups.getHits().getTotalHits().value() != 0) {
                     String modelGroupIdOfTheNameProvided = modelGroups.getHits().getAt(0).getId();
                     mlUploadInput.setModelGroupId(modelGroupIdOfTheNameProvided);
                     checkUserAccess(mlUploadInput, listener, true);

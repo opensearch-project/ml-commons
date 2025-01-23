@@ -129,7 +129,7 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
                 searchHiddenModels(modelIds, ActionListener.wrap(hiddenModels -> {
                     if (hiddenModels != null
                         && hiddenModels.getHits().getTotalHits() != null
-                        && hiddenModels.getHits().getTotalHits().value != 0
+                        && hiddenModels.getHits().getTotalHits().value() != 0
                         && !isSuperAdminUserWrapper(clusterService, client)) {
                         List<String> hiddenModelIds = Arrays
                             .stream(hiddenModels.getHits().getHits())

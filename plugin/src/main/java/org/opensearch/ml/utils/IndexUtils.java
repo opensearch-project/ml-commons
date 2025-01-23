@@ -127,7 +127,7 @@ public class IndexUtils {
                 searchRequest.source(builder).indices(indexName);
 
                 client.search(searchRequest, ActionListener.runBefore(ActionListener.wrap(r -> {
-                    long count = r.getHits().getTotalHits().value;
+                    long count = r.getHits().getTotalHits().value();
                     listener.onResponse(count);
                 }, e -> { listener.onFailure(e); }), () -> context.restore()));
             } catch (Exception e) {
