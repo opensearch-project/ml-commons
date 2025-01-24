@@ -60,7 +60,19 @@ public interface MachineLearningClient {
      * @param mlInput ML input
      * @param listener a listener to be notified of the result
      */
-    void predict(String modelId, MLInput mlInput, ActionListener<MLOutput> listener);
+    default void predict(String modelId, MLInput mlInput, ActionListener<MLOutput> listener) {
+        predict(modelId, null, mlInput, listener);
+    }
+
+    /**
+     * Do prediction machine learning job
+     * For additional info on Predict, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#predict
+     * @param modelId the trained model id
+     * @param tenantId tenant id
+     * @param mlInput ML input
+     * @param listener a listener to be notified of the result
+     */
+    void predict(String modelId, String tenantId, MLInput mlInput, ActionListener<MLOutput> listener);
 
     /**
      * Train model then predict with the same data set.
@@ -352,7 +364,19 @@ public interface MachineLearningClient {
      * @param modelIds the node ids. May be null for all nodes.
      * @param listener a listener to be notified of the result
      */
-    void undeploy(String[] modelIds, String[] nodeIds, ActionListener<MLUndeployModelsResponse> listener);
+    default void undeploy(String[] modelIds, String[] nodeIds, ActionListener<MLUndeployModelsResponse> listener) {
+        undeploy(modelIds, nodeIds, null, listener);
+    }
+
+    /**
+     * Undeploy model
+     * For additional info on deploy, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/model-apis/undeploy-model/
+     * @param modelIds the model ids
+     * @param modelIds the node ids. May be null for all nodes.
+     * @param tenantId the tenant id. This is necessary for multi-tenancy.
+     * @param listener a listener to be notified of the result
+     */
+    void undeploy(String[] modelIds, String[] nodeIds, String tenantId, ActionListener<MLUndeployModelsResponse> listener);
 
     /**
      * Create connector for remote model

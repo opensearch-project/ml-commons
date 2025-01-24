@@ -38,6 +38,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.Version;
 import org.opensearch.action.bulk.BulkRequest;
@@ -61,6 +62,7 @@ import org.opensearch.commons.ConfigConstants;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.common.transport.TransportAddress;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
@@ -71,7 +73,10 @@ import org.opensearch.ml.common.transport.sync.MLSyncUpNodesResponse;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TestHelper;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.aggregations.InternalAggregations;
@@ -88,12 +93,16 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
 
     @Mock
     private Client client;
+    private SdkClient sdkClient;
     @Mock
     private ClusterService clusterService;
     @Mock
     private DiscoveryNodeHelper nodeHelper;
     @Mock
     private MLIndicesHandler mlIndicesHandler;
+
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     private DiscoveryNode mlNode1;
     private DiscoveryNode mlNode2;
@@ -116,7 +125,6 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         mlNode1 = new DiscoveryNode(mlNode1Id, buildNewFakeTransportAddress(), emptyMap(), ImmutableSet.of(ML_ROLE), Version.CURRENT);
         mlNode2 = new DiscoveryNode(mlNode2Id, buildNewFakeTransportAddress(), emptyMap(), ImmutableSet.of(ML_ROLE), Version.CURRENT);
         encryptor = spy(new EncryptorImpl(null));
-        syncUpCron = new MLSyncUpCron(client, clusterService, nodeHelper, mlIndicesHandler, encryptor);
 
         testState = setupTestClusterState("node");
         when(clusterService.state()).thenReturn(testState);
@@ -128,10 +136,12 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         }).when(mlIndicesHandler).initMLConfigIndex(any());
 
         Settings settings = Settings.builder().build();
+        sdkClient = Mockito.spy(SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap()));
         threadContext = new ThreadContext(settings);
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, USER_STRING);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
+        syncUpCron = new MLSyncUpCron(client, sdkClient, clusterService, nodeHelper, mlIndicesHandler, encryptor, mlFeatureEnabledSetting);
     }
 
     public void testInitMlConfig_MasterKeyNotExist() {
