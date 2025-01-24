@@ -222,6 +222,7 @@ public class TransportSyncUpOnNodeAction extends
                 mlTaskManager
                     .updateMLTask(
                         taskId,
+                        null,
                         ImmutableMap
                             .of(MLTask.STATE_FIELD, MLTaskState.FAILED, MLTask.ERROR_FIELD, "timeout after " + mlTaskTimeout + " seconds"),
                         10_000,
@@ -236,7 +237,7 @@ public class TransportSyncUpOnNodeAction extends
         Path deployModelRootPath = mlEngine.getDeployModelRootPath();
         Path modelCacheRootPath = mlEngine.getModelCacheRootPath();
         Set<String> modelsInCacheFolder = FileUtils.getFileNames(registerModelRootPath, deployModelRootPath, modelCacheRootPath);
-        if (modelsInCacheFolder.size() > 0) {
+        if (!modelsInCacheFolder.isEmpty()) {
             log
                 .debug(
                     "Found {} models in cache folder: {}",

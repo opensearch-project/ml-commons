@@ -1,6 +1,8 @@
 package org.opensearch.ml.common.transport.deploy;
 
 import static org.junit.Assert.*;
+import static org.opensearch.ml.common.CommonValue.VERSION_2_18_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -14,6 +16,7 @@ import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.*;
+import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
@@ -25,7 +28,7 @@ public class MLDeployModelRequestTest {
 
     @Before
     public void setUp() throws Exception {
-        mlDeployModelRequest = mlDeployModelRequest
+        mlDeployModelRequest = MLDeployModelRequest
             .builder()
             .modelId("modelId")
             .modelNodeIds(new String[] { "modelNodeIds" })
@@ -37,19 +40,19 @@ public class MLDeployModelRequestTest {
 
     @Test
     public void testValidateWithBuilder() {
-        MLDeployModelRequest request = mlDeployModelRequest.builder().modelId("modelId").build();
+        MLDeployModelRequest request = MLDeployModelRequest.builder().modelId("modelId").build();
         assertNull(request.validate());
     }
 
     @Test
     public void testValidateWithoutBuilder() {
-        MLDeployModelRequest request = new MLDeployModelRequest("modelId", true);
+        MLDeployModelRequest request = new MLDeployModelRequest("modelId", null, true);
         assertNull(request.validate());
     }
 
     @Test
     public void validate_Exception_WithNullModelId() {
-        MLDeployModelRequest request = mlDeployModelRequest
+        MLDeployModelRequest request = MLDeployModelRequest
             .builder()
             .modelId(null)
             .modelNodeIds(new String[] { "modelNodeIds" })
@@ -87,13 +90,13 @@ public class MLDeployModelRequestTest {
                 throw new IOException("test");
             }
         };
-        mlDeployModelRequest.fromActionRequest(actionRequest);
+        MLDeployModelRequest.fromActionRequest(actionRequest);
     }
 
     @Test
     public void fromActionRequest_Success_WithMLDeployModelRequest() {
-        MLDeployModelRequest request = mlDeployModelRequest.builder().modelId("modelId").build();
-        assertSame(mlDeployModelRequest.fromActionRequest(request), request);
+        MLDeployModelRequest request = MLDeployModelRequest.builder().modelId("modelId").build();
+        assertSame(MLDeployModelRequest.fromActionRequest(request), request);
     }
 
     @Test
@@ -110,7 +113,7 @@ public class MLDeployModelRequestTest {
                 request.writeTo(out);
             }
         };
-        MLDeployModelRequest result = mlDeployModelRequest.fromActionRequest(actionRequest);
+        MLDeployModelRequest result = MLDeployModelRequest.fromActionRequest(actionRequest);
         assertNotSame(result, request);
         assertEquals(request.isAsync(), result.isAsync());
         assertEquals(request.isDispatchTask(), result.isDispatchTask());
@@ -141,6 +144,64 @@ public class MLDeployModelRequestTest {
         });
     }
 
+    @Test
+    public void testStreamInputVersionBefore_2_19_0() throws IOException {
+        BytesStreamOutput out = new BytesStreamOutput();
+        out.setVersion(VERSION_2_18_0);
+        mlDeployModelRequest.writeTo(out);
+
+        StreamInput in = out.bytes().streamInput();
+        in.setVersion(VERSION_2_18_0);
+        MLDeployModelRequest request = new MLDeployModelRequest(in);
+
+        assertEquals(mlDeployModelRequest.getModelId(), request.getModelId());
+        assertArrayEquals(mlDeployModelRequest.getModelNodeIds(), request.getModelNodeIds());
+        assertEquals(mlDeployModelRequest.isAsync(), request.isAsync());
+        assertEquals(mlDeployModelRequest.isDispatchTask(), request.isDispatchTask());
+        assertNull(request.getTenantId());
+    }
+
+    @Test
+    public void testStreamInputVersionAfter_2_19_0() throws IOException {
+        BytesStreamOutput out = new BytesStreamOutput();
+        out.setVersion(VERSION_2_19_0);
+        mlDeployModelRequest.writeTo(out);
+
+        StreamInput in = out.bytes().streamInput();
+        in.setVersion(VERSION_2_19_0);
+        MLDeployModelRequest request = new MLDeployModelRequest(in);
+
+        assertEquals(mlDeployModelRequest.getModelId(), request.getModelId());
+        assertArrayEquals(mlDeployModelRequest.getModelNodeIds(), request.getModelNodeIds());
+        assertEquals(mlDeployModelRequest.isAsync(), request.isAsync());
+        assertEquals(mlDeployModelRequest.isDispatchTask(), request.isDispatchTask());
+        assertEquals(mlDeployModelRequest.getTenantId(), request.getTenantId());
+    }
+
+    @Test
+    public void testWriteToWithNullNodeIds() throws IOException {
+        MLDeployModelRequest request = MLDeployModelRequest
+            .builder()
+            .modelId("modelId")
+            .modelNodeIds(null)
+            .async(true)
+            .dispatchTask(true)
+            .build();
+
+        BytesStreamOutput out = new BytesStreamOutput();
+        out.setVersion(VERSION_2_19_0);
+        request.writeTo(out);
+
+        StreamInput in = out.bytes().streamInput();
+        in.setVersion(VERSION_2_19_0);
+        MLDeployModelRequest result = new MLDeployModelRequest(in);
+
+        assertEquals(request.getModelId(), result.getModelId());
+        assertNull(result.getModelNodeIds());
+        assertEquals(request.isAsync(), result.isAsync());
+        assertEquals(request.isDispatchTask(), result.isDispatchTask());
+    }
+
     private void parseFromJsonString(String modelId, String expectedInputStr, Consumer<MLDeployModelRequest> verify) throws Exception {
         XContentParser parser = XContentType.JSON
             .xContent()
@@ -150,7 +211,7 @@ public class MLDeployModelRequestTest {
                 expectedInputStr
             );
         parser.nextToken();
-        MLDeployModelRequest parsedInput = mlDeployModelRequest.parse(parser, modelId);
+        MLDeployModelRequest parsedInput = MLDeployModelRequest.parse(parser, modelId, null);
         verify.accept(parsedInput);
     }
 }

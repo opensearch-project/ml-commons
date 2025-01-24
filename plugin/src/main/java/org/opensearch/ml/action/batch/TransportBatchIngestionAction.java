@@ -169,6 +169,7 @@ public class TransportBatchIngestionAction extends HandledTransportAction<Action
                         mlTaskManager
                             .updateMLTask(
                                 taskId,
+                                null,
                                 Map.of(STATE_FIELD, FAILED, ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(ex)),
                                 TASK_SEMAPHORE_TIMEOUT,
                                 true
@@ -194,6 +195,7 @@ public class TransportBatchIngestionAction extends HandledTransportAction<Action
             mlTaskManager
                 .updateMLTask(
                     taskId,
+                    null,
                     Map.of(STATE_FIELD, FAILED, ERROR_FIELD, jsonPathNotFoundException.getMessage()),
                     TASK_SEMAPHORE_TIMEOUT,
                     true
@@ -203,6 +205,7 @@ public class TransportBatchIngestionAction extends HandledTransportAction<Action
             mlTaskManager
                 .updateMLTask(
                     taskId,
+                    null,
                     Map.of(STATE_FIELD, FAILED, ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(e)),
                     TASK_SEMAPHORE_TIMEOUT,
                     true
@@ -212,11 +215,12 @@ public class TransportBatchIngestionAction extends HandledTransportAction<Action
 
     protected void handleSuccessRate(double successRate, String taskId) {
         if (successRate == 100) {
-            mlTaskManager.updateMLTask(taskId, Map.of(STATE_FIELD, COMPLETED), 5000, true);
+            mlTaskManager.updateMLTask(taskId, null, Map.of(STATE_FIELD, COMPLETED), 5000, true);
         } else if (successRate > 0) {
             mlTaskManager
                 .updateMLTask(
                     taskId,
+                    null,
                     Map.of(STATE_FIELD, FAILED, ERROR_FIELD, "batch ingestion successful rate is " + successRate),
                     TASK_SEMAPHORE_TIMEOUT,
                     true
@@ -225,6 +229,7 @@ public class TransportBatchIngestionAction extends HandledTransportAction<Action
             mlTaskManager
                 .updateMLTask(
                     taskId,
+                    null,
                     Map.of(STATE_FIELD, FAILED, ERROR_FIELD, "batch ingestion successful rate is 0"),
                     TASK_SEMAPHORE_TIMEOUT,
                     true

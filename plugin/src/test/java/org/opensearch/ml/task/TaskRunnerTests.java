@@ -27,6 +27,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.breaker.CircuitBreakingException;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.breaker.ThresholdCircuitBreaker;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
@@ -104,7 +105,7 @@ public class TaskRunnerTests extends OpenSearchTestCase {
         String errorMessage = "test error";
         mlTaskRunner.handleAsyncMLTaskFailure(mlTask, new RuntimeException(errorMessage));
         ArgumentCaptor<Map> argumentCaptor = ArgumentCaptor.forClass(Map.class);
-        verify(mlTaskManager, times(1)).updateMLTask(eq(mlTask.getTaskId()), argumentCaptor.capture(), anyLong(), anyBoolean());
+        verify(mlTaskManager, times(1)).updateMLTask(eq(mlTask.getTaskId()), any(), argumentCaptor.capture(), anyLong(), anyBoolean());
         assertEquals(errorMessage, argumentCaptor.getValue().get(MLTask.ERROR_FIELD));
         assertNull(mlTaskManager.getMLTask(mlTask.getTaskId()));
     }
@@ -112,7 +113,7 @@ public class TaskRunnerTests extends OpenSearchTestCase {
     public void testHandleAsyncMLTaskFailure_SyncTask() {
         MLTask syncMlTask = mlTask.toBuilder().async(false).build();
         mlTaskRunner.handleAsyncMLTaskFailure(syncMlTask, new RuntimeException("error"));
-        verify(mlTaskManager, never()).updateMLTask(eq(syncMlTask.getTaskId()), any(), anyLong(), anyBoolean());
+        verify(mlTaskManager, never()).updateMLTask(eq(syncMlTask.getTaskId()), any(), any(), anyLong(), anyBoolean());
     }
 
     public void testHandleAsyncMLTaskComplete_AsyncTask() {
@@ -120,7 +121,7 @@ public class TaskRunnerTests extends OpenSearchTestCase {
         MLTask task = mlTask.toBuilder().modelId(modelId).build();
         mlTaskRunner.handleAsyncMLTaskComplete(task);
         ArgumentCaptor<Map> argumentCaptor = ArgumentCaptor.forClass(Map.class);
-        verify(mlTaskManager, times(1)).updateMLTask(eq(mlTask.getTaskId()), argumentCaptor.capture(), anyLong(), anyBoolean());
+        verify(mlTaskManager, times(1)).updateMLTask(eq(mlTask.getTaskId()), any(), argumentCaptor.capture(), anyLong(), anyBoolean());
         assertEquals(modelId, argumentCaptor.getValue().get(MLTask.MODEL_ID_FIELD));
         assertEquals(MLTaskState.COMPLETED, argumentCaptor.getValue().get(MLTask.STATE_FIELD));
     }
@@ -128,7 +129,7 @@ public class TaskRunnerTests extends OpenSearchTestCase {
     public void testHandleAsyncMLTaskComplete_SyncTask() {
         MLTask syncMlTask = mlTask.toBuilder().async(false).build();
         mlTaskRunner.handleAsyncMLTaskComplete(syncMlTask);
-        verify(mlTaskManager, never()).updateMLTask(eq(syncMlTask.getTaskId()), any(), anyLong(), anyBoolean());
+        verify(mlTaskManager, never()).updateMLTask(eq(syncMlTask.getTaskId()), any(), any(), anyLong(), anyBoolean());
     }
 
     public void testRun_CircuitBreakerOpen() {
@@ -138,8 +139,8 @@ public class TaskRunnerTests extends OpenSearchTestCase {
         TransportService transportService = mock(TransportService.class);
         ActionListener listener = mock(ActionListener.class);
         MLTaskRequest request = new MLTaskRequest(false);
-        mlTaskRunner.run(FunctionName.REMOTE, request, transportService, listener);
+        expectThrows(CircuitBreakingException.class, () -> mlTaskRunner.run(FunctionName.REMOTE, request, transportService, listener));
         Long value = (Long) mlStats.getStat(MLNodeLevelStat.ML_CIRCUIT_BREAKER_TRIGGER_COUNT).getValue();
-        assertEquals(0L, value.longValue());
+        assertEquals(1L, value.longValue());
     }
 }

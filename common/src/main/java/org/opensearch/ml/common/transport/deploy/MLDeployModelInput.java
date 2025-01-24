@@ -5,8 +5,11 @@
 
 package org.opensearch.ml.common.transport.deploy;
 
+import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
+
 import java.io.IOException;
 
+import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -18,6 +21,7 @@ import lombok.Data;
 @Data
 public class MLDeployModelInput implements Writeable {
     private String modelId;
+    private String tenantId;
     private String taskId;
     private String modelContentHash;
     private Integer nodeCount;
@@ -26,6 +30,7 @@ public class MLDeployModelInput implements Writeable {
     private MLTask mlTask;
 
     public MLDeployModelInput(StreamInput in) throws IOException {
+        Version streamInputVersion = in.getVersion();
         this.modelId = in.readString();
         this.taskId = in.readString();
         this.modelContentHash = in.readOptionalString();
@@ -33,6 +38,7 @@ public class MLDeployModelInput implements Writeable {
         this.coordinatingNodeId = in.readString();
         this.isDeployToAllNodes = in.readOptionalBoolean();
         this.mlTask = new MLTask(in);
+        this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? in.readOptionalString() : null;
     }
 
     @Builder
@@ -43,7 +49,8 @@ public class MLDeployModelInput implements Writeable {
         Integer nodeCount,
         String coordinatingNodeId,
         Boolean isDeployToAllNodes,
-        MLTask mlTask
+        MLTask mlTask,
+        String tenantId
     ) {
         this.modelId = modelId;
         this.taskId = taskId;
@@ -52,12 +59,14 @@ public class MLDeployModelInput implements Writeable {
         this.coordinatingNodeId = coordinatingNodeId;
         this.isDeployToAllNodes = isDeployToAllNodes;
         this.mlTask = mlTask;
+        this.tenantId = tenantId;
     }
 
     public MLDeployModelInput() {}
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
+        Version streamOutputVersion = out.getVersion();
         out.writeString(modelId);
         out.writeString(taskId);
         out.writeOptionalString(modelContentHash);
@@ -65,6 +74,9 @@ public class MLDeployModelInput implements Writeable {
         out.writeString(coordinatingNodeId);
         out.writeOptionalBoolean(isDeployToAllNodes);
         mlTask.writeTo(out);
+        if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
+            out.writeOptionalString(tenantId);
+        }
     }
 
 }
