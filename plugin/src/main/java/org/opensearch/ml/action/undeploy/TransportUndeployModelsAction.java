@@ -11,6 +11,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.search.SearchRequest;
@@ -41,9 +42,14 @@ import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsResponse;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.ml.utils.TenantAwareHelper;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
+import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.tasks.Task;
@@ -62,6 +68,7 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
     ClusterService clusterService;
     ThreadPool threadPool;
     Client client;
+    SdkClient sdkClient;
 
     Settings settings;
     NamedXContentRegistry xContentRegistry;
@@ -69,6 +76,7 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
     MLTaskDispatcher mlTaskDispatcher;
     MLModelManager mlModelManager;
     ModelAccessControlHelper modelAccessControlHelper;
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Inject
     public TransportUndeployModelsAction(
@@ -79,12 +87,14 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         ClusterService clusterService,
         ThreadPool threadPool,
         Client client,
+        SdkClient sdkClient,
         Settings settings,
         NamedXContentRegistry xContentRegistry,
         DiscoveryNodeHelper nodeFilter,
         MLTaskDispatcher mlTaskDispatcher,
         MLModelManager mlModelManager,
-        ModelAccessControlHelper modelAccessControlHelper
+        ModelAccessControlHelper modelAccessControlHelper,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLUndeployModelsAction.NAME, transportService, actionFilters, MLDeployModelRequest::new);
         this.transportService = transportService;
@@ -93,19 +103,26 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         this.clusterService = clusterService;
         this.threadPool = threadPool;
         this.client = client;
+        this.sdkClient = sdkClient;
         this.xContentRegistry = xContentRegistry;
         this.nodeFilter = nodeFilter;
         this.mlTaskDispatcher = mlTaskDispatcher;
         this.mlModelManager = mlModelManager;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.settings = settings;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLUndeployModelsResponse> listener) {
         MLUndeployModelsRequest undeployModelsRequest = MLUndeployModelsRequest.fromActionRequest(request);
         String[] modelIds = undeployModelsRequest.getModelIds();
+        String tenantId = undeployModelsRequest.getTenantId();
         String[] targetNodeIds = undeployModelsRequest.getNodeIds();
+
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, listener)) {
+            return;
+        }
 
         if (modelIds == null) {
             listener.onFailure(new IllegalArgumentException("Must set specific model ids to undeploy"));
@@ -113,9 +130,9 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         }
         if (modelIds.length == 1) {
             String modelId = modelIds[0];
-            validateAccess(modelId, ActionListener.wrap(hasPermissionToUndeploy -> {
+            validateAccess(modelId, tenantId, ActionListener.wrap(hasPermissionToUndeploy -> {
                 if (hasPermissionToUndeploy) {
-                    undeployModels(targetNodeIds, modelIds, listener);
+                    undeployModels(targetNodeIds, modelIds, tenantId, listener);
                 } else {
                     listener.onFailure(new IllegalArgumentException("No permission to undeploy model " + modelId));
                 }
@@ -141,9 +158,9 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
                             .filter(modelId -> !hiddenModelIds.contains(modelId))
                             .toArray(String[]::new);
 
-                        undeployModels(targetNodeIds, modelsIDsToUndeploy, listener);
+                        undeployModels(targetNodeIds, modelsIDsToUndeploy, tenantId, listener);
                     } else {
-                        undeployModels(targetNodeIds, modelIds, listener);
+                        undeployModels(targetNodeIds, modelIds, tenantId, listener);
                     }
                 }, e -> {
                     log.error("Failed to search model index", e);
@@ -153,20 +170,29 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         }
     }
 
-    private void undeployModels(String[] targetNodeIds, String[] modelIds, ActionListener<MLUndeployModelsResponse> listener) {
+    private void undeployModels(
+        String[] targetNodeIds,
+        String[] modelIds,
+        String tenantId,
+        ActionListener<MLUndeployModelsResponse> listener
+    ) {
         MLUndeployModelNodesRequest mlUndeployModelNodesRequest = new MLUndeployModelNodesRequest(targetNodeIds, modelIds);
+        mlUndeployModelNodesRequest.setTenantId(tenantId);
 
         client.execute(MLUndeployModelAction.INSTANCE, mlUndeployModelNodesRequest, ActionListener.wrap(r -> {
             listener.onResponse(new MLUndeployModelsResponse(r));
         }, listener::onFailure));
     }
 
-    private void validateAccess(String modelId, ActionListener<Boolean> listener) {
+    private void validateAccess(String modelId, String tenantId, ActionListener<Boolean> listener) {
         User user = RestActionUtils.getUserContext(client);
         boolean isSuperAdmin = isSuperAdminUserWrapper(clusterService, client);
         String[] excludes = new String[] { MLModel.MODEL_CONTENT_FIELD, MLModel.OLD_MODEL_CONTENT_FIELD };
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            mlModelManager.getModel(modelId, null, excludes, ActionListener.runBefore(ActionListener.wrap(mlModel -> {
+            mlModelManager.getModel(modelId, tenantId, null, excludes, ActionListener.runBefore(ActionListener.wrap(mlModel -> {
+                if (!TenantAwareHelper.validateTenantResource(mlFeatureEnabledSetting, tenantId, mlModel.getTenantId(), listener)) {
+                    return;
+                }
                 Boolean isHidden = mlModel.getIsHidden();
                 if (isHidden != null && isHidden) {
                     if (isSuperAdmin) {
@@ -181,7 +207,16 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
                             );
                     }
                 } else {
-                    modelAccessControlHelper.validateModelGroupAccess(user, mlModel.getModelGroupId(), client, listener);
+                    modelAccessControlHelper
+                        .validateModelGroupAccess(
+                            user,
+                            mlFeatureEnabledSetting,
+                            tenantId,
+                            mlModel.getModelGroupId(),
+                            client,
+                            sdkClient,
+                            listener
+                        );
                 }
             }, e -> {
                 log.error("Failed to find Model", e);
@@ -215,14 +250,34 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
 
             SearchRequest searchRequest = new SearchRequest(ML_MODEL_INDEX).source(searchSourceBuilder);
 
-            client.search(searchRequest, ActionListener.runBefore(ActionListener.wrap(models -> { listener.onResponse(models); }, e -> {
-                if (e instanceof IndexNotFoundException) {
-                    listener.onResponse(null);
+            SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
+                .builder()
+                .indices(searchRequest.indices())
+                .searchSourceBuilder(searchRequest.source())
+                .build();
+
+            sdkClient.searchDataObjectAsync(searchDataObjectRequest).whenComplete((r, throwable) -> {
+                context.restore();
+                if (throwable != null) {
+                    Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                    log.error("Failed to search model index", cause);
+                    if (ExceptionsHelper.unwrap(cause, IndexNotFoundException.class) != null) {
+                        listener.onResponse(null);
+                    } else {
+                        listener.onFailure(cause);
+                    }
                 } else {
-                    log.error("Failed to search model index", e);
-                    listener.onFailure(e);
+                    try {
+                        SearchResponse searchResponse = SearchResponse.fromXContent(r.parser());
+                        log.info("Model Index search complete: {}", searchResponse.getHits().getTotalHits());
+                        listener.onResponse(searchResponse);
+                    } catch (Exception e) {
+                        log.error("Failed to parse search response", e);
+                        listener
+                            .onFailure(new OpenSearchStatusException("Failed to parse search response", RestStatus.INTERNAL_SERVER_ERROR));
+                    }
                 }
-            }), () -> context.restore()));
+            });
         } catch (Exception e) {
             log.error("Failed to search model index", e);
             listener.onFailure(e);
