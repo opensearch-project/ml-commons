@@ -343,6 +343,24 @@ public interface ModelExecutor {
         return path.replaceAll("\\[(\\d+)\\]", "$1\\.").replaceAll("\\['(.*?)']", "$1\\.").replaceAll("^\\$", "").replaceAll("\\.$", "");
     }
 
+    /**
+     * Sets the request context from the extensions in the SearchRequest.
+     *
+     * This method processes the extensions in the provided SearchRequest and sets
+     * corresponding attributes in the PipelineProcessingContext. It specifically
+     * handles two types of extensions:
+     * 1. MLInferenceRequestParametersExtBuilder
+     * 2. GenerativeQAParamExtBuilder
+     *
+     * For each recognized extension, it extracts parameters and sets them as
+     * attributes in the requestContext with appropriate prefixes.
+     *
+     * @param request The SearchRequest containing the extensions to process.
+     *                This should be a valid SearchRequest that may contain
+     *                ML Inference or Generative QA extensions.
+     * @param requestContext The PipelineProcessingContext where attributes will be set.
+     *                       This context will be updated with parameters from the extensions.
+     * */
     default void setRequestContextFromExt(SearchRequest request, PipelineProcessingContext requestContext) {
 
         List<SearchExtBuilder> extBuilderList = request.source().ext();

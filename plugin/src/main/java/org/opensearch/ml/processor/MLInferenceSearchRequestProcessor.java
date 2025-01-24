@@ -226,7 +226,7 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
      * @param queryString      the original query string
      * @param requestListener  the {@link ActionListener} to be notified when the query string or query template is updated
      * @param processOutputMap the list of output mappings
-     * @param requestContext
+     * @param requestContext   the requestContext can be carried over search processors into the search pipeline
      * @return an {@link ActionListener} that handles the response from the ML model inference
      */
     private ActionListener<Map<Integer, MLOutput>> createRewriteRequestListener(
@@ -316,6 +316,9 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
                         Object modelOutputValue = getModelOutputValue(mlOutput, modelOutputFieldName, ignoreMissing, fullResponsePath);
                         requestContext.setAttribute(newQueryField, modelOutputValue);
 
+                        // if output mapping is using jsonpath starts with $. or use dot path starts with ext.
+                        // to allow writing to search extension, try to prepare the path in the query,
+                        // for example {"ext":{"ml_inference":{}}}
                         if (newQueryField.startsWith("$.ext.") || newQueryField.startsWith("ext.")) {
                             incomeQueryObject = StringUtils.prepareNestedStructures(incomeQueryObject, newQueryField);
                         }

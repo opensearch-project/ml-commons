@@ -23,7 +23,14 @@ import org.opensearch.search.SearchExtBuilder;
  *
  */
 public class MLInferenceRequestParametersUtil {
-
+    /**
+     * Extracts ML Inference Request Parameters from a SearchRequest.
+     *
+     * This method examines the provided SearchRequest for ML-inference parameters
+     * that are embedded within the request's extensions. It specifically looks for
+     * the MLInferenceRequestParametersExtBuilder and extracts the ML Inference
+     * Request Parameters if present.
+     * */
     public static MLInferenceRequestParameters getMLInferenceRequestParameters(SearchRequest searchRequest) {
         MLInferenceRequestParametersExtBuilder mLInferenceRequestParametersExtBuilder = null;
         if (searchRequest.source() != null && searchRequest.source().ext() != null && !searchRequest.source().ext().isEmpty()) {

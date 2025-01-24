@@ -362,7 +362,6 @@ public class StringUtils {
      *             JsonPath expression (e.g., "$.store.book[0].title").
      * @return true if the path exists in the JSON object, false otherwise.
      * @throws IllegalArgumentException if the json object is null or if the path is null or empty.
-     * @throws PathNotFoundException if there's an error in parsing the JSON or the path.
      */
     public static boolean pathExists(Object json, String path) {
         if (json == null) {
