@@ -474,7 +474,23 @@ public interface MachineLearningClient {
         return actionFuture;
     }
 
-    void deleteAgent(String agentId, ActionListener<DeleteResponse> listener);
+    /**
+     * Delete agent
+     * @param agentId The id of the agent to delete
+     * @param listener a listener to be notified of the result
+     */
+    default void deleteAgent(String agentId, ActionListener<DeleteResponse> listener) {
+        PlainActionFuture<DeleteResponse> actionFuture = PlainActionFuture.newFuture();
+        deleteAgent(agentId, null, actionFuture);
+    }
+
+    /**
+     * Delete agent
+     * @param agentId The id of the agent to delete
+     * @param tenantId the tenant id. This is necessary for multi-tenancy.
+     * @param listener a listener to be notified of the result
+     */
+    void deleteAgent(String agentId, String tenantId, ActionListener<DeleteResponse> listener);
 
     /**
      * Get a list of ToolMetadata and return ActionFuture.

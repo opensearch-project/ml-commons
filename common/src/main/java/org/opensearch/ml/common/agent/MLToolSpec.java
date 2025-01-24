@@ -6,6 +6,8 @@
 package org.opensearch.ml.common.agent;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 import java.io.IOException;
@@ -22,6 +24,7 @@ import org.opensearch.ml.common.CommonValue;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import lombok.Setter;
 
 @EqualsAndHashCode
 @Getter
@@ -41,6 +44,8 @@ public class MLToolSpec implements ToXContentObject {
     private Map<String, String> parameters;
     private boolean includeOutputInAgentResponse;
     private Map<String, String> configMap;
+    @Setter
+    private String tenantId;
 
     @Builder(toBuilder = true)
     public MLToolSpec(
@@ -49,7 +54,8 @@ public class MLToolSpec implements ToXContentObject {
         String description,
         Map<String, String> parameters,
         boolean includeOutputInAgentResponse,
-        Map<String, String> configMap
+        Map<String, String> configMap,
+        String tenantId
     ) {
         if (type == null) {
             throw new IllegalArgumentException("tool type is null");
@@ -60,9 +66,11 @@ public class MLToolSpec implements ToXContentObject {
         this.parameters = parameters;
         this.includeOutputInAgentResponse = includeOutputInAgentResponse;
         this.configMap = configMap;
+        this.tenantId = tenantId;
     }
 
     public MLToolSpec(StreamInput input) throws IOException {
+        Version streamInputVersion = input.getVersion();
         type = input.readString();
         name = input.readOptionalString();
         description = input.readOptionalString();
@@ -73,13 +81,15 @@ public class MLToolSpec implements ToXContentObject {
         if (input.getVersion().onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_TOOL_CONFIG) && input.readBoolean()) {
             configMap = input.readMap(StreamInput::readString, StreamInput::readOptionalString);
         }
+        this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
     }
 
     public void writeTo(StreamOutput out) throws IOException {
+        Version streamOutputVersion = out.getVersion();
         out.writeString(type);
         out.writeOptionalString(name);
         out.writeOptionalString(description);
-        if (parameters != null && parameters.size() > 0) {
+        if (parameters != null && !parameters.isEmpty()) {
             out.writeBoolean(true);
             out.writeMap(parameters, StreamOutput::writeString, StreamOutput::writeOptionalString);
         } else {
@@ -93,6 +103,9 @@ public class MLToolSpec implements ToXContentObject {
             } else {
                 out.writeBoolean(false);
             }
+        }
+        if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
+            out.writeOptionalString(tenantId);
         }
     }
 
@@ -108,12 +121,15 @@ public class MLToolSpec implements ToXContentObject {
         if (description != null) {
             builder.field(DESCRIPTION_FIELD, description);
         }
-        if (parameters != null && parameters.size() > 0) {
+        if (parameters != null && !parameters.isEmpty()) {
             builder.field(PARAMETERS_FIELD, parameters);
         }
         builder.field(INCLUDE_OUTPUT_IN_AGENT_RESPONSE, includeOutputInAgentResponse);
         if (configMap != null && !configMap.isEmpty()) {
             builder.field(CONFIG_FIELD, configMap);
+        }
+        if (tenantId != null) {
+            builder.field(TENANT_ID_FIELD, tenantId);
         }
         builder.endObject();
         return builder;
@@ -126,6 +142,7 @@ public class MLToolSpec implements ToXContentObject {
         Map<String, String> parameters = null;
         boolean includeOutputInAgentResponse = false;
         Map<String, String> configMap = null;
+        String tenantId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -151,6 +168,9 @@ public class MLToolSpec implements ToXContentObject {
                 case CONFIG_FIELD:
                     configMap = getParameterMap(parser.map());
                     break;
+                case TENANT_ID_FIELD:
+                    tenantId = parser.textOrNull();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -164,11 +184,11 @@ public class MLToolSpec implements ToXContentObject {
             .parameters(parameters)
             .includeOutputInAgentResponse(includeOutputInAgentResponse)
             .configMap(configMap)
+            .tenantId(tenantId)
             .build();
     }
 
     public static MLToolSpec fromStream(StreamInput in) throws IOException {
-        MLToolSpec toolSpec = new MLToolSpec(in);
-        return toolSpec;
+        return new MLToolSpec(in);
     }
 }

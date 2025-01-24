@@ -42,9 +42,7 @@ public class MLConnectorGetRequest extends ActionRequest {
         super(in);
         Version streamInputVersion = in.getVersion();
         this.connectorId = in.readString();
-        if (streamInputVersion.onOrAfter(VERSION_2_19_0)) {
-            this.tenantId = in.readOptionalString();
-        }
+        this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? in.readOptionalString() : null;
         this.returnContent = in.readBoolean();
     }
 

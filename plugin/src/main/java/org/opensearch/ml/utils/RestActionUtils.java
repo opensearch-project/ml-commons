@@ -289,7 +289,8 @@ public class RestActionUtils {
      * @param listener ActionListener for a search response to wrap
      */
     public static void wrapListenerToHandleSearchIndexNotFound(Exception e, ActionListener<SearchResponse> listener) {
-        if (ExceptionsHelper.unwrapCause(e) instanceof IndexNotFoundException) {
+        if (ExceptionsHelper.unwrapCause(e) instanceof IndexNotFoundException
+            || ExceptionsHelper.unwrap(e, IndexNotFoundException.class) != null) {
             log.debug("Connectors index not created yet, therefore we will swallow the exception and return an empty search result");
             final InternalSearchResponse internalSearchResponse = InternalSearchResponse.empty();
             final SearchResponse emptySearchResponse = new SearchResponse(

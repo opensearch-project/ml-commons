@@ -69,9 +69,7 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable {
             modelAccessMode = in.readEnum(AccessMode.class);
         }
         this.isAddAllBackendRoles = in.readOptionalBoolean();
-        if (streamInputVersion.onOrAfter(VERSION_2_19_0)) {
-            this.tenantId = in.readOptionalString();
-        }
+        this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? in.readOptionalString() : null;
     }
 
     @Override
