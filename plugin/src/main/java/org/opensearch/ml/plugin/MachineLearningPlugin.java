@@ -697,12 +697,14 @@ public class MachineLearningPlugin extends Plugin
         MLCommonsClusterManagerEventListener clusterManagerEventListener = new MLCommonsClusterManagerEventListener(
             clusterService,
             client,
+            sdkClient,
             settings,
             threadPool,
             nodeHelper,
             mlIndicesHandler,
             encryptor,
-            mlModelAutoRedeployer
+            mlModelAutoRedeployer,
+            mlFeatureEnabledSetting
         );
 
         // TODO move this into MLFeatureEnabledSetting
@@ -772,7 +774,11 @@ public class MachineLearningPlugin extends Plugin
         );
         RestMLRegisterAgentAction restMLRegisterAgentAction = new RestMLRegisterAgentAction(mlFeatureEnabledSetting);
         RestMLDeployModelAction restMLDeployModelAction = new RestMLDeployModelAction(mlFeatureEnabledSetting);
-        RestMLUndeployModelAction restMLUndeployModelAction = new RestMLUndeployModelAction(clusterService, settings);
+        RestMLUndeployModelAction restMLUndeployModelAction = new RestMLUndeployModelAction(
+            clusterService,
+            settings,
+            mlFeatureEnabledSetting
+        );
         RestMLRegisterModelMetaAction restMLRegisterModelMetaAction = new RestMLRegisterModelMetaAction(clusterService, settings);
         RestMLUploadModelChunkAction restMLUploadModelChunkAction = new RestMLUploadModelChunkAction(clusterService, settings);
         RestMLRegisterModelGroupAction restMLCreateModelGroupAction = new RestMLRegisterModelGroupAction(mlFeatureEnabledSetting);
