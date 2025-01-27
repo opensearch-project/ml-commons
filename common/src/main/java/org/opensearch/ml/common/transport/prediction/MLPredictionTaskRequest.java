@@ -114,4 +114,5 @@ public class MLPredictionTaskRequest extends MLTaskRequest {
             throw new UncheckedIOException("failed to parse ActionRequest into MLPredictionTaskRequest", e);
         }
     }
+
 }
