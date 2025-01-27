@@ -573,6 +573,99 @@ public class StringUtilsTest {
     }
 
     @Test
+    public void testPathExists_InvalidJson() {
+        String invalidJson = "{invalid json}";
+        assertFalse(StringUtils.pathExists(invalidJson, "$.a"));
+    }
+
+    @Test
+    public void testPrepareNestedStructures_InvalidJsonPath() {
+        Object jsonObject = new HashMap<>();
+        String invalidFieldPath = "a.[.b";  // Invalid JSON path with single square bracket
+
+        IllegalArgumentException exception = assertThrows(
+            IllegalArgumentException.class,
+            () -> StringUtils.prepareNestedStructures(jsonObject, invalidFieldPath)
+        );
+
+        assertEquals("The field path is not a valid JSON path: " + invalidFieldPath, exception.getMessage());
+    }
+
+    @Test
+    public void testPrepareNestedStructures_ExistingObject() {
+        Map<String, Object> jsonObject = new HashMap<>();
+        Map<String, Object> existingMap = new HashMap<>();
+        jsonObject.put("a", existingMap);
+
+        Object result = StringUtils.prepareNestedStructures(jsonObject, "a.b.c");
+
+        assertTrue(jsonObject.get("a") instanceof Map);
+        Map<String, Object> aMap = (Map<String, Object>) jsonObject.get("a");
+        assertTrue(aMap.get("b") instanceof Map);
+        Map<String, Object> bMap = (Map<String, Object>) aMap.get("b");
+        assertTrue(bMap.containsKey("c"));
+    }
+
+    @Test
+    public void testPrepareNestedStructures_ExistingArray() {
+        Map<String, Object> jsonObject = new HashMap<>();
+        List<Object> existingList = new ArrayList<>();
+        existingList.add(new HashMap<>());
+        jsonObject.put("a", existingList);
+
+        Object result = StringUtils.prepareNestedStructures(jsonObject, "a[1].b");
+
+        assertTrue(jsonObject.get("a") instanceof List);
+        List<Object> aList = (List<Object>) jsonObject.get("a");
+        assertEquals(2, aList.size());
+        assertTrue(aList.get(1) instanceof Map);
+        Map<String, Object> aMap = (Map<String, Object>) aList.get(1);
+        assertTrue(aMap.containsKey("b"));
+    }
+
+    @Test
+    public void testPrepareNestedStructures_NonMapInArray() {
+        Map<String, Object> jsonObject = new HashMap<>();
+        List<Object> existingList = new ArrayList<>();
+        existingList.add("not a map");
+        jsonObject.put("a", existingList);
+
+        Object result = StringUtils.prepareNestedStructures(jsonObject, "a[0].b");
+
+        assertEquals(jsonObject, result);
+        assertTrue(jsonObject.get("a") instanceof List);
+        List<Object> aList = (List<Object>) jsonObject.get("a");
+        assertEquals("not a map", aList.get(0));
+    }
+
+    @Test
+    public void testPrepareNestedStructures_NonListForArrayNotation() {
+        Map<String, Object> jsonObject = new HashMap<>();
+        jsonObject.put("a", "not a list");
+
+        Object result = StringUtils.prepareNestedStructures(jsonObject, "a[0].b");
+
+        assertEquals(jsonObject, result);
+        assertEquals("not a list", jsonObject.get("a"));
+    }
+
+    @Test
+    public void testPrepareNestedStructures_ArrayNotation() {
+        Map<String, Object> jsonObject = new HashMap<>();
+        Object result = StringUtils.prepareNestedStructures(jsonObject, "a[0].b[1].c");
+
+        assertTrue(jsonObject.get("a") instanceof List);
+        List<Object> aList = (List<Object>) jsonObject.get("a");
+        assertTrue(aList.get(0) instanceof Map);
+        Map<String, Object> aMap = (Map<String, Object>) aList.get(0);
+        assertTrue(aMap.get("b") instanceof List);
+        List<Object> bList = (List<Object>) aMap.get("b");
+        assertTrue(bList.get(1) instanceof Map);
+        Map<String, Object> bMap = (Map<String, Object>) bList.get(1);
+        assertTrue(bMap.containsKey("c"));
+    }
+
+    @Test
     public void testPrepareNestedStructures_EmptyObject() {
         Object jsonObject = new HashMap<>();
         Object result = StringUtils.prepareNestedStructures(jsonObject, "a.b.c");

@@ -34,7 +34,6 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
-import com.jayway.jsonpath.InvalidJsonException;
 import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.PathNotFoundException;
 import com.networknt.schema.JsonSchema;
@@ -378,8 +377,6 @@ public class StringUtils {
             return true;
         } catch (PathNotFoundException e) {
             return false;
-        } catch (InvalidJsonException e) {
-            throw new IllegalArgumentException("Invalid JSON input", e);
         }
     }
 
