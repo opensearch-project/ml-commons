@@ -21,7 +21,11 @@ import static org.opensearch.ml.utils.TestHelper.getLocalSampleCalculatorRestReq
 import static org.opensearch.ml.utils.TestHelper.getMetricsCorrelationRestRequest;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
