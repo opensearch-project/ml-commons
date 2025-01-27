@@ -53,7 +53,6 @@ public class S3Utils {
         String key,
         String content
     ) {
-
         try (S3Client s3Client = initS3Client(accessKey, secretKey, sessionToken, region)) {
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
                 PutObjectRequest request = PutObjectRequest.builder().bucket(bucketName).key(key).build();
