@@ -292,6 +292,11 @@ public class MachineLearningClientTest {
             }
 
             @Override
+            public void deleteAgent(String agentId, String tenantId, ActionListener<DeleteResponse> listener) {
+                listener.onResponse(deleteResponse);
+            }
+
+            @Override
             public void getConfig(String configId, ActionListener<MLConfig> listener) {
                 listener.onResponse(mlConfig);
             }

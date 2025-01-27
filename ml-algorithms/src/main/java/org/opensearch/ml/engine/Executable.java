@@ -15,7 +15,6 @@ public interface Executable {
     /**
      * Execute algorithm with given input data.
      * @param input input data
-     * @return execution result
      */
     void execute(Input input, ActionListener<Output> listener) throws ExecuteException;
 }

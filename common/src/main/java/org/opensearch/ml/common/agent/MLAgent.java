@@ -6,6 +6,8 @@
 package org.opensearch.ml.common.agent;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 import java.io.IOException;
@@ -63,6 +65,7 @@ public class MLAgent implements ToXContentObject, Writeable {
     private Instant lastUpdateTime;
     private String appType;
     private Boolean isHidden;
+    private final String tenantId;
 
     @Builder(toBuilder = true)
     public MLAgent(
@@ -76,7 +79,8 @@ public class MLAgent implements ToXContentObject, Writeable {
         Instant createdTime,
         Instant lastUpdateTime,
         String appType,
-        Boolean isHidden
+        Boolean isHidden,
+        String tenantId
     ) {
         this.name = name;
         this.type = type;
@@ -90,6 +94,7 @@ public class MLAgent implements ToXContentObject, Writeable {
         this.appType = appType;
         // is_hidden field isn't going to be set by user. It will be set by the code.
         this.isHidden = isHidden;
+        this.tenantId = tenantId;
         validate();
     }
 
@@ -155,6 +160,7 @@ public class MLAgent implements ToXContentObject, Writeable {
         if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_HIDDEN_AGENT)) {
             isHidden = input.readOptionalBoolean();
         }
+        this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
         validate();
     }
 
@@ -169,7 +175,7 @@ public class MLAgent implements ToXContentObject, Writeable {
         } else {
             out.writeBoolean(false);
         }
-        if (tools != null && tools.size() > 0) {
+        if (tools != null && !tools.isEmpty()) {
             out.writeBoolean(true);
             out.writeInt(tools.size());
             for (MLToolSpec tool : tools) {
@@ -178,7 +184,7 @@ public class MLAgent implements ToXContentObject, Writeable {
         } else {
             out.writeBoolean(false);
         }
-        if (parameters != null && parameters.size() > 0) {
+        if (parameters != null && !parameters.isEmpty()) {
             out.writeBoolean(true);
             out.writeMap(parameters, StreamOutput::writeString, StreamOutput::writeOptionalString);
         } else {
@@ -196,6 +202,9 @@ public class MLAgent implements ToXContentObject, Writeable {
         // is_hidden field isn't going to be set by user. It will be set by the code.
         if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_HIDDEN_AGENT)) {
             out.writeOptionalBoolean(isHidden);
+        }
+        if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
+            out.writeOptionalString(tenantId);
         }
     }
 
@@ -236,6 +245,9 @@ public class MLAgent implements ToXContentObject, Writeable {
         if (isHidden != null) {
             builder.field(MLModel.IS_HIDDEN_FIELD, isHidden);
         }
+        if (tenantId != null) {
+            builder.field(TENANT_ID_FIELD, tenantId);
+        }
         builder.endObject();
         return builder;
     }
@@ -260,6 +272,7 @@ public class MLAgent implements ToXContentObject, Writeable {
         Instant lastUpdateTime = null;
         String appType = null;
         boolean isHidden = false;
+        String tenantId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -305,6 +318,9 @@ public class MLAgent implements ToXContentObject, Writeable {
                     if (parseHidden)
                         isHidden = parser.booleanValue();
                     break;
+                case TENANT_ID_FIELD:
+                    tenantId = parser.textOrNull();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -324,11 +340,11 @@ public class MLAgent implements ToXContentObject, Writeable {
             .lastUpdateTime(lastUpdateTime)
             .appType(appType)
             .isHidden(isHidden)
+            .tenantId(tenantId)
             .build();
     }
 
     public static MLAgent fromStream(StreamInput in) throws IOException {
-        MLAgent agent = new MLAgent(in);
-        return agent;
+        return new MLAgent(in);
     }
 }
