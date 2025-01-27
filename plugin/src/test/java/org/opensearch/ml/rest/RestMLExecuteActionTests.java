@@ -22,7 +22,6 @@ import static org.opensearch.ml.utils.TestHelper.getMetricsCorrelationRestReques
 
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -42,7 +41,6 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.output.execute.anomalylocalization.AnomalyLocalizationOutput;
 import org.opensearch.ml.common.output.execute.anomalylocalization.AnomalyLocalizationOutput.Bucket;
-import org.opensearch.ml.common.output.execute.anomalylocalization.AnomalyLocalizationOutput.Entity;
 import org.opensearch.ml.common.output.execute.anomalylocalization.AnomalyLocalizationOutput.Result;
 import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalculatorOutput;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
@@ -380,12 +378,6 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
         when(channel.newBuilder()).thenReturn(builder);
         doAnswer(invocation -> {
             ActionListener<MLExecuteTaskResponse> actionListener = invocation.getArgument(2);
-
-            Entity entity1 = new Entity();
-            entity1.setKey(Collections.singletonList("attr0"));
-            entity1.setContributionValue(1.0);
-            entity1.setBaseValue(2.0);
-            entity1.setNewValue(3.0);
 
             Bucket bucket1 = new Bucket();
             bucket1.setStartTime(1620630000000L);
