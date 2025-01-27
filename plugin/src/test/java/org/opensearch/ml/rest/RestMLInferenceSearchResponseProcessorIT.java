@@ -17,6 +17,7 @@ import org.apache.http.HttpHeaders;
 import org.apache.http.message.BasicHeader;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Test;
 import org.opensearch.client.Request;
 import org.opensearch.client.Response;
 import org.opensearch.ml.common.FunctionName;
@@ -256,6 +257,7 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
      *
      * @throws Exception if any error occurs during the test
      */
+    @Test
     public void testMLInferenceProcessorRemoteModelStringField() throws Exception {
         // Skip test if key is null
         if (AWS_ACCESS_KEY_ID == null) {
@@ -289,6 +291,78 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
             + "}";
 
         String query = "{\"query\":{\"term\":{\"diary\":{\"value\":\"happy\"}}}}";
+
+        String index_name = "daily_index";
+        String pipelineName = "weather_embedding_pipeline";
+        createSearchPipelineProcessor(createPipelineRequestBody, pipelineName);
+
+        Map response = searchWithPipeline(client(), index_name, pipelineName, query);
+        Assert.assertEquals(JsonPath.parse(response).read("$.hits.hits[0]._source.diary_embedding_size"), "1536");
+        Assert.assertEquals(JsonPath.parse(response).read("$.hits.hits[0]._source.weather"), "sunny");
+        Assert.assertEquals(JsonPath.parse(response).read("$.hits.hits[0]._source.diary[0]"), "happy");
+        Assert.assertEquals(JsonPath.parse(response).read("$.hits.hits[0]._source.diary[1]"), "first day at school");
+        List embeddingList = (List) JsonPath.parse(response).read("$.hits.hits[0]._source.weather_embedding");
+        Assert.assertEquals(embeddingList.size(), 1536);
+        Assert.assertEquals((Double) embeddingList.get(0), 0.734375, 0.005);
+        Assert.assertEquals((Double) embeddingList.get(1), 0.87109375, 0.005);
+    }
+
+    /**
+     * Tests the MLInferenceSearchResponseProcessor with a remote model and
+     * read the model input from a string field in ml inference search extension
+     * It creates a search pipeline with the processor configured to use the remote model,
+     * runs one to one prediction by sending one document to one prediction
+     * performs a search using the pipeline, and verifies the inference results.
+     *
+     * @throws Exception if any error occurs during the test
+     */
+    @Test
+    public void testMLInferenceProcessorRemoteModelStringFieldWithSearchExtension() throws Exception {
+        // Skip test if key is null
+        if (AWS_ACCESS_KEY_ID == null) {
+            return;
+        }
+        String createPipelineRequestBody = "{\n"
+            + "  \"response_processors\": [\n"
+            + "    {\n"
+            + "      \"ml_inference\": {\n"
+            + "        \"tag\": \"ml_inference\",\n"
+            + "        \"description\": \"This processor is going to run ml inference during search response\",\n"
+            + "        \"model_id\": \""
+            + this.bedrockEmbeddingModelId
+            + "\",\n"
+            + "        \"input_map\": [\n"
+            + "          {\n"
+            + "            \"input\": \"$._request.ext.ml_inference.query_text\"\n"
+            + "          }\n"
+            + "        ],\n"
+            + "        \"output_map\": [\n"
+            + "          {\n"
+            + "            \"weather_embedding\": \"$.embedding\"\n"
+            + "          }\n"
+            + "        ],\n"
+            + "        \"ignore_missing\": false,\n"
+            + "        \"ignore_failure\": false,\n"
+            + "        \"one_to_one\": true\n"
+            + "      }\n"
+            + "    }\n"
+            + "  ]\n"
+            + "}";
+
+        String query = "{\n"
+            + "  \"query\": {\n"
+            + "    \"term\": {\n"
+            + "      \"diary\": {\n"
+            + "        \"value\": \"happy\"\n"
+            + "      }\n"
+            + "    }\n"
+            + "  },\n"
+            + "  \"ext\": {\n"
+            + "    \"ml_inference\": {\n"
+            + "      \"query_text\": \"sunny\"\n"
+            + "    }\n"
+            + "  }\n"
+            + "}";
 
         String index_name = "daily_index";
         String pipelineName = "weather_embedding_pipeline";
