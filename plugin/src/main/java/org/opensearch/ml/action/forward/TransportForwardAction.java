@@ -209,7 +209,7 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
                                 log.error("Failed to update ML model {}, status: {}", modelId, response.status());
                             }
                         }, e -> { log.error("Failed to update ML model: {}", modelId, e); });
-                        mlModelManager.updateModel(modelId, updateFields, ActionListener.runBefore(updateModelListener, () -> {
+                        mlModelManager.updateModel(modelId, tenantId, updateFields, ActionListener.runBefore(updateModelListener, () -> {
                             mlModelManager.removeAutoDeployModel(modelId);
                         }));
                     }

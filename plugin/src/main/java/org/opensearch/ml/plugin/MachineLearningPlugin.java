@@ -813,7 +813,7 @@ public class MachineLearningPlugin extends Plugin
         RestMLSearchAgentAction restMLSearchAgentAction = new RestMLSearchAgentAction(mlFeatureEnabledSetting);
         RestMLListToolsAction restMLListToolsAction = new RestMLListToolsAction(toolFactories);
         RestMLGetToolAction restMLGetToolAction = new RestMLGetToolAction(toolFactories);
-        RestMLGetConfigAction restMLGetConfigAction = new RestMLGetConfigAction();
+        RestMLGetConfigAction restMLGetConfigAction = new RestMLGetConfigAction(mlFeatureEnabledSetting);
         RestMLBatchIngestAction restMLBatchIngestAction = new RestMLBatchIngestAction();
         RestMLCancelBatchJobAction restMLCancelBatchJobAction = new RestMLCancelBatchJobAction();
         return ImmutableList

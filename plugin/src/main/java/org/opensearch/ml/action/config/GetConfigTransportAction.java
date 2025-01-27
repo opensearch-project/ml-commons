@@ -27,6 +27,8 @@ import org.opensearch.ml.common.MLConfig;
 import org.opensearch.ml.common.transport.config.MLConfigGetAction;
 import org.opensearch.ml.common.transport.config.MLConfigGetRequest;
 import org.opensearch.ml.common.transport.config.MLConfigGetResponse;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
@@ -40,23 +42,30 @@ public class GetConfigTransportAction extends HandledTransportAction<ActionReque
 
     Client client;
     NamedXContentRegistry xContentRegistry;
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Inject
     public GetConfigTransportAction(
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
-        NamedXContentRegistry xContentRegistry
+        NamedXContentRegistry xContentRegistry,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLConfigGetAction.NAME, transportService, actionFilters, MLConfigGetRequest::new);
         this.client = client;
         this.xContentRegistry = xContentRegistry;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLConfigGetResponse> actionListener) {
         MLConfigGetRequest mlConfigGetRequest = MLConfigGetRequest.fromActionRequest(request);
         String configId = mlConfigGetRequest.getConfigId();
+        String tenantId = mlConfigGetRequest.getTenantId();
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
+            return;
+        }
         GetRequest getRequest = new GetRequest(ML_CONFIG_INDEX).id(configId);
 
         if (configId.equals(MASTER_KEY)) {
