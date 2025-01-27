@@ -17,6 +17,9 @@ import org.opensearch.jobscheduler.spi.JobExecutionContext;
 import org.opensearch.jobscheduler.spi.ScheduledJobParameter;
 import org.opensearch.jobscheduler.spi.ScheduledJobRunner;
 import org.opensearch.jobscheduler.spi.utils.LockService;
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLTaskState;
+import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.transport.task.MLTaskGetAction;
 import org.opensearch.ml.common.transport.task.MLTaskGetRequest;
 import org.opensearch.ml.task.MLTaskManager;
@@ -64,16 +67,10 @@ public class MLBatchTaskUpdateJobRunner implements ScheduledJobRunner {
         this.client = client;
     }
 
-    public void initialize(
-        final ClusterService clusterService,
-        final ThreadPool threadPool,
-        final Client client,
-        final MLTaskManager taskManager
-    ) {
+    public void initialize(final ClusterService clusterService, final ThreadPool threadPool, final Client client) {
         this.clusterService = clusterService;
         this.threadPool = threadPool;
         this.client = client;
-        this.taskManager = taskManager;
         this.initialized = true;
     }
 
@@ -93,19 +90,19 @@ public class MLBatchTaskUpdateJobRunner implements ScheduledJobRunner {
             String jobName = scheduledJobParameter.getName();
             log.info("Starting job execution for job ID: {} at {}", jobName, Instant.now());
 
-            if (taskManager == null) {
-                log.error("TaskManager not initialized. Cannot run batch task polling job");
-                return;
-            }
-
             log.debug("Running batch task polling job");
 
             SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
             BoolQueryBuilder boolQuery = QueryBuilders
                 .boolQuery()
-                .must(QueryBuilders.termQuery("task_type", "BATCH_PREDICTION"))
-                .must(QueryBuilders.termQuery("function_name", "REMOTE"))
-                .must(QueryBuilders.termQuery("state", "RUNNING"));
+                .must(QueryBuilders.termQuery("task_type", MLTaskType.BATCH_PREDICTION))
+                .must(QueryBuilders.termQuery("function_name", FunctionName.REMOTE))
+                .must(
+                    QueryBuilders
+                        .boolQuery()
+                        .should(QueryBuilders.termQuery("state", MLTaskState.RUNNING))
+                        .should(QueryBuilders.termQuery("state", MLTaskState.CANCELLING))
+                );
 
             sourceBuilder.query(boolQuery);
             sourceBuilder.size(100);
@@ -124,14 +121,14 @@ public class MLBatchTaskUpdateJobRunner implements ScheduledJobRunner {
                 for (SearchHit searchHit : searchHits) {
                     String taskId = searchHit.getId();
                     log.debug("Starting polling for task: {} at {}", taskId, Instant.now());
-                    MLTaskGetRequest mlTaskGetRequest = MLTaskGetRequest.builder().taskId(taskId).isUserInitiatedGetTaskRequest(false).build();
+                    MLTaskGetRequest mlTaskGetRequest = MLTaskGetRequest
+                        .builder()
+                        .taskId(taskId)
+                        .isUserInitiatedGetTaskRequest(false)
+                        .build();
 
                     client.execute(MLTaskGetAction.INSTANCE, mlTaskGetRequest, ActionListener.wrap(taskResponse -> {
-                        try {
-                            log.info("Updated Task status for taskId: {} at {}", taskId, Instant.now());
-                        } catch (Exception e) {
-                            log.error("Failed to update task status for task: " + taskId, e);
-                        }
+                        log.info("Updated Task status for taskId: {} at {}", taskId, Instant.now());
                     }, exception -> {
                         log.error("Failed to get task status for task: " + taskId, exception);
 

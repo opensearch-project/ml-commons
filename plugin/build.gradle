@@ -138,7 +138,7 @@ compileTestJava {
 }
 
 //TODO: check which one should be enabled
-licenseHeaders.enabled = false
+licenseHeaders.enabled = true
 testingConventions.enabled = false
 forbiddenApis.ignoreFailures = false
 dependencyLicenses.enabled = false
