@@ -11,10 +11,22 @@ import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.common.MLTask.REMOTE_JOB_FIELD;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
-import static org.opensearch.ml.common.MLTaskState.*;
-import static org.opensearch.ml.common.connector.AbstractConnector.*;
+import static org.opensearch.ml.common.MLTaskState.CANCELLED;
+import static org.opensearch.ml.common.MLTaskState.CANCELLING;
+import static org.opensearch.ml.common.MLTaskState.COMPLETED;
+import static org.opensearch.ml.common.MLTaskState.EXPIRED;
+import static org.opensearch.ml.common.MLTaskState.FAILED;
+import static org.opensearch.ml.common.MLTaskState.UNREACHABLE;
+import static org.opensearch.ml.common.connector.AbstractConnector.ACCESS_KEY_FIELD;
+import static org.opensearch.ml.common.connector.AbstractConnector.SECRET_KEY_FIELD;
+import static org.opensearch.ml.common.connector.AbstractConnector.SESSION_TOKEN_FIELD;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.BATCH_PREDICT_STATUS;
-import static org.opensearch.ml.settings.MLCommonsSettings.*;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_CANCELLED_REGEX;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_CANCELLING_REGEX;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_COMPLETED_REGEX;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_EXPIRED_REGEX;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_FAILED_REGEX;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_FIELD;
 import static org.opensearch.ml.utils.MLExceptionUtils.BATCH_INFERENCE_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 
@@ -49,7 +61,10 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
-import org.opensearch.ml.common.*;
+import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.MLTask;
+import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorAction.ActionType;
@@ -83,6 +98,8 @@ import org.opensearch.script.ScriptService;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
+
+import com.google.common.annotations.VisibleForTesting;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -440,6 +457,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         }
 
         decryptedCredential = connector.getDecryptedCredential();
+
         if (decryptedCredential == null || decryptedCredential.isEmpty()) {
             decryptedCredential = mlEngine.getConnectorCredential(connector);
         }
@@ -466,7 +484,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
                     updatedTask.put(STATE_FIELD, UNREACHABLE);
                     mlTask.setState(UNREACHABLE);
                     mlTask.setError(e.getMessage());
-                    updateDLQ(mlTask);
+                    updateDLQ(mlTask, decryptedCredential);
                 }
                 updatedTask.put("remote_job", remoteJob);
                 mlTaskManager.updateMLTaskDirectly(taskId, updatedTask);
@@ -504,7 +522,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
 
                         mlTaskManager.updateMLTaskDirectly(taskId, updatedTask, ActionListener.wrap(response -> {
                             if (mlTask.getState().equals(FAILED) && !isUserInitiatedGetTaskRequest) {
-                                updateDLQ(mlTask);
+                                updateDLQ(mlTask, decryptedCredential);
                             }
                             actionListener.onResponse(MLTaskGetResponse.builder().mlTask(mlTask).build());
                         }, e -> {
@@ -528,16 +546,17 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         }
     }
 
-    protected void updateDLQ(MLTask mlTask) {
+    @VisibleForTesting
+    protected void updateDLQ(MLTask mlTask, Map<String, String> decryptedCredential) {
         Map<String, Object> remoteJob = mlTask.getRemoteJob();
         Map<String, String> dlq = (Map<String, String>) remoteJob.get("dlq");
         if (dlq != null && !dlq.isEmpty()) {
             String taskId = mlTask.getTaskId();
             try {
                 Map<String, Object> remoteJobDetails = mlTask.getRemoteJob();
-                String accessKey = this.decryptedCredential.get(ACCESS_KEY_FIELD);
-                String secretKey = this.decryptedCredential.get(SECRET_KEY_FIELD);
-                String sessionToken = this.decryptedCredential.get(SESSION_TOKEN_FIELD);
+                String accessKey = decryptedCredential.get(ACCESS_KEY_FIELD);
+                String secretKey = decryptedCredential.get(SECRET_KEY_FIELD);
+                String sessionToken = decryptedCredential.get(SESSION_TOKEN_FIELD);
 
                 String bucketName = dlq.get("bucket");
                 String region = dlq.get("region");

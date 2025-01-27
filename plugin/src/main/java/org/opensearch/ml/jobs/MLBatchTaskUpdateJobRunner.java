@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package org.opensearch.ml.jobs;
 
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
@@ -129,10 +134,7 @@ public class MLBatchTaskUpdateJobRunner implements ScheduledJobRunner {
 
                     client.execute(MLTaskGetAction.INSTANCE, mlTaskGetRequest, ActionListener.wrap(taskResponse -> {
                         log.info("Updated Task status for taskId: {} at {}", taskId, Instant.now());
-                    }, exception -> {
-                        log.error("Failed to get task status for task: " + taskId, exception);
-
-                    }));
+                    }, exception -> { log.error("Failed to get task status for task: " + taskId, exception); }));
                 }
             }, e -> {
                 if (e instanceof IndexNotFoundException) {

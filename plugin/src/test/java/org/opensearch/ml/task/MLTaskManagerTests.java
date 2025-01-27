@@ -16,7 +16,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
+import static org.opensearch.ml.common.CommonValue.TASK_POLLING_JOB_INDEX;
 
+import java.io.IOException;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
@@ -30,7 +32,9 @@ import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.opensearch.action.DocWriteResponse;
+import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
+import org.opensearch.action.support.WriteRequest;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.Client;
@@ -340,5 +344,36 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
 
         mlTaskManager.addNodeError(task.getTaskId(), node2, error);
         assertTrue(mlTaskCache.allNodeFailed());
+    }
+
+    public void testStartTaskPollingJob() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(), any());
+
+        mlTaskManager.startTaskPollingJob();
+
+        ArgumentCaptor<IndexRequest> indexRequestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
+        verify(client).index(indexRequestCaptor.capture(), any());
+
+        IndexRequest capturedRequest = indexRequestCaptor.getValue();
+        assertEquals(TASK_POLLING_JOB_INDEX, capturedRequest.index());
+        assertNotNull(capturedRequest.id());
+        assertEquals(WriteRequest.RefreshPolicy.IMMEDIATE, capturedRequest.getRefreshPolicy());
+    }
+
+    public void testStartTaskPollingJob_IndexException() throws IOException {
+        String errorMessage = "Failed to index task polling job";
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException(errorMessage));
+            return null;
+        }).when(client).index(any(), any());
+
+        mlTaskManager.startTaskPollingJob();
+
+        verify(client).index(any(), any());
     }
 }

@@ -15,7 +15,12 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.settings.MLCommonsSettings.*;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_CANCELLED_REGEX;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_CANCELLING_REGEX;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_COMPLETED_REGEX;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_EXPIRED_REGEX;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_FAILED_REGEX;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_FIELD;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -67,7 +72,6 @@ import org.opensearch.ml.common.transport.task.MLTaskGetRequest;
 import org.opensearch.ml.common.transport.task.MLTaskGetResponse;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
-import org.opensearch.ml.engine.ingest.S3DataIngestion;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
@@ -119,9 +123,6 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
     ActionListener<MLTaskGetResponse> actionListener;
     @Mock
     private MLModelManager mlModelManager;
-
-    @Mock
-    private S3DataIngestion s3DataIngestion;
 
     @Mock
     private MLTaskManager mlTaskManager;
@@ -460,6 +461,10 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         processTaskResponse("status", "expired", MLTaskState.EXPIRED);
     }
 
+    public void test_processTaskResponse_failed() {
+        processTaskResponse("status", "failed", MLTaskState.FAILED);
+    }
+
     public void test_processTaskResponse_WrongStatusField() {
         processTaskResponse("wrong_status_field", "expired", null);
     }
@@ -499,5 +504,79 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         Map<String, Object> updatedRemoteJob = (Map<String, Object>) updatedTask.get("remote_job");
         assertEquals(remoteJobResponseStatus, updatedRemoteJob.get(statusField));
         assertEquals(remoteJobName, updatedRemoteJob.get("name"));
+    }
+
+    public void testUpdateDLQ_Success() throws IOException {
+        // Setup test data
+        Map<String, Object> remoteJob = new HashMap<>();
+        remoteJob.put("TransformJobName", "test-job");
+        Map<String, String> dlq = new HashMap<>();
+        dlq.put("bucket", "test-bucket");
+        dlq.put("region", "us-west-2");
+        remoteJob.put("dlq", dlq);
+
+        MLTask mlTask = MLTask
+            .builder()
+            .taskId("test-task")
+            .state(MLTaskState.FAILED)
+            .error("Test error message")
+            .remoteJob(remoteJob)
+            .build();
+
+        // Setup decrypted credentials
+        Map<String, String> decryptedCredential = new HashMap<>();
+        decryptedCredential.put("aws_access_key", "test-key");
+        decryptedCredential.put("aws_secret_key", "test-secret");
+        decryptedCredential.put("aws_session_token", "test-token");
+
+        // Call the method
+        getTaskTransportAction.updateDLQ(mlTask, decryptedCredential);
+
+        // Verify remoteJob DLQ is removed
+        assertNull(mlTask.getRemoteJob().get("dlq"));
+    }
+
+    public void testUpdateDLQ_MissingBucketOrRegion() {
+        // Setup test data with missing bucket/region
+        Map<String, Object> remoteJob = new HashMap<>();
+        remoteJob.put("TransformJobName", "test-job");
+        Map<String, String> dlq = new HashMap<>();
+        // Intentionally missing bucket and region
+        remoteJob.put("dlq", dlq);
+
+        MLTask mlTask = MLTask
+            .builder()
+            .taskId("test-task")
+            .state(MLTaskState.FAILED)
+            .error("Test error message")
+            .remoteJob(remoteJob)
+            .build();
+
+        // Call the method - should not throw exception but log error
+        getTaskTransportAction.updateDLQ(mlTask, Collections.emptyMap());
+
+        // Verify DLQ still exists since update failed
+        assertNotNull(mlTask.getRemoteJob().get("dlq"));
+    }
+
+    public void testUpdateDLQ_NullDLQ() {
+        // Setup test data with null DLQ
+        Map<String, Object> remoteJob = new HashMap<>();
+        remoteJob.put("TransformJobName", "test-job");
+        // No DLQ configuration
+
+        MLTask mlTask = MLTask
+            .builder()
+            .taskId("test-task")
+            .state(MLTaskState.FAILED)
+            .error("Test error message")
+            .remoteJob(remoteJob)
+            .build();
+
+        // Call the method - should do nothing
+        getTaskTransportAction.updateDLQ(mlTask, null);
+
+        // Verify remoteJob is unchanged
+        assertEquals("test-job", mlTask.getRemoteJob().get("TransformJobName"));
     }
 }
