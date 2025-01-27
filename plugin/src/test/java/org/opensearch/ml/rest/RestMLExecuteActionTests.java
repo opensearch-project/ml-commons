@@ -15,10 +15,10 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.utils.TestHelper.getAnomalyLocalizationRestRequest;
 import static org.opensearch.ml.utils.TestHelper.getExecuteAgentRestRequest;
 import static org.opensearch.ml.utils.TestHelper.getLocalSampleCalculatorRestRequest;
 import static org.opensearch.ml.utils.TestHelper.getMetricsCorrelationRestRequest;
-import static org.opensearch.ml.utils.TestHelper.getAnomalyLocalizationRestRequest;
 
 import java.io.IOException;
 import java.util.*;
@@ -30,12 +30,17 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentFactory;
-import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.input.Input;
+import org.opensearch.ml.common.output.execute.anomalylocalization.AnomalyLocalizationOutput;
+import org.opensearch.ml.common.output.execute.anomalylocalization.AnomalyLocalizationOutput.Bucket;
+import org.opensearch.ml.common.output.execute.anomalylocalization.AnomalyLocalizationOutput.Entity;
+import org.opensearch.ml.common.output.execute.anomalylocalization.AnomalyLocalizationOutput.Result;
+import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalculatorOutput;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
@@ -49,11 +54,6 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.RemoteTransportException;
-import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalculatorOutput;
-import org.opensearch.ml.common.output.execute.anomalylocalization.AnomalyLocalizationOutput;
-import org.opensearch.ml.common.output.execute.anomalylocalization.AnomalyLocalizationOutput.Entity;
-import org.opensearch.ml.common.output.execute.anomalylocalization.AnomalyLocalizationOutput.Bucket;
-import org.opensearch.ml.common.output.execute.anomalylocalization.AnomalyLocalizationOutput.Result;
 
 public class RestMLExecuteActionTests extends OpenSearchTestCase {
 
@@ -351,10 +351,9 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
         when(channel.newBuilder()).thenReturn(builder);
         doAnswer(invocation -> {
             ActionListener<MLExecuteTaskResponse> actionListener = invocation.getArgument(2);
-            LocalSampleCalculatorOutput output = LocalSampleCalculatorOutput.builder()
-                .totalSum(3.0)
-                .build();
-            MLExecuteTaskResponse response = MLExecuteTaskResponse.builder()
+            LocalSampleCalculatorOutput output = LocalSampleCalculatorOutput.builder().totalSum(3.0).build();
+            MLExecuteTaskResponse response = MLExecuteTaskResponse
+                .builder()
                 .output(output)
                 .functionName(FunctionName.LOCAL_SAMPLE_CALCULATOR)
                 .build();
@@ -396,8 +395,9 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
             Map<String, Result> results = new HashMap<>();
             results.put("sum", result);
             output.setResults(results);
-                
-            MLExecuteTaskResponse response = MLExecuteTaskResponse.builder()
+
+            MLExecuteTaskResponse response = MLExecuteTaskResponse
+                .builder()
                 .output(output)
                 .functionName(FunctionName.ANOMALY_LOCALIZATION)
                 .build();
@@ -411,19 +411,18 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
         verify(channel).sendResponse(responseCaptor.capture());
         BytesRestResponse response = (BytesRestResponse) responseCaptor.getValue();
         assertEquals(RestStatus.OK, response.status());
-        String expectedJson =
-            "{\"results\":[{" +
-                "\"name\":\"sum\"," +
-                "\"result\":{" +
-                    "\"buckets\":[" +
-                        "{" +
-                            "\"start_time\":1620630000000," +
-                            "\"end_time\":1620716400000," +
-                            "\"overall_aggregate_value\":65.0" +
-                        "}" +
-                    "]" +
-                "}" +
-            "}]}";
+        String expectedJson = "{\"results\":[{"
+            + "\"name\":\"sum\","
+            + "\"result\":{"
+            + "\"buckets\":["
+            + "{"
+            + "\"start_time\":1620630000000,"
+            + "\"end_time\":1620716400000,"
+            + "\"overall_aggregate_value\":65.0"
+            + "}"
+            + "]"
+            + "}"
+            + "}]}";
         assertEquals(expectedJson, response.content().utf8ToString());
     }
 }

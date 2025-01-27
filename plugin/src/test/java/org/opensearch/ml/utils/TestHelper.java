@@ -362,18 +362,17 @@ public class TestHelper {
     public static RestRequest getAnomalyLocalizationRestRequest() {
         Map<String, String> params = new HashMap<>();
         params.put(PARAMETER_ALGORITHM, FunctionName.ANOMALY_LOCALIZATION.name());
-        final String requestContent = 
-            "{" +
-                "\"input_data\": {" +
-                    "\"index_name\": \"test-index\"," +
-                    "\"attribute_field_names\": [\"attribute\"]," +
-                    "\"time_field_name\": \"timestamp\"," +
-                    "\"start_time\": 1620630000000," +
-                    "\"end_time\": 1621234800000," +
-                    "\"min_time_interval\": 86400000," +
-                    "\"num_outputs\": 1" +
-                "}" +
-            "}";
+        final String requestContent = "{"
+            + "\"input_data\": {"
+            + "\"index_name\": \"test-index\","
+            + "\"attribute_field_names\": [\"attribute\"],"
+            + "\"time_field_name\": \"timestamp\","
+            + "\"start_time\": 1620630000000,"
+            + "\"end_time\": 1621234800000,"
+            + "\"min_time_interval\": 86400000,"
+            + "\"num_outputs\": 1"
+            + "}"
+            + "}";
         RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
             .withParams(params)
             .withContent(new BytesArray(requestContent), XContentType.JSON)
