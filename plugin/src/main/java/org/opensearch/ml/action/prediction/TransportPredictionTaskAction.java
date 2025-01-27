@@ -102,8 +102,6 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         MLPredictionTaskRequest mlPredictionTaskRequest = MLPredictionTaskRequest.fromActionRequest(request);
         String modelId = mlPredictionTaskRequest.getModelId();
 
-        log.info("mlPredictionTaskRequest dlq: {}", mlPredictionTaskRequest.getMlInput());
-
         User user = mlPredictionTaskRequest.getUser();
         if (user == null) {
             user = RestActionUtils.getUserContext(client);

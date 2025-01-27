@@ -546,7 +546,7 @@ public class MLTaskManager {
             .source(jobParameter.toXContent(JsonXContent.contentBuilder(), null))
             .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
-        client.index(indexRequest, ActionListener.wrap(r -> { log.info("Indexed ml task polling job successfully {}"); }, e -> {
+        client.index(indexRequest, ActionListener.wrap(r -> { log.info("Indexed ml task polling job successfully"); }, e -> {
             log.error("Failed to index task polling job", e);
         }));
     }

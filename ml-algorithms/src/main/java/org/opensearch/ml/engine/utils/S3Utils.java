@@ -3,9 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.common.utils;
-
-import static org.opensearch.ml.common.connector.AbstractConnector.*;
+package org.opensearch.ml.engine.utils;
 
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
@@ -21,7 +19,6 @@ import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.*;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 @Log4j2
@@ -47,8 +44,17 @@ public class S3Utils {
         }
     }
 
-    public static void putObject(S3Client s3Client, String bucketName, String key, String content) {
-        try {
+    public static void putObject(
+        String accessKey,
+        String secretKey,
+        String sessionToken,
+        String region,
+        String bucketName,
+        String key,
+        String content
+    ) {
+
+        try (S3Client s3Client = initS3Client(accessKey, secretKey, sessionToken, region)) {
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
                 PutObjectRequest request = PutObjectRequest.builder().bucket(bucketName).key(key).build();
 
@@ -58,6 +64,8 @@ public class S3Utils {
             });
         } catch (PrivilegedActionException e) {
             throw new RuntimeException("Failed to upload file to S3: s3://" + bucketName + "/" + key, e);
+        } catch (Exception e) {
+            log.error("Unexpected error during S3 upload", e);
         }
     }
 

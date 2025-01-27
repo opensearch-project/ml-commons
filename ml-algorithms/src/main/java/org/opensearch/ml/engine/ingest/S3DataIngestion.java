@@ -5,7 +5,9 @@
 
 package org.opensearch.ml.engine.ingest;
 
-import static org.opensearch.ml.common.connector.AbstractConnector.*;
+import static org.opensearch.ml.common.connector.AbstractConnector.ACCESS_KEY_FIELD;
+import static org.opensearch.ml.common.connector.AbstractConnector.SECRET_KEY_FIELD;
+import static org.opensearch.ml.common.connector.AbstractConnector.SESSION_TOKEN_FIELD;
 import static org.opensearch.ml.common.connector.HttpConnector.REGION_FIELD;
 
 import java.io.BufferedReader;
@@ -25,8 +27,8 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.client.Client;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.transport.batch.MLBatchIngestionInput;
-import org.opensearch.ml.common.utils.S3Utils;
 import org.opensearch.ml.engine.annotation.Ingester;
+import org.opensearch.ml.engine.utils.S3Utils;
 
 import lombok.extern.log4j.Log4j2;
 import software.amazon.awssdk.core.ResponseInputStream;

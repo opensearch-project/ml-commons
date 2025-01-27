@@ -156,7 +156,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                 }
 
                 // TODO: check if we are able to input an object into the s3 bucket.
-                //  Or check permissions to DLQ write access
+                // Or check permissions to DLQ write access
             }
         }
 
