@@ -13,6 +13,7 @@ import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
 import static org.opensearch.ml.utils.RestActionUtils.getAlgorithm;
+import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
 import java.io.IOException;
 import java.util.List;
@@ -114,10 +115,12 @@ public class RestMLExecuteAction extends BaseRestHandler {
             if (!mlFeatureEnabledSetting.isAgentFrameworkEnabled()) {
                 throw new IllegalStateException(AGENT_FRAMEWORK_DISABLED_ERR_MSG);
             }
+            String tenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
             String agentId = request.param(PARAMETER_AGENT_ID);
             functionName = FunctionName.AGENT;
             input = MLInput.parse(parser, functionName.name());
             ((AgentMLInput) input).setAgentId(agentId);
+            ((AgentMLInput) input).setTenantId(tenantId);
         } else {
             String algorithm = getAlgorithm(request).toUpperCase(Locale.ROOT);
             functionName = FunctionName.from(algorithm);

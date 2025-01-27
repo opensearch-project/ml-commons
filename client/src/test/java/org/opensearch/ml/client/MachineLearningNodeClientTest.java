@@ -1182,7 +1182,7 @@ public class MachineLearningNodeClientTest {
 
         ArgumentCaptor<DeleteResponse> argumentCaptor = ArgumentCaptor.forClass(DeleteResponse.class);
 
-        machineLearningNodeClient.deleteAgent(agentId, deleteAgentActionListener);
+        machineLearningNodeClient.deleteAgent(agentId, null, deleteAgentActionListener);
 
         verify(client).execute(eq(MLAgentDeleteAction.INSTANCE), isA(MLAgentDeleteRequest.class), any());
         verify(deleteAgentActionListener).onResponse(argumentCaptor.capture());

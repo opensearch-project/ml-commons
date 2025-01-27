@@ -7,8 +7,10 @@ package org.opensearch.ml.common.input.execute.agent;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -17,6 +19,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.junit.Test;
+import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentParser;
@@ -34,40 +37,12 @@ public class AgentMLInputTests {
         MLInputDataset dataset = mock(MLInputDataset.class); // Mock the MLInputDataset
 
         // Act
-        AgentMLInput input = new AgentMLInput(agentId, functionName, dataset);
+        AgentMLInput input = new AgentMLInput(agentId, null, functionName, dataset);
 
         // Assert
         assertEquals(agentId, input.getAgentId());
         assertEquals(functionName, input.getAlgorithm());
         assertEquals(dataset, input.getInputDataset());
-    }
-
-    @Test
-    public void testWriteTo() throws IOException {
-        // Arrange
-        String agentId = "testAgentId";
-        AgentMLInput input = new AgentMLInput(agentId, FunctionName.AGENT, null);
-        StreamOutput out = mock(StreamOutput.class);
-
-        // Act
-        input.writeTo(out);
-
-        // Assert
-        verify(out).writeString(agentId);
-    }
-
-    @Test
-    public void testConstructorWithStreamInput() throws IOException {
-        // Arrange
-        String agentId = "testAgentId";
-        StreamInput in = mock(StreamInput.class);
-        when(in.readString()).thenReturn(agentId);
-
-        // Act
-        AgentMLInput input = new AgentMLInput(in);
-
-        // Assert
-        assertEquals(agentId, input.getAgentId());
     }
 
     @Test
@@ -106,5 +81,55 @@ public class AgentMLInputTests {
         // Additional assertions for RemoteInferenceInputDataSet
         RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) input.getInputDataset();
         assertEquals("paramValue", dataset.getParameters().get("paramKey"));
+    }
+
+    @Test
+    public void testWriteTo_WithTenantId_VersionCompatibility() throws IOException {
+        // Arrange
+        String agentId = "testAgentId";
+        String tenantId = "testTenantId";
+        AgentMLInput input = new AgentMLInput(agentId, tenantId, FunctionName.AGENT, null);
+
+        // Act and Assert for older version (before VERSION_2_19_0)
+        StreamOutput oldVersionOut = mock(StreamOutput.class);
+        when(oldVersionOut.getVersion()).thenReturn(Version.V_2_18_0); // Older version
+        input.writeTo(oldVersionOut);
+
+        // Verify tenantId is NOT written
+        verify(oldVersionOut).writeString(agentId);
+        verify(oldVersionOut, never()).writeOptionalString(tenantId);
+
+        // Act and Assert for newer version (VERSION_2_19_0 and above)
+        StreamOutput newVersionOut = mock(StreamOutput.class);
+        when(newVersionOut.getVersion()).thenReturn(Version.V_2_19_0); // Newer version
+        input.writeTo(newVersionOut);
+
+        // Verify tenantId is written
+        verify(newVersionOut).writeString(agentId);
+        verify(newVersionOut).writeOptionalString(tenantId);
+    }
+
+    @Test
+    public void testConstructorWithStreamInput_VersionCompatibility() throws IOException {
+        // Arrange for older version
+        StreamInput oldVersionIn = mock(StreamInput.class);
+        when(oldVersionIn.getVersion()).thenReturn(Version.V_2_18_0); // Older version
+        when(oldVersionIn.readString()).thenReturn("testAgentId");
+
+        // Act and Assert for older version
+        AgentMLInput inputOldVersion = new AgentMLInput(oldVersionIn);
+        assertEquals("testAgentId", inputOldVersion.getAgentId());
+        assertNull(inputOldVersion.getTenantId()); // tenantId should be null for older versions
+
+        // Arrange for newer version
+        StreamInput newVersionIn = mock(StreamInput.class);
+        when(newVersionIn.getVersion()).thenReturn(Version.V_2_19_0); // Newer version
+        when(newVersionIn.readString()).thenReturn("testAgentId");
+        when(newVersionIn.readOptionalString()).thenReturn("testTenantId");
+
+        // Act and Assert for newer version
+        AgentMLInput inputNewVersion = new AgentMLInput(newVersionIn);
+        assertEquals("testAgentId", inputNewVersion.getAgentId());
+        assertEquals("testTenantId", inputNewVersion.getTenantId()); // tenantId should be populated for newer versions
     }
 }

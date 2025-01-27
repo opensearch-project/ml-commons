@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
@@ -170,7 +171,7 @@ public class AgentUtils {
         Map<String, String> contextMap = new HashMap<>();
         contextMap.put(CONTEXT, parameters.getOrDefault(CONTEXT, ""));
         parameters.put(CONTEXT, contextMap.get(CONTEXT));
-        if (contextMap.size() > 0) {
+        if (!contextMap.isEmpty()) {
             StringSubstitutor substitutor = new StringSubstitutor(contextMap, "${parameters.", "}");
             return substitutor.replace(prompt);
         }
@@ -410,16 +411,22 @@ public class AgentUtils {
         Map<String, String> params,
         List<MLToolSpec> toolSpecs,
         Map<String, Tool> tools,
-        Map<String, MLToolSpec> toolSpecMap
+        Map<String, MLToolSpec> toolSpecMap,
+        MLAgent mlAgent
     ) {
         for (MLToolSpec toolSpec : toolSpecs) {
-            Tool tool = createTool(toolFactories, params, toolSpec);
+            Tool tool = createTool(toolFactories, params, toolSpec, mlAgent.getTenantId());
             tools.put(tool.getName(), tool);
             toolSpecMap.put(tool.getName(), toolSpec);
         }
     }
 
-    public static Tool createTool(Map<String, Tool.Factory> toolFactories, Map<String, String> params, MLToolSpec toolSpec) {
+    public static Tool createTool(
+        Map<String, Tool.Factory> toolFactories,
+        Map<String, String> params,
+        MLToolSpec toolSpec,
+        String tenantId
+    ) {
         if (!toolFactories.containsKey(toolSpec.getType())) {
             throw new IllegalArgumentException("Tool not found: " + toolSpec.getType());
         }
@@ -427,6 +434,7 @@ public class AgentUtils {
         if (toolSpec.getParameters() != null) {
             executeParams.putAll(toolSpec.getParameters());
         }
+        executeParams.put(TENANT_ID_FIELD, tenantId);
         for (String key : params.keySet()) {
             String toolNamePrefix = getToolName(toolSpec) + ".";
             if (key.startsWith(toolNamePrefix)) {

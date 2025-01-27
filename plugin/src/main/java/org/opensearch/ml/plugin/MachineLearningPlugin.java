@@ -670,11 +670,13 @@ public class MachineLearningPlugin extends Plugin
 
         MLAgentExecutor agentExecutor = new MLAgentExecutor(
             client,
+            sdkClient,
             settings,
             clusterService,
             xContentRegistry,
             toolFactories,
-            memoryFactoryMap
+            memoryFactoryMap,
+            mlFeatureEnabledSetting.isMultiTenancyEnabled()
         );
         MLEngineClassLoader.register(FunctionName.LOCAL_SAMPLE_CALCULATOR, localSampleCalculator);
         MLEngineClassLoader.register(FunctionName.AGENT, agentExecutor);
