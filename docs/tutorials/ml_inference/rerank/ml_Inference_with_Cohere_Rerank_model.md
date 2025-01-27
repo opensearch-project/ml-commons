@@ -127,7 +127,7 @@ Copy this role ARN which will be used in later steps.
 3. On "ml_full_access" role detail page, click "Mapped users", then click "Manage mapping". Paste IAM role ARN created in Step 3.1 to backend roles part.
    Click "Map", then the IAM role configured successfully in your OpenSearch cluster.
 
-![Alt text](../aws/images/semantic_search/mapping_iam_role_arn.png)
+![Alt text](../../aws/images/semantic_search/mapping_iam_role_arn.png)
 
 #### 4 Get temporary credential of the role created in step 3.1:
 ```
