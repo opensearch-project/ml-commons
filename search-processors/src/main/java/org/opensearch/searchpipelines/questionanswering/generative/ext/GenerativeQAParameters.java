@@ -133,51 +133,51 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
     private List<MessageBlock> llmMessages = new ArrayList<>();
 
     public GenerativeQAParameters(
-            String conversationId,
-            String llmModel,
-            String llmQuestion,
-            String systemPrompt,
-            String userInstructions,
-            Integer contextSize,
-            Integer interactionSize,
-            Integer timeout,
-            String llmResponseField
+        String conversationId,
+        String llmModel,
+        String llmQuestion,
+        String systemPrompt,
+        String userInstructions,
+        Integer contextSize,
+        Integer interactionSize,
+        Integer timeout,
+        String llmResponseField
     ) {
         this(
-                conversationId,
-                llmModel,
-                llmQuestion,
-                systemPrompt,
-                userInstructions,
-                contextSize,
-                interactionSize,
-                timeout,
-                llmResponseField,
-                null
+            conversationId,
+            llmModel,
+            llmQuestion,
+            systemPrompt,
+            userInstructions,
+            contextSize,
+            interactionSize,
+            timeout,
+            llmResponseField,
+            null
         );
     }
 
     @Builder(toBuilder = true)
     public GenerativeQAParameters(
-            String conversationId,
-            String llmModel,
-            String llmQuestion,
-            String systemPrompt,
-            String userInstructions,
-            Integer contextSize,
-            Integer interactionSize,
-            Integer timeout,
-            String llmResponseField,
-            List<MessageBlock> llmMessages
+        String conversationId,
+        String llmModel,
+        String llmQuestion,
+        String systemPrompt,
+        String userInstructions,
+        Integer contextSize,
+        Integer interactionSize,
+        Integer timeout,
+        String llmResponseField,
+        List<MessageBlock> llmMessages
     ) {
         this.conversationId = conversationId;
         this.llmModel = llmModel;
 
         Preconditions
-                .checkArgument(
-                        !(Strings.isNullOrEmpty(llmQuestion) && (llmMessages == null || llmMessages.isEmpty())),
-                        "At least one of " + LLM_QUESTION + " or " + LLM_MESSAGES_FIELD + " must be provided."
-                );
+            .checkArgument(
+                !(Strings.isNullOrEmpty(llmQuestion) && (llmMessages == null || llmMessages.isEmpty())),
+                "At least one of " + LLM_QUESTION + " or " + LLM_MESSAGES_FIELD + " must be provided."
+            );
         this.llmQuestion = llmQuestion;
         this.systemPrompt = systemPrompt;
         this.userInstructions = userInstructions;
@@ -358,18 +358,18 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
         }
 
         return GenerativeQAParameters
-                .builder()
-                .conversationId(conversationId)
-                .llmModel(llmModel)
-                .llmQuestion(llmQuestion)
-                .systemPrompt(systemPrompt)
-                .userInstructions(userInstructions)
-                .contextSize(contextSize)
-                .interactionSize(interactionSize)
-                .timeout(timeout)
-                .llmResponseField(llmResponseField)
-                .llmMessages(llmMessages)
-                .build();
+            .builder()
+            .conversationId(conversationId)
+            .llmModel(llmModel)
+            .llmQuestion(llmQuestion)
+            .systemPrompt(systemPrompt)
+            .userInstructions(userInstructions)
+            .contextSize(contextSize)
+            .interactionSize(interactionSize)
+            .timeout(timeout)
+            .llmResponseField(llmResponseField)
+            .llmMessages(llmMessages)
+            .build();
     }
 
     @Override
@@ -383,14 +383,14 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
 
         GenerativeQAParameters other = (GenerativeQAParameters) o;
         return Objects.equals(this.conversationId, other.getConversationId())
-                && Objects.equals(this.llmModel, other.getLlmModel())
-                && Objects.equals(this.llmQuestion, other.getLlmQuestion())
-                && Objects.equals(this.systemPrompt, other.getSystemPrompt())
-                && Objects.equals(this.userInstructions, other.getUserInstructions())
-                && (this.contextSize == other.getContextSize())
-                && (this.interactionSize == other.getInteractionSize())
-                && (this.timeout == other.getTimeout())
-                && Objects.equals(this.llmResponseField, other.getLlmResponseField());
+            && Objects.equals(this.llmModel, other.getLlmModel())
+            && Objects.equals(this.llmQuestion, other.getLlmQuestion())
+            && Objects.equals(this.systemPrompt, other.getSystemPrompt())
+            && Objects.equals(this.userInstructions, other.getUserInstructions())
+            && (this.contextSize == other.getContextSize())
+            && (this.interactionSize == other.getInteractionSize())
+            && (this.timeout == other.getTimeout())
+            && Objects.equals(this.llmResponseField, other.getLlmResponseField());
     }
 
     public void setMessageBlock(List<MessageBlock> blockList) {
