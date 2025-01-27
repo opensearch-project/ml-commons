@@ -1,19 +1,8 @@
 # DeepSeek connector blueprint example for Chat
+This blueprint integrates [DeepSeek Chat Model](https://api-docs.deepseek.com/api/create-chat-completion) for question-answering capabilities for standalone interactions. Full conversational functionality requires additional development. 
+Adapt and extend this blueprint as needed for your specific use case.
 
-## 1. Add connector endpoint to trusted URLs:
-
-```json
-PUT /_cluster/settings
-{
-    "persistent": {
-        "plugins.ml_commons.trusted_connector_endpoints_regex": [
-          "^https://api\\.deepseek\\.com/.*$"
-        ]
-    }
-}
-```
-
-## 2. Create connector for DeepSeek Chat:
+## 1. Create connector for DeepSeek Chat:
 
 ```json
 {
@@ -51,7 +40,7 @@ PUT /_cluster/settings
 }
 ```
 
-## 3. Create model group:
+## 2. Create model group:
 
 ```json
 POST /_plugins/_ml/model_groups/_register
@@ -69,7 +58,7 @@ POST /_plugins/_ml/model_groups/_register
 }
 ```
 
-## 4. Register model to model group & deploy model:
+## 3. Register model to model group & deploy model:
 
 ```json
 {
@@ -90,7 +79,7 @@ POST /_plugins/_ml/model_groups/_register
 }
 ```
 
-## 5. Test model inference
+## 4. Test model inference
 
 ```json
 POST /_plugins/_ml/models/oUdPqZQBQwAL8-GOCZYL/_predict
