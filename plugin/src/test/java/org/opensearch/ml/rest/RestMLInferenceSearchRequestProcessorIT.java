@@ -205,6 +205,73 @@ public class RestMLInferenceSearchRequestProcessorIT extends MLCommonsRestTestCa
     }
 
     /**
+     * Tests the ML inference processor with a remote model to rewrite the query string.
+     * It creates a search pipeline with the ML inference processor,
+     * the ml inference processor takes model input from search extension
+     * and then performs a search using the pipeline. The test verifies that the query string is rewritten
+     * correctly based on the inference results from the remote model.
+     *
+     * @throws Exception if any error occurs during the test
+     */
+    public void testMLInferenceProcessorRemoteModelRewriteQueryStringWithSearchExtension() throws Exception {
+        // Skip test if key is null
+        if (OPENAI_KEY == null) {
+            return;
+        }
+        String createPipelineRequestBody = "{\n"
+            + "  \"request_processors\": [\n"
+            + "    {\n"
+            + "      \"ml_inference\": {\n"
+            + "        \"tag\": \"ml_inference\",\n"
+            + "        \"description\": \"This processor is going to run ml inference during search request\",\n"
+            + "        \"model_id\": \""
+            + this.openAIChatModelId
+            + "\",\n"
+            + "        \"input_map\": [\n"
+            + "          {\n"
+            + "            \"input\": \"ext.ml_inference.query_text\"\n"
+            + "          }\n"
+            + "        ],\n"
+            + "        \"output_map\": [\n"
+            + "          {\n"
+            + "            \"query.term.diary_embedding_size.value\": \"data[0].embedding.length()\"\n"
+            + "          }\n"
+            + "        ],\n"
+            + "        \"ignore_missing\":false,\n"
+            + "        \"ignore_failure\": false\n"
+            + "        \n"
+            + "      }\n"
+            + "    }\n"
+            + "  ]\n"
+            + "}";
+
+        String query = "{\n"
+            + "  \"query\": {\n"
+            + "    \"term\": {\n"
+            + "      \"diary_embedding_size\": {\n"
+            + "        \"value\": \"any\"\n"
+            + "      }\n"
+            + "    }\n"
+            + "  },\n"
+            + "  \"ext\": {\n"
+            + "    \"ml_inference\": {\n"
+            + "      \"query_text\": \"foo\"\n"
+            + "    }\n"
+            + "  }\n"
+            + "}";
+        String index_name = "daily_index";
+        String pipelineName = "diary_embedding_pipeline";
+        createSearchPipelineProcessor(createPipelineRequestBody, pipelineName);
+
+        Map response = searchWithPipeline(client(), index_name, pipelineName, query);
+
+        Assert.assertEquals(JsonPath.parse(response).read("$.hits.hits[0]._source.diary_embedding_size"), "1536");
+        Assert.assertEquals(JsonPath.parse(response).read("$.hits.hits[0]._source.weather"), "rainy");
+        Assert.assertEquals(JsonPath.parse(response).read("$.hits.hits[0]._source.diary[0]"), "happy");
+        Assert.assertEquals(JsonPath.parse(response).read("$.hits.hits[0]._source.diary[1]"), "first day at school");
+    }
+
+    /**
      * Tests the ML inference processor with a remote model to rewrite the query type.
      * It creates a search pipeline with the ML inference processor configured to rewrite
      * a term query to a range query based on the inference results from the remote model.
