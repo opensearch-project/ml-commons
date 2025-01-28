@@ -94,7 +94,7 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<MLSe
                     queryBuilder.must(request.source().query());
                 }
                 // Add tenancy filter
-                queryBuilder.filter(QueryBuilders.termQuery(TENANT_ID_FIELD, tenantId)); // Replace 'tenant_id_field' with actual field name
+                queryBuilder.filter(QueryBuilders.termQuery(TENANT_ID_FIELD, tenantId));
 
                 // Update the request's source with the new query
                 request.source().query(queryBuilder);

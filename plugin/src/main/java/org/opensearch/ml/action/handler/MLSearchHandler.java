@@ -119,11 +119,6 @@ public class MLSearchHandler {
                 shouldQuery.should(QueryBuilders.termQuery(TENANT_ID_FIELD, tenantId));
             }
 
-            // For multi-tenancy
-            if (tenantId != null) {
-                shouldQuery.should(QueryBuilders.termQuery(TENANT_ID_FIELD, tenantId));
-            }
-
             // Add a should clause to include documents where IS_HIDDEN_FIELD does not exist or is null
             shouldQuery.should(QueryBuilders.boolQuery().mustNot(QueryBuilders.existsQuery(MLModel.IS_HIDDEN_FIELD)));
 
