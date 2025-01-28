@@ -156,6 +156,8 @@ public final class MLCommonsSettings {
     public static final Setting<Boolean> ML_COMMONS_OFFLINE_BATCH_INFERENCE_ENABLED = Setting
         .boolSetting("plugins.ml_commons.offline_batch_inference_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
+    public static final String REKOGNITION_TRUST_ENDPOINT_REGEX = "^https://rekognition(-fips)?\\..*[a-z0-9-]\\.amazonaws\\.com$";
+
     public static final Setting<List<String>> ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX = Setting
         .listSetting(
             "plugins.ml_commons.trusted_connector_endpoints_regex",
@@ -170,7 +172,8 @@ public final class MLCommonsSettings {
                     "^https://bedrock-agent-runtime\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
                     "^https://bedrock\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
                     "^https://textract\\..*[a-z0-9-]\\.amazonaws\\.com$",
-                    "^https://comprehend\\..*[a-z0-9-]\\.amazonaws\\.com$"
+                    "^https://comprehend\\..*[a-z0-9-]\\.amazonaws\\.com$",
+                    REKOGNITION_TRUST_ENDPOINT_REGEX
                 ),
             Function.identity(),
             Setting.Property.NodeScope,
