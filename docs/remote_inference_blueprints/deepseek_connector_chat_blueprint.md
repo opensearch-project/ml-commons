@@ -5,6 +5,7 @@ Adapt and extend this blueprint as needed for your specific use case.
 ## 1. Create connector for DeepSeek Chat:
 
 ```json
+POST /_plugins/_ml/connectors/_create
 {
   "name": "DeepSeek Chat",
   "description": "Test connector for DeepSeek Chat",
@@ -61,6 +62,7 @@ POST /_plugins/_ml/model_groups/_register
 ## 3. Register model to model group & deploy model:
 
 ```json
+POST /_plugins/_ml/models/_register?deploy=true
 {
   "name": "DeepSeek Chat model",
   "function_name": "remote",
