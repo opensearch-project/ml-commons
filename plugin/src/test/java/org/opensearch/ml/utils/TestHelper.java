@@ -80,6 +80,7 @@ import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.Constants;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.input.execute.anomalylocalization.AnomalyLocalizationInput;
 import org.opensearch.ml.common.input.execute.metricscorrelation.MetricsCorrelationInput;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
 import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
@@ -360,6 +361,27 @@ public class TestHelper {
             .build();
     }
 
+    public static RestRequest getAnomalyLocalizationRestRequest() {
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_ALGORITHM, FunctionName.ANOMALY_LOCALIZATION.name());
+        final String requestContent = "{"
+            + "\"input_data\": {"
+            + "\"index_name\": \"test-index\","
+            + "\"attribute_field_names\": [\"attribute\"],"
+            + "\"time_field_name\": \"timestamp\","
+            + "\"start_time\": 1620630000000,"
+            + "\"end_time\": 1621234800000,"
+            + "\"min_time_interval\": 86400000,"
+            + "\"num_outputs\": 1"
+            + "}"
+            + "}";
+        RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
+            .withParams(params)
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .build();
+        return request;
+    }
+
     public static RestRequest getExecuteAgentRestRequest() {
         Map<String, String> params = new HashMap<>();
         params.put(PARAMETER_AGENT_ID, "test_agent_id");
@@ -407,6 +429,7 @@ public class TestHelper {
         entries.add(KMeansParams.XCONTENT_REGISTRY);
         entries.add(LocalSampleCalculatorInput.XCONTENT_REGISTRY);
         entries.add(MetricsCorrelationInput.XCONTENT_REGISTRY);
+        entries.add(AnomalyLocalizationInput.XCONTENT_REGISTRY_ENTRY);
         return new NamedXContentRegistry(entries);
     }
 
