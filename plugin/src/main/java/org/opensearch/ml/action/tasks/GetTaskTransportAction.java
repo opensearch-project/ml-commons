@@ -15,15 +15,22 @@ import static org.opensearch.ml.common.MLTaskState.CANCELLED;
 import static org.opensearch.ml.common.MLTaskState.CANCELLING;
 import static org.opensearch.ml.common.MLTaskState.COMPLETED;
 import static org.opensearch.ml.common.MLTaskState.EXPIRED;
+import static org.opensearch.ml.common.MLTaskState.FAILED;
+import static org.opensearch.ml.common.MLTaskState.UNREACHABLE;
+import static org.opensearch.ml.common.connector.AbstractConnector.ACCESS_KEY_FIELD;
+import static org.opensearch.ml.common.connector.AbstractConnector.SECRET_KEY_FIELD;
+import static org.opensearch.ml.common.connector.AbstractConnector.SESSION_TOKEN_FIELD;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.BATCH_PREDICT_STATUS;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_CANCELLED_REGEX;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_CANCELLING_REGEX;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_COMPLETED_REGEX;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_EXPIRED_REGEX;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_FAILED_REGEX;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_FIELD;
 import static org.opensearch.ml.utils.MLExceptionUtils.BATCH_INFERENCE_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -70,10 +77,12 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.task.MLTaskGetAction;
 import org.opensearch.ml.common.transport.task.MLTaskGetRequest;
 import org.opensearch.ml.common.transport.task.MLTaskGetResponse;
+import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.algorithms.remote.ConnectorUtils;
 import org.opensearch.ml.engine.algorithms.remote.RemoteConnectorExecutor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
+import org.opensearch.ml.engine.utils.S3Utils;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
@@ -90,7 +99,11 @@ import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
+import com.google.common.annotations.VisibleForTesting;
+
 import lombok.extern.log4j.Log4j2;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 
 @Log4j2
 public class GetTaskTransportAction extends HandledTransportAction<ActionRequest, MLTaskGetResponse> {
@@ -115,6 +128,10 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
     volatile Pattern remoteJobCancelledStatusRegexPattern;
     volatile Pattern remoteJobCancellingStatusRegexPattern;
     volatile Pattern remoteJobExpiredStatusRegexPattern;
+    volatile Pattern remoteJobFailedStatusRegexPattern;
+    private final MLEngine mlEngine;
+
+    // private Map<String, String> decryptedCredential;
 
     @Inject
     public GetTaskTransportAction(
@@ -131,7 +148,8 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         MLTaskManager mlTaskManager,
         MLModelManager mlModelManager,
         MLFeatureEnabledSetting mlFeatureEnabledSetting,
-        Settings settings
+        Settings settings,
+        MLEngine mlEngine
     ) {
         super(MLTaskGetAction.NAME, transportService, actionFilters, MLTaskGetRequest::new);
         this.client = client;
@@ -145,6 +163,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         this.mlTaskManager = mlTaskManager;
         this.mlModelManager = mlModelManager;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+        this.mlEngine = mlEngine;
 
         remoteJobStatusFields = ML_COMMONS_REMOTE_JOB_STATUS_FIELD.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_REMOTE_JOB_STATUS_FIELD, it -> remoteJobStatusFields = it);
@@ -172,6 +191,12 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
             clusterService,
             (regex) -> remoteJobExpiredStatusRegexPattern = Pattern.compile(regex, Pattern.CASE_INSENSITIVE)
         );
+        initializeRegexPattern(
+            ML_COMMONS_REMOTE_JOB_STATUS_FAILED_REGEX,
+            settings,
+            clusterService,
+            (regex) -> remoteJobFailedStatusRegexPattern = Pattern.compile(regex, Pattern.CASE_INSENSITIVE)
+        );
     }
 
     private void initializeRegexPattern(
@@ -189,6 +214,8 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLTaskGetResponse> actionListener) {
         MLTaskGetRequest mlTaskGetRequest = MLTaskGetRequest.fromActionRequest(request);
         String taskId = mlTaskGetRequest.getTaskId();
+        Boolean isUserInitiatedGetTaskRequest = mlTaskGetRequest.isUserInitiatedGetTaskRequest();
+
         String tenantId = mlTaskGetRequest.getTenantId();
 
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
@@ -207,7 +234,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             sdkClient.getDataObjectAsync(getDataObjectRequest).whenComplete((r, throwable) -> {
                 context.restore();
-                handleAsyncResponse(r, throwable, taskId, tenantId, actionListener);
+                handleAsyncResponse(r, throwable, taskId, isUserInitiatedGetTaskRequest, tenantId, actionListener);
             });
         } catch (Exception e) {
             log.error("Failed to get ML task {}", taskId, e);
@@ -219,6 +246,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         GetDataObjectResponse response,
         Throwable throwable,
         String taskId,
+        Boolean isUserInitiatedGetTaskRequest,
         String tenantId,
         ActionListener<MLTaskGetResponse> actionListener
     ) {
@@ -228,8 +256,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
             handleThrowable(throwable, taskId, actionListener);
             return;
         }
-
-        processResponse(response, taskId, tenantId, actionListener);
+        processResponse(response, taskId, isUserInitiatedGetTaskRequest, tenantId, actionListener);
     }
 
     private void handleThrowable(Throwable throwable, String taskId, ActionListener<MLTaskGetResponse> actionListener) {
@@ -247,6 +274,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
     private void processResponse(
         GetDataObjectResponse response,
         String taskId,
+        Boolean isUserInitiatedGetTaskRequest,
         String tenantId,
         ActionListener<MLTaskGetResponse> actionListener
     ) {
@@ -258,14 +286,20 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
                 return;
             }
 
-            parseAndHandleTask(gr, taskId, tenantId, actionListener);
+            parseAndHandleTask(gr, taskId, isUserInitiatedGetTaskRequest, tenantId, actionListener);
         } catch (Exception e) {
             log.error("Failed to parse GetDataObjectResponse for task {}", taskId, e);
             actionListener.onFailure(e);
         }
     }
 
-    private void parseAndHandleTask(GetResponse gr, String taskId, String tenantId, ActionListener<MLTaskGetResponse> actionListener) {
+    private void parseAndHandleTask(
+        GetResponse gr,
+        String taskId,
+        Boolean isUserInitiatedGetTaskRequest,
+        String tenantId,
+        ActionListener<MLTaskGetResponse> actionListener
+    ) {
         try (
             XContentParser parser = jsonXContent.createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, gr.getSourceAsString())
         ) {
@@ -282,7 +316,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
             }
 
             if (mlTask.getTaskType() == MLTaskType.BATCH_PREDICTION && mlTask.getFunctionName() == FunctionName.REMOTE) {
-                processRemoteBatchPrediction(mlTask, taskId, tenantId, actionListener);
+                processRemoteBatchPrediction(mlTask, taskId, isUserInitiatedGetTaskRequest, tenantId, actionListener);
             } else {
                 actionListener.onResponse(MLTaskGetResponse.builder().mlTask(mlTask).build());
             }
@@ -295,6 +329,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
     private void processRemoteBatchPrediction(
         MLTask mlTask,
         String taskId,
+        Boolean isUserInitiatedGetTaskRequest,
         String tenantId,
         ActionListener<MLTaskGetResponse> actionListener
     ) {
@@ -319,7 +354,11 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
                     .orElse(null)
             );
 
-        RemoteInferenceInputDataSet inferenceInputDataSet = new RemoteInferenceInputDataSet(parameters, ActionType.BATCH_PREDICT_STATUS);
+        RemoteInferenceInputDataSet inferenceInputDataSet = new RemoteInferenceInputDataSet(
+            parameters,
+            ActionType.BATCH_PREDICT_STATUS,
+            null
+        );
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inferenceInputDataSet).build();
         String modelId = mlTask.getModelId();
         User user = RestActionUtils.getUserContext(client);
@@ -342,10 +381,26 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
                                 } else {
                                     if (model.getConnector() != null) {
                                         Connector connector = model.getConnector();
-                                        executeConnector(connector, mlInput, taskId, mlTask, remoteJob, actionListener);
+                                        executeConnector(
+                                            connector,
+                                            mlInput,
+                                            taskId,
+                                            isUserInitiatedGetTaskRequest,
+                                            mlTask,
+                                            remoteJob,
+                                            actionListener
+                                        );
                                     } else if (clusterService.state().metadata().hasIndex(ML_CONNECTOR_INDEX)) {
                                         ActionListener<Connector> listener = ActionListener.wrap(connector -> {
-                                            executeConnector(connector, mlInput, taskId, mlTask, remoteJob, actionListener);
+                                            executeConnector(
+                                                connector,
+                                                mlInput,
+                                                taskId,
+                                                isUserInitiatedGetTaskRequest,
+                                                mlTask,
+                                                remoteJob,
+                                                actionListener
+                                            );
                                         }, e -> {
                                             log.error("Failed to get connector {}", model.getConnectorId(), e);
                                             actionListener.onFailure(e);
@@ -392,6 +447,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         Connector connector,
         MLInput mlInput,
         String taskId,
+        Boolean isUserInitiatedGetTaskRequest,
         MLTask mlTask,
         Map<String, Object> remoteJob,
         ActionListener<MLTaskGetResponse> actionListener
@@ -401,23 +457,58 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
             ConnectorAction connectorAction = ConnectorUtils.createConnectorAction(connector, BATCH_PREDICT_STATUS);
             connector.addAction(connectorAction);
         }
-        // as we haven't implemented multi-tenancy in batch prediction yet, assigning null as tenantId
-        connector.decrypt(BATCH_PREDICT_STATUS.name(), (credential, tenantId) -> encryptor.decrypt(credential, null), null);
+
+        final Map<String, String> decryptedCredential = connector.getDecryptedCredential() != null
+            && !connector.getDecryptedCredential().isEmpty()
+                ? mlEngine.getConnectorCredential(connector)
+                : connector.getDecryptedCredential();
         RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader.initInstance(connector.getProtocol(), connector, Connector.class);
         connectorExecutor.setScriptService(scriptService);
         connectorExecutor.setClusterService(clusterService);
         connectorExecutor.setClient(client);
         connectorExecutor.setXContentRegistry(xContentRegistry);
         connectorExecutor.executeAction(BATCH_PREDICT_STATUS.name(), mlInput, ActionListener.wrap(taskResponse -> {
-            processTaskResponse(mlTask, taskId, taskResponse, remoteJob, actionListener);
-        }, actionListener::onFailure));
+            processTaskResponse(
+                mlTask,
+                taskId,
+                isUserInitiatedGetTaskRequest,
+                taskResponse,
+                remoteJob,
+                decryptedCredential,
+                actionListener
+            );
+        }, e -> {
+            // When the request to remote service fails, we will retry the request for next 10 minutes (10 runs).
+            // If it fails even then, we mark it as unreachable in task index and send message to DLQ
+            if (!isUserInitiatedGetTaskRequest) {
+                Map<String, Object> updatedTask = new HashMap<>();
+                Integer numberOfRetries = (Integer) remoteJob.getOrDefault("num_of_retries", 0);
+                remoteJob.put("num_of_retries", ++numberOfRetries);
+                if (numberOfRetries > 10) {
+                    log
+                        .debug(
+                            "Limit exceeded trying to reach the task {} . Marking as UNREACHABLE in task index and removing from further execution",
+                            taskId
+                        );
+                    updatedTask.put(STATE_FIELD, UNREACHABLE);
+                    mlTask.setState(UNREACHABLE);
+                    mlTask.setError(e.getMessage());
+                    updateDLQ(mlTask, decryptedCredential);
+                }
+                updatedTask.put("remote_job", remoteJob);
+                mlTaskManager.updateMLTaskDirectly(taskId, updatedTask);
+            }
+            actionListener.onFailure(e);
+        }));
     }
 
     protected void processTaskResponse(
         MLTask mlTask,
         String taskId,
+        Boolean isUserInitiatedGetTaskRequest,
         MLTaskResponse taskResponse,
         Map<String, Object> remoteJob,
+        Map<String, String> decryptedCredential,
         ActionListener<MLTaskGetResponse> actionListener
     ) {
         try {
@@ -430,6 +521,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
                         remoteJob.putAll(remoteJobStatus);
                         Map<String, Object> updatedTask = new HashMap<>();
                         updatedTask.put(REMOTE_JOB_FIELD, remoteJob);
+                        mlTask.setRemoteJob(remoteJob);
 
                         for (String statusField : remoteJobStatusFields) {
                             String statusValue = String.valueOf(remoteJob.get(statusField));
@@ -437,7 +529,11 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
                                 updateTaskState(updatedTask, mlTask, statusValue);
                             }
                         }
+
                         mlTaskManager.updateMLTaskDirectly(taskId, updatedTask, ActionListener.wrap(response -> {
+                            if (mlTask.getState().equals(FAILED) && !isUserInitiatedGetTaskRequest) {
+                                updateDLQ(mlTask, decryptedCredential);
+                            }
                             actionListener.onResponse(MLTaskGetResponse.builder().mlTask(mlTask).build());
                         }, e -> {
                             logException("Failed to update task for batch predict model", e, log);
@@ -460,6 +556,43 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         }
     }
 
+    @VisibleForTesting
+    protected void updateDLQ(MLTask mlTask, Map<String, String> decryptedCredential) {
+        Map<String, Object> remoteJob = mlTask.getRemoteJob();
+        Map<String, String> dlq = (Map<String, String>) remoteJob.get("dlq");
+        if (dlq != null && !dlq.isEmpty()) {
+            String taskId = mlTask.getTaskId();
+            try {
+                Map<String, Object> remoteJobDetails = mlTask.getRemoteJob();
+                String accessKey = decryptedCredential.get(ACCESS_KEY_FIELD);
+                String secretKey = decryptedCredential.get(SECRET_KEY_FIELD);
+                String sessionToken = decryptedCredential.get(SESSION_TOKEN_FIELD);
+
+                String bucketName = dlq.get("bucket");
+                String region = dlq.get("region");
+
+                if (bucketName == null || region == null) {
+                    log.error("Failed to get the bucket name and region from batch predict request");
+                }
+                remoteJobDetails.remove("dlq");
+                try (S3Client s3Client = S3Utils.initS3Client(accessKey, secretKey, sessionToken, region)) {
+                    String jobName = (String) remoteJobDetails.getOrDefault("TransformJobName", remoteJob.get("job_name"));
+                    String s3ObjectKey = "BatchJobFailure_" + jobName;
+                    String content = mlTask.getState().equals(UNREACHABLE)
+                        ? String.format("Unable to reach the Job: %s. Error Message: %s", jobName, mlTask.getError())
+                        : remoteJobDetails.toString();
+
+                    S3Utils.putObject(s3Client, bucketName, s3ObjectKey, content);
+                    log.debug("Task status successfully uploaded to S3 for task ID: {} at {}", taskId, Instant.now());
+                }
+            } catch (S3Exception e) {
+                log.error("Failed to update task status for task: {}. S3 Exception: {}", taskId, e.awsErrorDetails().errorMessage());
+            } catch (Exception e) {
+                log.error("Failed to update task status for task: " + taskId, e);
+            }
+        }
+    }
+
     private void updateTaskState(Map<String, Object> updatedTask, MLTask mlTask, String statusValue) {
         if (matchesPattern(remoteJobCancellingStatusRegexPattern, statusValue)) {
             updatedTask.put(STATE_FIELD, CANCELLING);
@@ -473,6 +606,9 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         } else if (matchesPattern(remoteJobExpiredStatusRegexPattern, statusValue)) {
             updatedTask.put(STATE_FIELD, EXPIRED);
             mlTask.setState(EXPIRED);
+        } else if (matchesPattern(remoteJobFailedStatusRegexPattern, statusValue)) {
+            updatedTask.put(STATE_FIELD, FAILED);
+            mlTask.setState(FAILED);
         }
     }
 
