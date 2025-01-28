@@ -10,10 +10,9 @@ import static org.opensearch.ml.common.CommonValue.MASTER_KEY;
 import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.MLConfig.CREATE_TIME_FIELD;
+import static org.opensearch.ml.common.utils.StringUtils.hashString;
 
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
@@ -226,21 +225,4 @@ public class EncryptorImpl implements Encryptor {
             throw new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR);
         }
     }
-
-    private String hashString(String input) {
-        try {
-            // Create a MessageDigest instance for SHA-256
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-
-            // Perform the hashing and get the byte array
-            byte[] hashBytes = digest.digest(input.getBytes());
-
-            // Convert the byte array to a Base64 encoded string
-            return Base64.getUrlEncoder().encodeToString(hashBytes);
-
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException("Error: Unable to compute hash", e);
-        }
-    }
-
 }

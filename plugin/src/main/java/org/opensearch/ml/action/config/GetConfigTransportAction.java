@@ -66,6 +66,8 @@ public class GetConfigTransportAction extends HandledTransportAction<ActionReque
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
             return;
         }
+
+        // In the get request tenantId will be used as a part of SDKClient migration
         GetRequest getRequest = new GetRequest(ML_CONFIG_INDEX).id(configId);
 
         if (configId.equals(MASTER_KEY)) {
@@ -83,7 +85,7 @@ public class GetConfigTransportAction extends HandledTransportAction<ActionReque
                         MLConfig mlConfig = MLConfig.parse(parser);
                         actionListener.onResponse(MLConfigGetResponse.builder().mlConfig(mlConfig).build());
                     } catch (Exception e) {
-                        log.error("Failed to parse ml config" + r.getId(), e);
+                        log.error("Failed to parse ml config{}", r.getId(), e);
                         actionListener.onFailure(e);
                     }
                 } else {
@@ -100,12 +102,12 @@ public class GetConfigTransportAction extends HandledTransportAction<ActionReque
                     log.error("Failed to get agent index", e);
                     actionListener.onFailure(new OpenSearchStatusException("Failed to get config index", RestStatus.NOT_FOUND));
                 } else {
-                    log.error("Failed to get ML config " + configId, e);
+                    log.error("Failed to get ML config {}", configId, e);
                     actionListener.onFailure(e);
                 }
             }), context::restore));
         } catch (Exception e) {
-            log.error("Failed to get ML config " + configId, e);
+            log.error("Failed to get ML config {}", configId, e);
             actionListener.onFailure(e);
         }
     }

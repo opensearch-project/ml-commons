@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.CREATE_TIME_FIELD;
 import static org.opensearch.ml.common.CommonValue.MASTER_KEY;
 import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
+import static org.opensearch.ml.common.utils.StringUtils.hashString;
 import static org.opensearch.ml.engine.encryptor.EncryptorImpl.DEFAULT_TENANT_ID;
 import static org.opensearch.ml.engine.encryptor.EncryptorImpl.MASTER_KEY_NOT_READY_ERROR;
 
@@ -71,6 +72,8 @@ public class EncryptorImplTest {
     final String USER_STRING = "myuser|role1,role2|myTenant";
     final String TENANT_ID = "myTenant";
 
+    Encryptor encryptor;
+
     @Before
     public void setUp() {
         MockitoAnnotations.openMocks(this);
@@ -116,6 +119,7 @@ public class EncryptorImplTest {
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, USER_STRING);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
+        encryptor = new EncryptorImpl(clusterService, client, mlIndicesHandler);
     }
 
     @Test
@@ -332,7 +336,7 @@ public class EncryptorImplTest {
             return null;
         }).when(mlIndicesHandler).initMLConfigIndex(any());
 
-        GetResponse response = prepareMLConfigResponse(DEFAULT_TENANT_ID);
+        GetResponse response = prepareMLConfigResponse(null);
 
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = (ActionListener) invocation.getArgument(1);
@@ -451,7 +455,7 @@ public class EncryptorImplTest {
             return null;
         }).when(mlIndicesHandler).initMLConfigIndex(any());
 
-        GetResponse response = prepareMLConfigResponse(DEFAULT_TENANT_ID);
+        GetResponse response = prepareMLConfigResponse(null);
 
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
@@ -541,11 +545,56 @@ public class EncryptorImplTest {
         encryptor.decrypt("test", null);
     }
 
+    @Test
+    public void initMasterKey_AddTenantMasterKeys() throws IOException {
+        // Mock ML Config Index initialization to succeed
+        doAnswer(invocation -> {
+            ActionListener<Boolean> actionListener = (ActionListener) invocation.getArgument(0);
+            actionListener.onResponse(true); // Simulate successful ML Config index initialization
+            return null;
+        }).when(mlIndicesHandler).initMLConfigIndex(any());
+
+        // Mock GetResponse to return a valid MASTER_KEY_ID for the given tenant
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            GetResponse response = prepareMLConfigResponse(TENANT_ID); // Response includes dynamic MASTER_KEY_ID
+            listener.onResponse(response);
+            return null;
+        }).when(client).get(any(), any());
+
+        // Initialize Encryptor and verify no master key exists initially
+        Encryptor encryptor = new EncryptorImpl(clusterService, client, mlIndicesHandler);
+        Assert.assertNull(encryptor.getMasterKey(TENANT_ID));
+
+        // Encrypt using the specified tenant ID
+        String encrypted = encryptor.encrypt("test", TENANT_ID);
+        Assert.assertNotNull(encrypted);
+
+        // Verify that the tenant-specific master key is added
+        String tenantMasterKey = encryptor.getMasterKey(TENANT_ID);
+        Assert.assertNotNull(tenantMasterKey);
+
+        // Ensure that the master key for this tenant matches the expected value
+        String expectedMasterKeyId = MASTER_KEY + "_" + hashString(TENANT_ID);
+        Assert.assertEquals("m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=", encryptor.getMasterKey(TENANT_ID));
+    }
+
     // Helper method to prepare a valid GetResponse
     private GetResponse prepareMLConfigResponse(String tenantId) throws IOException {
+        // Compute the masterKeyId based on tenantId
+        String masterKeyId = MASTER_KEY;
+        if (tenantId != null) {
+            masterKeyId = MASTER_KEY + "_" + hashString(tenantId);
+        }
+
         // Create the source map with the expected fields
         Map<String, Object> sourceMap = Map
-            .of(MASTER_KEY, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=", CREATE_TIME_FIELD, Instant.now().toEpochMilli());
+            .of(
+                masterKeyId,
+                "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=", // Valid MASTER_KEY for this tenant
+                CREATE_TIME_FIELD,
+                Instant.now().toEpochMilli()
+            );
 
         // Serialize the source map to JSON
         XContentBuilder builder = XContentFactory.jsonBuilder();
@@ -557,7 +606,7 @@ public class EncryptorImplTest {
         BytesReference sourceBytes = BytesReference.bytes(builder);
 
         // Create the GetResult
-        GetResult getResult = new GetResult(ML_CONFIG_INDEX, MASTER_KEY, 1L, 1L, 1L, true, sourceBytes, null, null);
+        GetResult getResult = new GetResult(ML_CONFIG_INDEX, masterKeyId, 1L, 1L, 1L, true, sourceBytes, null, null);
 
         // Create and return the GetResponse
         return new GetResponse(getResult);
