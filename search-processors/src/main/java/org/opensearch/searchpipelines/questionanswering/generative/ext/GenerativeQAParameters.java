@@ -90,6 +90,8 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
 
     static final Version MINIMAL_SUPPORTED_VERSION_FOR_BEDROCK_CONVERSE_LLM_MESSAGES = CommonValue.VERSION_2_18_0;
 
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_PROMPT_AND_INSTRUCTIONS = CommonValue.VERSION_2_13_0;
+
     @Setter
     @Getter
     private String conversationId;
@@ -200,16 +202,23 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
             this.llmQuestion = input.readString();
         }
 
-        this.systemPrompt = input.readOptionalString();
-        this.userInstructions = input.readOptionalString();
+        if (version.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_PROMPT_AND_INSTRUCTIONS)) {
+            this.systemPrompt = input.readOptionalString();
+            this.userInstructions = input.readOptionalString();
+        }
+
         this.contextSize = input.readInt();
         this.interactionSize = input.readInt();
         this.timeout = input.readInt();
-        this.llmResponseField = input.readOptionalString();
+
+        if (version.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_PROMPT_AND_INSTRUCTIONS)) {
+            this.llmResponseField = input.readOptionalString();
+        }
 
         if (version.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_BEDROCK_CONVERSE_LLM_MESSAGES)) {
             this.llmMessages.addAll(input.readList(MessageBlock::new));
         }
+
     }
 
     @Override
@@ -272,12 +281,18 @@ public class GenerativeQAParameters implements Writeable, ToXContentObject {
             out.writeString(llmQuestion);
         }
 
-        out.writeOptionalString(systemPrompt);
-        out.writeOptionalString(userInstructions);
+        if (version.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_PROMPT_AND_INSTRUCTIONS)) {
+            out.writeOptionalString(systemPrompt);
+            out.writeOptionalString(userInstructions);
+        }
+
         out.writeInt(contextSize);
         out.writeInt(interactionSize);
         out.writeInt(timeout);
-        out.writeOptionalString(llmResponseField);
+
+        if (version.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_PROMPT_AND_INSTRUCTIONS)) {
+            out.writeOptionalString(llmResponseField);
+        }
 
         if (version.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_BEDROCK_CONVERSE_LLM_MESSAGES)) {
             out.writeList(llmMessages);

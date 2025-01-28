@@ -121,6 +121,7 @@ public class GenerativeQAParamExtBuilderTests extends OpenSearchTestCase {
         assertNotEquals(builder1, builder2);
         assertNotEquals(builder1.hashCode(), builder2.hashCode());
 
+        // BWC test for bedrock converse params
         StreamOutput so1 = mock(StreamOutput.class);
         when(so1.getVersion()).thenReturn(GenerativeQAParameters.MINIMAL_SUPPORTED_VERSION_FOR_BEDROCK_CONVERSE_LLM_MESSAGES);
         builder1.writeTo(so1);
@@ -130,6 +131,19 @@ public class GenerativeQAParamExtBuilderTests extends OpenSearchTestCase {
         when(so2.getVersion()).thenReturn(Version.V_2_17_0);
         builder1.writeTo(so2);
         verify(so2, times(5)).writeOptionalString(any());
+
+        // BWC test for system prompt and instructions
+        StreamOutput so3 = mock(StreamOutput.class);
+        when(so3.getVersion()).thenReturn(GenerativeQAParameters.MINIMAL_SUPPORTED_VERSION_FOR_PROMPT_AND_INSTRUCTIONS);
+        builder1.writeTo(so3);
+        verify(so3, times(5)).writeOptionalString(any());
+        verify(so3, times(1)).writeString(any());
+
+        StreamOutput so4 = mock(StreamOutput.class);
+        when(so4.getVersion()).thenReturn(Version.V_2_12_0);
+        builder1.writeTo(so4);
+        verify(so4, times(2)).writeOptionalString(any());
+        verify(so4, times(1)).writeString(any());
     }
 
     public void testParse() throws IOException {
