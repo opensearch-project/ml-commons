@@ -6,6 +6,8 @@
 package org.opensearch.ml.common;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -57,6 +59,7 @@ public class MLConfig implements ToXContentObject, Writeable {
     private final Instant createTime;
     private Instant lastUpdateTime;
     private Instant lastUpdatedTime;
+    private final String tenantId;
 
     @Builder(toBuilder = true)
     public MLConfig(
@@ -66,7 +69,8 @@ public class MLConfig implements ToXContentObject, Writeable {
         Configuration mlConfiguration,
         Instant createTime,
         Instant lastUpdateTime,
-        Instant lastUpdatedTime
+        Instant lastUpdatedTime,
+        String tenantId
     ) {
         this.type = type;
         this.configType = configType;
@@ -75,6 +79,7 @@ public class MLConfig implements ToXContentObject, Writeable {
         this.createTime = createTime;
         this.lastUpdateTime = lastUpdateTime;
         this.lastUpdatedTime = lastUpdatedTime;
+        this.tenantId = tenantId;
     }
 
     public MLConfig(StreamInput input) throws IOException {
@@ -92,6 +97,7 @@ public class MLConfig implements ToXContentObject, Writeable {
             }
             lastUpdatedTime = input.readOptionalInstant();
         }
+        this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
     }
 
     @Override
@@ -116,6 +122,9 @@ public class MLConfig implements ToXContentObject, Writeable {
             }
             out.writeOptionalInstant(lastUpdatedTime);
         }
+        if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
+            out.writeOptionalString(tenantId);
+        }
     }
 
     @Override
@@ -133,12 +142,14 @@ public class MLConfig implements ToXContentObject, Writeable {
         if (lastUpdateTime != null || lastUpdatedTime != null) {
             builder.field(LAST_UPDATE_TIME_FIELD, lastUpdatedTime == null ? lastUpdateTime.toEpochMilli() : lastUpdatedTime.toEpochMilli());
         }
+        if (tenantId != null) {
+            builder.field(TENANT_ID_FIELD, tenantId);
+        }
         return builder.endObject();
     }
 
     public static MLConfig fromStream(StreamInput in) throws IOException {
-        MLConfig mlConfig = new MLConfig(in);
-        return mlConfig;
+        return new MLConfig(in);
     }
 
     public static MLConfig parse(XContentParser parser) throws IOException {
@@ -149,6 +160,7 @@ public class MLConfig implements ToXContentObject, Writeable {
         Instant createTime = null;
         Instant lastUpdateTime = null;
         Instant lastUpdatedTime = null;
+        String tenantId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -177,6 +189,8 @@ public class MLConfig implements ToXContentObject, Writeable {
                 case LAST_UPDATED_TIME_FIELD:
                     lastUpdatedTime = Instant.ofEpochMilli(parser.longValue());
                     break;
+                case TENANT_ID_FIELD:
+                    tenantId = parser.textOrNull();
                 default:
                     parser.skipChildren();
                     break;
@@ -191,6 +205,7 @@ public class MLConfig implements ToXContentObject, Writeable {
             .createTime(createTime)
             .lastUpdateTime(lastUpdateTime)
             .lastUpdatedTime(lastUpdatedTime)
+            .tenantId(tenantId)
             .build();
     }
 }

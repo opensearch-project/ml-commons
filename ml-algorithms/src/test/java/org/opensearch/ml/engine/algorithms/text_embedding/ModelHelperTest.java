@@ -59,7 +59,7 @@ public class ModelHelperTest {
         MockitoAnnotations.openMocks(this);
         modelFormat = MLModelFormat.TORCH_SCRIPT;
         modelId = "model_id";
-        encryptor = new EncryptorImpl("m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
+        encryptor = new EncryptorImpl(null, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
         mlEngine = new MLEngine(Path.of("/tmp/test" + modelId), encryptor);
         modelHelper = new ModelHelper(mlEngine);
     }

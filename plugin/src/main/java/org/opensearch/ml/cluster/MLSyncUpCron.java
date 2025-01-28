@@ -254,12 +254,16 @@ public class MLSyncUpCron implements Runnable {
                         indexRequest.opType(DocWriteRequest.OpType.CREATE);
                         client.index(indexRequest, ActionListener.wrap(indexResponse -> {
                             log.info("ML configuration initialized successfully");
-                            encryptor.setMasterKey(masterKey);
+                            // as this method is not being used for multi-tenancy use case, we are setting
+                            // tenant id null by default
+                            encryptor.setMasterKey(null, masterKey);
                             mlConfigInited = true;
                         }, e -> { log.debug("Failed to save ML encryption master key", e); }));
                     } else {
                         final String masterKey = (String) getResponse.getSourceAsMap().get(MASTER_KEY);
-                        encryptor.setMasterKey(masterKey);
+                        // as this method is not being used for multi-tenancy use case, we are setting
+                        // tenant id null by default
+                        encryptor.setMasterKey(null, masterKey);
                         mlConfigInited = true;
                         log.info("ML configuration already initialized, no action needed");
                     }

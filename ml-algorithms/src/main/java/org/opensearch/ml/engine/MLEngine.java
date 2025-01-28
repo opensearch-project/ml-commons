@@ -125,7 +125,12 @@ public class MLEngine {
     }
 
     public Map<String, String> getConnectorCredential(Connector connector) {
-        connector.decrypt(PREDICT.name(), (credential) -> encryptor.decrypt(credential));
+        connector
+            .decrypt(
+                PREDICT.name(),
+                (credential, tenantId) -> encryptor.decrypt(credential, connector.getTenantId()),
+                connector.getTenantId()
+            );
         Map<String, String> decryptedCredential = connector.getDecryptedCredential();
         String region = connector.getParameters().get(REGION_FIELD);
         if (region != null) {
@@ -211,8 +216,8 @@ public class MLEngine {
         }
     }
 
-    public String encrypt(String credential) {
-        return encryptor.encrypt(credential);
+    public String encrypt(String credential, String tenantId) {
+        return encryptor.encrypt(credential, tenantId);
     }
 
 }

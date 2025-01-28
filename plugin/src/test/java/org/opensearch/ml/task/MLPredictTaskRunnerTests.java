@@ -144,7 +144,7 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
-        encryptor = new EncryptorImpl("m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
+        encryptor = new EncryptorImpl(null, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
         mlEngine = new MLEngine(Path.of("/tmp/test" + randomAlphaOfLength(10)), encryptor);
         localNode = new DiscoveryNode("localNodeId", buildNewFakeTransportAddress(), Version.CURRENT);
         remoteNode = new DiscoveryNode("remoteNodeId", buildNewFakeTransportAddress(), Version.CURRENT);
@@ -259,10 +259,10 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
     public void testExecuteTask_OnLocalNode_RemoteModelAutoDeploy() {
         setupMocks(true, false, false, false);
         doAnswer(invocation -> {
-            ActionListener<MLModel> actionListener = invocation.getArgument(1);
+            ActionListener<MLModel> actionListener = invocation.getArgument(2);
             actionListener.onResponse(mlModel);
             return null;
-        }).when(mlModelManager).getModel(any(), any());
+        }).when(mlModelManager).getModel(any(), any(), any());
         when(mlModelManager.addModelToAutoDeployCache("111", mlModel)).thenReturn(mlModel);
         taskRunner.dispatchTask(FunctionName.REMOTE, requestWithDataFrame, transportService, listener);
         verify(client).execute(any(), any(), any());

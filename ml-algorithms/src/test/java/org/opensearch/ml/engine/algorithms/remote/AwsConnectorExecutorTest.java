@@ -105,7 +105,7 @@ public class AwsConnectorExecutorTest {
     @Before
     public void setUp() {
         MockitoAnnotations.openMocks(this);
-        encryptor = new EncryptorImpl("m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
+        encryptor = new EncryptorImpl(null, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
         when(scriptService.compile(any(), any()))
             .then(invocation -> new TestTemplateService.MockTemplateScript.Factory("{\"result\": \"hello world\"}"));
     }
@@ -140,7 +140,7 @@ public class AwsConnectorExecutorTest {
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
         Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
@@ -152,7 +152,7 @@ public class AwsConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT))
             .build();
-        connector.decrypt(PREDICT.name(), (c) -> encryptor.decrypt(c));
+        connector.decrypt(PREDICT.name(), (c, tenantId) -> encryptor.decrypt(c, null), null);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
@@ -184,7 +184,7 @@ public class AwsConnectorExecutorTest {
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
         Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
@@ -195,7 +195,7 @@ public class AwsConnectorExecutorTest {
             .credential(credential)
             .actions(Arrays.asList(predictAction))
             .build();
-        connector.decrypt(PREDICT.name(), (c) -> encryptor.decrypt(c));
+        connector.decrypt(PREDICT.name(), (c, tenantId) -> encryptor.decrypt(c, null), null);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
@@ -223,7 +223,7 @@ public class AwsConnectorExecutorTest {
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
         Map<String, String> parameters = ImmutableMap
             .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "2");
         Connector connector = AwsConnector
@@ -236,7 +236,7 @@ public class AwsConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT))
             .build();
-        connector.decrypt(PREDICT.name(), (c) -> encryptor.decrypt(c));
+        connector.decrypt(PREDICT.name(), (c, tenantId) -> encryptor.decrypt(c, null), null);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
@@ -275,7 +275,7 @@ public class AwsConnectorExecutorTest {
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
         Map<String, String> parameters = ImmutableMap
             .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "1");
         Connector connector = AwsConnector
@@ -288,7 +288,7 @@ public class AwsConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT))
             .build();
-        connector.decrypt(PREDICT.name(), (c) -> encryptor.decrypt(c));
+        connector.decrypt(PREDICT.name(), (c, tenantId) -> encryptor.decrypt(c, null), null);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
@@ -335,7 +335,7 @@ public class AwsConnectorExecutorTest {
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
         Map<String, String> parameters = ImmutableMap
             .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "1");
         Connector connector = AwsConnector
@@ -348,7 +348,7 @@ public class AwsConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT))
             .build();
-        connector.decrypt(PREDICT.name(), (c) -> encryptor.decrypt(c));
+        connector.decrypt(PREDICT.name(), (c, tenantId) -> encryptor.decrypt(c, null), null);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
@@ -392,7 +392,7 @@ public class AwsConnectorExecutorTest {
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
         Map<String, String> parameters = ImmutableMap
             .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "1");
         Connector connector = AwsConnector
@@ -405,7 +405,7 @@ public class AwsConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT))
             .build();
-        connector.decrypt(PREDICT.name(), (c) -> encryptor.decrypt(c));
+        connector.decrypt(PREDICT.name(), (c, tenantId) -> encryptor.decrypt(c, null), null);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
@@ -451,7 +451,7 @@ public class AwsConnectorExecutorTest {
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
         Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
@@ -462,7 +462,7 @@ public class AwsConnectorExecutorTest {
             .credential(credential)
             .actions(Arrays.asList(predictAction))
             .build();
-        connector.decrypt(PREDICT.name(), (c) -> encryptor.decrypt(c));
+        connector.decrypt(PREDICT.name(), (c, tenantId) -> encryptor.decrypt(c, null), null);
         AwsConnectorExecutor executor0 = new AwsConnectorExecutor(connector);
         Field httpClientField = AwsConnectorExecutor.class.getDeclaredField("httpClient");
         httpClientField.setAccessible(true);
@@ -496,7 +496,7 @@ public class AwsConnectorExecutorTest {
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
         Map<String, String> parameters = ImmutableMap
             .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "-1");
         Connector connector = AwsConnector
@@ -508,7 +508,7 @@ public class AwsConnectorExecutorTest {
             .credential(credential)
             .actions(Arrays.asList(predictAction))
             .build();
-        connector.decrypt(PREDICT.name(), (c) -> encryptor.decrypt(c));
+        connector.decrypt(PREDICT.name(), (c, tenantId) -> encryptor.decrypt(c, null), null);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
@@ -539,7 +539,7 @@ public class AwsConnectorExecutorTest {
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
         Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
@@ -549,7 +549,7 @@ public class AwsConnectorExecutorTest {
             .parameters(parameters)
             .credential(credential)
             .build();
-        connector.decrypt(PREDICT.name(), (c) -> encryptor.decrypt(c));
+        connector.decrypt(PREDICT.name(), (c, tenantId) -> encryptor.decrypt(c, null), null);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
@@ -583,7 +583,7 @@ public class AwsConnectorExecutorTest {
             )
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
         Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
@@ -594,7 +594,7 @@ public class AwsConnectorExecutorTest {
             .credential(credential)
             .actions(Arrays.asList(predictAction))
             .build();
-        connector.decrypt(PREDICT.name(), (c) -> encryptor.decrypt(c));
+        connector.decrypt(PREDICT.name(), (c, tenantId) -> encryptor.decrypt(c, null), null);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
@@ -623,7 +623,7 @@ public class AwsConnectorExecutorTest {
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_BEDROCK_EMBEDDING_INPUT)
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
         Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "bedrock");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
@@ -634,7 +634,7 @@ public class AwsConnectorExecutorTest {
             .credential(credential)
             .actions(Arrays.asList(predictAction))
             .build();
-        connector.decrypt(PREDICT.name(), (c) -> encryptor.decrypt(c));
+        connector.decrypt(PREDICT.name(), (c, tenantId) -> encryptor.decrypt(c, null), null);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
@@ -662,7 +662,7 @@ public class AwsConnectorExecutorTest {
             .requestBody("{\"input\": ${parameters.input}}")
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
         Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "bedrock");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
@@ -673,7 +673,7 @@ public class AwsConnectorExecutorTest {
             .credential(credential)
             .actions(Arrays.asList(predictAction))
             .build();
-        connector.decrypt(PREDICT.name(), (c) -> encryptor.decrypt(c));
+        connector.decrypt(PREDICT.name(), (c, tenantId) -> encryptor.decrypt(c, null), null);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
@@ -702,7 +702,7 @@ public class AwsConnectorExecutorTest {
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
         Map<String, String> parameters = ImmutableMap
             .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "5");
         // execute with retry disabled
@@ -717,7 +717,7 @@ public class AwsConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .connectorClientConfig(connectorClientConfig)
             .build();
-        connector.decrypt(PREDICT.name(), (c) -> encryptor.decrypt(c));
+        connector.decrypt(PREDICT.name(), (c, tenantId) -> encryptor.decrypt(c, null), null);
         AwsConnectorExecutor executor = spy(new AwsConnectorExecutor(connector));
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
@@ -751,7 +751,7 @@ public class AwsConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .connectorClientConfig(connectorClientConfig2)
             .build();
-        connector2.decrypt(PREDICT.name(), (c) -> encryptor.decrypt(c));
+        connector2.decrypt(PREDICT.name(), (c, tenantId) -> encryptor.decrypt(c, null), null);
         executor.initialize(connector2);
         executor
             .executeAction(

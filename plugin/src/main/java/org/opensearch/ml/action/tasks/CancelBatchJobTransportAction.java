@@ -139,7 +139,7 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
                                 .onFailure(new IllegalArgumentException("The task ID you provided does not have any associated batch job"));
                         }
                     } catch (Exception e) {
-                        log.error("Failed to parse ml task " + r.getId(), e);
+                        log.error("Failed to parse ml task {}", r.getId(), e);
                         actionListener.onFailure(e);
                     }
                 } else {
@@ -149,12 +149,12 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
                 if (e instanceof IndexNotFoundException) {
                     actionListener.onFailure(new MLResourceNotFoundException("Fail to find task"));
                 } else {
-                    log.error("Failed to get ML task " + taskId, e);
+                    log.error("Failed to get ML task {}", taskId, e);
                     actionListener.onFailure(e);
                 }
-            }), () -> context.restore()));
+            }), context::restore));
         } catch (Exception e) {
-            log.error("Failed to get ML task " + taskId, e);
+            log.error("Failed to get ML task {}", taskId, e);
             actionListener.onFailure(e);
         }
     }
@@ -167,7 +167,7 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
             if (entry.getValue() instanceof String) {
                 parameters.put(entry.getKey(), (String) entry.getValue());
             } else {
-                log.debug("Value for key " + entry.getKey() + " is not a String");
+                log.debug("Value for key {} is not a String", entry.getKey());
             }
         }
 
@@ -198,7 +198,7 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
                         } else if (clusterService.state().metadata().hasIndex(ML_CONNECTOR_INDEX)) {
                             ActionListener<Connector> listener = ActionListener
                                 .wrap(connector -> { executeConnector(connector, mlInput, actionListener); }, e -> {
-                                    log.error("Failed to get connector " + model.getConnectorId(), e);
+                                    log.error("Failed to get connector {}", model.getConnectorId(), e);
                                     actionListener.onFailure(e);
                                 });
                             try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
@@ -233,11 +233,12 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
 
     private void executeConnector(Connector connector, MLInput mlInput, ActionListener<MLCancelBatchJobResponse> actionListener) {
         Optional<ConnectorAction> cancelBatchPredictAction = connector.findAction(CANCEL_BATCH_PREDICT.name());
-        if (!cancelBatchPredictAction.isPresent() || cancelBatchPredictAction.get().getRequestBody() == null) {
+        if (cancelBatchPredictAction.isEmpty() || cancelBatchPredictAction.get().getRequestBody() == null) {
             ConnectorAction connectorAction = ConnectorUtils.createConnectorAction(connector, CANCEL_BATCH_PREDICT);
             connector.addAction(connectorAction);
         }
-        connector.decrypt(CANCEL_BATCH_PREDICT.name(), (credential) -> encryptor.decrypt(credential));
+        // multi-tenancy isn't implemented in batch, so setting null as tenant by default
+        connector.decrypt(CANCEL_BATCH_PREDICT.name(), (credential, tenantId) -> encryptor.decrypt(credential, null), null);
         RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader.initInstance(connector.getProtocol(), connector, Connector.class);
         connectorExecutor.setScriptService(scriptService);
         connectorExecutor.setClusterService(clusterService);
@@ -245,7 +246,7 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
         connectorExecutor.setXContentRegistry(xContentRegistry);
         connectorExecutor.executeAction(CANCEL_BATCH_PREDICT.name(), mlInput, ActionListener.wrap(taskResponse -> {
             processTaskResponse(taskResponse, actionListener);
-        }, e -> { actionListener.onFailure(e); }));
+        }, actionListener::onFailure));
     }
 
     private void processTaskResponse(MLTaskResponse taskResponse, ActionListener<MLCancelBatchJobResponse> actionListener) {
@@ -256,7 +257,7 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
                 if (modelOutput.getStatusCode() != null && modelOutput.getStatusCode().equals(HttpStatus.SC_OK)) {
                     actionListener.onResponse(new MLCancelBatchJobResponse(RestStatus.OK));
                 } else {
-                    log.debug("The status code from remote service is: " + modelOutput.getStatusCode());
+                    log.debug("The status code from remote service is: {}", modelOutput.getStatusCode());
                     actionListener.onFailure(new OpenSearchException("Couldn't cancel the transform job. Please try again"));
                 }
             } else {

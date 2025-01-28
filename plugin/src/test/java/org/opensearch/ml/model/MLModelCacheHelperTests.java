@@ -132,12 +132,6 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
         cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes, true);
     }
 
-    public void testPredictor_NotFoundException() {
-        expectedEx.expect(IllegalArgumentException.class);
-        expectedEx.expectMessage("Model not found in cache");
-        cacheHelper.setPredictor("modelId1", predictor);
-    }
-
     public void testPredictor() {
         cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes, true);
         assertNull(cacheHelper.getPredictor(modelId));

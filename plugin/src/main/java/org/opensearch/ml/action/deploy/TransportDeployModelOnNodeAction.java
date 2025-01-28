@@ -127,6 +127,7 @@ public class TransportDeployModelOnNodeAction extends
 
     private MLDeployModelNodeResponse createDeployModelNodeResponse(MLDeployModelNodesRequest MLDeployModelNodesRequest) {
         MLDeployModelInput deployModelInput = MLDeployModelNodesRequest.getMlDeployModelInput();
+        final String tenantId = MLDeployModelNodesRequest.getMlDeployModelInput().getTenantId();
         String modelId = deployModelInput.getModelId();
         String taskId = deployModelInput.getTaskId();
         String coordinatingNodeId = deployModelInput.getCoordinatingNodeId();
@@ -140,12 +141,13 @@ public class TransportDeployModelOnNodeAction extends
         String localNodeId = clusterService.localNode().getId();
 
         ActionListener<MLForwardResponse> taskDoneListener = ActionListener
-            .wrap(res -> { log.info("deploy model task done " + taskId); }, ex -> {
+            .wrap(res -> { log.info("deploy model task done {}", taskId); }, ex -> {
                 logException("Deploy model task failed: " + taskId, ex, log);
             });
 
         deployModel(
             modelId,
+            tenantId,
             modelContentHash,
             mlTask.getFunctionName(),
             localNodeId,
@@ -159,6 +161,7 @@ public class TransportDeployModelOnNodeAction extends
                     .taskId(taskId)
                     .modelId(modelId)
                     .workerNodeId(clusterService.localNode().getId())
+                    .tenantId(tenantId)
                     .build();
                 MLForwardRequest deployModelDoneMessage = new MLForwardRequest(mlForwardInput);
 
@@ -179,6 +182,7 @@ public class TransportDeployModelOnNodeAction extends
                     .modelId(modelId)
                     .workerNodeId(clusterService.localNode().getId())
                     .error(MLExceptionUtils.getRootCauseMessage(e))
+                    .tenantId(tenantId)
                     .build();
                 MLForwardRequest deployModelDoneMessage = new MLForwardRequest(mlForwardInput);
 
@@ -211,6 +215,7 @@ public class TransportDeployModelOnNodeAction extends
 
     private void deployModel(
         String modelId,
+        String tenantId,
         String modelContentHash,
         FunctionName functionName,
         String localNodeId,
@@ -224,6 +229,7 @@ public class TransportDeployModelOnNodeAction extends
             mlModelManager
                 .deployModel(
                     modelId,
+                    tenantId,
                     modelContentHash,
                     functionName,
                     deployToAllNodes,

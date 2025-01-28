@@ -73,7 +73,8 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
         if (clusterService.state().metadata().hasIndex(ML_CONNECTOR_INDEX)) {
             ActionListener<Connector> listener = ActionListener.wrap(connector -> {
                 if (connectorAccessControlHelper.validateConnectorAccess(client, connector)) {
-                    connector.decrypt(connectorAction, (credential) -> encryptor.decrypt(credential));
+                    // adding tenantID as null, because we are not implement multi-tenancy for this feature yet.
+                    connector.decrypt(connectorAction, (credential, tenantId) -> encryptor.decrypt(credential, null), null);
                     RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader
                         .initInstance(connector.getProtocol(), connector, Connector.class);
                     connectorExecutor.setScriptService(scriptService);

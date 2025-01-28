@@ -735,7 +735,8 @@ public class MLModelCacheHelper {
     private MLModelCache getExistingModelCache(String modelId) {
         MLModelCache modelCache = modelCaches.get(modelId);
         if (modelCache == null) {
-            throw new IllegalArgumentException("Model not found in cache");
+            return getOrCreateModelCache(modelId);
+            // throw new IllegalArgumentException("Model not found in cache");
         }
         return modelCache;
     }

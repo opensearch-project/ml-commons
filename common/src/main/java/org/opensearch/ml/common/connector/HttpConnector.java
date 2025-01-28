@@ -21,7 +21,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.Function;
+import java.util.function.BiFunction;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -300,7 +300,7 @@ public class HttpConnector extends AbstractConnector {
     }
 
     @Override
-    public void update(MLCreateConnectorInput updateContent, Function<String, String> function) {
+    public void update(MLCreateConnectorInput updateContent, BiFunction<String, String, String> function) {
         if (updateContent.getName() != null) {
             this.name = updateContent.getName();
         }
@@ -318,7 +318,7 @@ public class HttpConnector extends AbstractConnector {
         }
         if (updateContent.getCredential() != null && !updateContent.getCredential().isEmpty()) {
             this.credential = updateContent.getCredential();
-            encrypt(function);
+            encrypt(function, this.tenantId);
         }
         if (updateContent.getActions() != null) {
             this.actions = updateContent.getActions();
@@ -377,10 +377,10 @@ public class HttpConnector extends AbstractConnector {
     }
 
     @Override
-    public void decrypt(String action, Function<String, String> function) {
+    public void decrypt(String action, BiFunction<String, String, String> function, String tenantId) {
         Map<String, String> decrypted = new HashMap<>();
         for (String key : credential.keySet()) {
-            decrypted.put(key, function.apply(credential.get(key)));
+            decrypted.put(key, function.apply(credential.get(key), tenantId));
         }
         this.decryptedCredential = decrypted;
         Optional<ConnectorAction> connectorAction = findAction(action);
@@ -400,9 +400,9 @@ public class HttpConnector extends AbstractConnector {
     }
 
     @Override
-    public void encrypt(Function<String, String> function) {
+    public void encrypt(BiFunction<String, String, String> function, String tenantId) {
         for (String key : credential.keySet()) {
-            String encrypted = function.apply(credential.get(key));
+            String encrypted = function.apply(credential.get(key), tenantId);
             credential.put(key, encrypted);
         }
     }

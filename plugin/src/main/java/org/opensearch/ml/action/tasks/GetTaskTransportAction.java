@@ -401,7 +401,8 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
             ConnectorAction connectorAction = ConnectorUtils.createConnectorAction(connector, BATCH_PREDICT_STATUS);
             connector.addAction(connectorAction);
         }
-        connector.decrypt(BATCH_PREDICT_STATUS.name(), (credential) -> encryptor.decrypt(credential));
+        // as we haven't implemented multi-tenancy in batch prediction yet, assigning null as tenantId
+        connector.decrypt(BATCH_PREDICT_STATUS.name(), (credential, tenantId) -> encryptor.decrypt(credential, null), null);
         RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader.initInstance(connector.getProtocol(), connector, Connector.class);
         connectorExecutor.setScriptService(scriptService);
         connectorExecutor.setClusterService(clusterService);
