@@ -598,7 +598,7 @@ public class MLModelManager {
             String version = modelVersion == null ? registerModelInput.getVersion() : modelVersion;
             Instant now = Instant.now();
             if (registerModelInput.getConnector() != null) {
-                registerModelInput.getConnector().encrypt(mlEngine::encrypt);
+                registerModelInput.getConnector().encrypt(mlEngine::encrypt, registerModelInput.getTenantId());
             }
 
             mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(boolResponse -> {
@@ -692,7 +692,7 @@ public class MLModelManager {
             String version = modelVersion == null ? registerModelInput.getVersion() : modelVersion;
             Instant now = Instant.now();
             if (registerModelInput.getConnector() != null) {
-                registerModelInput.getConnector().encrypt(mlEngine::encrypt);
+                registerModelInput.getConnector().encrypt(mlEngine::encrypt, registerModelInput.getTenantId());
             }
             mlIndicesHandler.initModelIndexIfAbsent(ActionListener.runBefore(ActionListener.wrap(res -> {
                 if (!res) {
@@ -2097,7 +2097,7 @@ public class MLModelManager {
                             Connector connector = Connector.createConnector(parser);
                             listener.onResponse(connector);
                         } catch (Exception e) {
-                            log.error("Failed to parse connector:" + connectorId);
+                            log.error("Failed to parse connector:{}", connectorId);
                             listener.onFailure(e);
                         }
                     } else {
