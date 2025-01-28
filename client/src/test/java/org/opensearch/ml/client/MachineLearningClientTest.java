@@ -150,6 +150,11 @@ public class MachineLearningClientTest {
             }
 
             @Override
+            public void predict(String modelId, String tenantId, MLInput mlInput, ActionListener<MLOutput> listener) {
+                listener.onResponse(output);
+            }
+
+            @Override
             public void trainAndPredict(MLInput mlInput, ActionListener<MLOutput> listener) {
                 listener.onResponse(output);
             }
@@ -235,6 +240,11 @@ public class MachineLearningClientTest {
             }
 
             @Override
+            public void undeploy(String[] modelIds, String[] nodeIds, String tenantId, ActionListener<MLUndeployModelsResponse> listener) {
+                listener.onResponse(undeployModelsResponse);
+            }
+
+            @Override
             public void createConnector(MLCreateConnectorInput mlCreateConnectorInput, ActionListener<MLCreateConnectorResponse> listener) {
                 listener.onResponse(createConnectorResponse);
             }
@@ -282,6 +292,11 @@ public class MachineLearningClientTest {
             }
 
             @Override
+            public void deleteAgent(String agentId, String tenantId, ActionListener<DeleteResponse> listener) {
+                listener.onResponse(deleteResponse);
+            }
+
+            @Override
             public void getConfig(String configId, ActionListener<MLConfig> listener) {
                 listener.onResponse(mlConfig);
             }
@@ -320,7 +335,7 @@ public class MachineLearningClientTest {
     public void predict_WithAlgoAndInputDataAndListener() {
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).inputDataset(new DataFrameInputDataset(input)).build();
         ArgumentCaptor<MLOutput> dataFrameArgumentCaptor = ArgumentCaptor.forClass(MLOutput.class);
-        machineLearningClient.predict(null, mlInput, dataFrameActionListener);
+        machineLearningClient.predict(null, null, mlInput, dataFrameActionListener);
         verify(dataFrameActionListener).onResponse(dataFrameArgumentCaptor.capture());
         assertEquals(output, dataFrameArgumentCaptor.getValue());
     }

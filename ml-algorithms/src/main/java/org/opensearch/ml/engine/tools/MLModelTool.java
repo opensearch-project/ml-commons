@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.engine.tools;
 
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+
 import java.util.List;
 import java.util.Map;
 
@@ -17,8 +19,8 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Parser;
-import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
+import org.opensearch.ml.common.spi.tools.WithModelTool;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.utils.StringUtils;
@@ -33,7 +35,7 @@ import lombok.extern.log4j.Log4j2;
  */
 @Log4j2
 @ToolAnnotation(MLModelTool.TYPE)
-public class MLModelTool implements Tool {
+public class MLModelTool implements WithModelTool {
     public static final String TYPE = "MLModelTool";
     public static final String RESPONSE_FIELD = "response_field";
     public static final String MODEL_ID_FIELD = "model_id";
@@ -85,16 +87,23 @@ public class MLModelTool implements Tool {
     @Override
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
         RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
-        ActionRequest request = new MLPredictionTaskRequest(
-            modelId,
-            MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build()
-        );
+        String tenantId = null;
+        if (parameters != null) {
+            tenantId = parameters.get(TENANT_ID_FIELD);
+        }
+
+        ActionRequest request = MLPredictionTaskRequest
+            .builder()
+            .modelId(modelId)
+            .mlInput(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inputDataSet).build())
+            .tenantId(tenantId)
+            .build();
         client.execute(MLPredictionTaskAction.INSTANCE, request, ActionListener.wrap(r -> {
             ModelTensorOutput modelTensorOutput = (ModelTensorOutput) r.getOutput();
             modelTensorOutput.getMlModelOutputs();
             listener.onResponse((T) outputParser.parse(modelTensorOutput.getMlModelOutputs()));
         }, e -> {
-            log.error("Failed to run model " + modelId, e);
+            log.error("Failed to run model {}", modelId, e);
             listener.onFailure(e);
         }));
     }
@@ -127,7 +136,7 @@ public class MLModelTool implements Tool {
         return true;
     }
 
-    public static class Factory implements Tool.Factory<MLModelTool> {
+    public static class Factory implements WithModelTool.Factory<MLModelTool> {
         private Client client;
 
         private static Factory INSTANCE;
@@ -171,6 +180,11 @@ public class MLModelTool implements Tool {
         @Override
         public String getDefaultVersion() {
             return null;
+        }
+
+        @Override
+        public List<String> getAllModelKeys() {
+            return List.of(MODEL_ID_FIELD);
         }
     }
 }

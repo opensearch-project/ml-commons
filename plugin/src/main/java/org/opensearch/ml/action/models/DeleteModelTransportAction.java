@@ -15,20 +15,36 @@ import static org.opensearch.ml.common.MLModel.FUNCTION_NAME_FIELD;
 import static org.opensearch.ml.common.MLModel.IS_HIDDEN_FIELD;
 import static org.opensearch.ml.common.MLModel.MODEL_ID_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.getErrorMessage;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_SAFE_DELETE_WITH_USAGE_CHECK;
 import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Deque;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 
+import org.apache.commons.lang3.tuple.Pair;
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.ActionRequest;
+import org.opensearch.action.ActionType;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.ingest.GetPipelineAction;
+import org.opensearch.action.ingest.GetPipelineRequest;
+import org.opensearch.action.search.GetSearchPipelineAction;
+import org.opensearch.action.search.GetSearchPipelineRequest;
+import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.client.Client;
@@ -37,11 +53,14 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
+import org.opensearch.common.xcontent.XContentHelper;
+import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.index.query.TermsQueryBuilder;
@@ -54,6 +73,7 @@ import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
 import org.opensearch.ml.common.transport.model.MLModelGetRequest;
+import org.opensearch.ml.engine.utils.AgentModelsSearcher;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
@@ -62,6 +82,7 @@ import org.opensearch.remote.metadata.client.DeleteDataObjectRequest;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
+import org.opensearch.search.SearchHit;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
@@ -80,6 +101,10 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     static final String BULK_FAILURE_MSG = "Bulk failure while deleting model of ";
     static final String SEARCH_FAILURE_MSG = "Search failure while deleting model of ";
     static final String OS_STATUS_EXCEPTION_MESSAGE = "Failed to delete all model chunks";
+    static final String PIPELINE_TARGET_MODEL_KEY = "model_id";
+
+    Boolean isSafeDelete;
+
     final Client client;
     final SdkClient sdkClient;
     final NamedXContentRegistry xContentRegistry;
@@ -89,6 +114,8 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
 
     final ModelAccessControlHelper modelAccessControlHelper;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
+    final AgentModelsSearcher agentModelsSearcher;
 
     @Inject
     public DeleteModelTransportAction(
@@ -100,6 +127,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         NamedXContentRegistry xContentRegistry,
         ClusterService clusterService,
         ModelAccessControlHelper modelAccessControlHelper,
+        AgentModelsSearcher agentModelsSearcher,
         MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLModelDeleteAction.NAME, transportService, actionFilters, MLModelDeleteRequest::new);
@@ -108,6 +136,10 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         this.xContentRegistry = xContentRegistry;
         this.clusterService = clusterService;
         this.modelAccessControlHelper = modelAccessControlHelper;
+        this.agentModelsSearcher = agentModelsSearcher;
+        this.settings = settings;
+        isSafeDelete = ML_COMMONS_SAFE_DELETE_WITH_USAGE_CHECK.get(settings);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_SAFE_DELETE_WITH_USAGE_CHECK, it -> isSafeDelete = it);
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
@@ -193,7 +225,19 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                                         )
                                                     );
                                             } else if (isModelNotDeployed(mlModelState)) {
-                                                deleteModel(modelId, tenantId, mlModel.getAlgorithm().name(), isHidden, actionListener);
+                                                if (isSafeDelete) {
+                                                    // We only check downstream task when it's not hidden and cluster setting is true.
+                                                    checkDownstreamTaskBeforeDeleteModel(
+                                                        modelId,
+                                                        tenantId,
+                                                        mlModel.getAlgorithm().name(),
+                                                        isHidden,
+                                                        actionListener
+                                                    );
+                                                } else {
+                                                    deleteModel(modelId, tenantId, mlModel.getAlgorithm().name(), isHidden, actionListener);
+                                                }
+                                                // deleteModel(modelId, tenantId, mlModel.getAlgorithm().name(), isHidden, actionListener);
                                             } else {
                                                 wrappedListener
                                                     .onFailure(
@@ -305,6 +349,107 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         });
     }
 
+    private void checkDownstreamTaskBeforeDeleteModel(
+        String modelId,
+        String tenantId,
+        String algorithm,
+        Boolean isHidden,
+        ActionListener<DeleteResponse> actionListener
+    ) {
+        // Now checks 3 resources associated with the model id 1. Agent 2. Search pipeline 3. ingest pipeline
+        CountDownLatch countDownLatch = new CountDownLatch(3);
+        AtomicBoolean noneBlocked = new AtomicBoolean(true);
+        ConcurrentLinkedQueue<String> errorMessages = new ConcurrentLinkedQueue<>();
+        ActionListener<Boolean> countDownActionListener = ActionListener.wrap(b -> {
+            countDownLatch.countDown();
+            noneBlocked.compareAndSet(true, b);
+            if (countDownLatch.getCount() == 0) {
+                if (noneBlocked.get()) {
+                    deleteModel(modelId, tenantId, algorithm, isHidden, actionListener);
+                }
+            }
+        }, e -> {
+            countDownLatch.countDown();
+            noneBlocked.set(false);
+            errorMessages.add(e.getMessage());
+            actionListener.onFailure(new OpenSearchStatusException(e.getMessage(), RestStatus.CONFLICT));
+
+        });
+        checkAgentBeforeDeleteModel(modelId, countDownActionListener);
+        checkIngestPipelineBeforeDeleteModel(modelId, countDownActionListener);
+        checkSearchPipelineBeforeDeleteModel(modelId, countDownActionListener);
+    }
+
+    private void checkAgentBeforeDeleteModel(String modelId, ActionListener<Boolean> actionListener) {
+        // check whether agent are using them
+        SearchRequest searchAgentRequest = agentModelsSearcher.constructQueryRequestToSearchModelIdInsideAgent(modelId);
+        client.search(searchAgentRequest, ActionListener.wrap(searchResponse -> {
+            SearchHit[] searchHits = searchResponse.getHits().getHits();
+            if (searchHits.length == 0) {
+                actionListener.onResponse(true);
+            } else {
+                String errorMessage = formatAgentErrorMessage(searchHits);
+                actionListener.onFailure(new OpenSearchStatusException(errorMessage, RestStatus.CONFLICT));
+            }
+
+        }, e -> {
+            if (e instanceof IndexNotFoundException) {
+                actionListener.onResponse(true);
+                return;
+            }
+            log.error("Failed to delete ML Model: " + modelId, e);
+            actionListener.onFailure(e);
+
+        }));
+    }
+
+    private void checkIngestPipelineBeforeDeleteModel(String modelId, ActionListener<Boolean> actionListener) {
+        checkPipelineBeforeDeleteModel(modelId, actionListener, "ingest", GetPipelineRequest::new, GetPipelineAction.INSTANCE);
+
+    }
+
+    private void checkSearchPipelineBeforeDeleteModel(String modelId, ActionListener<Boolean> actionListener) {
+        checkPipelineBeforeDeleteModel(modelId, actionListener, "search", GetSearchPipelineRequest::new, GetSearchPipelineAction.INSTANCE);
+
+    }
+
+    private void checkPipelineBeforeDeleteModel(
+        String modelId,
+        ActionListener<Boolean> actionListener,
+        String pipelineType,
+        Supplier<ActionRequest> requestSupplier,
+        ActionType actionType
+    ) {
+        ActionRequest request = requestSupplier.get();
+        client.execute(actionType, request, ActionListener.wrap(pipelineResponse -> {
+            Map<String, Object> allConfigMap = XContentHelper.convertToMap(JsonXContent.jsonXContent, pipelineResponse.toString(), true);
+            List<String> allDependentPipelineIds = findDependentPipelinesEasy(allConfigMap, modelId);
+            if (allDependentPipelineIds.isEmpty()) {
+                actionListener.onResponse(true);
+            } else {
+                actionListener
+                    .onFailure(
+                        new OpenSearchStatusException(
+                            String
+                                .format(
+                                    Locale.ROOT,
+                                    "%d %s pipelines are still using this model, please delete or update the pipelines first: %s",
+                                    allDependentPipelineIds.size(),
+                                    pipelineType,
+                                    Arrays.toString(allDependentPipelineIds.toArray(new String[0]))
+                                ),
+                            RestStatus.CONFLICT
+                        )
+                    );
+            }
+        }, e -> {
+            log.error("Failed to delete ML Model: " + modelId, e);
+            actionListener.onFailure(e);
+
+        }));
+
+    }
+
     private void deleteModelChunksAndController(
         ActionListener<DeleteResponse> actionListener,
         String modelId,
@@ -408,6 +553,71 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
             && !mlModelState.equals(MLModelState.DEPLOYED)
             && !mlModelState.equals(MLModelState.DEPLOYING)
             && !mlModelState.equals(MLModelState.PARTIALLY_DEPLOYED);
+    }
+
+    private List<String> findDependentPipelinesEasy(Map<String, Object> allConfigMap, String candidateModelId) {
+        List<String> dependentPipelineConfigurations = new ArrayList<>();
+        for (Map.Entry<String, Object> entry : allConfigMap.entrySet()) {
+            String id = entry.getKey();
+            Map<String, Object> config = (Map<String, Object>) entry.getValue();
+            if (searchThroughConfig(config, candidateModelId)) {
+                dependentPipelineConfigurations.add(id);
+            }
+        }
+        return dependentPipelineConfigurations;
+    }
+
+    // This method is to go through the pipeline configs and the configuration is a map of string to objects.
+    // Objects can be a list or a map. we will search exhaustively through the configuration for any match of the candidateId.
+    private Boolean searchThroughConfig(Object searchCandidate, String candidateId) {
+        // Use a stack to store the elements to be processed
+        Deque<Pair<String, Object>> stack = new ArrayDeque<>();
+        stack.push(Pair.of("", searchCandidate));
+
+        while (!stack.isEmpty()) {
+            // Pop an item from the stack
+            Pair<String, Object> current = stack.pop();
+            String currentKey = current.getLeft();
+            Object currentCandidate = current.getRight();
+
+            if (currentCandidate instanceof String && candidateId.equals(currentCandidate)) {
+                // Check for a match
+                if (PIPELINE_TARGET_MODEL_KEY.equals(currentKey)) {
+                    return true;
+                }
+            } else if (currentCandidate instanceof List<?>) {
+                // Push all elements in the list onto the stack
+                for (Object v : (List<?>) currentCandidate) {
+                    stack.push(Pair.of(currentKey, v));
+                }
+            } else if (currentCandidate instanceof Map<?, ?>) {
+                // Push all values in the map onto the stack
+                for (Map.Entry<?, ?> entry : ((Map<?, ?>) currentCandidate).entrySet()) {
+                    String key = (String) entry.getKey();
+                    Object value = entry.getValue();
+                    stack.push(Pair.of(key, value));
+                }
+            }
+        }
+
+        // If no match is found
+        return false;
+    }
+
+    private String formatAgentErrorMessage(SearchHit[] hits) {
+        List<String> agentIds = new ArrayList<>();
+        for (SearchHit hit : hits) {
+            Map<String, Object> sourceAsMap = hit.getSourceAsMap();
+            agentIds.add(hit.getId());
+        }
+        return String
+            .format(
+                Locale.ROOT,
+                "%d agents are still using this model, please delete or update the agents first, all visible agents are: %s",
+                hits.length,
+                Arrays.toString(agentIds.toArray(new String[0]))
+            );
+
     }
 
     // this method is only to stub static method.

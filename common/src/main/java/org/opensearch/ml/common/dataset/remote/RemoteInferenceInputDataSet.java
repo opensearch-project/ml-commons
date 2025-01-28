@@ -21,6 +21,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
 
+@Setter
 @Getter
 @InputDataSet(MLInputDataType.REMOTE)
 public class RemoteInferenceInputDataSet extends MLInputDataset {
@@ -45,7 +46,7 @@ public class RemoteInferenceInputDataSet extends MLInputDataset {
         super(MLInputDataType.REMOTE);
         Version streamInputVersion = streamInput.getVersion();
         if (streamInput.readBoolean()) {
-            parameters = streamInput.readMap(s -> s.readString(), s -> s.readString());
+            parameters = streamInput.readMap(StreamInput::readString, StreamInput::readString);
         }
         if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_CLIENT_CONFIG)) {
             if (streamInput.readBoolean()) {

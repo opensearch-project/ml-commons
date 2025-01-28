@@ -197,6 +197,7 @@ import org.opensearch.ml.engine.tools.IndexMappingTool;
 import org.opensearch.ml.engine.tools.MLModelTool;
 import org.opensearch.ml.engine.tools.SearchIndexTool;
 import org.opensearch.ml.engine.tools.VisualizationsTool;
+import org.opensearch.ml.engine.utils.AgentModelsSearcher;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.memory.ConversationalMemoryHandler;
@@ -285,6 +286,7 @@ import org.opensearch.ml.rest.RestMemorySearchConversationsAction;
 import org.opensearch.ml.rest.RestMemorySearchInteractionsAction;
 import org.opensearch.ml.rest.RestMemoryUpdateConversationAction;
 import org.opensearch.ml.rest.RestMemoryUpdateInteractionAction;
+import org.opensearch.ml.searchext.MLInferenceRequestParametersExtBuilder;
 import org.opensearch.ml.settings.MLCommonsSettings;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.stats.MLClusterLevelStat;
@@ -366,6 +368,7 @@ public class MachineLearningPlugin extends Plugin
     private IndexUtils indexUtils;
     private ModelHelper modelHelper;
     private DiscoveryNodeHelper nodeHelper;
+    private AgentModelsSearcher agentModelsSearcher;
 
     private MLModelChunkUploader mlModelChunkUploader;
     private MLEngine mlEngine;
@@ -657,6 +660,8 @@ public class MachineLearningPlugin extends Plugin
             toolFactories.putAll(externalToolFactories);
         }
 
+        agentModelsSearcher = new AgentModelsSearcher(toolFactories);
+
         MLMemoryManager memoryManager = new MLMemoryManager(client, clusterService, new ConversationMetaIndex(client, clusterService));
         Map<String, Memory.Factory> memoryFactoryMap = new HashMap<>();
         ConversationIndexMemory.Factory conversationIndexMemoryFactory = new ConversationIndexMemory.Factory();
@@ -665,11 +670,13 @@ public class MachineLearningPlugin extends Plugin
 
         MLAgentExecutor agentExecutor = new MLAgentExecutor(
             client,
+            sdkClient,
             settings,
             clusterService,
             xContentRegistry,
             toolFactories,
-            memoryFactoryMap
+            memoryFactoryMap,
+            mlFeatureEnabledSetting.isMultiTenancyEnabled()
         );
         MLEngineClassLoader.register(FunctionName.LOCAL_SAMPLE_CALCULATOR, localSampleCalculator);
         MLEngineClassLoader.register(FunctionName.AGENT, agentExecutor);
@@ -697,12 +704,14 @@ public class MachineLearningPlugin extends Plugin
         MLCommonsClusterManagerEventListener clusterManagerEventListener = new MLCommonsClusterManagerEventListener(
             clusterService,
             client,
+            sdkClient,
             settings,
             threadPool,
             nodeHelper,
             mlIndicesHandler,
             encryptor,
-            mlModelAutoRedeployer
+            mlModelAutoRedeployer,
+            mlFeatureEnabledSetting
         );
 
         // TODO move this into MLFeatureEnabledSetting
@@ -721,6 +730,7 @@ public class MachineLearningPlugin extends Plugin
                 mlStats,
                 mlTaskManager,
                 mlModelManager,
+                agentModelsSearcher,
                 mlIndicesHandler,
                 mlInputDatasetHandler,
                 mlTrainingTaskRunner,
@@ -772,7 +782,11 @@ public class MachineLearningPlugin extends Plugin
         );
         RestMLRegisterAgentAction restMLRegisterAgentAction = new RestMLRegisterAgentAction(mlFeatureEnabledSetting);
         RestMLDeployModelAction restMLDeployModelAction = new RestMLDeployModelAction(mlFeatureEnabledSetting);
-        RestMLUndeployModelAction restMLUndeployModelAction = new RestMLUndeployModelAction(clusterService, settings);
+        RestMLUndeployModelAction restMLUndeployModelAction = new RestMLUndeployModelAction(
+            clusterService,
+            settings,
+            mlFeatureEnabledSetting
+        );
         RestMLRegisterModelMetaAction restMLRegisterModelMetaAction = new RestMLRegisterModelMetaAction(clusterService, settings);
         RestMLUploadModelChunkAction restMLUploadModelChunkAction = new RestMLUploadModelChunkAction(clusterService, settings);
         RestMLRegisterModelGroupAction restMLCreateModelGroupAction = new RestMLRegisterModelGroupAction(mlFeatureEnabledSetting);
@@ -1027,6 +1041,7 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_MAX_BATCH_INFERENCE_TASKS,
                 MLCommonsSettings.ML_COMMONS_MAX_BATCH_INGESTION_TASKS,
                 MLCommonsSettings.ML_COMMONS_BATCH_INGESTION_BULK_SIZE,
+                MLCommonsSettings.ML_COMMONS_SAFE_DELETE_WITH_USAGE_CHECK,
                 MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
                 MLCommonsSettings.REMOTE_METADATA_TYPE,
                 MLCommonsSettings.REMOTE_METADATA_ENDPOINT,
@@ -1052,6 +1067,15 @@ public class MachineLearningPlugin extends Plugin
                     GenerativeQAParamExtBuilder.PARAMETER_NAME,
                     input -> new GenerativeQAParamExtBuilder(input),
                     parser -> GenerativeQAParamExtBuilder.parse(parser)
+                )
+            );
+
+        searchExts
+            .add(
+                new SearchPlugin.SearchExtSpec<>(
+                    MLInferenceRequestParametersExtBuilder.NAME,
+                    input -> new MLInferenceRequestParametersExtBuilder(input),
+                    parser -> MLInferenceRequestParametersExtBuilder.parse(parser)
                 )
             );
 

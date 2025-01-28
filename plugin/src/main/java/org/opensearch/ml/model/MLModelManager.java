@@ -456,7 +456,7 @@ public class MLModelManager {
                     }
                 } else {
                     Exception e = SdkClientUtils.unwrapAndConvertToException(throwable);
-                    if (e instanceof IndexNotFoundException) {
+                    if (ExceptionsHelper.unwrap(e, IndexNotFoundException.class) != null) {
                         log.error("Model group Index is missing");
                         handleException(
                             mlRegisterModelInput.getFunctionName(),

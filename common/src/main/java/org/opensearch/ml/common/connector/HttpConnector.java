@@ -242,9 +242,7 @@ public class HttpConnector extends AbstractConnector {
         if (input.readBoolean()) {
             this.connectorClientConfig = new ConnectorClientConfig(input);
         }
-        if (streamInputVersion.onOrAfter(VERSION_2_19_0)) {
-            this.tenantId = input.readOptionalString();
-        }
+        this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
     }
 
     @Override

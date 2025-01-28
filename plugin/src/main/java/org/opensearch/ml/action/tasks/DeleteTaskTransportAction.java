@@ -87,6 +87,7 @@ public class DeleteTaskTransportAction extends HandledTransportAction<ActionRequ
             .index(ML_TASK_INDEX)
             .id(taskId)
             .fetchSourceContext(fetchSourceContext)
+            .tenantId(tenantId)
             .build();
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
@@ -156,7 +157,7 @@ public class DeleteTaskTransportAction extends HandledTransportAction<ActionRequ
             if (mlTask.getState() == MLTaskState.RUNNING) {
                 actionListener.onFailure(new Exception("Task cannot be deleted in running state. Try after some time."));
             } else {
-                executeDelete(taskId, actionListener);
+                executeDelete(taskId, tenantId, actionListener);
             }
         } catch (Exception e) {
             log.error("Failed to parse ML task {}", taskId, e);
@@ -164,12 +165,14 @@ public class DeleteTaskTransportAction extends HandledTransportAction<ActionRequ
         }
     }
 
-    private void executeDelete(String taskId, ActionListener<DeleteResponse> actionListener) {
+    private void executeDelete(String taskId, String tenantId, ActionListener<DeleteResponse> actionListener) {
         DeleteRequest deleteRequest = new DeleteRequest(ML_TASK_INDEX, taskId);
 
         try {
             sdkClient
-                .deleteDataObjectAsync(DeleteDataObjectRequest.builder().index(deleteRequest.index()).id(deleteRequest.id()).build())
+                .deleteDataObjectAsync(
+                    DeleteDataObjectRequest.builder().index(deleteRequest.index()).id(deleteRequest.id()).tenantId(tenantId).build()
+                )
                 .whenComplete((deleteDataObjectResponse, throwable) -> {
                     if (throwable != null) {
                         handleDeleteError(throwable, taskId, actionListener);

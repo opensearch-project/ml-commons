@@ -167,6 +167,7 @@ public final class MLCommonsSettings {
                     "^https://api\\.sagemaker\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
                     "^https://api\\.openai\\.com/.*$",
                     "^https://api\\.cohere\\.ai/.*$",
+                    "^https://api\\.deepseek\\.com/.*$",
                     "^https://bedrock-runtime\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
                     "^https://bedrock-agent-runtime\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
                     "^https://bedrock\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
@@ -272,6 +273,9 @@ public final class MLCommonsSettings {
     public static final Setting<Boolean> ML_COMMONS_CONTROLLER_ENABLED = Setting
         .boolSetting("plugins.ml_commons.controller_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
+    // This flag is the determine whether we need to check downstream task before deleting a model.
+    public static final Setting<Boolean> ML_COMMONS_SAFE_DELETE_WITH_USAGE_CHECK = Setting
+        .boolSetting("plugins.ml_commons.safe_delete_model", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
     /**
      * Indicates whether multi-tenancy is enabled in ML Commons.
      *

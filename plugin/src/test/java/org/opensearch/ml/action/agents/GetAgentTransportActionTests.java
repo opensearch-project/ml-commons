@@ -45,6 +45,9 @@ import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.transport.agent.MLAgentGetRequest;
 import org.opensearch.ml.common.transport.agent.MLAgentGetResponse;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
@@ -57,6 +60,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
 
     @Mock
     private Client client;
+    SdkClient sdkClient;
     @Mock
     ThreadPool threadPool;
 
@@ -81,11 +85,23 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
     ThreadContext threadContext;
     MLAgent mlAgent;
 
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
+        sdkClient = SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap());
         getAgentTransportAction = spy(
-            new GetAgentTransportAction(transportService, actionFilters, client, clusterService, xContentRegistry)
+            new GetAgentTransportAction(
+                transportService,
+                actionFilters,
+                client,
+                sdkClient,
+                clusterService,
+                xContentRegistry,
+                mlFeatureEnabledSetting
+            )
         );
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
@@ -93,7 +109,6 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
         when(clusterService.getSettings()).thenReturn(settings);
-
     }
 
     @Test
@@ -102,7 +117,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
 
         ActionListener<MLAgentGetResponse> actionListener = mock(ActionListener.class);
 
-        MLAgentGetRequest getRequest = new MLAgentGetRequest(agentId, true);
+        MLAgentGetRequest getRequest = new MLAgentGetRequest(agentId, true, null);
 
         Task task = mock(Task.class);
 
@@ -117,7 +132,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
         getAgentTransportAction.doExecute(task, getRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Failed to get ML agent " + agentId, argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to get data object from index .plugins-ml-agent", argumentCaptor.getValue().getMessage());
     }
 
     @Test
@@ -126,7 +141,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
 
         ActionListener<MLAgentGetResponse> actionListener = mock(ActionListener.class);
 
-        MLAgentGetRequest getRequest = new MLAgentGetRequest(agentId, true);
+        MLAgentGetRequest getRequest = new MLAgentGetRequest(agentId, true, null);
 
         Task task = mock(Task.class);
 
@@ -150,7 +165,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
 
         ActionListener<MLAgentGetResponse> actionListener = mock(ActionListener.class);
 
-        MLAgentGetRequest getRequest = new MLAgentGetRequest(agentId, true);
+        MLAgentGetRequest getRequest = new MLAgentGetRequest(agentId, true, null);
 
         Task task = mock(Task.class);
 
@@ -168,7 +183,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
         getAgentTransportAction.doExecute(task, getRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Failed to find agent with the provided agent id: " + agentId, argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to get data object from index .plugins-ml-agent", argumentCaptor.getValue().getMessage());
     }
 
     @Test
@@ -177,7 +192,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
         Task task = mock(Task.class);
         ActionListener<MLAgentGetResponse> actionListener = mock(ActionListener.class);
 
-        MLAgentGetRequest getRequest = new MLAgentGetRequest(agentId, true);
+        MLAgentGetRequest getRequest = new MLAgentGetRequest(agentId, true, null);
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
             listener.onFailure(new RuntimeException("Failed to get ML agent " + agentId));
@@ -186,7 +201,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
         getAgentTransportAction.doExecute(task, getRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Failed to get ML agent " + agentId, argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to get data object from index .plugins-ml-agent", argumentCaptor.getValue().getMessage());
     }
 
     @Test
@@ -194,7 +209,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
         String agentId = "test-agent-id-NullResponse";
         Task task = mock(Task.class);
         ActionListener<MLAgentGetResponse> actionListener = mock(ActionListener.class);
-        MLAgentGetRequest getRequest = new MLAgentGetRequest(agentId, true);
+        MLAgentGetRequest getRequest = new MLAgentGetRequest(agentId, true, null);
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
             listener.onResponse(null);
@@ -211,14 +226,16 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
         String agentId = "test-agent-id";
 
         ActionListener<MLAgentGetResponse> actionListener = mock(ActionListener.class);
-        MLAgentGetRequest getRequest = new MLAgentGetRequest(agentId, true);
+        MLAgentGetRequest getRequest = new MLAgentGetRequest(agentId, true, null);
         Task task = mock(Task.class);
         GetAgentTransportAction getAgentTransportActionNullContext = new GetAgentTransportAction(
             transportService,
             actionFilters,
             client,
+            sdkClient,
             clusterService,
-            xContentRegistry
+            xContentRegistry,
+            mlFeatureEnabledSetting
         );
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenThrow(new RuntimeException());
@@ -236,11 +253,11 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
 
     @Test
     public void testDoExecute_NoAgentId() throws IOException {
-        GetResponse getResponse = prepareMLAgent(null, false);
+        GetResponse getResponse = prepareMLAgent(null, false, null);
         String agentId = "test-agent-id";
 
         ActionListener<MLAgentGetResponse> actionListener = mock(ActionListener.class);
-        MLAgentGetRequest request = new MLAgentGetRequest(agentId, true);
+        MLAgentGetRequest request = new MLAgentGetRequest(agentId, true, null);
         Task task = mock(Task.class);
 
         doAnswer(invocation -> {
@@ -260,9 +277,9 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
     public void testDoExecute_Success() throws IOException {
 
         String agentId = "test-agent-id";
-        GetResponse getResponse = prepareMLAgent(agentId, false);
+        GetResponse getResponse = prepareMLAgent(agentId, false, null);
         ActionListener<MLAgentGetResponse> actionListener = mock(ActionListener.class);
-        MLAgentGetRequest request = new MLAgentGetRequest(agentId, true);
+        MLAgentGetRequest request = new MLAgentGetRequest(agentId, true, null);
         Task task = mock(Task.class);
 
         doAnswer(invocation -> {
@@ -275,20 +292,23 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(any(MLAgentGetResponse.class));
     }
 
-    public GetResponse prepareMLAgent(String agentId, boolean isHidden) throws IOException {
+    public GetResponse prepareMLAgent(String agentId, boolean isHidden, String tenantId) throws IOException {
+
+        new MLToolSpec("test", "test", "test", Collections.emptyMap(), false, Collections.emptyMap(), null);
 
         mlAgent = new MLAgent(
             "test",
             MLAgentType.CONVERSATIONAL.name(),
             "test",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
-            List.of(new MLToolSpec("test", "test", "test", Collections.emptyMap(), false, Collections.emptyMap())),
+            List.of(new MLToolSpec("test", "test", "test", Collections.emptyMap(), false, Collections.emptyMap(), null)),
             Map.of("test", "test"),
             new MLMemorySpec("test", "123", 0),
             Instant.EPOCH,
             Instant.EPOCH,
             "test",
-            isHidden
+            isHidden,
+            tenantId
         );
 
         XContentBuilder content = mlAgent.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
@@ -302,9 +322,9 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
     public void testRemoveModelIDIfHiddenAndNotSuperUser() throws IOException {
 
         String agentId = "test-agent-id";
-        GetResponse getResponse = prepareMLAgent(agentId, true);
+        GetResponse getResponse = prepareMLAgent(agentId, true, null);
         ActionListener<MLAgentGetResponse> actionListener = mock(ActionListener.class);
-        MLAgentGetRequest request = new MLAgentGetRequest(agentId, true);
+        MLAgentGetRequest request = new MLAgentGetRequest(agentId, true, null);
         Task task = mock(Task.class);
 
         doAnswer(invocation -> {
@@ -325,9 +345,9 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
     public void testNotRemoveModelIDIfHiddenAndSuperUser() throws IOException {
 
         String agentId = "test-agent-id";
-        GetResponse getResponse = prepareMLAgent(agentId, true);
+        GetResponse getResponse = prepareMLAgent(agentId, true, null);
         ActionListener<MLAgentGetResponse> actionListener = mock(ActionListener.class);
-        MLAgentGetRequest request = new MLAgentGetRequest(agentId, true);
+        MLAgentGetRequest request = new MLAgentGetRequest(agentId, true, null);
         Task task = mock(Task.class);
 
         doAnswer(invocation -> {
