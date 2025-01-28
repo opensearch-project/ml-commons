@@ -195,10 +195,10 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
             .build();
 
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(mlModel);
             return null;
-        }).when(mlModelManager).getModel(any(), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(), any(), any(), any(), isA(ActionListener.class));
 
         doReturn(true).when(transportUndeployModelsAction).isSuperAdminUserWrapper(clusterService, client);
 
@@ -226,7 +226,7 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
 
         String[] modelIds = new String[] { modelId };
         String[] nodeIds = new String[] { "test_node_id1", "test_node_id2" };
-        MLUndeployModelsRequest request = new MLUndeployModelsRequest(modelIds, nodeIds);
+        MLUndeployModelsRequest request = new MLUndeployModelsRequest(modelIds, nodeIds, null);
 
         transportUndeployModelsAction.doExecute(task, request, actionListener);
 
@@ -268,10 +268,10 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
             .build();
 
         doAnswer(invocation -> {
-            ActionListener<MLModel> listener = invocation.getArgument(3);
+            ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(mlModel);
             return null;
-        }).when(mlModelManager).getModel(any(), any(), any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(), any(), any(),any(), isA(ActionListener.class));
 
         doReturn(true).when(transportUndeployModelsAction).isSuperAdminUserWrapper(clusterService, client);
 
@@ -293,7 +293,7 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
 
         String[] modelIds = new String[] { modelId };
         String[] nodeIds = new String[] { "test_node_id1", "test_node_id2" };
-        MLUndeployModelsRequest request = new MLUndeployModelsRequest(modelIds, nodeIds);
+        MLUndeployModelsRequest request = new MLUndeployModelsRequest(modelIds, nodeIds, null);
 
         transportUndeployModelsAction.doExecute(task, request, actionListener);
 
