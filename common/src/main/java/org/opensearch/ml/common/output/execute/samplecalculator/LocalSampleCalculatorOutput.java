@@ -39,9 +39,11 @@ public class LocalSampleCalculatorOutput implements Output {
 
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
+        builder.startObject();
         if (result != null) {
             builder.field("result", result);
         }
+        builder.endObject();
         return builder;
     }
 }

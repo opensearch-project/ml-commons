@@ -15,12 +15,16 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.utils.TestHelper.getAnomalyLocalizationRestRequest;
 import static org.opensearch.ml.utils.TestHelper.getExecuteAgentRestRequest;
 import static org.opensearch.ml.utils.TestHelper.getLocalSampleCalculatorRestRequest;
 import static org.opensearch.ml.utils.TestHelper.getMetricsCorrelationRestRequest;
 
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
@@ -32,8 +36,13 @@ import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.input.Input;
+import org.opensearch.ml.common.output.execute.anomalylocalization.AnomalyLocalizationOutput;
+import org.opensearch.ml.common.output.execute.anomalylocalization.AnomalyLocalizationOutput.Bucket;
+import org.opensearch.ml.common.output.execute.anomalylocalization.AnomalyLocalizationOutput.Result;
+import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalculatorOutput;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
@@ -336,5 +345,80 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
         String expectedError =
             "{\"error\":{\"reason\":\"Invalid Request\",\"details\":\"Illegal Argument Exception\",\"type\":\"IllegalArgumentException\"},\"status\":400}";
         assertEquals(expectedError, response.content().utf8ToString());
+    }
+
+    public void testLocalSampleCalculatorExecutionResponse() throws Exception {
+        RestRequest request = getLocalSampleCalculatorRestRequest();
+        XContentBuilder builder = XContentFactory.jsonBuilder();
+        when(channel.newBuilder()).thenReturn(builder);
+        doAnswer(invocation -> {
+            ActionListener<MLExecuteTaskResponse> actionListener = invocation.getArgument(2);
+            LocalSampleCalculatorOutput output = LocalSampleCalculatorOutput.builder().totalSum(3.0).build();
+            MLExecuteTaskResponse response = MLExecuteTaskResponse
+                .builder()
+                .output(output)
+                .functionName(FunctionName.LOCAL_SAMPLE_CALCULATOR)
+                .build();
+            actionListener.onResponse(response);
+            return null;
+        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(), any());
+        doNothing().when(channel).sendResponse(any());
+        restMLExecuteAction.handleRequest(request, channel, client);
+
+        ArgumentCaptor<RestResponse> responseCaptor = ArgumentCaptor.forClass(RestResponse.class);
+        verify(channel).sendResponse(responseCaptor.capture());
+        BytesRestResponse response = (BytesRestResponse) responseCaptor.getValue();
+        assertEquals(RestStatus.OK, response.status());
+        assertEquals("{\"result\":3.0}", response.content().utf8ToString());
+    }
+
+    public void testAnomalyLocalizationExecutionResponse() throws Exception {
+        RestRequest request = getAnomalyLocalizationRestRequest();
+        XContentBuilder builder = XContentFactory.jsonBuilder();
+        when(channel.newBuilder()).thenReturn(builder);
+        doAnswer(invocation -> {
+            ActionListener<MLExecuteTaskResponse> actionListener = invocation.getArgument(2);
+
+            Bucket bucket1 = new Bucket();
+            bucket1.setStartTime(1620630000000L);
+            bucket1.setEndTime(1620716400000L);
+            bucket1.setOverallAggValue(65.0);
+
+            Result result = new Result();
+            result.setBuckets(Arrays.asList(bucket1));
+
+            AnomalyLocalizationOutput output = new AnomalyLocalizationOutput();
+            Map<String, Result> results = new HashMap<>();
+            results.put("sum", result);
+            output.setResults(results);
+
+            MLExecuteTaskResponse response = MLExecuteTaskResponse
+                .builder()
+                .output(output)
+                .functionName(FunctionName.ANOMALY_LOCALIZATION)
+                .build();
+            actionListener.onResponse(response);
+            return null;
+        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(), any());
+        doNothing().when(channel).sendResponse(any());
+        restMLExecuteAction.handleRequest(request, channel, client);
+
+        ArgumentCaptor<RestResponse> responseCaptor = ArgumentCaptor.forClass(RestResponse.class);
+        verify(channel).sendResponse(responseCaptor.capture());
+        BytesRestResponse response = (BytesRestResponse) responseCaptor.getValue();
+        assertEquals(RestStatus.OK, response.status());
+        String expectedJson = "{\"results\":[{"
+            + "\"name\":\"sum\","
+            + "\"result\":{"
+            + "\"buckets\":["
+            + "{"
+            + "\"start_time\":1620630000000,"
+            + "\"end_time\":1620716400000,"
+            + "\"overall_aggregate_value\":65.0"
+            + "}"
+            + "]"
+            + "}"
+            + "}]}";
+        assertEquals(expectedJson, response.content().utf8ToString());
     }
 }
