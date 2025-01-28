@@ -24,10 +24,9 @@ import org.opensearch.rest.RestRequest;
 public class RestMLSearchAgentAction extends AbstractMLSearchAction<MLAgent> {
     private static final String ML_SEARCH_AGENT_ACTION = "ml_search_agent_action";
     private static final String SEARCH_AGENT_PATH = ML_BASE_URI + "/agents/_search";
-    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     public RestMLSearchAgentAction(MLFeatureEnabledSetting mlFeatureEnabledSetting) {
-        super(ImmutableList.of(SEARCH_AGENT_PATH), ML_AGENT_INDEX, MLAgent.class, MLSearchAgentAction.INSTANCE);
+        super(ImmutableList.of(SEARCH_AGENT_PATH), ML_AGENT_INDEX, MLAgent.class, MLSearchAgentAction.INSTANCE, mlFeatureEnabledSetting);
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 

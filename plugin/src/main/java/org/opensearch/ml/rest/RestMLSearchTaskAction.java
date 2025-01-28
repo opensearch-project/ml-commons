@@ -10,6 +10,7 @@ import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.transport.task.MLTaskSearchAction;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 
 import com.google.common.collect.ImmutableList;
 
@@ -17,8 +18,8 @@ public class RestMLSearchTaskAction extends AbstractMLSearchAction<MLTask> {
     private static final String ML_SEARCH_Task_ACTION = "ml_search_task_action";
     private static final String SEARCH_TASK_PATH = ML_BASE_URI + "/tasks/_search";
 
-    public RestMLSearchTaskAction() {
-        super(ImmutableList.of(SEARCH_TASK_PATH), ML_TASK_INDEX, MLTask.class, MLTaskSearchAction.INSTANCE);
+    public RestMLSearchTaskAction(MLFeatureEnabledSetting mlFeatureEnabledSetting) {
+        super(ImmutableList.of(SEARCH_TASK_PATH), ML_TASK_INDEX, MLTask.class, MLTaskSearchAction.INSTANCE, mlFeatureEnabledSetting);
     }
 
     @Override
