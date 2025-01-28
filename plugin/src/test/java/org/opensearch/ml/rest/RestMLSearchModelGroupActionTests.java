@@ -36,6 +36,7 @@ import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
+import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.rest.RestChannel;
@@ -134,11 +135,12 @@ public class RestMLSearchModelGroupActionTests extends OpenSearchTestCase {
         RestRequest request = getSearchAllRestRequest();
         restMLSearchModelGroupAction.handleRequest(request, channel, client);
 
-        ArgumentCaptor<SearchRequest> argumentCaptor = ArgumentCaptor.forClass(SearchRequest.class);
+        ArgumentCaptor<MLSearchActionRequest> argumentCaptor = ArgumentCaptor.forClass(MLSearchActionRequest.class);
         ArgumentCaptor<RestResponse> responseCaptor = ArgumentCaptor.forClass(RestResponse.class);
         verify(client, times(1)).execute(eq(MLModelGroupSearchAction.INSTANCE), argumentCaptor.capture(), any());
         verify(channel, times(1)).sendResponse(responseCaptor.capture());
-        SearchRequest searchRequest = argumentCaptor.getValue();
+        MLSearchActionRequest mlSearchActionRequest = argumentCaptor.getValue();
+        SearchRequest searchRequest = mlSearchActionRequest.getSearchRequest();
         String[] indices = searchRequest.indices();
         assertArrayEquals(new String[] { ML_MODEL_GROUP_INDEX }, indices);
         assertEquals(
@@ -180,11 +182,12 @@ public class RestMLSearchModelGroupActionTests extends OpenSearchTestCase {
         RestRequest request = getSearchAllRestRequest();
         restMLSearchModelGroupAction.handleRequest(request, channel, client);
 
-        ArgumentCaptor<SearchRequest> argumentCaptor = ArgumentCaptor.forClass(SearchRequest.class);
+        ArgumentCaptor<MLSearchActionRequest> argumentCaptor = ArgumentCaptor.forClass(MLSearchActionRequest.class);
         ArgumentCaptor<RestResponse> responseCaptor = ArgumentCaptor.forClass(RestResponse.class);
         verify(client, times(1)).execute(eq(MLModelGroupSearchAction.INSTANCE), argumentCaptor.capture(), any());
         verify(channel, times(1)).sendResponse(responseCaptor.capture());
-        SearchRequest searchRequest = argumentCaptor.getValue();
+        MLSearchActionRequest mlSearchActionRequest = argumentCaptor.getValue();
+        SearchRequest searchRequest = mlSearchActionRequest.getSearchRequest();
         String[] indices = searchRequest.indices();
         assertArrayEquals(new String[] { ML_MODEL_GROUP_INDEX }, indices);
         assertEquals(
