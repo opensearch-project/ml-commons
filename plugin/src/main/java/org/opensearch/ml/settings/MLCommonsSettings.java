@@ -167,6 +167,7 @@ public final class MLCommonsSettings {
                     "^https://api\\.sagemaker\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
                     "^https://api\\.openai\\.com/.*$",
                     "^https://api\\.cohere\\.ai/.*$",
+                    "^https://api\\.deepseek\\.com/.*$",
                     "^https://bedrock-runtime\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
                     "^https://bedrock-agent-runtime\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
                     "^https://bedrock\\..*[a-z0-9-]\\.amazonaws\\.com/.*$",
