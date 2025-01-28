@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.action.connector;
 
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.utils.RestActionUtils.wrapListenerToHandleSearchIndexNotFound;
 
 import java.util.ArrayList;
@@ -25,11 +26,17 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.index.query.BoolQueryBuilder;
+import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
+import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.ml.utils.TenantAwareHelper;
+import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.search.internal.InternalSearchResponse;
@@ -41,31 +48,42 @@ import com.google.common.annotations.VisibleForTesting;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
-public class SearchConnectorTransportAction extends HandledTransportAction<SearchRequest, SearchResponse> {
+public class SearchConnectorTransportAction extends HandledTransportAction<MLSearchActionRequest, SearchResponse> {
 
     private final Client client;
+    private final SdkClient sdkClient;
 
     private final ConnectorAccessControlHelper connectorAccessControlHelper;
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Inject
     public SearchConnectorTransportAction(
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
-        ConnectorAccessControlHelper connectorAccessControlHelper
+        SdkClient sdkClient,
+        ConnectorAccessControlHelper connectorAccessControlHelper,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
-        super(MLConnectorSearchAction.NAME, transportService, actionFilters, SearchRequest::new);
+        super(MLConnectorSearchAction.NAME, transportService, actionFilters, MLSearchActionRequest::new);
         this.client = client;
+        this.sdkClient = sdkClient;
         this.connectorAccessControlHelper = connectorAccessControlHelper;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
-    protected void doExecute(Task task, SearchRequest request, ActionListener<SearchResponse> actionListener) {
-        request.indices(CommonValue.ML_CONNECTOR_INDEX);
-        search(request, actionListener);
+    protected void doExecute(Task task, MLSearchActionRequest request, ActionListener<SearchResponse> actionListener) {
+        request.getSearchRequest().indices(CommonValue.ML_CONNECTOR_INDEX);
+
+        String tenantId = request.getTenantId();
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
+            return;
+        }
+        search(request.getSearchRequest(), tenantId, actionListener);
     }
 
-    private void search(SearchRequest request, ActionListener<SearchResponse> actionListener) {
+    private void search(SearchRequest request, String tenantId, ActionListener<SearchResponse> actionListener) {
         User user = RestActionUtils.getUserContext(client);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<SearchResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
@@ -89,6 +107,15 @@ public class SearchConnectorTransportAction extends HandledTransportAction<Searc
 
             final ActionListener<SearchResponse> doubleWrappedListener = ActionListener
                 .wrap(wrappedListener::onResponse, e -> wrapListenerToHandleSearchIndexNotFound(e, wrappedListener));
+
+            if (tenantId != null) {
+                BoolQueryBuilder queryBuilder = QueryBuilders.boolQuery();
+                if (request.source().query() != null) {
+                    queryBuilder.must(request.source().query());
+                }
+                queryBuilder.filter(QueryBuilders.termQuery(TENANT_ID_FIELD, tenantId)); // Replace with your tenant_id field
+                request.source().query(queryBuilder);
+            }
 
             if (connectorAccessControlHelper.skipConnectorAccessControl(user)) {
                 client.search(request, doubleWrappedListener);
