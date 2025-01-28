@@ -5,10 +5,9 @@
 
 package org.opensearch.ml.jobs;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
+import java.io.IOException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 
@@ -18,9 +17,9 @@ import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.jobscheduler.spi.schedule.IntervalSchedule;
 
-public class MLBatchPredictTaskUpdateJobParameterTests {
+public class MLBatchTaskUpdateJobParameterTests {
 
-    private MLBatchPredictTaskUpdateJobParameter jobParameter;
+    private MLBatchTaskUpdateJobParameter jobParameter;
     private String jobName;
     private IntervalSchedule schedule;
     private Long lockDurationSeconds;
@@ -32,7 +31,7 @@ public class MLBatchPredictTaskUpdateJobParameterTests {
         schedule = new IntervalSchedule(Instant.now(), 1, ChronoUnit.MINUTES);
         lockDurationSeconds = 20L;
         jitter = 0.5;
-        jobParameter = new MLBatchPredictTaskUpdateJobParameter(jobName, schedule, lockDurationSeconds, jitter);
+        jobParameter = new MLBatchTaskUpdateJobParameter(jobName, schedule, lockDurationSeconds, jitter);
     }
 
     @Test
@@ -80,5 +79,21 @@ public class MLBatchPredictTaskUpdateJobParameterTests {
         Double newJitter = 0.7;
         jobParameter.setJitter(newJitter);
         assertEquals(newJitter, jobParameter.getJitter());
+    }
+
+    @Test
+    public void testNullCase() throws IOException {
+        String newJobName = "test-job";
+
+        jobParameter = new MLBatchTaskUpdateJobParameter(newJobName, null, null, null);
+        jobParameter.setLastUpdateTime(null);
+        jobParameter.setEnabledTime(null);
+
+        XContentBuilder builder = XContentFactory.jsonBuilder();
+        jobParameter.toXContent(builder, null);
+        String jsonString = builder.toString();
+
+        assertTrue(jsonString.contains(jobName));
+        assertEquals(newJobName, jobParameter.getName());
     }
 }

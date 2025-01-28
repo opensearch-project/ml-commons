@@ -44,16 +44,8 @@ public class S3Utils {
         }
     }
 
-    public static void putObject(
-        String accessKey,
-        String secretKey,
-        String sessionToken,
-        String region,
-        String bucketName,
-        String key,
-        String content
-    ) {
-        try (S3Client s3Client = initS3Client(accessKey, secretKey, sessionToken, region)) {
+    public static void putObject(S3Client s3Client, String bucketName, String key, String content) {
+        try {
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
                 PutObjectRequest request = PutObjectRequest.builder().bucket(bucketName).key(key).build();
 
@@ -63,8 +55,6 @@ public class S3Utils {
             });
         } catch (PrivilegedActionException e) {
             throw new RuntimeException("Failed to upload file to S3: s3://" + bucketName + "/" + key, e);
-        } catch (Exception e) {
-            log.error("Unexpected error during S3 upload", e);
         }
     }
 

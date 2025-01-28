@@ -102,6 +102,8 @@ import org.opensearch.transport.TransportService;
 import com.google.common.annotations.VisibleForTesting;
 
 import lombok.extern.log4j.Log4j2;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.S3Exception;
 
 @Log4j2
 public class GetTaskTransportAction extends HandledTransportAction<ActionRequest, MLTaskGetResponse> {
@@ -129,7 +131,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
     volatile Pattern remoteJobFailedStatusRegexPattern;
     private final MLEngine mlEngine;
 
-    private Map<String, String> decryptedCredential;
+    // private Map<String, String> decryptedCredential;
 
     @Inject
     public GetTaskTransportAction(
@@ -456,19 +458,25 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
             connector.addAction(connectorAction);
         }
 
-        decryptedCredential = connector.getDecryptedCredential();
-
-        if (decryptedCredential == null || decryptedCredential.isEmpty()) {
-            decryptedCredential = mlEngine.getConnectorCredential(connector);
-        }
-
+        final Map<String, String> decryptedCredential = connector.getDecryptedCredential() != null
+            && !connector.getDecryptedCredential().isEmpty()
+                ? mlEngine.getConnectorCredential(connector)
+                : connector.getDecryptedCredential();
         RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader.initInstance(connector.getProtocol(), connector, Connector.class);
         connectorExecutor.setScriptService(scriptService);
         connectorExecutor.setClusterService(clusterService);
         connectorExecutor.setClient(client);
         connectorExecutor.setXContentRegistry(xContentRegistry);
         connectorExecutor.executeAction(BATCH_PREDICT_STATUS.name(), mlInput, ActionListener.wrap(taskResponse -> {
-            processTaskResponse(mlTask, taskId, isUserInitiatedGetTaskRequest, taskResponse, remoteJob, actionListener);
+            processTaskResponse(
+                mlTask,
+                taskId,
+                isUserInitiatedGetTaskRequest,
+                taskResponse,
+                remoteJob,
+                decryptedCredential,
+                actionListener
+            );
         }, e -> {
             // When the request to remote service fails, we will retry the request for next 10 minutes (10 runs).
             // If it fails even then, we mark it as unreachable in task index and send message to DLQ
@@ -500,6 +508,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         Boolean isUserInitiatedGetTaskRequest,
         MLTaskResponse taskResponse,
         Map<String, Object> remoteJob,
+        Map<String, String> decryptedCredential,
         ActionListener<MLTaskGetResponse> actionListener
     ) {
         try {
@@ -566,15 +575,18 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
                     log.error("Failed to get the bucket name and region from batch predict request");
                 }
                 remoteJobDetails.remove("dlq");
+                try (S3Client s3Client = S3Utils.initS3Client(accessKey, secretKey, sessionToken, region)) {
+                    String jobName = (String) remoteJobDetails.getOrDefault("TransformJobName", remoteJob.get("job_name"));
+                    String s3ObjectKey = "BatchJobFailure_" + jobName;
+                    String content = mlTask.getState().equals(UNREACHABLE)
+                        ? String.format("Unable to reach the Job: %s. Error Message: %s", jobName, mlTask.getError())
+                        : remoteJobDetails.toString();
 
-                String jobName = (String) remoteJobDetails.getOrDefault("TransformJobName", remoteJob.get("job_name"));
-                String s3ObjectKey = "BatchJobFailure_" + jobName;
-                String content = mlTask.getState().equals(UNREACHABLE)
-                    ? String.format("Unable to reach the Job: %s. Error Message: %s", jobName, mlTask.getError())
-                    : remoteJobDetails.toString();
-
-                S3Utils.putObject(accessKey, secretKey, sessionToken, region, bucketName, s3ObjectKey, content);
-                log.debug("Task status successfully uploaded to S3 for task ID: {} at {}", taskId, Instant.now());
+                    S3Utils.putObject(s3Client, bucketName, s3ObjectKey, content);
+                    log.debug("Task status successfully uploaded to S3 for task ID: {} at {}", taskId, Instant.now());
+                }
+            } catch (S3Exception e) {
+                log.error("Failed to update task status for task: {}. S3 Exception: {}", taskId, e.awsErrorDetails().errorMessage());
             } catch (Exception e) {
                 log.error("Failed to update task status for task: " + taskId, e);
             }

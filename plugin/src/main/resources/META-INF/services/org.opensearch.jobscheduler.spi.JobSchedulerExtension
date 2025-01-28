@@ -3,4 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-org.opensearch.ml.jobs.BatchPredictTaskUpdateJob
+# This file is needed to register MLBatchTaskUpdateExtension in job scheduler framework
+# See https://github.com/opensearch-project/job-scheduler/blob/main/README.md#getting-started
+org.opensearch.ml.jobs.MLBatchTaskUpdateExtension

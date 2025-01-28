@@ -98,6 +98,9 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
     private final MLEngine mlEngine;
     private volatile boolean autoDeploymentEnabled;
 
+    public static final String BUCKET_FIELD = "bucket";
+    public static final String REGION_FIELD = "region";
+
     public MLPredictTaskRunner(
         ThreadPool threadPool,
         ClusterService clusterService,
@@ -146,19 +149,18 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         ActionListener<MLTaskResponse> listener
     ) {
         String modelId = request.getModelId();
-        Map<String, String> dlq = new HashMap<>();
-        String bucketName, stsRoleArn, region;
+        Map<String, String> dlq;
+        String bucketName, region;
         if (request.getMlInput().getInputDataset() instanceof RemoteInferenceInputDataSet) {
             RemoteInferenceInputDataSet inputDataset = (RemoteInferenceInputDataSet) request.getMlInput().getInputDataset();
             dlq = inputDataset.getDlq();
             if (dlq != null) {
-                bucketName = dlq.get("bucket");
-                region = dlq.get("region");
+                bucketName = dlq.get(BUCKET_FIELD);
+                region = dlq.get(REGION_FIELD);
 
                 if (bucketName == null || region == null) {
                     throw new IllegalArgumentException("DLQ bucketName or region cannot be null");
                 }
-
                 // TODO: check if we are able to input an object into the s3 bucket.
                 // Or check permissions to DLQ write access
             }

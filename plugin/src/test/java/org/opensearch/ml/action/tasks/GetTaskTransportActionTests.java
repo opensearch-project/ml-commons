@@ -15,6 +15,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.connector.AbstractConnector.*;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_CANCELLED_REGEX;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_CANCELLING_REGEX;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_COMPLETED_REGEX;
@@ -496,7 +497,7 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         ActionListener<MLTaskGetResponse> actionListener = mock(ActionListener.class);
         ArgumentCaptor<Map<String, Object>> updatedTaskCaptor = ArgumentCaptor.forClass(Map.class);
 
-        getTaskTransportAction.processTaskResponse(mlTask, taskId, true, taskResponse, mlTask.getRemoteJob(), actionListener);
+        getTaskTransportAction.processTaskResponse(mlTask, taskId, true, taskResponse, mlTask.getRemoteJob(), null, actionListener);
 
         verify(mlTaskManager).updateMLTaskDirectly(any(), updatedTaskCaptor.capture(), any());
         Map<String, Object> updatedTask = updatedTaskCaptor.getValue();
@@ -525,9 +526,9 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
 
         // Setup decrypted credentials
         Map<String, String> decryptedCredential = new HashMap<>();
-        decryptedCredential.put("aws_access_key", "test-key");
-        decryptedCredential.put("aws_secret_key", "test-secret");
-        decryptedCredential.put("aws_session_token", "test-token");
+        decryptedCredential.put(ACCESS_KEY_FIELD, "test-key");
+        decryptedCredential.put(SECRET_KEY_FIELD, "test-secret");
+        decryptedCredential.put(SESSION_TOKEN_FIELD, "test-token");
 
         // Call the method
         getTaskTransportAction.updateDLQ(mlTask, decryptedCredential);

@@ -18,7 +18,7 @@ import org.opensearch.jobscheduler.spi.schedule.Schedule;
  * It adds an additional "indexToWatch" field to {@link ScheduledJobParameter}, which stores the index
  * the job runner will watch.
  */
-public class MLBatchPredictTaskUpdateJobParameter implements ScheduledJobParameter {
+public class MLBatchTaskUpdateJobParameter implements ScheduledJobParameter {
     public static final String NAME_FIELD = "name";
     public static final String ENABLED_FILED = "enabled";
     public static final String LAST_UPDATE_TIME_FIELD = "last_update_time";
@@ -38,9 +38,9 @@ public class MLBatchPredictTaskUpdateJobParameter implements ScheduledJobParamet
     private Long lockDurationSeconds;
     private Double jitter;
 
-    public MLBatchPredictTaskUpdateJobParameter() {}
+    public MLBatchTaskUpdateJobParameter() {}
 
-    public MLBatchPredictTaskUpdateJobParameter(String name, Schedule schedule, Long lockDurationSeconds, Double jitter) {
+    public MLBatchTaskUpdateJobParameter(String name, Schedule schedule, Long lockDurationSeconds, Double jitter) {
         this.jobName = name;
         this.schedule = schedule;
         this.lockDurationSeconds = lockDurationSeconds;

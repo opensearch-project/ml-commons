@@ -54,7 +54,7 @@ import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
-import org.opensearch.ml.jobs.MLBatchPredictTaskUpdateJobParameter;
+import org.opensearch.ml.jobs.MLBatchTaskUpdateJobParameter;
 import org.opensearch.remote.metadata.client.PutDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.UpdateDataObjectRequest;
@@ -534,7 +534,7 @@ public class MLTaskManager {
         String interval = "1";
         Long lockDurationSeconds = 20L;
 
-        MLBatchPredictTaskUpdateJobParameter jobParameter = new MLBatchPredictTaskUpdateJobParameter(
+        MLBatchTaskUpdateJobParameter jobParameter = new MLBatchTaskUpdateJobParameter(
             jobName,
             new IntervalSchedule(Instant.now(), Integer.parseInt(interval), ChronoUnit.MINUTES),
             lockDurationSeconds,
