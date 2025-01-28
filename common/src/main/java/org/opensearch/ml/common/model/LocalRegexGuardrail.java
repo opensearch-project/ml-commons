@@ -235,7 +235,7 @@ public class LocalRegexGuardrail extends Guardrail {
                 context = client.threadPool().getThreadContext().stashContext();
                 ThreadContext.StoredContext finalContext = context;
                 client.search(searchRequest, ActionListener.runBefore(new LatchedActionListener(ActionListener.<SearchResponse>wrap(r -> {
-                    if (r == null || r.getHits() == null || r.getHits().getTotalHits() == null || r.getHits().getTotalHits().value == 0) {
+                    if (r == null || r.getHits() == null || r.getHits().getTotalHits() == null || r.getHits().getTotalHits().value() == 0) {
                         hitStopWords.set(true);
                     }
                 }, e -> {
@@ -244,7 +244,7 @@ public class LocalRegexGuardrail extends Guardrail {
                 }), latch), () -> finalContext.restore()));
             } else {
                 client.search(searchRequest, new LatchedActionListener(ActionListener.<SearchResponse>wrap(r -> {
-                    if (r == null || r.getHits() == null || r.getHits().getTotalHits() == null || r.getHits().getTotalHits().value == 0) {
+                    if (r == null || r.getHits() == null || r.getHits().getTotalHits() == null || r.getHits().getTotalHits().value() == 0) {
                         hitStopWords.set(true);
                     }
                 }, e -> {

@@ -210,7 +210,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
                     ActionListener.wrap(modelGroups -> {
                         if (modelGroups != null
                             && modelGroups.getHits().getTotalHits() != null
-                            && modelGroups.getHits().getTotalHits().value != 0) {
+                            && modelGroups.getHits().getTotalHits().value() != 0) {
                             for (SearchHit documentFields : modelGroups.getHits()) {
                                 String id = documentFields.getId();
                                 listener

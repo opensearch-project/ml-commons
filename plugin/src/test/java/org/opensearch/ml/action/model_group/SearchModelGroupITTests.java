@@ -52,7 +52,7 @@ public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchRequest.source(searchSourceBuilder);
         SearchResponse response = client().execute(MLModelGroupSearchAction.INSTANCE, searchRequest).actionGet();
-        assertEquals(1, response.getHits().getTotalHits().value);
+        assertEquals(1, response.getHits().getTotalHits().value());
         assertEquals(modelGroupId, response.getHits().getHits()[0].getId());
     }
 
@@ -62,7 +62,7 @@ public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
         searchRequest.source(searchSourceBuilder);
         searchRequest.source().query(QueryBuilders.matchAllQuery());
         SearchResponse response = client().execute(MLModelGroupSearchAction.INSTANCE, searchRequest).actionGet();
-        assertEquals(1, response.getHits().getTotalHits().value);
+        assertEquals(1, response.getHits().getTotalHits().value());
         assertEquals(modelGroupId, response.getHits().getHits()[0].getId());
     }
 
@@ -72,7 +72,7 @@ public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
         searchRequest.source(searchSourceBuilder);
         searchRequest.source().query(QueryBuilders.boolQuery().must(QueryBuilders.termQuery("name.keyword", "mock_model_group_name")));
         SearchResponse response = client().execute(MLModelGroupSearchAction.INSTANCE, searchRequest).actionGet();
-        assertEquals(1, response.getHits().getTotalHits().value);
+        assertEquals(1, response.getHits().getTotalHits().value());
         assertEquals(modelGroupId, response.getHits().getHits()[0].getId());
     }
 
@@ -82,7 +82,7 @@ public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
         searchRequest.source(searchSourceBuilder);
         searchRequest.source().query(QueryBuilders.termQuery("name.keyword", "mock_model_group_name"));
         SearchResponse response = client().execute(MLModelGroupSearchAction.INSTANCE, searchRequest).actionGet();
-        assertEquals(1, response.getHits().getTotalHits().value);
+        assertEquals(1, response.getHits().getTotalHits().value());
         assertEquals(modelGroupId, response.getHits().getHits()[0].getId());
     }
 
@@ -92,7 +92,7 @@ public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
         searchRequest.source(searchSourceBuilder);
         searchRequest.source().query(QueryBuilders.termsQuery("name.keyword", "mock_model_group_name", "test_model_group_name"));
         SearchResponse response = client().execute(MLModelGroupSearchAction.INSTANCE, searchRequest).actionGet();
-        assertEquals(1, response.getHits().getTotalHits().value);
+        assertEquals(1, response.getHits().getTotalHits().value());
         assertEquals(modelGroupId, response.getHits().getHits()[0].getId());
     }
 
@@ -102,7 +102,7 @@ public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
         searchRequest.source(searchSourceBuilder);
         searchRequest.source().query(QueryBuilders.rangeQuery("created_time").gte("now-1d"));
         SearchResponse response = client().execute(MLModelGroupSearchAction.INSTANCE, searchRequest).actionGet();
-        assertEquals(1, response.getHits().getTotalHits().value);
+        assertEquals(1, response.getHits().getTotalHits().value());
         assertEquals(modelGroupId, response.getHits().getHits()[0].getId());
     }
 
@@ -112,7 +112,7 @@ public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
         searchRequest.source(searchSourceBuilder);
         searchRequest.source().query(QueryBuilders.matchPhraseQuery("description", "desc"));
         SearchResponse response = client().execute(MLModelGroupSearchAction.INSTANCE, searchRequest).actionGet();
-        assertEquals(1, response.getHits().getTotalHits().value);
+        assertEquals(1, response.getHits().getTotalHits().value());
         assertEquals(modelGroupId, response.getHits().getHits()[0].getId());
     }
 
@@ -122,7 +122,7 @@ public class SearchModelGroupITTests extends MLCommonsIntegTestCase {
         searchRequest.source(searchSourceBuilder);
         searchRequest.source().query(QueryBuilders.queryStringQuery("name: mock_model_group_*"));
         SearchResponse response = client().execute(MLModelGroupSearchAction.INSTANCE, searchRequest).actionGet();
-        assertEquals(1, response.getHits().getTotalHits().value);
+        assertEquals(1, response.getHits().getTotalHits().value());
         assertEquals(modelGroupId, response.getHits().getHits()[0].getId());
     }
 

@@ -86,7 +86,7 @@ public class VisualizationsTool implements Tool {
                 SearchHits hits = searchResponse.getHits();
                 StringBuilder visBuilder = new StringBuilder();
                 visBuilder.append("Title,Id\n");
-                if (hits.getTotalHits().value > 0) {
+                if (hits.getTotalHits().value() > 0) {
                     Arrays.stream(hits.getHits()).forEach(h -> {
                         String id = trimIdPrefix(h.getId());
                         Map<String, String> visMap = (Map<String, String>) h.getSourceAsMap().get(SAVED_OBJECT_TYPE);

@@ -53,7 +53,7 @@ public class MLInputDatasetHandler {
         searchRequest.indices(indices);
 
         client.search(searchRequest, ActionListener.wrap(r -> {
-            if (r == null || r.getHits() == null || r.getHits().getTotalHits() == null || r.getHits().getTotalHits().value == 0) {
+            if (r == null || r.getHits() == null || r.getHits().getTotalHits() == null || r.getHits().getTotalHits().value() == 0) {
                 listener.onFailure(new IllegalArgumentException("No document found"));
                 return;
             }

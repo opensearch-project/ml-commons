@@ -179,7 +179,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                     ActionListener.wrap(modelGroups -> {
                         if (modelGroups != null
                             && modelGroups.getHits().getTotalHits() != null
-                            && modelGroups.getHits().getTotalHits().value != 0) {
+                            && modelGroups.getHits().getTotalHits().value() != 0) {
                             String modelGroupIdOfTheNameProvided = modelGroups.getHits().getAt(0).getId();
                             registerModelInput.setModelGroupId(modelGroupIdOfTheNameProvided);
                             checkUserAccess(registerModelInput, listener, true);

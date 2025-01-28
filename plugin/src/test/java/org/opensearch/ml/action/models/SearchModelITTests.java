@@ -111,7 +111,7 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
         searchRequest.source(searchSourceBuilder);
         searchRequest.source().query(QueryBuilders.boolQuery().mustNot(QueryBuilders.existsQuery(CHUNK_NUMBER)));
         SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, searchRequest).actionGet();
-        assertEquals(1, response.getHits().getTotalHits().value);
+        assertEquals(1, response.getHits().getTotalHits().value());
     }
 
     private void test_matchAll_search() {
@@ -122,7 +122,7 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
             .source()
             .query(QueryBuilders.boolQuery().mustNot(QueryBuilders.existsQuery(CHUNK_NUMBER)).must(QueryBuilders.matchAllQuery()));
         SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, searchRequest).actionGet();
-        assertEquals(1, response.getHits().getTotalHits().value);
+        assertEquals(1, response.getHits().getTotalHits().value());
     }
 
     private void test_bool_search() {
@@ -142,7 +142,7 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
                     )
             );
         SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, searchRequest).actionGet();
-        assertEquals(1, response.getHits().getTotalHits().value);
+        assertEquals(1, response.getHits().getTotalHits().value());
     }
 
     private void test_term_search() {
@@ -155,7 +155,7 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
             .must(QueryBuilders.termQuery("name.keyword", "msmarco-distilbert-base-tas-b-pt"));
         searchRequest.source().query(boolQueryBuilder);
         SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, searchRequest).actionGet();
-        assertEquals(1, response.getHits().getTotalHits().value);
+        assertEquals(1, response.getHits().getTotalHits().value());
     }
 
     private void test_terms_search() {
@@ -168,7 +168,7 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
             .must(QueryBuilders.termsQuery("name.keyword", "msmarco-distilbert-base-tas-b-pt", "test_model_group_name"));
         searchRequest.source().query(boolQueryBuilder);
         SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, searchRequest).actionGet();
-        assertEquals(1, response.getHits().getTotalHits().value);
+        assertEquals(1, response.getHits().getTotalHits().value());
     }
 
     private void test_range_search() {
@@ -181,7 +181,7 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
             .must(QueryBuilders.rangeQuery("created_time").gte("now-1d"));
         searchRequest.source().query(boolQueryBuilder);
         SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, searchRequest).actionGet();
-        assertEquals(1, response.getHits().getTotalHits().value);
+        assertEquals(1, response.getHits().getTotalHits().value());
     }
 
     private void test_matchPhrase_search() {
@@ -194,7 +194,7 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
             .must(QueryBuilders.matchPhraseQuery("description", "desc"));
         searchRequest.source().query(boolQueryBuilder);
         SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, searchRequest).actionGet();
-        assertEquals(1, response.getHits().getTotalHits().value);
+        assertEquals(1, response.getHits().getTotalHits().value());
     }
 
     @Override
