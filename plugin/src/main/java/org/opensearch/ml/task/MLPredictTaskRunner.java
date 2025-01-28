@@ -7,6 +7,7 @@ package org.opensearch.ml.task;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.common.CommonValue.TASK_POLLING_JOB_INDEX;
 import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.getErrorMessage;
 import static org.opensearch.ml.permission.AccessController.checkUserPermissions;
@@ -97,6 +98,9 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
     private final MLEngine mlEngine;
     private volatile boolean autoDeploymentEnabled;
 
+    public static final String BUCKET_FIELD = "bucket";
+    public static final String REGION_FIELD = "region";
+
     public MLPredictTaskRunner(
         ThreadPool threadPool,
         ClusterService clusterService,
@@ -145,6 +149,23 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         ActionListener<MLTaskResponse> listener
     ) {
         String modelId = request.getModelId();
+        Map<String, String> dlq;
+        String bucketName, region;
+        if (request.getMlInput().getInputDataset() instanceof RemoteInferenceInputDataSet) {
+            RemoteInferenceInputDataSet inputDataset = (RemoteInferenceInputDataSet) request.getMlInput().getInputDataset();
+            dlq = inputDataset.getDlq();
+            if (dlq != null) {
+                bucketName = dlq.get(BUCKET_FIELD);
+                region = dlq.get(REGION_FIELD);
+
+                if (bucketName == null || region == null) {
+                    throw new IllegalArgumentException("DLQ bucketName or region cannot be null");
+                }
+                // TODO: check if we are able to input an object into the s3 bucket.
+                // Or check permissions to DLQ write access
+            }
+        }
+
         try {
             ActionListener<DiscoveryNode> actionListener = ActionListener.wrap(node -> {
                 if (clusterService.localNode().getId().equals(node.getId())) {
@@ -394,6 +415,8 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                                             .getDataAsMap();
                                         if (dataAsMap != null && statusCode != null && statusCode >= 200 && statusCode < 300) {
                                             remoteJob.putAll(dataAsMap);
+                                            // put dlq info in remote job
+                                            remoteJob.put("dlq", ((RemoteInferenceInputDataSet) mlInput.getInputDataset()).getDlq());
                                             mlTask.setRemoteJob(remoteJob);
                                             mlTask.setTaskId(null);
                                             mlTaskManager.createMLTask(mlTask, ActionListener.wrap(response -> {
@@ -404,6 +427,10 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                                                     MLTaskState.CREATED.name(),
                                                     remoteJob
                                                 );
+
+                                                if (!clusterService.state().metadata().indices().containsKey(TASK_POLLING_JOB_INDEX)) {
+                                                    mlTaskManager.startTaskPollingJob();
+                                                }
 
                                                 MLTaskResponse predictOutput = MLTaskResponse.builder().output(outputBuilder).build();
                                                 internalListener.onResponse(predictOutput);
