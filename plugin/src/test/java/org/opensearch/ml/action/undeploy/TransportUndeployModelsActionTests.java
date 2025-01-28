@@ -271,7 +271,7 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
             ActionListener<MLModel> listener = invocation.getArgument(4);
             listener.onResponse(mlModel);
             return null;
-        }).when(mlModelManager).getModel(any(), any(), any(),any(), isA(ActionListener.class));
+        }).when(mlModelManager).getModel(any(), any(), any(), any(), isA(ActionListener.class));
 
         doReturn(true).when(transportUndeployModelsAction).isSuperAdminUserWrapper(clusterService, client);
 
