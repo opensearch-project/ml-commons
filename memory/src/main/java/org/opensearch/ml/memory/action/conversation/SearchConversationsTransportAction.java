@@ -30,6 +30,7 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
+import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
 import org.opensearch.ml.memory.ConversationalMemoryHandler;
 import org.opensearch.ml.memory.index.OpenSearchConversationalMemoryHandler;
 import org.opensearch.tasks.Task;
@@ -38,7 +39,7 @@ import org.opensearch.transport.TransportService;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
-public class SearchConversationsTransportAction extends HandledTransportAction<SearchRequest, SearchResponse> {
+public class SearchConversationsTransportAction extends HandledTransportAction<MLSearchActionRequest, SearchResponse> {
 
     private ConversationalMemoryHandler cmHandler;
     private Client client;
@@ -61,7 +62,7 @@ public class SearchConversationsTransportAction extends HandledTransportAction<S
         Client client,
         ClusterService clusterService
     ) {
-        super(SearchConversationsAction.NAME, transportService, actionFilters, SearchRequest::new);
+        super(SearchConversationsAction.NAME, transportService, actionFilters, MLSearchActionRequest::new);
         this.cmHandler = cmHandler;
         this.client = client;
         this.featureIsEnabled = ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED.get(clusterService.getSettings());
@@ -71,13 +72,14 @@ public class SearchConversationsTransportAction extends HandledTransportAction<S
     }
 
     @Override
-    public void doExecute(Task task, SearchRequest request, ActionListener<SearchResponse> actionListener) {
+    public void doExecute(Task task, MLSearchActionRequest mlSearchActionRequest, ActionListener<SearchResponse> actionListener) {
+        SearchRequest request = mlSearchActionRequest.getSearchRequest();
         if (!featureIsEnabled) {
             actionListener.onFailure(new OpenSearchException(ML_COMMONS_MEMORY_FEATURE_DISABLED_MESSAGE));
             return;
         } else {
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
-                ActionListener<SearchResponse> internalListener = ActionListener.runBefore(actionListener, () -> context.restore());
+                ActionListener<SearchResponse> internalListener = ActionListener.runBefore(actionListener, context::restore);
                 cmHandler.searchConversations(request, internalListener);
             } catch (Exception e) {
                 log.error("Failed to search memories", e);

@@ -399,7 +399,11 @@ public class TestHelper {
     }
 
     public static RestRequest getSearchAllRestRequest() {
+        String tenantId = "test-tenant";
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put(Constants.TENANT_ID_HEADER, Collections.singletonList(tenantId));
         RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
+            .withHeaders(headers)
             .withContent(new BytesArray(TestData.matchAllSearchQuery()), XContentType.JSON)
             .build();
         return request;
