@@ -67,7 +67,7 @@ public class RemoteConnectorExecutorTest {
     @Before
     public void setUp() {
         MockitoAnnotations.openMocks(this);
-        encryptor = new EncryptorImpl("m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
+        encryptor = new EncryptorImpl(null, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
         when(scriptService.compile(any(), any()))
             .then(invocation -> new TestTemplateService.MockTemplateScript.Factory("{\"result\": \"hello world\"}"));
     }
@@ -81,7 +81,7 @@ public class RemoteConnectorExecutorTest {
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key"), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key"));
+            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
         return AwsConnector
             .awsConnectorBuilder()
             .name("test connector")

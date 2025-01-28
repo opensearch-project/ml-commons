@@ -65,7 +65,7 @@ public class MLEngineTest extends MLStaticMockBase {
 
     @Before
     public void setUp() {
-        Encryptor encryptor = new EncryptorImpl("m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
+        Encryptor encryptor = new EncryptorImpl(null, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
         mlEngine = new MLEngine(Path.of("/tmp/test" + UUID.randomUUID()), encryptor);
     }
 
@@ -389,7 +389,7 @@ public class MLEngineTest extends MLStaticMockBase {
     @Test
     public void testMLEngineInitialization() {
         Path testPath = Path.of("/tmp/test" + UUID.randomUUID());
-        mlEngine = new MLEngine(testPath, new EncryptorImpl("m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w="));
+        mlEngine = new MLEngine(testPath, new EncryptorImpl(null, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w="));
 
         Path expectedMlCachePath = testPath.resolve("ml_cache");
         Path expectedMlConfigPath = expectedMlCachePath.resolve("config");
@@ -411,14 +411,14 @@ public class MLEngineTest extends MLStaticMockBase {
     @Test
     public void testEncryptMethod() {
         String testString = "testString";
-        String encryptedString = mlEngine.encrypt(testString);
+        String encryptedString = mlEngine.encrypt(testString, null);
         assertNotNull(encryptedString);
         assertNotEquals(testString, encryptedString);
     }
 
     @Test
     public void testGetConnectorCredential() throws IOException {
-        String encryptedValue = mlEngine.encrypt("test_key_value");
+        String encryptedValue = mlEngine.encrypt("test_key_value", null);
         String test_connector_string = "{\"name\":\"test_connector_name\",\"version\":\"1\","
             + "\"description\":\"this is a test connector\",\"protocol\":\"http\","
             + "\"parameters\":{\"region\":\"test region\"},\"credential\":{\"key\":\""

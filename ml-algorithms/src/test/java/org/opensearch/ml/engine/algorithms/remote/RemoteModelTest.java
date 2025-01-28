@@ -64,7 +64,7 @@ public class RemoteModelTest extends MLStaticMockBase {
     public void setUp() {
         MockitoAnnotations.openMocks(this);
         remoteModel = new RemoteModel();
-        encryptor = spy(new EncryptorImpl("m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w="));
+        encryptor = spy(new EncryptorImpl(null, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w="));
     }
 
     @Test
@@ -179,7 +179,7 @@ public class RemoteModelTest extends MLStaticMockBase {
         exceptionRule.expectMessage(expExceptionMessage);
         Connector connector = createConnector(null);
         when(mlModel.getConnector()).thenReturn(connector);
-        doThrow(actualException).when(encryptor).decrypt(any());
+        doThrow(actualException).when(encryptor).decrypt(any(), any());
         remoteModel.initModel(mlModel, ImmutableMap.of(), encryptor);
     }
 
@@ -222,7 +222,7 @@ public class RemoteModelTest extends MLStaticMockBase {
             .name("test connector")
             .protocol(ConnectorProtocols.HTTP)
             .version("1")
-            .credential(ImmutableMap.of("key", encryptor.encrypt("test_api_key")))
+            .credential(ImmutableMap.of("key", encryptor.encrypt("test_api_key", null)))
             .actions(Arrays.asList(predictAction))
             .build();
         return connector;
