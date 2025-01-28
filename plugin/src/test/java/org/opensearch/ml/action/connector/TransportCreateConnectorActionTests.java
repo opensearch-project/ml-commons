@@ -549,17 +549,17 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
 
     public void test_connector_creation_success_deepseek() {
         TransportCreateConnectorAction action = new TransportCreateConnectorAction(
-                transportService,
-                actionFilters,
-                mlIndicesHandler,
-                client,
-                sdkClient,
-                mlEngine,
-                connectorAccessControlHelper,
-                settings,
-                clusterService,
-                mlModelManager,
-                mlFeatureEnabledSetting
+            transportService,
+            actionFilters,
+            mlIndicesHandler,
+            client,
+            sdkClient,
+            mlEngine,
+            connectorAccessControlHelper,
+            settings,
+            clusterService,
+            mlModelManager,
+            mlFeatureEnabledSetting
         );
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(0);
@@ -573,24 +573,24 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         }).when(client).index(any(IndexRequest.class), isA(ActionListener.class));
         List<ConnectorAction> actions = new ArrayList<>();
         actions
-                .add(
-                        ConnectorAction
-                                .builder()
-                                .actionType(ConnectorAction.ActionType.PREDICT)
-                                .method("POST")
-                                .url("https://api.deepseek.com/v1/chat/completions")
-                                .build()
-                );
+            .add(
+                ConnectorAction
+                    .builder()
+                    .actionType(ConnectorAction.ActionType.PREDICT)
+                    .method("POST")
+                    .url("https://api.deepseek.com/v1/chat/completions")
+                    .build()
+            );
         Map<String, String> credential = ImmutableMap.of("access_key", "mockKey", "secret_key", "mockSecret");
         MLCreateConnectorInput mlCreateConnectorInput = MLCreateConnectorInput
-                .builder()
-                .name(randomAlphaOfLength(5))
-                .description(randomAlphaOfLength(10))
-                .version("1")
-                .protocol(ConnectorProtocols.HTTP)
-                .credential(credential)
-                .actions(actions)
-                .build();
+            .builder()
+            .name(randomAlphaOfLength(5))
+            .description(randomAlphaOfLength(10))
+            .version("1")
+            .protocol(ConnectorProtocols.HTTP)
+            .credential(credential)
+            .actions(actions)
+            .build();
         MLCreateConnectorRequest request = new MLCreateConnectorRequest(mlCreateConnectorInput);
         action.doExecute(task, request, actionListener);
         verify(actionListener).onResponse(any(MLCreateConnectorResponse.class));
@@ -598,17 +598,17 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
 
     public void test_connector_creation_success_rekognition() {
         TransportCreateConnectorAction action = new TransportCreateConnectorAction(
-                transportService,
-                actionFilters,
-                mlIndicesHandler,
-                client,
-                sdkClient,
-                mlEngine,
-                connectorAccessControlHelper,
-                settings,
-                clusterService,
-                mlModelManager,
-                mlFeatureEnabledSetting
+            transportService,
+            actionFilters,
+            mlIndicesHandler,
+            client,
+            sdkClient,
+            mlEngine,
+            connectorAccessControlHelper,
+            settings,
+            clusterService,
+            mlModelManager,
+            mlFeatureEnabledSetting
         );
 
         doAnswer(invocation -> {
@@ -625,34 +625,34 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
 
         List<ConnectorAction> actions = new ArrayList<>();
         actions
-                .add(
-                        ConnectorAction
-                                .builder()
-                                .actionType(ConnectorAction.ActionType.PREDICT)
-                                .method("POST")
-                                .url("https://rekognition.test-region-1.amazonaws.com")
-                                .build()
-                );
+            .add(
+                ConnectorAction
+                    .builder()
+                    .actionType(ConnectorAction.ActionType.PREDICT)
+                    .method("POST")
+                    .url("https://rekognition.test-region-1.amazonaws.com")
+                    .build()
+            );
         actions
-                .add(
-                        ConnectorAction
-                                .builder()
-                                .actionType(ConnectorAction.ActionType.PREDICT)
-                                .method("POST")
-                                .url("https://rekognition-fips.test-region-1.amazonaws.com")
-                                .build()
-                );
+            .add(
+                ConnectorAction
+                    .builder()
+                    .actionType(ConnectorAction.ActionType.PREDICT)
+                    .method("POST")
+                    .url("https://rekognition-fips.test-region-1.amazonaws.com")
+                    .build()
+            );
 
         Map<String, String> credential = ImmutableMap.of("access_key", "mockKey", "secret_key", "mockSecret");
         MLCreateConnectorInput mlCreateConnectorInput = MLCreateConnectorInput
-                .builder()
-                .name(randomAlphaOfLength(5))
-                .description(randomAlphaOfLength(10))
-                .version("1")
-                .protocol(ConnectorProtocols.HTTP)
-                .credential(credential)
-                .actions(actions)
-                .build();
+            .builder()
+            .name(randomAlphaOfLength(5))
+            .description(randomAlphaOfLength(10))
+            .version("1")
+            .protocol(ConnectorProtocols.HTTP)
+            .credential(credential)
+            .actions(actions)
+            .build();
 
         MLCreateConnectorRequest request = new MLCreateConnectorRequest(mlCreateConnectorInput);
 
