@@ -480,7 +480,7 @@ String bwcVersion = "2.4.0.0"
 String bwcShortVersion = bwcVersion[0..4]
 String baseName = "mlCommonsBwcCluster"
 String bwcBasePath = "src/test/resources/org/opensearch/ml/bwc/"
-String bwcMLFilePath = "src/test/resources/org/opensearch/ml/bwc/"
+String bwcMLFilePath = "src/test/resources/org/opensearch/ml/bwc/ml/"
 String bwcJobSchedulerFilePath = "src/test/resources/org/opensearch/ml/bwc/job-scheduler/"
 
 String bwcMlPlugin = "opensearch-ml-" + bwcVersion + ".zip"
@@ -505,19 +505,16 @@ String opensearchJobSchedulerPlugin = "opensearch-job-scheduler-" + project.vers
                         @Override
                         File getAsFile() {
 
-                            File bwcDir = new File('./plugin/' + bwcBasePath)
-                            if (!bwcDir.exists()) {
-                                bwcDir.mkdirs()
-                            }
-                            File dir = new File('./plugin/' + bwcBasePath + 'job-scheduler/' + bwcVersion)
+                            File dir = new File(bwcBasePath + "job-scheduler/" + bwcVersion)
                             if (!dir.exists()) {
                                 dir.mkdirs()
                             }
-                            File mlJobSchedulerFile = new File(dir, bwcJobSchedulerPlugin)
-                            if (!mlJobSchedulerFile.exists()) {
-                                new URL(bwcRemoteJobSchedulerFile).withInputStream{ ins -> mlJobSchedulerFile.withOutputStream{ it << ins }}
+                            File file = new File(dir, "opensearch-job-scheduler-" + bwcVersion + ".zip")
+                            if (!file.exists()) {
+                                new URL(bwcRemoteJobSchedulerFile).withInputStream{ ins -> file.withOutputStream{ it << ins }}
                             }
-                            return fileTree(bwcBasePath + 'job-scheduler/' + bwcVersion).getSingleFile()
+                            return fileTree(bwcBasePath + "job-scheduler/" + bwcVersion).getSingleFile()
+
                         }
                     }
                 }
@@ -529,19 +526,15 @@ String opensearchJobSchedulerPlugin = "opensearch-job-scheduler-" + project.vers
                     return new RegularFile() {
                         @Override
                         File getAsFile() {
-                            File bwcDir = new File('./plugin/' + bwcBasePath)
-                            if (!bwcDir.exists()) {
-                                bwcDir.mkdirs()
-                            }
-                            File dir = new File('./plugin/' + bwcBasePath + 'ml/' + bwcVersion)
+                            File dir = new File(bwcBasePath + "ml/" + bwcVersion)
                             if (!dir.exists()) {
                                 dir.mkdirs()
                             }
-                            File mlPluginFile = new File(dir, bwcMlPlugin)
-                            if (!mlPluginFile.exists()) {
-                                new URL(bwcRemoteMlFile).withInputStream{ ins -> mlPluginFile.withOutputStream{ it << ins }}
+                            File file = new File(dir, "opensearch-ml-" + bwcVersion + ".zip")
+                            if (!file.exists()) {
+                                new URL(bwcRemoteMlFile).withInputStream{ ins -> file.withOutputStream{ it << ins }}
                             }
-                            return fileTree(bwcBasePath + 'ml/' + bwcVersion).getSingleFile()
+                            return fileTree(bwcBasePath + "ml/" + bwcVersion).getSingleFile()
                         }
                     }
                 }
@@ -560,12 +553,7 @@ List<Provider<RegularFile>> plugins = [
                 return new RegularFile() {
                     @Override
                     File getAsFile() {
-                        project.mkdir "$bwcJobSchedulerFilePath/$project.version"
-                        copy {
-                            from "$buildDir/distributions/$opensearchJobSchedulerPlugin"
-                            into "$bwcJobSchedulerFilePath/$project.version"
-                        }
-                        return fileTree(bwcJobSchedulerFilePath + project.version).getSingleFile()
+                        return configurations.zipArchive.asFileTree.matching{include "**/job-scheduler-${opensearch_build}.zip"}.getSingleFile()
                     }
                 }
             }
