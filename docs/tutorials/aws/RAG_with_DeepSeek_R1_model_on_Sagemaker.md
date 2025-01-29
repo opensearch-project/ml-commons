@@ -263,13 +263,7 @@ Sample output
 POST /_plugins/_ml/models/Sym9sJQBts7fa6byEh1-/_predict
 {
   "parameters": {
-    "inputs": "hello",
-    "parameters": {
-      "do_sample": true,
-      "top_p": 0.9,
-      "temperature": 0.7,
-      "max_new_tokens": 512
-    }
+    "inputs": "hello"
   }
 }
 ```
@@ -351,7 +345,7 @@ GET /my-nlp-index/_search?search_pipeline=my-conversation-search-pipeline-deepse
   "query": {
     "neural": {
       "passage_embedding": {
-        "query_text": "What's the population increase of New York City from 2021 to 2023?",
+        "query_text": "What's the population increase of New York City from 2021 to 2023? How is the trending comparing with Miami?",
         "model_id": "USkHsZQBts7fa6bybx3G",
         "k": 5
       }
