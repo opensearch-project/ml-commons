@@ -359,7 +359,7 @@ GET /my-nlp-index/_search?search_pipeline=my-conversation-search-pipeline-deepse
   }
 }
 ```
-The response contains the matching documents:
+The response contains the matching documents and LLM response:
 ```
 {
   "took": 5,
