@@ -523,9 +523,7 @@ String opensearchJobSchedulerPlugin = "opensearch-job-scheduler-" + project.vers
                             if (!mlPluginFile.exists()) {
                                 new URL(bwcRemoteMlFile).withInputStream{ ins -> mlPluginFile.withOutputStream{ it << ins }}
                             }
-                            return fileTree(bwcMLFilePath + bwcVersion).matching {
-                                include bwcMlPlugin
-                            }
+                            return fileTree(bwcMLFilePath + bwcVersion).getSingleFile()
                         }
                     }
                 }
