@@ -513,7 +513,12 @@ String opensearchJobSchedulerPlugin = "opensearch-job-scheduler-" + project.vers
                                 dir.mkdirs()
                             }
 
-                            File jobSchedulerFile = new File(dir, bwcJobSchedulerPlugin)
+                            File jobSchedulerDir = new File('./plugin/' + bwcJobSchedulerFilePath + bwcVersion)
+                            if (!jobSchedulerDir.exists()) {
+                                jobSchedulerDir.mkdirs()
+                            }
+
+                            File jobSchedulerFile = new File(jobSchedulerDir, bwcJobSchedulerPlugin)
                             if (!jobSchedulerFile.exists()) {
                                 new URL(bwcRemoteJobSchedulerFile).withInputStream { ins ->
                                     jobSchedulerFile.withOutputStream { it << ins }
