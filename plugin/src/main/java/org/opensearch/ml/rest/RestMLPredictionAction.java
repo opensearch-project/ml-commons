@@ -115,7 +115,12 @@ public class RestMLPredictionAction extends BaseRestHandler {
                 }
             });
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                modelManager.getModel(modelId, ActionListener.runBefore(listener, context::restore));
+                modelManager
+                    .getModel(
+                        modelId,
+                        getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request),
+                        ActionListener.runBefore(listener, context::restore)
+                    );
             }
         };
     }
