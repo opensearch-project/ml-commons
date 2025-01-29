@@ -497,31 +497,6 @@ String opensearchJobSchedulerPlugin = "opensearch-job-scheduler-" + project.vers
             testDistribution = "ARCHIVE"
             versions = [bwcShortVersion, opensearch_version]
             numberOfNodes = 3
-            plugin(provider(new Callable<RegularFile>() {
-                @Override
-                RegularFile call() throws Exception {
-                    return new RegularFile() {
-                        @Override
-                        File getAsFile() {
-                            File bwcDir = new File('./plugin/' + bwcJobSchedulerFilePath)
-                            if (!bwcDir.exists()) {
-                                bwcDir.mkdirs()
-                            }
-                            File dir = new File('./plugin/' + bwcJobSchedulerFilePath + bwcVersion)
-                            if (!dir.exists()) {
-                                dir.mkdirs()
-                            }
-                            File jobSchedulerFile = new File(dir, bwcJobSchedulerPlugin)
-                            if (!jobSchedulerFile.exists()) {
-                                new URL(bwcRemoteJobSchedulerFile).withInputStream { ins ->
-                                    jobSchedulerFile.withOutputStream { it << ins }
-                                }
-                            }
-                            return fileTree(bwcJobSchedulerFilePath + bwcVersion).getSingleFile()
-                        }
-                    }
-                }
-            }))
 
             plugin(provider(new Callable<RegularFile>() {
                 @Override
@@ -537,11 +512,19 @@ String opensearchJobSchedulerPlugin = "opensearch-job-scheduler-" + project.vers
                             if (!dir.exists()) {
                                 dir.mkdirs()
                             }
+
+                            File jobSchedulerFile = new File(dir, bwcJobSchedulerPlugin)
+                            if (!jobSchedulerFile.exists()) {
+                                new URL(bwcRemoteJobSchedulerFile).withInputStream { ins ->
+                                    jobSchedulerFile.withOutputStream { it << ins }
+                                }
+                            }
                             File mlPluginFile = new File(dir, bwcMlPlugin)
                             if (!mlPluginFile.exists()) {
                                 new URL(bwcRemoteMlFile).withInputStream{ ins -> mlPluginFile.withOutputStream{ it << ins }}
                             }
-                            return fileTree(bwcMLFilePath + bwcVersion).getSingleFile()
+                            return fileTree(bwcMLFilePath + bwcVersion).matching {
+                                include bwcMlPlugin
                         }
                     }
                 }
@@ -554,6 +537,22 @@ String opensearchJobSchedulerPlugin = "opensearch-job-scheduler-" + project.vers
 }
 
 List<Provider<RegularFile>> plugins = [
+        provider(new Callable<RegularFile>() {
+            @Override
+            RegularFile call() throws Exception {
+                return new RegularFile() {
+                    @Override
+                    File getAsFile() {
+                        project.mkdir "$bwcJobSchedulerFilePath/$project.version"
+                        copy {
+                            from "$buildDir/distributions/$opensearchJobSchedulerPlugin"
+                            into "$bwcJobSchedulerFilePath/$project.version"
+                        }
+                        return fileTree(bwcJobSchedulerFilePath + project.version).getSingleFile()
+                    }
+                }
+            }
+        }),
         provider(new Callable<RegularFile>() {
             @Override
             RegularFile call() throws Exception {
