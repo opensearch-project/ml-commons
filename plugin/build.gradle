@@ -560,22 +560,6 @@ List<Provider<RegularFile>> plugins = [
                 return new RegularFile() {
                     @Override
                     File getAsFile() {
-                        project.mkdir "$bwcJobSchedulerFilePath/$project.version"
-                        copy {
-                            from "$buildDir/distributions/$opensearchJobSchedulerPlugin"
-                            into "$bwcJobSchedulerFilePath/$project.version"
-                        }
-                        return fileTree(bwcJobSchedulerFilePath + project.version).getSingleFile()
-                    }
-                }
-            }
-        }),
-        provider(new Callable<RegularFile>() {
-            @Override
-            RegularFile call() throws Exception {
-                return new RegularFile() {
-                    @Override
-                    File getAsFile() {
                         project.mkdir "$bwcMLFilePath/$project.version"
                         copy {
                             from "$buildDir/distributions/$opensearchMlPlugin"
