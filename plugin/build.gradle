@@ -560,12 +560,7 @@ List<Provider<RegularFile>> plugins = [
                 return new RegularFile() {
                     @Override
                     File getAsFile() {
-                        project.mkdir "$bwcJobSchedulerFilePath/$project.version"
-                        copy {
-                            from "$buildDir/distributions/$opensearchJobSchedulerPlugin"
-                            into "$bwcJobSchedulerFilePath/$project.version"
-                        }
-                        return fileTree(bwcJobSchedulerFilePath + project.version).getSingleFile()
+                        return configurations.zipArchive.asFileTree.getSingleFile()
                     }
                 }
             }
