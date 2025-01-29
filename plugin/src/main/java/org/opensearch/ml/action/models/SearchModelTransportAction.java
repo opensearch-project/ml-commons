@@ -11,7 +11,6 @@ import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.action.handler.MLSearchHandler;
-import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
 import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
@@ -44,11 +43,11 @@ public class SearchModelTransportAction extends HandledTransportAction<MLSearchA
 
     @Override
     protected void doExecute(Task task, MLSearchActionRequest request, ActionListener<SearchResponse> actionListener) {
-        request.getSearchRequest().indices(CommonValue.ML_MODEL_INDEX);
+
         String tenantId = request.getTenantId();
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
             return;
         }
-        mlSearchHandler.search(request.getSearchRequest(), tenantId, actionListener);
+        mlSearchHandler.search(request, tenantId, actionListener);
     }
 }

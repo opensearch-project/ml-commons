@@ -78,6 +78,6 @@ public class RestMemorySearchConversationsActionTests extends OpenSearchTestCase
         ArgumentCaptor<RestResponse> responseCaptor = ArgumentCaptor.forClass(RestResponse.class);
 
         verify(client, times(1)).execute(eq(SearchConversationsAction.INSTANCE), argumentCaptor.capture(), any());
-        assert (argumentCaptor.getValue().getSearchRequest().source().query() instanceof MatchAllQueryBuilder);
+        assert (argumentCaptor.getValue().source().query() instanceof MatchAllQueryBuilder);
     }
 }

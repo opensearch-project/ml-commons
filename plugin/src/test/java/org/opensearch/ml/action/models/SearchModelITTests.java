@@ -107,7 +107,7 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
     }
 
     private void test_empty_body_search() {
-        SearchRequest searchRequest = new SearchRequest();
+        SearchRequest searchRequest = new SearchRequest(".plugins-ml-model");
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchRequest.source(searchSourceBuilder);
         searchRequest.source().query(QueryBuilders.boolQuery().mustNot(QueryBuilders.existsQuery(CHUNK_NUMBER)));
@@ -117,7 +117,7 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
     }
 
     private void test_matchAll_search() {
-        SearchRequest searchRequest = new SearchRequest();
+        SearchRequest searchRequest = new SearchRequest(".plugins-ml-model");
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchRequest.source(searchSourceBuilder);
         searchRequest
@@ -129,7 +129,7 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
     }
 
     private void test_bool_search() {
-        SearchRequest searchRequest = new SearchRequest();
+        SearchRequest searchRequest = new SearchRequest(".plugins-ml-model");
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchRequest.source(searchSourceBuilder);
         searchRequest
@@ -150,7 +150,7 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
     }
 
     private void test_term_search() {
-        SearchRequest searchRequest = new SearchRequest();
+        SearchRequest searchRequest = new SearchRequest(".plugins-ml-model");
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchRequest.source(searchSourceBuilder);
         BoolQueryBuilder boolQueryBuilder = QueryBuilders
@@ -164,7 +164,7 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
     }
 
     private void test_terms_search() {
-        SearchRequest searchRequest = new SearchRequest();
+        SearchRequest searchRequest = new SearchRequest(".plugins-ml-model");
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchRequest.source(searchSourceBuilder);
         BoolQueryBuilder boolQueryBuilder = QueryBuilders
@@ -178,7 +178,7 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
     }
 
     private void test_range_search() {
-        SearchRequest searchRequest = new SearchRequest();
+        SearchRequest searchRequest = new SearchRequest(".plugins-ml-model");
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchRequest.source(searchSourceBuilder);
         BoolQueryBuilder boolQueryBuilder = QueryBuilders
@@ -192,7 +192,7 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
     }
 
     private void test_matchPhrase_search() {
-        SearchRequest searchRequest = new SearchRequest();
+        SearchRequest searchRequest = new SearchRequest(".plugins-ml-model");
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchRequest.source(searchSourceBuilder);
         BoolQueryBuilder boolQueryBuilder = QueryBuilders

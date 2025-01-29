@@ -8,7 +8,6 @@ package org.opensearch.ml.action.tasks;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.utils.RestActionUtils.wrapListenerToHandleSearchIndexNotFound;
 
-import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
@@ -51,7 +50,6 @@ public class SearchTaskTransportAction extends HandledTransportAction<MLSearchAc
     @Override
     protected void doExecute(Task task, MLSearchActionRequest mlSearchActionRequest, ActionListener<SearchResponse> actionListener) {
         String tenantId = mlSearchActionRequest.getTenantId();
-        SearchRequest request = mlSearchActionRequest.getSearchRequest();
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
             return;
         }
@@ -65,16 +63,16 @@ public class SearchTaskTransportAction extends HandledTransportAction<MLSearchAc
                 BoolQueryBuilder queryBuilder = QueryBuilders.boolQuery();
 
                 // Preserve existing query if present
-                if (request.source().query() != null) {
-                    queryBuilder.must(request.source().query());
+                if (mlSearchActionRequest.source().query() != null) {
+                    queryBuilder.must(mlSearchActionRequest.source().query());
                 }
                 // Add tenancy filter
                 queryBuilder.filter(QueryBuilders.termQuery(TENANT_ID_FIELD, tenantId)); // Replace 'tenant_id_field' with actual field name
 
                 // Update the request's source with the new query
-                request.source().query(queryBuilder);
+                mlSearchActionRequest.source().query(queryBuilder);
             }
-            client.search(request, ActionListener.runBefore(wrappedListener, context::restore));
+            client.search(mlSearchActionRequest, ActionListener.runBefore(wrappedListener, context::restore));
         } catch (Exception e) {
             log.error(e.getMessage(), e);
             actionListener.onFailure(e);

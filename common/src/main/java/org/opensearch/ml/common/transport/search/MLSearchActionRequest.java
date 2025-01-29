@@ -25,7 +25,6 @@ import lombok.Getter;
  */
 @Getter
 public class MLSearchActionRequest extends SearchRequest {
-    SearchRequest searchRequest;
     String tenantId;
 
     /**
@@ -36,7 +35,7 @@ public class MLSearchActionRequest extends SearchRequest {
      */
     @Builder
     public MLSearchActionRequest(SearchRequest searchRequest, String tenantId) {
-        this.searchRequest = searchRequest;
+        super(searchRequest);
         this.tenantId = tenantId;
     }
 
@@ -50,6 +49,7 @@ public class MLSearchActionRequest extends SearchRequest {
         super(input);
         Version streamInputVersion = input.getVersion();
         this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
+
     }
 
     /**
@@ -78,6 +78,14 @@ public class MLSearchActionRequest extends SearchRequest {
     public static MLSearchActionRequest fromActionRequest(ActionRequest actionRequest) {
         if (actionRequest instanceof MLSearchActionRequest) {
             return (MLSearchActionRequest) actionRequest;
+        }
+
+        if (actionRequest instanceof SearchRequest) {
+            return MLSearchActionRequest
+                .builder()
+                .searchRequest((SearchRequest) actionRequest)
+                .tenantId(null) // No tenant ID in the original request
+                .build();
         }
 
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream(); OutputStreamStreamOutput osso = new OutputStreamStreamOutput(baos)) {
