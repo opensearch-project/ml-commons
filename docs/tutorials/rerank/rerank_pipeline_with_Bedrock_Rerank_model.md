@@ -169,6 +169,7 @@ POST /_plugins/_ml/connectors/_create
         "content-type": "application/json"
       },
       "pre_process_function": "connector.pre_process.bedrock.rerank",
+      "post_process_function": "connector.post_process.bedrock.rerank",
       "request_body": """
         {
           "queries": ${parameters.queries},
@@ -182,8 +183,7 @@ POST /_plugins/_ml/connectors/_create
           },
           "sources": ${parameters.sources}
         }
-      """,
-      "post_process_function": "connector.post_process.bedrock.rerank"
+      """
     }
   ]
 }
@@ -218,6 +218,7 @@ POST /_plugins/_ml/connectors/_create
         "content-type": "application/json"
       },
       "pre_process_function": "connector.pre_process.bedrock.rerank",
+      "post_process_function": "connector.post_process.bedrock.rerank",
       "request_body": """
         {
           "queries": ${parameters.queries},
@@ -231,8 +232,7 @@ POST /_plugins/_ml/connectors/_create
           },
           "sources": ${parameters.sources}
         }
-      """,
-      "post_process_function": "connector.post_process.bedrock.rerank"
+      """
     }
   ]
 }
@@ -430,19 +430,19 @@ Create a reranking pipeline using the Amazon Bedrock reranking model:
 ```json
 PUT /_search/pipeline/rerank_pipeline_bedrock
 {
-    "description": "Pipeline for reranking with Bedrock rerank model",
-    "response_processors": [
-        {
-            "rerank": {
-                "ml_opensearch": {
-                    "model_id": "your_model_id_created_in_step1"
-                },
-                "context": {
-                    "document_fields": ["passage_text"]
-                }
-            }
+  "description": "Pipeline for reranking with Bedrock rerank model",
+  "response_processors": [
+    {
+      "rerank": {
+        "ml_opensearch": {
+          "model_id": "your_model_id_created_in_step1"
+        },
+        "context": {
+          "document_fields": ["passage_text"]
         }
-    ]
+      }
+    }
+  ]
 }
 ```
 
@@ -459,11 +459,6 @@ POST my-test-data/_search
     "match": {
       "passage_text": "What is the capital city of America?"
     }
-  },
-  "highlight": {
-    "pre_tags": ["<strong>"],
-    "post_tags": ["</strong>"],
-    "fields": {"passage_text": {}}
   },
   "_source": false,
   "fields": ["passage_text"]
@@ -496,11 +491,6 @@ The first document in the response is `Carson City is the capital city of the Am
           "passage_text": [
             "Carson City is the capital city of the American state of Nevada."
           ]
-        },
-        "highlight": {
-          "passage_text": [
-            "Carson <strong>City</strong> <strong>is</strong> <strong>the</strong> <strong>capital</strong> <strong>city</strong> <strong>of</strong> <strong>the</strong> American state <strong>of</strong> Nevada."
-          ]
         }
       },
       {
@@ -510,12 +500,6 @@ The first document in the response is `Carson City is the capital city of the Am
         "fields": {
           "passage_text": [
             "The Commonwealth of the Northern Mariana Islands is a group of islands in the Pacific Ocean. Its capital is Saipan."
-          ]
-        },
-        "highlight": {
-          "passage_text": [
-            "<strong>The</strong> Commonwealth <strong>of</strong> <strong>the</strong> Northern Mariana Islands <strong>is</strong> a group <strong>of</strong> islands in <strong>the</strong> Pacific Ocean.",
-            "Its <strong>capital</strong> <strong>is</strong> Saipan."
           ]
         }
       },
@@ -527,13 +511,6 @@ The first document in the response is `Carson City is the capital city of the Am
           "passage_text": [
             "Washington, D.C. (also known as simply Washington or D.C., and officially as the District of Columbia) is the capital of the United States. It is a federal district."
           ]
-        },
-        "highlight": {
-          "passage_text": [
-            "(also known as simply Washington or D.C., and officially as <strong>the</strong> District <strong>of</strong> Columbia) <strong>is</strong> <strong>the</strong> <strong>capital</strong>",
-            "<strong>of</strong> <strong>the</strong> United States.",
-            "It <strong>is</strong> a federal district."
-          ]
         }
       },
       {
@@ -543,12 +520,6 @@ The first document in the response is `Carson City is the capital city of the Am
         "fields": {
           "passage_text": [
             "Capital punishment (the death penalty) has existed in the United States since beforethe United States was a country. As of 2017, capital punishment is legal in 30 of the 50 states."
-          ]
-        },
-        "highlight": {
-          "passage_text": [
-            "<strong>Capital</strong> punishment (<strong>the</strong> death penalty) has existed in <strong>the</strong> United States since beforethe United States",
-            "As <strong>of</strong> 2017, <strong>capital</strong> punishment <strong>is</strong> legal in 30 <strong>of</strong> <strong>the</strong> 50 states."
           ]
         }
       }
@@ -562,7 +533,7 @@ Next, test the query using the reranking pipeline:
 ```json
 POST my-test-data/_search?search_pipeline=rerank_pipeline_bedrock
 {
-  "query": {
+  "filter": {
     "match": {
       "passage_text": "What is the capital city of America?"
     }
@@ -573,11 +544,6 @@ POST my-test-data/_search?search_pipeline=rerank_pipeline_bedrock
          "query_text": "What is the capital city of America?"
       }
     }
-  },
-  "highlight": {
-    "pre_tags": ["<strong>"],
-    "post_tags": ["</strong>"],
-    "fields": {"passage_text": {}}
   },
   "_source": false,
   "fields": ["passage_text"]
@@ -611,13 +577,6 @@ The first document in the response is `"Washington, D.C. (also known as simply W
           "passage_text": [
             "Washington, D.C. (also known as simply Washington or D.C., and officially as the District of Columbia) is the capital of the United States. It is a federal district."
           ]
-        },
-        "highlight": {
-          "passage_text": [
-            "(also known as simply Washington or D.C., and officially as <strong>the</strong> District <strong>of</strong> Columbia) <strong>is</strong> <strong>the</strong> <strong>capital</strong>",
-            "<strong>of</strong> <strong>the</strong> United States.",
-            "It <strong>is</strong> a federal district."
-          ]
         }
       },
       {
@@ -627,11 +586,6 @@ The first document in the response is `"Washington, D.C. (also known as simply W
         "fields": {
           "passage_text": [
             "Carson City is the capital city of the American state of Nevada."
-          ]
-        },
-        "highlight": {
-          "passage_text": [
-            "Carson <strong>City</strong> <strong>is</strong> <strong>the</strong> <strong>capital</strong> <strong>city</strong> <strong>of</strong> <strong>the</strong> American state <strong>of</strong> Nevada."
           ]
         }
       },
@@ -643,12 +597,6 @@ The first document in the response is `"Washington, D.C. (also known as simply W
           "passage_text": [
             "The Commonwealth of the Northern Mariana Islands is a group of islands in the Pacific Ocean. Its capital is Saipan."
           ]
-        },
-        "highlight": {
-          "passage_text": [
-            "<strong>The</strong> Commonwealth <strong>of</strong> <strong>the</strong> Northern Mariana Islands <strong>is</strong> a group <strong>of</strong> islands in <strong>the</strong> Pacific Ocean.",
-            "Its <strong>capital</strong> <strong>is</strong> Saipan."
-          ]
         }
       },
       {
@@ -658,12 +606,6 @@ The first document in the response is `"Washington, D.C. (also known as simply W
         "fields": {
           "passage_text": [
             "Capital punishment (the death penalty) has existed in the United States since beforethe United States was a country. As of 2017, capital punishment is legal in 30 of the 50 states."
-          ]
-        },
-        "highlight": {
-          "passage_text": [
-            "<strong>Capital</strong> punishment (<strong>the</strong> death penalty) has existed in <strong>the</strong> United States since beforethe United States",
-            "As <strong>of</strong> 2017, <strong>capital</strong> punishment <strong>is</strong> legal in 30 <strong>of</strong> <strong>the</strong> 50 states."
           ]
         }
       }
@@ -692,10 +634,33 @@ POST my-test-data/_search?search_pipeline=rerank_pipeline_bedrock
       }
     }
   },
-  "highlight": {
-    "pre_tags": ["<strong>"],
-    "post_tags": ["</strong>"],
-    "fields": {"passage_text": {}}
+  "_source": false,
+  "fields": ["passage_text"]
+}
+```
+
+Note: If you don't use score calculated by OpenSearch, you can optimize query latency to use filter context instead. It skips score calculation on OpenSearch side:
+
+```json
+POST my-test-data/_search?search_pipeline=rerank_pipeline_bedrock
+{
+  "query": {
+    "bool": {
+      "filter": [
+        {
+          "match": {
+            "passage_text": "What is the capital city of America?"
+          }
+        }
+      ]
+    }
+  },
+  "ext": {
+    "rerank": {
+      "query_context": {
+         "query_text_path": "query.match.passage_text.query"
+      }
+    }
   },
   "_source": false,
   "fields": ["passage_text"]
