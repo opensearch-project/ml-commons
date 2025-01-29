@@ -21,7 +21,7 @@ import static org.opensearch.ml.utils.TestHelper.getLocalSampleCalculatorRestReq
 import static org.opensearch.ml.utils.TestHelper.getMetricsCorrelationRestRequest;
 
 import java.io.IOException;
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -385,7 +385,9 @@ public class RestMLExecuteActionTests extends OpenSearchTestCase {
             bucket1.setOverallAggValue(65.0);
 
             Result result = new Result();
-            result.setBuckets(Collections.singletonList(bucket1));
+            List<Bucket> buckets = new ArrayList<>();
+            buckets.add(bucket1);
+            result.setBuckets(buckets);
 
             AnomalyLocalizationOutput output = new AnomalyLocalizationOutput();
             Map<String, Result> results = new HashMap<>();
