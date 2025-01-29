@@ -525,6 +525,7 @@ String opensearchJobSchedulerPlugin = "opensearch-job-scheduler-" + project.vers
                             }
                             return fileTree(bwcMLFilePath + bwcVersion).matching {
                                 include bwcMlPlugin
+                            }
                         }
                     }
                 }
