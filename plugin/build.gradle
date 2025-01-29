@@ -479,8 +479,8 @@ tasks.withType(licenseHeaders.class) {
 String bwcVersion = "2.4.0.0"
 String bwcShortVersion = bwcVersion[0..4]
 String baseName = "mlCommonsBwcCluster"
-String bwcFilePath = "src/test/resources/org/opensearch/ml/bwc/"
-String bwcMLFilePath = "src/test/resources/org/opensearch/ml/bwc/ml/"
+String bwcBasePath = "src/test/resources/org/opensearch/ml/bwc/"
+String bwcMLFilePath = "src/test/resources/org/opensearch/ml/bwc/"
 String bwcJobSchedulerFilePath = "src/test/resources/org/opensearch/ml/bwc/job-scheduler/"
 
 String bwcMlPlugin = "opensearch-ml-" + bwcVersion + ".zip"
@@ -504,31 +504,44 @@ String opensearchJobSchedulerPlugin = "opensearch-job-scheduler-" + project.vers
                     return new RegularFile() {
                         @Override
                         File getAsFile() {
-                            File bwcDir = new File('./plugin/' + bwcMLFilePath)
+
+                            File bwcDir = new File('./plugin/' + bwcBasePath)
                             if (!bwcDir.exists()) {
                                 bwcDir.mkdirs()
                             }
-                            File dir = new File('./plugin/' + bwcMLFilePath + bwcVersion)
+                            File dir = new File('./plugin/' + bwcBasePath + 'job-scheduler/' + bwcVersion)
                             if (!dir.exists()) {
                                 dir.mkdirs()
                             }
-
-                            File jobSchedulerDir = new File('./plugin/' + bwcJobSchedulerFilePath + bwcVersion)
-                            if (!jobSchedulerDir.exists()) {
-                                jobSchedulerDir.mkdirs()
+                            File mlJobSchedulerFile = new File(dir, bwcJobSchedulerPlugin)
+                            if (!mlJobSchedulerFile.exists()) {
+                                new URL(bwcRemoteJobSchedulerFile).withInputStream{ ins -> mlJobSchedulerFile.withOutputStream{ it << ins }}
                             }
+                            return fileTree(bwcBasePath + 'job-scheduler/' + bwcVersion).getSingleFile()
+                        }
+                    }
+                }
+            }))
 
-                            File jobSchedulerFile = new File(jobSchedulerDir, bwcJobSchedulerPlugin)
-                            if (!jobSchedulerFile.exists()) {
-                                new URL(bwcRemoteJobSchedulerFile).withInputStream { ins ->
-                                    jobSchedulerFile.withOutputStream { it << ins }
-                                }
+            plugin(provider(new Callable<RegularFile>() {
+                @Override
+                RegularFile call() throws Exception {
+                    return new RegularFile() {
+                        @Override
+                        File getAsFile() {
+                            File bwcDir = new File('./plugin/' + bwcBasePath)
+                            if (!bwcDir.exists()) {
+                                bwcDir.mkdirs()
+                            }
+                            File dir = new File('./plugin/' + bwcBasePath + 'ml/' + bwcVersion)
+                            if (!dir.exists()) {
+                                dir.mkdirs()
                             }
                             File mlPluginFile = new File(dir, bwcMlPlugin)
                             if (!mlPluginFile.exists()) {
                                 new URL(bwcRemoteMlFile).withInputStream{ ins -> mlPluginFile.withOutputStream{ it << ins }}
                             }
-                            return fileTree(bwcMLFilePath + bwcVersion).getSingleFile()
+                            return fileTree(bwcBasePath + 'ml/' + bwcVersion).getSingleFile()
                         }
                     }
                 }
