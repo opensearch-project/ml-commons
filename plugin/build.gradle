@@ -505,16 +505,19 @@ String opensearchJobSchedulerPlugin = "opensearch-job-scheduler-" + project.vers
                         @Override
                         File getAsFile() {
 
-                            File dir = new File(bwcBasePath + "job-scheduler/" + bwcVersion)
+                            File bwcDir = new File('./plugin/' + bwcBasePath)
+                            if (!bwcDir.exists()) {
+                                bwcDir.mkdirs()
+                            }
+                            File dir = new File('./plugin/' + bwcJobSchedulerFilePath + bwcVersion)
                             if (!dir.exists()) {
                                 dir.mkdirs()
                             }
-                            File file = new File(dir, "opensearch-job-scheduler-" + bwcVersion + ".zip")
-                            if (!file.exists()) {
-                                new URL(bwcRemoteJobSchedulerFile).withInputStream{ ins -> file.withOutputStream{ it << ins }}
+                            File mlJobSchedulerFile = new File(dir, bwcJobSchedulerPlugin)
+                            if (!mlJobSchedulerFile.exists()) {
+                                new URL(bwcRemoteJobSchedulerFile).withInputStream{ ins -> mlJobSchedulerFile.withOutputStream{ it << ins }}
                             }
-                            return fileTree(bwcBasePath + "job-scheduler/" + bwcVersion).getSingleFile()
-
+                            return fileTree(bwcJobSchedulerFilePath + bwcVersion).getSingleFile()
                         }
                     }
                 }
@@ -526,15 +529,19 @@ String opensearchJobSchedulerPlugin = "opensearch-job-scheduler-" + project.vers
                     return new RegularFile() {
                         @Override
                         File getAsFile() {
-                            File dir = new File(bwcBasePath + "ml/" + bwcVersion)
+                            File bwcDir = new File('./plugin/' + bwcBasePath)
+                            if (!bwcDir.exists()) {
+                                bwcDir.mkdirs()
+                            }
+                            File dir = new File('./plugin/' + bwcMLFilePath + bwcVersion)
                             if (!dir.exists()) {
                                 dir.mkdirs()
                             }
-                            File file = new File(dir, "opensearch-ml-" + bwcVersion + ".zip")
-                            if (!file.exists()) {
-                                new URL(bwcRemoteMlFile).withInputStream{ ins -> file.withOutputStream{ it << ins }}
+                            File mlPluginFile = new File(dir, bwcMlPlugin)
+                            if (!mlPluginFile.exists()) {
+                                new URL(bwcRemoteMlFile).withInputStream{ ins -> mlPluginFile.withOutputStream{ it << ins }}
                             }
-                            return fileTree(bwcBasePath + "ml/" + bwcVersion).getSingleFile()
+                            return fileTree(bwcMLFilePath + bwcVersion).getSingleFile()
                         }
                     }
                 }
