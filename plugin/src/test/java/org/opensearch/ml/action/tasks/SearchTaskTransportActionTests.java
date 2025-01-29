@@ -115,14 +115,15 @@ public class SearchTaskTransportActionTests extends OpenSearchTestCase {
     public void test_DoExecute() {
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
         SearchRequest request = new SearchRequest("my_index").source(sourceBuilder);
+        MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(request, null);
         doAnswer(invocation -> {
             ActionListener<SearchResponse> listener = invocation.getArgument(1);
             listener.onResponse(searchResponse);
             return null;
-        }).when(client).search(eq(request), any());
-        MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(request, null);
+        }).when(client).search(eq(mlSearchActionRequest), any());
+
         searchTaskTransportAction.doExecute(null, mlSearchActionRequest, actionListener);
-        verify(client, times(1)).search(eq(request), any());
+        verify(client, times(1)).search(eq(mlSearchActionRequest), any());
         // Use ArgumentCaptor to capture the SearchResponse
         ArgumentCaptor<SearchResponse> responseCaptor = ArgumentCaptor.forClass(SearchResponse.class);
         // Capture the response passed to actionListener.onResponse

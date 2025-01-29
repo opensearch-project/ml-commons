@@ -20,7 +20,6 @@ package org.opensearch.ml.memory.action.conversation;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_DISABLED_MESSAGE;
 
 import org.opensearch.OpenSearchException;
-import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
@@ -73,14 +72,13 @@ public class SearchConversationsTransportAction extends HandledTransportAction<M
 
     @Override
     public void doExecute(Task task, MLSearchActionRequest mlSearchActionRequest, ActionListener<SearchResponse> actionListener) {
-        SearchRequest request = mlSearchActionRequest.getSearchRequest();
         if (!featureIsEnabled) {
             actionListener.onFailure(new OpenSearchException(ML_COMMONS_MEMORY_FEATURE_DISABLED_MESSAGE));
             return;
         } else {
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().newStoredContext(true)) {
                 ActionListener<SearchResponse> internalListener = ActionListener.runBefore(actionListener, context::restore);
-                cmHandler.searchConversations(request, internalListener);
+                cmHandler.searchConversations(mlSearchActionRequest, internalListener);
             } catch (Exception e) {
                 log.error("Failed to search memories", e);
                 actionListener.onFailure(e);

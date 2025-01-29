@@ -21,7 +21,6 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
-import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
 import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
@@ -65,12 +64,11 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<MLSe
     protected void doExecute(Task task, MLSearchActionRequest request, ActionListener<SearchResponse> actionListener) {
         User user = RestActionUtils.getUserContext(client);
         ActionListener<SearchResponse> listener = wrapRestActionListener(actionListener, "Fail to search");
-        request.getSearchRequest().indices(CommonValue.ML_MODEL_GROUP_INDEX);
         String tenantId = request.getTenantId();
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
             return;
         }
-        preProcessRoleAndPerformSearch(request.getSearchRequest(), tenantId, user, listener);
+        preProcessRoleAndPerformSearch(request, tenantId, user, listener);
     }
 
     private void preProcessRoleAndPerformSearch(

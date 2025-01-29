@@ -25,7 +25,6 @@ import lombok.Getter;
  */
 @Getter
 public class MLSearchActionRequest extends SearchRequest {
-    SearchRequest searchRequest;
     String tenantId;
 
     /**
@@ -36,7 +35,7 @@ public class MLSearchActionRequest extends SearchRequest {
      */
     @Builder
     public MLSearchActionRequest(SearchRequest searchRequest, String tenantId) {
-        this.searchRequest = searchRequest;
+        super(searchRequest);
         this.tenantId = tenantId;
     }
 
@@ -49,10 +48,8 @@ public class MLSearchActionRequest extends SearchRequest {
     public MLSearchActionRequest(StreamInput input) throws IOException {
         super(input);
         Version streamInputVersion = input.getVersion();
-        if (input.readBoolean()) {
-            searchRequest = new SearchRequest(input);
-        }
         this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
+
     }
 
     /**
@@ -65,12 +62,6 @@ public class MLSearchActionRequest extends SearchRequest {
     public void writeTo(StreamOutput output) throws IOException {
         super.writeTo(output);
         Version streamOutputVersion = output.getVersion();
-        if (searchRequest != null) {
-            output.writeBoolean(true); // user exists
-            searchRequest.writeTo(output);
-        } else {
-            output.writeBoolean(false); // user does not exist
-        }
         if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
             output.writeOptionalString(tenantId);
         }
@@ -87,6 +78,14 @@ public class MLSearchActionRequest extends SearchRequest {
     public static MLSearchActionRequest fromActionRequest(ActionRequest actionRequest) {
         if (actionRequest instanceof MLSearchActionRequest) {
             return (MLSearchActionRequest) actionRequest;
+        }
+
+        if (actionRequest instanceof SearchRequest) {
+            return MLSearchActionRequest
+                .builder()
+                .searchRequest((SearchRequest) actionRequest)
+                .tenantId(null) // No tenant ID in the original request
+                .build();
         }
 
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream(); OutputStreamStreamOutput osso = new OutputStreamStreamOutput(baos)) {
