@@ -2,7 +2,20 @@
 This blueprint integrates [DeepSeek Chat Model](https://api-docs.deepseek.com/api/create-chat-completion) for question-answering capabilities for standalone interactions. Full conversational functionality requires additional development. 
 Adapt and extend this blueprint as needed for your specific use case.
 
-## 1. Create connector for DeepSeek Chat:
+## 1. Add connector endpoint to trusted URLs:
+Note: skip this step starting 2.19.0
+
+```json
+PUT /_cluster/settings
+{
+    "persistent": {
+        "plugins.ml_commons.trusted_connector_endpoints_regex": [
+          "^https://api\\.deepseek\\.com/.*$"
+        ]
+    }
+}
+```
+## 2. Create connector for DeepSeek Chat:
 
 ```json
 POST /_plugins/_ml/connectors/_create
@@ -13,8 +26,7 @@ POST /_plugins/_ml/connectors/_create
   "protocol": "http",
   "parameters": {
     "endpoint": "api.deepseek.com",
-    "model": "deepseek-chat",
-    "stream": false
+    "model": "deepseek-chat"
   },
   "credential": {
     "deepSeek_key": "<PLEASE ADD YOUR DEEPSEEK API KEY HERE>"
@@ -28,7 +40,7 @@ POST /_plugins/_ml/connectors/_create
         "Content-Type": "application/json",
         "Authorization": "Bearer ${credential.deepSeek_key}"
       },
-      "request_body": "{ \"model\": \"${parameters.model}\", \"messages\": ${parameters.messages}, \"stream\":${parameters.stream} }"
+      "request_body": "{ \"model\": \"${parameters.model}\", \"messages\": ${parameters.messages} }"
     }
   ]
 }
@@ -41,7 +53,7 @@ POST /_plugins/_ml/connectors/_create
 }
 ```
 
-## 2. Create model group:
+## 3. Create model group:
 
 ```json
 POST /_plugins/_ml/model_groups/_register
@@ -59,7 +71,7 @@ POST /_plugins/_ml/model_groups/_register
 }
 ```
 
-## 3. Register model to model group & deploy model:
+## 4. Register model to model group & deploy model:
 
 ```json
 POST /_plugins/_ml/models/_register?deploy=true
@@ -81,7 +93,7 @@ POST /_plugins/_ml/models/_register?deploy=true
 }
 ```
 
-## 4. Test model inference
+## 5. Test model inference
 
 ```json
 POST /_plugins/_ml/models/oUdPqZQBQwAL8-GOCZYL/_predict
@@ -97,8 +109,7 @@ POST /_plugins/_ml/models/oUdPqZQBQwAL8-GOCZYL/_predict
         "content": "Hello!"
       }
     ]
-  },
-  "stream": false
+  }
 }
 ```
 
