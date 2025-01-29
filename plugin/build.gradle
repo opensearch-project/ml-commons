@@ -480,16 +480,15 @@ String bwcVersion = "2.4.0.0"
 String bwcShortVersion = bwcVersion[0..4]
 String baseName = "mlCommonsBwcCluster"
 String bwcBasePath = "src/test/resources/org/opensearch/ml/bwc/"
-String bwcMLFilePath = "src/test/resources/org/opensearch/ml/bwc/ml/"
-String bwcJobSchedulerFilePath = "src/test/resources/org/opensearch/ml/bwc/job-scheduler/"
-
-String bwcMlPlugin = "opensearch-ml-" + bwcVersion + ".zip"
-String bwcRemoteMlFile = "https://ci.opensearch.org/ci/dbc/distribution-build-opensearch/" + bwcShortVersion + "/latest/linux/x64/tar/builds/opensearch/plugins/" + bwcMlPlugin
+String bwcMLFilePath = bwcBasePath + "ml/"
+String bwcJobSchedulerFilePath = bwcBasePath + "job-scheduler/"
 String opensearchMlPlugin = "opensearch-ml-" + project.version + ".zip"
 
+String bwcMlPlugin = "opensearch-ml-" + bwcVersion + ".zip"
 String bwcJobSchedulerPlugin = "opensearch-job-scheduler-" + bwcVersion + ".zip"
-String bwcRemoteJobSchedulerFile = "https://ci.opensearch.org/ci/dbc/distribution-build-opensearch/" + bwcShortVersion + "/latest/linux/x64/tar/builds/opensearch/plugins/" + bwcJobSchedulerPlugin
-String opensearchJobSchedulerPlugin = "opensearch-job-scheduler-" + project.version + ".zip"
+String bwcRemoteFile = "https://ci.opensearch.org/ci/dbc/distribution-build-opensearch/" + bwcShortVersion + "/latest/linux/x64/tar/builds/opensearch/plugins/"
+String bwcRemoteMlFile = bwcRemoteFile + bwcMlPlugin
+String bwcRemoteJobSchedulerFile = bwcRemoteFile + bwcJobSchedulerPlugin
 
 2.times {i ->
     testClusters {
