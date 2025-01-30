@@ -30,5 +30,6 @@ public enum MLTaskState {
     CANCELLED,
     COMPLETED_WITH_ERROR,
     CANCELLING,
-    EXPIRED
+    EXPIRED,
+    UNREACHABLE
 }

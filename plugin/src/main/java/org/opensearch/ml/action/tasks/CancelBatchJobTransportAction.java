@@ -181,7 +181,11 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
                     .orElse(null)
             );
 
-        RemoteInferenceInputDataSet inferenceInputDataSet = new RemoteInferenceInputDataSet(parameters, ActionType.BATCH_PREDICT_STATUS);
+        RemoteInferenceInputDataSet inferenceInputDataSet = new RemoteInferenceInputDataSet(
+            parameters,
+            ActionType.BATCH_PREDICT_STATUS,
+            null
+        );
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(inferenceInputDataSet).build();
         String modelId = mlTask.getModelId();
         User user = RestActionUtils.getUserContext(client);
