@@ -30,14 +30,14 @@ public class BedrockEmbeddingPostProcessFunctionTest {
     @Test
     public void process_WrongInput_NotList() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Post process function input is not a List.");
+        exceptionRule.expectMessage("Model response is neither a list type nor a map type, please check the model response!");
         function.apply("abc");
     }
 
     @Test
     public void process_WrongInput_NotNumberList() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("The embedding should be a non-empty List containing Float values.");
+        exceptionRule.expectMessage("Model result is NOT an non-empty List containing Number values, please check the model response!");
         function.apply(Arrays.asList("abc"));
     }
 

@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
@@ -40,6 +41,7 @@ import org.opensearch.ml.common.dataset.TextSimilarityInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLGuard;
+import org.opensearch.ml.common.output.model.MLResultDataType;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.script.ScriptService;
@@ -225,7 +227,15 @@ public class ConnectorUtils {
                 responseFilter = MLPostProcessFunction.getResponseFilter(postProcessFunction);
 
             Object filteredOutput = JsonPath.read(modelResponse, responseFilter);
-            List<ModelTensor> processedResponse = MLPostProcessFunction.get(postProcessFunction).apply(filteredOutput);
+            // For case use specifies the response filter to embedding type, we need to set the embedding type back to processed
+            // ModelTensor.
+            MLResultDataType mlResultDataType = parseMLResultDataTypeFromResponseFilter(responseFilter);
+            List<ModelTensor> processedResponse;
+            if (mlResultDataType == null) {
+                processedResponse = MLPostProcessFunction.get(postProcessFunction).apply(filteredOutput);
+            } else {
+                processedResponse = MLPostProcessFunction.get(postProcessFunction).apply(filteredOutput, mlResultDataType);
+            }
             return ModelTensors.builder().mlModelTensors(processedResponse).build();
         }
 
@@ -242,6 +252,15 @@ public class ConnectorUtils {
             connector.parseResponse(filteredResponse, modelTensors, scriptReturnModelTensor);
         }
         return ModelTensors.builder().mlModelTensors(modelTensors).build();
+    }
+
+    private static MLResultDataType parseMLResultDataTypeFromResponseFilter(String responseFilter) {
+        for (MLResultDataType type : MLResultDataType.values()) {
+            if (responseFilter.contains("." + type.name()) || responseFilter.contains("." + type.name().toLowerCase(Locale.ROOT))) {
+                return type;
+            }
+        }
+        return null;
     }
 
     private static String fillProcessFunctionParameter(Map<String, String> parameters, String processFunction) {

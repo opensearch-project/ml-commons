@@ -12,7 +12,7 @@ import java.util.Map;
 import org.opensearch.ml.common.output.model.MLResultDataType;
 import org.opensearch.ml.common.output.model.ModelTensor;
 
-public class CohereRerankPostProcessFunction extends ConnectorPostProcessFunction<List<Map<String, Object>>> {
+public class CohereRerankPostProcessFunction implements ConnectorPostProcessFunction {
 
     @Override
     public void validate(Object input) {
@@ -33,7 +33,8 @@ public class CohereRerankPostProcessFunction extends ConnectorPostProcessFunctio
     }
 
     @Override
-    public List<ModelTensor> process(List<Map<String, Object>> rerankResults) {
+    public List<ModelTensor> process(Object input) {
+        List<Map<String, Object>> rerankResults = (List<Map<String, Object>>) input;
         List<ModelTensor> modelTensors = new ArrayList<>();
 
         if (rerankResults.size() > 0) {
