@@ -2066,7 +2066,7 @@ public class MLModelManager {
      * @param tenantId tenant id
      * @param listener    action listener
      */
-    private void getConnector(String connectorId, String tenantId, ActionListener<Connector> listener) {
+    public void getConnector(String connectorId, String tenantId, ActionListener<Connector> listener) {
         GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
             .builder()
             .index(ML_CONNECTOR_INDEX)
