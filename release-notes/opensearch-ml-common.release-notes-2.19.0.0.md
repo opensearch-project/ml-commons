@@ -26,7 +26,6 @@ Compatible with OpenSearch 2.19.0
 * multi-tenancy + sdk client related changes in agents (#3432)[https://github.com/opensearch-project/ml-commons/pull/3432]
 * Introduce Ml Inference Search Request Extension (#3284)[https://github.com/opensearch-project/ml-commons/pull/3284]
 * Cherry-pick BWC fix for system prompt and user instructions (#3437)[https://github.com/opensearch-project/ml-commons/pull/3437]
-* Add DeepSeek connector blueprint (#3436)[https://github.com/opensearch-project/ml-commons/pull/3436]
 * Add deepseek as a trusted endpoint. (#3440)[https://github.com/opensearch-project/ml-commons/pull/3440]
 * applying multi-tenancy in search [model, model group, agent, connector] (#3433)[https://github.com/opensearch-project/ml-commons/pull/3433]
 * Added amazon rekognition as a trust endpoint (#3419)[https://github.com/opensearch-project/ml-commons/pull/3419]
@@ -84,3 +83,4 @@ Compatible with OpenSearch 2.19.0
 * add tutorials for cross encoder models on Amazon Bedrock (#3278)[https://github.com/opensearch-project/ml-commons/pull/3278]
 * fix typo (#3234)[https://github.com/opensearch-project/ml-commons/pull/3234]
 * Tutorial for ml inference with cohere rerank model (#3398)[https://github.com/opensearch-project/ml-commons/pull/3398]
+* Add DeepSeek connector blueprint (#3436)[https://github.com/opensearch-project/ml-commons/pull/3436]
