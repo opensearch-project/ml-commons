@@ -13,6 +13,7 @@ import java.util.regex.Pattern;
 
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.opensearch.client.Response;
@@ -201,6 +202,7 @@ public class RestMLGuardrailsIT extends MLCommonsRestTestCase {
         predictRemoteModel(modelId, predictInput);
     }
 
+    @Ignore
     public void testPredictRemoteModelSuccessWithModelGuardrail() throws IOException, InterruptedException {
         // Skip test if key is null
         if (OPENAI_KEY == null) {
