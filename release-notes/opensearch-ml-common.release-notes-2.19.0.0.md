@@ -34,6 +34,8 @@ Compatible with OpenSearch 2.19.0
 * Undeploy models with no WorkerNodes (#3380)[https://github.com/opensearch-project/ml-commons/pull/3380]
 * support batch task management by periodically bolling the remote task via a cron job (#3421)[https://github.com/opensearch-project/ml-commons/pull/3421]
 * Add pre and post process functions for Bedrock Rerank API #3254 (#3339)[https://github.com/opensearch-project/ml-commons/pull/3339]
+* [Backport 2.19] [BACKPORT 2.x] applying multi-tenancy in search [model, model group, agent, connector] (#3433) (#3469)[https://github.com/opensearch-project/ml-commons/pull/3469]
+* [Backport 2.19] fixing connector validation (#3471)[https://github.com/opensearch-project/ml-commons/pull/3471]
 
 
 ### Bug Fixes
@@ -49,7 +51,7 @@ Compatible with OpenSearch 2.19.0
 * Revert "Add application_type to ConversationMeta; update tests (#3282)" (#3315)[https://github.com/opensearch-project/ml-commons/pull/3315]
 * Revert "Filter out remote model auto redeployment (#2976)" and related commits (#3104, #3214) (#3368)[https://github.com/opensearch-project/ml-commons/pull/3368]
 * Fix JsonGenerationException error in Local Sample Calculator and Anomaly Localization Execution Response (#3434)[https://github.com/opensearch-project/ml-commons/pull/3434]
-
+* [Backport 2.19] Fix guardrail it for 2.19 (#3468)[https://github.com/opensearch-project/ml-commons/pull/3468]
 
 ### Maintenance
 
