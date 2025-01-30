@@ -4,7 +4,6 @@ Compatible with OpenSearch 2.19.0
 
 ### Enhancements
 
-* Improve test coverage for RemoteModel.java (#3205)[https://github.com/opensearch-project/ml-commons/pull/3205]
 * adding multi-modal pre-processor for cohere (#3219)[https://github.com/opensearch-project/ml-commons/pull/3219]
 * [Enhancement] Fetch system index mappings from json file instead of string constants (#3153)[https://github.com/opensearch-project/ml-commons/pull/3153]
 * Retrieve remote model id from registration response in IT to avoid flaky (#3244)[https://github.com/opensearch-project/ml-commons/pull/3244]
@@ -41,13 +40,10 @@ Compatible with OpenSearch 2.19.0
 ### Bug Fixes
 
 * getFirst is not allowed in java 17 (#3226)[https://github.com/opensearch-project/ml-commons/pull/3226]
-* Fixes Two Flaky IT classes RestMLGuardrailsIT & ToolIntegrationWithLLMTest (#3253)[https://github.com/opensearch-project/ml-commons/pull/3253]
 * Fix: ml/engine/utils/FileUtils casts long file length to int incorrectly (#3198)[https://github.com/opensearch-project/ml-commons/pull/3198]
 * fix for sync up job not working in 2.17 when upgraded from previous versions (#3241)[https://github.com/opensearch-project/ml-commons/pull/3241]
 * Fix remote model with embedding input issue (#3289)[https://github.com/opensearch-project/ml-commons/pull/3289]
 * Adds preset contentRegistry for IngestProcessors (#3281)[https://github.com/opensearch-project/ml-commons/pull/3281]
-* Revert Text Block changes from "Enhance validation for create connector API" #3260 (#3329)[https://github.com/opensearch-project/ml-commons/pull/3329]
-* fix post_process_function on rerank_pipeline_with_bge-rerank-m3-v2_model_deployed_on_Sagemaker.md (#3296)[https://github.com/opensearch-project/ml-commons/pull/3296]
 * Revert "Add application_type to ConversationMeta; update tests (#3282)" (#3315)[https://github.com/opensearch-project/ml-commons/pull/3315]
 * Revert "Filter out remote model auto redeployment (#2976)" and related commits (#3104, #3214) (#3368)[https://github.com/opensearch-project/ml-commons/pull/3368]
 * Fix JsonGenerationException error in Local Sample Calculator and Anomaly Localization Execution Response (#3434)[https://github.com/opensearch-project/ml-commons/pull/3434]
@@ -72,6 +68,9 @@ Compatible with OpenSearch 2.19.0
 * Checkout code from pull request head for spotless (#3422)[https://github.com/opensearch-project/ml-commons/pull/3422]
 * Fixes spotless on Java 11 (#3449)[https://github.com/opensearch-project/ml-commons/pull/3449]
 * add spotless to all build.gradle files (#3453)[https://github.com/opensearch-project/ml-commons/pull/3453]
+* Fixes Two Flaky IT classes RestMLGuardrailsIT & ToolIntegrationWithLLMTest (#3253)[https://github.com/opensearch-project/ml-commons/pull/3253]
+* Improve test coverage for RemoteModel.java (#3205)[https://github.com/opensearch-project/ml-commons/pull/3205]
+* Revert Text Block changes from "Enhance validation for create connector API" #3260 (#3329)[https://github.com/opensearch-project/ml-commons/pull/3329]
 
 
 ### Documentation
@@ -84,3 +83,4 @@ Compatible with OpenSearch 2.19.0
 * fix typo (#3234)[https://github.com/opensearch-project/ml-commons/pull/3234]
 * Tutorial for ml inference with cohere rerank model (#3398)[https://github.com/opensearch-project/ml-commons/pull/3398]
 * Add DeepSeek connector blueprint (#3436)[https://github.com/opensearch-project/ml-commons/pull/3436]
+* fix post_process_function on rerank_pipeline_with_bge-rerank-m3-v2_model_deployed_on_Sagemaker.md (#3296)[https://github.com/opensearch-project/ml-commons/pull/3296]
