@@ -36,6 +36,7 @@ Compatible with OpenSearch 2.19.0
 * Add pre and post process functions for Bedrock Rerank API #3254 (#3339)[https://github.com/opensearch-project/ml-commons/pull/3339]
 * [Backport 2.19] [BACKPORT 2.x] applying multi-tenancy in search [model, model group, agent, connector] (#3433) (#3469)[https://github.com/opensearch-project/ml-commons/pull/3469]
 * [Backport 2.19] fixing connector validation (#3471)[https://github.com/opensearch-project/ml-commons/pull/3471]
+* [BACKPORT 2.x] applying multi-tenancy in search [model, model group, agent, connector] (#3433) (#3443) (#3469)[https://github.com/opensearch-project/ml-commons/pull/3469]
 
 
 ### Bug Fixes
