@@ -270,7 +270,19 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                         mlFeatureEnabledSetting,
                         ActionListener.wrap(r -> {
                             if (Boolean.TRUE.equals(r)) {
-                                createModelGroup(registerModelInput, listener);
+                                if (registerModelInput.getModelInterface() == null) {
+                                    mlModelManager
+                                        .getConnector(
+                                            registerModelInput.getConnectorId(),
+                                            registerModelInput.getTenantId(),
+                                            ActionListener.wrap(connector -> {
+                                                updateRegisterModelInputModelInterfaceFieldsByConnector(registerModelInput, connector);
+                                                createModelGroup(registerModelInput, listener);
+                                            }, listener::onFailure)
+                                        );
+                                } else {
+                                    createModelGroup(registerModelInput, listener);
+                                }
                             } else {
                                 listener
                                     .onFailure(
