@@ -25,7 +25,6 @@ import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.SearchResponseSections;
 import org.opensearch.action.search.ShardSearchFailure;
@@ -142,12 +141,11 @@ public class RestMLSearchAgentActionTests extends OpenSearchTestCase {
         verify(client, times(1)).execute(eq(MLSearchAgentAction.INSTANCE), argumentCaptor.capture(), any());
         verify(channel, times(1)).sendResponse(responseCaptor.capture());
         MLSearchActionRequest mlSearchActionRequest = argumentCaptor.getValue();
-        SearchRequest searchRequest = mlSearchActionRequest.getSearchRequest();
-        String[] indices = searchRequest.indices();
+        String[] indices = mlSearchActionRequest.indices();
         assertArrayEquals(new String[] { ML_AGENT_INDEX }, indices);
         assertEquals(
             "{\"query\":{\"match_all\":{\"boost\":1.0}},\"version\":true,\"seq_no_primary_term\":true,\"_source\":{\"includes\":[],\"excludes\":[\"content\",\"model_content\",\"ui_metadata\"]}}",
-            searchRequest.source().toString()
+            mlSearchActionRequest.source().toString()
         );
         RestResponse agentResponse = responseCaptor.getValue();
         assertEquals(RestStatus.OK, agentResponse.status());
@@ -196,12 +194,11 @@ public class RestMLSearchAgentActionTests extends OpenSearchTestCase {
         verify(client, times(1)).execute(eq(MLSearchAgentAction.INSTANCE), argumentCaptor.capture(), any());
         verify(channel, times(1)).sendResponse(responseCaptor.capture());
         MLSearchActionRequest mlSearchActionRequest = argumentCaptor.getValue();
-        SearchRequest searchRequest = mlSearchActionRequest.getSearchRequest();
-        String[] indices = searchRequest.indices();
+        String[] indices = mlSearchActionRequest.indices();
         assertArrayEquals(new String[] { ML_AGENT_INDEX }, indices);
         assertEquals(
             "{\"query\":{\"match_all\":{\"boost\":1.0}},\"version\":true,\"seq_no_primary_term\":true,\"_source\":{\"includes\":[],\"excludes\":[\"content\",\"model_content\",\"ui_metadata\"]}}",
-            searchRequest.source().toString()
+            mlSearchActionRequest.source().toString()
         );
         RestResponse agentResponse = responseCaptor.getValue();
         assertEquals(RestStatus.REQUEST_TIMEOUT, agentResponse.status());

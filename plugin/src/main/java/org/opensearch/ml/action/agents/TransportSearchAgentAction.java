@@ -52,12 +52,12 @@ public class TransportSearchAgentAction extends HandledTransportAction<MLSearchA
 
     @Override
     protected void doExecute(Task task, MLSearchActionRequest request, ActionListener<SearchResponse> actionListener) {
-        request.getSearchRequest().indices(CommonValue.ML_AGENT_INDEX);
+        request.indices(CommonValue.ML_AGENT_INDEX);
         String tenantId = request.getTenantId();
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
             return;
         }
-        search(request.getSearchRequest(), tenantId, actionListener);
+        search(request, tenantId, actionListener);
     }
 
     private void search(SearchRequest request, String tenantId, ActionListener<SearchResponse> actionListener) {

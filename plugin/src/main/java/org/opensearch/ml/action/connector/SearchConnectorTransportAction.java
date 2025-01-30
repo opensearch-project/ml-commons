@@ -74,13 +74,13 @@ public class SearchConnectorTransportAction extends HandledTransportAction<MLSea
 
     @Override
     protected void doExecute(Task task, MLSearchActionRequest request, ActionListener<SearchResponse> actionListener) {
-        request.getSearchRequest().indices(CommonValue.ML_CONNECTOR_INDEX);
+        request.indices(CommonValue.ML_CONNECTOR_INDEX);
 
         String tenantId = request.getTenantId();
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
             return;
         }
-        search(request.getSearchRequest(), tenantId, actionListener);
+        search(request, tenantId, actionListener);
     }
 
     private void search(SearchRequest request, String tenantId, ActionListener<SearchResponse> actionListener) {
