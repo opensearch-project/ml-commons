@@ -44,6 +44,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
+import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
 import org.opensearch.ml.memory.MemoryTestUtil;
 import org.opensearch.ml.memory.index.OpenSearchConversationalMemoryHandler;
 import org.opensearch.test.OpenSearchTestCase;
@@ -79,12 +80,15 @@ public class SearchConversationsTransportActionTests extends OpenSearchTestCase 
     @Mock
     SearchRequest request;
 
+    MLSearchActionRequest mlSearchActionRequest;
+
     SearchConversationsTransportAction action;
     ThreadContext threadContext;
 
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
+        mlSearchActionRequest = new MLSearchActionRequest(request, null);
 
         Settings settings = Settings.builder().put(ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED.getKey(), true).build();
         this.threadContext = new ThreadContext(settings);
@@ -104,7 +108,7 @@ public class SearchConversationsTransportActionTests extends OpenSearchTestCase 
             listener.onResponse(response);
             return null;
         }).when(cmHandler).searchConversations(any(), any());
-        action.doExecute(null, request, actionListener);
+        action.doExecute(null, mlSearchActionRequest, actionListener);
         ArgumentCaptor<SearchResponse> argCaptor = ArgumentCaptor.forClass(SearchResponse.class);
         verify(actionListener, times(1)).onResponse(argCaptor.capture());
         assert (argCaptor.getValue().equals(response));
@@ -114,7 +118,7 @@ public class SearchConversationsTransportActionTests extends OpenSearchTestCase 
         clusterService = MemoryTestUtil.clusterServiceWithMemoryFeatureDisabled();
         this.action = spy(new SearchConversationsTransportAction(transportService, actionFilters, cmHandler, client, clusterService));
 
-        action.doExecute(null, request, actionListener);
+        action.doExecute(null, mlSearchActionRequest, actionListener);
         ArgumentCaptor<Exception> argCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argCaptor.capture());
         assertEquals(argCaptor.getValue().getMessage(), ML_COMMONS_MEMORY_FEATURE_DISABLED_MESSAGE);

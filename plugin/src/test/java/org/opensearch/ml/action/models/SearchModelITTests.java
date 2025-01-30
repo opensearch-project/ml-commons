@@ -27,6 +27,7 @@ import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupRespon
 import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
+import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
@@ -106,27 +107,29 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
     }
 
     private void test_empty_body_search() {
-        SearchRequest searchRequest = new SearchRequest();
+        SearchRequest searchRequest = new SearchRequest(".plugins-ml-model");
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchRequest.source(searchSourceBuilder);
         searchRequest.source().query(QueryBuilders.boolQuery().mustNot(QueryBuilders.existsQuery(CHUNK_NUMBER)));
-        SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, searchRequest).actionGet();
+        MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(searchRequest, null);
+        SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, mlSearchActionRequest).actionGet();
         assertEquals(1, response.getHits().getTotalHits().value);
     }
 
     private void test_matchAll_search() {
-        SearchRequest searchRequest = new SearchRequest();
+        SearchRequest searchRequest = new SearchRequest(".plugins-ml-model");
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchRequest.source(searchSourceBuilder);
         searchRequest
             .source()
             .query(QueryBuilders.boolQuery().mustNot(QueryBuilders.existsQuery(CHUNK_NUMBER)).must(QueryBuilders.matchAllQuery()));
-        SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, searchRequest).actionGet();
+        MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(searchRequest, null);
+        SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, mlSearchActionRequest).actionGet();
         assertEquals(1, response.getHits().getTotalHits().value);
     }
 
     private void test_bool_search() {
-        SearchRequest searchRequest = new SearchRequest();
+        SearchRequest searchRequest = new SearchRequest(".plugins-ml-model");
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchRequest.source(searchSourceBuilder);
         searchRequest
@@ -141,12 +144,13 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
                             .must(QueryBuilders.termQuery("name.keyword", "msmarco-distilbert-base-tas-b-pt"))
                     )
             );
-        SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, searchRequest).actionGet();
+        MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(searchRequest, null);
+        SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, mlSearchActionRequest).actionGet();
         assertEquals(1, response.getHits().getTotalHits().value);
     }
 
     private void test_term_search() {
-        SearchRequest searchRequest = new SearchRequest();
+        SearchRequest searchRequest = new SearchRequest(".plugins-ml-model");
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchRequest.source(searchSourceBuilder);
         BoolQueryBuilder boolQueryBuilder = QueryBuilders
@@ -154,12 +158,13 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
             .mustNot(QueryBuilders.existsQuery(CHUNK_NUMBER))
             .must(QueryBuilders.termQuery("name.keyword", "msmarco-distilbert-base-tas-b-pt"));
         searchRequest.source().query(boolQueryBuilder);
-        SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, searchRequest).actionGet();
+        MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(searchRequest, null);
+        SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, mlSearchActionRequest).actionGet();
         assertEquals(1, response.getHits().getTotalHits().value);
     }
 
     private void test_terms_search() {
-        SearchRequest searchRequest = new SearchRequest();
+        SearchRequest searchRequest = new SearchRequest(".plugins-ml-model");
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchRequest.source(searchSourceBuilder);
         BoolQueryBuilder boolQueryBuilder = QueryBuilders
@@ -167,12 +172,13 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
             .mustNot(QueryBuilders.existsQuery(CHUNK_NUMBER))
             .must(QueryBuilders.termsQuery("name.keyword", "msmarco-distilbert-base-tas-b-pt", "test_model_group_name"));
         searchRequest.source().query(boolQueryBuilder);
-        SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, searchRequest).actionGet();
+        MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(searchRequest, null);
+        SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, mlSearchActionRequest).actionGet();
         assertEquals(1, response.getHits().getTotalHits().value);
     }
 
     private void test_range_search() {
-        SearchRequest searchRequest = new SearchRequest();
+        SearchRequest searchRequest = new SearchRequest(".plugins-ml-model");
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchRequest.source(searchSourceBuilder);
         BoolQueryBuilder boolQueryBuilder = QueryBuilders
@@ -180,12 +186,13 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
             .mustNot(QueryBuilders.existsQuery(CHUNK_NUMBER))
             .must(QueryBuilders.rangeQuery("created_time").gte("now-1d"));
         searchRequest.source().query(boolQueryBuilder);
-        SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, searchRequest).actionGet();
+        MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(searchRequest, null);
+        SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, mlSearchActionRequest).actionGet();
         assertEquals(1, response.getHits().getTotalHits().value);
     }
 
     private void test_matchPhrase_search() {
-        SearchRequest searchRequest = new SearchRequest();
+        SearchRequest searchRequest = new SearchRequest(".plugins-ml-model");
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchRequest.source(searchSourceBuilder);
         BoolQueryBuilder boolQueryBuilder = QueryBuilders
@@ -193,7 +200,8 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
             .mustNot(QueryBuilders.existsQuery(CHUNK_NUMBER))
             .must(QueryBuilders.matchPhraseQuery("description", "desc"));
         searchRequest.source().query(boolQueryBuilder);
-        SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, searchRequest).actionGet();
+        MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(searchRequest, null);
+        SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, mlSearchActionRequest).actionGet();
         assertEquals(1, response.getHits().getTotalHits().value);
     }
 

@@ -26,7 +26,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchWrapperException;
-import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.SearchResponseSections;
 import org.opensearch.action.search.ShardSearchFailure;
@@ -40,6 +39,8 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.action.connector.SearchConnectorTransportAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
+import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
@@ -56,6 +57,9 @@ public class RestMLSearchConnectorActionTests extends OpenSearchTestCase {
 
     private RestMLSearchConnectorAction restMLSearchConnectorAction;
 
+    @Mock
+    MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     NodeClient client;
     private ThreadPool threadPool;
     @Mock
@@ -64,7 +68,7 @@ public class RestMLSearchConnectorActionTests extends OpenSearchTestCase {
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
-        restMLSearchConnectorAction = new RestMLSearchConnectorAction();
+        restMLSearchConnectorAction = new RestMLSearchConnectorAction(mlFeatureEnabledSetting);
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
 
@@ -110,7 +114,7 @@ public class RestMLSearchConnectorActionTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        RestMLSearchConnectorAction mlSearchConnectorAction = new RestMLSearchConnectorAction();
+        RestMLSearchConnectorAction mlSearchConnectorAction = new RestMLSearchConnectorAction(mlFeatureEnabledSetting);
         assertNotNull(mlSearchConnectorAction);
     }
 
@@ -134,16 +138,16 @@ public class RestMLSearchConnectorActionTests extends OpenSearchTestCase {
         RestRequest request = getSearchAllRestRequest();
         restMLSearchConnectorAction.handleRequest(request, channel, client);
 
-        ArgumentCaptor<SearchRequest> argumentCaptor = ArgumentCaptor.forClass(SearchRequest.class);
+        ArgumentCaptor<MLSearchActionRequest> argumentCaptor = ArgumentCaptor.forClass(MLSearchActionRequest.class);
         ArgumentCaptor<RestResponse> responseCaptor = ArgumentCaptor.forClass(RestResponse.class);
         verify(client, times(1)).execute(eq(MLConnectorSearchAction.INSTANCE), argumentCaptor.capture(), any());
         verify(channel, times(1)).sendResponse(responseCaptor.capture());
-        SearchRequest searchRequest = argumentCaptor.getValue();
-        String[] indices = searchRequest.indices();
+        MLSearchActionRequest mlSearchActionRequest = argumentCaptor.getValue();
+        String[] indices = mlSearchActionRequest.indices();
         assertArrayEquals(new String[] { ML_CONNECTOR_INDEX }, indices);
         assertEquals(
             "{\"query\":{\"match_all\":{\"boost\":1.0}},\"version\":true,\"seq_no_primary_term\":true,\"_source\":{\"includes\":[],\"excludes\":[\"content\",\"model_content\",\"ui_metadata\"]}}",
-            searchRequest.source().toString()
+            mlSearchActionRequest.source().toString()
         );
         RestResponse restResponse = responseCaptor.getValue();
         assertNotEquals(RestStatus.REQUEST_TIMEOUT, restResponse.status());
@@ -180,16 +184,16 @@ public class RestMLSearchConnectorActionTests extends OpenSearchTestCase {
         RestRequest request = getSearchAllRestRequest();
         restMLSearchConnectorAction.handleRequest(request, channel, client);
 
-        ArgumentCaptor<SearchRequest> argumentCaptor = ArgumentCaptor.forClass(SearchRequest.class);
+        ArgumentCaptor<MLSearchActionRequest> argumentCaptor = ArgumentCaptor.forClass(MLSearchActionRequest.class);
         ArgumentCaptor<RestResponse> responseCaptor = ArgumentCaptor.forClass(RestResponse.class);
         verify(client, times(1)).execute(eq(MLConnectorSearchAction.INSTANCE), argumentCaptor.capture(), any());
         verify(channel, times(1)).sendResponse(responseCaptor.capture());
-        SearchRequest searchRequest = argumentCaptor.getValue();
-        String[] indices = searchRequest.indices();
+        MLSearchActionRequest mlSearchActionRequest = argumentCaptor.getValue();
+        String[] indices = mlSearchActionRequest.indices();
         assertArrayEquals(new String[] { ML_CONNECTOR_INDEX }, indices);
         assertEquals(
             "{\"query\":{\"match_all\":{\"boost\":1.0}},\"version\":true,\"seq_no_primary_term\":true,\"_source\":{\"includes\":[],\"excludes\":[\"content\",\"model_content\",\"ui_metadata\"]}}",
-            searchRequest.source().toString()
+            mlSearchActionRequest.source().toString()
         );
         RestResponse restResponse = responseCaptor.getValue();
         assertEquals(RestStatus.REQUEST_TIMEOUT, restResponse.status());
