@@ -33,7 +33,8 @@ jobs:
           echo plugin_version $plugin_version
           ./gradlew assemble
           echo "Creating ./plugin/src/test/resources/org/opensearch/ml/bwc..."
-          mkdir -p ./plugin/src/test/resources/org/opensearch/ml/bwc
+          mkdir -p ./plugin/src/test/resources/org/opensearch/ml/bwc/job-scheduler
+          mkdir -p ./plugin/src/test/resources/org/opensearch/ml/bwc/ml
       - name: Run MLCommons Backwards Compatibility Tests
         run: |
           echo "Running backwards compatibility tests ..."
