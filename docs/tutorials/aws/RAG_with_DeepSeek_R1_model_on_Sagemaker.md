@@ -4,6 +4,8 @@
 This tutorial shows you how to implement retrieval-augmented generation (RAG) in Amazon OpenSearch with the [DeepSeek R1 model](https://huggingface.co/deepseek-ai/DeepSeek-R1).
 If you are not using Amazon OpenSearch, you can use the DeepSeek connector chat blueprint directly. For more information, see [the blueprint](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/deepseek_connector_chat_blueprint.md).
 
+For a simpler alternative, you can explore our Python-based implementation in this [demo notebook](DeepSeek_demo_notebook_for_RAG.ipynb).
+
 Note: Replace the placeholders starting with the prefix `your_` with your own values.
 
 
