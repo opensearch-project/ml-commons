@@ -237,7 +237,7 @@ public interface MachineLearningClient {
      */
     default ActionFuture<DeleteResponse> deleteTask(String taskId) {
         PlainActionFuture<DeleteResponse> actionFuture = PlainActionFuture.newFuture();
-        deleteModel(taskId, actionFuture);
+        deleteTask(taskId, actionFuture);
         return actionFuture;
     }
 
@@ -361,7 +361,7 @@ public interface MachineLearningClient {
      * Undeploy model
      * For additional info on deploy, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/model-apis/undeploy-model/
      * @param modelIds the model ids
-     * @param modelIds the node ids. May be null for all nodes.
+     * @param nodeIds the node ids. May be null for all nodes.
      * @param listener a listener to be notified of the result
      */
     default void undeploy(String[] modelIds, String[] nodeIds, ActionListener<MLUndeployModelsResponse> listener) {
@@ -372,7 +372,7 @@ public interface MachineLearningClient {
      * Undeploy model
      * For additional info on deploy, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/model-apis/undeploy-model/
      * @param modelIds the model ids
-     * @param modelIds the node ids. May be null for all nodes.
+     * @param nodeIds the node ids. May be null for all nodes.
      * @param tenantId the tenant id. This is necessary for multi-tenancy.
      * @param listener a listener to be notified of the result
      */
@@ -480,8 +480,7 @@ public interface MachineLearningClient {
      * @param listener a listener to be notified of the result
      */
     default void deleteAgent(String agentId, ActionListener<DeleteResponse> listener) {
-        PlainActionFuture<DeleteResponse> actionFuture = PlainActionFuture.newFuture();
-        deleteAgent(agentId, null, actionFuture);
+        deleteAgent(agentId, null, listener);
     }
 
     /**
@@ -543,5 +542,15 @@ public interface MachineLearningClient {
      * @param configId ML config id
      * @param listener a listener to be notified of the result
      */
-    void getConfig(String configId, ActionListener<MLConfig> listener);
+    default void getConfig(String configId, ActionListener<MLConfig> listener) {
+        getConfig(configId, null, listener);
+    }
+
+    /**
+     * Delete agent
+     * @param configId ML config id
+     * @param tenantId the tenant id. This is necessary for multi-tenancy.
+     * @param listener a listener to be notified of the result
+     */
+    void getConfig(String configId, String tenantId, ActionListener<MLConfig> listener);
 }

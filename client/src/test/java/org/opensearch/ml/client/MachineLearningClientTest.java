@@ -144,10 +144,6 @@ public class MachineLearningClientTest {
             .build();
 
         machineLearningClient = new MachineLearningClient() {
-            @Override
-            public void predict(String modelId, MLInput mlInput, ActionListener<MLOutput> listener) {
-                listener.onResponse(output);
-            }
 
             @Override
             public void predict(String modelId, String tenantId, MLInput mlInput, ActionListener<MLOutput> listener) {
@@ -170,18 +166,8 @@ public class MachineLearningClientTest {
             }
 
             @Override
-            public void getModel(String modelId, ActionListener<MLModel> listener) {
-                listener.onResponse(mlModel);
-            }
-
-            @Override
             public void getModel(String modelId, String tenantId, ActionListener<MLModel> listener) {
                 listener.onResponse(mlModel);
-            }
-
-            @Override
-            public void deleteModel(String modelId, ActionListener<DeleteResponse> listener) {
-                listener.onResponse(deleteResponse);
             }
 
             @Override
@@ -195,18 +181,8 @@ public class MachineLearningClientTest {
             }
 
             @Override
-            public void getTask(String taskId, ActionListener<MLTask> listener) {
-                listener.onResponse(mlTask);
-            }
-
-            @Override
             public void getTask(String taskId, String tenantId, ActionListener<MLTask> listener) {
                 listener.onResponse(mlTask);
-            }
-
-            @Override
-            public void deleteTask(String taskId, ActionListener<DeleteResponse> listener) {
-                listener.onResponse(deleteResponse);
             }
 
             @Override
@@ -225,18 +201,8 @@ public class MachineLearningClientTest {
             }
 
             @Override
-            public void deploy(String modelId, ActionListener<MLDeployModelResponse> listener) {
-                listener.onResponse(deployModelResponse);
-            }
-
-            @Override
             public void deploy(String modelId, String tenantId, ActionListener<MLDeployModelResponse> listener) {
                 listener.onResponse(deployModelResponse);
-            }
-
-            @Override
-            public void undeploy(String[] modelIds, String[] nodeIds, ActionListener<MLUndeployModelsResponse> listener) {
-                listener.onResponse(undeployModelsResponse);
             }
 
             @Override
@@ -256,11 +222,6 @@ public class MachineLearningClientTest {
 
             @Override
             public void deleteConnector(String connectorId, String tenantId, ActionListener<DeleteResponse> listener) {
-                listener.onResponse(deleteResponse);
-            }
-
-            @Override
-            public void deleteConnector(String connectorId, ActionListener<DeleteResponse> listener) {
                 listener.onResponse(deleteResponse);
             }
 
@@ -287,17 +248,12 @@ public class MachineLearningClientTest {
             }
 
             @Override
-            public void deleteAgent(String agentId, ActionListener<DeleteResponse> listener) {
-                listener.onResponse(deleteResponse);
-            }
-
-            @Override
             public void deleteAgent(String agentId, String tenantId, ActionListener<DeleteResponse> listener) {
                 listener.onResponse(deleteResponse);
             }
 
             @Override
-            public void getConfig(String configId, ActionListener<MLConfig> listener) {
+            public void getConfig(String configId, String tenantId, ActionListener<MLConfig> listener) {
                 listener.onResponse(mlConfig);
             }
         };
