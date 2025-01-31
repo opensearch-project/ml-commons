@@ -21,12 +21,14 @@ import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
 import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
 import org.junit.Rule;
+import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -43,6 +45,7 @@ import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTask;
@@ -68,6 +71,8 @@ import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.TestHelper;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.tasks.Task;
@@ -78,6 +83,7 @@ import org.opensearch.transport.TransportService;
 import com.google.common.collect.ImmutableList;
 
 public class TransportRegisterModelActionTests extends OpenSearchTestCase {
+
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
@@ -109,6 +115,8 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
 
     @Mock
     private Client client;
+
+    private SdkClient sdkClient;
 
     @Mock
     private DiscoveryNodeHelper nodeFilter;
@@ -158,6 +166,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
+        sdkClient = SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap());
         settings = Settings
             .builder()
             .put(ML_COMMONS_TRUSTED_URL_REGEX.getKey(), trustedUrlRegex)
@@ -184,6 +193,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             settings,
             threadPool,
             client,
+            sdkClient,
             nodeFilter,
             mlTaskDispatcher,
             mlStats,
@@ -195,10 +205,10 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         assertNotNull(transportRegisterModelAction);
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onResponse(true);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
 
         MLStat mlStat = mock(MLStat.class);
         when(mlStats.getStat(eq(MLNodeLevelStat.ML_REQUEST_COUNT))).thenReturn(mlStat);
@@ -217,10 +227,10 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
 
         SearchResponse searchResponse = createModelGroupSearchResponse(0);
         doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onResponse(searchResponse);
             return null;
-        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any());
+        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any(), any());
 
         when(mlFeatureEnabledSetting.isLocalModelEnabled()).thenReturn(true);
 
@@ -228,12 +238,13 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         when(node2.getId()).thenReturn("node2Id");
 
         doAnswer(invocation -> { return null; }).when(mlModelManager).registerMLModel(any(), any());
-        doAnswer(invocation -> { return null; }).when(mlModelManager).registerMLRemoteModel(any(), any(), any());
+        doAnswer(invocation -> { return null; }).when(mlModelManager).registerMLRemoteModel(any(), any(), any(), any());
 
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
     }
 
+    @Test
     public void testDoExecute_LocalModelDisabledException() {
         when(mlFeatureEnabledSetting.isLocalModelEnabled()).thenReturn(false);
 
@@ -270,12 +281,13 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         );
     }
 
+    @Test
     public void testDoExecute_userHasNoAccessException() {
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onResponse(false);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
 
         transportRegisterModelAction.doExecute(task, prepareRequest("test url", "testModelGroupsID"), actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -283,6 +295,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         assertEquals("You don't have permissions to perform this operation on this model.", argumentCaptor.getValue().getMessage());
     }
 
+    @Test
     public void testDoExecute_successWithLocalNodeEqualToClusterNode() {
         when(node1.getId()).thenReturn("NodeId1");
         when(node2.getId()).thenReturn("NodeId1");
@@ -298,6 +311,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
 
+    @Test
     public void testDoExecute_successWithCreateModelGroup() {
         doAnswer(invocation -> {
             ActionListener<String> listener = invocation.getArgument(1);
@@ -320,6 +334,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
 
+    @Test
     public void testDoExecute_failureWithCreateModelGroup() {
         doAnswer(invocation -> {
             ActionListener<String> listener = invocation.getArgument(1);
@@ -334,6 +349,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         assertEquals("Failed to create Model Group", argumentCaptor.getValue().getMessage());
     }
 
+    @Test
     public void testDoExecute_invalidURL() {
         transportRegisterModelAction.doExecute(task, prepareRequest("test url", "testModelGroupsID"), actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -341,6 +357,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         assertEquals("URL can't match trusted url regex", argumentCaptor.getValue().getMessage());
     }
 
+    @Test
     public void testRegisterModelUrlNotAllowed() throws Exception {
         Settings settings = Settings
             .builder()
@@ -367,6 +384,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             settings,
             threadPool,
             client,
+            sdkClient,
             nodeFilter,
             mlTaskDispatcher,
             mlStats,
@@ -386,6 +404,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         );
     }
 
+    @Test
     public void testDoExecute_successWithLocalNodeNotEqualToClusterNode() {
         when(node1.getId()).thenReturn("NodeId1");
         when(node2.getId()).thenReturn("NodeId2");
@@ -401,6 +420,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
 
+    @Test
     public void testDoExecute_FailToSendForwardRequest() {
         when(node1.getId()).thenReturn("NodeId1");
         when(node2.getId()).thenReturn("NodeId2");
@@ -411,6 +431,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
 
+    @Test
     public void testTransportRegisterModelActionDoExecuteWithDispatchException() {
         doAnswer(invocation -> {
             ActionListener<Exception> listener = invocation.getArgument(1);
@@ -424,12 +445,13 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         verify(actionListener).onFailure(argumentCaptor.capture());
     }
 
+    @Test
     public void test_ValidationFailedException() {
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onFailure(new Exception("Failed to validate access"));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
 
         transportRegisterModelAction.doExecute(task, prepareRequest("http://test_url", "modelGroupID"), actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -437,6 +459,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         assertEquals("Failed to validate access", argumentCaptor.getValue().getMessage());
     }
 
+    @Test
     public void testTransportRegisterModelActionDoExecuteWithCreateTaskException() {
         doAnswer(invocation -> {
             ActionListener<Exception> listener = invocation.getArgument(1);
@@ -450,6 +473,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         verify(actionListener).onFailure(argumentCaptor.capture());
     }
 
+    @Test
     public void test_execute_registerRemoteModel_withConnectorId_success() {
         MLRegisterModelRequest request = mock(MLRegisterModelRequest.class);
         MLRegisterModelInput input = mock(MLRegisterModelInput.class);
@@ -459,16 +483,15 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         when(input.getConnectorId()).thenReturn("mockConnectorId");
         when(input.getFunctionName()).thenReturn(FunctionName.REMOTE);
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(2);
+            ActionListener<Boolean> listener = invocation.getArgument(5);
             listener.onResponse(true);
             return null;
-        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), anyString(), isA(ActionListener.class));
-        MLRegisterModelResponse response = mock(MLRegisterModelResponse.class);
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), isA(ActionListener.class));
         transportRegisterModelAction.doExecute(task, request, actionListener);
-        ArgumentCaptor<MLRegisterModelResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelResponse.class);
-        verify(mlModelManager).registerMLRemoteModel(eq(input), isA(MLTask.class), eq(actionListener));
+        verify(mlModelManager).registerMLRemoteModel(eq(sdkClient), eq(input), isA(MLTask.class), eq(actionListener));
     }
 
+    @Test
     public void test_execute_registerRemoteModel_withConnectorId_noPermissionToConnectorId() {
         MLRegisterModelRequest request = mock(MLRegisterModelRequest.class);
         MLRegisterModelInput input = mock(MLRegisterModelInput.class);
@@ -476,10 +499,10 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         when(input.getConnectorId()).thenReturn("mockConnectorId");
         when(input.getFunctionName()).thenReturn(FunctionName.REMOTE);
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(2);
+            ActionListener<Boolean> listener = invocation.getArgument(5);
             listener.onResponse(false);
             return null;
-        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), anyString(), isA(ActionListener.class));
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), isA(ActionListener.class));
         MLRegisterModelResponse response = mock(MLRegisterModelResponse.class);
         doAnswer(invocation -> {
             ActionListener<MLRegisterModelResponse> listener = invocation.getArgument(2);
@@ -495,6 +518,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         );
     }
 
+    @Test
     public void test_execute_registerRemoteModel_withConnectorId_connectorValidationException() {
         MLRegisterModelRequest request = mock(MLRegisterModelRequest.class);
         MLRegisterModelInput input = mock(MLRegisterModelInput.class);
@@ -502,16 +526,17 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         when(input.getConnectorId()).thenReturn("mockConnectorId");
         when(input.getFunctionName()).thenReturn(FunctionName.REMOTE);
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(2);
+            ActionListener<Boolean> listener = invocation.getArgument(5);
             listener.onFailure(new Exception("Failed to validate access"));
             return null;
-        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), anyString(), isA(ActionListener.class));
+        }).when(connectorAccessControlHelper).validateConnectorAccess(any(), any(), any(), any(), any(), isA(ActionListener.class));
         transportRegisterModelAction.doExecute(task, request, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to validate access", argumentCaptor.getValue().getMessage());
     }
 
+    @Test
     public void test_execute_registerRemoteModel_withInternalConnector_success() {
         MLRegisterModelRequest request = mock(MLRegisterModelRequest.class);
         MLRegisterModelInput input = mock(MLRegisterModelInput.class);
@@ -532,9 +557,10 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         MLRegisterModelResponse response = mock(MLRegisterModelResponse.class);
         transportRegisterModelAction.doExecute(task, request, actionListener);
         ArgumentCaptor<MLRegisterModelResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelResponse.class);
-        verify(mlModelManager).registerMLRemoteModel(eq(input), isA(MLTask.class), eq(actionListener));
+        verify(mlModelManager).registerMLRemoteModel(eq(sdkClient), eq(input), isA(MLTask.class), eq(actionListener));
     }
 
+    @Test
     public void test_execute_registerRemoteModel_withInternalConnector_connectorIsNull() {
         MLRegisterModelRequest request = mock(MLRegisterModelRequest.class);
         MLRegisterModelInput input = mock(MLRegisterModelInput.class);
@@ -550,6 +576,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         );
     }
 
+    @Test
     public void test_execute_registerRemoteModel_withInternalConnector_predictEndpointIsNull() {
         MLRegisterModelRequest request = mock(MLRegisterModelRequest.class);
         MLRegisterModelInput input = mock(MLRegisterModelInput.class);
@@ -567,6 +594,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         );
     }
 
+    @Test
     public void test_ModelNameAlreadyExists() throws IOException {
         when(node1.getId()).thenReturn("NodeId1");
         when(node2.getId()).thenReturn("NodeId2");
@@ -578,29 +606,29 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         }).when(transportService).sendRequest(any(), any(), any(), any());
         SearchResponse searchResponse = createModelGroupSearchResponse(1);
         doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onResponse(searchResponse);
             return null;
-        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any());
+        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any(), any());
 
         transportRegisterModelAction.doExecute(task, prepareRequest("http://test_url", null), actionListener);
         ArgumentCaptor<MLRegisterModelResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelResponse.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
 
+    @Test
     public void test_FailureWhenPreBuildModelNameAlreadyExists() throws IOException {
         SearchResponse searchResponse = createModelGroupSearchResponse(1);
         doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onResponse(searchResponse);
             return null;
-        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any());
-
+        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any(), any());
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onResponse(false);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
 
         MLRegisterModelInput registerModelInput = MLRegisterModelInput
             .builder()
@@ -621,10 +649,10 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
 
     public void test_FailureWhenSearchingModelGroupName() throws IOException {
         doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onFailure(new RuntimeException("Runtime exception"));
             return null;
-        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any());
+        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any(), any());
 
         transportRegisterModelAction.doExecute(task, prepareRequest("Test URL", null), actionListener);
 
@@ -637,16 +665,16 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
 
         SearchResponse searchResponse = createModelGroupSearchResponse(1);
         doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
             listener.onResponse(searchResponse);
             return null;
-        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any());
+        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any(), any());
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onResponse(false);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
 
         transportRegisterModelAction.doExecute(task, prepareRequest("Test URL", null), actionListener);
 

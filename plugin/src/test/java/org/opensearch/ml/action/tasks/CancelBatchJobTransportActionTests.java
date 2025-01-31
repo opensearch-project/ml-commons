@@ -60,6 +60,7 @@ import org.opensearch.ml.common.transport.task.MLCancelBatchJobRequest;
 import org.opensearch.ml.common.transport.task.MLCancelBatchJobResponse;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
+import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.task.MLTaskManager;
@@ -95,6 +96,8 @@ public class CancelBatchJobTransportActionTests extends OpenSearchTestCase {
     ActionFilters actionFilters;
     @Mock
     private ConnectorAccessControlHelper connectorAccessControlHelper;
+    @Mock
+    private ModelAccessControlHelper modelAccessControlHelper;
 
     @Mock
     private EncryptorImpl encryptor;
@@ -141,6 +144,7 @@ public class CancelBatchJobTransportActionTests extends OpenSearchTestCase {
                 clusterService,
                 scriptService,
                 connectorAccessControlHelper,
+                modelAccessControlHelper,
                 encryptor,
                 mlTaskManager,
                 mlModelManager,
@@ -180,7 +184,11 @@ public class CancelBatchJobTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(mlModelManager).getModel(eq("testModelID"), any(), any(), isA(ActionListener.class));
 
-        when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(true);
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ActionListener<Connector> listener = invocation.getArgument(2);
@@ -272,12 +280,16 @@ public class CancelBatchJobTransportActionTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(any(MLCancelBatchJobResponse.class));
     }
 
-    public void test_BatchPredictCancel_NoConnector() throws IOException {
+    public void test_BatchPredictCancel_NoModelGroupAccess() throws IOException {
         Map<String, Object> remoteJob = new HashMap<>();
         remoteJob.put("Status", "IN PROGRESS");
         remoteJob.put("TransformJobName", "SM-offline-batch-transform13");
 
-        when(connectorAccessControlHelper.validateConnectorAccess(eq(client), any())).thenReturn(false);
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(3);
+            listener.onResponse(false);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
 
         GetResponse getResponse = prepareMLTask(FunctionName.REMOTE, MLTaskType.BATCH_PREDICTION, remoteJob);
 
@@ -290,10 +302,10 @@ public class CancelBatchJobTransportActionTests extends OpenSearchTestCase {
         cancelBatchJobTransportAction.doExecute(null, mlCancelBatchJobRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("You don't have permission to access this connector", argumentCaptor.getValue().getMessage());
+        assertEquals("You don't have permission to cancel this batch job", argumentCaptor.getValue().getMessage());
     }
 
-    public void test_BatchPredictStatus_NoAccessToConnector() throws IOException {
+    public void test_BatchPredictStatus_NoConnectorFound() throws IOException {
         Map<String, Object> remoteJob = new HashMap<>();
         remoteJob.put("Status", "IN PROGRESS");
         remoteJob.put("TransformJobName", "SM-offline-batch-transform13");

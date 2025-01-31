@@ -14,11 +14,13 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -32,7 +34,13 @@ import org.opensearch.Version;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.client.Client;
+import org.opensearch.cluster.ClusterName;
+import org.opensearch.cluster.ClusterState;
+import org.opensearch.cluster.metadata.IndexMetadata;
+import org.opensearch.cluster.metadata.Metadata;
 import org.opensearch.cluster.node.DiscoveryNode;
+import org.opensearch.cluster.node.DiscoveryNodeRole;
+import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
@@ -42,6 +50,7 @@ import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
+import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.get.GetResult;
@@ -84,6 +93,7 @@ import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 
 public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
 
@@ -144,7 +154,7 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
-        encryptor = new EncryptorImpl("m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
+        encryptor = new EncryptorImpl(null, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
         mlEngine = new MLEngine(Path.of("/tmp/test" + randomAlphaOfLength(10)), encryptor);
         localNode = new DiscoveryNode("localNodeId", buildNewFakeTransportAddress(), Version.CURRENT);
         remoteNode = new DiscoveryNode("remoteNodeId", buildNewFakeTransportAddress(), Version.CURRENT);
@@ -229,6 +239,11 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
 
         GetResult getResult = new GetResult(indexName, "1.1.1", 111l, 111l, 111l, true, bytesReference, null, null);
         getResponse = new GetResponse(getResult);
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(1);
+            listener.onResponse(false);
+            return null;
+        }).when(mlModelManager).checkMaxBatchJobTask(any(MLTask.class), isA(ActionListener.class));
     }
 
     public void testExecuteTask_OnLocalNode() {
@@ -254,10 +269,10 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
     public void testExecuteTask_OnLocalNode_RemoteModelAutoDeploy() {
         setupMocks(true, false, false, false);
         doAnswer(invocation -> {
-            ActionListener<MLModel> actionListener = invocation.getArgument(1);
+            ActionListener<MLModel> actionListener = invocation.getArgument(2);
             actionListener.onResponse(mlModel);
             return null;
-        }).when(mlModelManager).getModel(any(), any());
+        }).when(mlModelManager).getModel(any(), any(), any());
         when(mlModelManager.addModelToAutoDeployCache("111", mlModel)).thenReturn(mlModel);
         taskRunner.dispatchTask(FunctionName.REMOTE, requestWithDataFrame, transportService, listener);
         verify(client).execute(any(), any(), any());
@@ -468,6 +483,40 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
 
         when(mlModelManager.getPredictor(anyString())).thenReturn(predictor);
         when(mlModelManager.getWorkerNodes(anyString(), eq(FunctionName.REMOTE), eq(true))).thenReturn(new String[] { "node1" });
+
+        Settings indexSettings = Settings
+            .builder()
+            .put(IndexMetadata.SETTING_NUMBER_OF_SHARDS, 1)
+            .put(IndexMetadata.SETTING_NUMBER_OF_REPLICAS, 1)
+            .put(IndexMetadata.SETTING_VERSION_CREATED, Version.CURRENT)
+            .build();
+        final Settings.Builder existingSettings = Settings.builder().put(indexSettings).put(IndexMetadata.SETTING_INDEX_UUID, "test2UUID");
+
+        IndexMetadata indexMetaData = IndexMetadata.builder(".ml_commons_task_polling_job").settings(existingSettings).build();
+
+        final Map<String, IndexMetadata> indices = Map.of(indexName, indexMetaData);
+        Metadata metadata = new Metadata.Builder().indices(indices).build();
+        DiscoveryNode node = new DiscoveryNode(
+            "node",
+            new TransportAddress(TransportAddress.META_ADDRESS, new AtomicInteger().incrementAndGet()),
+            new HashMap<>(),
+            ImmutableSet.of(DiscoveryNodeRole.DATA_ROLE),
+            Version.CURRENT
+        );
+        ClusterState state = new ClusterState(
+            new ClusterName("test cluster"),
+            123l,
+            "111111",
+            metadata,
+            null,
+            DiscoveryNodes.builder().add(node).build(),
+            null,
+            Map.of(),
+            0,
+            false
+        );
+        ;
+        when(clusterService.state()).thenReturn(state);
         taskRunner.dispatchTask(FunctionName.REMOTE, remoteInputRequest, transportService, listener);
         verify(client, never()).get(any(), any());
         ArgumentCaptor<MLTaskResponse> argumentCaptor = ArgumentCaptor.forClass(MLTaskResponse.class);
@@ -536,6 +585,87 @@ public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
             .build();
         when(mlModelManager.getModelInterface(any())).thenReturn(modelInterface);
         taskRunner.validateOutputSchema("testId", modelTensorOutput);
+    }
+
+    public void testValidateBatchPredictionSuccess_InitPollingJob() throws IOException {
+        setupMocks(true, false, false, false);
+        RemoteInferenceInputDataSet remoteInferenceInputDataSet = RemoteInferenceInputDataSet
+            .builder()
+            .parameters(
+                Map
+                    .of(
+                        "messages",
+                        "[{\\\"role\\\":\\\"system\\\",\\\"content\\\":\\\"You are a helpful assistant.\\\"},"
+                            + "{\\\"role\\\":\\\"user\\\",\\\"content\\\":\\\"Hello!\\\"}]"
+                    )
+            )
+            .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
+            .build();
+        MLPredictionTaskRequest remoteInputRequest = MLPredictionTaskRequest
+            .builder()
+            .modelId("test_model")
+            .mlInput(MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(remoteInferenceInputDataSet).build())
+            .build();
+        Predictable predictor = mock(Predictable.class);
+        when(predictor.isModelReady()).thenReturn(true);
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .name("response")
+            .dataAsMap(Map.of("TransformJobArn", "arn:aws:sagemaker:us-east-1:802041417063:transform-job/batch-transform-01"))
+            .build();
+        Map<String, String> modelInterface = Map
+            .of(
+                "output",
+                "{\"properties\":{\"inference_results\":{\"description\":\"This is a test description field\"," + "\"type\":\"array\"}}}"
+            );
+        ModelTensors modelTensors = ModelTensors.builder().statusCode(200).mlModelTensors(List.of(modelTensor)).statusCode(200).build();
+        modelTensors.setStatusCode(200);
+        ModelTensorOutput modelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(List.of(modelTensors)).build();
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(MLTaskResponse.builder().output(modelTensorOutput).build());
+            return null;
+        }).when(predictor).asyncPredict(any(), any());
+
+        IndexResponse indexResponse = mock(IndexResponse.class);
+        when(indexResponse.getId()).thenReturn("mockTaskId");
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(mlTaskManager).createMLTask(any(MLTask.class), Mockito.isA(ActionListener.class));
+
+        when(mlModelManager.getModelInterface(any())).thenReturn(modelInterface);
+
+        when(mlModelManager.getPredictor(anyString())).thenReturn(predictor);
+        when(mlModelManager.getWorkerNodes(anyString(), eq(FunctionName.REMOTE), eq(true))).thenReturn(new String[] { "node1" });
+
+        // Mocking clusterService to simulate missing TASK_POLLING_JOB_INDEX
+        Metadata metadata = new Metadata.Builder().indices(Map.of()).build();
+        DiscoveryNode node = new DiscoveryNode(
+            "node",
+            new TransportAddress(TransportAddress.META_ADDRESS, new AtomicInteger().incrementAndGet()),
+            new HashMap<>(),
+            ImmutableSet.of(DiscoveryNodeRole.DATA_ROLE),
+            Version.CURRENT
+        );
+        ClusterState state = new ClusterState(
+            new ClusterName("test cluster"),
+            123l,
+            "111111",
+            metadata,
+            null,
+            DiscoveryNodes.builder().add(node).build(),
+            null,
+            Map.of(),
+            0,
+            false
+        );
+        ;
+        when(clusterService.state()).thenReturn(state);
+
+        taskRunner.dispatchTask(FunctionName.REMOTE, remoteInputRequest, transportService, listener);
+        verify(mlTaskManager).startTaskPollingJob();
     }
 
     private void setupMocks(boolean runOnLocalNode, boolean failedToParseQueryInput, boolean failedToGetModel, boolean nullGetResponse) {

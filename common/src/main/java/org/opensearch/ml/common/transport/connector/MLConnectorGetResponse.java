@@ -21,7 +21,9 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.connector.Connector;
 
 import lombok.Builder;
+import lombok.Getter;
 
+@Getter
 public class MLConnectorGetResponse extends ActionResponse implements ToXContentObject {
     Connector mlConnector;
 

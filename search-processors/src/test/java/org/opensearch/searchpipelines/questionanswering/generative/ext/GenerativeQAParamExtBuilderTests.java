@@ -22,19 +22,26 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
 import java.io.EOFException;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import org.junit.Assert;
+import org.opensearch.Version;
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.core.xcontent.XContentHelper;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.search.SearchModule;
 import org.opensearch.searchpipelines.questionanswering.generative.llm.MessageBlock;
 import org.opensearch.test.OpenSearchTestCase;
 
@@ -114,28 +121,64 @@ public class GenerativeQAParamExtBuilderTests extends OpenSearchTestCase {
         assertNotEquals(builder1, builder2);
         assertNotEquals(builder1.hashCode(), builder2.hashCode());
 
-        StreamOutput so = mock(StreamOutput.class);
-        builder1.writeTo(so);
-        verify(so, times(5)).writeOptionalString(any());
-        verify(so, times(1)).writeString(any());
+        // BWC test for bedrock converse params
+        StreamOutput so1 = mock(StreamOutput.class);
+        when(so1.getVersion()).thenReturn(GenerativeQAParameters.MINIMAL_SUPPORTED_VERSION_FOR_BEDROCK_CONVERSE_LLM_MESSAGES);
+        builder1.writeTo(so1);
+        verify(so1, times(6)).writeOptionalString(any());
+
+        StreamOutput so2 = mock(StreamOutput.class);
+        when(so2.getVersion()).thenReturn(Version.V_2_17_0);
+        builder1.writeTo(so2);
+        verify(so2, times(5)).writeOptionalString(any());
+
+        // BWC test for system prompt and instructions
+        StreamOutput so3 = mock(StreamOutput.class);
+        when(so3.getVersion()).thenReturn(GenerativeQAParameters.MINIMAL_SUPPORTED_VERSION_FOR_PROMPT_AND_INSTRUCTIONS);
+        builder1.writeTo(so3);
+        verify(so3, times(5)).writeOptionalString(any());
+        verify(so3, times(1)).writeString(any());
+
+        StreamOutput so4 = mock(StreamOutput.class);
+        when(so4.getVersion()).thenReturn(Version.V_2_12_0);
+        builder1.writeTo(so4);
+        verify(so4, times(2)).writeOptionalString(any());
+        verify(so4, times(1)).writeString(any());
     }
 
     public void testParse() throws IOException {
-        XContentParser xcParser = mock(XContentParser.class);
-        when(xcParser.nextToken()).thenReturn(XContentParser.Token.START_OBJECT).thenReturn(XContentParser.Token.END_OBJECT);
-        GenerativeQAParamExtBuilder builder = GenerativeQAParamExtBuilder.parse(xcParser);
+        String requiredJsonStr = "{\"llm_question\":\"this is test llm question\"}";
+
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                requiredJsonStr
+            );
+
+        parser.nextToken();
+        GenerativeQAParamExtBuilder builder = GenerativeQAParamExtBuilder.parse(parser);
         assertNotNull(builder);
         assertNotNull(builder.getParams());
+        GenerativeQAParameters params = builder.getParams();
+        Assert.assertEquals("this is test llm question", params.getLlmQuestion());
     }
 
     public void testXContentRoundTrip() throws IOException {
         GenerativeQAParameters param1 = new GenerativeQAParameters("a", "b", "c", "s", "u", null, null, null, null, messageList);
         GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
         extBuilder.setParams(param1);
+
         XContentType xContentType = randomFrom(XContentType.values());
-        BytesReference serialized = XContentHelper.toXContent(extBuilder, xContentType, true);
+        XContentBuilder builder = XContentBuilder.builder(xContentType.xContent());
+        builder = extBuilder.toXContent(builder, EMPTY_PARAMS);
+        BytesReference serialized = BytesReference.bytes(builder);
+
         XContentParser parser = createParser(xContentType.xContent(), serialized);
+        parser.nextToken();
         GenerativeQAParamExtBuilder deserialized = GenerativeQAParamExtBuilder.parse(parser);
+
         assertEquals(extBuilder, deserialized);
         GenerativeQAParameters parameters = deserialized.getParams();
         assertTrue(GenerativeQAParameters.SIZE_NULL_VALUE == parameters.getContextSize());
@@ -147,10 +190,16 @@ public class GenerativeQAParamExtBuilderTests extends OpenSearchTestCase {
         GenerativeQAParameters param1 = new GenerativeQAParameters("a", "b", "c", "s", "u", 1, 2, 3, null);
         GenerativeQAParamExtBuilder extBuilder = new GenerativeQAParamExtBuilder();
         extBuilder.setParams(param1);
+
         XContentType xContentType = randomFrom(XContentType.values());
-        BytesReference serialized = XContentHelper.toXContent(extBuilder, xContentType, true);
+        XContentBuilder builder = XContentBuilder.builder(xContentType.xContent());
+        builder = extBuilder.toXContent(builder, EMPTY_PARAMS);
+        BytesReference serialized = BytesReference.bytes(builder);
+
         XContentParser parser = createParser(xContentType.xContent(), serialized);
+        parser.nextToken();
         GenerativeQAParamExtBuilder deserialized = GenerativeQAParamExtBuilder.parse(parser);
+
         assertEquals(extBuilder, deserialized);
     }
 

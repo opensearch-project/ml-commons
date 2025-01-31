@@ -7,8 +7,10 @@ package org.opensearch.ml.engine.indices;
 
 import static org.opensearch.ml.common.CommonValue.META;
 import static org.opensearch.ml.common.CommonValue.SCHEMA_VERSION_FIELD;
-import static org.opensearch.ml.common.utils.IndexUtils.INDEX_SETTINGS;
-import static org.opensearch.ml.common.utils.IndexUtils.UPDATED_INDEX_SETTINGS;
+import static org.opensearch.ml.common.utils.IndexUtils.ALL_NODES_REPLICA_INDEX_SETTINGS;
+import static org.opensearch.ml.common.utils.IndexUtils.DEFAULT_INDEX_SETTINGS;
+import static org.opensearch.ml.common.utils.IndexUtils.UPDATED_ALL_NODES_REPLICA_INDEX_SETTINGS;
+import static org.opensearch.ml.common.utils.IndexUtils.UPDATED_DEFAULT_INDEX_SETTINGS;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -27,6 +29,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.CommonValue;
+import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.exception.MLException;
 
 import lombok.AccessLevel;
@@ -104,11 +107,13 @@ public class MLIndicesHandler {
                         log.info("Skip creating the Index:{} that is already created by another parallel request", indexName);
                         internalListener.onResponse(true);
                     } else {
-                        log.error("Failed to create index " + indexName, e);
+                        log.error("Failed to create index {}", indexName, e);
                         internalListener.onFailure(e);
                     }
                 });
-                CreateIndexRequest request = new CreateIndexRequest(indexName).mapping(mapping, XContentType.JSON).settings(INDEX_SETTINGS);
+                CreateIndexRequest request = new CreateIndexRequest(indexName)
+                    .mapping(mapping, XContentType.JSON)
+                    .settings(indexName.equals(MLIndex.CONFIG.getIndexName()) ? ALL_NODES_REPLICA_INDEX_SETTINGS : DEFAULT_INDEX_SETTINGS);
                 client.admin().indices().create(request, actionListener);
             } else {
                 log.debug("index:{} is already created", indexName);
@@ -124,7 +129,13 @@ public class MLIndicesHandler {
                                     ActionListener.wrap(response -> {
                                         if (response.isAcknowledged()) {
                                             UpdateSettingsRequest updateSettingRequest = new UpdateSettingsRequest();
-                                            updateSettingRequest.indices(indexName).settings(UPDATED_INDEX_SETTINGS);
+                                            updateSettingRequest
+                                                .indices(indexName)
+                                                .settings(
+                                                    indexName.equals(MLIndex.CONFIG.getIndexName())
+                                                        ? UPDATED_ALL_NODES_REPLICA_INDEX_SETTINGS
+                                                        : UPDATED_DEFAULT_INDEX_SETTINGS
+                                                );
                                             client
                                                 .admin()
                                                 .indices()
@@ -137,14 +148,14 @@ public class MLIndicesHandler {
                                                             .onFailure(new MLException("Failed to update index setting for: " + indexName));
                                                     }
                                                 }, exception -> {
-                                                    log.error("Failed to update index setting for: " + indexName, exception);
+                                                    log.error("Failed to update index setting for: {}", indexName, exception);
                                                     internalListener.onFailure(exception);
                                                 }));
                                         } else {
                                             internalListener.onFailure(new MLException("Failed to update index: " + indexName));
                                         }
                                     }, exception -> {
-                                        log.error("Failed to update index " + indexName, exception);
+                                        log.error("Failed to update index {}", indexName, exception);
                                         internalListener.onFailure(exception);
                                     })
                                 );
@@ -164,7 +175,7 @@ public class MLIndicesHandler {
                 }
             }
         } catch (Exception e) {
-            log.error("Failed to init index " + indexName, e);
+            log.error("Failed to init index {}", indexName, e);
             listener.onFailure(e);
         }
     }
@@ -179,14 +190,14 @@ public class MLIndicesHandler {
      */
     public void shouldUpdateIndex(String indexName, Integer newVersion, ActionListener<Boolean> listener) {
         IndexMetadata indexMetaData = clusterService.state().getMetadata().indices().get(indexName);
-        if (indexMetaData == null) {
+        if (indexMetaData == null || indexMetaData.mapping() == null) {
             listener.onResponse(Boolean.FALSE);
             return;
         }
         Integer oldVersion = CommonValue.NO_SCHEMA_VERSION;
         Map<String, Object> indexMapping = indexMetaData.mapping().getSourceAsMap();
         Object meta = indexMapping.get(META);
-        if (meta != null && meta instanceof Map) {
+        if (meta instanceof Map) {
             @SuppressWarnings("unchecked")
             Map<String, Object> metaMapping = (Map<String, Object>) meta;
             Object schemaVersion = metaMapping.get(SCHEMA_VERSION_FIELD);

@@ -6,12 +6,14 @@
 package org.opensearch.ml.common.transport.connector;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
+import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 
+import org.opensearch.Version;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
@@ -22,24 +24,37 @@ import org.opensearch.core.common.io.stream.StreamOutput;
 import lombok.Builder;
 import lombok.Getter;
 
+@Getter
 public class MLConnectorDeleteRequest extends ActionRequest {
-    @Getter
-    String connectorId;
+    private final String connectorId;
+    private final String tenantId;
 
     @Builder
+    public MLConnectorDeleteRequest(String connectorId, String tenantId) {
+        this.connectorId = connectorId;
+        this.tenantId = tenantId;
+    }
+
     public MLConnectorDeleteRequest(String connectorId) {
         this.connectorId = connectorId;
+        this.tenantId = null;
     }
 
     public MLConnectorDeleteRequest(StreamInput input) throws IOException {
         super(input);
+        Version streamInputVersion = input.getVersion();
         this.connectorId = input.readString();
+        this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
     }
 
     @Override
     public void writeTo(StreamOutput output) throws IOException {
+        Version streamOutputVersion = output.getVersion();
         super.writeTo(output);
         output.writeString(connectorId);
+        if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
+            output.writeOptionalString(tenantId);
+        }
     }
 
     @Override

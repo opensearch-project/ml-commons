@@ -6,12 +6,14 @@
 package org.opensearch.ml.common.transport.task;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
+import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 
+import org.opensearch.Version;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
@@ -26,20 +28,44 @@ public class MLTaskGetRequest extends ActionRequest {
     @Getter
     String taskId;
 
+    @Getter
+    String tenantId;
+
+    // This is to identify if the get request is initiated by user or not. During batch task polling job,
+    // we also perform get operation. This field is to distinguish between
+    // these two situations.
+    @Getter
+    boolean isUserInitiatedGetTaskRequest;
+
     @Builder
-    public MLTaskGetRequest(String taskId) {
+    public MLTaskGetRequest(String taskId, String tenantId) {
+        this(taskId, tenantId, true);
+    }
+
+    @Builder
+    public MLTaskGetRequest(String taskId, String tenantId, Boolean isUserInitiatedGetTaskRequest) {
         this.taskId = taskId;
+        this.tenantId = tenantId;
+        this.isUserInitiatedGetTaskRequest = isUserInitiatedGetTaskRequest;
     }
 
     public MLTaskGetRequest(StreamInput in) throws IOException {
         super(in);
+        Version streamInputVersion = in.getVersion();
         this.taskId = in.readString();
+        this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? in.readOptionalString() : null;
+        this.isUserInitiatedGetTaskRequest = in.readBoolean();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
+        Version streamOutputVersion = out.getVersion();
         out.writeString(this.taskId);
+        if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
+            out.writeOptionalString(tenantId);
+        }
+        out.writeBoolean(isUserInitiatedGetTaskRequest);
     }
 
     @Override

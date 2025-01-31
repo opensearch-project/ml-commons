@@ -39,7 +39,7 @@ public class MultiModalConnectorPreProcessFunctionTest {
     @Before
     public void setUp() {
         function = new MultiModalConnectorPreProcessFunction();
-        textSimilarityInputDataSet = TextSimilarityInputDataSet.builder().queryText("test").textDocs(Arrays.asList("hello")).build();
+        textSimilarityInputDataSet = TextSimilarityInputDataSet.builder().queryText("test").textDocs(List.of("hello")).build();
         textDocsInputDataSet = TextDocsInputDataSet.builder().docs(Arrays.asList("hello", "world")).build();
         remoteInferenceInputDataSet = RemoteInferenceInputDataSet
             .builder()

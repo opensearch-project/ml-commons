@@ -11,23 +11,31 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.input.Constants.TENANT_ID_HEADER;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_GROUP_ID;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.client.node.NodeClient;
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteRequest;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
@@ -46,9 +54,22 @@ public class RestMLDeleteModelGroupActionTests extends OpenSearchTestCase {
     @Mock
     RestChannel channel;
 
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
+    @Mock
+    private ClusterService clusterService;
+
+    Settings settings;
+
     @Before
     public void setup() {
-        restMLDeleteModelGroupAction = new RestMLDeleteModelGroupAction();
+        MockitoAnnotations.openMocks(this);
+        MockitoAnnotations.openMocks(this);
+        when(clusterService.getSettings()).thenReturn(settings);
+        when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MULTI_TENANCY_ENABLED)));
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
+        restMLDeleteModelGroupAction = new RestMLDeleteModelGroupAction(mlFeatureEnabledSetting);
 
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
@@ -68,7 +89,7 @@ public class RestMLDeleteModelGroupActionTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        RestMLDeleteModelGroupAction mlDeleteModelGroupAction = new RestMLDeleteModelGroupAction();
+        RestMLDeleteModelGroupAction mlDeleteModelGroupAction = new RestMLDeleteModelGroupAction(mlFeatureEnabledSetting);
         assertNotNull(mlDeleteModelGroupAction);
     }
 
@@ -97,10 +118,37 @@ public class RestMLDeleteModelGroupActionTests extends OpenSearchTestCase {
         assertEquals(taskId, "test_id");
     }
 
+    public void test_PrepareRequest_WithTenantId() throws Exception {
+        // Enable multi-tenancy
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
+
+        // Create RestRequest with tenantId in header
+        RestRequest request = getRestRequestWithTenantId("test_tenant");
+        restMLDeleteModelGroupAction.handleRequest(request, channel, client);
+
+        // Capture request sent to client
+        ArgumentCaptor<MLModelGroupDeleteRequest> argumentCaptor = ArgumentCaptor.forClass(MLModelGroupDeleteRequest.class);
+        verify(client, times(1)).execute(eq(MLModelGroupDeleteAction.INSTANCE), argumentCaptor.capture(), any());
+
+        // Verify modelGroupId and tenantId
+        MLModelGroupDeleteRequest capturedRequest = argumentCaptor.getValue();
+        assertEquals("test_id", capturedRequest.getModelGroupId());
+        assertEquals("test_tenant", capturedRequest.getTenantId());
+    }
+
     private RestRequest getRestRequest() {
         Map<String, String> params = new HashMap<>();
         params.put(PARAMETER_MODEL_GROUP_ID, "test_id");
-        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(params).build();
-        return request;
+        return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(params).build();
+    }
+
+    private RestRequest getRestRequestWithTenantId(String tenantId) {
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_MODEL_GROUP_ID, "test_id");
+
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put(TENANT_ID_HEADER, List.of(tenantId)); // Add tenant ID to headers
+
+        return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(params).withHeaders(headers).build();
     }
 }

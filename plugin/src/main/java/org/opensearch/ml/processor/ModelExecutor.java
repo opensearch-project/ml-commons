@@ -8,17 +8,20 @@ package org.opensearch.ml.processor;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
+import static org.opensearch.searchpipelines.questionanswering.generative.ext.GenerativeQAParamExtBuilder.PARAMETER_NAME;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.action.ActionRequest;
+import org.opensearch.action.search.SearchRequest;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -33,6 +36,10 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.searchext.MLInferenceRequestParametersExtBuilder;
+import org.opensearch.search.SearchExtBuilder;
+import org.opensearch.search.pipeline.PipelineProcessingContext;
+import org.opensearch.searchpipelines.questionanswering.generative.ext.GenerativeQAParamExtBuilder;
 
 import com.jayway.jsonpath.Configuration;
 import com.jayway.jsonpath.JsonPath;
@@ -105,11 +112,11 @@ public interface ModelExecutor {
      * Retrieves the model output value from the given ModelTensorOutput for the specified modelOutputFieldName.
      * It handles cases where the output contains a single tensor or multiple tensors.
      *
-     * @param modelTensorOutput          the ModelTensorOutput containing the model output
-     * @param modelOutputFieldName       the name of the field in the model output to retrieve the value for
-     * @param ignoreMissing              a flag indicating whether to ignore missing fields or throw an exception
+     * @param modelTensorOutput    the ModelTensorOutput containing the model output
+     * @param modelOutputFieldName the name of the field in the model output to retrieve the value for
+     * @param ignoreMissing        a flag indicating whether to ignore missing fields or throw an exception
      * @return the model output value as an Object
-     * @throws RuntimeException          if there is an error retrieving the model output value
+     * @throws RuntimeException if there is an error retrieving the model output value
      */
     default Object getModelOutputValue(ModelTensorOutput modelTensorOutput, String modelOutputFieldName, boolean ignoreMissing) {
         Object modelOutputValue;
@@ -282,8 +289,12 @@ public interface ModelExecutor {
     }
 
     default boolean hasField(Object json, String path) {
-        Object value = JsonPath.using(suppressExceptionConfiguration).parse(json).read(path);
-
+        Object value;
+        if (json instanceof String) {
+            value = JsonPath.using(suppressExceptionConfiguration).parse((String) json).read(path);
+        } else {
+            value = JsonPath.using(suppressExceptionConfiguration).parse(json).read(path);
+        }
         if (value != null) {
             return true;
         }
@@ -294,6 +305,7 @@ public interface ModelExecutor {
      * Writes a new dot path for a nested object within the given JSON object.
      * This method is useful when dealing with arrays or nested objects in the JSON structure.
      * for example foo.*.bar.*.quk to be [foo.0.bar.0.quk, foo.0.bar.1.quk..]
+     *
      * @param json    the JSON object containing the nested object
      * @param dotPath the dot path representing the location of the nested object
      * @return a list of dot paths representing the new locations of the nested object
@@ -329,5 +341,48 @@ public interface ModelExecutor {
      */
     default String convertToDotPath(String path) {
         return path.replaceAll("\\[(\\d+)\\]", "$1\\.").replaceAll("\\['(.*?)']", "$1\\.").replaceAll("^\\$", "").replaceAll("\\.$", "");
+    }
+
+    /**
+     * Sets the request context from the extensions in the SearchRequest.
+     *
+     * This method processes the extensions in the provided SearchRequest and sets
+     * corresponding attributes in the PipelineProcessingContext. It specifically
+     * handles two types of extensions:
+     * 1. MLInferenceRequestParametersExtBuilder
+     * 2. GenerativeQAParamExtBuilder
+     *
+     * For each recognized extension, it extracts parameters and sets them as
+     * attributes in the requestContext with appropriate prefixes.
+     *
+     * @param request The SearchRequest containing the extensions to process.
+     *                This should be a valid SearchRequest that may contain
+     *                ML Inference or Generative QA extensions.
+     * @param requestContext The PipelineProcessingContext where attributes will be set.
+     *                       This context will be updated with parameters from the extensions.
+     * */
+    default void setRequestContextFromExt(SearchRequest request, PipelineProcessingContext requestContext) {
+
+        List<SearchExtBuilder> extBuilderList = request.source().ext();
+        for (SearchExtBuilder ext : extBuilderList) {
+            if (ext instanceof MLInferenceRequestParametersExtBuilder) {
+                MLInferenceRequestParametersExtBuilder mlExtBuilder = (MLInferenceRequestParametersExtBuilder) ext;
+                Map<String, Object> mlParams = mlExtBuilder.getRequestParameters().getParams();
+                mlParams
+                    .forEach(
+                        (key, value) -> requestContext
+                            .setAttribute(String.format(Locale.ROOT, "ext.%s.%s", MLInferenceRequestParametersExtBuilder.NAME, key), value)
+                    );
+            }
+            if (ext instanceof GenerativeQAParamExtBuilder) {
+                GenerativeQAParamExtBuilder qaParamExtBuilder = (GenerativeQAParamExtBuilder) ext;
+                Map<String, Object> mlParams = (Map<String, Object>) qaParamExtBuilder.getParams();
+                mlParams
+                    .forEach(
+                        (key, value) -> requestContext.setAttribute(String.format(Locale.ROOT, "ext.%s.%s", PARAMETER_NAME, key), value)
+                    );
+            }
+        }
+
     }
 }

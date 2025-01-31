@@ -76,7 +76,9 @@ import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
+import org.opensearch.ml.common.input.Constants;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.input.execute.anomalylocalization.AnomalyLocalizationInput;
 import org.opensearch.ml.common.input.execute.metricscorrelation.MetricsCorrelationInput;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
 import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
@@ -245,7 +247,12 @@ public class TestHelper {
         return request;
     }
 
-    public static RestRequest getCreateConnectorRestRequest() {
+    public static RestRequest getCreateConnectorRestRequest(String tenantId) {
+        Map<String, List<String>> headers = new HashMap<>();
+        if (tenantId != null) {
+            headers.put(Constants.TENANT_ID_HEADER, Collections.singletonList(tenantId));
+        }
+
         final String requestContent = "{\n"
             + "    \"name\": \"OpenAI Connector\",\n"
             + "    \"description\": \"The connector to public OpenAI model service for GPT 3.5\",\n"
@@ -276,6 +283,7 @@ public class TestHelper {
             + "    \"access_mode\": \"public\"\n"
             + "}";
         RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
+            .withHeaders(headers)
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .build();
         return request;
@@ -351,6 +359,27 @@ public class TestHelper {
             .build();
     }
 
+    public static RestRequest getAnomalyLocalizationRestRequest() {
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_ALGORITHM, FunctionName.ANOMALY_LOCALIZATION.name());
+        final String requestContent = "{"
+            + "\"input_data\": {"
+            + "\"index_name\": \"test-index\","
+            + "\"attribute_field_names\": [\"attribute\"],"
+            + "\"time_field_name\": \"timestamp\","
+            + "\"start_time\": 1620630000000,"
+            + "\"end_time\": 1621234800000,"
+            + "\"min_time_interval\": 86400000,"
+            + "\"num_outputs\": 1"
+            + "}"
+            + "}";
+        RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
+            .withParams(params)
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .build();
+        return request;
+    }
+
     public static RestRequest getExecuteAgentRestRequest() {
         Map<String, String> params = new HashMap<>();
         params.put(PARAMETER_AGENT_ID, "test_agent_id");
@@ -368,7 +397,11 @@ public class TestHelper {
     }
 
     public static RestRequest getSearchAllRestRequest() {
+        String tenantId = "test-tenant";
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put(Constants.TENANT_ID_HEADER, Collections.singletonList(tenantId));
         RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
+            .withHeaders(headers)
             .withContent(new BytesArray(TestData.matchAllSearchQuery()), XContentType.JSON)
             .build();
         return request;
@@ -398,6 +431,7 @@ public class TestHelper {
         entries.add(KMeansParams.XCONTENT_REGISTRY);
         entries.add(LocalSampleCalculatorInput.XCONTENT_REGISTRY);
         entries.add(MetricsCorrelationInput.XCONTENT_REGISTRY);
+        entries.add(AnomalyLocalizationInput.XCONTENT_REGISTRY_ENTRY);
         return new NamedXContentRegistry(entries);
     }
 
@@ -459,11 +493,11 @@ public class TestHelper {
         return state(new ClusterName("test"), indexName, mapping, clusterManagerNode, clusterManagerNode, allNodes);
     }
 
-    public static ClusterState setupTestClusterState() {
+    public static ClusterState setupTestClusterState(String nodeId) {
         Set<DiscoveryNodeRole> roleSet = new HashSet<>();
         roleSet.add(DiscoveryNodeRole.DATA_ROLE);
         DiscoveryNode node = new DiscoveryNode(
-            "node",
+            nodeId,
             new TransportAddress(TransportAddress.META_ADDRESS, new AtomicInteger().incrementAndGet()),
             new HashMap<>(),
             roleSet,

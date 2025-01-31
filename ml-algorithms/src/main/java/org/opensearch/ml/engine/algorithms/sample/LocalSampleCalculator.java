@@ -38,7 +38,7 @@ public class LocalSampleCalculator implements Executable {
 
     @Override
     public void execute(Input input, ActionListener<Output> listener) {
-        if (input == null || !(input instanceof LocalSampleCalculatorInput)) {
+        if (!(input instanceof LocalSampleCalculatorInput)) {
             throw new IllegalArgumentException("wrong input");
         }
         LocalSampleCalculatorInput sampleCalculatorInput = (LocalSampleCalculatorInput) input;

@@ -36,6 +36,8 @@ public class MLAgentTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
+    MLToolSpec mlToolSpec = new MLToolSpec("test", "test", "test", Collections.emptyMap(), false, Collections.emptyMap(), null);
+
     @Test
     public void constructor_NullName() {
         exceptionRule.expect(IllegalArgumentException.class);
@@ -46,13 +48,14 @@ public class MLAgentTest {
             MLAgentType.CONVERSATIONAL.name(),
             "test",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
-            List.of(new MLToolSpec("test", "test", "test", Collections.EMPTY_MAP, false)),
+            List.of(mlToolSpec),
             null,
             null,
             Instant.EPOCH,
             Instant.EPOCH,
             "test",
-            false
+            false,
+            null
         );
     }
 
@@ -66,13 +69,14 @@ public class MLAgentTest {
             null,
             "test",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
-            List.of(new MLToolSpec("test", "test", "test", Collections.EMPTY_MAP, false)),
+            List.of(mlToolSpec),
             null,
             null,
             Instant.EPOCH,
             Instant.EPOCH,
             "test",
-            false
+            false,
+            null
         );
     }
 
@@ -86,21 +90,22 @@ public class MLAgentTest {
             MLAgentType.CONVERSATIONAL.name(),
             "test",
             null,
-            List.of(new MLToolSpec("test", "test", "test", Collections.EMPTY_MAP, false)),
+            List.of(mlToolSpec),
             null,
             null,
             Instant.EPOCH,
             Instant.EPOCH,
             "test",
-            false
+            false,
+            null
         );
     }
 
     @Test
     public void constructor_DuplicateTool() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Duplicate tool defined: test_tool_name");
-        MLToolSpec mlToolSpec = new MLToolSpec("test_tool_type", "test_tool_name", "test", Collections.EMPTY_MAP, false);
+        exceptionRule.expectMessage("Duplicate tool defined: test");
+
         MLAgent agent = new MLAgent(
             "test_name",
             MLAgentType.CONVERSATIONAL.name(),
@@ -112,7 +117,8 @@ public class MLAgentTest {
             Instant.EPOCH,
             Instant.EPOCH,
             "test",
-            false
+            false,
+            null
         );
     }
 
@@ -123,13 +129,14 @@ public class MLAgentTest {
             "CONVERSATIONAL",
             "test",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
-            List.of(new MLToolSpec("test", "test", "test", Collections.EMPTY_MAP, false)),
+            List.of(mlToolSpec),
             Map.of("test", "test"),
             new MLMemorySpec("test", "123", 0),
             Instant.EPOCH,
             Instant.EPOCH,
             "test",
-            false
+            false,
+            null
         );
         BytesStreamOutput output = new BytesStreamOutput();
         agent.writeTo(output);
@@ -150,19 +157,20 @@ public class MLAgentTest {
             "FLOW",
             "test",
             null,
-            List.of(new MLToolSpec("test", "test", "test", Collections.EMPTY_MAP, false)),
+            List.of(mlToolSpec),
             Map.of("test", "test"),
             new MLMemorySpec("test", "123", 0),
             Instant.EPOCH,
             Instant.EPOCH,
             "test",
-            false
+            false,
+            null
         );
         BytesStreamOutput output = new BytesStreamOutput();
         agent.writeTo(output);
         MLAgent agent1 = new MLAgent(output.bytes().streamInput());
 
-        Assert.assertEquals(agent1.getLlm(), null);
+        assertNull(agent1.getLlm());
     }
 
     @Test
@@ -178,13 +186,14 @@ public class MLAgentTest {
             Instant.EPOCH,
             Instant.EPOCH,
             "test",
-            false
+            false,
+            null
         );
         BytesStreamOutput output = new BytesStreamOutput();
         agent.writeTo(output);
         MLAgent agent1 = new MLAgent(output.bytes().streamInput());
 
-        Assert.assertEquals(agent1.getTools(), null);
+        assertNull(agent1.getTools());
     }
 
     @Test
@@ -194,19 +203,20 @@ public class MLAgentTest {
             MLAgentType.CONVERSATIONAL.name(),
             "test",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
-            List.of(new MLToolSpec("test", "test", "test", Collections.EMPTY_MAP, false)),
+            List.of(mlToolSpec),
             null,
             new MLMemorySpec("test", "123", 0),
             Instant.EPOCH,
             Instant.EPOCH,
             "test",
-            false
+            false,
+            null
         );
         BytesStreamOutput output = new BytesStreamOutput();
         agent.writeTo(output);
         MLAgent agent1 = new MLAgent(output.bytes().streamInput());
 
-        Assert.assertEquals(agent1.getParameters(), null);
+        assertNull(agent1.getParameters());
     }
 
     @Test
@@ -216,19 +226,20 @@ public class MLAgentTest {
             "CONVERSATIONAL",
             "test",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
-            List.of(new MLToolSpec("test", "test", "test", Collections.EMPTY_MAP, false)),
+            List.of(mlToolSpec),
             Map.of("test", "test"),
             null,
             Instant.EPOCH,
             Instant.EPOCH,
             "test",
-            false
+            false,
+            null
         );
         BytesStreamOutput output = new BytesStreamOutput();
         agent.writeTo(output);
         MLAgent agent1 = new MLAgent(output.bytes().streamInput());
 
-        Assert.assertEquals(agent1.getMemory(), null);
+        assertNull(agent1.getMemory());
     }
 
     @Test
@@ -238,13 +249,14 @@ public class MLAgentTest {
             "CONVERSATIONAL",
             "test",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
-            List.of(new MLToolSpec("test", "test", "test", Map.of("test", "test"), false)),
+            List.of(new MLToolSpec("test", "test", "test", Map.of("test", "test"), false, Collections.emptyMap(), null)),
             Map.of("test", "test"),
             new MLMemorySpec("test", "123", 0),
             Instant.EPOCH,
             Instant.EPOCH,
             "test",
-            false
+            false,
+            null
         );
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         agent.toXContent(builder, ToXContent.EMPTY_PARAMS);
@@ -278,7 +290,7 @@ public class MLAgentTest {
         Assert.assertEquals(agent.getTools().get(0).getType(), "test");
         Assert.assertEquals(agent.getTools().get(0).getDescription(), "test");
         Assert.assertEquals(agent.getTools().get(0).getParameters(), Map.of("test", "test"));
-        Assert.assertEquals(agent.getTools().get(0).isIncludeOutputInAgentResponse(), false);
+        assertFalse(agent.getTools().get(0).isIncludeOutputInAgentResponse());
         Assert.assertEquals(agent.getCreatedTime(), Instant.EPOCH);
         Assert.assertEquals(agent.getLastUpdateTime(), Instant.EPOCH);
         Assert.assertEquals(agent.getAppType(), "test");
@@ -294,13 +306,14 @@ public class MLAgentTest {
             MLAgentType.CONVERSATIONAL.name(),
             "test",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
-            List.of(new MLToolSpec("test", "test", "test", Collections.EMPTY_MAP, false)),
+            List.of(mlToolSpec),
             Map.of("test", "test"),
             new MLMemorySpec("test", "123", 0),
             Instant.EPOCH,
             Instant.EPOCH,
             "test",
-            false
+            false,
+            null
         );
         BytesStreamOutput output = new BytesStreamOutput();
         agent.writeTo(output);
@@ -319,7 +332,20 @@ public class MLAgentTest {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage(" is not a valid Agent Type");
 
-        new MLAgent("test_name", "INVALID_TYPE", "test_description", null, null, null, null, Instant.EPOCH, Instant.EPOCH, "test", false);
+        new MLAgent(
+            "test_name",
+            "INVALID_TYPE",
+            "test_description",
+            null,
+            null,
+            null,
+            null,
+            Instant.EPOCH,
+            Instant.EPOCH,
+            "test",
+            false,
+            null
+        );
     }
 
     @Test
@@ -336,7 +362,8 @@ public class MLAgentTest {
                 Instant.EPOCH,
                 Instant.EPOCH,
                 "test",
-                false
+                false,
+                null
             );
             assertNotNull(agent); // Ensuring object creation was successful without throwing an exception
         } catch (IllegalArgumentException e) {
@@ -346,10 +373,12 @@ public class MLAgentTest {
 
     @Test
     public void writeTo_ReadFrom_HiddenFlag_VersionCompatibility() throws IOException {
-        MLAgent agent = new MLAgent("test", "FLOW", "test", null, null, null, null, Instant.EPOCH, Instant.EPOCH, "test", true);
+        MLAgent agent = new MLAgent("test", "FLOW", "test", null, null, null, null, Instant.EPOCH, Instant.EPOCH, "test", true, null);
+
+        // Serialize and deserialize with an older version
         BytesStreamOutput output = new BytesStreamOutput();
-        Version oldVersion = CommonValue.VERSION_2_12_0;
-        output.setVersion(oldVersion); // Version before MINIMAL_SUPPORTED_VERSION_FOR_HIDDEN_AGENT
+        Version oldVersion = CommonValue.VERSION_2_12_0; // Before hidden flag support
+        output.setVersion(oldVersion);
         agent.writeTo(output);
 
         StreamInput streamInput = output.bytes().streamInput();
@@ -357,12 +386,14 @@ public class MLAgentTest {
         MLAgent agentOldVersion = new MLAgent(streamInput);
         assertNull(agentOldVersion.getIsHidden()); // Hidden should be null for old versions
 
+        // Serialize and deserialize with a newer version
         output = new BytesStreamOutput();
-        output.setVersion(CommonValue.VERSION_2_13_0); // Version at or after MINIMAL_SUPPORTED_VERSION_FOR_HIDDEN_AGENT
+        output.setVersion(CommonValue.VERSION_2_13_0); // After hidden flag support
         agent.writeTo(output);
+
         StreamInput streamInput1 = output.bytes().streamInput();
         streamInput1.setVersion(CommonValue.VERSION_2_13_0);
-        MLAgent agentNewVersion = new MLAgent(output.bytes().streamInput());
+        MLAgent agentNewVersion = new MLAgent(streamInput1);
         assertEquals(Boolean.TRUE, agentNewVersion.getIsHidden()); // Hidden should be true for new versions
     }
 

@@ -36,7 +36,7 @@ dependencies {
     implementation group: 'org.opensearch', name: 'common-utils', version: "${common_utils_version}"
     // https://mvnrepository.com/artifact/org.apache.httpcomponents.core5/httpcore5
     implementation group: 'org.apache.httpcomponents.core5', name: 'httpcore5', version: "${versions.httpcore5}"
-    implementation group: 'com.google.guava', name: 'guava', version: '32.1.2-jre'
+    implementation group: 'com.google.guava', name: 'guava', version: '32.1.3-jre'
     implementation group: 'org.json', name: 'json', version: '20231013'
     implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
     testImplementation "org.opensearch.test:framework:${opensearch_version}"
@@ -78,6 +78,6 @@ spotless {
         removeUnusedImports()
         importOrder 'java', 'javax', 'org', 'com'
 
-        eclipse().configFile rootProject.file('.eclipseformat.xml')
+        eclipse().withP2Mirrors(Map.of("https://download.eclipse.org/", "https://mirror.umd.edu/eclipse/")).configFile rootProject.file('.eclipseformat.xml')
     }
 }

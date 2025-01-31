@@ -8,12 +8,17 @@ package org.opensearch.ml.engine.encryptor;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.opensearch.ml.common.CommonValue.MASTER_KEY;
 import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.MLConfig.CREATE_TIME_FIELD;
+import static org.opensearch.ml.common.utils.StringUtils.hashString;
 
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -48,37 +53,41 @@ public class EncryptorImpl implements Encryptor {
         "The ML encryption master key has not been initialized yet. Please retry after waiting for 10 seconds.";
     private ClusterService clusterService;
     private Client client;
-    private volatile String masterKey;
+    private final Map<String, String> tenantMasterKeys;
     private MLIndicesHandler mlIndicesHandler;
 
+    // concurrent map can't have null as a key. This is to support single tenancy
+    // assigning some random string so that it can't be duplicate
+    public static final String DEFAULT_TENANT_ID = "03000200-0400-0500-0006-000700080009";
+
     public EncryptorImpl(ClusterService clusterService, Client client, MLIndicesHandler mlIndicesHandler) {
-        this.masterKey = null;
+        this.tenantMasterKeys = new ConcurrentHashMap<>();
         this.clusterService = clusterService;
         this.client = client;
+
         this.mlIndicesHandler = mlIndicesHandler;
     }
 
-    public EncryptorImpl(String masterKey) {
-        this.masterKey = masterKey;
+    public EncryptorImpl(String tenantId, String masterKey) {
+        this.tenantMasterKeys = new ConcurrentHashMap<>();
+        this.tenantMasterKeys.put(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID), masterKey);
     }
 
     @Override
-    public void setMasterKey(String masterKey) {
-        this.masterKey = masterKey;
+    public void setMasterKey(String tenantId, String masterKey) {
+        this.tenantMasterKeys.put(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID), masterKey);
     }
 
     @Override
-    public String getMasterKey() {
-        return masterKey;
+    public String getMasterKey(String tenantId) {
+        return tenantMasterKeys.get(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID));
     }
 
     @Override
-    public String encrypt(String plainText) {
-        initMasterKey();
+    public String encrypt(String plainText, String tenantId) {
+        initMasterKey(tenantId);
         final AwsCrypto crypto = AwsCrypto.builder().withCommitmentPolicy(CommitmentPolicy.RequireEncryptRequireDecrypt).build();
-        byte[] bytes = Base64.getDecoder().decode(masterKey);
-        // https://github.com/aws/aws-encryption-sdk-java/issues/1879
-        JceMasterKey jceMasterKey = JceMasterKey.getInstance(new SecretKeySpec(bytes, "AES"), "Custom", "", "AES/GCM/NOPADDING");
+        JceMasterKey jceMasterKey = createJceMasterKey(tenantId);
 
         final CryptoResult<byte[], JceMasterKey> encryptResult = crypto
             .encryptData(jceMasterKey, plainText.getBytes(StandardCharsets.UTF_8));
@@ -86,12 +95,10 @@ public class EncryptorImpl implements Encryptor {
     }
 
     @Override
-    public String decrypt(String encryptedText) {
-        initMasterKey();
+    public String decrypt(String encryptedText, String tenantId) {
+        initMasterKey(tenantId);
         final AwsCrypto crypto = AwsCrypto.builder().withCommitmentPolicy(CommitmentPolicy.RequireEncryptRequireDecrypt).build();
-
-        byte[] bytes = Base64.getDecoder().decode(masterKey);
-        JceMasterKey jceMasterKey = JceMasterKey.getInstance(new SecretKeySpec(bytes, "AES"), "Custom", "", "AES/GCM/NOPADDING");
+        JceMasterKey jceMasterKey = createJceMasterKey(tenantId);
 
         final CryptoResult<byte[], JceMasterKey> decryptedResult = crypto
             .decryptData(jceMasterKey, Base64.getDecoder().decode(encryptedText));
@@ -102,47 +109,64 @@ public class EncryptorImpl implements Encryptor {
     public String generateMasterKey() {
         byte[] keyBytes = new byte[32];
         new SecureRandom().nextBytes(keyBytes);
-        String base64Key = Base64.getEncoder().encodeToString(keyBytes);
-        return base64Key;
+        return Base64.getEncoder().encodeToString(keyBytes);
     }
 
-    private void initMasterKey() {
-        if (masterKey != null) {
+    private JceMasterKey createJceMasterKey(String tenantId) {
+        byte[] bytes = Base64.getDecoder().decode(tenantMasterKeys.get(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID)));
+        return JceMasterKey.getInstance(new SecretKeySpec(bytes, "AES"), "Custom", "", "AES/GCM/NOPADDING");
+    }
+
+    private void initMasterKey(String tenantId) {
+        if (tenantMasterKeys.containsKey(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID))) {
             return;
         }
         AtomicReference<Exception> exceptionRef = new AtomicReference<>();
-
         CountDownLatch latch = new CountDownLatch(1);
         mlIndicesHandler.initMLConfigIndex(ActionListener.wrap(r -> {
             if (!r) {
                 exceptionRef.set(new RuntimeException("No response to create ML Config index"));
                 latch.countDown();
             } else {
-                GetRequest getRequest = new GetRequest(ML_CONFIG_INDEX).id(MASTER_KEY);
+                String masterKeyId = MASTER_KEY;
+                if (tenantId != null) {
+                    masterKeyId = MASTER_KEY + "_" + hashString(tenantId);
+                }
+                final String MASTER_KEY_ID = masterKeyId;
+                GetRequest getRequest = new GetRequest(ML_CONFIG_INDEX).id(MASTER_KEY_ID);
                 try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                     client.get(getRequest, ActionListener.wrap(getResponse -> {
                         if (getResponse == null || !getResponse.isExists()) {
-                            IndexRequest indexRequest = new IndexRequest(ML_CONFIG_INDEX).id(MASTER_KEY);
+                            IndexRequest indexRequest = new IndexRequest(ML_CONFIG_INDEX).id(MASTER_KEY_ID);
                             final String generatedMasterKey = generateMasterKey();
-                            indexRequest
-                                .source(ImmutableMap.of(MASTER_KEY, generatedMasterKey, CREATE_TIME_FIELD, Instant.now().toEpochMilli()));
+
+                            ImmutableMap.Builder<String, Object> mapBuilder = ImmutableMap.builder();
+                            mapBuilder.put(MASTER_KEY_ID, generatedMasterKey);
+                            mapBuilder.put(CREATE_TIME_FIELD, Instant.now().toEpochMilli());
+                            if (tenantId != null) {
+                                mapBuilder.put(TENANT_ID_FIELD, tenantId);
+                            }
+                            indexRequest.source(mapBuilder.build());
                             indexRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                             indexRequest.opType(DocWriteRequest.OpType.CREATE);
                             client.index(indexRequest, ActionListener.wrap(indexResponse -> {
-                                this.masterKey = generatedMasterKey;
+                                this.tenantMasterKeys.put(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID), generatedMasterKey);
                                 log.info("ML encryption master key initialized successfully");
                                 latch.countDown();
                             }, e -> {
 
                                 if (ExceptionUtils.getRootCause(e) instanceof VersionConflictEngineException) {
-                                    GetRequest getMasterKeyRequest = new GetRequest(ML_CONFIG_INDEX).id(MASTER_KEY);
+                                    GetRequest getMasterKeyRequest = new GetRequest(ML_CONFIG_INDEX).id(MASTER_KEY_ID);
                                     try (
                                         ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()
                                     ) {
                                         client.get(getMasterKeyRequest, ActionListener.wrap(getMasterKeyResponse -> {
                                             if (getMasterKeyResponse != null && getMasterKeyResponse.isExists()) {
-                                                final String masterKey = (String) getMasterKeyResponse.getSourceAsMap().get(MASTER_KEY);
-                                                this.masterKey = masterKey;
+                                                this.tenantMasterKeys
+                                                    .put(
+                                                        Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID),
+                                                        (String) getMasterKeyResponse.getSourceAsMap().get(MASTER_KEY_ID)
+                                                    );
                                                 log.info("ML encryption master key already initialized, no action needed");
                                                 latch.countDown();
                                             } else {
@@ -162,8 +186,8 @@ public class EncryptorImpl implements Encryptor {
                                 }
                             }));
                         } else {
-                            final String masterKey = (String) getResponse.getSourceAsMap().get(MASTER_KEY);
-                            this.masterKey = masterKey;
+                            final String masterKey = (String) getResponse.getSourceAsMap().get(MASTER_KEY_ID);
+                            this.tenantMasterKeys.put(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID), masterKey);
                             log.info("ML encryption master key already initialized, no action needed");
                             latch.countDown();
                         }
@@ -181,7 +205,10 @@ public class EncryptorImpl implements Encryptor {
         }));
 
         try {
-            latch.await(1, SECONDS);
+            boolean completed = latch.await(3, SECONDS);
+            if (!completed) {
+                throw new MLException("Fetching master key timed out.");
+            }
         } catch (InterruptedException e) {
             throw new IllegalStateException(e);
         }
@@ -194,9 +221,8 @@ public class EncryptorImpl implements Encryptor {
                 throw new MLException(exceptionRef.get());
             }
         }
-        if (masterKey == null) {
+        if (tenantMasterKeys.get(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID)) == null) {
             throw new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR);
         }
     }
-
 }

@@ -292,12 +292,32 @@ public class MLFlowAgentRunnerTest {
 
         Map<String, String> params = Map.of("toolType.param2", "value2", "toolName.param3", "value3", "param4", "value4");
 
-        Map<String, String> result = mlFlowAgentRunner.getToolExecuteParams(toolSpec, params);
+        Map<String, String> result = mlFlowAgentRunner.getToolExecuteParams(toolSpec, params, null);
 
         assertEquals("value1", result.get("param1"));
         assertEquals("value3", result.get("param3"));
         assertEquals("value4", result.get("param4"));
         assertFalse(result.containsKey("toolType.param2"));
+    }
+
+    @Test
+    public void testGetToolExecuteParamsWithConfig() {
+        MLToolSpec toolSpec = mock(MLToolSpec.class);
+        when(toolSpec.getParameters()).thenReturn(Map.of("param1", "value1", "tool_key", "value_from_parameters"));
+        when(toolSpec.getConfigMap()).thenReturn(Map.of("tool_key", "tool_config_value"));
+        when(toolSpec.getType()).thenReturn("toolType");
+        when(toolSpec.getName()).thenReturn("toolName");
+
+        Map<String, String> params = Map
+            .of("toolType.param2", "value2", "toolName.param3", "value3", "param4", "value4", "toolName.tool_key", "dynamic value");
+
+        Map<String, String> result = mlFlowAgentRunner.getToolExecuteParams(toolSpec, params, null);
+
+        assertEquals("value1", result.get("param1"));
+        assertEquals("value3", result.get("param3"));
+        assertEquals("value4", result.get("param4"));
+        assertFalse(result.containsKey("toolType.param2"));
+        assertEquals("tool_config_value", result.get("tool_key"));
     }
 
     @Test
@@ -322,7 +342,7 @@ public class MLFlowAgentRunnerTest {
             );
 
         // Execute the method
-        Map<String, String> result = mlFlowAgentRunner.getToolExecuteParams(toolSpec, params);
+        Map<String, String> result = mlFlowAgentRunner.getToolExecuteParams(toolSpec, params, null);
 
         // Assertions
         assertEquals("value1", result.get("param1"));
@@ -338,7 +358,7 @@ public class MLFlowAgentRunnerTest {
     @Test
     public void testCreateTool() {
         MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).description("description").type(FIRST_TOOL).build();
-        Tool result = mlFlowAgentRunner.createTool(firstToolSpec);
+        Tool result = mlFlowAgentRunner.createTool(firstToolSpec, null);
 
         assertNotNull(result);
         assertEquals(FIRST_TOOL, result.getName());

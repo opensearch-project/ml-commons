@@ -14,6 +14,7 @@ import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
 import static org.opensearch.ml.utils.RestActionUtils.getActionTypeFromRestRequest;
 import static org.opensearch.ml.utils.RestActionUtils.getParameterId;
+import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
 import java.io.IOException;
 import java.util.List;
@@ -47,9 +48,9 @@ import lombok.extern.log4j.Log4j2;
 public class RestMLPredictionAction extends BaseRestHandler {
     private static final String ML_PREDICTION_ACTION = "ml_prediction_action";
 
-    private MLModelManager modelManager;
+    private final MLModelManager modelManager;
 
-    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     /**
      * Constructor
@@ -114,7 +115,12 @@ public class RestMLPredictionAction extends BaseRestHandler {
                 }
             });
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                modelManager.getModel(modelId, ActionListener.runBefore(listener, () -> context.restore()));
+                modelManager
+                    .getModel(
+                        modelId,
+                        getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request),
+                        ActionListener.runBefore(listener, context::restore)
+                    );
             }
         };
     }
@@ -127,6 +133,7 @@ public class RestMLPredictionAction extends BaseRestHandler {
      */
     @VisibleForTesting
     MLPredictionTaskRequest getRequest(String modelId, String algorithm, RestRequest request) throws IOException {
+        String tenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
         ActionType actionType = ActionType.from(getActionTypeFromRestRequest(request));
         if (FunctionName.REMOTE.name().equals(algorithm) && !mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
             throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
@@ -142,7 +149,7 @@ public class RestMLPredictionAction extends BaseRestHandler {
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
         MLInput mlInput = MLInput.parse(parser, algorithm, actionType);
-        return new MLPredictionTaskRequest(modelId, mlInput, null);
+        return new MLPredictionTaskRequest(modelId, mlInput, null, tenantId);
     }
 
 }

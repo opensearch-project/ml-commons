@@ -26,8 +26,8 @@ dependencies {
     compileOnly group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
     compileOnly group: 'com.google.code.gson', name: 'gson', version: '2.10.1'
     compileOnly group: 'org.json', name: 'json', version: '20231013'
-
-    implementation('com.google.guava:guava:32.1.2-jre') {
+    testImplementation group: 'org.json', name: 'json', version: '20231013'
+    implementation('com.google.guava:guava:32.1.3-jre') {
         exclude group: 'com.google.guava', module: 'failureaccess'
         exclude group: 'com.google.code.findbugs', module: 'jsr305'
         exclude group: 'org.checkerframework', module: 'checker-qual'
@@ -36,6 +36,11 @@ dependencies {
         exclude group: 'com.google.guava', module: 'listenablefuture'
     }
     compileOnly 'com.jayway.jsonpath:json-path:2.9.0'
+    compileOnly("com.fasterxml.jackson.core:jackson-annotations:${versions.jackson}")
+    compileOnly("com.fasterxml.jackson.core:jackson-databind:${versions.jackson_databind}")
+    compileOnly group: 'com.networknt' , name: 'json-schema-validator', version: '1.4.0'
+    // Multi-tenant SDK Client
+    compileOnly "org.opensearch:opensearch-remote-metadata-sdk:${opensearch_build}"
 }
 
 lombok {
@@ -74,7 +79,7 @@ spotless {
         removeUnusedImports()
         importOrder 'java', 'javax', 'org', 'com'
 
-        eclipse().configFile rootProject.file('.eclipseformat.xml')
+        eclipse().withP2Mirrors(Map.of("https://download.eclipse.org/", "https://mirror.umd.edu/eclipse/")).configFile rootProject.file('.eclipseformat.xml')
     }
 }
 

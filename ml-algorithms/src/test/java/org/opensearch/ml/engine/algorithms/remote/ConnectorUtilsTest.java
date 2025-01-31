@@ -5,8 +5,13 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.BATCH_PREDICT_STATUS;
+import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.CANCEL_BATCH_PREDICT;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
@@ -134,7 +139,7 @@ public class ConnectorUtilsTest {
             .actions(Arrays.asList(predictAction))
             .build();
         ConnectorUtils.processInput(PREDICT.name(), mlInput, connector, new HashMap<>(), scriptService);
-        Assert.assertEquals(expectedInput, ((RemoteInferenceInputDataSet) mlInput.getInputDataset()).getParameters().get("input"));
+        assertEquals(expectedInput, ((RemoteInferenceInputDataSet) mlInput.getInputDataset()).getParameters().get("input"));
     }
 
     @Test
@@ -195,9 +200,9 @@ public class ConnectorUtilsTest {
             "{\"object\":\"list\",\"data\":[{\"object\":\"embedding\",\"index\":0,\"embedding\":[-0.014555434,-0.0002135904,0.0035105038]}],\"model\":\"text-embedding-ada-002-v2\",\"usage\":{\"prompt_tokens\":5,\"total_tokens\":5}}";
         ModelTensors tensors = ConnectorUtils
             .processOutput(PREDICT.name(), modelResponse, connector, scriptService, ImmutableMap.of(), null);
-        Assert.assertEquals(1, tensors.getMlModelTensors().size());
-        Assert.assertEquals("response", tensors.getMlModelTensors().get(0).getName());
-        Assert.assertEquals(4, tensors.getMlModelTensors().get(0).getDataAsMap().size());
+        assertEquals(1, tensors.getMlModelTensors().size());
+        assertEquals("response", tensors.getMlModelTensors().get(0).getName());
+        assertEquals(4, tensors.getMlModelTensors().get(0).getDataAsMap().size());
     }
 
     @Test
@@ -228,13 +233,13 @@ public class ConnectorUtilsTest {
             "{\"object\":\"list\",\"data\":[{\"object\":\"embedding\",\"index\":0,\"embedding\":[-0.014555434,-0.0002135904,0.0035105038]}],\"model\":\"text-embedding-ada-002-v2\",\"usage\":{\"prompt_tokens\":5,\"total_tokens\":5}}";
         ModelTensors tensors = ConnectorUtils
             .processOutput(PREDICT.name(), modelResponse, connector, scriptService, ImmutableMap.of(), null);
-        Assert.assertEquals(1, tensors.getMlModelTensors().size());
-        Assert.assertEquals("sentence_embedding", tensors.getMlModelTensors().get(0).getName());
-        Assert.assertNull(tensors.getMlModelTensors().get(0).getDataAsMap());
-        Assert.assertEquals(3, tensors.getMlModelTensors().get(0).getData().length);
-        Assert.assertEquals(-0.014555434, tensors.getMlModelTensors().get(0).getData()[0]);
-        Assert.assertEquals(-0.0002135904, tensors.getMlModelTensors().get(0).getData()[1]);
-        Assert.assertEquals(0.0035105038, tensors.getMlModelTensors().get(0).getData()[2]);
+        assertEquals(1, tensors.getMlModelTensors().size());
+        assertEquals("sentence_embedding", tensors.getMlModelTensors().get(0).getName());
+        assertNull(tensors.getMlModelTensors().get(0).getDataAsMap());
+        assertEquals(3, tensors.getMlModelTensors().get(0).getData().length);
+        assertEquals(-0.014555434, tensors.getMlModelTensors().get(0).getData()[0]);
+        assertEquals(-0.0002135904, tensors.getMlModelTensors().get(0).getData()[1]);
+        assertEquals(0.0035105038, tensors.getMlModelTensors().get(0).getData()[2]);
     }
 
     private void processInput_TextDocsInputDataSet_PreprocessFunction(
@@ -268,7 +273,117 @@ public class ConnectorUtilsTest {
         RemoteInferenceInputDataSet remoteInferenceInputDataSet = ConnectorUtils
             .processInput(PREDICT.name(), mlInput, connector, new HashMap<>(), scriptService);
         Assert.assertNotNull(remoteInferenceInputDataSet.getParameters());
-        Assert.assertEquals(1, remoteInferenceInputDataSet.getParameters().size());
-        Assert.assertEquals(expectedProcessedInput, remoteInferenceInputDataSet.getParameters().get(resultKey));
+        assertEquals(1, remoteInferenceInputDataSet.getParameters().size());
+        assertEquals(expectedProcessedInput, remoteInferenceInputDataSet.getParameters().get(resultKey));
+    }
+
+    @Test
+    public void testGetTask_createBatchStatusActionForSageMaker() {
+        Connector connector1 = HttpConnector
+            .builder()
+            .name("test")
+            .protocol("http")
+            .version("1")
+            .credential(Map.of("api_key", "credential_value"))
+            .parameters(Map.of("param1", "value1"))
+            .actions(
+                new ArrayList<>(
+                    Arrays
+                        .asList(
+                            ConnectorAction
+                                .builder()
+                                .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
+                                .method("POST")
+                                .url("https://api.sagemaker.us-east-1.amazonaws.com/CreateTransformJob")
+                                .headers(Map.of("Authorization", "Bearer ${credential.api_key}"))
+                                .requestBody("{ \"TransformJobName\" : \"${parameters.TransformJobName}\"}")
+                                .build()
+                        )
+                )
+            )
+            .build();
+
+        ConnectorAction result = ConnectorUtils.createConnectorAction(connector1, BATCH_PREDICT_STATUS);
+
+        assertEquals(ConnectorAction.ActionType.BATCH_PREDICT_STATUS, result.getActionType());
+        assertEquals("POST", result.getMethod());
+        assertEquals("https://api.sagemaker.us-east-1.amazonaws.com/DescribeTransformJob", result.getUrl());
+        assertEquals("{ \"TransformJobName\" : \"${parameters.TransformJobName}\"}", result.getRequestBody());
+        assertTrue(result.getHeaders().containsKey("Authorization"));
+
+    }
+
+    @Test
+    public void testGetTask_createBatchStatusActionForOpenAI() {
+        Connector connector1 = HttpConnector
+            .builder()
+            .name("test")
+            .protocol("http")
+            .version("1")
+            .credential(Map.of("api_key", "credential_value"))
+            .parameters(Map.of("param1", "value1"))
+            .actions(
+                new ArrayList<>(
+                    Arrays
+                        .asList(
+                            ConnectorAction
+                                .builder()
+                                .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
+                                .method("POST")
+                                .url("https://api.openai.com/v1/batches")
+                                .headers(Map.of("Authorization", "Bearer ${credential.openAI_key}"))
+                                .requestBody("{ \\\"input_file_id\\\": \\\"${parameters.input_file_id}\\\" }")
+                                .build()
+                        )
+                )
+            )
+            .build();
+
+        ConnectorAction result = ConnectorUtils.createConnectorAction(connector1, BATCH_PREDICT_STATUS);
+
+        assertEquals(ConnectorAction.ActionType.BATCH_PREDICT_STATUS, result.getActionType());
+        assertEquals("GET", result.getMethod());
+        assertEquals("https://api.openai.com/v1/batches/${parameters.id}", result.getUrl());
+        assertNull(result.getRequestBody());
+        assertTrue(result.getHeaders().containsKey("Authorization"));
+    }
+
+    @Test
+    public void testGetTask_createCancelBatchActionForBedrock() {
+        Connector connector1 = HttpConnector
+            .builder()
+            .name("test")
+            .protocol("http")
+            .version("1")
+            .credential(Map.of("api_key", "credential_value"))
+            .parameters(Map.of("param1", "value1"))
+            .actions(
+                new ArrayList<>(
+                    Arrays
+                        .asList(
+                            ConnectorAction
+                                .builder()
+                                .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
+                                .method("POST")
+                                .url("https://bedrock.${parameters.region}.amazonaws.com/model-invocation-job")
+                                .requestBody(
+                                    "{\\\"inputDataConfig\\\":{\\\"s3InputDataConfig\\\":{\\\"s3Uri\\\":\\\"${parameters.input_s3Uri}\\\"}},\\\"jobName\\\":\\\"${parameters.job_name}\\\",\\\"modelId\\\":\\\"${parameters.model}\\\",\\\"outputDataConfig\\\":{\\\"s3OutputDataConfig\\\":{\\\"s3Uri\\\":\\\"${parameters.output_s3Uri}\\\"}},\\\"roleArn\\\":\\\"${parameters.role_arn}\\\"}"
+                                )
+                                .postProcessFunction("connector.post_process.bedrock.batch_job_arn")
+                                .build()
+                        )
+                )
+            )
+            .build();
+
+        ConnectorAction result = ConnectorUtils.createConnectorAction(connector1, CANCEL_BATCH_PREDICT);
+
+        assertEquals(ConnectorAction.ActionType.CANCEL_BATCH_PREDICT, result.getActionType());
+        assertEquals("POST", result.getMethod());
+        assertEquals(
+            "https://bedrock.${parameters.region}.amazonaws.com/model-invocation-job/${parameters.processedJobArn}/stop",
+            result.getUrl()
+        );
+        assertNull(result.getRequestBody());
     }
 }

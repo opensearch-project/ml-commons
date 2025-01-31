@@ -60,7 +60,19 @@ public interface MachineLearningClient {
      * @param mlInput ML input
      * @param listener a listener to be notified of the result
      */
-    void predict(String modelId, MLInput mlInput, ActionListener<MLOutput> listener);
+    default void predict(String modelId, MLInput mlInput, ActionListener<MLOutput> listener) {
+        predict(modelId, null, mlInput, listener);
+    }
+
+    /**
+     * Do prediction machine learning job
+     * For additional info on Predict, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#predict
+     * @param modelId the trained model id
+     * @param tenantId tenant id
+     * @param mlInput ML input
+     * @param listener a listener to be notified of the result
+     */
+    void predict(String modelId, String tenantId, MLInput mlInput, ActionListener<MLOutput> listener);
 
     /**
      * Train model then predict with the same data set.
@@ -142,7 +154,18 @@ public interface MachineLearningClient {
      * @param modelId id of the model
      * @param listener action listener
      */
-    void getModel(String modelId, ActionListener<MLModel> listener);
+    default void getModel(String modelId, ActionListener<MLModel> listener) {
+        getModel(modelId, null, listener);
+    }
+
+    /**
+     * Get MLModel and return model in listener
+     * For more info on get model, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#get-model-information
+     * @param modelId id of the model
+     * @param tenantId id of the tenant
+     * @param listener action listener
+     */
+    void getModel(String modelId, String tenantId, ActionListener<MLModel> listener);
 
     /**
      * Get MLTask and return ActionFuture.
@@ -162,7 +185,18 @@ public interface MachineLearningClient {
      * @param taskId id of the model
      * @param listener action listener
      */
-    void getTask(String taskId, ActionListener<MLTask> listener);
+    default void getTask(String taskId, ActionListener<MLTask> listener) {
+        getTask(taskId, null, listener);
+    }
+
+    /**
+     * Get MLTask and return task in listener
+     * For more info on get task, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#get-task-information
+     * @param taskId id of the model
+     * @param tenantId the tenant id. This is necessary for multi-tenancy.
+     * @param listener action listener
+     */
+    void getTask(String taskId, String tenantId, ActionListener<MLTask> listener);
 
     /**
      *  Delete the model with modelId.
@@ -182,7 +216,18 @@ public interface MachineLearningClient {
      * @param modelId id of the model
      * @param listener action listener
      */
-    void deleteModel(String modelId, ActionListener<DeleteResponse> listener);
+    default void deleteModel(String modelId, ActionListener<DeleteResponse> listener) {
+        deleteModel(modelId, null, listener);
+    }
+
+    /**
+     * Delete MLModel
+     * For more info on delete model, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#delete-model
+     * @param modelId id of the model
+     * @param tenantId the tenant id. This is necessary for multi-tenancy.
+     * @param listener action listener
+     */
+    void deleteModel(String modelId, String tenantId, ActionListener<DeleteResponse> listener);
 
     /**
      *  Delete the task with taskId.
@@ -202,7 +247,18 @@ public interface MachineLearningClient {
      * @param taskId id of the task
      * @param listener action listener
      */
-    void deleteTask(String taskId, ActionListener<DeleteResponse> listener);
+    default void deleteTask(String taskId, ActionListener<DeleteResponse> listener) {
+        deleteTask(taskId, null, listener);
+    }
+
+    /**
+     * Delete MLTask
+     * For more info on delete task, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#delete-task
+     * @param taskId id of the task
+     * @param tenantId the tenant id. This is necessary for multi-tenancy.
+     * @param listener action listener
+     */
+    void deleteTask(String taskId, String tenantId, ActionListener<DeleteResponse> listener);
 
     /**
      * For more info on search model, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/#search-model
@@ -276,7 +332,18 @@ public interface MachineLearningClient {
      * @param modelId the model id
      * @param listener a listener to be notified of the result
      */
-    void deploy(String modelId, ActionListener<MLDeployModelResponse> listener);
+    default void deploy(String modelId, ActionListener<MLDeployModelResponse> listener) {
+        deploy(modelId, null, listener);
+    }
+
+    /**
+     * Deploy model
+     * For additional info on deploy, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/model-apis/deploy-model/
+     * @param modelId the model id
+     * @param tenantId the tenant id. This is necessary for multi-tenancy.
+     * @param listener a listener to be notified of the result
+     */
+    void deploy(String modelId, String tenantId, ActionListener<MLDeployModelResponse> listener);
 
     /**
      * Undeploy models
@@ -297,7 +364,19 @@ public interface MachineLearningClient {
      * @param modelIds the node ids. May be null for all nodes.
      * @param listener a listener to be notified of the result
      */
-    void undeploy(String[] modelIds, String[] nodeIds, ActionListener<MLUndeployModelsResponse> listener);
+    default void undeploy(String[] modelIds, String[] nodeIds, ActionListener<MLUndeployModelsResponse> listener) {
+        undeploy(modelIds, nodeIds, null, listener);
+    }
+
+    /**
+     * Undeploy model
+     * For additional info on deploy, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/model-apis/undeploy-model/
+     * @param modelIds the model ids
+     * @param modelIds the node ids. May be null for all nodes.
+     * @param tenantId the tenant id. This is necessary for multi-tenancy.
+     * @param listener a listener to be notified of the result
+     */
+    void undeploy(String[] modelIds, String[] nodeIds, String tenantId, ActionListener<MLUndeployModelsResponse> listener);
 
     /**
      * Create connector for remote model
@@ -323,7 +402,11 @@ public interface MachineLearningClient {
         return actionFuture;
     }
 
-    void deleteConnector(String connectorId, ActionListener<DeleteResponse> listener);
+    default void deleteConnector(String connectorId, ActionListener<DeleteResponse> listener) {
+        deleteConnector(connectorId, null, listener);
+    }
+
+    void deleteConnector(String connectorId, String tenantId, ActionListener<DeleteResponse> listener);
 
     /**
      * Register model group
@@ -391,7 +474,23 @@ public interface MachineLearningClient {
         return actionFuture;
     }
 
-    void deleteAgent(String agentId, ActionListener<DeleteResponse> listener);
+    /**
+     * Delete agent
+     * @param agentId The id of the agent to delete
+     * @param listener a listener to be notified of the result
+     */
+    default void deleteAgent(String agentId, ActionListener<DeleteResponse> listener) {
+        PlainActionFuture<DeleteResponse> actionFuture = PlainActionFuture.newFuture();
+        deleteAgent(agentId, null, actionFuture);
+    }
+
+    /**
+     * Delete agent
+     * @param agentId The id of the agent to delete
+     * @param tenantId the tenant id. This is necessary for multi-tenancy.
+     * @param listener a listener to be notified of the result
+     */
+    void deleteAgent(String agentId, String tenantId, ActionListener<DeleteResponse> listener);
 
     /**
      * Get a list of ToolMetadata and return ActionFuture.

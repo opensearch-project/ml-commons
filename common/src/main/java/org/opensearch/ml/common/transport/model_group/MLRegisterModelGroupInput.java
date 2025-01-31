@@ -6,6 +6,8 @@
 package org.opensearch.ml.common.transport.model_group;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -13,6 +15,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 
+import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -38,6 +41,7 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable {
     private List<String> backendRoles;
     private AccessMode modelAccessMode;
     private Boolean isAddAllBackendRoles;
+    private String tenantId;
 
     @Builder(toBuilder = true)
     public MLRegisterModelGroupInput(
@@ -45,16 +49,19 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable {
         String description,
         List<String> backendRoles,
         AccessMode modelAccessMode,
-        Boolean isAddAllBackendRoles
+        Boolean isAddAllBackendRoles,
+        String tenantId
     ) {
         this.name = Objects.requireNonNull(name, "model group name must not be null");
         this.description = description;
         this.backendRoles = backendRoles;
         this.modelAccessMode = modelAccessMode;
         this.isAddAllBackendRoles = isAddAllBackendRoles;
+        this.tenantId = tenantId;
     }
 
     public MLRegisterModelGroupInput(StreamInput in) throws IOException {
+        Version streamInputVersion = in.getVersion();
         this.name = in.readString();
         this.description = in.readOptionalString();
         this.backendRoles = in.readOptionalStringList();
@@ -62,10 +69,12 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable {
             modelAccessMode = in.readEnum(AccessMode.class);
         }
         this.isAddAllBackendRoles = in.readOptionalBoolean();
+        this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? in.readOptionalString() : null;
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
+        Version streamOutputVersion = out.getVersion();
         out.writeString(name);
         out.writeOptionalString(description);
         if (backendRoles != null) {
@@ -81,6 +90,9 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable {
             out.writeBoolean(false);
         }
         out.writeOptionalBoolean(isAddAllBackendRoles);
+        if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
+            out.writeOptionalString(tenantId);
+        }
     }
 
     @Override
@@ -99,6 +111,9 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable {
         if (isAddAllBackendRoles != null) {
             builder.field(ADD_ALL_BACKEND_ROLES, isAddAllBackendRoles);
         }
+        if (tenantId != null) {
+            builder.field(TENANT_ID_FIELD, tenantId);
+        }
         builder.endObject();
         return builder;
     }
@@ -109,6 +124,7 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable {
         List<String> backendRoles = null;
         AccessMode modelAccessMode = null;
         Boolean isAddAllBackendRoles = null;
+        String tenantId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -134,12 +150,14 @@ public class MLRegisterModelGroupInput implements ToXContentObject, Writeable {
                 case ADD_ALL_BACKEND_ROLES:
                     isAddAllBackendRoles = parser.booleanValue();
                     break;
+                case TENANT_ID_FIELD:
+                    tenantId = parser.textOrNull();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
-        return new MLRegisterModelGroupInput(name, description, backendRoles, modelAccessMode, isAddAllBackendRoles);
+        return new MLRegisterModelGroupInput(name, description, backendRoles, modelAccessMode, isAddAllBackendRoles, tenantId);
     }
-
 }

@@ -147,7 +147,7 @@ public class RestMLStatsActionTests extends OpenSearchTestCase {
             roleSet,
             Version.CURRENT
         );
-        testState = setupTestClusterState();
+        testState = setupTestClusterState("node");
         when(clusterService.state()).thenReturn(testState);
 
         clusterName = new ClusterName(clusterNameStr);

@@ -101,7 +101,7 @@ public class MLTrainAndPredictTaskRunnerTests extends OpenSearchTestCase {
 
     @Before
     public void setup() {
-        encryptor = new EncryptorImpl("m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
+        encryptor = new EncryptorImpl(null, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
         mlEngine = new MLEngine(Path.of("/tmp/test" + randomAlphaOfLength(10)), encryptor);
         settings = Settings.builder().build();
         MockitoAnnotations.openMocks(this);
@@ -222,7 +222,7 @@ public class MLTrainAndPredictTaskRunnerTests extends OpenSearchTestCase {
             actionListener.onResponse(localNode);
             return null;
         }).when(mlTaskDispatcher).dispatch(any(), any());
-        doThrow(new RuntimeException(errorMessage)).when(mlTaskManager).updateTaskStateAsRunning(anyString(), anyBoolean());
+        doThrow(new RuntimeException(errorMessage)).when(mlTaskManager).updateTaskStateAsRunning(anyString(), null, anyBoolean());
         taskRunner.dispatchTask(FunctionName.REMOTE, requestWithDataFrame, transportService, listener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());

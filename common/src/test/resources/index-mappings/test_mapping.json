@@ -1,0 +1,16 @@
+{
+  "_meta": {
+    "schema_version": 1
+  },
+  "properties": {
+    "test_field_1": {
+      "type": "test_type_1"
+    },
+    "test_field_2": {
+      "type": "test_type_2"
+    },
+    "test_field_3": {
+      "type": "test_type_3"
+    }
+  }
+}

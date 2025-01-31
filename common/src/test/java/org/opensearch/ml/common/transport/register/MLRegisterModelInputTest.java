@@ -4,6 +4,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -167,11 +169,40 @@ public class MLRegisterModelInputTest {
         input.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
         String jsonStr = builder.toString();
-        assertEquals(expectedInputStr, jsonStr);
+
+        String expectedFunctionInputStr = "{\"function_name\":\"LINEAR_REGRESSION\",\"name\":\"modelName\","
+            + "\"version\":\"version\",\"model_group_id\":\"modelGroupId\",\"description\":\"test description\","
+            + "\"url\":\"url\",\"model_content_hash_value\":\"hash_value_test\",\"model_format\":\"ONNX\","
+            + "\"model_config\":{\"model_type\":\"testModelType\",\"embedding_dimension\":100,"
+            + "\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\","
+            + "\\\"field2\\\":\\\"value2\\\"}\"},\"deploy_model\":true,\"model_node_ids\":[\"modelNodeIds\"],"
+            + "\"connector\":{\"name\":\"test_connector_name\",\"version\":\"1\","
+            + "\"description\":\"this is a test connector\",\"protocol\":\"http\","
+            + "\"parameters\":{\"input\":\"test input value\"},\"credential\":{\"key\":\"test_key_value\"},"
+            + "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://test.com\","
+            + "\"headers\":{\"api_key\":\"${credential.key}\"},"
+            + "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\","
+            + "\"pre_process_function\":\"connector.pre_process.openai.embedding\","
+            + "\"post_process_function\":\"connector.post_process.openai.embedding\"}],"
+            + "\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\","
+            + "\"client_config\":{\"max_connection\":30,\"connection_timeout\":30000,\"read_timeout\":30000,"
+            + "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}},\"is_hidden\":false}";
+
+        assertEquals(expectedFunctionInputStr, jsonStr);
     }
 
     @Test
     public void testToXContent_Incomplete() throws Exception {
+        input.setUrl(null);
+        input.setModelConfig(null);
+        input.setModelFormat(null);
+        input.setModelNodeIds(null);
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        input.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        assertNotNull(builder);
+
+        String jsonStr = builder.toString();
+
         String expectedIncompleteInputStr = "{\"function_name\":\"LINEAR_REGRESSION\","
             + "\"name\":\"modelName\",\"version\":\"version\",\"model_group_id\":\"modelGroupId\","
             + "\"description\":\"test description\",\"model_content_hash_value\":\"hash_value_test\","
@@ -186,14 +217,7 @@ public class MLRegisterModelInputTest {
             + "\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\","
             + "\"client_config\":{\"max_connection\":30,\"connection_timeout\":30000,\"read_timeout\":30000,"
             + "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}},\"is_hidden\":false}";
-        input.setUrl(null);
-        input.setModelConfig(null);
-        input.setModelFormat(null);
-        input.setModelNodeIds(null);
-        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
-        input.toXContent(builder, ToXContent.EMPTY_PARAMS);
-        assertNotNull(builder);
-        String jsonStr = builder.toString();
+
         assertEquals(expectedIncompleteInputStr, jsonStr);
     }
 
@@ -361,6 +385,52 @@ public class MLRegisterModelInputTest {
             assertEquals(parsedInput.getModelName(), FunctionName.METRICS_CORRELATION.name());
             assertEquals(parsedInput.getModelGroupId(), modelGroupId);
         });
+    }
+
+    @Test
+    public void readInputStream_withTenantId_Success() throws IOException {
+        // Add tenantId to input
+        input = input.toBuilder().tenantId("tenant-1").build();
+
+        // Serialize with newer version
+        BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
+        bytesStreamOutput.setVersion(VERSION_2_19_0);
+        input.writeTo(bytesStreamOutput);
+
+        // Deserialize and verify tenantId
+        StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
+        streamInput.setVersion(VERSION_2_19_0);
+        MLRegisterModelInput parsedInput = new MLRegisterModelInput(streamInput);
+
+        assertEquals("tenant-1", parsedInput.getTenantId());
+    }
+
+    @Test
+    public void toXContent_withTenantId_Success() throws IOException {
+        // Add tenantId to input
+        input = input.toBuilder().tenantId("tenant-1").build();
+
+        // Convert to XContent
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        input.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String jsonStr = builder.toString();
+
+        // Verify tenantId is serialized correctly
+        assertTrue(jsonStr.contains("\"tenant_id\":\"tenant-1\""));
+    }
+
+    @Test
+    public void toXContent_withoutTenantId_Success() throws IOException {
+        // Ensure input does not have tenantId
+        input = input.toBuilder().tenantId(null).build();
+
+        // Convert to XContent
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        input.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String jsonStr = builder.toString();
+
+        // Verify tenantId is not present
+        assertFalse(jsonStr.contains("\"tenant_id\""));
     }
 
     private void readInputStream(MLRegisterModelInput input, Consumer<MLRegisterModelInput> verify) throws IOException {
