@@ -312,8 +312,8 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     }
 
     @Override
-    public void getConfig(String configId, ActionListener<MLConfig> listener) {
-        MLConfigGetRequest mlConfigGetRequest = MLConfigGetRequest.builder().configId(configId).build();
+    public void getConfig(String configId, String tenantId, ActionListener<MLConfig> listener) {
+        MLConfigGetRequest mlConfigGetRequest = MLConfigGetRequest.builder().configId(configId).tenantId(tenantId).build();
 
         client.execute(MLConfigGetAction.INSTANCE, mlConfigGetRequest, getMlGetConfigResponseActionListener(listener));
     }
