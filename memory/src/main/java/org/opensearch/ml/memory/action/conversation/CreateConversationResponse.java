@@ -17,15 +17,21 @@
  */
 package org.opensearch.ml.memory.action.conversation;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 
 import org.opensearch.core.action.ActionResponse;
+import org.opensearch.core.common.io.stream.InputStreamStreamInput;
+import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.conversation.ActionConstants;
+import org.opensearch.ml.common.transport.connector.MLCreateConnectorResponse;
 
 import lombok.AllArgsConstructor;
 
@@ -65,6 +71,22 @@ public class CreateConversationResponse extends ActionResponse implements ToXCon
         builder.field(ActionConstants.CONVERSATION_ID_FIELD, this.conversationId);
         builder.endObject();
         return builder;
+    }
+
+    public static CreateConversationResponse fromActionResponse(ActionResponse actionResponse) {
+        if (actionResponse instanceof MLCreateConnectorResponse) {
+            return (CreateConversationResponse) actionResponse;
+        }
+
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream(); OutputStreamStreamOutput osso = new OutputStreamStreamOutput(baos)) {
+            actionResponse.writeTo(osso);
+            try (StreamInput input = new InputStreamStreamInput(new ByteArrayInputStream(baos.toByteArray()))) {
+                return new CreateConversationResponse(input);
+            }
+        } catch (IOException e) {
+            throw new UncheckedIOException("failed to parse ActionResponse into CreateConversationResponse", e);
+        }
+
     }
 
 }
