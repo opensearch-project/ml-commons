@@ -1188,6 +1188,15 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         verify(actionListener).onResponse(argumentCaptor.capture());
     }
 
+    public void testRegisterModelMetaWithBlankModelGroupId() {
+        MLRegisterModelMetaInput registerModelMetaInput = prepareRequest();
+        registerModelMetaInput.setModelGroupId("");
+
+        modelManager.registerModelMeta(registerModelMetaInput, actionListener);
+
+        verify(modelManager).uploadMLModelMeta(eq(registerModelMetaInput), eq("1"), any());
+    }
+
     public void testRegisterModelMeta_FailedToInitIndex() {
         setupForModelMeta();
         doAnswer(invocation -> {
