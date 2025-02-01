@@ -2460,6 +2460,10 @@ public class MLModelManager {
         return getWorkerNodes(modelId, functionName, false).length;
     }
 
+    public String[] getTargetWorkerNodes(String modelId) {
+        return modelCacheHelper.getTargetWorkerNodes(modelId);
+    }
+
     /**
      * Get predictable instance with model id.
      *
