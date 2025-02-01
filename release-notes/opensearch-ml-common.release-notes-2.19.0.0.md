@@ -48,6 +48,8 @@ Compatible with OpenSearch 2.19.0
 * Revert "Filter out remote model auto redeployment (#2976)" and related commits (#3104, #3214) (#3368)[https://github.com/opensearch-project/ml-commons/pull/3368]
 * Fix JsonGenerationException error in Local Sample Calculator and Anomaly Localization Execution Response (#3434)[https://github.com/opensearch-project/ml-commons/pull/3434]
 * [Backport 2.19] Fix guardrail it for 2.19 (#3468)[https://github.com/opensearch-project/ml-commons/pull/3468]
+* addressing client changes due to adding tenantId in the apis (#3474) (#3480)[https://github.com/opensearch-project/ml-commons/pull/3480]
+
 
 ### Maintenance
 
@@ -58,6 +60,7 @@ Compatible with OpenSearch 2.19.0
 * Adding back Mingshi as Maintainer. (#3367)[https://github.com/opensearch-project/ml-commons/pull/3367]
 * updating sdk client version (#3392)[https://github.com/opensearch-project/ml-commons/pull/3392]
 * downgrading codecov action (#3409) (#3410)[https://github.com/opensearch-project/ml-commons/pull/3410]
+* fix CVE from ai.djl dependency (#3478) (#3482)[https://github.com/opensearch-project/ml-commons/pull/3482]
 
 
 ### Infrastructure
