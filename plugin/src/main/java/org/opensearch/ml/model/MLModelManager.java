@@ -464,7 +464,7 @@ public class MLModelManager {
                             mlRegisterModelInput.getTenantId(),
                             new MLResourceNotFoundException("Failed to get model group due to index missing")
                         );
-                        listener.onFailure(e);
+                        listener.onFailure(new OpenSearchStatusException("Model group not found", RestStatus.NOT_FOUND));
                     } else {
                         log.error("Failed to get model group", e);
                         handleException(mlRegisterModelInput.getFunctionName(), mlTask.getTaskId(), mlRegisterModelInput.getTenantId(), e);
