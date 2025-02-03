@@ -2080,6 +2080,7 @@ public class MLModelManager {
         try (ThreadContext.StoredContext ctx = client.threadPool().getThreadContext().stashContext()) {
             sdkClient.getDataObjectAsync(getDataObjectRequest).whenComplete((r, throwable) -> {
                 log.debug("Completed Get Connector Request, id:{}", connectorId);
+                ctx.restore();
                 if (throwable != null) {
                     Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
                     if (ExceptionsHelper.unwrap(cause, IndexNotFoundException.class) != null) {
