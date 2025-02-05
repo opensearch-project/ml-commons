@@ -8,21 +8,16 @@ package org.opensearch.ml.action.undeploy;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 
-import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
-import org.opensearch.action.bulk.BulkRequest;
-import org.opensearch.action.bulk.BulkResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
-import org.opensearch.action.support.WriteRequest;
-import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
@@ -38,11 +33,9 @@ import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.MLModel;
-import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesRequest;
-import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesResponse;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsRequest;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsResponse;
@@ -64,7 +57,6 @@ import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableMap;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -186,73 +178,9 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         MLUndeployModelNodesRequest mlUndeployModelNodesRequest = new MLUndeployModelNodesRequest(targetNodeIds, modelIds);
         mlUndeployModelNodesRequest.setTenantId(tenantId);
 
-        client.execute(MLUndeployModelAction.INSTANCE, mlUndeployModelNodesRequest, ActionListener.wrap(response -> {
-            /*
-             * The method TransportUndeployModelsAction.processUndeployModelResponseAndUpdate(...) performs
-             * undeploy action of models by removing the models from the nodes cache and updating the index when it's able to find it.
-             *
-             * The problem becomes when the models index is incorrect and no node(s) are servicing the model. This results in
-             * `{}` responses (on undeploy action), with no update to the model index thus, causing incorrect model state status.
-             *
-             * Having this change enables a check that this edge case occurs along with having access to the model id
-             * allowing us to update the stale model index correctly to `UNDEPLOYED` since no nodes service the model.
-             */
-            if (response.getNodes().isEmpty()) {
-                bulkSetModelIndexToUndeploy(modelIds, listener, response);
-                return;
-            }
-            listener.onResponse(new MLUndeployModelsResponse(response));
+        client.execute(MLUndeployModelAction.INSTANCE, mlUndeployModelNodesRequest, ActionListener.wrap(r -> {
+            listener.onResponse(new MLUndeployModelsResponse(r));
         }, listener::onFailure));
-    }
-
-    private void bulkSetModelIndexToUndeploy(
-        String[] modelIds,
-        ActionListener<MLUndeployModelsResponse> listener,
-        MLUndeployModelNodesResponse response
-    ) {
-        BulkRequest bulkUpdateRequest = new BulkRequest();
-        for (String modelId : modelIds) {
-            UpdateRequest updateRequest = new UpdateRequest();
-
-            ImmutableMap.Builder<String, Object> builder = ImmutableMap.builder();
-            builder.put(MLModel.MODEL_STATE_FIELD, MLModelState.UNDEPLOYED.name());
-
-            builder.put(MLModel.PLANNING_WORKER_NODES_FIELD, List.of());
-            builder.put(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD, 0);
-
-            builder.put(MLModel.LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
-            builder.put(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD, 0);
-            updateRequest.index(ML_MODEL_INDEX).id(modelId).doc(builder.build());
-            bulkUpdateRequest.add(updateRequest);
-        }
-
-        bulkUpdateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-        log.info("No nodes running these models: {}", Arrays.toString(modelIds));
-
-        try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<MLUndeployModelsResponse> listenerWithContextRestoration = ActionListener
-                .runBefore(listener, () -> threadContext.restore());
-            ActionListener<BulkResponse> bulkResponseListener = ActionListener.wrap(br -> {
-                log.debug("Successfully set the following modelId(s) to UNDEPLOY in index: {}", Arrays.toString(modelIds));
-                listenerWithContextRestoration.onResponse(new MLUndeployModelsResponse(response));
-            }, e -> {
-                String modelsNotFoundMessage = String
-                    .format("Failed to set the following modelId(s) to UNDEPLOY in index: %s", Arrays.toString(modelIds));
-                log.error(modelsNotFoundMessage, e);
-
-                OpenSearchStatusException exception = new OpenSearchStatusException(
-                    modelsNotFoundMessage + e.getMessage(),
-                    RestStatus.INTERNAL_SERVER_ERROR
-                );
-                listenerWithContextRestoration.onFailure(exception);
-            });
-
-            client.bulk(bulkUpdateRequest, bulkResponseListener);
-        } catch (Exception e) {
-            log.error("Unexpected error while setting the following modelId(s) to UNDEPLOY in index: {}", Arrays.toString(modelIds), e);
-            listener.onFailure(e);
-        }
-
     }
 
     private void validateAccess(String modelId, String tenantId, ActionListener<Boolean> listener) {
