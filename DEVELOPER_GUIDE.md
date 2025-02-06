@@ -82,6 +82,38 @@ opensearch.username: "admin" # Default username
 opensearch.password: "admin" # Default password
 ```
 
+### 🚀 Run OpenSearch from Source Code
+
+#### 1. Build the Distributions
+First, compile the source code to build the distributions:
+
+```bash
+./gradlew assemble
+```
+
+After the build completes, you'll find an artifact like `opensearch-ml-3.0.0.0-SNAPSHOT.zip` in the `plugin/build/distributions` directory.
+
+---
+
+#### 2. Run OpenSearch Using Docker Compose
+Start OpenSearch with:
+
+```bash
+docker-compose -f dev-docker-compose.yml up -d
+```
+
+To stop OpenSearch, run:
+
+```bash
+docker-compose -f dev-docker-compose.yml down
+```
+
+---
+
+#### 3. Access OpenSearch
+After a few minutes, the server will be ready. You can make requests using `curl` or other HTTP clients
+
+
 ### Build
 
 This package uses the [Gradle](https://docs.gradle.org/current/userguide/userguide.html) build system. Gradle comes with excellent documentation that should be your first stop when trying to figure out how to operate or modify the build. we also use the OpenSearch build tools for Gradle. These tools are idiosyncratic and don't always follow the conventions and instructions for building regular Java code using Gradle. Not everything in this package will work the way it's described in the Gradle documentation. If you encounter such a situation, the OpenSearch build tools [source code](https://github.com/opensearch-project/OpenSearch/tree/main/buildSrc/src/main/groovy/org/opensearch/gradle) is your best bet for figuring out what's going on.

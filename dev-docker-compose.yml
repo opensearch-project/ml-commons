@@ -1,0 +1,125 @@
+version: '3'
+services:
+  opensearch-node1:
+    image: opensearchstaging/opensearch:3.0.0
+    container_name: opensearch-node1
+    environment:
+      - cluster.name=opensearch-cluster
+      - node.name=opensearch-node1
+      - discovery.seed_hosts=opensearch-node1,opensearch-node2
+      - cluster.initial_cluster_manager_nodes=opensearch-node1,opensearch-node2
+      - bootstrap.memory_lock=true # along with the memlock settings below, disables swapping
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=MyPassword123!
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      - "DISABLE_SECURITY_PLUGIN=true"
+
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536 # maximum number of open files for the OpenSearch user, set to at least 65536 on modern systems
+        hard: 65536
+    volumes:
+      - opensearch-data1:/usr/share/opensearch/data
+      - ./plugin/build/distributions:/usr/share/opensearch/dev
+    command: bash -c "bin/opensearch-plugin remove opensearch-skills; bin/opensearch-plugin remove opensearch-ml; bin/opensearch-plugin install --batch file:///usr/share/opensearch/dev/opensearch-ml-3.0.0.0-SNAPSHOT.zip; ./opensearch-docker-entrypoint.sh opensearch"
+    ports:
+      - 9200:9200
+      - 9600:9600 # required for Performance Analyzer
+      - 5005:5005
+
+    networks:
+      - opensearch-net
+  opensearch-node2:
+    image: opensearchstaging/opensearch:3.0.0
+    container_name: opensearch-node2
+    environment:
+      - cluster.name=opensearch-cluster
+      - node.name=opensearch-node2
+      - discovery.seed_hosts=opensearch-node1,opensearch-node2
+      - cluster.initial_cluster_manager_nodes=opensearch-node1,opensearch-node2
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=MyPassword123!
+      - "DISABLE_SECURITY_PLUGIN=true"
+
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - opensearch-data2:/usr/share/opensearch/data
+      - ./plugin/build/distributions:/usr/share/opensearch/dev
+    command: bash -c "bin/opensearch-plugin remove opensearch-skills; bin/opensearch-plugin remove opensearch-ml; bin/opensearch-plugin install --batch file:///usr/share/opensearch/dev/opensearch-ml-3.0.0.0-SNAPSHOT.zip; ./opensearch-docker-entrypoint.sh opensearch"
+    networks:
+      - opensearch-net
+
+  opensearch-ml1:
+    image: opensearchstaging/opensearch:3.0.0
+    container_name: opensearch-ml1
+    environment:
+      - cluster.name=opensearch-cluster
+      - node.name=opensearch-ml1
+      - node.roles=ml
+      - discovery.seed_hosts=opensearch-node1,opensearch-node2
+      - cluster.initial_cluster_manager_nodes=opensearch-node1,opensearch-node2
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=MyPassword123!
+      - "DISABLE_SECURITY_PLUGIN=true"
+
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - opensearch-ml1:/usr/share/opensearch/data
+      - ./plugin/build/distributions:/usr/share/opensearch/dev
+    command: bash -c "bin/opensearch-plugin remove opensearch-skills; bin/opensearch-plugin remove opensearch-ml; bin/opensearch-plugin install --batch file:///usr/share/opensearch/dev/opensearch-ml-3.0.0.0-SNAPSHOT.zip; ./opensearch-docker-entrypoint.sh opensearch"
+    networks:
+      - opensearch-net
+
+  opensearch-ml2:
+    image: opensearchstaging/opensearch:3.0.0
+    container_name: opensearch-ml2
+    environment:
+      - cluster.name=opensearch-cluster
+      - node.name=opensearch-ml2
+      - node.roles=ml
+      - discovery.seed_hosts=opensearch-node1,opensearch-node2
+      - cluster.initial_cluster_manager_nodes=opensearch-node1,opensearch-node2
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=MyPassword123!
+      - "DISABLE_SECURITY_PLUGIN=true"
+
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - opensearch-ml2:/usr/share/opensearch/data
+      - ./plugin/build/distributions:/usr/share/opensearch/dev
+    command: bash -c "bin/opensearch-plugin remove opensearch-skills; bin/opensearch-plugin remove opensearch-ml; bin/opensearch-plugin install --batch file:///usr/share/opensearch/dev/opensearch-ml-3.0.0.0-SNAPSHOT.zip; ./opensearch-docker-entrypoint.sh opensearch"
+    networks:
+      - opensearch-net
+
+volumes:
+  opensearch-data1:
+  opensearch-data2:
+  opensearch-ml1:
+  opensearch-ml2:
+
+
+networks:
+  opensearch-net:
