@@ -739,7 +739,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         responseMap = (Map) responseList.get(0);
         assertFalse(((String) responseMap.get("text")).isEmpty());
     }
-    
+
     public static Response createConnector(String input) throws IOException {
         try {
             return TestHelper.makeRequest(client(), "POST", "/_plugins/_ml/connectors/_create", null, TestHelper.toHttpEntity(input), null);
