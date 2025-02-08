@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.rest;
 
-import static org.opensearch.ml.common.CommonValue.TENANT_ID;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.MLModelGroup.MODEL_GROUP_ID_FIELD;
 import static org.opensearch.ml.common.MLTask.MODEL_ID_FIELD;
 import static org.opensearch.ml.rest.RestMLRAGSearchProcessorIT.COHERE_CONNECTOR_BLUEPRINT;
@@ -46,9 +46,9 @@ public class RestMLModelGroupTenantAwareIT extends MLCommonsTenantAwareRestTestC
         map = responseToMap(response);
         assertEquals("test model group", map.get("name"));
         if (multiTenancyEnabled) {
-            assertEquals(tenantId, map.get(TENANT_ID));
+            assertEquals(tenantId, map.get(TENANT_ID_FIELD));
         } else {
-            assertNull(map.get(TENANT_ID));
+            assertNull(map.get(TENANT_ID_FIELD));
         }
 
         // Now try again with an other ID
@@ -280,11 +280,11 @@ public class RestMLModelGroupTenantAwareIT extends MLCommonsTenantAwareRestTestC
         SearchResponse searchResponse = searchResponseFromResponse(response);
         if (multiTenancyEnabled) {
             assertEquals(2, searchResponse.getHits().getTotalHits().value);
-            assertEquals(tenantId, searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID));
+            assertEquals(tenantId, searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID_FIELD));
         } else {
             assertEquals(3, searchResponse.getHits().getTotalHits().value);
-            assertNull(searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID));
-            assertNull(searchResponse.getHits().getHits()[1].getSourceAsMap().get(TENANT_ID));
+            assertNull(searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID_FIELD));
+            assertNull(searchResponse.getHits().getHits()[1].getSourceAsMap().get(TENANT_ID_FIELD));
         }
 
         // Search should show only the model group for other tenant
@@ -293,11 +293,11 @@ public class RestMLModelGroupTenantAwareIT extends MLCommonsTenantAwareRestTestC
         searchResponse = searchResponseFromResponse(response);
         if (multiTenancyEnabled) {
             assertEquals(1, searchResponse.getHits().getTotalHits().value);
-            assertEquals(otherTenantId, searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID));
+            assertEquals(otherTenantId, searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID_FIELD));
         } else {
             assertEquals(3, searchResponse.getHits().getTotalHits().value);
-            assertNull(searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID));
-            assertNull(searchResponse.getHits().getHits()[1].getSourceAsMap().get(TENANT_ID));
+            assertNull(searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID_FIELD));
+            assertNull(searchResponse.getHits().getHits()[1].getSourceAsMap().get(TENANT_ID_FIELD));
         }
 
         // Search should fail without a tenant id
@@ -315,8 +315,8 @@ public class RestMLModelGroupTenantAwareIT extends MLCommonsTenantAwareRestTestC
             assertOK(response);
             searchResponse = searchResponseFromResponse(response);
             assertEquals(3, searchResponse.getHits().getTotalHits().value);
-            assertNull(searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID));
-            assertNull(searchResponse.getHits().getHits()[1].getSourceAsMap().get(TENANT_ID));
+            assertNull(searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID_FIELD));
+            assertNull(searchResponse.getHits().getHits()[1].getSourceAsMap().get(TENANT_ID_FIELD));
         }
 
         /*
