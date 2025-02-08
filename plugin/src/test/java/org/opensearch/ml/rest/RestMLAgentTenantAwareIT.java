@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.rest;
 
-import static org.opensearch.ml.common.CommonValue.TENANT_ID;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.MLTask.MODEL_ID_FIELD;
 import static org.opensearch.ml.common.input.execute.agent.AgentMLInput.AGENT_ID_FIELD;
 import static org.opensearch.ml.common.output.model.ModelTensorOutput.INFERENCE_RESULT_FIELD;
@@ -65,9 +65,9 @@ public class RestMLAgentTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
         map = responseToMap(response);
         assertEquals("test agent", map.get("name"));
         if (multiTenancyEnabled) {
-            assertEquals(tenantId, map.get(TENANT_ID));
+            assertEquals(tenantId, map.get(TENANT_ID_FIELD));
         } else {
-            assertNull(map.get(TENANT_ID));
+            assertNull(map.get(TENANT_ID_FIELD));
         }
 
         // Now try again with an other ID
@@ -213,11 +213,11 @@ public class RestMLAgentTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
             SearchResponse searchResponse = searchResponseFromResponse(restResponse);
             if (multiTenancyEnabled) {
                 assertEquals(1, searchResponse.getHits().getTotalHits().value);
-                assertEquals(tenantId, searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID));
+                assertEquals(tenantId, searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID_FIELD));
             } else {
                 assertEquals(2, searchResponse.getHits().getTotalHits().value);
-                assertNull(searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID));
-                assertNull(searchResponse.getHits().getHits()[1].getSourceAsMap().get(TENANT_ID));
+                assertNull(searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID_FIELD));
+                assertNull(searchResponse.getHits().getHits()[1].getSourceAsMap().get(TENANT_ID_FIELD));
             }
         }, 20, TimeUnit.SECONDS);
 
@@ -228,11 +228,11 @@ public class RestMLAgentTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
             SearchResponse searchResponse = searchResponseFromResponse(restResponse);
             if (multiTenancyEnabled) {
                 assertEquals(1, searchResponse.getHits().getTotalHits().value);
-                assertEquals(otherTenantId, searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID));
+                assertEquals(otherTenantId, searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID_FIELD));
             } else {
                 assertEquals(2, searchResponse.getHits().getTotalHits().value);
-                assertNull(searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID));
-                assertNull(searchResponse.getHits().getHits()[1].getSourceAsMap().get(TENANT_ID));
+                assertNull(searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID_FIELD));
+                assertNull(searchResponse.getHits().getHits()[1].getSourceAsMap().get(TENANT_ID_FIELD));
             }
         }, 20, TimeUnit.SECONDS);
 
@@ -251,8 +251,8 @@ public class RestMLAgentTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
             assertOK(response);
             SearchResponse searchResponse = searchResponseFromResponse(response);
             assertEquals(2, searchResponse.getHits().getTotalHits().value);
-            assertNull(searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID));
-            assertNull(searchResponse.getHits().getHits()[1].getSourceAsMap().get(TENANT_ID));
+            assertNull(searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID_FIELD));
+            assertNull(searchResponse.getHits().getHits()[1].getSourceAsMap().get(TENANT_ID_FIELD));
         }
 
         /*

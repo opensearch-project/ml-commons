@@ -19,8 +19,8 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-import org.apache.http.Header;
-import org.apache.http.message.BasicHeader;
+import org.apache.hc.core5.http.Header;
+import org.apache.hc.core5.http.message.BasicHeader;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Response;
 import org.opensearch.client.ResponseException;
