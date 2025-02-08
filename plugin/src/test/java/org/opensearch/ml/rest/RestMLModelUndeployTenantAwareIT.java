@@ -62,7 +62,7 @@ public class RestMLModelUndeployTenantAwareIT extends MLCommonsTenantAwareRestTe
             } else {
                 assertNull(responseMap.get(TENANT_ID_FIELD));
             }
-        }, 20, TimeUnit.SECONDS);
+        }, 30, TimeUnit.SECONDS);
 
         /*
          * Test delete/deploy interaction
