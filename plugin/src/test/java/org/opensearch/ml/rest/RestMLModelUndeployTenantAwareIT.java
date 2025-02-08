@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.rest;
 
-import static org.opensearch.ml.common.CommonValue.TENANT_ID;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.MLModel.MODEL_STATE_FIELD;
 import static org.opensearch.ml.common.MLTask.MODEL_ID_FIELD;
 import static org.opensearch.ml.rest.RestMLRAGSearchProcessorIT.COHERE_CONNECTOR_BLUEPRINT;
@@ -58,9 +58,9 @@ public class RestMLModelUndeployTenantAwareIT extends MLCommonsTenantAwareRestTe
             Map<String, Object> responseMap = responseToMap(getResponse);
             assertEquals("DEPLOYED", responseMap.get(MODEL_STATE_FIELD).toString());
             if (multiTenancyEnabled) {
-                assertEquals(tenantId, responseMap.get(TENANT_ID));
+                assertEquals(tenantId, responseMap.get(TENANT_ID_FIELD));
             } else {
-                assertNull(responseMap.get(TENANT_ID));
+                assertNull(responseMap.get(TENANT_ID_FIELD));
             }
         }, 20, TimeUnit.SECONDS);
 
@@ -119,9 +119,9 @@ public class RestMLModelUndeployTenantAwareIT extends MLCommonsTenantAwareRestTe
         map = responseToMap(response);
         assertEquals("UNDEPLOYED", map.get(MODEL_STATE_FIELD).toString());
         if (multiTenancyEnabled) {
-            assertEquals(tenantId, map.get(TENANT_ID));
+            assertEquals(tenantId, map.get(TENANT_ID_FIELD));
         } else {
-            assertNull(map.get(TENANT_ID));
+            assertNull(map.get(TENANT_ID_FIELD));
         }
 
         /*
