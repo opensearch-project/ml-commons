@@ -60,7 +60,7 @@ public abstract class MLCommonsTenantAwareRestTestCase extends MLCommonsRestTest
     protected static final String EMPTY_CONTENT = "{}";
 
     // REST Response error reasons
-    protected static final String MISSING_TENANT_REASON = "Tenant ID header is missing";
+    protected static final String MISSING_TENANT_REASON = "Tenant ID header is missing or has no value";
     protected static final String NO_PERMISSION_REASON = "You don't have permission to access this resource";
     protected static final String DEPLOYED_REASON =
         "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete";
