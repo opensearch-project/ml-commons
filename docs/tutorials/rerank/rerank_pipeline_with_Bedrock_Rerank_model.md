@@ -8,7 +8,7 @@ Note: Replace the placeholders beginning with the prefix your_ with your own val
 
 # Steps
 
-## Prerequisite: Test the model on Amazon Bedrock
+## Prerequisite 1: Test the model on Amazon Bedrock
 Before using your model, test it on Amazon Bedrock. For supported reranker models, see [Supported Regions and models for reranking in Amazon Bedrock](https://docs.aws.amazon.com/bedrock/latest/userguide/rerank-supported.html). For model IDs, see [Supported foundation models in Amazon Bedrock](https://docs.aws.amazon.com/bedrock/latest/userguide/models-supported.html). To perform a reranking test, use the following code:
 
 ```python
@@ -129,6 +129,8 @@ The following are the results sorted by index:
   }
 ]
 ```
+
+If you see an authorization error when running the test code, check the rerank model access settings on Amazon Bedrock. To check and add model access settings, see [Add or remove access to Amazon Bedrock foundation models](https://docs.aws.amazon.com/bedrock/latest/userguide/model-access-modify.html).
 
 ## Step 1: Create a connector and register the model
 
@@ -533,7 +535,7 @@ Next, test the query using the reranking pipeline:
 ```json
 POST my-test-data/_search?search_pipeline=rerank_pipeline_bedrock
 {
-  "filter": {
+  "query": {
     "match": {
       "passage_text": "What is the capital city of America?"
     }
@@ -658,7 +660,7 @@ POST my-test-data/_search?search_pipeline=rerank_pipeline_bedrock
   "ext": {
     "rerank": {
       "query_context": {
-         "query_text_path": "query.match.passage_text.query"
+         "query_text_path": "query.bool.filter.0.match.passage_text.query"
       }
     }
   },
