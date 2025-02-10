@@ -202,14 +202,16 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
              */
             boolean modelNotFoundInNodesCache = response.getNodes().stream().allMatch(nodeResponse -> {
                 Map<String, String> status = nodeResponse.getModelUndeployStatus();
-                if (status == null) return false;
-                boolean modelCacheMissForModelIds =  Arrays.stream(modelIds).allMatch(modelId -> {
+                if (status == null)
+                    return false;
+                // Stream is used to catch all models edge case but only one is ever undeployed
+                boolean modelCacheMissForModelIds = Arrays.stream(modelIds).allMatch(modelId -> {
                     String modelStatus = status.get(modelId);
                     return modelStatus != null && modelStatus.equalsIgnoreCase(NOT_FOUND);
                 });
 
                 return modelCacheMissForModelIds;
-            } );
+            });
             if (response.getNodes().isEmpty() || modelNotFoundInNodesCache) {
                 bulkSetModelIndexToUndeploy(modelIds, listener, response);
                 return;
