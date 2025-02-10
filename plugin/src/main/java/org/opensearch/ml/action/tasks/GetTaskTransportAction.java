@@ -459,9 +459,9 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         }
 
         final Map<String, String> decryptedCredential = connector.getDecryptedCredential() != null
-            && !connector.getDecryptedCredential().isEmpty()
-                ? mlEngine.getConnectorCredential(connector)
-                : connector.getDecryptedCredential();
+                && !connector.getDecryptedCredential().isEmpty()
+                ? connector.getDecryptedCredential()
+                : mlEngine.getConnectorCredential(connector);
         RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader.initInstance(connector.getProtocol(), connector, Connector.class);
         connectorExecutor.setScriptService(scriptService);
         connectorExecutor.setClusterService(clusterService);
