@@ -14,6 +14,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.opensearch.ml.engine.tools.MLModelTool.DEFAULT_DESCRIPTION;
+import static org.opensearch.ml.engine.tools.MLModelTool.MODEL_ID_FIELD;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -218,5 +219,6 @@ public class MLModelToolTests {
         assertTrue(tool.validate(otherParams));
         assertFalse(tool.validate(emptyParams));
         assertEquals(DEFAULT_DESCRIPTION, tool.getDescription());
+        assertEquals(List.of(MODEL_ID_FIELD), MLModelTool.Factory.getInstance().getAllModelKeys());
     }
 }

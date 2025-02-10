@@ -456,7 +456,7 @@ public class MLModelManager {
                     }
                 } else {
                     Exception e = SdkClientUtils.unwrapAndConvertToException(throwable);
-                    if (e instanceof IndexNotFoundException) {
+                    if (ExceptionsHelper.unwrap(e, IndexNotFoundException.class) != null) {
                         log.error("Model group Index is missing");
                         handleException(
                             mlRegisterModelInput.getFunctionName(),
@@ -464,7 +464,7 @@ public class MLModelManager {
                             mlRegisterModelInput.getTenantId(),
                             new MLResourceNotFoundException("Failed to get model group due to index missing")
                         );
-                        listener.onFailure(e);
+                        listener.onFailure(new OpenSearchStatusException("Model group not found", RestStatus.NOT_FOUND));
                     } else {
                         log.error("Failed to get model group", e);
                         handleException(mlRegisterModelInput.getFunctionName(), mlTask.getTaskId(), mlRegisterModelInput.getTenantId(), e);
@@ -598,7 +598,7 @@ public class MLModelManager {
             String version = modelVersion == null ? registerModelInput.getVersion() : modelVersion;
             Instant now = Instant.now();
             if (registerModelInput.getConnector() != null) {
-                registerModelInput.getConnector().encrypt(mlEngine::encrypt);
+                registerModelInput.getConnector().encrypt(mlEngine::encrypt, registerModelInput.getTenantId());
             }
 
             mlIndicesHandler.initModelIndexIfAbsent(ActionListener.wrap(boolResponse -> {
@@ -693,7 +693,7 @@ public class MLModelManager {
             String version = modelVersion == null ? registerModelInput.getVersion() : modelVersion;
             Instant now = Instant.now();
             if (registerModelInput.getConnector() != null) {
-                registerModelInput.getConnector().encrypt(mlEngine::encrypt);
+                registerModelInput.getConnector().encrypt(mlEngine::encrypt, registerModelInput.getTenantId());
             }
             mlIndicesHandler.initModelIndexIfAbsent(ActionListener.runBefore(ActionListener.wrap(res -> {
                 if (!res) {
@@ -2069,7 +2069,7 @@ public class MLModelManager {
      * @param tenantId tenant id
      * @param listener    action listener
      */
-    private void getConnector(String connectorId, String tenantId, ActionListener<Connector> listener) {
+    public void getConnector(String connectorId, String tenantId, ActionListener<Connector> listener) {
         GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
             .builder()
             .index(ML_CONNECTOR_INDEX)
@@ -2077,40 +2077,44 @@ public class MLModelManager {
             .tenantId(tenantId)
             .build();
 
-        sdkClient.getDataObjectAsync(getDataObjectRequest).whenComplete((r, throwable) -> {
-            log.debug("Completed Get Connector Request, id:{}", connectorId);
-            if (throwable != null) {
-                Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                if (ExceptionsHelper.unwrap(cause, IndexNotFoundException.class) != null) {
-                    log.error("Failed to get connector index", cause);
-                    listener.onFailure(new OpenSearchStatusException("Failed to find connector", RestStatus.NOT_FOUND));
-                } else {
-                    log.error("Failed to get ML connector {}", connectorId, cause);
-                    listener.onFailure(cause);
-                }
-            } else {
-                try {
-                    GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
-                    if (gr != null && gr.isExists()) {
-                        try (
-                            XContentParser parser = MLNodeUtils
-                                .createXContentParserFromRegistry(NamedXContentRegistry.EMPTY, gr.getSourceAsBytesRef())
-                        ) {
-                            ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                            Connector connector = Connector.createConnector(parser);
-                            listener.onResponse(connector);
-                        } catch (Exception e) {
-                            log.error("Failed to parse connector:" + connectorId);
-                            listener.onFailure(e);
-                        }
+        try (ThreadContext.StoredContext ctx = client.threadPool().getThreadContext().stashContext()) {
+            sdkClient.getDataObjectAsync(getDataObjectRequest).whenComplete((r, throwable) -> {
+                log.debug("Completed Get Connector Request, id:{}", connectorId);
+                ctx.restore();
+                if (throwable != null) {
+                    Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                    if (ExceptionsHelper.unwrap(cause, IndexNotFoundException.class) != null) {
+                        log.error("Failed to get connector index", cause);
+                        listener.onFailure(new OpenSearchStatusException("Failed to find connector", RestStatus.NOT_FOUND));
                     } else {
-                        listener.onFailure(new OpenSearchStatusException("Failed to find connector:" + connectorId, RestStatus.NOT_FOUND));
+                        log.error("Failed to get ML connector {}", connectorId, cause);
+                        listener.onFailure(cause);
                     }
-                } catch (Exception e) {
-                    listener.onFailure(e);
+                } else {
+                    try {
+                        GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
+                        if (gr != null && gr.isExists()) {
+                            try (
+                                XContentParser parser = MLNodeUtils
+                                    .createXContentParserFromRegistry(NamedXContentRegistry.EMPTY, gr.getSourceAsBytesRef())
+                            ) {
+                                ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                                Connector connector = Connector.createConnector(parser);
+                                listener.onResponse(connector);
+                            } catch (Exception e) {
+                                log.error("Failed to parse connector:{}", connectorId);
+                                listener.onFailure(e);
+                            }
+                        } else {
+                            listener
+                                .onFailure(new OpenSearchStatusException("Failed to find connector:" + connectorId, RestStatus.NOT_FOUND));
+                        }
+                    } catch (Exception e) {
+                        listener.onFailure(e);
+                    }
                 }
-            }
-        });
+            });
+        }
     }
 
     /**

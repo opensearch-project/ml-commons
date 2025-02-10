@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.apache.lucene.search.join.ScoreMode;
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.client.Client;
@@ -178,7 +179,7 @@ public class ModelAccessControlHelper {
                     }
                 } else {
                     Exception e = SdkClientUtils.unwrapAndConvertToException(throwable);
-                    if (e instanceof IndexNotFoundException) {
+                    if (ExceptionsHelper.unwrap(e, IndexNotFoundException.class) != null) {
                         wrappedListener.onFailure(new MLResourceNotFoundException("Fail to find model group"));
                     } else {
                         log.error("Fail to get model group", e);

@@ -102,7 +102,8 @@ public class VisualizationsTool implements Tool {
 
             @Override
             public void onFailure(Exception e) {
-                if (ExceptionsHelper.unwrapCause(e) instanceof IndexNotFoundException) {
+                if (ExceptionsHelper.unwrapCause(e) instanceof IndexNotFoundException
+                    || ExceptionsHelper.unwrap(e, IndexNotFoundException.class) != null) {
                     listener.onResponse((T) "No Visualization found");
                 } else {
                     listener.onFailure(e);

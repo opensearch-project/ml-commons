@@ -75,6 +75,7 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
@@ -92,9 +93,11 @@ import org.opensearch.core.common.breaker.CircuitBreaker;
 import org.opensearch.core.common.breaker.CircuitBreakingException;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.index.shard.ShardId;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.breaker.ThresholdCircuitBreaker;
@@ -202,7 +205,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     public void setup() throws URISyntaxException {
         String masterKey = "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=";
         MockitoAnnotations.openMocks(this);
-        encryptor = new EncryptorImpl(masterKey);
+        encryptor = new EncryptorImpl(null, masterKey);
         mlEngine = new MLEngine(Path.of("/tmp/test" + randomAlphaOfLength(10)), encryptor);
         settings = Settings.builder().put(ML_COMMONS_MAX_MODELS_PER_NODE.getKey(), 10).build();
         settings = Settings.builder().put(ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE.getKey(), 10).build();
@@ -490,6 +493,46 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         modelManager.registerMLRemoteModel(sdkClient, pretrainedInput, pretrainedTask, listener);
         assertEquals(pretrainedTask.getFunctionName(), FunctionName.REMOTE);
         verify(mlTaskManager).updateMLTask(anyString(), any(), anyMap(), anyLong(), anyBoolean());
+    }
+
+    @Test
+    public void testRegisterMLRemoteModelModelGroupNotFoundException() throws PrivilegedActionException, IOException {
+        // Create listener and capture the failure
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        ActionListener<MLRegisterModelResponse> listener = mock(ActionListener.class);
+
+        // Setup mocks
+        doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
+        when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
+        when(threadPool.executor(REGISTER_THREAD_POOL)).thenReturn(taskExecutorService);
+        when(modelHelper.downloadPrebuiltModelMetaList(any(), any())).thenReturn(Collections.singletonList("demo"));
+        when(modelHelper.isModelAllowed(any(), any())).thenReturn(true);
+
+        // Create test inputs
+        MLRegisterModelInput pretrainedInput = mockRemoteModelInput(true);
+        MLTask pretrainedTask = MLTask.builder().taskId("pretrained").modelId("pretrained").functionName(FunctionName.REMOTE).build();
+
+        // Mock index handler
+        mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
+
+        // Mock client.get() to throw IndexNotFoundException
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> getModelGroupListener = invocation.getArgument(1);
+            getModelGroupListener.onFailure(new IndexNotFoundException("Test", "test"));
+            return null;
+        }).when(client).get(any(), any());
+
+        // Execute method under test
+        modelManager.registerMLRemoteModel(sdkClient, pretrainedInput, pretrainedTask, listener);
+
+        // Verify the listener's onFailure was called with correct exception
+        verify(listener).onFailure(exceptionCaptor.capture());
+        Exception exception = exceptionCaptor.getValue();
+
+        // Verify exception type and message
+        assertTrue(exception instanceof OpenSearchStatusException);
+        assertEquals("Model group not found", exception.getMessage());
+        assertEquals(RestStatus.NOT_FOUND, ((OpenSearchStatusException) exception).status());
     }
 
     public void testRegisterMLRemoteModel_SkipMemoryCBOpen() throws IOException {

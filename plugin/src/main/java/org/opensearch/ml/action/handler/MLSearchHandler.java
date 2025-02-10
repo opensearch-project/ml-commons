@@ -7,6 +7,7 @@ package org.opensearch.ml.action.handler;
 
 import static org.opensearch.core.rest.RestStatus.BAD_REQUEST;
 import static org.opensearch.core.rest.RestStatus.INTERNAL_SERVER_ERROR;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.utils.RestActionUtils.wrapListenerToHandleSearchIndexNotFound;
 
 import java.util.ArrayList;
@@ -80,11 +81,11 @@ public class MLSearchHandler {
      * @param request
      * @param actionListener
      */
-    public void search(SearchRequest request, ActionListener<SearchResponse> actionListener) {
+    public void search(SearchRequest request, String tenantId, ActionListener<SearchResponse> actionListener) {
         User user = RestActionUtils.getUserContext(client);
         ActionListener<SearchResponse> listener = wrapRestActionListener(actionListener, "Fail to search model version");
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<SearchResponse> wrappedListener = ActionListener.runBefore(listener, () -> context.restore());
+            ActionListener<SearchResponse> wrappedListener = ActionListener.runBefore(listener, context::restore);
             List<String> excludes = Optional
                 .ofNullable(request.source())
                 .map(SearchSourceBuilder::fetchSource)
@@ -113,6 +114,11 @@ public class MLSearchHandler {
 
             // Add a should clause to include documents where IS_HIDDEN_FIELD is false
             shouldQuery.should(QueryBuilders.termQuery(MLModel.IS_HIDDEN_FIELD, false));
+
+            // For multi-tenancy
+            if (tenantId != null) {
+                shouldQuery.should(QueryBuilders.termQuery(TENANT_ID_FIELD, tenantId));
+            }
 
             // Add a should clause to include documents where IS_HIDDEN_FIELD does not exist or is null
             shouldQuery.should(QueryBuilders.boolQuery().mustNot(QueryBuilders.existsQuery(MLModel.IS_HIDDEN_FIELD)));
