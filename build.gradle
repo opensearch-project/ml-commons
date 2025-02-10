@@ -25,7 +25,7 @@ buildscript {
             opensearch_build += "-SNAPSHOT"
         }
 
-        common_utils_version = System.getProperty("common_utils.version", "3.0.0.0-SNAPSHOT")
+        common_utils_version = System.getProperty("common_utils.version", opensearch_build)
         kotlin_version = System.getProperty("kotlin.version", "1.9.23")
     }
 
