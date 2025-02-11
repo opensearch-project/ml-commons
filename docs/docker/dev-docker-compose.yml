@@ -21,8 +21,16 @@ services:
         soft: 65536 # maximum number of open files for the OpenSearch user, set to at least 65536 on modern systems
         hard: 65536
     volumes:
+      # Persist data for the first OpenSearch node to ensure cluster state, indexes, and metadata are retained
       - opensearch-data1:/usr/share/opensearch/data
-      - ./plugin/build/distributions:/usr/share/opensearch/dev
+
+      # Mount the local plugin build directory into the container to make custom plugins available for installation
+      - ../../plugin/build/distributions:/usr/share/opensearch/dev
+
+    # We will now remove the existing 'opensearch-skills' plugin to prevent version conflicts
+    # Remove the existing 'opensearch-ml' plugin to ensure a clean installation
+    # Install the new version of the 'opensearch-ml' plugin from a local distribution file
+    # Start the OpenSearch service using the Docker entrypoint script
     command: bash -c "bin/opensearch-plugin remove opensearch-skills; bin/opensearch-plugin remove opensearch-ml; bin/opensearch-plugin install --batch file:///usr/share/opensearch/dev/opensearch-ml-3.0.0.0-SNAPSHOT.zip; ./opensearch-docker-entrypoint.sh opensearch"
     ports:
       - 9200:9200
@@ -52,8 +60,16 @@ services:
         soft: 65536
         hard: 65536
     volumes:
+      # Persist data for the second OpenSearch node to maintain high availability and redundancy
       - opensearch-data2:/usr/share/opensearch/data
-      - ./plugin/build/distributions:/usr/share/opensearch/dev
+
+      # Mount the local plugin build directory into the container to make custom plugins available for installation
+      - ../../plugin/build/distributions:/usr/share/opensearch/dev
+
+    # We will now remove the existing 'opensearch-skills' plugin to prevent version conflicts
+    # Remove the existing 'opensearch-ml' plugin to ensure a clean installation
+    # Install the new version of the 'opensearch-ml' plugin from a local distribution file
+    # Start the OpenSearch service using the Docker entrypoint script
     command: bash -c "bin/opensearch-plugin remove opensearch-skills; bin/opensearch-plugin remove opensearch-ml; bin/opensearch-plugin install --batch file:///usr/share/opensearch/dev/opensearch-ml-3.0.0.0-SNAPSHOT.zip; ./opensearch-docker-entrypoint.sh opensearch"
     networks:
       - opensearch-net
@@ -80,8 +96,16 @@ services:
         soft: 65536
         hard: 65536
     volumes:
+      # Persist machine learning-related data for the first ML node to store model metadata and results
       - opensearch-ml1:/usr/share/opensearch/data
-      - ./plugin/build/distributions:/usr/share/opensearch/dev
+
+      # Mount the local plugin build directory into the container to make custom plugins available for installation
+      - ../../plugin/build/distributions:/usr/share/opensearch/dev
+
+    # We will now remove the existing 'opensearch-skills' plugin to prevent version conflicts
+    # Remove the existing 'opensearch-ml' plugin to ensure a clean installation
+    # Install the new version of the 'opensearch-ml' plugin from a local distribution file
+    # Start the OpenSearch service using the Docker entrypoint script
     command: bash -c "bin/opensearch-plugin remove opensearch-skills; bin/opensearch-plugin remove opensearch-ml; bin/opensearch-plugin install --batch file:///usr/share/opensearch/dev/opensearch-ml-3.0.0.0-SNAPSHOT.zip; ./opensearch-docker-entrypoint.sh opensearch"
     networks:
       - opensearch-net
@@ -108,8 +132,16 @@ services:
         soft: 65536
         hard: 65536
     volumes:
+      # Persist machine learning-related data for the second ML node to support distributed ML processing and data redundancy
       - opensearch-ml2:/usr/share/opensearch/data
-      - ./plugin/build/distributions:/usr/share/opensearch/dev
+
+      # Mount the local plugin build directory into the container to make custom plugins available for installation
+      - ../../plugin/build/distributions:/usr/share/opensearch/dev
+
+    # We will now remove the existing 'opensearch-skills' plugin to prevent version conflicts
+    # Remove the existing 'opensearch-ml' plugin to ensure a clean installation
+    # Install the new version of the 'opensearch-ml' plugin from a local distribution file
+    # Start the OpenSearch service using the Docker entrypoint script
     command: bash -c "bin/opensearch-plugin remove opensearch-skills; bin/opensearch-plugin remove opensearch-ml; bin/opensearch-plugin install --batch file:///usr/share/opensearch/dev/opensearch-ml-3.0.0.0-SNAPSHOT.zip; ./opensearch-docker-entrypoint.sh opensearch"
     networks:
       - opensearch-net
