@@ -24,13 +24,13 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.opensearch.OpenSearchStatusException;
-import org.opensearch.client.Client;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.transport.batch.MLBatchIngestionInput;
 import org.opensearch.ml.engine.annotation.Ingester;
 import org.opensearch.ml.engine.utils.S3Utils;
 
 import lombok.extern.log4j.Log4j2;
+import org.opensearch.transport.client.Client;
 import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;

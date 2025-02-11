@@ -34,9 +34,9 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.bulk.BulkRequest;
 import org.opensearch.action.bulk.BulkResponse;
-import org.opensearch.client.Client;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.transport.batch.MLBatchIngestionInput;
+import org.opensearch.transport.client.Client;
 
 public class AbstractIngestionTests {
     @Mock

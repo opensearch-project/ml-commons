@@ -7,8 +7,8 @@ package org.opensearch.ml.common.model;
 
 import java.util.Map;
 
-import org.opensearch.client.Client;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.transport.client.Client;
 
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
