@@ -5,9 +5,9 @@
 
 package org.opensearch.ml.permission;
 
-import org.opensearch.client.Client;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
+import org.opensearch.transport.client.Client;
 
 import lombok.extern.log4j.Log4j2;
 

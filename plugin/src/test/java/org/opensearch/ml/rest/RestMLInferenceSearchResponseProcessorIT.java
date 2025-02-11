@@ -18,8 +18,6 @@ import org.apache.hc.core5.http.message.BasicHeader;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import org.opensearch.client.Request;
-import org.opensearch.client.Response;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.model.MLModelConfig;
@@ -27,6 +25,8 @@ import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.utils.TestHelper;
+import org.opensearch.transport.client.Request;
+import org.opensearch.transport.client.Response;
 
 import com.google.common.collect.ImmutableList;
 import com.jayway.jsonpath.JsonPath;

@@ -26,11 +26,11 @@ import org.apache.hc.core5.http.HttpEntity;
 import org.apache.hc.core5.http.HttpHeaders;
 import org.apache.hc.core5.http.message.BasicHeader;
 import org.junit.Before;
-import org.opensearch.client.Response;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.conversation.ActionConstants;
 import org.opensearch.ml.settings.MLCommonsSettings;
 import org.opensearch.ml.utils.TestHelper;
+import org.opensearch.transport.client.Response;
 
 import com.google.common.collect.ImmutableList;
 

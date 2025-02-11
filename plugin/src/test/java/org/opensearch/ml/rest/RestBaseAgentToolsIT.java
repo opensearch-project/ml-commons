@@ -14,8 +14,6 @@ import java.util.stream.Collectors;
 
 import org.apache.hc.core5.http.ParseException;
 import org.junit.After;
-import org.opensearch.client.Request;
-import org.opensearch.client.Response;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.DeprecationHandler;
@@ -28,6 +26,8 @@ import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.utils.TestHelper;
+import org.opensearch.transport.client.Request;
+import org.opensearch.transport.client.Response;
 
 public abstract class RestBaseAgentToolsIT extends MLCommonsRestTestCase {
 

@@ -16,12 +16,12 @@ import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
-import org.opensearch.client.Response;
-import org.opensearch.client.ResponseException;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.utils.TestData;
 import org.opensearch.ml.utils.TestHelper;
+import org.opensearch.transport.client.Response;
+import org.opensearch.transport.client.ResponseException;
 
 import com.google.common.collect.ImmutableMap;
 

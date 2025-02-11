@@ -10,10 +10,10 @@ import java.io.IOException;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
-import org.opensearch.client.Response;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.utils.TestHelper;
+import org.opensearch.transport.client.Response;
 
 public class RestMLDeleteModelGroupActionIT extends MLCommonsRestTestCase {
     @Rule

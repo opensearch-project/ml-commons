@@ -21,14 +21,14 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
-import org.opensearch.client.Response;
-import org.opensearch.client.ResponseException;
-import org.opensearch.client.RestClient;
 import org.opensearch.commons.rest.SecureRestClientBuilder;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupInput;
 import org.opensearch.ml.utils.TestHelper;
+import org.opensearch.transport.client.Response;
+import org.opensearch.transport.client.ResponseException;
+import org.opensearch.transport.client.RestClient;
 
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
