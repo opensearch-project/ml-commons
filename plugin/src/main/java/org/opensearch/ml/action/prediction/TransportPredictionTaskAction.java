@@ -47,7 +47,6 @@ import org.opensearch.transport.client.Client;
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.log4j.Log4j2;
-import org.opensearch.transport.client.Client;
 
 @Log4j2
 @FieldDefaults(level = AccessLevel.PRIVATE)

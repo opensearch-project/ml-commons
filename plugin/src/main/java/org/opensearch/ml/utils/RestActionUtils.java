@@ -52,7 +52,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
 
 import lombok.extern.log4j.Log4j2;
-import org.opensearch.transport.client.Client;
 
 @Log4j2
 public class RestActionUtils {

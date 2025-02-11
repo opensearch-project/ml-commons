@@ -90,10 +90,10 @@ import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import org.opensearch.transport.client.Client;
 
 public class MLPredictTaskRunnerTests extends OpenSearchTestCase {
 

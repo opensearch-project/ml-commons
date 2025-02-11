@@ -56,6 +56,7 @@ import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
+import org.opensearch.transport.client.Client;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.gson.Gson;
@@ -63,7 +64,6 @@ import com.google.gson.Gson;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.extern.log4j.Log4j2;
-import org.opensearch.transport.client.Client;
 
 @Log4j2
 @Data
