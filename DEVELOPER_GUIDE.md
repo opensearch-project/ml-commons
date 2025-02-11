@@ -82,7 +82,7 @@ opensearch.username: "admin" # Default username
 opensearch.password: "admin" # Default password
 ```
 
-### 🚀 Run OpenSearch from Source Code
+### 🚀 Run OpenSearch from Source Code using Docker
 
 #### 1. Build the Distributions
 First, compile the source code to build the distributions:
