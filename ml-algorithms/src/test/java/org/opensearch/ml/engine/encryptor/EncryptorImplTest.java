@@ -514,6 +514,24 @@ public class EncryptorImplTest {
         encryptor.encrypt("test", null);
     }
 
+    @Test
+    public void handleVersionConflictResponse_ShouldThrowException_WhenRetryFails() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> actionListener = (ActionListener) invocation.getArgument(0);
+            actionListener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConfigIndex(any());
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onFailure(new IOException("Failed to get master key"));
+            return null;
+        }).when(client).get(any(), any());
+
+        exceptionRule.expect(MLException.class);
+        encryptor.encrypt("test", "someTenant");
+    }
+
     // Helper method to prepare a valid GetResponse
     private GetResponse prepareMLConfigResponse(String tenantId) throws IOException {
         // Compute the masterKeyId based on tenantId

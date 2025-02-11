@@ -12,6 +12,7 @@ import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.MLConfig.CREATE_TIME_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.hashString;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.time.Instant;
@@ -27,6 +28,7 @@ import javax.crypto.spec.SecretKeySpec;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.index.IndexResponse;
 import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -38,6 +40,7 @@ import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.PutDataObjectRequest;
+import org.opensearch.remote.metadata.client.PutDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
@@ -275,17 +278,24 @@ public class EncryptorImpl implements Encryptor {
         final String generatedMasterKey = generateMasterKey();
         sdkClient
             .putDataObjectAsync(createPutDataObjectRequest(tenantId, masterKeyId, generatedMasterKey))
-            .whenComplete(
-                (putDataObjectResponse, throwable1) -> handlePutDataObjectResponse(
-                    tenantId,
-                    masterKeyId,
-                    context,
-                    throwable1,
-                    exceptionRef,
-                    latch,
-                    generatedMasterKey
-                )
-            );
+            .whenComplete((putDataObjectResponse, throwable1) -> {
+                try {
+                    handlePutDataObjectResponse(
+                        tenantId,
+                        masterKeyId,
+                        context,
+                        putDataObjectResponse,
+                        throwable1,
+                        exceptionRef,
+                        latch,
+                        generatedMasterKey
+                    );
+                } catch (IOException e) {
+                    log.debug("Failed to index ML encryption master key to config index", e);
+                    exceptionRef.set(e);
+                    latch.countDown();
+                }
+            });
     }
 
     private PutDataObjectRequest createPutDataObjectRequest(String tenantId, String masterKeyId, String generatedMasterKey) {
@@ -313,16 +323,19 @@ public class EncryptorImpl implements Encryptor {
         String tenantId,
         String masterKeyId,
         ThreadContext.StoredContext context,
+        PutDataObjectResponse putDataObjectResponse,
         Throwable throwable,
         AtomicReference<Exception> exceptionRef,
         CountDownLatch latch,
         String generatedMasterKey
-    ) {
+    ) throws IOException {
         context.restore();
 
         if (throwable != null) {
             handlePutDataObjectFailure(tenantId, masterKeyId, context, throwable, exceptionRef, latch);
         } else {
+            IndexResponse indexResponse = IndexResponse.fromXContent(putDataObjectResponse.parser());
+            log.info("Master key creation result: {}, Master key id: {}", indexResponse.getResult(), indexResponse.getId());
             this.tenantMasterKeys.put(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID), generatedMasterKey);
             log.info("ML encryption master key initialized successfully");
             latch.countDown();
@@ -358,17 +371,15 @@ public class EncryptorImpl implements Encryptor {
             .getDataObjectAsync(
                 createGetDataObjectRequest(tenantId, new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY))
             )
-            .whenComplete(
-                (response, throwable) -> handleVersionConflictResponse(
-                    tenantId,
-                    masterKeyId,
-                    context,
-                    response,
-                    throwable,
-                    exceptionRef,
-                    latch
-                )
-            );
+            .whenComplete((response, throwable) -> {
+                try {
+                    handleVersionConflictResponse(tenantId, masterKeyId, context, response, throwable, exceptionRef, latch);
+                } catch (IOException e) {
+                    log.debug("Failed to get ML encryption master key from config index", e);
+                    exceptionRef.set(e);
+                    latch.countDown();
+                }
+            });
     }
 
     private GetDataObjectRequest createGetDataObjectRequest(String tenantId, FetchSourceContext fetchSourceContext) {
@@ -393,7 +404,7 @@ public class EncryptorImpl implements Encryptor {
         Throwable throwable2,
         AtomicReference<Exception> exceptionRef,
         CountDownLatch latch
-    ) {
+    ) throws IOException {
         context.restore();
         log.debug("Completed Get config item");
 
@@ -403,7 +414,16 @@ public class EncryptorImpl implements Encryptor {
             exceptionRef.set(new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR));
             latch.countDown();
         } else {
-            handleGetDataObjectSuccess(response1, tenantId, masterKeyId, exceptionRef, latch, context);
+            GetResponse getMasterKeyResponse = response1.parser() == null ? null : GetResponse.fromXContent(response1.parser());
+            if (getMasterKeyResponse != null && getMasterKeyResponse.isExists()) {
+                this.tenantMasterKeys
+                    .put(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID), (String) response1.source().get(masterKeyId));
+                log.info("ML encryption master key already initialized, no action needed");
+                latch.countDown();
+            } else {
+                exceptionRef.set(new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR));
+                latch.countDown();
+            }
         }
     }
 }
