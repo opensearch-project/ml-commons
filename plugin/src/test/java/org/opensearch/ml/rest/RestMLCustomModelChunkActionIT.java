@@ -13,8 +13,6 @@ import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
-import org.opensearch.transport.client.Response;
-import org.opensearch.transport.client.ResponseException;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
@@ -23,6 +21,8 @@ import org.opensearch.ml.common.model.TextEmbeddingModelConfig.FrameworkType;
 import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaInput;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkInput;
 import org.opensearch.ml.utils.TestHelper;
+import org.opensearch.transport.client.Response;
+import org.opensearch.transport.client.ResponseException;
 
 public class RestMLCustomModelChunkActionIT extends MLCommonsRestTestCase {
 

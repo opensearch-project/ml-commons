@@ -19,7 +19,6 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.search.SearchResponse;
-import org.opensearch.transport.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.jobscheduler.spi.JobExecutionContext;
@@ -29,6 +28,7 @@ import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.client.Client;
 
 public class MLBatchTaskUpdateJobRunnerTests {
 

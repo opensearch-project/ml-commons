@@ -27,7 +27,6 @@ import java.util.stream.Collectors;
 
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
-import org.opensearch.transport.client.node.NodeClient;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -51,6 +50,7 @@ import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.search.SearchHit;
+import org.opensearch.transport.client.node.NodeClient;
 
 import com.google.common.collect.ImmutableList;
 

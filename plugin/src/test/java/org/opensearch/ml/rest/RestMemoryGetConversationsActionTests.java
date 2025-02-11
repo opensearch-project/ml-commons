@@ -26,7 +26,6 @@ import static org.mockito.Mockito.verify;
 import java.util.List;
 
 import org.mockito.ArgumentCaptor;
-import org.opensearch.transport.client.node.NodeClient;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.conversation.ActionConstants;
 import org.opensearch.ml.memory.action.conversation.GetConversationsAction;
@@ -36,6 +35,7 @@ import org.opensearch.rest.RestHandler.Route;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
+import org.opensearch.transport.client.node.NodeClient;
 
 public class RestMemoryGetConversationsActionTests extends OpenSearchTestCase {
     public void testBasics() {

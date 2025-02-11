@@ -29,7 +29,6 @@ import java.util.List;
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.opensearch.action.search.SearchResponse;
-import org.opensearch.transport.client.node.NodeClient;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -43,6 +42,7 @@ import org.opensearch.rest.RestHandler.Route;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.RestResponse;
 import org.opensearch.test.OpenSearchTestCase;
+import org.opensearch.transport.client.node.NodeClient;
 
 import com.google.gson.Gson;
 

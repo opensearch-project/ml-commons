@@ -19,10 +19,10 @@ import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
-import org.opensearch.transport.client.Response;
-import org.opensearch.transport.client.ResponseException;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.utils.TestHelper;
+import org.opensearch.transport.client.Response;
+import org.opensearch.transport.client.ResponseException;
 
 import com.google.common.collect.ImmutableList;
 

@@ -19,7 +19,6 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
 
-import org.opensearch.transport.client.node.NodeClient;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -41,6 +40,7 @@ import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
+import org.opensearch.transport.client.node.NodeClient;
 
 import lombok.extern.log4j.Log4j2;
 

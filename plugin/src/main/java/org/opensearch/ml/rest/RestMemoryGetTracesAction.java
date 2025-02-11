@@ -8,13 +8,13 @@ package org.opensearch.ml.rest;
 import java.io.IOException;
 import java.util.List;
 
-import org.opensearch.transport.client.node.NodeClient;
 import org.opensearch.ml.common.conversation.ActionConstants;
 import org.opensearch.ml.memory.action.conversation.GetTracesAction;
 import org.opensearch.ml.memory.action.conversation.GetTracesRequest;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
+import org.opensearch.transport.client.node.NodeClient;
 
 public class RestMemoryGetTracesAction extends BaseRestHandler {
     private final static String GET_TRACES_NAME = "conversational_get_traces";

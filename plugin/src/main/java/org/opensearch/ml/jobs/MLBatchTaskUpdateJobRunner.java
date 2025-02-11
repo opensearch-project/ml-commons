@@ -12,7 +12,6 @@ import java.time.Instant;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.opensearch.action.search.SearchRequest;
-import org.opensearch.transport.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.IndexNotFoundException;
@@ -31,6 +30,7 @@ import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.client.Client;
 
 public class MLBatchTaskUpdateJobRunner implements ScheduledJobRunner {
     private static final Logger log = LogManager.getLogger(ScheduledJobRunner.class);

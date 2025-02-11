@@ -28,7 +28,6 @@ import java.util.Map;
 
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
-import org.opensearch.transport.client.node.NodeClient;
 import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -40,6 +39,7 @@ import org.opensearch.rest.RestHandler.Route;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
+import org.opensearch.transport.client.node.NodeClient;
 
 import com.google.gson.Gson;
 

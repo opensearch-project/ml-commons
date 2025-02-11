@@ -28,7 +28,6 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchParseException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.update.UpdateResponse;
-import org.opensearch.transport.client.node.NodeClient;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
@@ -47,6 +46,7 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
 import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.client.node.NodeClient;
 
 import com.google.gson.Gson;
 

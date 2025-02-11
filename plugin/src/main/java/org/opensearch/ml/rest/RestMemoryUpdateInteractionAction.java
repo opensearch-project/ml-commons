@@ -13,7 +13,6 @@ import java.io.IOException;
 import java.util.List;
 
 import org.opensearch.OpenSearchParseException;
-import org.opensearch.transport.client.node.NodeClient;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.conversation.ActionConstants;
 import org.opensearch.ml.memory.action.conversation.UpdateInteractionAction;
@@ -21,6 +20,7 @@ import org.opensearch.ml.memory.action.conversation.UpdateInteractionRequest;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
+import org.opensearch.transport.client.node.NodeClient;
 
 import com.google.common.annotations.VisibleForTesting;
 

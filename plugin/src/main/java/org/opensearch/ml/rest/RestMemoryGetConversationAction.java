@@ -20,13 +20,13 @@ package org.opensearch.ml.rest;
 import java.io.IOException;
 import java.util.List;
 
-import org.opensearch.transport.client.node.NodeClient;
 import org.opensearch.ml.common.conversation.ActionConstants;
 import org.opensearch.ml.memory.action.conversation.GetConversationAction;
 import org.opensearch.ml.memory.action.conversation.GetConversationRequest;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
+import org.opensearch.transport.client.node.NodeClient;
 
 import com.google.common.collect.ImmutableList;
 

@@ -234,10 +234,7 @@ public interface ModelExecutor {
         } else if (tensor.getDataType().isString()) {
             modelOutputValue = Arrays.stream(tensor.getData()).map(String::valueOf).collect(Collectors.toList());
         } else if (tensor.getDataType().isBoolean()) {
-            modelOutputValue = Arrays
-                .stream(tensor.getData())
-                .map(num -> num.intValue() != 0)
-                .collect(Collectors.toList());
+            modelOutputValue = Arrays.stream(tensor.getData()).map(num -> num.intValue() != 0).collect(Collectors.toList());
         } else {
             throw new RuntimeException("unsupported data type in prediction data.");
         }

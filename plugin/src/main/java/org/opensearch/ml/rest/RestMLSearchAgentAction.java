@@ -11,12 +11,12 @@ import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_
 
 import java.io.IOException;
 
-import org.opensearch.transport.client.node.NodeClient;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.transport.agent.MLSearchAgentAction;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.RestRequest;
+import org.opensearch.transport.client.node.NodeClient;
 
 /**
  * This class consists of the REST handler to search ML Agents.
