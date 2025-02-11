@@ -96,16 +96,10 @@ After the build completes, you'll find an artifact like `opensearch-ml-3.0.0.0-S
 ---
 
 #### 2. Run OpenSearch Using Docker Compose
-Start OpenSearch with:
+Navigate to the root directory of the project and start OpenSearch with the following command:
 
 ```bash
-docker-compose -f dev-docker-compose.yml up -d
-```
-
-To stop OpenSearch, run:
-
-```bash
-docker-compose -f dev-docker-compose.yml down
+docker-compose -f docs/docker/dev-docker-compose.yml up
 ```
 
 ---
