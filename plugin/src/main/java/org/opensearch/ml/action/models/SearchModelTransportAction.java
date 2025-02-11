@@ -48,6 +48,6 @@ public class SearchModelTransportAction extends HandledTransportAction<MLSearchA
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
             return;
         }
-        mlSearchHandler.search(request, tenantId, actionListener);
+        mlSearchHandler.search(sdkClient, request, tenantId, actionListener);
     }
 }
