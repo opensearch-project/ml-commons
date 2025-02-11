@@ -17,7 +17,7 @@ import java.util.Locale;
 
 import org.opensearch.OpenSearchParseException;
 import org.opensearch.OpenSearchStatusException;
-import org.opensearch.client.node.NodeClient;
+import org.opensearch.transport.client.node.NodeClient;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.transport.model.MLUpdateModelAction;

@@ -29,7 +29,7 @@ import java.util.List;
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.opensearch.action.search.SearchResponse;
-import org.opensearch.client.node.NodeClient;
+import org.opensearch.transport.client.node.NodeClient;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentBuilder;

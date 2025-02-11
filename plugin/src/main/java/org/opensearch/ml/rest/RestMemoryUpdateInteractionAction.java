@@ -13,7 +13,7 @@ import java.io.IOException;
 import java.util.List;
 
 import org.opensearch.OpenSearchParseException;
-import org.opensearch.client.node.NodeClient;
+import org.opensearch.transport.client.node.NodeClient;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.conversation.ActionConstants;
 import org.opensearch.ml.memory.action.conversation.UpdateInteractionAction;

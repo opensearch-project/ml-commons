@@ -12,7 +12,7 @@ import java.util.Map;
 import org.apache.hc.core5.http.ParseException;
 import org.junit.After;
 import org.junit.Before;
-import org.opensearch.client.Response;
+import org.opensearch.transport.client.Response;
 import org.opensearch.ml.utils.TestHelper;
 
 public class RestMLFlowAgentIT extends MLCommonsRestTestCase {

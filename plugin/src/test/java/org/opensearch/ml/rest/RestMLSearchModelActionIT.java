@@ -11,7 +11,7 @@ import java.io.IOException;
 import java.util.Map;
 
 import org.apache.hc.core5.http.HttpEntity;
-import org.opensearch.client.Response;
+import org.opensearch.transport.client.Response;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.utils.TestHelper;
 

@@ -12,8 +12,8 @@ import org.apache.hc.core5.http.HttpEntity;
 import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
-import org.opensearch.client.Response;
-import org.opensearch.client.ResponseException;
+import org.opensearch.transport.client.Response;
+import org.opensearch.transport.client.ResponseException;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.utils.TestHelper;
 

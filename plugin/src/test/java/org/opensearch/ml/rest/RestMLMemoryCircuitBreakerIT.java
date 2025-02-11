@@ -12,8 +12,8 @@ import java.io.IOException;
 import org.apache.hc.core5.http.HttpHeaders;
 import org.apache.hc.core5.http.message.BasicHeader;
 import org.junit.After;
-import org.opensearch.client.Response;
-import org.opensearch.client.ResponseException;
+import org.opensearch.transport.client.Response;
+import org.opensearch.transport.client.ResponseException;
 import org.opensearch.ml.breaker.MemoryCircuitBreaker;
 import org.opensearch.ml.utils.TestHelper;
 
