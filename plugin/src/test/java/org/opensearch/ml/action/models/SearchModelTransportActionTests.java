@@ -173,7 +173,7 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).search(any(), any());
         searchModelTransportAction.doExecute(null, mlSearchActionRequest, actionListener);
-        verify(mlSearchHandler).search(mlSearchActionRequest, null,  actionListener);
+        verify(mlSearchHandler).search(sdkClient, mlSearchActionRequest, null,  actionListener);
         verify(client, times(1)).search(any(), any());
     }
 
@@ -186,7 +186,7 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
         }).when(client).search(any(), any());
         when(modelAccessControlHelper.createSearchSourceBuilder(any())).thenReturn(searchSourceBuilder);
         searchModelTransportAction.doExecute(null, mlSearchActionRequest, actionListener);
-        verify(mlSearchHandler).search(mlSearchActionRequest, null, actionListener);
+        verify(mlSearchHandler).search(sdkClient, mlSearchActionRequest, null, actionListener);
         verify(client, times(2)).search(any(), any());
     }
 
@@ -198,7 +198,7 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
         }).when(client).search(any(), isA(ActionListener.class));
         when(modelAccessControlHelper.createSearchSourceBuilder(any())).thenReturn(searchSourceBuilder);
         searchModelTransportAction.doExecute(null, mlSearchActionRequest, actionListener);
-        verify(mlSearchHandler).search(mlSearchActionRequest, null, actionListener);
+        verify(mlSearchHandler).search(sdkClient, mlSearchActionRequest, null, actionListener);
         verify(client, times(2)).search(any(), any());
     }
 
@@ -210,7 +210,7 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
         }).when(client).search(any(), isA(ActionListener.class));
         when(modelAccessControlHelper.createSearchSourceBuilder(any())).thenReturn(searchSourceBuilder);
         searchModelTransportAction.doExecute(null, mlSearchActionRequest, actionListener);
-        verify(mlSearchHandler).search(mlSearchActionRequest, null, actionListener);
+        verify(mlSearchHandler).search(sdkClient, mlSearchActionRequest, null, actionListener);
         verify(client, times(1)).search(any(), any());
     }
 
@@ -222,7 +222,7 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
         }).when(client).search(any(), isA(ActionListener.class));
         when(modelAccessControlHelper.skipModelAccessControl(any())).thenReturn(true);
         searchModelTransportAction.doExecute(null, mlSearchActionRequest, actionListener);
-        verify(mlSearchHandler).search(mlSearchActionRequest, null, actionListener);
+        verify(mlSearchHandler).search(sdkClient, mlSearchActionRequest, null, actionListener);
         verify(client, times(1)).search(any(), any());
         verify(actionListener, times(0)).onFailure(any(IndexNotFoundException.class));
     }
@@ -255,7 +255,7 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
         }).when(client).search(any(), isA(ActionListener.class));
         when(modelAccessControlHelper.skipModelAccessControl(any())).thenReturn(true);
         searchModelTransportAction.doExecute(null, mlSearchActionRequest, actionListener);
-        verify(mlSearchHandler).search(mlSearchActionRequest, null, actionListener);
+        verify(mlSearchHandler).search(sdkClient, mlSearchActionRequest, null, actionListener);
         verify(client, times(1)).search(any(), any());
         verify(actionListener, times(0)).onFailure(any(IndexNotFoundException.class));
         verify(actionListener, times(1)).onResponse(any(SearchResponse.class));
@@ -269,7 +269,7 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
         }).when(client).search(any(), isA(ActionListener.class));
         when(modelAccessControlHelper.skipModelAccessControl(any())).thenReturn(true);
         searchModelTransportAction.doExecute(null, mlSearchActionRequest, actionListener);
-        verify(mlSearchHandler).search(mlSearchActionRequest, null, actionListener);
+        verify(mlSearchHandler).search(sdkClient, mlSearchActionRequest, null, actionListener);
         verify(client, times(1)).search(any(), any());
         verify(actionListener, times(1)).onFailure(any(OpenSearchStatusException.class));
     }
@@ -284,7 +284,7 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
         when(modelAccessControlHelper.createSearchSourceBuilder(any())).thenReturn(searchSourceBuilder);
         searchRequest.source().query(QueryBuilders.boolQuery().must(QueryBuilders.matchQuery("name", "model_IT")));
         searchModelTransportAction.doExecute(null, mlSearchActionRequest, actionListener);
-        verify(mlSearchHandler).search(mlSearchActionRequest, null, actionListener);
+        verify(mlSearchHandler).search(sdkClient, mlSearchActionRequest, null, actionListener);
         verify(client, times(2)).search(any(), any());
     }
 
@@ -298,7 +298,7 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
         when(modelAccessControlHelper.createSearchSourceBuilder(any())).thenReturn(searchSourceBuilder);
         searchRequest.source().query(QueryBuilders.termQuery("name", "model_IT"));
         searchModelTransportAction.doExecute(null, mlSearchActionRequest, actionListener);
-        verify(mlSearchHandler).search(mlSearchActionRequest, null, actionListener);
+        verify(mlSearchHandler).search(sdkClient, mlSearchActionRequest, null, actionListener);
         verify(client, times(2)).search(any(), any());
     }
 
@@ -336,7 +336,7 @@ public class SearchModelTransportActionTests extends OpenSearchTestCase {
 
         searchModelTransportAction.doExecute(null, mlSearchActionRequest, actionListener);
 
-        verify(mlSearchHandler).search(mlSearchActionRequest, "123456", actionListener);
+        verify(mlSearchHandler).search(sdkClient, mlSearchActionRequest, "123456", actionListener);
         verify(client, times(2)).search(any(), any());
     }
 
