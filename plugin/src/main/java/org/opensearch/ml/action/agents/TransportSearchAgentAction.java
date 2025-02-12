@@ -6,8 +6,8 @@
 package org.opensearch.ml.action.agents;
 
 import static org.opensearch.ml.action.handler.MLSearchHandler.wrapRestActionListener;
-import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -15,6 +15,7 @@ import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.CommonValue;
@@ -24,6 +25,8 @@ import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
+import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -76,11 +79,6 @@ public class TransportSearchAgentAction extends HandledTransportAction<MLSearchA
             // Add a should clause to include documents where IS_HIDDEN_FIELD is false
             shouldQuery.should(QueryBuilders.termQuery(MLAgent.IS_HIDDEN_FIELD, false));
 
-            // For multi-tenancy
-            if (tenantId != null) {
-                shouldQuery.should(QueryBuilders.termQuery(TENANT_ID_FIELD, tenantId));
-            }
-
             // Add a should clause to include documents where IS_HIDDEN_FIELD does not exist or is null
             shouldQuery.should(QueryBuilders.boolQuery().mustNot(QueryBuilders.existsQuery(MLAgent.IS_HIDDEN_FIELD)));
 
@@ -91,7 +89,32 @@ public class TransportSearchAgentAction extends HandledTransportAction<MLSearchA
             queryBuilder.filter(shouldQuery);
 
             request.source().query(queryBuilder);
-            client.search(request, wrappedListener);
+            SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
+                .builder()
+                .indices(request.indices())
+                .searchSourceBuilder(request.source())
+                .tenantId(tenantId)
+                .build();
+
+            sdkClient.searchDataObjectAsync(searchDataObjectRequest).whenComplete((r, throwable) -> {
+                if (throwable != null) {
+                    Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable, OpenSearchStatusException.class);
+                    log.error("Failed to search agent", cause);
+                    wrappedListener.onFailure(cause);
+                } else {
+                    try {
+                        SearchResponse searchResponse = SearchResponse.fromXContent(r.parser());
+                        log.info("Agent search complete: {}", searchResponse.getHits().getTotalHits());
+                        wrappedListener.onResponse(searchResponse);
+                    } catch (Exception e) {
+                        log.error("Failed to parse model search response", e);
+                        wrappedListener
+                            .onFailure(
+                                new OpenSearchStatusException("Failed to parse model search response", RestStatus.INTERNAL_SERVER_ERROR)
+                            );
+                    }
+                }
+            });
         } catch (Exception e) {
             log.error("failed to search the agent index", e);
             actionListener.onFailure(e);

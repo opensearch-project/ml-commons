@@ -314,7 +314,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                     log.error(e.getMessage(), e);
                     listener.onFailure(e);
                 });
-                MLCreateConnectorRequest mlCreateConnectorRequest = createDryRunConnectorRequest();
+                MLCreateConnectorRequest mlCreateConnectorRequest = createDryRunConnectorRequest(registerModelInput.getTenantId());
                 client.execute(MLCreateConnectorAction.INSTANCE, mlCreateConnectorRequest, dryRunResultListener);
             }
         } else {
@@ -339,8 +339,9 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         }
     }
 
-    private MLCreateConnectorRequest createDryRunConnectorRequest() {
+    private MLCreateConnectorRequest createDryRunConnectorRequest(final String tenantId) {
         MLCreateConnectorInput createConnectorInput = MLCreateConnectorInput.builder().dryRun(true).build();
+        createConnectorInput.setTenantId(tenantId);
         return new MLCreateConnectorRequest(createConnectorInput);
     }
 
