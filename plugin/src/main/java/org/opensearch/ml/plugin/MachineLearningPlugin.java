@@ -498,7 +498,6 @@ public class MachineLearningPlugin extends Plugin
         Path configFile = environment.configFile();
 
         mlIndicesHandler = new MLIndicesHandler(clusterService, client);
-        encryptor = new EncryptorImpl(clusterService, client, mlIndicesHandler);
 
         SdkClient sdkClient = SdkClientFactory
             .createSdkClient(
@@ -522,6 +521,8 @@ public class MachineLearningPlugin extends Plugin
                 // todo: need to update this when ddbclient async is going to be implemented.
                 client.threadPool().executor(ThreadPool.Names.GENERIC)
             );
+
+        encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
 
         mlEngine = new MLEngine(dataPath, encryptor);
         nodeHelper = new DiscoveryNodeHelper(clusterService, settings);
