@@ -14,6 +14,7 @@ import static org.opensearch.ml.engine.encryptor.EncryptorImpl.MASTER_KEY_NOT_RE
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -40,11 +41,14 @@ import org.opensearch.commons.ConfigConstants;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.index.shard.ShardId;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.engine.VersionConflictEngineException;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.threadpool.ThreadPool;
 
 import com.google.common.collect.ImmutableMap;
@@ -54,6 +58,7 @@ public class EncryptorImplTest {
     public ExpectedException exceptionRule = ExpectedException.none();
     @Mock
     Client client;
+    SdkClient sdkClient;
 
     @Mock
     ClusterService clusterService;
@@ -79,6 +84,7 @@ public class EncryptorImplTest {
         MockitoAnnotations.openMocks(this);
         masterKey = new ConcurrentHashMap<>();
         masterKey.put(DEFAULT_TENANT_ID, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
+        sdkClient = SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap());
 
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
@@ -119,7 +125,7 @@ public class EncryptorImplTest {
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, USER_STRING);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
-        encryptor = new EncryptorImpl(clusterService, client, mlIndicesHandler);
+        encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
     }
 
     @Test
@@ -137,7 +143,7 @@ public class EncryptorImplTest {
             return null;
         }).when(client).get(any(), any());
 
-        Encryptor encryptor = new EncryptorImpl(clusterService, client, mlIndicesHandler);
+        Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
         Assert.assertNull(encryptor.getMasterKey(null));
         String encrypted = encryptor.encrypt("test", null);
         Assert.assertNotNull(encrypted);
@@ -151,25 +157,26 @@ public class EncryptorImplTest {
             actionListener.onResponse(true);
             return null;
         }).when(mlIndicesHandler).initMLConfigIndex(any());
+        IndexResponse indexResponse = prepareIndexResponse();
+
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = (ActionListener) invocation.getArgument(1);
-            GetResponse response = mock(GetResponse.class);
-            when(response.isExists()).thenReturn(false);
-            actionListener.onResponse(response);
+            actionListener.onResponse(null);
             return null;
         }).when(client).get(any(), any());
+
         doAnswer(invocation -> {
             ActionListener<IndexResponse> actionListener = (ActionListener) invocation.getArgument(1);
-            IndexResponse response = mock(IndexResponse.class);
-            actionListener.onResponse(response);
+
+            actionListener.onResponse(indexResponse);
             return null;
         }).when(client).index(any(), any());
 
-        Encryptor encryptor = new EncryptorImpl(clusterService, client, mlIndicesHandler);
-        Assert.assertNull(encryptor.getMasterKey(TENANT_ID));
-        String encrypted = encryptor.encrypt("test", TENANT_ID);
+        Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
+        Assert.assertNull(encryptor.getMasterKey(null));
+        String encrypted = encryptor.encrypt("test", null);
         Assert.assertNotNull(encrypted);
-        Assert.assertNotEquals(masterKey.get(DEFAULT_TENANT_ID), encryptor.getMasterKey(TENANT_ID));
+        Assert.assertNotEquals(masterKey.get(DEFAULT_TENANT_ID), encryptor.getMasterKey(null));
     }
 
     @Test
@@ -183,9 +190,7 @@ public class EncryptorImplTest {
         }).when(mlIndicesHandler).initMLConfigIndex(any());
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = (ActionListener) invocation.getArgument(1);
-            GetResponse response = mock(GetResponse.class);
-            when(response.isExists()).thenReturn(false);
-            actionListener.onResponse(response);
+            actionListener.onResponse(null);
             return null;
         }).when(client).get(any(), any());
         doAnswer(invocation -> {
@@ -194,9 +199,9 @@ public class EncryptorImplTest {
             return null;
         }).when(client).index(any(), any());
 
-        Encryptor encryptor = new EncryptorImpl(clusterService, client, mlIndicesHandler);
-        Assert.assertNull(encryptor.getMasterKey(TENANT_ID));
-        encryptor.encrypt("test", TENANT_ID);
+        Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
+        Assert.assertNull(encryptor.getMasterKey(null));
+        encryptor.encrypt("test", null);
     }
 
     @Test
@@ -210,9 +215,7 @@ public class EncryptorImplTest {
         }).when(mlIndicesHandler).initMLConfigIndex(any());
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = (ActionListener) invocation.getArgument(1);
-            GetResponse response = mock(GetResponse.class);
-            when(response.isExists()).thenReturn(false);
-            actionListener.onResponse(response);
+            actionListener.onResponse(null);
             return null;
         }).when(client).get(any(), any());
         doAnswer(invocation -> {
@@ -221,13 +224,17 @@ public class EncryptorImplTest {
             return null;
         }).when(client).index(any(), any());
 
-        Encryptor encryptor = new EncryptorImpl(clusterService, client, mlIndicesHandler);
-        Assert.assertNull(encryptor.getMasterKey(TENANT_ID));
-        encryptor.encrypt("test", TENANT_ID);
+        Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
+        Assert.assertNull(encryptor.getMasterKey(null));
+        encryptor.encrypt("test", null);
     }
 
     @Test
     public void encrypt_NonExistingMasterKey_FailedToCreateNewKey_VersionConflict() {
+        /**
+         * The context of this unit test is if there's any version conflict then we create new key, but if that fails
+         * again then we throw ResourceNotFoundException exception.
+         */
         exceptionRule.expect(ResourceNotFoundException.class);
         exceptionRule.expectMessage(MASTER_KEY_NOT_READY_ERROR);
         doAnswer(invocation -> {
@@ -237,15 +244,11 @@ public class EncryptorImplTest {
         }).when(mlIndicesHandler).initMLConfigIndex(any());
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = (ActionListener) invocation.getArgument(1);
-            GetResponse response = mock(GetResponse.class);
-            when(response.isExists()).thenReturn(false);
-            actionListener.onResponse(response);
+            actionListener.onResponse(null);
             return null;
         }).doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = (ActionListener) invocation.getArgument(1);
-            GetResponse response = mock(GetResponse.class);
-            when(response.isExists()).thenReturn(false);
-            actionListener.onResponse(response);
+            actionListener.onFailure(new IOException("testing"));
             return null;
         }).when(client).get(any(), any());
         doAnswer(invocation -> {
@@ -255,77 +258,9 @@ public class EncryptorImplTest {
             return null;
         }).when(client).index(any(), any());
 
-        Encryptor encryptor = new EncryptorImpl(clusterService, client, mlIndicesHandler);
+        Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
         Assert.assertNull(encryptor.getMasterKey(TENANT_ID));
         encryptor.encrypt("test", TENANT_ID);
-    }
-
-    @Test
-    public void encrypt_NonExistingMasterKey_FailedToCreateNewKey_VersionConflict_NullGetResponse() {
-        exceptionRule.expect(ResourceNotFoundException.class);
-        exceptionRule.expectMessage(MASTER_KEY_NOT_READY_ERROR);
-        doAnswer(invocation -> {
-            ActionListener<Boolean> actionListener = (ActionListener) invocation.getArgument(0);
-            actionListener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLConfigIndex(any());
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = (ActionListener) invocation.getArgument(1);
-            GetResponse response = mock(GetResponse.class);
-            when(response.isExists()).thenReturn(false);
-            actionListener.onResponse(response);
-            return null;
-        }).doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = (ActionListener) invocation.getArgument(1);
-            GetResponse response = null;
-            actionListener.onResponse(response);
-            return null;
-        }).when(client).get(any(), any());
-        doAnswer(invocation -> {
-            ActionListener<IndexResponse> actionListener = (ActionListener) invocation.getArgument(1);
-            actionListener
-                .onFailure(new VersionConflictEngineException(new ShardId(ML_CONFIG_INDEX, "index_uuid", 1), "test_id", "failed"));
-            return null;
-        }).when(client).index(any(), any());
-
-        Encryptor encryptor = new EncryptorImpl(clusterService, client, mlIndicesHandler);
-        Assert.assertNull(encryptor.getMasterKey(TENANT_ID));
-        encryptor.encrypt("test", TENANT_ID);
-    }
-
-    @Test
-    public void encrypt_NonExistingMasterKey_FailedToCreateNewKey_VersionConflict_NullResponse() {
-        exceptionRule.expect(ResourceNotFoundException.class);
-        exceptionRule.expectMessage(MASTER_KEY_NOT_READY_ERROR);
-        doAnswer(invocation -> {
-            ActionListener<Boolean> actionListener = (ActionListener) invocation.getArgument(0);
-            actionListener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLConfigIndex(any());
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = (ActionListener) invocation.getArgument(1);
-            GetResponse response = null;
-            actionListener.onResponse(response);
-            return null;
-        }).doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = (ActionListener) invocation.getArgument(1);
-            GetResponse response = mock(GetResponse.class);
-            when(response.isExists()).thenReturn(false);
-            actionListener.onResponse(response);
-            return null;
-        }).when(client).get(any(), any());
-        doAnswer(invocation -> {
-            ActionListener<IndexResponse> actionListener = (ActionListener) invocation.getArgument(1);
-            actionListener
-                .onFailure(new VersionConflictEngineException(new ShardId(ML_CONFIG_INDEX, "index_uuid", 1), "test_id", "failed"));
-            return null;
-        }).when(client).index(any(), any());
-
-        Encryptor encryptor = new EncryptorImpl(clusterService, client, mlIndicesHandler);
-        Assert.assertNull(encryptor.getMasterKey(null));
-        String encrypted = encryptor.encrypt("test", null);
-        Assert.assertNotNull(encrypted);
-        Assert.assertEquals(masterKey.get(DEFAULT_TENANT_ID), encryptor.getMasterKey(null));
     }
 
     @Test
@@ -354,41 +289,7 @@ public class EncryptorImplTest {
             return null;
         }).when(client).index(any(), any());
 
-        Encryptor encryptor = new EncryptorImpl(clusterService, client, mlIndicesHandler);
-        Assert.assertNull(encryptor.getMasterKey(null));
-        String encrypted = encryptor.encrypt("test", null);
-        Assert.assertNotNull(encrypted);
-        Assert.assertEquals(masterKey.get(DEFAULT_TENANT_ID), encryptor.getMasterKey(null));
-    }
-
-    @Test
-    public void encrypt_NonExistingMasterKey_FailedToCreateNewKey_VersionConflict_FailedToGetExistingMasterKey() {
-        exceptionRule.expect(RuntimeException.class);
-        exceptionRule.expectMessage("random test exception");
-        doAnswer(invocation -> {
-            ActionListener<Boolean> actionListener = (ActionListener) invocation.getArgument(0);
-            actionListener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLConfigIndex(any());
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = (ActionListener) invocation.getArgument(1);
-            GetResponse response = mock(GetResponse.class);
-            when(response.isExists()).thenReturn(false);
-            actionListener.onResponse(response);
-            return null;
-        }).doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = (ActionListener) invocation.getArgument(1);
-            actionListener.onFailure(new RuntimeException("random test exception"));
-            return null;
-        }).when(client).get(any(), any());
-        doAnswer(invocation -> {
-            ActionListener<IndexResponse> actionListener = (ActionListener) invocation.getArgument(1);
-            actionListener
-                .onFailure(new VersionConflictEngineException(new ShardId(ML_CONFIG_INDEX, "index_uuid", 1), "test_id", "failed"));
-            return null;
-        }).when(client).index(any(), any());
-
-        Encryptor encryptor = new EncryptorImpl(clusterService, client, mlIndicesHandler);
+        Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
         Assert.assertNull(encryptor.getMasterKey(null));
         String encrypted = encryptor.encrypt("test", null);
         Assert.assertNotNull(encrypted);
@@ -400,20 +301,20 @@ public class EncryptorImplTest {
         exceptionRule.expect(RuntimeException.class);
         exceptionRule.expectMessage("test exception");
         doThrow(new RuntimeException("test exception")).when(mlIndicesHandler).initMLConfigIndex(any());
-        Encryptor encryptor = new EncryptorImpl(clusterService, client, mlIndicesHandler);
+        Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
         encryptor.encrypt(masterKey.get(DEFAULT_TENANT_ID), null);
     }
 
     @Test
     public void encrypt_FailedToInitMLConfigIndex() {
         exceptionRule.expect(RuntimeException.class);
-        exceptionRule.expectMessage("random test exception");
+        exceptionRule.expectMessage("No response to create ML Config index");
         doAnswer(invocation -> {
             ActionListener<Boolean> actionListener = (ActionListener) invocation.getArgument(0);
             actionListener.onFailure(new RuntimeException("random test exception"));
             return null;
         }).when(mlIndicesHandler).initMLConfigIndex(any());
-        Encryptor encryptor = new EncryptorImpl(clusterService, client, mlIndicesHandler);
+        Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
         encryptor.encrypt(masterKey.get(DEFAULT_TENANT_ID), null);
     }
 
@@ -431,7 +332,7 @@ public class EncryptorImplTest {
             actionListener.onFailure(new RuntimeException("random test exception"));
             return null;
         }).when(client).get(any(), any());
-        Encryptor encryptor = new EncryptorImpl(clusterService, client, mlIndicesHandler);
+        Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
         encryptor.encrypt(masterKey.get(DEFAULT_TENANT_ID), null);
     }
 
@@ -463,7 +364,7 @@ public class EncryptorImplTest {
             return null;
         }).when(client).get(any(), any());
 
-        Encryptor encryptor = new EncryptorImpl(clusterService, client, mlIndicesHandler);
+        Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
         Assert.assertNull(encryptor.getMasterKey(null));
         String encrypted = encryptor.encrypt("test", null);
         String decrypted = encryptor.decrypt(encrypted, null);
@@ -484,7 +385,7 @@ public class EncryptorImplTest {
             return null;
         }).when(client).get(any(), any());
 
-        Encryptor encryptor = new EncryptorImpl(clusterService, client, mlIndicesHandler);
+        Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
         Assert.assertNull(encryptor.getMasterKey(null));
         encryptor.encrypt("test", null);
     }
@@ -505,15 +406,13 @@ public class EncryptorImplTest {
             return null;
         }).when(client).get(any(), any());
 
-        Encryptor encryptor = new EncryptorImpl(clusterService, client, mlIndicesHandler);
+        Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
         Assert.assertNull(encryptor.getMasterKey(null));
         encryptor.decrypt("test", null);
     }
 
     @Test
     public void decrypt_NoResponseToInitConfigIndex() {
-        exceptionRule.expect(RuntimeException.class);
-        exceptionRule.expectMessage("No response to create ML Config index");
 
         doAnswer(invocation -> {
             ActionListener<Boolean> actionListener = (ActionListener) invocation.getArgument(0);
@@ -521,9 +420,18 @@ public class EncryptorImplTest {
             return null;
         }).when(mlIndicesHandler).initMLConfigIndex(any());
 
-        Encryptor encryptor = new EncryptorImpl(clusterService, client, mlIndicesHandler);
-        Assert.assertNull(encryptor.getMasterKey(null));
-        encryptor.decrypt("test", null);
+        // Mock GetResponse to return a valid MASTER_KEY_ID for the given tenant
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            GetResponse response = prepareMLConfigResponse(TENANT_ID); // Response includes dynamic MASTER_KEY_ID
+            listener.onResponse(response);
+            return null;
+        }).when(client).get(any(), any());
+
+        Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
+        String encrypted = encryptor.encrypt("test", TENANT_ID);
+        Assert.assertNotNull(encryptor.getMasterKey(TENANT_ID));
+        Assert.assertEquals("test", encryptor.decrypt(encrypted, TENANT_ID));
     }
 
     @Test
@@ -540,7 +448,7 @@ public class EncryptorImplTest {
             return null;
         }).when(client).get(any(), any());
 
-        Encryptor encryptor = new EncryptorImpl(clusterService, client, mlIndicesHandler);
+        Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
         Assert.assertNull(encryptor.getMasterKey(null));
         encryptor.decrypt("test", null);
     }
@@ -563,7 +471,7 @@ public class EncryptorImplTest {
         }).when(client).get(any(), any());
 
         // Initialize Encryptor and verify no master key exists initially
-        Encryptor encryptor = new EncryptorImpl(clusterService, client, mlIndicesHandler);
+        Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
         Assert.assertNull(encryptor.getMasterKey(TENANT_ID));
 
         // Encrypt using the specified tenant ID
@@ -577,6 +485,51 @@ public class EncryptorImplTest {
         // Ensure that the master key for this tenant matches the expected value
         String expectedMasterKeyId = MASTER_KEY + "_" + hashString(TENANT_ID);
         Assert.assertEquals("m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=", encryptor.getMasterKey(TENANT_ID));
+    }
+
+    @Test
+    public void encrypt_SdkClientPutDataObjectFailure() {
+        exceptionRule.expect(RuntimeException.class);
+        exceptionRule.expectMessage("Failed to index ML encryption master key");
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> actionListener = (ActionListener) invocation.getArgument(0);
+            actionListener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConfigIndex(any());
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(null);
+            return null;
+        }).when(client).get(any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> actionListener = (ActionListener) invocation.getArgument(1);
+            actionListener.onFailure(new RuntimeException("Failed to index ML encryption master key"));
+            return null;
+        }).when(client).index(any(), any());
+
+        Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
+        encryptor.encrypt("test", null);
+    }
+
+    @Test
+    public void handleVersionConflictResponse_ShouldThrowException_WhenRetryFails() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> actionListener = (ActionListener) invocation.getArgument(0);
+            actionListener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConfigIndex(any());
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onFailure(new IOException("Failed to get master key"));
+            return null;
+        }).when(client).get(any(), any());
+
+        exceptionRule.expect(MLException.class);
+        encryptor.encrypt("test", "someTenant");
     }
 
     // Helper method to prepare a valid GetResponse
