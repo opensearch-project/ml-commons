@@ -27,7 +27,6 @@ import org.mockito.junit.MockitoJUnitRunner;
 import org.opensearch.Version;
 import org.opensearch.action.FailedNodeException;
 import org.opensearch.action.support.ActionFilters;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.ClusterName;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
@@ -44,6 +43,7 @@ import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
 
 @RunWith(MockitoJUnitRunner.class)
 public class UpdateModelCacheTransportActionTests {

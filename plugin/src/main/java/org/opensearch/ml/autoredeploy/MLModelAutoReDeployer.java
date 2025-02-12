@@ -21,8 +21,6 @@ import java.util.stream.Collectors;
 import org.opensearch.action.search.SearchAction;
 import org.opensearch.action.search.SearchRequestBuilder;
 import org.opensearch.action.search.SearchResponse;
-import org.opensearch.client.Client;
-import org.opensearch.client.OpenSearchClient;
 import org.opensearch.cluster.block.ClusterBlockException;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
@@ -46,6 +44,8 @@ import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.search.sort.FieldSortBuilder;
 import org.opensearch.search.sort.SortBuilders;
 import org.opensearch.search.sort.SortOrder;
+import org.opensearch.transport.client.Client;
+import org.opensearch.transport.client.OpenSearchClient;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableMap;

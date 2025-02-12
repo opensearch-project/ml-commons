@@ -19,7 +19,6 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.GroupedActionListener;
-import org.opensearch.client.Client;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -35,6 +34,7 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.script.ScriptService;
 import org.opensearch.script.TemplateScript;
+import org.opensearch.transport.client.Client;
 
 import com.jayway.jsonpath.JsonPath;
 

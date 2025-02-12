@@ -44,8 +44,6 @@ import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
-import org.opensearch.client.Client;
-import org.opensearch.client.Requests;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentType;
@@ -63,6 +61,8 @@ import org.opensearch.ml.common.conversation.ConversationMeta;
 import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.sort.SortOrder;
+import org.opensearch.transport.client.Client;
+import org.opensearch.transport.client.Requests;
 
 import lombok.AllArgsConstructor;
 import lombok.extern.log4j.Log4j2;
