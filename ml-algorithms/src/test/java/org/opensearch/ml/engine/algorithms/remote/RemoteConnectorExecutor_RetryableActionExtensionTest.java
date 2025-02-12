@@ -3,6 +3,8 @@ package org.opensearch.ml.engine.algorithms.remote;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.Map;
@@ -30,7 +32,7 @@ import org.opensearch.threadpool.ThreadPool;
 @RunWith(MockitoJUnitRunner.class)
 public class RemoteConnectorExecutor_RetryableActionExtensionTest {
 
-    private static final int TEST_ATTEMPT_LIMIT = 10;
+    private static final int TEST_ATTEMPT_LIMIT = 5;
 
     @Mock
     Logger logger;
@@ -84,14 +86,16 @@ public class RemoteConnectorExecutor_RetryableActionExtensionTest {
             .thenReturn(new RuntimeException()); // Stop retrying on 3rd exception
         var attempts = retryAttempts(-1, exceptions);
 
-        assertThat(attempts, equalTo(3));
+        assertThat(attempts, equalTo(2));
+        verify(exceptions, times(3)).get();
     }
 
     @Test
     public void test_ShouldRetry_stopAtMaxAttempts() {
-        var attempts = retryAttempts(3, this::createThrottleException);
+        int maxAttempts = 3;
+        var attempts = retryAttempts(maxAttempts, this::createThrottleException);
 
-        assertThat(attempts, equalTo(4));
+        assertThat(attempts, equalTo(maxAttempts));
     }
 
     private int retryAttempts(int maxAttempts, Supplier<Exception> exception) {
@@ -100,8 +104,7 @@ public class RemoteConnectorExecutor_RetryableActionExtensionTest {
         boolean shouldRetry;
         do {
             shouldRetry = retryableAction.shouldRetry(exception.get());
-            attempt++;
-        } while (attempt < TEST_ATTEMPT_LIMIT && shouldRetry);
+        } while (shouldRetry && ++attempt < TEST_ATTEMPT_LIMIT);
         return attempt;
     }
 
