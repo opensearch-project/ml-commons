@@ -17,11 +17,11 @@ import java.util.Map;
 import org.junit.Before;
 import org.mockito.Mock;
 import org.opensearch.OpenSearchParseException;
-import org.opensearch.client.Client;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ingest.Processor;
 import org.opensearch.script.ScriptService;
 import org.opensearch.test.OpenSearchTestCase;
+import org.opensearch.transport.client.Client;
 
 public class MLInferenceIngestProcessorFactoryTests extends OpenSearchTestCase {
     private MLInferenceIngestProcessor.Factory factory;

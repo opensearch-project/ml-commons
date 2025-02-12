@@ -5,9 +5,14 @@
 
 package org.opensearch.ml.utils;
 
+import java.util.List;
+
 import org.junit.Ignore;
-import org.opensearch.action.support.master.AcknowledgedResponse;
+import org.opensearch.action.support.clustermanager.AcknowledgedResponse;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.search.SearchModule;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
 import com.google.common.collect.ImmutableMap;
@@ -61,4 +66,32 @@ public class IndexUtilsTests extends OpenSearchIntegTestCase {
         indexUtils
             .getNumberOfDocumentsInIndex(indexName, ActionListener.wrap(r -> { assertEquals((Long) count, r); }, e -> { assertNull(e); }));
     }
+
+    public void testGetNumberOfDocumentsInIndex_SearchQuery() throws Exception {
+        String indexName = "test-2";
+        createIndex(indexName);
+        flush();
+
+        long count = 20;
+        for (int i = 0; i < count; i++) {
+            index(indexName, "_doc", i + "", ImmutableMap.of(randomAlphaOfLength(5), randomAlphaOfLength(5)));
+        }
+        flushAndRefresh(indexName);
+
+        NamedXContentRegistry xContentRegistry = new NamedXContentRegistry(new SearchModule(Settings.EMPTY, List.of()).getNamedXContents());
+
+        String searchQuery = "{}";
+        IndexUtils indexUtils = new IndexUtils(client(), clusterService());
+
+        indexUtils
+            .getNumberOfDocumentsInIndex(
+                indexName,
+                searchQuery,
+                xContentRegistry,
+                ActionListener.wrap(r -> { assertEquals((Long) count, r); }, e -> {
+                    assertNull(e);
+                })
+            );
+    }
+
 }

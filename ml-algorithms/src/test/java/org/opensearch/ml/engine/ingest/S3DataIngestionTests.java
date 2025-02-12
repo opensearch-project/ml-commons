@@ -14,8 +14,8 @@ import java.util.Map;
 import org.junit.Before;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.opensearch.client.Client;
 import org.opensearch.ml.common.transport.batch.MLBatchIngestionInput;
+import org.opensearch.transport.client.Client;
 
 import software.amazon.awssdk.services.s3.S3Client;
 

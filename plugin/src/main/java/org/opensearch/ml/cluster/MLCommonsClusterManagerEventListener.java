@@ -10,7 +10,6 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_SYNC_UP_JO
 
 import java.util.List;
 
-import org.opensearch.client.Client;
 import org.opensearch.cluster.LocalNodeClusterManagerListener;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.lifecycle.LifecycleListener;
@@ -24,6 +23,7 @@ import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.threadpool.Scheduler;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.client.Client;
 
 import lombok.extern.log4j.Log4j2;
 

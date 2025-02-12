@@ -11,7 +11,6 @@ import static org.mockito.Mockito.*;
 import java.util.*;
 
 import org.junit.Test;
-import org.opensearch.client.Client;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
@@ -20,6 +19,7 @@ import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalcul
 import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalculatorOutput;
 import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
+import org.opensearch.transport.client.Client;
 
 public class MLEngineClassLoaderTests {
 

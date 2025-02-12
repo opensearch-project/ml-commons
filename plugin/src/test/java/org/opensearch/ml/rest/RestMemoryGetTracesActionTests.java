@@ -15,7 +15,6 @@ import java.util.List;
 import java.util.Map;
 
 import org.mockito.ArgumentCaptor;
-import org.opensearch.client.node.NodeClient;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.conversation.ActionConstants;
 import org.opensearch.ml.memory.action.conversation.GetTracesAction;
@@ -25,6 +24,7 @@ import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
+import org.opensearch.transport.client.node.NodeClient;
 
 public class RestMemoryGetTracesActionTests extends OpenSearchTestCase {
 

@@ -113,7 +113,7 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
         searchRequest.source().query(QueryBuilders.boolQuery().mustNot(QueryBuilders.existsQuery(CHUNK_NUMBER)));
         MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(searchRequest, null);
         SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, mlSearchActionRequest).actionGet();
-        assertEquals(1, response.getHits().getTotalHits().value);
+        assertEquals(1, response.getHits().getTotalHits().value());
     }
 
     private void test_matchAll_search() {
@@ -125,7 +125,7 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
             .query(QueryBuilders.boolQuery().mustNot(QueryBuilders.existsQuery(CHUNK_NUMBER)).must(QueryBuilders.matchAllQuery()));
         MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(searchRequest, null);
         SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, mlSearchActionRequest).actionGet();
-        assertEquals(1, response.getHits().getTotalHits().value);
+        assertEquals(1, response.getHits().getTotalHits().value());
     }
 
     private void test_bool_search() {
@@ -146,7 +146,7 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
             );
         MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(searchRequest, null);
         SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, mlSearchActionRequest).actionGet();
-        assertEquals(1, response.getHits().getTotalHits().value);
+        assertEquals(1, response.getHits().getTotalHits().value());
     }
 
     private void test_term_search() {
@@ -160,7 +160,7 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
         searchRequest.source().query(boolQueryBuilder);
         MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(searchRequest, null);
         SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, mlSearchActionRequest).actionGet();
-        assertEquals(1, response.getHits().getTotalHits().value);
+        assertEquals(1, response.getHits().getTotalHits().value());
     }
 
     private void test_terms_search() {
@@ -174,7 +174,7 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
         searchRequest.source().query(boolQueryBuilder);
         MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(searchRequest, null);
         SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, mlSearchActionRequest).actionGet();
-        assertEquals(1, response.getHits().getTotalHits().value);
+        assertEquals(1, response.getHits().getTotalHits().value());
     }
 
     private void test_range_search() {
@@ -188,7 +188,7 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
         searchRequest.source().query(boolQueryBuilder);
         MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(searchRequest, null);
         SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, mlSearchActionRequest).actionGet();
-        assertEquals(1, response.getHits().getTotalHits().value);
+        assertEquals(1, response.getHits().getTotalHits().value());
     }
 
     private void test_matchPhrase_search() {
@@ -202,7 +202,7 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
         searchRequest.source().query(boolQueryBuilder);
         MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(searchRequest, null);
         SearchResponse response = client().execute(MLModelSearchAction.INSTANCE, mlSearchActionRequest).actionGet();
-        assertEquals(1, response.getHits().getTotalHits().value);
+        assertEquals(1, response.getHits().getTotalHits().value());
     }
 
     @Override

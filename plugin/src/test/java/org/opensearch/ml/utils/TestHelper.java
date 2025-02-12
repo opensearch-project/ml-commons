@@ -448,7 +448,7 @@ public class TestHelper {
             discoBuilder.add(node);
         }
         if (clusterManagerNode != null) {
-            discoBuilder.masterNodeId(clusterManagerNode.getId());
+            discoBuilder.clusterManagerNodeId(clusterManagerNode.getId());
         }
         discoBuilder.localNodeId(localNode.getId());
 

@@ -15,7 +15,6 @@ import java.util.stream.Collectors;
 
 import javax.naming.LimitExceededException;
 
-import org.opensearch.client.Client;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
@@ -26,6 +25,7 @@ import org.opensearch.ml.action.stats.MLStatsNodesRequest;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.stats.MLNodeLevelStat;
+import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableSet;
 

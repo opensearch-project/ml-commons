@@ -142,7 +142,7 @@ public class CustomModelITTests extends MLCommonsIntegTestCase {
             SearchResponse response = searchModelChunks(modelId.get());
             AtomicBoolean modelChunksReady = new AtomicBoolean(false);
             if (response != null) {
-                long totalHits = response.getHits().getTotalHits().value;
+                long totalHits = response.getHits().getTotalHits().value();
                 if (totalHits == 9) {
                     modelChunksReady.set(true);
                 }

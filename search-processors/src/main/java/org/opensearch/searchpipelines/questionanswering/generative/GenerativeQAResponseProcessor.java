@@ -30,7 +30,6 @@ import java.util.function.BooleanSupplier;
 
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
-import org.opensearch.client.Client;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.ingest.ConfigurationUtils;
@@ -50,6 +49,7 @@ import org.opensearch.searchpipelines.questionanswering.generative.llm.Llm;
 import org.opensearch.searchpipelines.questionanswering.generative.llm.LlmIOUtil;
 import org.opensearch.searchpipelines.questionanswering.generative.llm.ModelLocator;
 import org.opensearch.searchpipelines.questionanswering.generative.prompt.PromptUtil;
+import org.opensearch.transport.client.Client;
 
 import com.google.gson.JsonArray;
 

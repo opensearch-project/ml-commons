@@ -27,7 +27,6 @@ import org.junit.Before;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.LatchedActionListener;
 import org.opensearch.action.StepListener;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.CheckedConsumer;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -39,6 +38,7 @@ import org.opensearch.ml.common.conversation.ConversationMeta;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.memory.index.OpenSearchConversationalMemoryHandler;
 import org.opensearch.test.OpenSearchIntegTestCase;
+import org.opensearch.transport.client.Client;
 
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 

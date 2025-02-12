@@ -18,7 +18,6 @@ import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -51,6 +50,7 @@ import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.transport.client.Client;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -90,7 +90,7 @@ public class MLModelGroupManager {
                 validateUniqueModelGroupName(input.getName(), input.getTenantId(), ActionListener.wrap(modelGroups -> {
                     if (modelGroups != null
                         && modelGroups.getHits().getTotalHits() != null
-                        && modelGroups.getHits().getTotalHits().value != 0) {
+                        && modelGroups.getHits().getTotalHits().value() != 0) {
                         for (SearchHit documentFields : modelGroups.getHits()) {
                             String id = documentFields.getId();
                             wrappedListener

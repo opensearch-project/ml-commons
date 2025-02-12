@@ -20,7 +20,6 @@ import org.opensearch.action.ActionRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -53,6 +52,7 @@ import org.opensearch.search.SearchHit;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableList;
 
@@ -210,7 +210,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
                     ActionListener.wrap(modelGroups -> {
                         if (modelGroups != null
                             && modelGroups.getHits().getTotalHits() != null
-                            && modelGroups.getHits().getTotalHits().value != 0) {
+                            && modelGroups.getHits().getTotalHits().value() != 0) {
                             for (SearchHit documentFields : modelGroups.getHits()) {
                                 String id = documentFields.getId();
                                 listener

@@ -40,7 +40,6 @@ import org.opensearch.Version;
 import org.opensearch.action.search.MultiSearchResponse;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.IndicesOptions;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.ClusterName;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.metadata.IndexMetadata;
@@ -65,6 +64,7 @@ import org.opensearch.search.aggregations.Aggregations;
 import org.opensearch.search.aggregations.bucket.composite.CompositeAggregation;
 import org.opensearch.search.aggregations.bucket.filter.Filters;
 import org.opensearch.search.aggregations.metrics.NumericMetricsAggregation.SingleValue;
+import org.opensearch.transport.client.Client;
 
 public class AnomalyLocalizerImplTests {
 

@@ -27,7 +27,6 @@ import java.util.UUID;
 import java.util.stream.IntStream;
 
 import org.mockito.ArgumentCaptor;
-import org.opensearch.client.Client;
 import org.opensearch.common.action.ActionFuture;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.memory.action.conversation.CreateConversationAction;
@@ -39,6 +38,7 @@ import org.opensearch.ml.memory.action.conversation.GetInteractionsAction;
 import org.opensearch.ml.memory.action.conversation.GetInteractionsRequest;
 import org.opensearch.ml.memory.action.conversation.GetInteractionsResponse;
 import org.opensearch.test.OpenSearchTestCase;
+import org.opensearch.transport.client.Client;
 
 public class ConversationalMemoryClientTests extends OpenSearchTestCase {
 

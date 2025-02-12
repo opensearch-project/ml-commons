@@ -12,13 +12,13 @@ import java.util.List;
 
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
-import org.opensearch.client.Client;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.client.Client;
 
 public class AccessControllerTests extends OpenSearchTestCase {
     @Rule

@@ -48,7 +48,6 @@ import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.ShardSearchFailure;
-import org.opensearch.client.node.NodeClient;
 import org.opensearch.cluster.ClusterName;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.action.ActionListener;
@@ -147,6 +146,7 @@ import org.opensearch.search.aggregations.InternalAggregations;
 import org.opensearch.search.internal.InternalSearchResponse;
 import org.opensearch.search.profile.SearchProfileShardResults;
 import org.opensearch.search.suggest.Suggest;
+import org.opensearch.transport.client.node.NodeClient;
 
 public class MachineLearningNodeClientTest {
 
@@ -909,7 +909,7 @@ public class MachineLearningNodeClientTest {
 
         verify(client).execute(eq(MLTaskSearchAction.INSTANCE), isA(SearchRequest.class), any());
         verify(searchTaskActionListener).onResponse(argumentCaptor.capture());
-        assertEquals(1, argumentCaptor.getValue().getHits().getTotalHits().value);
+        assertEquals(1, argumentCaptor.getValue().getHits().getTotalHits().value());
         Map<String, Object> source = argumentCaptor.getValue().getHits().getAt(0).getSourceAsMap();
         assertEquals(taskId, source.get(MLTask.TASK_ID_FIELD));
         assertEquals(modelId, source.get(MLTask.MODEL_ID_FIELD));
