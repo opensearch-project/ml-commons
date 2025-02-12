@@ -14,7 +14,7 @@ import org.apache.hc.core5.http.ParseException;
 import org.hamcrest.MatcherAssert;
 import org.junit.After;
 import org.junit.Before;
-import org.opensearch.transport.client.ResponseException;
+import org.opensearch.client.ResponseException;
 
 public class RestConnectorToolIT extends RestBaseAgentToolsIT {
     private static final String AWS_ACCESS_KEY_ID = System.getenv("AWS_ACCESS_KEY_ID");

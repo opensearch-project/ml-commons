@@ -17,7 +17,7 @@ import org.apache.hc.core5.http.ParseException;
 import org.hamcrest.MatcherAssert;
 import org.junit.After;
 import org.junit.Before;
-import org.opensearch.transport.client.ResponseException;
+import org.opensearch.client.ResponseException;
 
 public class RestSearchIndexToolIT extends RestBaseAgentToolsIT {
     public static String TEST_INDEX_NAME = "test_index";

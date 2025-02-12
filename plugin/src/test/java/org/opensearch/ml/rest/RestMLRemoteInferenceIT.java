@@ -19,10 +19,10 @@ import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.client.Response;
+import org.opensearch.client.ResponseException;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.utils.TestHelper;
-import org.opensearch.transport.client.Response;
-import org.opensearch.transport.client.ResponseException;
 
 import com.google.common.collect.ImmutableList;
 
@@ -299,7 +299,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
 
     public void testPredictRemoteModelWithWrongInputInterface() throws IOException, InterruptedException {
         testPredictRemoteModelWithInterface("wrongInputInterface", null, (exception) -> {
-            assertTrue(exception instanceof org.opensearch.transport.client.ResponseException);
+            assertTrue(exception instanceof org.opensearch.client.ResponseException);
             String stackTrace = ExceptionUtils.getStackTrace(exception);
             assertTrue(stackTrace.contains("Error validating input schema"));
         });
@@ -307,7 +307,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
 
     public void testPredictRemoteModelWithWrongOutputInterface() throws IOException, InterruptedException {
         testPredictRemoteModelWithInterface("wrongOutputInterface", null, (exception) -> {
-            assertTrue(exception instanceof org.opensearch.transport.client.ResponseException);
+            assertTrue(exception instanceof org.opensearch.client.ResponseException);
             String stackTrace = ExceptionUtils.getStackTrace(exception);
             assertTrue(stackTrace.contains("Error validating output schema"));
         });
