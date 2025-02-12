@@ -6,7 +6,6 @@
 package org.opensearch.ml.action.agents;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 
@@ -107,14 +106,24 @@ public class TransportSearchAgentActionTests extends OpenSearchTestCase {
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
         SearchRequest request = new SearchRequest("my_index").source(sourceBuilder);
         MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(request, null);
+        // Capture the actual SearchRequest passed to client.search()
+        ArgumentCaptor<SearchRequest> requestCaptor = ArgumentCaptor.forClass(SearchRequest.class);
         doAnswer(invocation -> {
             ActionListener<SearchResponse> listener = invocation.getArgument(1);
             listener.onResponse(searchResponse);
             return null;
-        }).when(client).search(eq(mlSearchActionRequest), any());
+        }).when(client).search(requestCaptor.capture(), any());
 
         transportSearchAgentAction.doExecute(null, mlSearchActionRequest, actionListener);
-        verify(client, times(1)).search(eq(mlSearchActionRequest), any());
+        verify(client, times(1)).search(any(), any());
+
+        // Get the actual SearchRequest used in the method
+        SearchRequest actualRequest = requestCaptor.getValue();
+
+        // Validate that the query has been modified as expected
+        assertNotNull(actualRequest.source().query());
+        assertTrue(actualRequest.source().query().toString().contains("is_hidden"));
+
         // Use ArgumentCaptor to capture the SearchResponse
         ArgumentCaptor<SearchResponse> responseCaptor = ArgumentCaptor.forClass(SearchResponse.class);
         // Capture the response passed to actionListener.onResponse
@@ -124,29 +133,44 @@ public class TransportSearchAgentActionTests extends OpenSearchTestCase {
         assertEquals(searchResponse.getHits().getTotalHits(), capturedResponse.getHits().getTotalHits());
         assertEquals(searchResponse.getHits().getHits().length, capturedResponse.getHits().getHits().length);
         assertEquals(searchResponse.status(), capturedResponse.status());
-
     }
 
     @Test
     public void testDoExecuteWithNonEmptyQuery() {
+        // Create a search request with a MatchAllQuery
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
-        sourceBuilder.query(QueryBuilders.matchAllQuery());
+        sourceBuilder.query(QueryBuilders.matchAllQuery()); // Non-empty query
         SearchRequest request = new SearchRequest("my_index").source(sourceBuilder);
         MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(request, null);
 
+        // Capture the actual SearchRequest passed to client.search()
+        ArgumentCaptor<SearchRequest> requestCaptor = ArgumentCaptor.forClass(SearchRequest.class);
         doAnswer(invocation -> {
             ActionListener<SearchResponse> listener = invocation.getArgument(1);
             listener.onResponse(searchResponse);
             return null;
-        }).when(client).search(eq(mlSearchActionRequest), any());
+        }).when(client).search(requestCaptor.capture(), any());
 
+        // Execute the method
         transportSearchAgentAction.doExecute(null, mlSearchActionRequest, actionListener);
 
-        verify(client, times(1)).search(eq(mlSearchActionRequest), any());
-        // Use ArgumentCaptor to capture the SearchResponse
+        // Verify that client.search was called once
+        verify(client, times(1)).search(any(), any());
+
+        // Get the actual SearchRequest used in the method
+        SearchRequest actualRequest = requestCaptor.getValue();
+
+        // Validate that the original MatchAllQuery is included
+        assertNotNull(actualRequest.source().query());
+        assertTrue(actualRequest.source().query().toString().contains("match_all"));
+
+        // Validate that "is_hidden" filtering logic is applied
+        assertTrue(actualRequest.source().query().toString().contains("is_hidden"));
+
+        // Capture and validate the SearchResponse
         ArgumentCaptor<SearchResponse> responseCaptor = ArgumentCaptor.forClass(SearchResponse.class);
-        // Capture the response passed to actionListener.onResponse
         verify(actionListener, times(1)).onResponse(responseCaptor.capture());
+
         // Assert that the captured response matches the expected values
         SearchResponse capturedResponse = responseCaptor.getValue();
         assertEquals(searchResponse.getHits().getTotalHits(), capturedResponse.getHits().getTotalHits());
@@ -158,16 +182,34 @@ public class TransportSearchAgentActionTests extends OpenSearchTestCase {
     public void testDoExecuteOnFailure() {
         SearchRequest request = new SearchRequest("my_index");
         MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(request, null);
+
+        // Capture the actual SearchRequest passed to client.search()
+        ArgumentCaptor<SearchRequest> requestCaptor = ArgumentCaptor.forClass(SearchRequest.class);
         doAnswer(invocation -> {
             ActionListener<SearchResponse> listener = invocation.getArgument(1);
             listener.onFailure(new Exception("test exception"));
             return null;
-        }).when(client).search(eq(mlSearchActionRequest), any());
+        }).when(client).search(requestCaptor.capture(), any());
 
+        // Execute the method
         transportSearchAgentAction.doExecute(null, mlSearchActionRequest, actionListener);
 
-        verify(client, times(1)).search(eq(mlSearchActionRequest), any());
-        verify(actionListener, times(1)).onFailure(any(Exception.class));
+        // Verify that client.search was called once
+        verify(client, times(1)).search(any(), any());
+
+        // Get the actual SearchRequest used in the method
+        SearchRequest actualRequest = requestCaptor.getValue();
+        assertNotNull(actualRequest.source());
+
+        // Validate that "is_hidden" filtering logic is applied
+        assertTrue(actualRequest.source().query().toString().contains("is_hidden"));
+
+        // Verify that actionListener.onFailure was called with an exception
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
+
+        // Assert that the captured exception has the expected message
+        assertEquals("Fail to search agent", exceptionCaptor.getValue().getMessage());
     }
 
     @Test
@@ -176,15 +218,17 @@ public class TransportSearchAgentActionTests extends OpenSearchTestCase {
         sourceBuilder.query(QueryBuilders.termQuery("field", "value")); // Simulate user query
         SearchRequest request = new SearchRequest("my_index").source(sourceBuilder);
         MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(request, null);
+        // Capture the actual SearchRequest passed to client.search()
+        ArgumentCaptor<SearchRequest> requestCaptor = ArgumentCaptor.forClass(SearchRequest.class);
         doAnswer(invocation -> {
             ActionListener<SearchResponse> listener = invocation.getArgument(1);
             listener.onResponse(searchResponse);
             return null;
-        }).when(client).search(eq(mlSearchActionRequest), any());
+        }).when(client).search(requestCaptor.capture(), any());
 
         transportSearchAgentAction.doExecute(null, mlSearchActionRequest, actionListener);
 
-        verify(client, times(1)).search(eq(mlSearchActionRequest), any());
+        verify(client, times(1)).search(any(), any());
         // Use ArgumentCaptor to capture the SearchResponse
         ArgumentCaptor<SearchResponse> responseCaptor = ArgumentCaptor.forClass(SearchResponse.class);
         // Capture the response passed to actionListener.onResponse
@@ -202,11 +246,13 @@ public class TransportSearchAgentActionTests extends OpenSearchTestCase {
         sourceBuilder.query(QueryBuilders.termQuery("field", "value")); // Simulate user query
         SearchRequest request = new SearchRequest("my_index").source(sourceBuilder);
         MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(request, null);
+        // Capture the actual SearchRequest passed to client.search()
+        ArgumentCaptor<SearchRequest> requestCaptor = ArgumentCaptor.forClass(SearchRequest.class);
         doAnswer(invocation -> {
             ActionListener<SearchResponse> listener = invocation.getArgument(1);
             listener.onFailure(new Exception("failed to search the agent index"));
             return null;
-        }).when(client).search(eq(mlSearchActionRequest), any());
+        }).when(client).search(requestCaptor.capture(), any());
 
         transportSearchAgentAction.doExecute(null, mlSearchActionRequest, actionListener);
 
