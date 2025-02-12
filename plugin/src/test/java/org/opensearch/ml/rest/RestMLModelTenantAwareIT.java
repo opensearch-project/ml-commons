@@ -226,10 +226,8 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
             assertOK(restResponse);
             SearchResponse searchResponse = searchResponseFromResponse(restResponse);
             if (multiTenancyEnabled) {
-                /*- TODO Currently failing because MLSearchHandler is still using client.search()
                 assertEquals(1, searchResponse.getHits().getTotalHits().value);
                 assertEquals(tenantId, searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID_FIELD));
-                */
             } else {
                 assertEquals(3, searchResponse.getHits().getTotalHits().value);
                 assertNull(searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID_FIELD));
@@ -243,10 +241,8 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
             assertOK(restResponse);
             SearchResponse searchResponse = searchResponseFromResponse(restResponse);
             if (multiTenancyEnabled) {
-                /*- TODO Currently failing because MLSearchHandler is still using client.search()
                 assertEquals(1, searchResponse.getHits().getTotalHits().value);
                 assertEquals(otherTenantId, searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID_FIELD));
-                */
             } else {
                 assertEquals(3, searchResponse.getHits().getTotalHits().value);
                 assertNull(searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID_FIELD));
