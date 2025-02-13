@@ -1,6 +1,18 @@
 package org.opensearch.ml.engine.tools;
 
-import com.google.common.collect.ImmutableMap;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -17,10 +29,6 @@ import org.opensearch.action.admin.indices.stats.CommonStats;
 import org.opensearch.action.admin.indices.stats.IndexStats;
 import org.opensearch.action.admin.indices.stats.IndicesStatsRequest;
 import org.opensearch.action.admin.indices.stats.IndicesStatsResponse;
-import org.opensearch.client.AdminClient;
-import org.opensearch.client.Client;
-import org.opensearch.client.ClusterAdminClient;
-import org.opensearch.client.IndicesAdminClient;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.health.ClusterIndexHealth;
 import org.opensearch.cluster.metadata.IndexMetadata;
@@ -36,19 +44,12 @@ import org.opensearch.core.index.Index;
 import org.opensearch.index.shard.DocsStats;
 import org.opensearch.index.store.StoreStats;
 import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.transport.client.AdminClient;
+import org.opensearch.transport.client.Client;
+import org.opensearch.transport.client.ClusterAdminClient;
+import org.opensearch.transport.client.IndicesAdminClient;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.isA;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import com.google.common.collect.ImmutableMap;
 
 public class ListIndexToolTests {
     @Mock
@@ -72,7 +73,6 @@ public class ListIndexToolTests {
     @Mock
     private Index index;
 
-
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
@@ -94,7 +94,6 @@ public class ListIndexToolTests {
 
         ListIndexTool.Factory.getInstance().init(client, clusterService);
     }
-
 
     @Test
     public void test_getType() {
@@ -144,7 +143,7 @@ public class ListIndexToolTests {
             when(primaryStats.getStore()).thenReturn(primaryStoreStats);
             // end mock primary stats
 
-            //mock total stats
+            // mock total stats
             CommonStats totalStats = mock(CommonStats.class);
             DocsStats totalDocsStats = mock(DocsStats.class);
             when(totalDocsStats.getCount()).thenReturn(100L);
@@ -152,7 +151,7 @@ public class ListIndexToolTests {
             StoreStats totalStoreStats = mock(StoreStats.class);
             when(totalStoreStats.size()).thenReturn(ByteSizeValue.parseBytesSizeValue("100k", "mock_setting_name"));
             when(totalStats.getStore()).thenReturn(totalStoreStats);
-            //end mock common stats
+            // end mock common stats
 
             when(indexStats.getPrimaries()).thenReturn(primaryStats);
             when(indexStats.getTotal()).thenReturn(totalStats);
@@ -210,7 +209,6 @@ public class ListIndexToolTests {
         assert (captor.getValue().getMessage().contains("failed to get settings"));
     }
 
-
     @Test
     public void test_validate() {
         Tool tool = ListIndexTool.Factory.getInstance().create(Collections.emptyMap());
@@ -221,7 +219,11 @@ public class ListIndexToolTests {
     public void test_getDefaultDescription() {
         Tool.Factory<ListIndexTool> factory = ListIndexTool.Factory.getInstance();
         System.out.println(factory.getDefaultDescription());
-        assert (factory.getDefaultDescription().equals("This tool gets index information from the OpenSearch cluster. It takes 2 optional arguments named `index` which is a comma-delimited list of one or more indices to get information from (default is an empty list meaning all indices), and `local` which means whether to return information from the local node only instead of the cluster manager node (default is false). The tool returns the indices information, including `health`, `status`, `index`, `uuid`, `pri`, `rep`, `docs.count`, `docs.deleted`, `store.size`, `pri.store. size `, `pri.store.size`, `pri.store`."));
+        assert (factory
+            .getDefaultDescription()
+            .equals(
+                "This tool gets index information from the OpenSearch cluster. It takes 2 optional arguments named `index` which is a comma-delimited list of one or more indices to get information from (default is an empty list meaning all indices), and `local` which means whether to return information from the local node only instead of the cluster manager node (default is false). The tool returns the indices information, including `health`, `status`, `index`, `uuid`, `pri`, `rep`, `docs.count`, `docs.deleted`, `store.size`, `pri.store. size `, `pri.store.size`, `pri.store`."
+            ));
     }
 
     @Test
