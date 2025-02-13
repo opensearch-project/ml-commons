@@ -22,19 +22,19 @@ import java.util.Set;
 import java.util.concurrent.Semaphore;
 import java.util.stream.Collectors;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.DocWriteRequest;
-import org.opensearch.action.bulk.BulkRequest;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.index.IndexRequest;
-import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.WriteRequest;
-import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.TermsQueryBuilder;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
@@ -48,7 +48,11 @@ import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsRequest;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
+import org.opensearch.remote.metadata.client.BulkDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
+import org.opensearch.remote.metadata.client.UpdateDataObjectRequest;
+import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.transport.client.Client;
@@ -278,7 +282,6 @@ public class MLSyncUpCron implements Runnable {
             return;
         }
         try {
-            SearchRequest searchRequest = new SearchRequest(ML_MODEL_INDEX);
             BoolQueryBuilder queryBuilder = new BoolQueryBuilder();
             queryBuilder
                 .filter(
@@ -303,6 +306,7 @@ public class MLSyncUpCron implements Runnable {
             sourceBuilder
                 .fetchSource(
                     new String[] {
+                        CommonValue.TENANT_ID_FIELD,
                         MLModel.MODEL_STATE_FIELD,
                         MLModel.ALGORITHM_FIELD,
                         MLModel.DEPLOY_TO_ALL_NODES_FIELD,
@@ -312,61 +316,76 @@ public class MLSyncUpCron implements Runnable {
                         MLModel.CURRENT_WORKER_NODE_COUNT_FIELD },
                     null
                 );
-            searchRequest.source(sourceBuilder);
-            client.search(searchRequest, ActionListener.wrap(res -> {
-                SearchHit[] hits = res.getHits().getHits();
-                Map<String, MLModelState> newModelStates = new HashMap<>();
-                Map<String, List<String>> newPlanningWorkerNodes = new HashMap<>();
-                for (SearchHit hit : hits) {
-                    String modelId = hit.getId();
-                    Map<String, Object> sourceAsMap = hit.getSourceAsMap();
-                    FunctionName functionName = FunctionName.from((String) sourceAsMap.get(MLModel.ALGORITHM_FIELD));
-                    MLModelState state = MLModelState.from((String) sourceAsMap.get(MLModel.MODEL_STATE_FIELD));
-                    Long lastUpdateTime = sourceAsMap.containsKey(MLModel.LAST_UPDATED_TIME_FIELD)
-                        ? (Long) sourceAsMap.get(MLModel.LAST_UPDATED_TIME_FIELD)
-                        : null;
-                    int planningWorkerNodeCount = sourceAsMap.containsKey(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD)
-                        ? (int) sourceAsMap.get(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD)
-                        : 0;
-                    int currentWorkerNodeCountInIndex = sourceAsMap.containsKey(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD)
-                        ? (int) sourceAsMap.get(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD)
-                        : 0;
-                    boolean deployToAllNodes = sourceAsMap.containsKey(MLModel.DEPLOY_TO_ALL_NODES_FIELD)
-                        ? (boolean) sourceAsMap.get(MLModel.DEPLOY_TO_ALL_NODES_FIELD)
-                        : false;
-                    List<String> planningWorkNodes = sourceAsMap.containsKey(MLModel.PLANNING_WORKER_NODES_FIELD)
-                        ? (List<String>) sourceAsMap.get(MLModel.PLANNING_WORKER_NODES_FIELD)
-                        : new ArrayList<>();
-                    if (deployToAllNodes) {
-                        DiscoveryNode[] eligibleNodes = nodeHelper.getEligibleNodes(functionName);
-                        planningWorkerNodeCount = eligibleNodes.length;
-                        List<String> eligibleNodeIds = Arrays
-                            .asList(eligibleNodes)
-                            .stream()
-                            .map(n -> n.getId())
-                            .collect(Collectors.toList());
-                        if (eligibleNodeIds.size() != planningWorkNodes.size() || !eligibleNodeIds.containsAll(planningWorkNodes)) {
-                            newPlanningWorkerNodes.put(modelId, eligibleNodeIds);
+            SearchDataObjectRequest searchRequest = SearchDataObjectRequest
+                .builder()
+                .indices(ML_MODEL_INDEX)
+                .searchSourceBuilder(sourceBuilder)
+                .build();
+            sdkClient.searchDataObjectAsync(searchRequest).whenComplete((r, throwable) -> {
+                if (throwable == null) {
+                    try {
+                        SearchResponse res = SearchResponse.fromXContent(r.parser());
+                        SearchHit[] hits = res.getHits().getHits();
+                        Map<String, String> tenantIds = new HashMap<>();
+                        Map<String, MLModelState> newModelStates = new HashMap<>();
+                        Map<String, List<String>> newPlanningWorkerNodes = new HashMap<>();
+                        for (SearchHit hit : hits) {
+                            String modelId = hit.getId();
+                            Map<String, Object> sourceAsMap = hit.getSourceAsMap();
+                            if (sourceAsMap.containsKey(CommonValue.TENANT_ID_FIELD)) {
+                                tenantIds.put(modelId, (String) sourceAsMap.get(CommonValue.TENANT_ID_FIELD));
+                            }
+                            FunctionName functionName = FunctionName.from((String) sourceAsMap.get(MLModel.ALGORITHM_FIELD));
+                            MLModelState state = MLModelState.from((String) sourceAsMap.get(MLModel.MODEL_STATE_FIELD));
+                            Long lastUpdateTime = sourceAsMap.containsKey(MLModel.LAST_UPDATED_TIME_FIELD)
+                                ? (Long) sourceAsMap.get(MLModel.LAST_UPDATED_TIME_FIELD)
+                                : null;
+                            int planningWorkerNodeCount = sourceAsMap.containsKey(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD)
+                                ? (int) sourceAsMap.get(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD)
+                                : 0;
+                            int currentWorkerNodeCountInIndex = sourceAsMap.containsKey(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD)
+                                ? (int) sourceAsMap.get(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD)
+                                : 0;
+                            boolean deployToAllNodes = sourceAsMap.containsKey(MLModel.DEPLOY_TO_ALL_NODES_FIELD)
+                                && (boolean) sourceAsMap.get(MLModel.DEPLOY_TO_ALL_NODES_FIELD);
+                            List<String> planningWorkNodes = sourceAsMap.containsKey(MLModel.PLANNING_WORKER_NODES_FIELD)
+                                ? (List<String>) sourceAsMap.get(MLModel.PLANNING_WORKER_NODES_FIELD)
+                                : new ArrayList<>();
+                            if (deployToAllNodes) {
+                                DiscoveryNode[] eligibleNodes = nodeHelper.getEligibleNodes(functionName);
+                                planningWorkerNodeCount = eligibleNodes.length;
+                                List<String> eligibleNodeIds = Arrays
+                                    .stream(eligibleNodes)
+                                    .map(DiscoveryNode::getId)
+                                    .collect(Collectors.toList());
+                                if (eligibleNodeIds.size() != planningWorkNodes.size() || !eligibleNodeIds.containsAll(planningWorkNodes)) {
+                                    newPlanningWorkerNodes.put(modelId, eligibleNodeIds);
+                                }
+                            }
+                            MLModelState mlModelState = getNewModelState(
+                                deployingModels,
+                                modelWorkerNodes,
+                                modelId,
+                                state,
+                                lastUpdateTime,
+                                planningWorkerNodeCount,
+                                currentWorkerNodeCountInIndex
+                            );
+                            if (mlModelState != null) {
+                                newModelStates.put(modelId, mlModelState);
+                            }
                         }
+                        bulkUpdateModelState(modelWorkerNodes, newModelStates, newPlanningWorkerNodes, tenantIds);
+                    } catch (Exception e) {
+                        log.error("Failed to parse model search response", e);
+                        updateModelStateSemaphore.release();
                     }
-                    MLModelState mlModelState = getNewModelState(
-                        deployingModels,
-                        modelWorkerNodes,
-                        modelId,
-                        state,
-                        lastUpdateTime,
-                        planningWorkerNodeCount,
-                        currentWorkerNodeCountInIndex
-                    );
-                    if (mlModelState != null) {
-                        newModelStates.put(modelId, mlModelState);
-                    }
+                } else {
+                    Exception e = SdkClientUtils.unwrapAndConvertToException(throwable, OpenSearchStatusException.class);
+                    updateModelStateSemaphore.release();
+                    log.error("Failed to search models", e);
                 }
-                bulkUpdateModelState(modelWorkerNodes, newModelStates, newPlanningWorkerNodes);
-            }, e -> {
-                updateModelStateSemaphore.release();
-                log.error("Failed to search models", e);
-            }));
+            });
         } catch (Exception e) {
             updateModelStateSemaphore.release();
             log.error("Failed to refresh model state", e);
@@ -425,41 +444,48 @@ public class MLSyncUpCron implements Runnable {
     private void bulkUpdateModelState(
         Map<String, Set<String>> modelWorkerNodes,
         Map<String, MLModelState> newModelStates,
-        Map<String, List<String>> newPlanningWorkNodes
+        Map<String, List<String>> newPlanningWorkNodes,
+        Map<String, String> tenantIds
     ) {
         Set<String> updatedModelIds = new HashSet<>();
         updatedModelIds.addAll(newModelStates.keySet());
         updatedModelIds.addAll(newPlanningWorkNodes.keySet());
 
         if (!updatedModelIds.isEmpty()) {
-            BulkRequest bulkUpdateRequest = new BulkRequest();
+            BulkDataObjectRequest bulkUpdateRequest = BulkDataObjectRequest.builder().globalIndex(ML_MODEL_INDEX).build();
             for (String modelId : updatedModelIds) {
-                UpdateRequest updateRequest = new UpdateRequest();
                 Instant now = Instant.now();
-                ImmutableMap.Builder<String, Object> builder = ImmutableMap.builder();
+                Map<String, Object> updateDocument = new HashMap<>();
                 if (newModelStates.containsKey(modelId)) {
-                    builder.put(MLModel.MODEL_STATE_FIELD, newModelStates.get(modelId).name());
+                    updateDocument.put(MLModel.MODEL_STATE_FIELD, newModelStates.get(modelId).name());
                 }
                 if (newPlanningWorkNodes.containsKey(modelId)) {
-                    builder.put(MLModel.PLANNING_WORKER_NODES_FIELD, newPlanningWorkNodes.get(modelId));
-                    builder.put(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD, newPlanningWorkNodes.get(modelId).size());
+                    updateDocument.put(MLModel.PLANNING_WORKER_NODES_FIELD, newPlanningWorkNodes.get(modelId));
+                    updateDocument.put(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD, newPlanningWorkNodes.get(modelId).size());
                 }
-                builder.put(MLModel.LAST_UPDATED_TIME_FIELD, now.toEpochMilli());
+                updateDocument.put(MLModel.LAST_UPDATED_TIME_FIELD, now.toEpochMilli());
                 Set<String> workerNodes = modelWorkerNodes.get(modelId);
                 int currentWorkNodeCount = workerNodes == null ? 0 : workerNodes.size();
-                builder.put(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD, currentWorkNodeCount);
-                updateRequest.index(ML_MODEL_INDEX).id(modelId).doc(builder.build());
+                updateDocument.put(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD, currentWorkNodeCount);
+                UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
+                    .builder()
+                    .tenantId(tenantIds.get(modelId))
+                    .id(modelId)
+                    .dataObject(updateDocument)
+                    .build();
                 bulkUpdateRequest.add(updateRequest);
             }
             bulkUpdateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
             log.info("Refresh model state: {}", newModelStates);
-            client.bulk(bulkUpdateRequest, ActionListener.wrap(br -> {
+            sdkClient.bulkDataObjectAsync(bulkUpdateRequest).whenComplete((r, throwable) -> {
                 updateModelStateSemaphore.release();
-                log.debug("Refresh model state successfully");
-            }, e -> {
-                updateModelStateSemaphore.release();
-                log.error("Failed to bulk update model state", e);
-            }));
+                if (throwable != null) {
+                    Exception e = SdkClientUtils.unwrapAndConvertToException(throwable, OpenSearchStatusException.class);
+                    log.error("Failed to bulk update model state", e);
+                } else {
+                    log.debug("Refresh model state successfully");
+                }
+            });
         } else {
             updateModelStateSemaphore.release();
         }
