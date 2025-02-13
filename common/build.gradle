@@ -20,7 +20,7 @@ dependencies {
     testImplementation group: 'junit', name: 'junit', version: '4.13.2'
     compileOnly "org.opensearch.client:opensearch-rest-client:${opensearch_version}"
     compileOnly "org.opensearch:common-utils:${common_utils_version}"
-    testImplementation group: 'org.mockito', name: 'mockito-core', version: '5.7.0'
+    testImplementation group: 'org.mockito', name: 'mockito-core', version: '5.15.2'
     testImplementation "org.opensearch.test:framework:${opensearch_version}"
 
     compileOnly group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
