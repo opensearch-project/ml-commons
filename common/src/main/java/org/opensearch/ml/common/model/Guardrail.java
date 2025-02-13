@@ -8,10 +8,10 @@ package org.opensearch.ml.common.model;
 import java.io.IOException;
 import java.util.Map;
 
-import org.opensearch.client.Client;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContentObject;
+import org.opensearch.transport.client.Client;
 
 public abstract class Guardrail implements ToXContentObject {
 

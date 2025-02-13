@@ -17,7 +17,7 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative.llm;
 
-import org.opensearch.client.Client;
+import org.opensearch.transport.client.Client;
 
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;

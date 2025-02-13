@@ -27,7 +27,6 @@ import java.util.stream.Collectors;
 import org.opensearch.action.LatchedActionListener;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
-import org.opensearch.client.Client;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentType;
@@ -38,6 +37,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.transport.client.Client;
 
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -235,7 +235,7 @@ public class LocalRegexGuardrail extends Guardrail {
                 context = client.threadPool().getThreadContext().stashContext();
                 ThreadContext.StoredContext finalContext = context;
                 client.search(searchRequest, ActionListener.runBefore(new LatchedActionListener(ActionListener.<SearchResponse>wrap(r -> {
-                    if (r == null || r.getHits() == null || r.getHits().getTotalHits() == null || r.getHits().getTotalHits().value == 0) {
+                    if (r == null || r.getHits() == null || r.getHits().getTotalHits() == null || r.getHits().getTotalHits().value() == 0) {
                         hitStopWords.set(true);
                     }
                 }, e -> {
@@ -244,7 +244,7 @@ public class LocalRegexGuardrail extends Guardrail {
                 }), latch), () -> finalContext.restore()));
             } else {
                 client.search(searchRequest, new LatchedActionListener(ActionListener.<SearchResponse>wrap(r -> {
-                    if (r == null || r.getHits() == null || r.getHits().getTotalHits() == null || r.getHits().getTotalHits().value == 0) {
+                    if (r == null || r.getHits() == null || r.getHits().getTotalHits() == null || r.getHits().getTotalHits().value() == 0) {
                         hitStopWords.set(true);
                     }
                 }, e -> {
