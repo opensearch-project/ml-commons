@@ -10,6 +10,7 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.Map;
 
@@ -183,6 +184,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         ActionListener<MLUpdateModelGroupResponse> listener,
         User user
     ) {
+        source.put(MLModelGroup.LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
         String modelGroupName = (String) source.get(MLModelGroup.MODEL_GROUP_NAME_FIELD);
         if (updateModelGroupInput.getModelAccessMode() != null) {
             source.put(MLModelGroup.ACCESS, updateModelGroupInput.getModelAccessMode().getValue());
@@ -242,6 +244,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         Map<String, Object> source,
         ActionListener<MLUpdateModelGroupResponse> listener
     ) {
+        source.put(MLModelGroup.LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
         UpdateDataObjectRequest updateDataObjectRequest = UpdateDataObjectRequest
             .builder()
             .index(ML_MODEL_GROUP_INDEX)
