@@ -34,7 +34,7 @@ public class ListIndexToolIT extends RestBaseAgentToolsIT {
 
     @Before
     public void setUpCluster() throws Exception {
-        registerCatIndexFlowAgent();
+        registerListIndexFlowAgent();
     }
 
     private List<String> createIndices(int count) throws IOException {
@@ -47,15 +47,15 @@ public class ListIndexToolIT extends RestBaseAgentToolsIT {
         return indices;
     }
 
-    private void registerCatIndexFlowAgent() throws Exception {
+    private void registerListIndexFlowAgent() throws Exception {
         String requestBody = Files
             .readString(
-                Path.of(this.getClass().getClassLoader().getResource("org/opensearch/ml/tools/CatIndexAgentRegistration.json").toURI())
+                Path.of(this.getClass().getClassLoader().getResource("org/opensearch/ml/tools/ListIndexAgentRegistration.json").toURI())
             );
         registerMLAgent(client(), requestBody, response -> agentId = (String) response.get("agent_id"));
     }
 
-    public void testCatIndexWithFewIndices() throws IOException {
+    public void testListIndexWithFewIndices() throws IOException {
         List<String> indices = createIndices(ListIndexTool.DEFAULT_PAGE_SIZE);
         Response response = TestHelper.makeRequest(client(), "POST", "/_plugins/_ml/agents/" + agentId + "/_execute", null, question, null);
         String responseStr = TestHelper.httpEntityToString(response.getEntity());
@@ -68,7 +68,7 @@ public class ListIndexToolIT extends RestBaseAgentToolsIT {
         }
     }
 
-    public void testCatIndexWithMoreThan100Indices() throws IOException {
+    public void testListIndexWithMoreThan100Indices() throws IOException {
         List<String> indices = createIndices(ListIndexTool.DEFAULT_PAGE_SIZE + 1);
         Response response = TestHelper.makeRequest(client(), "POST", "/_plugins/_ml/agents/" + agentId + "/_execute", null, question, null);
         String responseStr = TestHelper.httpEntityToString(response.getEntity());

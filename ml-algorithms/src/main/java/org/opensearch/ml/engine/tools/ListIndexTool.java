@@ -263,6 +263,7 @@ public class ListIndexTool implements Tool {
             ? indices
             : paginationStrategy.getRequestedEntities().toArray(new String[0]);
         // After the group listener returns, one page complete and prepare for next page.
+        // We put the single page result into the pageResults queue for future buildTable.
         final GroupedActionListener<ActionResponse> groupedListener = createGroupedListener(
             pageResults,
             paginationStrategy.getResponseToken(),
