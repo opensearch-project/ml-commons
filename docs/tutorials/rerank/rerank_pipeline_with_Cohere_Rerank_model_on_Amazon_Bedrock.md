@@ -1,5 +1,7 @@
 # Topic
 
+Note: Since 2.19, OpenSearch supports built-in pre and post process function for easy integration. For more detais, see [rerank_pipeline_with_Bedrock_Rerank_model.md](../rerank_pipeline_with_Bedrock_Rerank_model.md)
+
 [Reranking pipeline](https://opensearch.org/docs/latest/search-plugins/search-relevance/reranking-search-results/) is a feature released in OpenSearch 2.12. It can rerank search results, providing a relevance score with respect to the search query for each matching document. The relevance score is calculated by a cross-encoder model. 
 
 This tutorial illustrates using the [Cohere Rerank 3.5 model in Amazon Bedrock](https://docs.aws.amazon.com/bedrock/latest/userguide/rerank-supported.html) in a reranking pipeline. 
