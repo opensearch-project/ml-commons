@@ -597,7 +597,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     );
             } catch (Exception e) {
                 throw new OpenSearchStatusException(
-                    "Error validating output schema, if you think this is expected, please update your 'output' field in the 'interface' field for this model: : "
+                    "Error validating output schema, if you think this is expected, please update your 'output' field in the 'interface' field for this model: "
                         + e.getMessage(),
                     RestStatus.BAD_REQUEST
                 );
