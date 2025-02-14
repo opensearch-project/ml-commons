@@ -357,15 +357,19 @@ PUT /_search/pipeline/cohere_pipeline
     {
       "ml_inference": {
         "model_id": "your_model_id",
-        "input_map": {
+        "input_map": [
+         {
           "documents": "fact_description",
           "query": "_request.ext.query_context.query_text",
           "top_n": "_request.ext.query_context.top_n"
-        },
-        "output_map": {
+         }
+        ],
+        "output_map": [
+         {
           "relevance_score": "results[*].relevance_score",
           "description": "results[*].document.text"
-        },
+         }
+        ],
         "full_response_path": false,
         "ignore_missing": false,
         "ignore_failure": false,
