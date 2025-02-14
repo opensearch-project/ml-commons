@@ -35,7 +35,7 @@ dependencies {
         exclude module : 'hamcrest'
         exclude module : 'hamcrest-core'
     }
-    testImplementation group: 'org.mockito', name: 'mockito-core', version: '5.7.0'
+    testImplementation group: 'org.mockito', name: 'mockito-core', version: '5.15.2'
     testImplementation "org.opensearch.test:framework:${opensearch_version}"
     testImplementation "org.opensearch.client:opensearch-rest-client:${opensearch_version}"
     testImplementation group: 'com.google.code.gson', name: 'gson', version: '2.11.0'
