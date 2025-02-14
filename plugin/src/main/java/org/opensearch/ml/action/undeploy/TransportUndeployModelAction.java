@@ -101,13 +101,13 @@ public class TransportUndeployModelAction extends
     @Override
     protected void doExecute(Task task, MLUndeployModelNodesRequest request, ActionListener<MLUndeployModelNodesResponse> listener) {
         ActionListener<MLUndeployModelNodesResponse> wrappedListener = ActionListener.wrap(undeployModelNodesResponse -> {
-            processUndeployModelResponseAndUpdate(request, undeployModelNodesResponse, listener);
+            processUndeployModelResponseAndUpdate(request.getTenantId(), undeployModelNodesResponse, listener);
         }, listener::onFailure);
         super.doExecute(task, request, wrappedListener);
     }
 
     void processUndeployModelResponseAndUpdate(
-        MLUndeployModelNodesRequest undeployModelNodesRequest,
+        String tenantId,
         MLUndeployModelNodesResponse undeployModelNodesResponse,
         ActionListener<MLUndeployModelNodesResponse> listener
     ) {
@@ -155,7 +155,6 @@ public class TransportUndeployModelAction extends
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             if (!actualRemovedNodesMap.isEmpty()) {
                 BulkDataObjectRequest bulkRequest = BulkDataObjectRequest.builder().globalIndex(ML_MODEL_INDEX).build();
-                String tenantId = undeployModelNodesRequest.getTenantId();
                 Map<String, Boolean> deployToAllNodes = new HashMap<>();
                 for (String modelId : actualRemovedNodesMap.keySet()) {
                     List<String> removedNodes = actualRemovedNodesMap.get(modelId);
