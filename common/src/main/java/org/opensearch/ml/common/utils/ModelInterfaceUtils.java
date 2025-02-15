@@ -9,6 +9,7 @@ import java.util.Map;
 
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.connector.MLPostProcessFunction;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
 import lombok.extern.log4j.Log4j2;
@@ -814,7 +815,8 @@ public class ModelInterfaceUtils {
                                 );
                             return BEDROCK_ANTHROPIC_CLAUDE_V2_MODEL_INTERFACE;
                         case "cohere.embed-english-v3":
-                            if (connectorAction.getPostProcessFunction() != null && !connectorAction.getPostProcessFunction().isBlank()) {
+                            if (connectorAction.getPostProcessFunction() != null
+                                && connectorAction.getPostProcessFunction().equalsIgnoreCase(MLPostProcessFunction.COHERE_EMBEDDING)) {
                                 log
                                     .debug(
                                         "Creating preset model interface for Amazon Bedrock model with post-process function: {}",
@@ -830,7 +832,8 @@ public class ModelInterfaceUtils {
                                 return BEDROCK_COHERE_EMBED_ENGLISH_V3_RAW_MODEL_INTERFACE;
                             }
                         case "cohere.embed-multilingual-v3":
-                            if (connectorAction.getPostProcessFunction() != null && !connectorAction.getPostProcessFunction().isBlank()) {
+                            if (connectorAction.getPostProcessFunction() != null
+                                && connectorAction.getPostProcessFunction().equalsIgnoreCase(MLPostProcessFunction.COHERE_EMBEDDING)) {
                                 log
                                     .debug(
                                         "Creating preset model interface for Amazon Bedrock model with post-process function: {}",
@@ -846,7 +849,8 @@ public class ModelInterfaceUtils {
                                 return BEDROCK_COHERE_EMBED_MULTILINGUAL_V3_RAW_MODEL_INTERFACE;
                             }
                         case "amazon.titan-embed-text-v1":
-                            if (connectorAction.getPostProcessFunction() != null && !connectorAction.getPostProcessFunction().isBlank()) {
+                            if (connectorAction.getPostProcessFunction() != null
+                                && connectorAction.getPostProcessFunction().equalsIgnoreCase(MLPostProcessFunction.BEDROCK_EMBEDDING)) {
                                 log
                                     .debug(
                                         "Creating preset model interface for Amazon Bedrock model with post-process function: {}",
@@ -862,7 +866,8 @@ public class ModelInterfaceUtils {
                                 return BEDROCK_TITAN_EMBED_TEXT_V1_RAW_MODEL_INTERFACE;
                             }
                         case "amazon.titan-embed-image-v1":
-                            if (connectorAction.getPostProcessFunction() != null && !connectorAction.getPostProcessFunction().isBlank()) {
+                            if (connectorAction.getPostProcessFunction() != null
+                                && connectorAction.getPostProcessFunction().equalsIgnoreCase(MLPostProcessFunction.BEDROCK_EMBEDDING)) {
                                 log
                                     .debug(
                                         "Creating preset model interface for Amazon Bedrock model with post-process function: {}",

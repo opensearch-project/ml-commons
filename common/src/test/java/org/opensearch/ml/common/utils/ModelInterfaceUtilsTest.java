@@ -36,6 +36,7 @@ import org.mockito.Spy;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.HttpConnector;
+import org.opensearch.ml.common.connector.MLPostProcessFunction;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
 public class ModelInterfaceUtilsTest {
@@ -154,6 +155,16 @@ public class ModelInterfaceUtilsTest {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("service_name", "bedrock");
         parameters.put("model", "cohere.embed-english-v3");
+
+        connectorActionWithPostProcessFunction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("http:///mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .postProcessFunction(MLPostProcessFunction.COHERE_EMBEDDING)
+            .build();
+
         connector = HttpConnector
             .builder()
             .protocol("http")
@@ -185,6 +196,16 @@ public class ModelInterfaceUtilsTest {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("service_name", "bedrock");
         parameters.put("model", "cohere.embed-multilingual-v3");
+
+        connectorActionWithPostProcessFunction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("http:///mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .postProcessFunction(MLPostProcessFunction.COHERE_EMBEDDING)
+            .build();
+
         connector = HttpConnector
             .builder()
             .protocol("http")
@@ -219,6 +240,16 @@ public class ModelInterfaceUtilsTest {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("service_name", "bedrock");
         parameters.put("model", "amazon.titan-embed-text-v1");
+
+        connectorActionWithPostProcessFunction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("http:///mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .postProcessFunction(MLPostProcessFunction.BEDROCK_EMBEDDING)
+            .build();
+
         connector = HttpConnector
             .builder()
             .protocol("http")
@@ -250,6 +281,16 @@ public class ModelInterfaceUtilsTest {
         Map<String, String> parameters = new HashMap<>();
         parameters.put("service_name", "bedrock");
         parameters.put("model", "amazon.titan-embed-image-v1");
+
+        connectorActionWithPostProcessFunction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("http:///mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .postProcessFunction(MLPostProcessFunction.BEDROCK_EMBEDDING)
+            .build();
+
         connector = HttpConnector
             .builder()
             .protocol("http")
