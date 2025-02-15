@@ -265,7 +265,11 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                 String processedInputString = MLNodeUtils.processRemoteInferenceInputDataSetParametersValue(InputString);
                 MLNodeUtils.validateSchema(inputSchemaString, processedInputString);
             } catch (Exception e) {
-                throw new OpenSearchStatusException("Error validating input schema: " + e.getMessage(), RestStatus.BAD_REQUEST);
+                throw new OpenSearchStatusException(
+                    "Error validating input schema, if you think this is expected, please update your 'input' field in the 'interface' field for this model: "
+                        + e.getMessage(),
+                    RestStatus.BAD_REQUEST
+                );
             }
         }
     }
