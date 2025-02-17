@@ -10,7 +10,6 @@ import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PRED
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.util.TokenBucket;
 import org.opensearch.core.action.ActionListener;
@@ -30,6 +29,7 @@ import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.script.ScriptService;
+import org.opensearch.transport.client.Client;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -101,7 +101,8 @@ public class RemoteModel implements Predictable {
     public void initModel(MLModel model, Map<String, Object> params, Encryptor encryptor) {
         try {
             Connector connector = model.getConnector().cloneConnector();
-            connector.decrypt(PREDICT.name(), (credential) -> encryptor.decrypt(credential));
+            connector
+                .decrypt(PREDICT.name(), (credential, tenantId) -> encryptor.decrypt(credential, model.getTenantId()), model.getTenantId());
             this.connectorExecutor = MLEngineClassLoader.initInstance(connector.getProtocol(), connector, Connector.class);
             this.connectorExecutor.setScriptService((ScriptService) params.get(SCRIPT_SERVICE));
             this.connectorExecutor.setClusterService((ClusterService) params.get(CLUSTER_SERVICE));

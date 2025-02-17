@@ -8,12 +8,13 @@ package org.opensearch.ml.model;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import org.apache.lucene.search.TotalHits;
@@ -22,12 +23,14 @@ import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchResponse;
-import org.opensearch.client.Client;
+import org.opensearch.action.search.SearchResponseSections;
+import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -36,6 +39,8 @@ import org.opensearch.commons.ConfigConstants;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
+import org.opensearch.core.index.shard.ShardId;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.get.GetResult;
@@ -44,13 +49,19 @@ import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TestHelper;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
+import org.opensearch.search.aggregations.InternalAggregations;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.client.Client;
 
 public class MLModelGroupManagerTests extends OpenSearchTestCase {
+
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
@@ -65,6 +76,8 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
 
     @Mock
     private Client client;
+
+    SdkClient sdkClient;
 
     @Mock
     private ActionListener<String> actionListener;
@@ -83,17 +96,28 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
     @Mock
     private MLModelGroupManager mlModelGroupManager;
 
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     private final List<String> backendRoles = Arrays.asList("IT", "HR");
 
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
         Settings settings = Settings.builder().build();
+        sdkClient = Mockito.spy(SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap()));
         threadContext = new ThreadContext(settings);
-        mlModelGroupManager = new MLModelGroupManager(mlIndicesHandler, client, clusterService, modelAccessControlHelper);
+        mlModelGroupManager = new MLModelGroupManager(
+            mlIndicesHandler,
+            client,
+            sdkClient,
+            clusterService,
+            modelAccessControlHelper,
+            mlFeatureEnabledSetting
+        );
         assertNotNull(mlModelGroupManager);
-
-        when(indexResponse.getId()).thenReturn("modelGroupID");
+        indexResponse = new IndexResponse(new ShardId(ML_MODEL_GROUP_INDEX, "_na_", 0), "model_group_ID", 1, 0, 2, true);
+        // when(indexResponse.getId()).thenReturn("modelGroupID");
 
         doAnswer(invocation -> {
             ActionListener<IndexResponse> listener = invocation.getArgument(1);
@@ -107,7 +131,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
             return null;
         }).when(mlIndicesHandler).initModelGroupIndexIfAbsent(any());
 
-        SearchResponse searchResponse = createModelGroupSearchResponse(0);
+        SearchResponse searchResponse = getEmptySearchResponse();
         doAnswer(invocation -> {
             ActionListener<SearchResponse> listener = invocation.getArgument(1);
             listener.onResponse(searchResponse);
@@ -129,7 +153,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
     }
 
     public void test_ModelGroupNameNotUnique() throws IOException {//
-        SearchResponse searchResponse = createModelGroupSearchResponse(1);
+        SearchResponse searchResponse = getNonEmptySearchResponse();
         doAnswer(invocation -> {
             ActionListener<SearchResponse> listener = invocation.getArgument(1);
             listener.onResponse(searchResponse);
@@ -316,7 +340,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         mlModelGroupManager.createModelGroup(mlRegisterModelGroupInput, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Index Not Found", argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to put data object in index .plugins-ml-model-group", argumentCaptor.getValue().getMessage());
     }
 
     public void test_ExceptionInitModelGroupIndexIfAbsent() {
@@ -353,7 +377,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
             return null;
         }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
 
-        mlModelGroupManager.getModelGroupResponse("testModelGroupID", modelGroupListener);
+        mlModelGroupManager.getModelGroupResponse(sdkClient, "testModelGroupID", modelGroupListener);
         verify(modelGroupListener).onResponse(getResponse);
     }
 
@@ -367,13 +391,10 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
             return null;
         }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
 
-        mlModelGroupManager.getModelGroupResponse("testModelGroupID", modelGroupListener);
+        mlModelGroupManager.getModelGroupResponse(sdkClient, "testModelGroupID", modelGroupListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(modelGroupListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "Any other Exception occurred during getting the model group. Please check log for more details.",
-            argumentCaptor.getValue().getMessage()
-        );
+        assertEquals("Failed to get data object from index .plugins-ml-model-group", argumentCaptor.getValue().getMessage());
     }
 
     public void test_NotFoundGetModelGroup() throws IOException {
@@ -383,27 +404,10 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
             return null;
         }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
 
-        mlModelGroupManager.getModelGroupResponse("testModelGroupID", modelGroupListener);
+        mlModelGroupManager.getModelGroupResponse(sdkClient, "testModelGroupID", modelGroupListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(modelGroupListener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to find model group with ID: testModelGroupID", argumentCaptor.getValue().getMessage());
-    }
-
-    public void test_NoResponseoInitModelGroup() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<Boolean> actionListener = invocation.getArgument(0);
-            actionListener.onResponse(false);
-            return null;
-        }).when(mlIndicesHandler).initModelGroupIndexIfAbsent(any());
-
-        when(modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(any())).thenReturn(false);
-
-        MLRegisterModelGroupInput mlRegisterModelGroupInput = prepareRequest(null, null, null);
-        mlModelGroupManager.createModelGroup(mlRegisterModelGroupInput, actionListener);
-
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("No response to create ML Model Group index", argumentCaptor.getValue().getMessage());
     }
 
     private MLRegisterModelGroupInput prepareRequest(List<String> backendRoles, AccessMode modelAccessMode, Boolean isAddAllBackendRoles) {
@@ -417,8 +421,24 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
             .build();
     }
 
-    private SearchResponse createModelGroupSearchResponse(long totalHits) throws IOException {
-        SearchResponse searchResponse = mock(SearchResponse.class);
+    private SearchResponse getEmptySearchResponse() {
+        SearchHits hits = new SearchHits(new SearchHit[0], null, Float.NaN);
+        SearchResponseSections searchSections = new SearchResponseSections(hits, InternalAggregations.EMPTY, null, true, false, null, 1);
+        SearchResponse searchResponse = new SearchResponse(
+            searchSections,
+            null,
+            1,
+            1,
+            0,
+            11,
+            ShardSearchFailure.EMPTY_ARRAY,
+            SearchResponse.Clusters.EMPTY
+        );
+        return searchResponse;
+    }
+
+    private SearchResponse getNonEmptySearchResponse() throws IOException {
+        SearchHit[] hits = new SearchHit[1];
         String modelContent = "{\n"
             + "                    \"created_time\": 1684981986069,\n"
             + "                    \"access\": \"public\",\n"
@@ -428,9 +448,28 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
             + "                    \"name\": \"model_group_IT\",\n"
             + "                    \"description\": \"This is an example description\"\n"
             + "                }";
-        SearchHit modelGroup = SearchHit.fromXContent(TestHelper.parser(modelContent));
-        SearchHits hits = new SearchHits(new SearchHit[] { modelGroup }, new TotalHits(totalHits, TotalHits.Relation.EQUAL_TO), Float.NaN);
-        when(searchResponse.getHits()).thenReturn(hits);
+        SearchHit model = SearchHit.fromXContent(TestHelper.parser(modelContent));
+        hits[0] = model;
+        SearchHits searchHits = new SearchHits(hits, new TotalHits(1, TotalHits.Relation.EQUAL_TO), 1.0f);
+        SearchResponseSections searchSections = new SearchResponseSections(
+            searchHits,
+            InternalAggregations.EMPTY,
+            null,
+            true,
+            false,
+            null,
+            1
+        );
+        SearchResponse searchResponse = new SearchResponse(
+            searchSections,
+            null,
+            1,
+            1,
+            0,
+            11,
+            ShardSearchFailure.EMPTY_ARRAY,
+            SearchResponse.Clusters.EMPTY
+        );
         return searchResponse;
     }
 

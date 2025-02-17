@@ -11,6 +11,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.opensearch.ml.utils.TestHelper.toJsonString;
 
 import java.util.HashMap;
@@ -27,7 +28,6 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchParseException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.update.UpdateResponse;
-import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
@@ -38,6 +38,7 @@ import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.model.MLUpdateModelAction;
 import org.opensearch.ml.common.transport.model.MLUpdateModelInput;
 import org.opensearch.ml.common.transport.model.MLUpdateModelRequest;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
@@ -45,6 +46,7 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
 import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.client.node.NodeClient;
 
 import com.google.gson.Gson;
 
@@ -57,6 +59,9 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
     private ThreadPool threadPool;
 
     @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
+    @Mock
     RestChannel channel;
 
     @Before
@@ -64,7 +69,8 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
         MockitoAnnotations.openMocks(this);
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
-        restMLUpdateModelAction = new RestMLUpdateModelAction();
+        when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(true);
+        restMLUpdateModelAction = new RestMLUpdateModelAction(mlFeatureEnabledSetting);
         doAnswer(invocation -> {
             ActionListener<UpdateResponse> actionListener = invocation.getArgument(2);
             return null;
@@ -80,7 +86,7 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
 
     @Test
     public void testConstructor() {
-        RestMLUpdateModelAction UpdateModelAction = new RestMLUpdateModelAction();
+        RestMLUpdateModelAction UpdateModelAction = new RestMLUpdateModelAction(mlFeatureEnabledSetting);
         assertNotNull(UpdateModelAction);
     }
 
@@ -176,26 +182,24 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
         String requestContent = new Gson().toJson(modelContent);
         Map<String, String> params = new HashMap<>();
         params.put("model_id", "test_modelId");
-        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+        return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
             .withPath("/_plugins/_ml/models/{model_id}")
             .withParams(params)
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .build();
-        return request;
     }
 
     private RestRequest getRestRequestWithEmptyContent() {
         RestRequest.Method method = RestRequest.Method.PUT;
         Map<String, String> params = new HashMap<>();
         params.put("model_id", "test_modelId");
-        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+        return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
             .withPath("/_plugins/_ml/models/{model_id}")
             .withParams(params)
             .withContent(new BytesArray(""), XContentType.JSON)
             .build();
-        return request;
     }
 
     private RestRequest getRestRequestWithNullModelId() {
@@ -203,13 +207,12 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
         final Map<String, Object> modelContent = Map.of("name", "testModelName", "description", "This is test description");
         String requestContent = new Gson().toJson(modelContent);
         Map<String, String> params = new HashMap<>();
-        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+        return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
             .withPath("/_plugins/_ml/models/{model_id}")
             .withParams(params)
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .build();
-        return request;
     }
 
     private RestRequest getRestRequestWithNullField() {
@@ -217,13 +220,12 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
         String requestContent = "{\"name\":\"testModelName\",\"description\":null}";
         Map<String, String> params = new HashMap<>();
         params.put("model_id", "test_modelId");
-        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+        return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
             .withPath("/_plugins/_ml/models/{model_id}")
             .withParams(params)
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .build();
-        return request;
     }
 
     private RestRequest getRestRequestWithConnectorIDAndConnectorUpdateContent() {
@@ -248,13 +250,12 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
         String requestContent = new Gson().toJson(modelContent);
         Map<String, String> params = new HashMap<>();
         params.put("model_id", "test_modelId");
-        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+        return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
             .withPath("/_plugins/_ml/models/{model_id}")
             .withParams(params)
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .build();
-        return request;
     }
 
     private RestRequest getRestRequestWithConnectorID() {
@@ -264,13 +265,12 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
         String requestContent = new Gson().toJson(modelContent);
         Map<String, String> params = new HashMap<>();
         params.put("model_id", "test_modelId");
-        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+        return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
             .withPath("/_plugins/_ml/models/{model_id}")
             .withParams(params)
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .build();
-        return request;
     }
 
     private RestRequest getRestRequestWithConnectorUpdateContent() {
@@ -286,12 +286,11 @@ public class RestMLUpdateModelActionTests extends OpenSearchTestCase {
         String requestContent = new Gson().toJson(modelContent);
         Map<String, String> params = new HashMap<>();
         params.put("model_id", "test_modelId");
-        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+        return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)
             .withPath("/_plugins/_ml/models/{model_id}")
             .withParams(params)
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .build();
-        return request;
     }
 }

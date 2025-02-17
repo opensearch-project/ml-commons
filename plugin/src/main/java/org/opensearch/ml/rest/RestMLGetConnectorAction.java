@@ -9,17 +9,21 @@ import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_CONNECTOR_ID;
 import static org.opensearch.ml.utils.RestActionUtils.getParameterId;
 import static org.opensearch.ml.utils.RestActionUtils.returnContent;
+import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
 
-import org.opensearch.client.node.NodeClient;
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetRequest;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
+import org.opensearch.transport.client.node.NodeClient;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
@@ -27,10 +31,20 @@ import com.google.common.collect.ImmutableList;
 public class RestMLGetConnectorAction extends BaseRestHandler {
     private static final String ML_GET_CONNECTOR_ACTION = "ml_get_connector_action";
 
+    private ClusterService clusterService;
+
+    private Settings settings;
+
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     /**
      * Constructor
      */
-    public RestMLGetConnectorAction() {}
+    public RestMLGetConnectorAction(ClusterService clusterService, Settings settings, MLFeatureEnabledSetting mlFeatureEnabledSetting) {
+        this.clusterService = clusterService;
+        this.settings = settings;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+    }
 
     @Override
     public String getName() {
@@ -59,7 +73,7 @@ public class RestMLGetConnectorAction extends BaseRestHandler {
     MLConnectorGetRequest getRequest(RestRequest request) throws IOException {
         String connectorId = getParameterId(request, PARAMETER_CONNECTOR_ID);
         boolean returnContent = returnContent(request);
-
-        return new MLConnectorGetRequest(connectorId, returnContent);
+        String tenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
+        return new MLConnectorGetRequest(connectorId, tenantId, returnContent);
     }
 }

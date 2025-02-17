@@ -14,6 +14,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.opensearch.ml.engine.tools.MLModelTool.DEFAULT_DESCRIPTION;
+import static org.opensearch.ml.engine.tools.MLModelTool.MODEL_ID_FIELD;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -27,7 +28,6 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.opensearch.client.Client;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
@@ -37,6 +37,7 @@ import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
+import org.opensearch.transport.client.Client;
 
 public class MLModelToolTests {
 
@@ -218,5 +219,6 @@ public class MLModelToolTests {
         assertTrue(tool.validate(otherParams));
         assertFalse(tool.validate(emptyParams));
         assertEquals(DEFAULT_DESCRIPTION, tool.getDescription());
+        assertEquals(List.of(MODEL_ID_FIELD), MLModelTool.Factory.getInstance().getAllModelKeys());
     }
 }

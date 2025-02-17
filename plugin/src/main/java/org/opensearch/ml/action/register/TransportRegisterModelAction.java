@@ -27,7 +27,6 @@ import org.opensearch.action.ActionListenerResponseHandler;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.settings.Settings;
@@ -65,9 +64,12 @@ import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.MLExceptionUtils;
 import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.ml.utils.TenantAwareHelper;
+import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -84,6 +86,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
     ClusterService clusterService;
     ThreadPool threadPool;
     Client client;
+    private final SdkClient sdkClient;
 
     Settings settings;
     DiscoveryNodeHelper nodeFilter;
@@ -98,7 +101,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
 
     ConnectorAccessControlHelper connectorAccessControlHelper;
     MLModelGroupManager mlModelGroupManager;
-    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Inject
     public TransportRegisterModelAction(
@@ -112,6 +115,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         Settings settings,
         ThreadPool threadPool,
         Client client,
+        SdkClient sdkClient,
         DiscoveryNodeHelper nodeFilter,
         MLTaskDispatcher mlTaskDispatcher,
         MLStats mlStats,
@@ -129,6 +133,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         this.clusterService = clusterService;
         this.threadPool = threadPool;
         this.client = client;
+        this.sdkClient = sdkClient;
         this.nodeFilter = nodeFilter;
         this.mlTaskDispatcher = mlTaskDispatcher;
         this.mlStats = mlStats;
@@ -154,6 +159,9 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLRegisterModelResponse> listener) {
         MLRegisterModelRequest registerModelRequest = MLRegisterModelRequest.fromActionRequest(request);
         MLRegisterModelInput registerModelInput = registerModelRequest.getRegisterModelInput();
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, registerModelInput.getTenantId(), listener)) {
+            return;
+        }
         if (FunctionName.isDLModel(registerModelInput.getFunctionName()) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
             throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
         }
@@ -164,20 +172,25 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         }
         registerModelInput.setIsHidden(RestActionUtils.isSuperAdminUser(clusterService, client));
         if (StringUtils.isEmpty(registerModelInput.getModelGroupId())) {
-            mlModelGroupManager.validateUniqueModelGroupName(registerModelInput.getModelName(), ActionListener.wrap(modelGroups -> {
-                if (modelGroups != null
-                    && modelGroups.getHits().getTotalHits() != null
-                    && modelGroups.getHits().getTotalHits().value != 0) {
-                    String modelGroupIdOfTheNameProvided = modelGroups.getHits().getAt(0).getId();
-                    registerModelInput.setModelGroupId(modelGroupIdOfTheNameProvided);
-                    checkUserAccess(registerModelInput, listener, true);
-                } else {
-                    doRegister(registerModelInput, listener);
-                }
-            }, e -> {
-                log.error("Failed to search model group index", e);
-                listener.onFailure(e);
-            }));
+            mlModelGroupManager
+                .validateUniqueModelGroupName(
+                    registerModelInput.getModelName(),
+                    registerModelInput.getTenantId(),
+                    ActionListener.wrap(modelGroups -> {
+                        if (modelGroups != null
+                            && modelGroups.getHits().getTotalHits() != null
+                            && modelGroups.getHits().getTotalHits().value() != 0) {
+                            String modelGroupIdOfTheNameProvided = modelGroups.getHits().getAt(0).getId();
+                            registerModelInput.setModelGroupId(modelGroupIdOfTheNameProvided);
+                            checkUserAccess(registerModelInput, listener, true);
+                        } else {
+                            doRegister(registerModelInput, listener);
+                        }
+                    }, e -> {
+                        log.error("Failed to search model group index", e);
+                        listener.onFailure(e);
+                    })
+                );
         } else {
             checkUserAccess(registerModelInput, listener, false);
         }
@@ -190,81 +203,105 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
     ) {
         User user = RestActionUtils.getUserContext(client);
         modelAccessControlHelper
-            .validateModelGroupAccess(user, registerModelInput.getModelGroupId(), client, ActionListener.wrap(access -> {
-                if (access) {
-                    doRegister(registerModelInput, listener);
-                    return;
-                }
-                // if the user does not have access, we need to check three more conditions before throwing exception.
-                // if we are checking the access based on the name provided in the input, we let user know the name is already used by a
-                // model group they do not have access to.
-                if (isModelNameAlreadyExisting) {
-                    // This case handles when user is using the same pre-trained model already registered by another user on the cluster.
-                    // The only way here is for the user to first create model group and use its ID in the request
-                    if (registerModelInput.getUrl() == null
-                        && registerModelInput.getFunctionName() != FunctionName.REMOTE
-                        && registerModelInput.getConnectorId() == null) {
-                        listener
-                            .onFailure(
-                                new IllegalArgumentException(
-                                    "Without a model group ID, the system will use the model name {"
-                                        + registerModelInput.getModelName()
-                                        + "} to create a new model group. However, this name is taken by another group with id {"
-                                        + registerModelInput.getModelGroupId()
-                                        + "} you can't access. To register this pre-trained model, create a new model group and use its ID in your request."
-                                )
-                            );
-                    } else {
-                        listener
-                            .onFailure(
-                                new IllegalArgumentException(
-                                    "The name {"
-                                        + registerModelInput.getModelName()
-                                        + "} you provided is unavailable because it is used by another model group with id {"
-                                        + registerModelInput.getModelGroupId()
-                                        + "} to which you do not have access. Please provide a different name."
-                                )
-                            );
+            .validateModelGroupAccess(
+                user,
+                mlFeatureEnabledSetting,
+                registerModelInput.getTenantId(),
+                registerModelInput.getModelGroupId(),
+                client,
+                sdkClient,
+                ActionListener.wrap(access -> {
+                    if (access) {
+                        doRegister(registerModelInput, listener);
+                        return;
                     }
-                    return;
-                }
-                // if user does not have access to the model group ID provided in the input, we let user know they do not have access to the
-                // specified model group
-                listener.onFailure(new IllegalArgumentException("You don't have permissions to perform this operation on this model."));
-            }, listener::onFailure));
+                    // if the user does not have access, we need to check three more conditions before throwing exception.
+                    // if we are checking the access based on the name provided in the input, we let user know the name is already used by a
+                    // model group they do not have access to.
+                    if (isModelNameAlreadyExisting) {
+                        // This case handles when user is using the same pre-trained model already registered by another user on the
+                        // cluster.
+                        // The only way here is for the user to first create model group and use its ID in the request
+                        if (registerModelInput.getUrl() == null
+                            && registerModelInput.getFunctionName() != FunctionName.REMOTE
+                            && registerModelInput.getConnectorId() == null) {
+                            listener
+                                .onFailure(
+                                    new IllegalArgumentException(
+                                        "Without a model group ID, the system will use the model name {"
+                                            + registerModelInput.getModelName()
+                                            + "} to create a new model group. However, this name is taken by another group with id {"
+                                            + registerModelInput.getModelGroupId()
+                                            + "} you can't access. To register this pre-trained model, create a new model group and use its ID in your request."
+                                    )
+                                );
+                        } else {
+                            listener
+                                .onFailure(
+                                    new IllegalArgumentException(
+                                        "The name {"
+                                            + registerModelInput.getModelName()
+                                            + "} you provided is unavailable because it is used by another model group with id {"
+                                            + registerModelInput.getModelGroupId()
+                                            + "} to which you do not have access. Please provide a different name."
+                                    )
+                                );
+                        }
+                        return;
+                    }
+                    // if user does not have access to the model group ID provided in the input, we let user know they do not have access to
+                    // the
+                    // specified model group
+                    listener.onFailure(new IllegalArgumentException("You don't have permissions to perform this operation on this model."));
+                }, listener::onFailure)
+            );
     }
 
     private void doRegister(MLRegisterModelInput registerModelInput, ActionListener<MLRegisterModelResponse> listener) {
         FunctionName functionName = registerModelInput.getFunctionName();
         if (FunctionName.REMOTE == functionName) {
             if (Strings.isNotBlank(registerModelInput.getConnectorId())) {
-                connectorAccessControlHelper.validateConnectorAccess(client, registerModelInput.getConnectorId(), ActionListener.wrap(r -> {
-                    if (Boolean.TRUE.equals(r)) {
-                        if (registerModelInput.getModelInterface() == null) {
-                            mlModelManager.getConnector(registerModelInput.getConnectorId(), ActionListener.wrap(connector -> {
-                                updateRegisterModelInputModelInterfaceFieldsByConnector(registerModelInput, connector);
-                                createModelGroup(registerModelInput, listener);
-                            }, listener::onFailure));
-                        } else {
-                            createModelGroup(registerModelInput, listener);
-                        }
-                    } else {
-                        listener
-                            .onFailure(
-                                new IllegalArgumentException(
-                                    "You don't have permission to use the connector provided, connector id: "
-                                        + registerModelInput.getConnectorId()
-                                )
-                            );
-                    }
-                }, e -> {
-                    log
-                        .error(
-                            "You don't have permission to use the connector provided, connector id: " + registerModelInput.getConnectorId(),
-                            e
-                        );
-                    listener.onFailure(e);
-                }));
+                connectorAccessControlHelper
+                    .validateConnectorAccess(
+                        sdkClient,
+                        client,
+                        registerModelInput.getConnectorId(),
+                        registerModelInput.getTenantId(),
+                        mlFeatureEnabledSetting,
+                        ActionListener.wrap(r -> {
+                            if (Boolean.TRUE.equals(r)) {
+                                if (registerModelInput.getModelInterface() == null) {
+                                    mlModelManager
+                                        .getConnector(
+                                            registerModelInput.getConnectorId(),
+                                            registerModelInput.getTenantId(),
+                                            ActionListener.wrap(connector -> {
+                                                updateRegisterModelInputModelInterfaceFieldsByConnector(registerModelInput, connector);
+                                                createModelGroup(registerModelInput, listener);
+                                            }, listener::onFailure)
+                                        );
+                                } else {
+                                    createModelGroup(registerModelInput, listener);
+                                }
+                            } else {
+                                listener
+                                    .onFailure(
+                                        new IllegalArgumentException(
+                                            "You don't have permission to use the connector provided, connector id: "
+                                                + registerModelInput.getConnectorId()
+                                        )
+                                    );
+                            }
+                        }, e -> {
+                            log
+                                .error(
+                                    "You don't have permission to use the connector provided, connector id: {}",
+                                    registerModelInput.getConnectorId(),
+                                    e
+                                );
+                            listener.onFailure(e);
+                        })
+                    );
             } else {
                 validateInternalConnector(registerModelInput);
                 ActionListener<MLCreateConnectorResponse> dryRunResultListener = ActionListener.wrap(res -> {
@@ -277,7 +314,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                     log.error(e.getMessage(), e);
                     listener.onFailure(e);
                 });
-                MLCreateConnectorRequest mlCreateConnectorRequest = createDryRunConnectorRequest();
+                MLCreateConnectorRequest mlCreateConnectorRequest = createDryRunConnectorRequest(registerModelInput.getTenantId());
                 client.execute(MLCreateConnectorAction.INSTANCE, mlCreateConnectorRequest, dryRunResultListener);
             }
         } else {
@@ -302,8 +339,9 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         }
     }
 
-    private MLCreateConnectorRequest createDryRunConnectorRequest() {
+    private MLCreateConnectorRequest createDryRunConnectorRequest(final String tenantId) {
         MLCreateConnectorInput createConnectorInput = MLCreateConnectorInput.builder().dryRun(true).build();
+        createConnectorInput.setTenantId(tenantId);
         return new MLCreateConnectorRequest(createConnectorInput);
     }
 
@@ -342,13 +380,14 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             .lastUpdateTime(Instant.now())
             .state(MLTaskState.CREATED)
             .workerNodes(ImmutableList.of(clusterService.localNode().getId()))
+            .tenantId(registerModelInput.getTenantId())
             .build();
 
         if (!isAsync) {
             mlTaskManager.createMLTask(mlTask, ActionListener.wrap(response -> {
                 String taskId = response.getId();
                 mlTask.setTaskId(taskId);
-                mlModelManager.registerMLRemoteModel(registerModelInput, mlTask, listener);
+                mlModelManager.registerMLRemoteModel(sdkClient, registerModelInput, mlTask, listener);
             }, e -> {
                 logException("Failed to register model", e, log);
                 listener.onFailure(e);
@@ -365,7 +404,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                 listener.onResponse(new MLRegisterModelResponse(taskId, MLTaskState.CREATED.name()));
 
                 ActionListener<MLForwardResponse> forwardActionListener = ActionListener.wrap(res -> {
-                    log.debug("Register model response: " + res);
+                    log.debug("Register model response: {}", res);
                     if (!clusterService.localNode().getId().equals(nodeId)) {
                         mlTaskManager.remove(taskId);
                     }
@@ -374,6 +413,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                     mlTaskManager
                         .updateMLTask(
                             taskId,
+                            registerModelInput.getTenantId(),
                             ImmutableMap.of(MLTask.ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(ex), STATE_FIELD, FAILED),
                             TASK_SEMAPHORE_TIMEOUT,
                             true
@@ -416,6 +456,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             .backendRoles(registerModelInput.getBackendRoles())
             .modelAccessMode(registerModelInput.getAccessMode())
             .isAddAllBackendRoles(registerModelInput.getAddAllBackendRoles())
+            .tenantId(registerModelInput.getTenantId())
             .build();
     }
 }

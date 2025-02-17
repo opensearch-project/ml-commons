@@ -14,14 +14,18 @@ import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.action.LatchedActionListener;
 import org.opensearch.action.get.GetResponse;
-import org.opensearch.client.Client;
+import org.opensearch.action.support.PlainActionFuture;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
@@ -30,6 +34,7 @@ import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.get.GetResult;
@@ -39,9 +44,13 @@ import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.MLModelGroup.MLModelGroupBuilder;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.client.Client;
 
 public class ModelAccessControlHelperTests extends OpenSearchTestCase {
 
@@ -49,7 +58,15 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
     ClusterService clusterService;
 
     @Mock
+    MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
+    @Mock
     Client client;
+
+    SdkClient sdkClient;
+
+    @Mock
+    NamedXContentRegistry xContentRegistry;
 
     @Mock
     private ActionListener<Boolean> actionListener;
@@ -66,13 +83,16 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
+
         Settings settings = Settings.builder().put(ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED.getKey(), true).build();
+        sdkClient = SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap());
         threadContext = new ThreadContext(settings);
         ClusterSettings clusterSettings = clusterSetting(settings, ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED);
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
         modelAccessControlHelper = new ModelAccessControlHelper(clusterService, settings);
         assertNotNull(modelAccessControlHelper);
 
+        // TODO Remove when all calls are migrated to SdkClient version
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
             listener.onResponse(getResponse);
@@ -92,14 +112,23 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
         }).when(client).get(any(), any());
     }
 
-    public void test_UndefinedModelGroupID() {
+    // TODO Remove when all calls are migrated to SdkClient version
+    public void test_UndefinedModelGroupID_NoSdkClient() {
         modelAccessControlHelper.validateModelGroupAccess(null, null, client, actionListener);
         ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
         assertTrue(argumentCaptor.getValue());
     }
 
-    public void test_UndefinedOwner() throws IOException {
+    public void test_UndefinedModelGroupID() {
+        modelAccessControlHelper.validateModelGroupAccess(null, mlFeatureEnabledSetting, null, null, client, sdkClient, actionListener);
+        ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue());
+    }
+
+    // TODO Remove when all calls are migrated to SdkClient version
+    public void test_UndefinedOwner_NoSdkClient() throws IOException {
         getResponse = modelGroupBuilder(null, null, null);
         modelAccessControlHelper.validateModelGroupAccess(null, "testGroupID", client, actionListener);
         ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
@@ -107,7 +136,17 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
         assertTrue(argumentCaptor.getValue());
     }
 
-    public void test_ExceptionEmptyBackendRoles() throws IOException {
+    public void test_UndefinedOwner() throws IOException {
+        getResponse = modelGroupBuilder(null, null, null);
+        modelAccessControlHelper
+            .validateModelGroupAccess(null, mlFeatureEnabledSetting, null, "testGroupID", client, sdkClient, actionListener);
+        ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue());
+    }
+
+    // TODO Remove when all calls are migrated to SdkClient version
+    public void test_ExceptionEmptyBackendRoles_NoSdkClient() throws IOException {
         String owner = "owner|IT,HR|myTenant";
         User user = User.parse("owner|IT,HR|myTenant");
         getResponse = modelGroupBuilder(null, AccessMode.RESTRICTED.getValue(), owner);
@@ -117,7 +156,28 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
         assertEquals("Backend roles shouldn't be null", argumentCaptor.getValue().getMessage());
     }
 
-    public void test_MatchingBackendRoles() throws IOException {
+    public void test_ExceptionEmptyBackendRoles() throws IOException, InterruptedException {
+        String owner = "owner|IT,HR|myTenant";
+        User user = User.parse("owner|IT,HR|myTenant");
+        getResponse = modelGroupBuilder(null, AccessMode.RESTRICTED.getValue(), owner);
+
+        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(getResponse);
+        when(client.get(any())).thenReturn(future);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<Boolean> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        modelAccessControlHelper
+            .validateModelGroupAccess(user, mlFeatureEnabledSetting, null, "testGroupID", client, sdkClient, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Backend roles shouldn't be null", argumentCaptor.getValue().getMessage());
+    }
+
+    // TODO Remove when all calls are migrated to SdkClient version
+    public void test_MatchingBackendRoles_NoSdkClient() throws IOException {
         String owner = "owner|IT,HR|myTenant";
         List<String> backendRoles = Arrays.asList("IT", "HR");
         setupModelGroup(owner, AccessMode.RESTRICTED.getValue(), backendRoles);
@@ -128,7 +188,29 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
         assertTrue(argumentCaptor.getValue());
     }
 
-    public void test_PublicModelGroup() throws IOException {
+    public void test_MatchingBackendRoles() throws IOException, InterruptedException {
+        String owner = "owner|IT,HR|myTenant";
+        List<String> backendRoles = Arrays.asList("IT", "HR");
+        setupModelGroup(owner, AccessMode.RESTRICTED.getValue(), backendRoles);
+        User user = User.parse("owner|IT,HR|myTenant");
+
+        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(getResponse);
+        when(client.get(any())).thenReturn(future);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<Boolean> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        modelAccessControlHelper
+            .validateModelGroupAccess(user, mlFeatureEnabledSetting, null, "testGroupID", client, sdkClient, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue());
+    }
+
+    // TODO Remove when all calls are migrated to SdkClient version
+    public void test_PublicModelGroup_NoSdkClient() throws IOException {
         String owner = "owner|IT,HR|myTenant";
         List<String> backendRoles = Arrays.asList("IT", "HR");
         setupModelGroup(owner, AccessMode.PUBLIC.getValue(), backendRoles);
@@ -139,7 +221,29 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
         assertTrue(argumentCaptor.getValue());
     }
 
-    public void test_PrivateModelGroupWithSameOwner() throws IOException {
+    public void test_PublicModelGroup() throws IOException, InterruptedException {
+        String owner = "owner|IT,HR|myTenant";
+        List<String> backendRoles = Arrays.asList("IT", "HR");
+        setupModelGroup(owner, AccessMode.PUBLIC.getValue(), backendRoles);
+        User user = User.parse("owner|IT,HR|myTenant");
+
+        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(getResponse);
+        when(client.get(any())).thenReturn(future);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<Boolean> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        modelAccessControlHelper
+            .validateModelGroupAccess(user, mlFeatureEnabledSetting, null, "testGroupID", client, sdkClient, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue());
+    }
+
+    // TODO Remove when all calls are migrated to SdkClient version
+    public void test_PrivateModelGroupWithSameOwner_NoSdkClient() throws IOException {
         String owner = "owner|IT,HR|myTenant";
         List<String> backendRoles = Arrays.asList("IT", "HR");
         setupModelGroup(owner, AccessMode.PRIVATE.getValue(), backendRoles);
@@ -150,12 +254,55 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
         assertTrue(argumentCaptor.getValue());
     }
 
-    public void test_PrivateModelGroupWithDifferentOwner() throws IOException {
+    public void test_PrivateModelGroupWithSameOwner() throws IOException, InterruptedException {
+        String owner = "owner|IT,HR|myTenant";
+        List<String> backendRoles = Arrays.asList("IT", "HR");
+        setupModelGroup(owner, AccessMode.PRIVATE.getValue(), backendRoles);
+        User user = User.parse("owner|IT,HR|myTenant");
+
+        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(getResponse);
+        when(client.get(any())).thenReturn(future);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<Boolean> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        modelAccessControlHelper
+            .validateModelGroupAccess(user, mlFeatureEnabledSetting, null, "testGroupID", client, sdkClient, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
+        ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue());
+    }
+
+    // TODO Remove when all calls are migrated to SdkClient version
+    public void test_PrivateModelGroupWithDifferentOwner_NoSdkClient() throws IOException {
         String owner = "owner|IT,HR|myTenant";
         List<String> backendRoles = Arrays.asList("IT", "HR");
         setupModelGroup(owner, AccessMode.PRIVATE.getValue(), backendRoles);
         User user = User.parse("user|IT,HR|myTenant");
         modelAccessControlHelper.validateModelGroupAccess(user, "testGroupID", client, actionListener);
+        ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+        assertFalse(argumentCaptor.getValue());
+    }
+
+    public void test_PrivateModelGroupWithDifferentOwner() throws IOException, InterruptedException {
+        String owner = "owner|IT,HR|myTenant";
+        List<String> backendRoles = Arrays.asList("IT", "HR");
+        setupModelGroup(owner, AccessMode.PRIVATE.getValue(), backendRoles);
+        User user = User.parse("user|IT,HR|myTenant");
+
+        PlainActionFuture<GetResponse> future = PlainActionFuture.newFuture();
+        future.onResponse(getResponse);
+        when(client.get(any())).thenReturn(future);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        LatchedActionListener<Boolean> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
+        modelAccessControlHelper
+            .validateModelGroupAccess(user, mlFeatureEnabledSetting, null, "testGroupID", client, sdkClient, latchedActionListener);
+        latch.await(500, TimeUnit.MILLISECONDS);
+
         ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
         assertFalse(argumentCaptor.getValue());

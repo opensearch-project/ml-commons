@@ -7,6 +7,7 @@ package org.opensearch.ml.rest;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
+import static org.opensearch.ml.utils.MLExceptionUtils.CONTROLLER_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
 import static org.opensearch.ml.utils.RestActionUtils.getParameterId;
 
@@ -15,25 +16,29 @@ import java.util.List;
 import java.util.Locale;
 
 import org.opensearch.OpenSearchParseException;
-import org.opensearch.client.node.NodeClient;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.controller.MLController;
 import org.opensearch.ml.common.transport.controller.MLUpdateControllerAction;
 import org.opensearch.ml.common.transport.controller.MLUpdateControllerRequest;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
+import org.opensearch.transport.client.node.NodeClient;
 
 import com.google.common.collect.ImmutableList;
 
 public class RestMLUpdateControllerAction extends BaseRestHandler {
 
     public final static String ML_UPDATE_CONTROLLER_ACTION = "ml_update_controller_action";
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     /**
      * Constructor
      */
-    public RestMLUpdateControllerAction() {}
+    public RestMLUpdateControllerAction(MLFeatureEnabledSetting mlFeatureEnabledSetting) {
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+    }
 
     @Override
     public String getName() {
@@ -62,6 +67,10 @@ public class RestMLUpdateControllerAction extends BaseRestHandler {
      * @throws IOException if an error occurs while parsing the request
      */
     private MLUpdateControllerRequest getRequest(RestRequest request) throws IOException {
+        if (!mlFeatureEnabledSetting.isControllerEnabled()) {
+            throw new IllegalStateException(CONTROLLER_DISABLED_ERR_MSG);
+        }
+
         if (!request.hasContent()) {
             throw new OpenSearchParseException("Update model controller request has empty body");
         }

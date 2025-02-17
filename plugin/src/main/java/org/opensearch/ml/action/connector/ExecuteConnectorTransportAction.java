@@ -11,7 +11,6 @@ import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -30,6 +29,7 @@ import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.script.ScriptService;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -73,7 +73,8 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
         if (clusterService.state().metadata().hasIndex(ML_CONNECTOR_INDEX)) {
             ActionListener<Connector> listener = ActionListener.wrap(connector -> {
                 if (connectorAccessControlHelper.validateConnectorAccess(client, connector)) {
-                    connector.decrypt(connectorAction, (credential) -> encryptor.decrypt(credential));
+                    // adding tenantID as null, because we are not implement multi-tenancy for this feature yet.
+                    connector.decrypt(connectorAction, (credential, tenantId) -> encryptor.decrypt(credential, null), null);
                     RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader
                         .initInstance(connector.getProtocol(), connector, Connector.class);
                     connectorExecutor.setScriptService(scriptService);

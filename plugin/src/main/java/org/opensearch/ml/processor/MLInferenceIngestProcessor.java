@@ -7,7 +7,6 @@ package org.opensearch.ml.processor;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.*;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -20,7 +19,6 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.GroupedActionListener;
-import org.opensearch.client.Client;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -36,10 +34,9 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.script.ScriptService;
 import org.opensearch.script.TemplateScript;
+import org.opensearch.transport.client.Client;
 
-import com.jayway.jsonpath.Configuration;
 import com.jayway.jsonpath.JsonPath;
-import com.jayway.jsonpath.Option;
 
 /**
  * MLInferenceIngestProcessor requires a modelId string to call model inferences
@@ -74,11 +71,6 @@ public class MLInferenceIngestProcessor extends AbstractProcessor implements Mod
     public static final int DEFAULT_MAX_PREDICTION_TASKS = 10;
     public static final String DEFAULT_MODEl_INPUT = "{ \"parameters\": ${ml_inference.parameters} }";
     private final NamedXContentRegistry xContentRegistry;
-
-    private Configuration suppressExceptionConfiguration = Configuration
-        .builder()
-        .options(Option.SUPPRESS_EXCEPTIONS, Option.DEFAULT_PATH_LEAF_TO_NULL, Option.ALWAYS_RETURN_LIST)
-        .build();
 
     protected MLInferenceIngestProcessor(
         String modelId,
@@ -320,24 +312,29 @@ public class MLInferenceIngestProcessor extends AbstractProcessor implements Mod
             Object documentFieldValue = ingestDocument.getFieldValue(originalFieldPath, Object.class);
             String documentFieldValueAsString = toString(documentFieldValue);
             updateModelParameters(modelInputFieldName, documentFieldValueAsString, modelParameters);
+            return;
         }
-        // else when cannot find field path in document, try check for nested array using json path
-        else {
-            if (documentFieldName.contains(DOT_SYMBOL)) {
+        // If the standard dot path fails, try to check for a nested array using JSON path
+        if (StringUtils.isValidJSONPath(documentFieldName)) {
+            Map<String, Object> sourceObject = ingestDocument.getSourceAndMetadata();
+            Object fieldValue = JsonPath.using(suppressExceptionConfiguration).parse(sourceObject).read(documentFieldName);
 
-                Map<String, Object> sourceObject = ingestDocument.getSourceAndMetadata();
-                ArrayList<Object> fieldValueList = JsonPath
-                    .using(suppressExceptionConfiguration)
-                    .parse(sourceObject)
-                    .read(documentFieldName);
-                if (!fieldValueList.isEmpty()) {
-                    updateModelParameters(modelInputFieldName, toString(fieldValueList), modelParameters);
-                } else if (!ignoreMissing) {
-                    throw new IllegalArgumentException("cannot find field name defined from input map: " + documentFieldName);
+            if (fieldValue != null) {
+                if (fieldValue instanceof List) {
+                    List<?> fieldValueList = (List<?>) fieldValue;
+                    if (!fieldValueList.isEmpty()) {
+                        updateModelParameters(modelInputFieldName, toString(fieldValueList), modelParameters);
+                    } else if (!ignoreMissing) {
+                        throw new IllegalArgumentException("Cannot find field name defined from input map: " + documentFieldName);
+                    }
+                } else {
+                    updateModelParameters(modelInputFieldName, toString(fieldValue), modelParameters);
                 }
             } else if (!ignoreMissing) {
-                throw new IllegalArgumentException("cannot find field name defined from input map: " + documentFieldName);
+                throw new IllegalArgumentException("Cannot find field name defined from input map: " + documentFieldName);
             }
+        } else {
+            throw new IllegalArgumentException("Cannot find field name defined from input map: " + documentFieldName);
         }
     }
 

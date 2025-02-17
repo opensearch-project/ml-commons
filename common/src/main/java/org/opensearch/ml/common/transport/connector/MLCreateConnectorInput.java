@@ -6,6 +6,8 @@
 package org.opensearch.ml.common.transport.connector;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 import java.io.IOException;
@@ -30,6 +32,7 @@ import org.opensearch.ml.common.connector.ConnectorClientConfig;
 
 import lombok.Builder;
 import lombok.Data;
+import lombok.Setter;
 
 @Data
 public class MLCreateConnectorInput implements ToXContentObject, Writeable {
@@ -56,6 +59,8 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
     private String description;
     private String version;
     private String protocol;
+    @Setter
+    private String tenantId;
     private Map<String, String> parameters;
     private Map<String, String> credential;
     private List<ConnectorAction> actions;
@@ -80,7 +85,8 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         AccessMode access,
         boolean dryRun,
         boolean updateConnector,
-        ConnectorClientConfig connectorClientConfig
+        ConnectorClientConfig connectorClientConfig,
+        String tenantId
 
     ) {
         if (!dryRun && !updateConnector) {
@@ -92,6 +98,9 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
             }
             if (protocol == null) {
                 throw new IllegalArgumentException("Connector protocol is null");
+            }
+            if (credential == null || credential.isEmpty()) {
+                throw new IllegalArgumentException("Connector credential is null or empty list");
             }
         }
         this.name = name;
@@ -107,6 +116,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         this.dryRun = dryRun;
         this.updateConnector = updateConnector;
         this.connectorClientConfig = connectorClientConfig;
+        this.tenantId = tenantId;
 
     }
 
@@ -127,6 +137,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         AccessMode access = null;
         boolean dryRun = false;
         ConnectorClientConfig connectorClientConfig = null;
+        String tenantId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -178,6 +189,9 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                 case AbstractConnector.CLIENT_CONFIG_FIELD:
                     connectorClientConfig = ConnectorClientConfig.parse(parser);
                     break;
+                case TENANT_ID_FIELD:
+                    tenantId = parser.textOrNull();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -196,7 +210,8 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
             access,
             dryRun,
             updateConnector,
-            connectorClientConfig
+            connectorClientConfig,
+            tenantId
         );
     }
 
@@ -235,6 +250,9 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         }
         if (connectorClientConfig != null) {
             builder.field(AbstractConnector.CLIENT_CONFIG_FIELD, connectorClientConfig);
+        }
+        if (tenantId != null) {
+            builder.field(TENANT_ID_FIELD, tenantId);
         }
         builder.endObject();
         return builder;
@@ -291,6 +309,9 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                 output.writeBoolean(false);
             }
         }
+        if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
+            output.writeOptionalString(tenantId);
+        }
     }
 
     public MLCreateConnectorInput(StreamInput input) throws IOException {
@@ -326,6 +347,6 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                 this.connectorClientConfig = new ConnectorClientConfig(input);
             }
         }
-
+        this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
     }
 }

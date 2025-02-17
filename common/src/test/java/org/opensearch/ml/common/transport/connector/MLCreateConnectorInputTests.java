@@ -8,6 +8,7 @@ package org.opensearch.ml.common.transport.connector;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
@@ -19,9 +20,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.opensearch.Version;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
@@ -46,8 +45,16 @@ public class MLCreateConnectorInputTests {
     private MLCreateConnectorInput mlCreateConnectorInput;
     private MLCreateConnectorInput mlCreateDryRunConnectorInput;
 
-    @Rule
-    public final ExpectedException exceptionRule = ExpectedException.none();
+    private static final String TEST_CONNECTOR_NAME = "test_connector_name";
+    private static final String TEST_CONNECTOR_DESCRIPTION = "this is a test connector";
+    private static final String TEST_CONNECTOR_VERSION = "1";
+    private static final String TEST_CONNECTOR_PROTOCOL = "http";
+    private static final String TEST_PARAM_KEY = "input";
+    private static final String TEST_PARAM_VALUE = "test input value";
+    private static final String TEST_CREDENTIAL_KEY = "key";
+    private static final String TEST_CREDENTIAL_VALUE = "test_key_value";
+    private static final String TEST_ROLE1 = "role1";
+    private static final String TEST_ROLE2 = "role2";
     private final String expectedInputStr = "{\"name\":\"test_connector_name\","
         + "\"description\":\"this is a test connector\",\"version\":\"1\",\"protocol\":\"http\","
         + "\"parameters\":{\"input\":\"test input value\"},\"credential\":{\"key\":\"test_key_value\"},"
@@ -84,15 +91,15 @@ public class MLCreateConnectorInputTests {
 
         mlCreateConnectorInput = MLCreateConnectorInput
             .builder()
-            .name("test_connector_name")
-            .description("this is a test connector")
-            .version("1")
-            .protocol("http")
-            .parameters(Map.of("input", "test input value"))
-            .credential(Map.of("key", "test_key_value"))
+            .name(TEST_CONNECTOR_NAME)
+            .description(TEST_CONNECTOR_DESCRIPTION)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(TEST_CONNECTOR_PROTOCOL)
+            .parameters(Map.of(TEST_PARAM_KEY, TEST_PARAM_VALUE))
+            .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
             .actions(List.of(action))
             .access(AccessMode.PUBLIC)
-            .backendRoles(Arrays.asList("role1", "role2"))
+            .backendRoles(Arrays.asList(TEST_ROLE1, TEST_ROLE2))
             .addAllBackendRoles(false)
             .connectorClientConfig(connectorClientConfig)
             .build();
@@ -102,59 +109,102 @@ public class MLCreateConnectorInputTests {
 
     @Test
     public void constructorMLCreateConnectorInput_NullName() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Connector name is null");
-        MLCreateConnectorInput
-            .builder()
-            .name(null)
-            .description("this is a test connector")
-            .version("1")
-            .protocol("http")
-            .parameters(Map.of("input", "test input value"))
-            .credential(Map.of("key", "test_key_value"))
-            .actions(List.of())
-            .access(AccessMode.PUBLIC)
-            .backendRoles(Arrays.asList("role1", "role2"))
-            .addAllBackendRoles(false)
-            .build();
+        Throwable exception = assertThrows(IllegalArgumentException.class, () -> {
+            MLCreateConnectorInput
+                .builder()
+                .name(null)
+                .description(TEST_CONNECTOR_DESCRIPTION)
+                .version(TEST_CONNECTOR_VERSION)
+                .protocol(TEST_CONNECTOR_PROTOCOL)
+                .parameters(Map.of(TEST_PARAM_KEY, TEST_PARAM_VALUE))
+                .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
+                .actions(List.of())
+                .access(AccessMode.PUBLIC)
+                .backendRoles(Arrays.asList(TEST_ROLE1, TEST_ROLE2))
+                .addAllBackendRoles(false)
+                .build();
+        });
+        assertEquals("Connector name is null", exception.getMessage());
     }
 
     @Test
     public void constructorMLCreateConnectorInput_NullVersion() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Connector version is null");
-        MLCreateConnectorInput
-            .builder()
-            .name("test_connector_name")
-            .description("this is a test connector")
-            .version(null)
-            .protocol("http")
-            .parameters(Map.of("input", "test input value"))
-            .credential(Map.of("key", "test_key_value"))
-            .actions(List.of())
-            .access(AccessMode.PUBLIC)
-            .backendRoles(Arrays.asList("role1", "role2"))
-            .addAllBackendRoles(false)
-            .build();
+        Throwable exception = assertThrows(IllegalArgumentException.class, () -> {
+            MLCreateConnectorInput
+                .builder()
+                .name(TEST_CONNECTOR_NAME)
+                .description(TEST_CONNECTOR_DESCRIPTION)
+                .version(null)
+                .protocol(TEST_CONNECTOR_PROTOCOL)
+                .parameters(Map.of(TEST_PARAM_KEY, TEST_PARAM_VALUE))
+                .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
+                .actions(List.of())
+                .access(AccessMode.PUBLIC)
+                .backendRoles(Arrays.asList(TEST_ROLE1, TEST_ROLE2))
+                .addAllBackendRoles(false)
+                .build();
+        });
+        assertEquals("Connector version is null", exception.getMessage());
     }
 
     @Test
     public void constructorMLCreateConnectorInput_NullProtocol() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Connector protocol is null");
-        MLCreateConnectorInput
-            .builder()
-            .name("test_connector_name")
-            .description("this is a test connector")
-            .version("1")
-            .protocol(null)
-            .parameters(Map.of("input", "test input value"))
-            .credential(Map.of("key", "test_key_value"))
-            .actions(List.of())
-            .access(AccessMode.PUBLIC)
-            .backendRoles(Arrays.asList("role1", "role2"))
-            .addAllBackendRoles(false)
-            .build();
+        Throwable exception = assertThrows(IllegalArgumentException.class, () -> {
+            MLCreateConnectorInput
+                .builder()
+                .name(TEST_CONNECTOR_NAME)
+                .description(TEST_CONNECTOR_DESCRIPTION)
+                .version(TEST_CONNECTOR_VERSION)
+                .protocol(null)
+                .parameters(Map.of(TEST_PARAM_KEY, TEST_PARAM_VALUE))
+                .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
+                .actions(List.of())
+                .access(AccessMode.PUBLIC)
+                .backendRoles(Arrays.asList(TEST_ROLE1, TEST_ROLE2))
+                .addAllBackendRoles(false)
+                .build();
+        });
+        assertEquals("Connector protocol is null", exception.getMessage());
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_NullCredential() {
+        Throwable exception = assertThrows(IllegalArgumentException.class, () -> {
+            MLCreateConnectorInput
+                .builder()
+                .name(TEST_CONNECTOR_NAME)
+                .description(TEST_CONNECTOR_DESCRIPTION)
+                .version(TEST_CONNECTOR_VERSION)
+                .protocol(TEST_CONNECTOR_PROTOCOL)
+                .parameters(Map.of(TEST_PARAM_KEY, TEST_PARAM_VALUE))
+                .credential(null)
+                .actions(List.of())
+                .access(AccessMode.PUBLIC)
+                .backendRoles(Arrays.asList(TEST_ROLE1, TEST_ROLE2))
+                .addAllBackendRoles(false)
+                .build();
+        });
+        assertEquals("Connector credential is null or empty list", exception.getMessage());
+    }
+
+    @Test
+    public void constructorMLCreateConnectorInput_EmptyCredential() {
+        Throwable exception = assertThrows(IllegalArgumentException.class, () -> {
+            MLCreateConnectorInput
+                .builder()
+                .name(TEST_CONNECTOR_NAME)
+                .description(TEST_CONNECTOR_DESCRIPTION)
+                .version(TEST_CONNECTOR_VERSION)
+                .protocol(TEST_CONNECTOR_PROTOCOL)
+                .parameters(Map.of(TEST_PARAM_KEY, TEST_PARAM_VALUE))
+                .credential(Map.of())
+                .actions(List.of())
+                .access(AccessMode.PUBLIC)
+                .backendRoles(Arrays.asList(TEST_ROLE1, TEST_ROLE2))
+                .addAllBackendRoles(false)
+                .build();
+        });
+        assertEquals("Connector credential is null or empty list", exception.getMessage());
     }
 
     @Test
@@ -178,7 +228,7 @@ public class MLCreateConnectorInputTests {
     @Test
     public void testParse() throws Exception {
         testParseFromJsonString(expectedInputStr, parsedInput -> {
-            assertEquals("test_connector_name", parsedInput.getName());
+            assertEquals(TEST_CONNECTOR_NAME, parsedInput.getName());
             assertEquals(20, parsedInput.getConnectorClientConfig().getMaxConnections().intValue());
             assertEquals(10000, parsedInput.getConnectorClientConfig().getReadTimeout().intValue());
             assertEquals(10000, parsedInput.getConnectorClientConfig().getConnectionTimeout().intValue());
@@ -198,7 +248,7 @@ public class MLCreateConnectorInputTests {
             + "\"backend_roles\":[\"role1\",\"role2\"],\"add_all_backend_roles\":false,"
             + "\"access_mode\":\"PUBLIC\"}";
         testParseFromJsonString(expectedInputStr, parsedInput -> {
-            assertEquals("test_connector_name", parsedInput.getName());
+            assertEquals(TEST_CONNECTOR_NAME, parsedInput.getName());
             assertEquals(1, parsedInput.getParameters().size());
             assertEquals("[\"test input value\"]", parsedInput.getParameters().get("input"));
         });
@@ -222,9 +272,10 @@ public class MLCreateConnectorInputTests {
     public void readInputStream_SuccessWithNullFields() throws IOException {
         MLCreateConnectorInput mlCreateMinimalConnectorInput = MLCreateConnectorInput
             .builder()
-            .name("test_connector_name")
-            .version("1")
-            .protocol("http")
+            .name(TEST_CONNECTOR_NAME)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(TEST_CONNECTOR_PROTOCOL)
+            .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
             .build();
         readInputStream(mlCreateMinimalConnectorInput, parsedInput -> {
             assertEquals(mlCreateMinimalConnectorInput.getName(), parsedInput.getName());
@@ -238,15 +289,15 @@ public class MLCreateConnectorInputTests {
         // Actions can be null for a connector without any specific actions defined.
         MLCreateConnectorInput input = MLCreateConnectorInput
             .builder()
-            .name("test_connector_name")
-            .description("this is a test connector")
-            .version("1")
-            .protocol("http")
-            .parameters(Map.of("input", "test input value"))
-            .credential(Map.of("key", "test_key_value"))
+            .name(TEST_CONNECTOR_NAME)
+            .description(TEST_CONNECTOR_DESCRIPTION)
+            .version(TEST_CONNECTOR_VERSION)
+            .protocol(TEST_CONNECTOR_PROTOCOL)
+            .parameters(Map.of(TEST_PARAM_KEY, TEST_PARAM_VALUE))
+            .credential(Map.of(TEST_CREDENTIAL_KEY, TEST_CREDENTIAL_VALUE))
             .actions(null) // Setting actions to null
             .access(AccessMode.PUBLIC)
-            .backendRoles(Arrays.asList("role1", "role2"))
+            .backendRoles(Arrays.asList(TEST_ROLE1, TEST_ROLE2))
             .addAllBackendRoles(false)
             .build();
 
@@ -258,10 +309,38 @@ public class MLCreateConnectorInputTests {
         String jsonMissingName = "{\"description\":\"this is a test connector\",\"version\":\"1\",\"protocol\":\"http\"}";
         XContentParser parser = createParser(jsonMissingName);
 
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Connector name is null");
+        Throwable exception = assertThrows(IllegalArgumentException.class, () -> { MLCreateConnectorInput.parse(parser); });
+        assertEquals("Connector name is null", exception.getMessage());
+    }
 
-        MLCreateConnectorInput.parse(parser);
+    @Test
+    public void testParseWithTenantId() throws Exception {
+        String inputWithTenantId =
+            "{\"name\":\"test_connector_name\",\"credential\":{\"key\":\"test_key_value\"},\"version\":\"1\",\"protocol\":\"http\",\"tenant_id\":\"test_tenant\"}";
+        testParseFromJsonString(inputWithTenantId, parsedInput -> {
+            assertEquals("test_connector_name", parsedInput.getName());
+            assertEquals("test_tenant", parsedInput.getTenantId());
+        });
+    }
+
+    @Test
+    public void testParseWithUnknownFields() throws Exception {
+        String inputWithUnknownFields =
+            "{\"name\":\"test_connector_name\",\"credential\":{\"key\":\"test_key_value\"},\"version\":\"1\",\"protocol\":\"http\",\"unknown_field\":\"unknown_value\"}";
+        testParseFromJsonString(inputWithUnknownFields, parsedInput -> {
+            assertEquals("test_connector_name", parsedInput.getName());
+            assertNull(parsedInput.getTenantId());
+        });
+    }
+
+    @Test
+    public void testParseWithEmptyActions() throws Exception {
+        String inputWithEmptyActions =
+            "{\"name\":\"test_connector_name\",\"credential\":{\"key\":\"test_key_value\"},\"version\":\"1\",\"protocol\":\"http\",\"actions\":[]}";
+        testParseFromJsonString(inputWithEmptyActions, parsedInput -> {
+            assertEquals("test_connector_name", parsedInput.getName());
+            assertTrue(parsedInput.getActions().isEmpty());
+        });
     }
 
     @Test

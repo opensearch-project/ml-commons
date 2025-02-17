@@ -23,9 +23,9 @@ import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.WriteRequest;
 import org.opensearch.common.action.ActionFuture;
 import org.opensearch.common.unit.TimeValue;
+import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.rest.RestStatus;
-import org.opensearch.core.xcontent.MediaTypeRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.query.QueryBuilder;
@@ -116,11 +116,9 @@ public class IntegTestUtils extends OpenSearchIntegTestCase {
     }
 
     /**
-     * Train model and return model id if not async request or task id for async
-     * request.
-     * 
+     * Train model and return model id if not async request or task id for async request.
      * @param inputDataset input data set
-     * @param async        async request or not
+     * @param async async request or not
      * @return model id for sync request or task id for async request.
      */
     public static String trainModel(MLInputDataset inputDataset, boolean async) {
@@ -142,8 +140,7 @@ public class IntegTestUtils extends OpenSearchIntegTestCase {
         return id;
     }
 
-    // Wait a while (20 seconds at most) for the model to be available in the ml
-    // index.
+    // Wait a while (20 seconds at most) for the model to be available in the ml index.
     public static SearchResponse waitModelAvailable1(String taskId) throws InterruptedException {
         SearchSourceBuilder modelSearchSourceBuilder = new SearchSourceBuilder();
         QueryBuilder queryBuilder = QueryBuilders.termQuery("taskId", taskId);
@@ -151,7 +148,7 @@ public class IntegTestUtils extends OpenSearchIntegTestCase {
         SearchRequest modelSearchRequest = new SearchRequest(new String[] { ML_MODEL_INDEX }, modelSearchSourceBuilder);
         SearchResponse modelSearchResponse = null;
         int i = 0;
-        while ((modelSearchResponse == null || modelSearchResponse.getHits().getTotalHits().value == 0) && i < 500) {
+        while ((modelSearchResponse == null || modelSearchResponse.getHits().getTotalHits().value() == 0) && i < 500) {
             try {
                 ActionFuture<SearchResponse> searchFuture = client().execute(SearchAction.INSTANCE, modelSearchRequest);
                 modelSearchResponse = searchFuture.actionGet();
@@ -162,12 +159,12 @@ public class IntegTestUtils extends OpenSearchIntegTestCase {
             i++;
         }
         assertNotNull(modelSearchResponse);
-        assertTrue(modelSearchResponse.getHits().getTotalHits().value > 0);
+        assertTrue(modelSearchResponse.getHits().getTotalHits().value() > 0);
         return modelSearchResponse;
     }
 
     public static MLTask waitModelAvailable(String taskId) throws InterruptedException {
-        MLTaskGetRequest getTaskRequest = new MLTaskGetRequest(taskId);
+        MLTaskGetRequest getTaskRequest = new MLTaskGetRequest(taskId, null);
         MLTask mlTask = null;
         int i = 0;
         while ((mlTask == null || mlTask.getModelId() == null) && i < 500) {
@@ -188,10 +185,10 @@ public class IntegTestUtils extends OpenSearchIntegTestCase {
     // Predict with the model generated, and verify the prediction result.
     public static void predictAndVerifyResult(String taskId, MLInputDataset inputDataset) throws IOException {
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).inputDataset(inputDataset).build();
-        MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest(taskId, mlInput, null);
+        MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest(taskId, mlInput, null, null);
         ActionFuture<MLTaskResponse> predictionFuture = client().execute(MLPredictionTaskAction.INSTANCE, predictionRequest);
         MLTaskResponse predictionResponse = predictionFuture.actionGet();
-        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        XContentBuilder builder = XContentFactory.jsonBuilder();
         builder.startObject();
         MLPredictionOutput mlPredictionOutput = (MLPredictionOutput) predictionResponse.getOutput();
         mlPredictionOutput.getPredictionResult().toXContent(builder, ToXContent.EMPTY_PARAMS);

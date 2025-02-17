@@ -44,6 +44,11 @@ opensearchplugin {
     name 'opensearch-ml'
     description 'machine learning plugin for opensearch'
     classname 'org.opensearch.ml.plugin.MachineLearningPlugin'
+    extendedPlugins = ['opensearch-job-scheduler']
+}
+
+configurations {
+    zipArchive
 }
 
 dependencies {
@@ -52,15 +57,33 @@ dependencies {
     implementation project(':opensearch-ml-algorithms')
     implementation project(':opensearch-ml-search-processors')
     implementation project(':opensearch-ml-memory')
+    compileOnly "com.google.guava:guava:32.1.3-jre"
 
+    implementation group: 'software.amazon.awssdk', name: 'aws-core', version: '2.29.12'
+    implementation group: 'software.amazon.awssdk', name: 's3', version: '2.29.12'
+    implementation group: 'software.amazon.awssdk', name: 'regions', version: '2.29.12'
+
+    implementation group: 'software.amazon.awssdk', name: 'aws-xml-protocol', version: '2.29.12'
+
+    implementation group: 'software.amazon.awssdk', name: 'aws-query-protocol', version: '2.29.12'
+
+    implementation group: 'software.amazon.awssdk', name: 'protocol-core', version: '2.29.12'
+
+    zipArchive group: 'org.opensearch.plugin', name:'opensearch-job-scheduler', version: "${opensearch_build}"
+    compileOnly "org.opensearch:opensearch-job-scheduler-spi:${opensearch_build}"
     implementation group: 'org.opensearch', name: 'opensearch', version: "${opensearch_version}"
     implementation "org.opensearch.client:opensearch-rest-client:${opensearch_version}"
+    // Multi-tenant SDK Client
+    implementation "org.opensearch:opensearch-remote-metadata-sdk:${opensearch_build}"
+
     implementation "org.opensearch:common-utils:${common_utils_version}"
     implementation("com.fasterxml.jackson.core:jackson-annotations:${versions.jackson}")
     implementation("com.fasterxml.jackson.core:jackson-databind:${versions.jackson_databind}")
     implementation group: 'com.networknt' , name: 'json-schema-validator', version: '1.4.0'
-    implementation group: 'com.google.guava', name: 'guava', version: '32.1.2-jre'
-    implementation group: 'com.google.code.gson', name: 'gson', version: '2.10.1'
+    implementation (group: 'com.google.guava', name: 'guava', version: '32.1.3-jre') {
+	exclude group: 'com.google.errorprone', module: 'error_prone_annotations'
+    }
+    implementation group: 'com.google.code.gson', name: 'gson', version: '2.11.0'
     implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.10'
     implementation group: 'org.apache.commons', name: 'commons-math3', version: '3.6.1'
     implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
@@ -95,6 +118,9 @@ publishing {
 
     repositories {
         maven {
+            mavenLocal()
+            mavenCentral()
+            maven { url "https://ci.opensearch.org/ci/dbc/snapshots/lucene/" }
             name = "Snapshots"
             url = "https://aws.oss.sonatype.org/content/repositories/snapshots"
             credentials {
@@ -215,6 +241,17 @@ testClusters.integTest {
         }
     }
     plugin(project.tasks.bundlePlugin.archiveFile)
+    plugin(provider(new Callable<RegularFile>(){
+        @Override
+        RegularFile call() throws Exception {
+            return new RegularFile() {
+                @Override
+                File getAsFile() {
+                    return configurations.zipArchive.asFileTree.getSingleFile()
+                }
+            }
+        }
+    }))
 
     nodes.each { node ->
         def plugins = node.plugins
@@ -222,6 +259,21 @@ testClusters.integTest {
         plugins.remove(0)
         plugins.add(firstPlugin)
     }
+}
+
+testClusters.yamlRestTest {
+
+    plugin(provider(new Callable<RegularFile>(){
+        @Override
+        RegularFile call() throws Exception {
+            return new RegularFile() {
+                @Override
+                File getAsFile() {
+                    return configurations.zipArchive.asFileTree.getSingleFile()
+                }
+            }
+        }
+    }))
 }
 
 task integTestRemote(type: RestIntegTestTask) {
@@ -313,7 +365,9 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.action.models.DeleteModelTransportAction.2',
         'org.opensearch.ml.model.MLModelCacheHelper',
         'org.opensearch.ml.model.MLModelCacheHelper.1',
-        'org.opensearch.ml.action.tasks.CancelBatchJobTransportAction'
+        'org.opensearch.ml.action.tasks.CancelBatchJobTransportAction',
+        'org.opensearch.ml.jobs.MLBatchTaskUpdateExtension',
+        'org.opensearch.ml.jobs.MLBatchTaskUpdateJobRunner'
 
 ]
 
@@ -342,18 +396,30 @@ jacocoTestCoverageVerification {
 check.dependsOn jacocoTestCoverageVerification
 
 configurations.all {
+    exclude group: "org.jetbrains", module: "annotations"
+    exclude group: "com.google.guava", module: "failureaccess"
     resolutionStrategy.force 'org.apache.commons:commons-lang3:3.10'
     resolutionStrategy.force 'commons-logging:commons-logging:1.2'
     resolutionStrategy.force 'org.objenesis:objenesis:3.2'
     resolutionStrategy.force 'net.java.dev.jna:jna:5.11.0'
     resolutionStrategy.force 'org.apache.commons:commons-text:1.10.0'
-    resolutionStrategy.force 'com.google.protobuf:protobuf-java:3.21.9'
+    resolutionStrategy.force 'com.google.protobuf:protobuf-java:3.25.5'
     resolutionStrategy.force 'org.apache.httpcomponents:httpcore:4.4.15'
     resolutionStrategy.force 'org.apache.httpcomponents:httpclient:4.5.14'
     resolutionStrategy.force 'commons-codec:commons-codec:1.15'
     resolutionStrategy.force 'org.slf4j:slf4j-api:1.7.36'
     resolutionStrategy.force 'org.codehaus.plexus:plexus-utils:3.3.0'
-    exclude group: "org.jetbrains", module: "annotations"
+    resolutionStrategy.force 'org.eclipse.platform:org.eclipse.core.runtime:3.29.0'
+    resolutionStrategy.force "org.opensearch.client:opensearch-rest-client:${opensearch_version}"
+    resolutionStrategy.force "org.apache.httpcomponents.core5:httpcore5:5.3.1"
+    resolutionStrategy.force "org.apache.httpcomponents.core5:httpcore5-h2:5.3.1"
+    resolutionStrategy.force "org.apache.httpcomponents.client5:httpclient5:5.4.1"
+    resolutionStrategy.force "com.fasterxml.jackson.core:jackson-databind:${versions.jackson_databind}"
+    resolutionStrategy.force "com.fasterxml.jackson.core:jackson-core:${versions.jackson_databind}"
+    resolutionStrategy.force "org.apache.logging.log4j:log4j-api:2.24.2"
+    resolutionStrategy.force "org.apache.logging.log4j:log4j-core:2.24.2"
+    resolutionStrategy.force "jakarta.json:jakarta.json-api:2.1.3"
+    resolutionStrategy.force "org.opensearch:opensearch:${opensearch_version}"
 }
 
 apply plugin: 'com.netflix.nebula.ospackage'
@@ -410,7 +476,7 @@ spotless {
         removeUnusedImports()
         importOrder 'java', 'javax', 'org', 'com'
 
-        eclipse().configFile rootProject.file('.eclipseformat.xml')
+        eclipse().withP2Mirrors(Map.of("https://download.eclipse.org/", "https://mirror.umd.edu/eclipse/")).configFile rootProject.file('.eclipseformat.xml')
     }
 }
 

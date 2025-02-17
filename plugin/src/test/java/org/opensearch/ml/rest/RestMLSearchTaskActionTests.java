@@ -9,7 +9,9 @@ import java.util.List;
 
 import org.hamcrest.Matchers;
 import org.junit.Before;
+import org.mockito.Mock;
 import org.opensearch.core.common.Strings;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.test.OpenSearchTestCase;
@@ -18,13 +20,16 @@ public class RestMLSearchTaskActionTests extends OpenSearchTestCase {
 
     private RestMLSearchTaskAction restMLSearchTaskAction;
 
+    @Mock
+    MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Before
     public void setup() {
-        restMLSearchTaskAction = new RestMLSearchTaskAction();
+        restMLSearchTaskAction = new RestMLSearchTaskAction(mlFeatureEnabledSetting);
     }
 
     public void testConstructor() {
-        RestMLSearchTaskAction mlSearchTaskAction = new RestMLSearchTaskAction();
+        RestMLSearchTaskAction mlSearchTaskAction = new RestMLSearchTaskAction(mlFeatureEnabledSetting);
         assertNotNull(mlSearchTaskAction);
     }
 

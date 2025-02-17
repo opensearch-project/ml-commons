@@ -24,11 +24,9 @@ import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.SearchResponseSections;
 import org.opensearch.action.search.ShardSearchFailure;
-import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.action.ActionListener;
@@ -36,6 +34,8 @@ import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
+import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
@@ -47,6 +47,7 @@ import org.opensearch.search.aggregations.InternalAggregations;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.client.node.NodeClient;
 
 public class RestMLSearchModelGroupActionTests extends OpenSearchTestCase {
 
@@ -57,10 +58,13 @@ public class RestMLSearchModelGroupActionTests extends OpenSearchTestCase {
     @Mock
     RestChannel channel;
 
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
-        restMLSearchModelGroupAction = new RestMLSearchModelGroupAction();
+        restMLSearchModelGroupAction = new RestMLSearchModelGroupAction(mlFeatureEnabledSetting);
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
 
@@ -106,7 +110,7 @@ public class RestMLSearchModelGroupActionTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        RestMLSearchModelGroupAction mlSearchModelGroupAction = new RestMLSearchModelGroupAction();
+        RestMLSearchModelGroupAction mlSearchModelGroupAction = new RestMLSearchModelGroupAction(mlFeatureEnabledSetting);
         assertNotNull(mlSearchModelGroupAction);
     }
 
@@ -130,16 +134,16 @@ public class RestMLSearchModelGroupActionTests extends OpenSearchTestCase {
         RestRequest request = getSearchAllRestRequest();
         restMLSearchModelGroupAction.handleRequest(request, channel, client);
 
-        ArgumentCaptor<SearchRequest> argumentCaptor = ArgumentCaptor.forClass(SearchRequest.class);
+        ArgumentCaptor<MLSearchActionRequest> argumentCaptor = ArgumentCaptor.forClass(MLSearchActionRequest.class);
         ArgumentCaptor<RestResponse> responseCaptor = ArgumentCaptor.forClass(RestResponse.class);
         verify(client, times(1)).execute(eq(MLModelGroupSearchAction.INSTANCE), argumentCaptor.capture(), any());
         verify(channel, times(1)).sendResponse(responseCaptor.capture());
-        SearchRequest searchRequest = argumentCaptor.getValue();
-        String[] indices = searchRequest.indices();
+        MLSearchActionRequest mlSearchActionRequest = argumentCaptor.getValue();
+        String[] indices = mlSearchActionRequest.indices();
         assertArrayEquals(new String[] { ML_MODEL_GROUP_INDEX }, indices);
         assertEquals(
             "{\"query\":{\"match_all\":{\"boost\":1.0}},\"version\":true,\"seq_no_primary_term\":true,\"_source\":{\"includes\":[],\"excludes\":[\"content\",\"model_content\",\"ui_metadata\"]}}",
-            searchRequest.source().toString()
+            mlSearchActionRequest.source().toString()
         );
         RestResponse restResponse = responseCaptor.getValue();
         assertNotEquals(RestStatus.REQUEST_TIMEOUT, restResponse.status());
@@ -176,16 +180,16 @@ public class RestMLSearchModelGroupActionTests extends OpenSearchTestCase {
         RestRequest request = getSearchAllRestRequest();
         restMLSearchModelGroupAction.handleRequest(request, channel, client);
 
-        ArgumentCaptor<SearchRequest> argumentCaptor = ArgumentCaptor.forClass(SearchRequest.class);
+        ArgumentCaptor<MLSearchActionRequest> argumentCaptor = ArgumentCaptor.forClass(MLSearchActionRequest.class);
         ArgumentCaptor<RestResponse> responseCaptor = ArgumentCaptor.forClass(RestResponse.class);
         verify(client, times(1)).execute(eq(MLModelGroupSearchAction.INSTANCE), argumentCaptor.capture(), any());
         verify(channel, times(1)).sendResponse(responseCaptor.capture());
-        SearchRequest searchRequest = argumentCaptor.getValue();
-        String[] indices = searchRequest.indices();
+        MLSearchActionRequest mlSearchActionRequest = argumentCaptor.getValue();
+        String[] indices = mlSearchActionRequest.indices();
         assertArrayEquals(new String[] { ML_MODEL_GROUP_INDEX }, indices);
         assertEquals(
             "{\"query\":{\"match_all\":{\"boost\":1.0}},\"version\":true,\"seq_no_primary_term\":true,\"_source\":{\"includes\":[],\"excludes\":[\"content\",\"model_content\",\"ui_metadata\"]}}",
-            searchRequest.source().toString()
+            mlSearchActionRequest.source().toString()
         );
         RestResponse restResponse = responseCaptor.getValue();
         assertEquals(RestStatus.REQUEST_TIMEOUT, restResponse.status());

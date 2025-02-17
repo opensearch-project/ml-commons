@@ -27,7 +27,6 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
@@ -44,6 +43,7 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
 import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.client.node.NodeClient;
 
 public class RestMLCreateConnectorActionTests extends OpenSearchTestCase {
     @Rule
@@ -104,7 +104,7 @@ public class RestMLCreateConnectorActionTests extends OpenSearchTestCase {
     }
 
     public void testGetRequest() throws IOException {
-        RestRequest request = getCreateConnectorRestRequest();
+        RestRequest request = getCreateConnectorRestRequest(null);
         MLCreateConnectorRequest mlCreateConnectorRequest = restMLCreateConnectorAction.getRequest(request);
 
         MLCreateConnectorInput mlCreateConnectorInput = mlCreateConnectorRequest.getMlCreateConnectorInput();
@@ -112,7 +112,7 @@ public class RestMLCreateConnectorActionTests extends OpenSearchTestCase {
     }
 
     public void testPrepareRequest() throws Exception {
-        RestRequest request = getCreateConnectorRestRequest();
+        RestRequest request = getCreateConnectorRestRequest(null);
         restMLCreateConnectorAction.handleRequest(request, channel, client);
 
         ArgumentCaptor<MLCreateConnectorRequest> argumentCaptor = ArgumentCaptor.forClass(MLCreateConnectorRequest.class);
@@ -135,7 +135,17 @@ public class RestMLCreateConnectorActionTests extends OpenSearchTestCase {
         thrown.expectMessage(REMOTE_INFERENCE_DISABLED_ERR_MSG);
 
         when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(false);
-        RestRequest request = getCreateConnectorRestRequest();
+        RestRequest request = getCreateConnectorRestRequest(null);
         restMLCreateConnectorAction.handleRequest(request, channel, client);
+    }
+
+    public void testGetRequest_MultiTenancyEnabled() throws IOException {
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
+        RestRequest request = getCreateConnectorRestRequest("tenantId");
+        MLCreateConnectorRequest mlCreateConnectorRequest = restMLCreateConnectorAction.getRequest(request);
+
+        MLCreateConnectorInput mlCreateConnectorInput = mlCreateConnectorRequest.getMlCreateConnectorInput();
+        verifyParsedCreateConnectorInput(mlCreateConnectorInput);
+        assertEquals("tenantId", mlCreateConnectorInput.getTenantId());
     }
 }

@@ -35,7 +35,6 @@ import org.opensearch.Version;
 import org.opensearch.action.FailedNodeException;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.support.ActionFilters;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.node.DiscoveryNodes;
@@ -54,9 +53,11 @@ import org.opensearch.ml.common.transport.controller.MLUndeployControllerNodesRe
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
 
 public class DeleteControllerTransportActionTests extends OpenSearchTestCase {
     @Mock
@@ -104,6 +105,9 @@ public class DeleteControllerTransportActionTests extends OpenSearchTestCase {
     @Mock
     MLUndeployControllerNodesResponse mlUndeployControllerNodesResponse;
 
+    @Mock
+    MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
@@ -137,7 +141,7 @@ public class DeleteControllerTransportActionTests extends OpenSearchTestCase {
         );
 
         DiscoveryNodes nodes = DiscoveryNodes.builder().add(node1).add(node2).build();
-
+        when(mlFeatureEnabledSetting.isControllerEnabled()).thenReturn(true);
         deleteControllerTransportAction = spy(
             new DeleteControllerTransportAction(
                 transportService,
@@ -147,7 +151,8 @@ public class DeleteControllerTransportActionTests extends OpenSearchTestCase {
                 clusterService,
                 mlModelManager,
                 mlModelCacheHelper,
-                modelAccessControlHelper
+                modelAccessControlHelper,
+                mlFeatureEnabledSetting
             )
         );
 
@@ -191,6 +196,18 @@ public class DeleteControllerTransportActionTests extends OpenSearchTestCase {
     public void testDeleteControllerSuccess() {
         deleteControllerTransportAction.doExecute(null, mlControllerDeleteRequest, actionListener);
         verify(actionListener).onResponse(deleteResponse);
+    }
+
+    @Test
+    public void testDeleteControllerFailedWithControllerFeatureFlagDisabled() {
+        when(mlFeatureEnabledSetting.isControllerEnabled()).thenReturn(false);
+        deleteControllerTransportAction.doExecute(null, mlControllerDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+                "Controller is currently disabled. To enable it, update the setting \"plugins.ml_commons.controller_enabled\" to true.",
+                argumentCaptor.getValue().getMessage()
+        );
     }
 
     @Test

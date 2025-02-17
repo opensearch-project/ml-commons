@@ -9,21 +9,26 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.times;
+import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_TASK_ID;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.opensearch.client.node.NodeClient;
+import org.mockito.MockitoAnnotations;
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.transport.task.*;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
@@ -31,6 +36,7 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
 import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.client.node.NodeClient;
 
 public class RestMLGetTaskActionTests extends OpenSearchTestCase {
 
@@ -42,9 +48,22 @@ public class RestMLGetTaskActionTests extends OpenSearchTestCase {
     @Mock
     RestChannel channel;
 
+    Settings settings;
+
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
+    @Mock
+    private ClusterService clusterService;
+
     @Before
     public void setup() {
-        restMLGetTaskAction = new RestMLGetTaskAction();
+        MockitoAnnotations.openMocks(this);
+        settings = Settings.builder().put(ML_COMMONS_MULTI_TENANCY_ENABLED.getKey(), false).build();
+        when(clusterService.getSettings()).thenReturn(settings);
+        when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MULTI_TENANCY_ENABLED)));
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
+        restMLGetTaskAction = new RestMLGetTaskAction(mlFeatureEnabledSetting);
 
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
@@ -63,7 +82,7 @@ public class RestMLGetTaskActionTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        RestMLGetTaskAction mlGetTaskAction = new RestMLGetTaskAction();
+        RestMLGetTaskAction mlGetTaskAction = new RestMLGetTaskAction(mlFeatureEnabledSetting);
         assertNotNull(mlGetTaskAction);
     }
 
@@ -95,7 +114,6 @@ public class RestMLGetTaskActionTests extends OpenSearchTestCase {
     private RestRequest getRestRequest() {
         Map<String, String> params = new HashMap<>();
         params.put(PARAMETER_TASK_ID, "test_id");
-        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(params).build();
-        return request;
+        return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(params).build();
     }
 }

@@ -65,10 +65,14 @@ public abstract class AbstractConnector implements Connector {
     protected User owner;
     @Setter
     protected AccessMode access;
+    @Setter
     protected Instant createdTime;
+    @Setter
     protected Instant lastUpdateTime;
     @Setter
     protected ConnectorClientConfig connectorClientConfig;
+    @Setter
+    protected String tenantId;
 
     protected Map<String, String> createDecryptedHeaders(Map<String, String> headers) {
         if (headers == null) {
@@ -79,7 +83,7 @@ public abstract class AbstractConnector implements Connector {
         for (String key : headers.keySet()) {
             decryptedHeaders.put(key, substitutor.replace(headers.get(key)));
         }
-        if (parameters != null && parameters.size() > 0) {
+        if (parameters != null && !parameters.isEmpty()) {
             substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
             for (String key : decryptedHeaders.keySet()) {
                 decryptedHeaders.put(key, substitutor.replace(decryptedHeaders.get(key)));
@@ -124,6 +128,11 @@ public abstract class AbstractConnector implements Connector {
     }
 
     @Override
+    public void addAction(ConnectorAction action) {
+        actions.add(action);
+    }
+
+    @Override
     public void removeCredential() {
         this.credential = null;
         this.decryptedCredential = null;
@@ -133,11 +142,11 @@ public abstract class AbstractConnector implements Connector {
     @Override
     public String getActionEndpoint(String action, Map<String, String> parameters) {
         Optional<ConnectorAction> actionEndpoint = findAction(action);
-        if (!actionEndpoint.isPresent()) {
+        if (actionEndpoint.isEmpty()) {
             return null;
         }
         String predictEndpoint = actionEndpoint.get().getUrl();
-        if (parameters != null && parameters.size() > 0) {
+        if (parameters != null && !parameters.isEmpty()) {
             StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
             predictEndpoint = substitutor.replace(predictEndpoint);
         }

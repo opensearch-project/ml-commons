@@ -34,9 +34,9 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.bulk.BulkRequest;
 import org.opensearch.action.bulk.BulkResponse;
-import org.opensearch.client.Client;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.transport.batch.MLBatchIngestionInput;
+import org.opensearch.transport.client.Client;
 
 public class AbstractIngestionTests {
     @Mock
@@ -166,7 +166,8 @@ public class AbstractIngestionTests {
             fieldMap,
             ingestFields,
             new HashMap<>(),
-            new HashMap<>()
+            new HashMap<>(),
+            null
         );
         Map<String, Object> result = s3DataIngestion.filterFieldMapping(mlBatchIngestionInput, 0);
 
@@ -190,7 +191,8 @@ public class AbstractIngestionTests {
             fieldMap,
             ingestFields,
             new HashMap<>(),
-            new HashMap<>()
+            new HashMap<>(),
+            null
         );
 
         // Act
@@ -219,7 +221,8 @@ public class AbstractIngestionTests {
             fieldMap,
             ingestFields,
             new HashMap<>(),
-            new HashMap<>()
+            new HashMap<>(),
+            null
         );
 
         // Act
@@ -292,7 +295,8 @@ public class AbstractIngestionTests {
             fieldMap,
             ingestFields,
             new HashMap<>(),
-            new HashMap<>()
+            new HashMap<>(),
+            null
         );
         ActionListener<BulkResponse> bulkResponseListener = mock(ActionListener.class);
         s3DataIngestion.batchIngest(sourceLines, mlBatchIngestionInput, bulkResponseListener, 0, true);
@@ -318,7 +322,8 @@ public class AbstractIngestionTests {
             fieldMap,
             ingestFields,
             new HashMap<>(),
-            new HashMap<>()
+            new HashMap<>(),
+            null
         );
         ActionListener<BulkResponse> bulkResponseListener = mock(ActionListener.class);
         s3DataIngestion.batchIngest(sourceLines, mlBatchIngestionInput, bulkResponseListener, 0, false);

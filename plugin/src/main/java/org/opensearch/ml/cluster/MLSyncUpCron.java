@@ -29,7 +29,6 @@ import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.support.WriteRequest;
 import org.opensearch.action.update.UpdateRequest;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -48,8 +47,11 @@ import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsRequest;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
+import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.transport.client.Client;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableMap;
@@ -61,28 +63,34 @@ public class MLSyncUpCron implements Runnable {
 
     public static final int DEPLOY_MODEL_TASK_GRACE_TIME_IN_MS = 20_000;
     private Client client;
+    private final SdkClient sdkClient;
     private ClusterService clusterService;
     private DiscoveryNodeHelper nodeHelper;
     private MLIndicesHandler mlIndicesHandler;
     private Encryptor encryptor;
     private volatile Boolean mlConfigInited;
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
     @VisibleForTesting
     Semaphore updateModelStateSemaphore;
 
     public MLSyncUpCron(
         Client client,
+        SdkClient sdkClient,
         ClusterService clusterService,
         DiscoveryNodeHelper nodeHelper,
         MLIndicesHandler mlIndicesHandler,
-        Encryptor encryptor
+        Encryptor encryptor,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         this.client = client;
+        this.sdkClient = sdkClient;
         this.clusterService = clusterService;
         this.nodeHelper = nodeHelper;
         this.mlIndicesHandler = mlIndicesHandler;
         this.updateModelStateSemaphore = new Semaphore(1);
         this.mlConfigInited = false;
         this.encryptor = encryptor;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
@@ -100,7 +108,7 @@ public class MLSyncUpCron implements Runnable {
         // gather running model/tasks on nodes
         client.execute(MLSyncUpAction.INSTANCE, gatherInfoRequest, ActionListener.wrap(r -> {
             List<MLSyncUpNodeResponse> responses = r.getNodes();
-            if (r.failures() != null && r.failures().size() != 0) {
+            if (r.failures() != null && !r.failures().isEmpty()) {
                 log
                     .debug(
                         "Received {} failures in the sync up response on nodes. Error messages are {}",
@@ -126,14 +134,14 @@ public class MLSyncUpCron implements Runnable {
                 }
 
                 String[] deployedModelIds = response.getDeployedModelIds();
-                if (deployedModelIds != null && deployedModelIds.length > 0) {
+                if (deployedModelIds != null) {
                     for (String modelId : deployedModelIds) {
                         Set<String> workerNodes = modelWorkerNodes.computeIfAbsent(modelId, it -> new HashSet<>());
                         workerNodes.add(nodeId);
                     }
                 }
                 String[] runningModelIds = response.getRunningDeployModelIds();
-                if (runningModelIds != null && runningModelIds.length > 0) {
+                if (runningModelIds != null) {
                     for (String modelId : runningModelIds) {
                         Set<String> workerNodes = deployingModels.computeIfAbsent(modelId, it -> new HashSet<>());
                         workerNodes.add(nodeId);
@@ -141,7 +149,7 @@ public class MLSyncUpCron implements Runnable {
                 }
 
                 String[] runningDeployModelTaskIds = response.getRunningDeployModelTaskIds();
-                if (runningDeployModelTaskIds != null && runningDeployModelTaskIds.length > 0) {
+                if (runningDeployModelTaskIds != null) {
                     for (String taskId : runningDeployModelTaskIds) {
                         Set<String> workerNodes = runningDeployModelTasks.computeIfAbsent(taskId, it -> new HashSet<>());
                         workerNodes.add(nodeId);
@@ -169,7 +177,7 @@ public class MLSyncUpCron implements Runnable {
                 .builder()
                 .syncRunningDeployModelTasks(true)
                 .runningDeployModelTasks(runningDeployModelTasks);
-            if (modelWorkerNodes.size() == 0) {
+            if (modelWorkerNodes.isEmpty()) {
                 log.debug("No deployed model found. Will clear model routing on all nodes");
                 inputBuilder.clearRoutingTable(true);
             } else {
@@ -205,12 +213,13 @@ public class MLSyncUpCron implements Runnable {
         String[] targetNodeIds = getAllNodes(clusterService);
         MLUndeployModelsRequest mlUndeployModelsRequest = new MLUndeployModelsRequest(
             expiredModels.toArray(new String[expiredModels.size()]),
-            targetNodeIds
+            targetNodeIds,
+            null
         );
 
         client.execute(MLUndeployModelsAction.INSTANCE, mlUndeployModelsRequest, ActionListener.wrap(r -> {
             MLUndeployModelNodesResponse mlUndeployModelNodesResponse = r.getResponse();
-            if (mlUndeployModelNodesResponse.failures() != null && mlUndeployModelNodesResponse.failures().size() != 0) {
+            if (mlUndeployModelNodesResponse.failures() != null && !mlUndeployModelNodesResponse.failures().isEmpty()) {
                 log.debug("Received failures in undeploying expired models", mlUndeployModelNodesResponse.failures());
             }
 
@@ -226,7 +235,7 @@ public class MLSyncUpCron implements Runnable {
 
     @VisibleForTesting
     void initMLConfig() {
-        if (mlConfigInited) {
+        if (mlConfigInited || mlFeatureEnabledSetting.isMultiTenancyEnabled()) {
             return;
         }
         mlIndicesHandler.initMLConfigIndex(ActionListener.wrap(r -> {
@@ -245,12 +254,16 @@ public class MLSyncUpCron implements Runnable {
                         indexRequest.opType(DocWriteRequest.OpType.CREATE);
                         client.index(indexRequest, ActionListener.wrap(indexResponse -> {
                             log.info("ML configuration initialized successfully");
-                            encryptor.setMasterKey(masterKey);
+                            // as this method is not being used for multi-tenancy use case, we are setting
+                            // tenant id null by default
+                            encryptor.setMasterKey(null, masterKey);
                             mlConfigInited = true;
                         }, e -> { log.debug("Failed to save ML encryption master key", e); }));
                     } else {
                         final String masterKey = (String) getResponse.getSourceAsMap().get(MASTER_KEY);
-                        encryptor.setMasterKey(masterKey);
+                        // as this method is not being used for multi-tenancy use case, we are setting
+                        // tenant id null by default
+                        encryptor.setMasterKey(null, masterKey);
                         mlConfigInited = true;
                         log.info("ML configuration already initialized, no action needed");
                     }
@@ -370,7 +383,7 @@ public class MLSyncUpCron implements Runnable {
         int currentWorkerNodeCountInIndex
     ) {
         Set<String> deployModelTaskNodes = deployingModels.get(modelId);
-        if (deployModelTaskNodes != null && deployModelTaskNodes.size() > 0 && state != MLModelState.DEPLOYING) {
+        if (deployModelTaskNodes != null && !deployModelTaskNodes.isEmpty() && state != MLModelState.DEPLOYING) {
             // If some node/nodes are deploying the model and model state is not DEPLOYING, then set model state as DEPLOYING.
             return MLModelState.DEPLOYING;
         }
@@ -418,7 +431,7 @@ public class MLSyncUpCron implements Runnable {
         updatedModelIds.addAll(newModelStates.keySet());
         updatedModelIds.addAll(newPlanningWorkNodes.keySet());
 
-        if (updatedModelIds.size() > 0) {
+        if (!updatedModelIds.isEmpty()) {
             BulkRequest bulkUpdateRequest = new BulkRequest();
             for (String modelId : updatedModelIds) {
                 UpdateRequest updateRequest = new UpdateRequest();

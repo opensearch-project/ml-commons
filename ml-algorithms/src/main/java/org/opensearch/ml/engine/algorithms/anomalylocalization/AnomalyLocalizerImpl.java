@@ -25,7 +25,6 @@ import org.opensearch.action.search.MultiSearchResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.IndicesOptions;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.metadata.IndexNameExpressionResolver;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
@@ -52,6 +51,7 @@ import org.opensearch.search.aggregations.bucket.filter.FiltersAggregationBuilde
 import org.opensearch.search.aggregations.bucket.filter.FiltersAggregator.KeyedFilter;
 import org.opensearch.search.aggregations.metrics.NumericMetricsAggregation.SingleValue;
 import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.transport.client.Client;
 
 import lombok.Data;
 import lombok.SneakyThrows;
@@ -525,9 +525,6 @@ public class AnomalyLocalizerImpl implements AnomalyLocalizer, Executable {
 
     @Override
     public void execute(Input input, ActionListener<Output> listener) {
-        getLocalizationResults(
-            (AnomalyLocalizationInput) input,
-            ActionListener.wrap(o -> listener.onResponse(o), e -> listener.onFailure(e))
-        );
+        getLocalizationResults((AnomalyLocalizationInput) input, ActionListener.wrap(listener::onResponse, listener::onFailure));
     }
 }

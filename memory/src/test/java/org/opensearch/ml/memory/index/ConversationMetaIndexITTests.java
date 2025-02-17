@@ -35,8 +35,6 @@ import org.opensearch.action.LatchedActionListener;
 import org.opensearch.action.StepListener;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
-import org.opensearch.client.Client;
-import org.opensearch.client.Requests;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.util.concurrent.ThreadContext.StoredContext;
@@ -48,6 +46,8 @@ import org.opensearch.ml.common.conversation.ConversationMeta;
 import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchIntegTestCase;
+import org.opensearch.transport.client.Client;
+import org.opensearch.transport.client.Requests;
 
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 
@@ -564,8 +564,8 @@ public class ConversationMetaIndexITTests extends OpenSearchIntegTestCase {
             assert (cid2.result().equals(get2.result().getId()));
             assert (get1.result().getName().equals("convo1"));
             assert (get2.result().getName().equals("convo2"));
-            Assert.assertTrue(convo2.getAdditionalInfos().isEmpty());
-            Assert.assertTrue(get1.result().getAdditionalInfos().isEmpty());
+            Assert.assertTrue(convo2.getAdditionalInfos() == null);
+            Assert.assertTrue(get1.result().getAdditionalInfos() == null);
             cdl.countDown();
         }, e -> {
             cdl.countDown();
@@ -702,7 +702,7 @@ public class ConversationMetaIndexITTests extends OpenSearchIntegTestCase {
             log.info(response.toString());
             cdl.countDown();
             assert (response.getHits().getAt(0).getId().equals(convo1.result()));
-            Assert.assertEquals(1L, Objects.requireNonNull(response.getHits().getTotalHits()).value);
+            Assert.assertEquals(1L, Objects.requireNonNull(response.getHits().getTotalHits()).value());
         }, e -> {
             cdl.countDown();
             log.error(e);

@@ -8,9 +8,12 @@ package org.opensearch.ml.common.utils;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.AccessController;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -18,16 +21,28 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.BooleanUtils;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.opensearch.OpenSearchParseException;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
+import com.jayway.jsonpath.JsonPath;
+import com.jayway.jsonpath.PathNotFoundException;
+import com.networknt.schema.JsonSchema;
+import com.networknt.schema.JsonSchemaFactory;
+import com.networknt.schema.SpecVersion;
+import com.networknt.schema.ValidationMessage;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -52,12 +67,18 @@ public class StringUtils {
     }
     public static final String TO_STRING_FUNCTION_NAME = ".toString()";
 
-    public static boolean isValidJsonString(String Json) {
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    public static boolean isValidJsonString(String json) {
+        if (json == null || json.isBlank()) {
+            return false;
+        }
+
         try {
-            new JSONObject(Json);
+            new JSONObject(json);
         } catch (JSONException ex) {
             try {
-                new JSONArray(Json);
+                new JSONArray(json);
             } catch (JSONException ex1) {
                 return false;
             }
@@ -66,6 +87,10 @@ public class StringUtils {
     }
 
     public static boolean isJson(String json) {
+        if (json == null || json.isBlank()) {
+            return false;
+        }
+
         try {
             if (!isValidJsonString(json)) {
                 return false;
@@ -293,4 +318,183 @@ public class StringUtils {
         // Extract the substring from the startIndex to the end of the input string
         return (startIndex != -1) ? jsonPathWithSource.substring(startIndex) : jsonPathWithSource;
     }
+
+    /**
+     * Checks if the given input string matches the JSONPath format.
+     *
+     * <p>The JSONPath format is a way to navigate and extract data from JSON documents.
+     * It uses a syntax similar to XPath for XML documents. This method attempts to compile
+     * the input string as a JSONPath expression using the {@link com.jayway.jsonpath.JsonPath}
+     * library. If the compilation succeeds, it means the input string is a valid JSONPath
+     * expression.
+     *
+     * @param input the input string to be checked for JSONPath format validity
+     * @return true if the input string is a valid JSONPath expression, false otherwise
+     */
+    public static boolean isValidJSONPath(String input) {
+        if (input == null || input.isBlank()) {
+            return false;
+        }
+        try {
+            JsonPath.compile(input); // This will throw an exception if the path is invalid
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    public static JsonObject getJsonObjectFromString(String jsonString) {
+        if (jsonString == null || jsonString.isBlank()) {
+            throw new IllegalArgumentException("Json cannot be null or empty");
+        }
+
+        return JsonParser.parseString(jsonString).getAsJsonObject();
+    }
+
+    /**
+     * Checks if a specified JSON path exists within a given JSON object.
+     *
+     * This method attempts to read the value at the specified path in the JSON object.
+     * If the path exists, it returns true. If a PathNotFoundException is thrown,
+     * indicating that the path does not exist, it returns false.
+     *
+     * @param json The JSON object to check. This can be a Map, List, or any object
+     *             that JsonPath can parse.
+     * @param path The JSON path to check for existence. This should be a valid
+     *             JsonPath expression (e.g., "$.store.book[0].title").
+     * @return true if the path exists in the JSON object, false otherwise.
+     * @throws IllegalArgumentException if the json object is null or if the path is null or empty.
+     */
+    public static boolean pathExists(Object json, String path) {
+        if (json == null) {
+            throw new IllegalArgumentException("JSON object cannot be null");
+        }
+        if (path == null || path.isEmpty()) {
+            throw new IllegalArgumentException("Path cannot be null or empty");
+        }
+        if (!isValidJSONPath(path)) {
+            throw new IllegalArgumentException("the field path is not a valid json path: " + path);
+        }
+        try {
+            JsonPath.read(json, path);
+            return true;
+        } catch (PathNotFoundException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Prepares nested structures in a JSON object based on the given field path.
+     *
+     * This method ensures that all intermediate nested objects and arrays exist in the JSON object
+     * for a given field path. If any part of the path doesn't exist, it creates new empty objects
+     * (HashMaps) or arrays (ArrayLists) for those parts.
+     *
+     * The method can handle complex paths including both object properties and array indices.
+     * For example, it can process paths like "foo.bar[1].baz[0].qux".
+     *
+     * @param jsonObject The JSON object to be updated. If this is not a Map, a new Map will be created.
+     * @param fieldPath The full path of the field, potentially including nested structures and array indices.
+     *                  The path can optionally start with "$." which will be ignored if present.
+     * @return The updated JSON object with necessary nested structures in place.
+     *         If the input was not a Map, returns the newly created Map structure.
+     *
+     * @throws IllegalArgumentException If the field path is null or not a valid JSON path.
+     *
+     */
+    public static Object prepareNestedStructures(Object jsonObject, String fieldPath) {
+        if (fieldPath == null) {
+            throw new IllegalArgumentException("The field path is null");
+        }
+        if (jsonObject == null) {
+            throw new IllegalArgumentException("The object is null");
+        }
+        if (!isValidJSONPath(fieldPath)) {
+            throw new IllegalArgumentException("The field path is not a valid JSON path: " + fieldPath);
+        }
+
+        String path = fieldPath.startsWith("$.") ? fieldPath.substring(2) : fieldPath;
+        String[] pathParts = path.split("(?<!\\\\)\\.");
+
+        Map<String, Object> current = (jsonObject instanceof Map) ? (Map<String, Object>) jsonObject : new HashMap<>();
+
+        for (String part : pathParts) {
+            if (part.contains("[")) {
+                // Handle array notation
+                String[] arrayParts = part.split("\\[");
+                String key = arrayParts[0];
+                int index = Integer.parseInt(arrayParts[1].replaceAll("\\]", ""));
+
+                if (!current.containsKey(key)) {
+                    current.put(key, new ArrayList<>());
+                }
+                if (!(current.get(key) instanceof List)) {
+                    return jsonObject;
+                }
+                List<Object> list = (List<Object>) current.get(key);
+                if (index >= list.size()) {
+                    while (list.size() <= index) {
+                        list.add(null);
+                    }
+                    list.set(index, new HashMap<>());
+                }
+                if (!(list.get(index) instanceof Map)) {
+                    return jsonObject;
+                }
+                current = (Map<String, Object>) list.get(index);
+            } else {
+                // Handle object notation
+                if (!current.containsKey(part)) {
+                    current.put(part, new HashMap<>());
+                } else if (!(current.get(part) instanceof Map)) {
+                    return jsonObject;
+                }
+                current = (Map<String, Object>) current.get(part);
+            }
+        }
+
+        return jsonObject;
+    }
+
+    public static void validateSchema(String schemaString, String instanceString) {
+        try {
+            // parse the schema JSON as string
+            JsonNode schemaNode = MAPPER.readTree(schemaString);
+            JsonSchema schema = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V202012).getSchema(schemaNode);
+
+            // JSON data to validate
+            JsonNode jsonNode = MAPPER.readTree(instanceString);
+
+            // Validate JSON node against the schema
+            Set<ValidationMessage> errors = schema.validate(jsonNode);
+            if (!errors.isEmpty()) {
+                String errorMessage = errors.stream().map(ValidationMessage::getMessage).collect(Collectors.joining(", "));
+
+                throw new OpenSearchParseException(
+                    "Validation failed: " + errorMessage + " for instance: " + instanceString + " with schema: " + schemaString
+                );
+            }
+        } catch (JsonProcessingException e) {
+            throw new IllegalArgumentException("Invalid JSON format: " + e.getMessage(), e);
+        } catch (Exception e) {
+            throw new OpenSearchParseException("Schema validation failed: " + e.getMessage(), e);
+        }
+    }
+
+    public static String hashString(String input) {
+        try {
+            // Create a MessageDigest instance for SHA-256
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+
+            // Perform the hashing and get the byte array
+            byte[] hashBytes = digest.digest(input.getBytes());
+
+            // Convert the byte array to a Base64 encoded string
+            return Base64.getUrlEncoder().encodeToString(hashBytes);
+
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("Error: Unable to compute hash", e);
+        }
+    }
+
 }

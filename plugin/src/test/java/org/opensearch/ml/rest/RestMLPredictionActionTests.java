@@ -24,11 +24,11 @@ import java.util.Optional;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Rule;
+import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
@@ -49,6 +49,7 @@ import org.opensearch.rest.action.RestToXContentListener;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.client.node.NodeClient;
 
 public class RestMLPredictionActionTests extends OpenSearchTestCase {
     @Rule
@@ -90,17 +91,20 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
         client.close();
     }
 
+    @Test
     public void testConstructor() {
         RestMLPredictionAction mlPredictionAction = new RestMLPredictionAction(modelManager, mlFeatureEnabledSetting);
         assertNotNull(mlPredictionAction);
     }
 
+    @Test
     public void testGetName() {
         String actionName = restMLPredictionAction.getName();
         assertFalse(Strings.isNullOrEmpty(actionName));
         assertEquals("ml_prediction_action", actionName);
     }
 
+    @Test
     public void testRoutes() {
         List<RestHandler.Route> routes = restMLPredictionAction.routes();
         assertNotNull(routes);
@@ -110,6 +114,7 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
         assertEquals("/_plugins/_ml/_predict/{algorithm}/{model_id}", route.getPath());
     }
 
+    @Test
     public void testRoutes_Batch() {
         List<RestHandler.Route> routes = restMLPredictionAction.routes();
         assertNotNull(routes);
@@ -119,6 +124,7 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
         assertEquals("/_plugins/_ml/models/{model_id}/_batch_predict", route.getPath());
     }
 
+    @Test
     public void testGetRequest() throws IOException {
         RestRequest request = getRestRequest_PredictModel();
         MLPredictionTaskRequest mlPredictionTaskRequest = restMLPredictionAction.getRequest("modelId", FunctionName.KMEANS.name(), request);
@@ -127,6 +133,7 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
         verifyParsedKMeansMLInput(mlInput);
     }
 
+    @Test
     public void testGetRequest_RemoteInferenceDisabled() throws IOException {
         thrown.expect(IllegalStateException.class);
         thrown.expectMessage(REMOTE_INFERENCE_DISABLED_ERR_MSG);
@@ -136,6 +143,7 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
         MLPredictionTaskRequest mlPredictionTaskRequest = restMLPredictionAction.getRequest("modelId", FunctionName.REMOTE.name(), request);
     }
 
+    @Test
     public void testGetRequest_LocalModelInferenceDisabled() throws IOException {
         thrown.expect(IllegalStateException.class);
         thrown.expectMessage(LOCAL_MODEL_DISABLED_ERR_MSG);
@@ -146,6 +154,7 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
             .getRequest("modelId", FunctionName.TEXT_EMBEDDING.name(), request);
     }
 
+    @Test
     public void testPrepareRequest() throws Exception {
         RestRequest request = getRestRequest_PredictModel();
         restMLPredictionAction.handleRequest(request, channel, client);
@@ -155,8 +164,10 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
         verifyParsedKMeansMLInput(mlInput);
     }
 
+    @Test
     public void testPrepareBatchRequest() throws Exception {
         RestRequest request = getBatchRestRequest();
+        when(mlFeatureEnabledSetting.isOfflineBatchInferenceEnabled()).thenReturn(true);
         restMLPredictionAction.handleRequest(request, channel, client);
         ArgumentCaptor<MLPredictionTaskRequest> argumentCaptor = ArgumentCaptor.forClass(MLPredictionTaskRequest.class);
         verify(client, times(1)).execute(eq(MLPredictionTaskAction.INSTANCE), argumentCaptor.capture(), any());
@@ -164,6 +175,20 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
         verifyParsedBatchMLInput(mlInput);
     }
 
+    @Test
+    public void testPrepareBatchRequest_FeatureFlagDisabled() throws Exception {
+        thrown.expect(IllegalStateException.class);
+        thrown
+            .expectMessage(
+                "Offline Batch Inference is currently disabled. To enable it, update the setting \"plugins.ml_commons.offline_batch_inference_enabled\" to true."
+            );
+
+        RestRequest request = getBatchRestRequest();
+        when(mlFeatureEnabledSetting.isOfflineBatchInferenceEnabled()).thenReturn(false);
+        restMLPredictionAction.handleRequest(request, channel, client);
+    }
+
+    @Test
     public void testPrepareBatchRequest_WrongActionType() throws Exception {
         thrown.expect(IllegalArgumentException.class);
         thrown.expectMessage("Wrong Action Type");
@@ -198,6 +223,26 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
         verify(client, times(1)).execute(eq(MLPredictionTaskAction.INSTANCE), argumentCaptor.capture(), any());
         MLInput mlInput = argumentCaptor.getValue().getMlInput();
         verifyParsedKMeansMLInput(mlInput);
+    }
+
+    @Test
+    public void testGetRequest_InvalidActionType() throws IOException {
+        // Test with an invalid action type
+        thrown.expect(IllegalArgumentException.class);
+        thrown.expectMessage("Wrong Action Type of models");
+
+        RestRequest request = getBatchRestRequest_WrongActionType();
+        restMLPredictionAction.getRequest("model_id", FunctionName.REMOTE.name(), request);
+    }
+
+    @Test
+    public void testGetRequest_UnsupportedAlgorithm() throws IOException {
+        thrown.expect(IllegalArgumentException.class);
+        thrown.expectMessage("Wrong function name");
+
+        // Create a RestRequest with an unsupported algorithm
+        RestRequest request = getRestRequest_PredictModel();
+        restMLPredictionAction.getRequest("model_id", "INVALID_ALGO", request);
     }
 
     private RestRequest getRestRequest_PredictModel() {

@@ -13,18 +13,19 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
 
-import org.opensearch.client.node.NodeClient;
 import org.opensearch.ml.common.transport.task.MLCancelBatchJobAction;
 import org.opensearch.ml.common.transport.task.MLCancelBatchJobRequest;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
+import org.opensearch.transport.client.node.NodeClient;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 
+//TODO: Rename class and support cancelling more tasks. Now only support cancelling remote job
 public class RestMLCancelBatchJobAction extends BaseRestHandler {
-    private static final String ML_CANCEL_BATCH_ACTION = "ml_cancel_batch_action";
+    private static final String ML_CANCEL_TASK_ACTION = "ml_cancel_task_action";
 
     /**
      * Constructor
@@ -33,18 +34,13 @@ public class RestMLCancelBatchJobAction extends BaseRestHandler {
 
     @Override
     public String getName() {
-        return ML_CANCEL_BATCH_ACTION;
+        return ML_CANCEL_TASK_ACTION;
     }
 
     @Override
     public List<Route> routes() {
         return ImmutableList
-            .of(
-                new Route(
-                    RestRequest.Method.POST,
-                    String.format(Locale.ROOT, "%s/tasks/{%s}/_cancel_batch", ML_BASE_URI, PARAMETER_TASK_ID)
-                )
-            );
+            .of(new Route(RestRequest.Method.POST, String.format(Locale.ROOT, "%s/tasks/{%s}/_cancel", ML_BASE_URI, PARAMETER_TASK_ID)));
     }
 
     @Override

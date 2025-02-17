@@ -8,6 +8,8 @@ package org.opensearch.ml.common.utils;
 import java.util.Map;
 
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.connector.MLPostProcessFunction;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
 import lombok.extern.log4j.Log4j2;
@@ -52,10 +54,7 @@ public class ModelInterfaceUtils {
         + "                \"texts\"\n"
         + "            ]\n"
         + "        }\n"
-        + "    },\n"
-        + "    \"required\": [\n"
-        + "        \"parameters\"\n"
-        + "    ]\n"
+        + "    }\n"
         + "}";
 
     private static final String TITAN_TEXT_EMBEDDING_MODEL_INTERFACE_INPUT = "{\n"
@@ -72,10 +71,7 @@ public class ModelInterfaceUtils {
         + "                \"inputText\"\n"
         + "            ]\n"
         + "        }\n"
-        + "    },\n"
-        + "    \"required\": [\n"
-        + "        \"parameters\"\n"
-        + "    ]\n"
+        + "    }\n"
         + "}";
 
     private static final String TITAN_MULTI_MODAL_EMBEDDING_MODEL_INTERFACE_INPUT = "{\n"
@@ -92,10 +88,7 @@ public class ModelInterfaceUtils {
         + "                }\n"
         + "            }\n"
         + "        }\n"
-        + "    },\n"
-        + "    \"required\": [\n"
-        + "        \"parameters\"\n"
-        + "    ]\n"
+        + "    }\n"
         + "}";
 
     private static final String AMAZON_COMPREHEND_DETECTDOMAINANTLANGUAGE_API_INTERFACE_INPUT = "{\n"
@@ -186,6 +179,143 @@ public class ModelInterfaceUtils {
         + "    \"required\": [\n"
         + "        \"inference_results\"\n"
         + "    ]\n"
+        + "}";
+
+    private static final String BEDROCK_AI21_J2_MID_V1_RAW_MODEL_INTERFACE_OUTPUT = "{\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"properties\": {\n"
+        + "    \"inference_results\": {\n"
+        + "      \"type\": \"array\",\n"
+        + "      \"items\": {\n"
+        + "        \"type\": \"object\",\n"
+        + "        \"properties\": {\n"
+        + "          \"output\": {\n"
+        + "            \"type\": \"array\",\n"
+        + "            \"items\": {\n"
+        + "              \"type\": \"object\",\n"
+        + "              \"properties\": {\n"
+        + "                \"name\": {\n"
+        + "                  \"type\": \"string\"\n"
+        + "                },\n"
+        + "                \"dataAsMap\": {\n"
+        + "                  \"type\": \"object\",\n"
+        + "                  \"properties\": {\n"
+        + "                    \"id\": {\n"
+        + "                      \"type\": \"number\"\n"
+        + "                    },\n"
+        + "                    \"prompt\": {\n"
+        + "                      \"type\": \"object\",\n"
+        + "                      \"properties\": {\n"
+        + "                        \"text\": {\n"
+        + "                          \"type\": \"string\"\n"
+        + "                        },\n"
+        + "                        \"tokens\": {\n"
+        + "                          \"type\": \"array\",\n"
+        + "                          \"items\": {\n"
+        + "                            \"type\": \"object\",\n"
+        + "                            \"properties\": {\n"
+        + "                              \"generatedToken\": {\n"
+        + "                                \"type\": \"object\",\n"
+        + "                                \"properties\": {\n"
+        + "                                  \"token\": {\n"
+        + "                                    \"type\": \"string\"\n"
+        + "                                  },\n"
+        + "                                  \"logprob\": {\n"
+        + "                                    \"type\": \"number\"\n"
+        + "                                  },\n"
+        + "                                  \"raw_logprob\": {\n"
+        + "                                    \"type\": \"number\"\n"
+        + "                                  }\n"
+        + "                                }\n"
+        + "                              },\n"
+        + "                              \"textRange\": {\n"
+        + "                                \"type\": \"object\",\n"
+        + "                                \"properties\": {\n"
+        + "                                  \"start\": {\n"
+        + "                                    \"type\": \"number\"\n"
+        + "                                  },\n"
+        + "                                  \"end\": {\n"
+        + "                                    \"type\": \"number\"\n"
+        + "                                  }\n"
+        + "                                }\n"
+        + "                              }\n"
+        + "                            }\n"
+        + "                          }\n"
+        + "                        }\n"
+        + "                      }\n"
+        + "                    },\n"
+        + "                    \"completions\": {\n"
+        + "                      \"type\": \"array\",\n"
+        + "                      \"items\": {\n"
+        + "                        \"type\": \"object\",\n"
+        + "                        \"properties\": {\n"
+        + "                          \"data\": {\n"
+        + "                            \"type\": \"object\",\n"
+        + "                            \"properties\": {\n"
+        + "                              \"text\": {\n"
+        + "                                \"type\": \"string\"\n"
+        + "                              },\n"
+        + "                              \"tokens\": {\n"
+        + "                                \"type\": \"array\",\n"
+        + "                                \"items\": {\n"
+        + "                                  \"type\": \"object\",\n"
+        + "                                  \"properties\": {\n"
+        + "                                    \"generatedToken\": {\n"
+        + "                                      \"type\": \"object\",\n"
+        + "                                      \"properties\": {\n"
+        + "                                        \"token\": {\n"
+        + "                                          \"type\": \"string\"\n"
+        + "                                        },\n"
+        + "                                        \"logprob\": {\n"
+        + "                                          \"type\": \"number\"\n"
+        + "                                        },\n"
+        + "                                        \"raw_logprob\": {\n"
+        + "                                          \"type\": \"number\"\n"
+        + "                                        }\n"
+        + "                                      }\n"
+        + "                                    },\n"
+        + "                                    \"textRange\": {\n"
+        + "                                      \"type\": \"object\",\n"
+        + "                                      \"properties\": {\n"
+        + "                                        \"start\": {\n"
+        + "                                          \"type\": \"number\"\n"
+        + "                                        },\n"
+        + "                                        \"end\": {\n"
+        + "                                          \"type\": \"number\"\n"
+        + "                                        }\n"
+        + "                                      }\n"
+        + "                                    }\n"
+        + "                                  }\n"
+        + "                                }\n"
+        + "                              }\n"
+        + "                            }\n"
+        + "                          },\n"
+        + "                          \"finishReason\": {\n"
+        + "                            \"type\": \"object\",\n"
+        + "                            \"properties\": {\n"
+        + "                              \"reason\": {\n"
+        + "                                \"type\": \"string\"\n"
+        + "                              },\n"
+        + "                              \"length\": {\n"
+        + "                                \"type\": \"number\"\n"
+        + "                              }\n"
+        + "                            }\n"
+        + "                          }\n"
+        + "                        }\n"
+        + "                      }\n"
+        + "                    }\n"
+        + "                  }\n"
+        + "                }\n"
+        + "              }\n"
+        + "            }\n"
+        + "          },\n"
+        + "          \"status_code\": {\n"
+        + "            \"type\": \"integer\"\n"
+        + "          }\n"
+        + "        }\n"
+        + "      }\n"
+        + "    }\n"
+        + "  }\n"
         + "}";
 
     private static final String BEDROCK_ANTHROPIC_CLAUDE_V2_MODEL_INTERFACE_OUTPUT = "{\n"
@@ -304,6 +434,110 @@ public class ModelInterfaceUtils {
         + "    \"required\": [\n"
         + "        \"inference_results\"\n"
         + "    ]\n"
+        + "}";
+
+    private static final String AMAZON_TITAN_EMBEDDING_V1_RAW_INTERFACE_OUTPUT = "{\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"properties\": {\n"
+        + "    \"inference_results\": {\n"
+        + "      \"type\": \"array\",\n"
+        + "      \"items\": {\n"
+        + "        \"type\": \"object\",\n"
+        + "        \"properties\": {\n"
+        + "          \"output\": {\n"
+        + "            \"type\": \"array\",\n"
+        + "            \"items\": {\n"
+        + "              \"type\": \"object\",\n"
+        + "              \"properties\": {\n"
+        + "                \"name\": {\n"
+        + "                  \"type\": \"string\"\n"
+        + "                },\n"
+        + "                \"dataAsMap\": {\n"
+        + "                  \"type\": \"object\",\n"
+        + "                  \"properties\": {\n"
+        + "                    \"embedding\": {\n"
+        + "                      \"type\": \"array\",\n"
+        + "                      \"items\": {\n"
+        + "                        \"type\": \"number\"\n"
+        + "                      }\n"
+        + "                    },\n"
+        + "                    \"inputTextTokenCount\": {\n"
+        + "                      \"type\": \"integer\"\n"
+        + "                    }\n"
+        + "                  },\n"
+        + "                  \"required\": [\"embedding\", \"inputTextTokenCount\"]\n"
+        + "                }\n"
+        + "              },\n"
+        + "              \"required\": [\"name\", \"dataAsMap\"]\n"
+        + "            }\n"
+        + "          },\n"
+        + "          \"status_code\": {\n"
+        + "            \"type\": \"integer\"\n"
+        + "          }\n"
+        + "        },\n"
+        + "        \"required\": [\"output\", \"status_code\"]\n"
+        + "      }\n"
+        + "    }\n"
+        + "  },\n"
+        + "  \"required\": [\"inference_results\"]\n"
+        + "}";
+
+    private static final String COHERE_EMBEDDING_V3_RAW_INTERFACE_OUTPUT = "{\n"
+        + "  \"type\": \"object\",\n"
+        + "  \"properties\": {\n"
+        + "    \"inference_results\": {\n"
+        + "      \"type\": \"array\",\n"
+        + "      \"items\": {\n"
+        + "        \"type\": \"object\",\n"
+        + "        \"properties\": {\n"
+        + "          \"output\": {\n"
+        + "            \"type\": \"array\",\n"
+        + "            \"items\": {\n"
+        + "              \"type\": \"object\",\n"
+        + "              \"properties\": {\n"
+        + "                \"name\": {\n"
+        + "                  \"type\": \"string\"\n"
+        + "                },\n"
+        + "                \"dataAsMap\": {\n"
+        + "                  \"type\": \"object\",\n"
+        + "                  \"properties\": {\n"
+        + "                    \"id\": {\n"
+        + "                      \"type\": \"string\"\n"
+        + "                    },\n"
+        + "                    \"texts\": {\n"
+        + "                      \"type\": \"array\",\n"
+        + "                      \"items\": {\n"
+        + "                        \"type\": \"string\"\n"
+        + "                      }\n"
+        + "                    },\n"
+        + "                    \"embeddings\": {\n"
+        + "                      \"type\": \"array\",\n"
+        + "                      \"items\": {\n"
+        + "                        \"type\": \"array\",\n"
+        + "                        \"items\": {\n"
+        + "                          \"type\": \"number\"\n"
+        + "                        }\n"
+        + "                      }\n"
+        + "                    },\n"
+        + "                    \"response_type\": {\n"
+        + "                      \"type\": \"string\"\n"
+        + "                    }\n"
+        + "                  },\n"
+        + "                  \"required\": [\"id\", \"texts\", \"embeddings\", \"response_type\"]\n"
+        + "                }\n"
+        + "              },\n"
+        + "              \"required\": [\"name\", \"dataAsMap\"]\n"
+        + "            }\n"
+        + "          },\n"
+        + "          \"status_code\": {\n"
+        + "            \"type\": \"integer\"\n"
+        + "          }\n"
+        + "        },\n"
+        + "        \"required\": [\"output\", \"status_code\"]\n"
+        + "      }\n"
+        + "    }\n"
+        + "  },\n"
+        + "  \"required\": [\"inference_results\"]\n"
         + "}";
 
     private static final String AMAZON_COMPREHEND_DETECTDOMAINANTLANGUAGE_API_INTERFACE_OUTPUT = "{\n"
@@ -493,6 +727,9 @@ public class ModelInterfaceUtils {
     public static final Map<String, String> BEDROCK_AI21_LABS_JURASSIC2_MID_V1_MODEL_INTERFACE = Map
         .of("input", GENERAL_CONVERSATIONAL_MODEL_INTERFACE_INPUT, "output", GENERAL_CONVERSATIONAL_MODEL_INTERFACE_OUTPUT);
 
+    public static final Map<String, String> BEDROCK_AI21_LABS_JURASSIC2_MID_V1_RAW_MODEL_INTERFACE = Map
+        .of("input", GENERAL_CONVERSATIONAL_MODEL_INTERFACE_INPUT, "output", BEDROCK_AI21_J2_MID_V1_RAW_MODEL_INTERFACE_OUTPUT);
+
     public static final Map<String, String> BEDROCK_ANTHROPIC_CLAUDE_V3_SONNET_MODEL_INTERFACE = Map
         .of("input", GENERAL_CONVERSATIONAL_MODEL_INTERFACE_INPUT, "output", GENERAL_CONVERSATIONAL_MODEL_INTERFACE_OUTPUT);
 
@@ -502,14 +739,26 @@ public class ModelInterfaceUtils {
     public static final Map<String, String> BEDROCK_COHERE_EMBED_ENGLISH_V3_MODEL_INTERFACE = Map
         .of("input", GENERAL_EMBEDDING_MODEL_INTERFACE_INPUT, "output", GENERAL_EMBEDDING_MODEL_INTERFACE_OUTPUT);
 
+    public static final Map<String, String> BEDROCK_COHERE_EMBED_ENGLISH_V3_RAW_MODEL_INTERFACE = Map
+        .of("input", GENERAL_EMBEDDING_MODEL_INTERFACE_INPUT, "output", COHERE_EMBEDDING_V3_RAW_INTERFACE_OUTPUT);
+
     public static final Map<String, String> BEDROCK_COHERE_EMBED_MULTILINGUAL_V3_MODEL_INTERFACE = Map
         .of("input", GENERAL_EMBEDDING_MODEL_INTERFACE_INPUT, "output", GENERAL_EMBEDDING_MODEL_INTERFACE_OUTPUT);
+
+    public static final Map<String, String> BEDROCK_COHERE_EMBED_MULTILINGUAL_V3_RAW_MODEL_INTERFACE = Map
+        .of("input", GENERAL_EMBEDDING_MODEL_INTERFACE_INPUT, "output", COHERE_EMBEDDING_V3_RAW_INTERFACE_OUTPUT);
 
     public static final Map<String, String> BEDROCK_TITAN_EMBED_TEXT_V1_MODEL_INTERFACE = Map
         .of("input", TITAN_TEXT_EMBEDDING_MODEL_INTERFACE_INPUT, "output", GENERAL_EMBEDDING_MODEL_INTERFACE_OUTPUT);
 
+    public static final Map<String, String> BEDROCK_TITAN_EMBED_TEXT_V1_RAW_MODEL_INTERFACE = Map
+        .of("input", TITAN_TEXT_EMBEDDING_MODEL_INTERFACE_INPUT, "output", AMAZON_TITAN_EMBEDDING_V1_RAW_INTERFACE_OUTPUT);
+
     public static final Map<String, String> BEDROCK_TITAN_EMBED_MULTI_MODAL_V1_MODEL_INTERFACE = Map
         .of("input", TITAN_MULTI_MODAL_EMBEDDING_MODEL_INTERFACE_INPUT, "output", GENERAL_EMBEDDING_MODEL_INTERFACE_OUTPUT);
+
+    public static final Map<String, String> BEDROCK_TITAN_EMBED_MULTI_MODAL_V1_RAW_MODEL_INTERFACE = Map
+        .of("input", TITAN_MULTI_MODAL_EMBEDDING_MODEL_INTERFACE_INPUT, "output", AMAZON_TITAN_EMBEDDING_V1_RAW_INTERFACE_OUTPUT);
 
     public static final Map<String, String> AMAZON_COMPREHEND_DETECTDOMAINANTLANGUAGE_API_INTERFACE = Map
         .of(
@@ -529,17 +778,28 @@ public class ModelInterfaceUtils {
 
     private static Map<String, String> createPresetModelInterfaceByConnector(Connector connector) {
         if (connector.getParameters() != null) {
+            ConnectorAction connectorAction = connector.getActions().get(0);
             switch ((connector.getParameters().get("service_name") != null) ? connector.getParameters().get("service_name") : "null") {
                 case "bedrock":
                     log.debug("Detected Amazon Bedrock model");
                     switch ((connector.getParameters().get("model") != null) ? connector.getParameters().get("model") : "null") {
                         case "ai21.j2-mid-v1":
-                            log
-                                .debug(
-                                    "Creating preset model interface for Amazon Bedrock model: {}",
-                                    connector.getParameters().get("model")
-                                );
-                            return BEDROCK_AI21_LABS_JURASSIC2_MID_V1_MODEL_INTERFACE;
+                            if (connectorAction.getPostProcessFunction() != null && !connectorAction.getPostProcessFunction().isBlank()) {
+                                log
+                                    .debug(
+                                        "Creating preset model interface for Amazon Bedrock model with post-process function: {}",
+                                        connector.getParameters().get("model")
+                                    );
+                                return BEDROCK_AI21_LABS_JURASSIC2_MID_V1_MODEL_INTERFACE;
+                            } else {
+
+                                log
+                                    .debug(
+                                        "Creating preset model interface for Amazon Bedrock model without post-process function: {}",
+                                        connector.getParameters().get("model")
+                                    );
+                                return BEDROCK_AI21_LABS_JURASSIC2_MID_V1_RAW_MODEL_INTERFACE;
+                            }
                         case "anthropic.claude-3-sonnet-20240229-v1:0":
                             log
                                 .debug(
@@ -555,33 +815,73 @@ public class ModelInterfaceUtils {
                                 );
                             return BEDROCK_ANTHROPIC_CLAUDE_V2_MODEL_INTERFACE;
                         case "cohere.embed-english-v3":
-                            log
-                                .debug(
-                                    "Creating preset model interface for Amazon Bedrock model: {}",
-                                    connector.getParameters().get("model")
-                                );
-                            return BEDROCK_COHERE_EMBED_ENGLISH_V3_MODEL_INTERFACE;
+                            if (connectorAction.getPostProcessFunction() != null
+                                && connectorAction.getPostProcessFunction().equalsIgnoreCase(MLPostProcessFunction.COHERE_EMBEDDING)) {
+                                log
+                                    .debug(
+                                        "Creating preset model interface for Amazon Bedrock model with post-process function: {}",
+                                        connector.getParameters().get("model")
+                                    );
+                                return BEDROCK_COHERE_EMBED_ENGLISH_V3_MODEL_INTERFACE;
+                            } else {
+                                log
+                                    .debug(
+                                        "Creating preset model interface for Amazon Bedrock model without post-process function: {}",
+                                        connector.getParameters().get("model")
+                                    );
+                                return BEDROCK_COHERE_EMBED_ENGLISH_V3_RAW_MODEL_INTERFACE;
+                            }
                         case "cohere.embed-multilingual-v3":
-                            log
-                                .debug(
-                                    "Creating preset model interface for Amazon Bedrock model: {}",
-                                    connector.getParameters().get("model")
-                                );
-                            return BEDROCK_COHERE_EMBED_MULTILINGUAL_V3_MODEL_INTERFACE;
+                            if (connectorAction.getPostProcessFunction() != null
+                                && connectorAction.getPostProcessFunction().equalsIgnoreCase(MLPostProcessFunction.COHERE_EMBEDDING)) {
+                                log
+                                    .debug(
+                                        "Creating preset model interface for Amazon Bedrock model with post-process function: {}",
+                                        connector.getParameters().get("model")
+                                    );
+                                return BEDROCK_COHERE_EMBED_MULTILINGUAL_V3_MODEL_INTERFACE;
+                            } else {
+                                log
+                                    .debug(
+                                        "Creating preset model interface for Amazon Bedrock model without post-process function: {}",
+                                        connector.getParameters().get("model")
+                                    );
+                                return BEDROCK_COHERE_EMBED_MULTILINGUAL_V3_RAW_MODEL_INTERFACE;
+                            }
                         case "amazon.titan-embed-text-v1":
-                            log
-                                .debug(
-                                    "Creating preset model interface for Amazon Bedrock model: {}",
-                                    connector.getParameters().get("model")
-                                );
-                            return BEDROCK_TITAN_EMBED_TEXT_V1_MODEL_INTERFACE;
+                            if (connectorAction.getPostProcessFunction() != null
+                                && connectorAction.getPostProcessFunction().equalsIgnoreCase(MLPostProcessFunction.BEDROCK_EMBEDDING)) {
+                                log
+                                    .debug(
+                                        "Creating preset model interface for Amazon Bedrock model with post-process function: {}",
+                                        connector.getParameters().get("model")
+                                    );
+                                return BEDROCK_TITAN_EMBED_TEXT_V1_MODEL_INTERFACE;
+                            } else {
+                                log
+                                    .debug(
+                                        "Creating preset model interface for Amazon Bedrock model without post-process function: {}",
+                                        connector.getParameters().get("model")
+                                    );
+                                return BEDROCK_TITAN_EMBED_TEXT_V1_RAW_MODEL_INTERFACE;
+                            }
                         case "amazon.titan-embed-image-v1":
-                            log
-                                .debug(
-                                    "Creating preset model interface for Amazon Bedrock model: {}",
-                                    connector.getParameters().get("model")
-                                );
-                            return BEDROCK_TITAN_EMBED_MULTI_MODAL_V1_MODEL_INTERFACE;
+                            if (connectorAction.getPostProcessFunction() != null
+                                && connectorAction.getPostProcessFunction().equalsIgnoreCase(MLPostProcessFunction.BEDROCK_EMBEDDING)) {
+                                log
+                                    .debug(
+                                        "Creating preset model interface for Amazon Bedrock model with post-process function: {}",
+                                        connector.getParameters().get("model")
+                                    );
+                                return BEDROCK_TITAN_EMBED_MULTI_MODAL_V1_MODEL_INTERFACE;
+                            } else {
+                                log
+                                    .debug(
+                                        "Creating preset model interface for Amazon Bedrock model without post-process function: {}",
+                                        connector.getParameters().get("model")
+                                    );
+                                return BEDROCK_TITAN_EMBED_MULTI_MODAL_V1_RAW_MODEL_INTERFACE;
+                            }
                         default:
                             return null;
                     }

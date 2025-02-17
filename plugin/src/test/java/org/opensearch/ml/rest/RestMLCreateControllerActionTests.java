@@ -11,6 +11,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.util.HashMap;
 import java.util.List;
@@ -24,7 +25,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchParseException;
-import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.ParsingException;
@@ -34,6 +34,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.controller.MLController;
 import org.opensearch.ml.common.transport.controller.MLCreateControllerAction;
 import org.opensearch.ml.common.transport.controller.MLCreateControllerRequest;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
@@ -41,6 +42,7 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
 import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.client.node.NodeClient;
 
 public class RestMLCreateControllerActionTests extends OpenSearchTestCase {
     @Rule
@@ -51,6 +53,9 @@ public class RestMLCreateControllerActionTests extends OpenSearchTestCase {
     private ThreadPool threadPool;
 
     @Mock
+    MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
+    @Mock
     RestChannel channel;
 
     @Before
@@ -58,7 +63,8 @@ public class RestMLCreateControllerActionTests extends OpenSearchTestCase {
         MockitoAnnotations.openMocks(this);
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
-        restMLCreateControllerAction = new RestMLCreateControllerAction();
+        when(mlFeatureEnabledSetting.isControllerEnabled()).thenReturn(true);
+        restMLCreateControllerAction = new RestMLCreateControllerAction(mlFeatureEnabledSetting);
         doAnswer(invocation -> {
             invocation.getArgument(2);
             return null;
@@ -74,7 +80,7 @@ public class RestMLCreateControllerActionTests extends OpenSearchTestCase {
 
     @Test
     public void testConstructor() {
-        RestMLCreateControllerAction CreateModelAction = new RestMLCreateControllerAction();
+        RestMLCreateControllerAction CreateModelAction = new RestMLCreateControllerAction(mlFeatureEnabledSetting);
         assertNotNull(CreateModelAction);
     }
 
@@ -126,6 +132,18 @@ public class RestMLCreateControllerActionTests extends OpenSearchTestCase {
         exceptionRule.expect(ParsingException.class);
         exceptionRule.expectMessage("expecting token of type [START_OBJECT] but found [VALUE_NULL]");
         RestRequest request = getRestRequestWithNullField();
+        restMLCreateControllerAction.handleRequest(request, channel, client);
+    }
+
+    @Test
+    public void testCreateControllerRequestWithControllerDisabled() throws Exception {
+        exceptionRule.expect(IllegalStateException.class);
+        exceptionRule
+            .expectMessage(
+                "Controller is currently disabled. To enable it, update the setting \"plugins.ml_commons.controller_enabled\" to true."
+            );
+        when(mlFeatureEnabledSetting.isControllerEnabled()).thenReturn(false);
+        RestRequest request = getRestRequest();
         restMLCreateControllerAction.handleRequest(request, channel, client);
     }
 

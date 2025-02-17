@@ -12,6 +12,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.io.IOException;
+import java.util.Collections;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -21,7 +22,6 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -37,9 +37,13 @@ import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetRequest;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
 
 public class GetModelGroupTransportActionTests extends OpenSearchTestCase {
     @Mock
@@ -47,6 +51,8 @@ public class GetModelGroupTransportActionTests extends OpenSearchTestCase {
 
     @Mock
     Client client;
+
+    SdkClient sdkClient;
 
     @Mock
     NamedXContentRegistry xContentRegistry;
@@ -73,20 +79,26 @@ public class GetModelGroupTransportActionTests extends OpenSearchTestCase {
     @Mock
     private ModelAccessControlHelper modelAccessControlHelper;
 
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
-        mlModelGroupGetRequest = MLModelGroupGetRequest.builder().modelGroupId("test_id").build();
         Settings settings = Settings.builder().build();
+        sdkClient = SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap());
+        mlModelGroupGetRequest = MLModelGroupGetRequest.builder().modelGroupId("test_id").build();
 
         getModelGroupTransportAction = spy(
             new GetModelGroupTransportAction(
                 transportService,
                 actionFilters,
                 client,
+                sdkClient,
                 xContentRegistry,
                 clusterService,
-                modelAccessControlHelper
+                modelAccessControlHelper,
+                mlFeatureEnabledSetting
             )
         );
 
@@ -176,7 +188,7 @@ public class GetModelGroupTransportActionTests extends OpenSearchTestCase {
         getModelGroupTransportAction.doExecute(null, mlModelGroupGetRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Fail to find model group index", argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to find model group index", argumentCaptor.getValue().getMessage());
     }
 
     public void testGetModel_RuntimeException() {
@@ -188,7 +200,7 @@ public class GetModelGroupTransportActionTests extends OpenSearchTestCase {
         getModelGroupTransportAction.doExecute(null, mlModelGroupGetRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("errorMessage", argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to get data object from index .plugins-ml-model-group", argumentCaptor.getValue().getMessage());
     }
 
     public GetResponse prepareMLModelGroup() throws IOException {
@@ -203,7 +215,6 @@ public class GetModelGroupTransportActionTests extends OpenSearchTestCase {
         XContentBuilder content = mlModelGroup.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
         BytesReference bytesReference = BytesReference.bytes(content);
         GetResult getResult = new GetResult("indexName", "111", 111l, 111l, 111l, true, bytesReference, null, null);
-        GetResponse getResponse = new GetResponse(getResult);
-        return getResponse;
+        return new GetResponse(getResult);
     }
 }

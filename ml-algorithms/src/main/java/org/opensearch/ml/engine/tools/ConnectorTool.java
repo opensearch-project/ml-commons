@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.Map;
 
 import org.opensearch.action.ActionRequest;
-import org.opensearch.client.Client;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
@@ -22,6 +21,7 @@ import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.transport.connector.MLExecuteConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLExecuteConnectorRequest;
+import org.opensearch.transport.client.Client;
 
 import lombok.Getter;
 import lombok.Setter;

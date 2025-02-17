@@ -6,12 +6,14 @@
 package org.opensearch.ml.common.transport.prediction;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
+import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 
+import org.opensearch.Version;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.commons.authuser.User;
@@ -36,37 +38,43 @@ public class MLPredictionTaskRequest extends MLTaskRequest {
 
     String modelId;
     MLInput mlInput;
+    String tenantId;
     @Setter
     User user;
 
     @Builder
-    public MLPredictionTaskRequest(String modelId, MLInput mlInput, boolean dispatchTask, User user) {
+    public MLPredictionTaskRequest(String modelId, MLInput mlInput, boolean dispatchTask, User user, String tenantId) {
         super(dispatchTask);
         this.mlInput = mlInput;
         this.modelId = modelId;
         this.user = user;
+        this.tenantId = tenantId;
     }
 
     public MLPredictionTaskRequest(String modelId, MLInput mlInput) {
-        this(modelId, mlInput, true, null);
+        // TODO: this is invoked in chat agent runner. I'll refactor this when work on agents.
+        this(modelId, mlInput, true, null, null);
     }
 
-    public MLPredictionTaskRequest(String modelId, MLInput mlInput, User user) {
-        this(modelId, mlInput, true, user);
+    public MLPredictionTaskRequest(String modelId, MLInput mlInput, User user, String tenantId) {
+        this(modelId, mlInput, true, user, tenantId);
     }
 
     public MLPredictionTaskRequest(StreamInput in) throws IOException {
         super(in);
+        Version streamInputVersion = in.getVersion();
         this.modelId = in.readOptionalString();
         this.mlInput = new MLInput(in);
         if (in.readBoolean()) {
             this.user = new User(in);
         }
+        this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? in.readOptionalString() : null;
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
+        Version streamOutputVersion = out.getVersion();
         out.writeOptionalString(this.modelId);
         this.mlInput.writeTo(out);
         if (user != null) {
@@ -74,6 +82,9 @@ public class MLPredictionTaskRequest extends MLTaskRequest {
             user.writeTo(out);
         } else {
             out.writeBoolean(false);
+        }
+        if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
+            out.writeOptionalString(tenantId);
         }
     }
 
@@ -102,6 +113,6 @@ public class MLPredictionTaskRequest extends MLTaskRequest {
         } catch (IOException e) {
             throw new UncheckedIOException("failed to parse ActionRequest into MLPredictionTaskRequest", e);
         }
-
     }
+
 }

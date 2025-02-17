@@ -33,13 +33,13 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.opensearch.client.Client;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.ml.common.spi.MLCommonsExtension;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.tools.MLModelTool;
 import org.opensearch.ml.processor.MLInferenceSearchRequestProcessor;
 import org.opensearch.ml.processor.MLInferenceSearchResponseProcessor;
+import org.opensearch.ml.searchext.MLInferenceRequestParametersExtBuilder;
 import org.opensearch.plugins.ExtensiblePlugin;
 import org.opensearch.plugins.SearchPipelinePlugin;
 import org.opensearch.plugins.SearchPlugin;
@@ -47,6 +47,7 @@ import org.opensearch.searchpipelines.questionanswering.generative.GenerativeQAP
 import org.opensearch.searchpipelines.questionanswering.generative.GenerativeQARequestProcessor;
 import org.opensearch.searchpipelines.questionanswering.generative.GenerativeQAResponseProcessor;
 import org.opensearch.searchpipelines.questionanswering.generative.ext.GenerativeQAParamExtBuilder;
+import org.opensearch.transport.client.Client;
 
 public class MachineLearningPluginTests {
 
@@ -66,9 +67,11 @@ public class MachineLearningPluginTests {
     @Test
     public void testGetSearchExts() {
         List<SearchPlugin.SearchExtSpec<?>> searchExts = plugin.getSearchExts();
-        assertEquals(1, searchExts.size());
-        SearchPlugin.SearchExtSpec<?> spec = searchExts.get(0);
-        assertEquals(GenerativeQAParamExtBuilder.PARAMETER_NAME, spec.getName().getPreferredName());
+        assertEquals(2, searchExts.size());
+        SearchPlugin.SearchExtSpec<?> spec1 = searchExts.get(0);
+        assertEquals(GenerativeQAParamExtBuilder.PARAMETER_NAME, spec1.getName().getPreferredName());
+        SearchPlugin.SearchExtSpec<?> spec2 = searchExts.get(1);
+        assertEquals(MLInferenceRequestParametersExtBuilder.NAME, spec2.getName().getPreferredName());
     }
 
     @Test

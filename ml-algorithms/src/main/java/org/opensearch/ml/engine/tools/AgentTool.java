@@ -5,13 +5,13 @@
 
 package org.opensearch.ml.engine.tools;
 
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.util.HashMap;
 import java.util.Map;
 
 import org.opensearch.action.ActionRequest;
-import org.opensearch.client.Client;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
@@ -22,6 +22,7 @@ import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
+import org.opensearch.transport.client.Client;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -55,9 +56,11 @@ public class AgentTool implements Tool {
     @Override
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
         Map<String, String> extractedParameters = extractInputParameters(parameters);
+        String tenantId = parameters.get(TENANT_ID_FIELD);
         AgentMLInput agentMLInput = AgentMLInput
             .AgentMLInputBuilder()
             .agentId(agentId)
+            .tenantId(tenantId)
             .functionName(FunctionName.AGENT)
             .inputDataset(RemoteInferenceInputDataSet.builder().parameters(extractedParameters).build())
             .build();

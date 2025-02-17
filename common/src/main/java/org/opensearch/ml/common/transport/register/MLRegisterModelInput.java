@@ -6,6 +6,8 @@
 package org.opensearch.ml.common.transport.register;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 import static org.opensearch.ml.common.MLModel.allowedInterfaceFieldKeys;
 import static org.opensearch.ml.common.connector.Connector.createConnector;
 import static org.opensearch.ml.common.utils.StringUtils.filteredParameterMap;
@@ -103,6 +105,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     private Guardrails guardrails;
 
     private Map<String, String> modelInterface;
+    private String tenantId;
 
     @Builder(toBuilder = true)
     public MLRegisterModelInput(
@@ -128,7 +131,8 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         Boolean doesVersionCreateModelGroup,
         Boolean isHidden,
         Guardrails guardrails,
-        Map<String, String> modelInterface
+        Map<String, String> modelInterface,
+        String tenantId
     ) {
         this.functionName = Objects.requireNonNullElse(functionName, FunctionName.TEXT_EMBEDDING);
         if (modelName == null) {
@@ -170,6 +174,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         this.isHidden = isHidden;
         this.guardrails = guardrails;
         this.modelInterface = modelInterface;
+        this.tenantId = tenantId;
     }
 
     public MLRegisterModelInput(StreamInput in) throws IOException {
@@ -231,6 +236,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                 this.modelInterface = in.readMap(StreamInput::readString, StreamInput::readString);
             }
         }
+        this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? in.readOptionalString() : null;
     }
 
     @Override
@@ -312,6 +318,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                 out.writeBoolean(false);
             }
         }
+        if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
+            out.writeOptionalString(tenantId);
+        }
     }
 
     @Override
@@ -380,6 +389,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         if (modelInterface != null) {
             builder.field(MLModel.INTERFACE_FIELD, modelInterface);
         }
+        if (tenantId != null) {
+            builder.field(TENANT_ID_FIELD, tenantId);
+        }
         builder.endObject();
         return builder;
     }
@@ -406,6 +418,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         Boolean isHidden = null;
         Guardrails guardrails = null;
         Map<String, String> modelInterface = null;
+        String tenantId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -484,6 +497,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                 case MLModel.INTERFACE_FIELD:
                     modelInterface = filteredParameterMap(parser.map(), allowedInterfaceFieldKeys);
                     break;
+                case TENANT_ID_FIELD:
+                    tenantId = parser.textOrNull();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -512,7 +528,8 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
             doesVersionCreateModelGroup,
             isHidden,
             guardrails,
-            modelInterface
+            modelInterface,
+            tenantId
         );
     }
 
@@ -539,6 +556,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
         Boolean isHidden = null;
         Guardrails guardrails = null;
         Map<String, String> modelInterface = null;
+        String tenantId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -624,6 +642,9 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                 case MLModel.INTERFACE_FIELD:
                     modelInterface = filteredParameterMap(parser.map(), allowedInterfaceFieldKeys);
                     break;
+                case TENANT_ID_FIELD:
+                    tenantId = parser.textOrNull();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -652,7 +673,8 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
             doesVersionCreateModelGroup,
             isHidden,
             guardrails,
-            modelInterface
+            modelInterface,
+            tenantId
         );
     }
 }

@@ -22,7 +22,7 @@ public class MLAgentDeleteRequestTest {
     @Test
     public void constructor_AgentId() {
         agentId = "test-abc";
-        MLAgentDeleteRequest mLAgentDeleteRequest = new MLAgentDeleteRequest(agentId);
+        MLAgentDeleteRequest mLAgentDeleteRequest = new MLAgentDeleteRequest(agentId, null);
         assertEquals(mLAgentDeleteRequest.agentId, agentId);
     }
 
@@ -30,7 +30,7 @@ public class MLAgentDeleteRequestTest {
     public void writeTo() throws IOException {
         agentId = "test-hij";
 
-        MLAgentDeleteRequest mLAgentDeleteRequest = new MLAgentDeleteRequest(agentId);
+        MLAgentDeleteRequest mLAgentDeleteRequest = new MLAgentDeleteRequest(agentId, null);
         BytesStreamOutput output = new BytesStreamOutput();
         mLAgentDeleteRequest.writeTo(output);
 
@@ -43,7 +43,7 @@ public class MLAgentDeleteRequestTest {
     @Test
     public void validate_Success() {
         agentId = "not-null";
-        MLAgentDeleteRequest mLAgentDeleteRequest = new MLAgentDeleteRequest(agentId);
+        MLAgentDeleteRequest mLAgentDeleteRequest = new MLAgentDeleteRequest(agentId, null);
 
         assertEquals(null, mLAgentDeleteRequest.validate());
     }
@@ -51,7 +51,7 @@ public class MLAgentDeleteRequestTest {
     @Test
     public void validate_Failure() {
         agentId = null;
-        MLAgentDeleteRequest mLAgentDeleteRequest = new MLAgentDeleteRequest(agentId);
+        MLAgentDeleteRequest mLAgentDeleteRequest = new MLAgentDeleteRequest(agentId, null);
         assertEquals(null, mLAgentDeleteRequest.agentId);
 
         ActionRequestValidationException exception = addValidationError("ML agent id can't be null", null);
@@ -61,7 +61,7 @@ public class MLAgentDeleteRequestTest {
     @Test
     public void fromActionRequest_Success() throws IOException {
         agentId = "test-lmn";
-        MLAgentDeleteRequest mLAgentDeleteRequest = new MLAgentDeleteRequest(agentId);
+        MLAgentDeleteRequest mLAgentDeleteRequest = new MLAgentDeleteRequest(agentId, null);
         assertEquals(mLAgentDeleteRequest.fromActionRequest(mLAgentDeleteRequest), mLAgentDeleteRequest);
 
     }
@@ -69,7 +69,7 @@ public class MLAgentDeleteRequestTest {
     @Test
     public void fromActionRequest_Success_fromActionRequest() throws IOException {
         agentId = "test-opq";
-        MLAgentDeleteRequest mLAgentDeleteRequest = new MLAgentDeleteRequest(agentId);
+        MLAgentDeleteRequest mLAgentDeleteRequest = new MLAgentDeleteRequest(agentId, null);
 
         ActionRequest actionRequest = new ActionRequest() {
             @Override
@@ -89,7 +89,7 @@ public class MLAgentDeleteRequestTest {
     @Test(expected = UncheckedIOException.class)
     public void fromActionRequest_IOException() {
         agentId = "test-rst";
-        MLAgentDeleteRequest mLAgentDeleteRequest = new MLAgentDeleteRequest(agentId);
+        MLAgentDeleteRequest mLAgentDeleteRequest = new MLAgentDeleteRequest(agentId, null);
         ActionRequest actionRequest = new ActionRequest() {
             @Override
             public ActionRequestValidationException validate() {

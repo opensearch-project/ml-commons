@@ -22,7 +22,6 @@ import java.util.regex.Pattern;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.LatchedActionListener;
-import org.opensearch.client.Client;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.action.ActionResponse;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -38,6 +37,7 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.transport.client.Client;
 
 import lombok.Builder;
 import lombok.EqualsAndHashCode;

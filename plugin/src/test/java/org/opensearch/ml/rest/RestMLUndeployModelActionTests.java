@@ -24,7 +24,6 @@ import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.opensearch.client.node.NodeClient;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
@@ -37,6 +36,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.transport.model.MLModelGetResponse;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsRequest;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
@@ -44,6 +44,7 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
 import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.client.node.NodeClient;
 
 import com.google.gson.Gson;
 
@@ -58,6 +59,9 @@ public class RestMLUndeployModelActionTests extends OpenSearchTestCase {
     ClusterState testState;
 
     @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
+    @Mock
     RestChannel channel;
 
     private final Settings settings = Settings.builder().put(ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN.getKey(), true).build();
@@ -67,10 +71,10 @@ public class RestMLUndeployModelActionTests extends OpenSearchTestCase {
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        testState = setupTestClusterState();
+        testState = setupTestClusterState("node");
         when(clusterService.state()).thenReturn(testState);
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
-        restMLUndeployModelAction = new RestMLUndeployModelAction(clusterService, settings);
+        restMLUndeployModelAction = new RestMLUndeployModelAction(clusterService, settings, mlFeatureEnabledSetting);
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
         doAnswer(invocation -> {
@@ -88,7 +92,7 @@ public class RestMLUndeployModelActionTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        RestMLUndeployModelAction undeployModel = new RestMLUndeployModelAction(clusterService, settings);
+        RestMLUndeployModelAction undeployModel = new RestMLUndeployModelAction(clusterService, settings, mlFeatureEnabledSetting);
         assertNotNull(undeployModel);
     }
 

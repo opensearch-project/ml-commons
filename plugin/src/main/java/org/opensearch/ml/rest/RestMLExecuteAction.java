@@ -13,12 +13,12 @@ import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
 import static org.opensearch.ml.utils.RestActionUtils.getAlgorithm;
+import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
 
-import org.opensearch.client.node.NodeClient;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -40,6 +40,7 @@ import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
+import org.opensearch.transport.client.node.NodeClient;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -114,10 +115,12 @@ public class RestMLExecuteAction extends BaseRestHandler {
             if (!mlFeatureEnabledSetting.isAgentFrameworkEnabled()) {
                 throw new IllegalStateException(AGENT_FRAMEWORK_DISABLED_ERR_MSG);
             }
+            String tenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
             String agentId = request.param(PARAMETER_AGENT_ID);
             functionName = FunctionName.AGENT;
             input = MLInput.parse(parser, functionName.name());
             ((AgentMLInput) input).setAgentId(agentId);
+            ((AgentMLInput) input).setTenantId(tenantId);
         } else {
             String algorithm = getAlgorithm(request).toUpperCase(Locale.ROOT);
             functionName = FunctionName.from(algorithm);

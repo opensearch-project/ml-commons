@@ -10,8 +10,10 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
 
 import org.junit.Before;
@@ -22,28 +24,34 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchException;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.ConfigConstants;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.index.shard.ShardId;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentRequest;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
 
 public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
 
     @Mock
     private Client client;
+
+    SdkClient sdkClient;
 
     @Mock
     private MLIndicesHandler mlIndicesHandler;
@@ -63,6 +71,8 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
     @Mock
     private ActionListener<MLRegisterAgentResponse> actionListener;
 
+    IndexResponse indexResponse;
+
     @Mock
     private ThreadPool threadPool;
 
@@ -70,10 +80,14 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
     private Settings settings;
     private ThreadContext threadContext;
 
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
         settings = Settings.builder().build();
+        sdkClient = SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap());
         threadContext = new ThreadContext(settings);
 
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "alex|IT,HR|engineering,operations");
@@ -85,9 +99,12 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
             transportService,
             actionFilters,
             client,
+            sdkClient,
             mlIndicesHandler,
-            clusterService
+            clusterService,
+            mlFeatureEnabledSetting
         );
+        indexResponse = new IndexResponse(new ShardId(ML_AGENT_INDEX, "_na_", 0), "AGENT_ID", 1, 0, 2, true);
     }
 
     @Test
@@ -172,7 +189,7 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<RuntimeException> argumentCaptor = ArgumentCaptor.forClass(RuntimeException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
 
-        assertEquals("index failure", argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to put data object in index .plugins-ml-agent", argumentCaptor.getValue().getMessage());
     }
 
     @Test
@@ -219,7 +236,7 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
 
         doAnswer(invocation -> {
             ActionListener<IndexResponse> al = invocation.getArgument(1);
-            al.onResponse(mock(IndexResponse.class)); // Simulating successful indexing
+            al.onResponse(indexResponse); // Simulating successful indexing
             return null;
         }).when(client).index(any(), any());
 
@@ -245,7 +262,7 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
 
         doAnswer(invocation -> {
             ActionListener<IndexResponse> al = invocation.getArgument(1);
-            al.onResponse(mock(IndexResponse.class)); // Simulating successful indexing
+            al.onResponse(indexResponse);
             return null;
         }).when(client).index(any(), any());
 
@@ -256,25 +273,5 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
 
         assertNotNull(argumentCaptor.getValue());
     }
-
-    // @Test
-    // public void test_execute_ModelNotFound() {
-    // MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
-    // MLAgent mlAgent = MLAgent
-    // .builder()
-    // .name("agent")
-    // .type(MLAgentType.CONVERSATIONAL.name())
-    // .description("description")
-    // .llm(new LLMSpec("model_id", new HashMap<>()))
-    // .build();
-    // when(request.getMlAgent()).thenReturn(mlAgent);
-    //
-    // transportRegisterAgentAction.doExecute(task, request, actionListener);
-    //
-    // ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-    // verify(actionListener).onFailure(argumentCaptor.capture());
-    //
-    // assertNotNull(argumentCaptor.getValue());
-    // }
 
 }

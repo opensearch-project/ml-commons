@@ -10,18 +10,21 @@ import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO
 import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 import static org.opensearch.ml.utils.MLExceptionUtils.toJsonString;
+import static org.opensearch.ml.utils.RestActionUtils.getAllNodes;
 
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.action.update.UpdateResponse;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
@@ -45,10 +48,14 @@ import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpInput;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodesRequest;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.task.MLTaskCache;
 import org.opensearch.ml.task.MLTaskManager;
+import org.opensearch.ml.utils.TenantAwareHelper;
+import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableMap;
 
@@ -62,6 +69,7 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
     private final ClusterService clusterService;
     MLTaskManager mlTaskManager;
     Client client;
+    final SdkClient sdkClient;
     MLModelManager mlModelManager;
     DiscoveryNodeHelper nodeHelper;
 
@@ -73,26 +81,32 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
 
     private final MLModelAutoReDeployer mlModelAutoReDeployer;
 
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Inject
     public TransportForwardAction(
         TransportService transportService,
         ActionFilters actionFilters,
         MLTaskManager mlTaskManager,
         Client client,
+        SdkClient sdkClient,
         MLModelManager mlModelManager,
         DiscoveryNodeHelper nodeHelper,
         Settings settings,
         ClusterService clusterService,
-        MLModelAutoReDeployer mlModelAutoReDeployer
+        MLModelAutoReDeployer mlModelAutoReDeployer,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLForwardAction.NAME, transportService, actionFilters, MLForwardRequest::new);
         this.mlTaskManager = mlTaskManager;
         this.client = client;
+        this.sdkClient = sdkClient;
         this.mlModelManager = mlModelManager;
         this.nodeHelper = nodeHelper;
         this.settings = settings;
         this.clusterService = clusterService;
         this.mlModelAutoReDeployer = mlModelAutoReDeployer;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
 
         modelAutoRedeploySuccessRatio = ML_COMMONS_MODEL_AUTO_REDEPLOY_SUCCESS_RATIO.get(settings);
         enableAutoReDeployModel = ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE.get(settings);
@@ -108,6 +122,10 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
         MLForwardInput forwardInput = mlForwardRequest.getForwardInput();
         String modelId = forwardInput.getModelId();
         String taskId = forwardInput.getTaskId();
+        String tenantId = forwardInput.getTenantId();
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, listener)) {
+            return;
+        }
         MLRegisterModelInput registerModelInput = forwardInput.getRegisterModelInput();
         MLTask mlTask = forwardInput.getMlTask();
         String workerNodeId = forwardInput.getWorkerNodeId();
@@ -131,10 +149,29 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
                         syncModelWorkerNodes(modelId, functionName);
                     }
 
-                    if (workNodes == null || workNodes.size() == 0) {
+                    Set<String> workNodesRemovedFromCluster = new HashSet<>();
+
+                    if (workNodes != null && !workNodes.isEmpty()) {
+                        Set<String> allNodesInCluster = new HashSet<>(List.of(getAllNodes(clusterService)));
+
+                        workNodesRemovedFromCluster = workNodes
+                            .stream()
+                            .filter(node -> !allNodesInCluster.contains(node))
+                            .collect(Collectors.toSet());
+
+                        if (!workNodesRemovedFromCluster.isEmpty()) {
+                            workNodes.removeAll(workNodesRemovedFromCluster);
+                        }
+                    }
+
+                    if (workNodes == null || workNodes.isEmpty()) {
+                        if (!workNodesRemovedFromCluster.isEmpty()) {
+                            mlTaskCache.updateWorkerNode(workNodesRemovedFromCluster);
+                            mlModelManager.removeModelWorkerNode(modelId, false, workNodesRemovedFromCluster.toArray(new String[0]));
+                        }
                         int currentWorkerNodeCount = mlTaskCache.getWorkerNodeSize();
                         MLTaskState taskState = mlTaskCache.hasError() ? MLTaskState.COMPLETED_WITH_ERROR : MLTaskState.COMPLETED;
-                        if (mlTaskCache.allNodeFailed()) {
+                        if (mlTaskCache.allNodeFailed() || mlTaskCache.getWorkerNodeSize() == 0) {
                             taskState = MLTaskState.FAILED;
                             currentWorkerNodeCount = 0;
                         } else {
@@ -147,14 +184,14 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
                             builder.put(MLTask.ERROR_FIELD, toJsonString(mlTaskCache.getErrors()));
                         }
                         boolean clearAutoReDeployRetryTimes = triggerNextModelDeployAndCheckIfRestRetryTimes(workNodes, taskId);
-                        mlTaskManager.updateMLTask(taskId, builder.build(), TASK_SEMAPHORE_TIMEOUT, true);
+                        mlTaskManager.updateMLTask(taskId, tenantId, builder.build(), TASK_SEMAPHORE_TIMEOUT, true);
 
                         MLModelState modelState;
-                        if (!mlTaskCache.allNodeFailed()) {
-                            modelState = mlTaskCache.hasError() ? MLModelState.PARTIALLY_DEPLOYED : MLModelState.DEPLOYED;
-                        } else {
+                        if (mlTaskCache.allNodeFailed() || mlTaskCache.getWorkerNodeSize() == 0) {
                             modelState = MLModelState.DEPLOY_FAILED;
                             log.error("deploy model failed on all nodes, model id: {}", modelId);
+                        } else {
+                            modelState = mlTaskCache.hasError() ? MLModelState.PARTIALLY_DEPLOYED : MLModelState.DEPLOYED;
                         }
                         Map<String, Object> updateFields = new HashMap<>();
                         updateFields.put(MLModel.MODEL_STATE_FIELD, modelState);
@@ -171,8 +208,8 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
                             } else {
                                 log.error("Failed to update ML model {}, status: {}", modelId, response.status());
                             }
-                        }, e -> { log.error("Failed to update ML model: " + modelId, e); });
-                        mlModelManager.updateModel(modelId, updateFields, ActionListener.runBefore(updateModelListener, () -> {
+                        }, e -> { log.error("Failed to update ML model: {}", modelId, e); });
+                        mlModelManager.updateModel(modelId, tenantId, updateFields, ActionListener.runBefore(updateModelListener, () -> {
                             mlModelManager.removeAutoDeployModel(modelId);
                         }));
                     }

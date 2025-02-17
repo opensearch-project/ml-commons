@@ -12,6 +12,7 @@ import static org.opensearch.ml.utils.TestData.TIME_FIELD;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.lucene.tests.util.LuceneTestCase;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
@@ -68,9 +69,10 @@ public class PredictionITTests extends MLCommonsIntegTestCase {
         irisIndexName = "iris_data_for_prediction_it";
         loadIrisData(irisIndexName);
 
-        kMeansModelId = trainKmeansWithIrisData(irisIndexName, false);
-        MLModel kMeansModel = getModel(kMeansModelId);
-        assertNotNull(kMeansModel);
+        // TODO: open these lines when this bug fix merged https://github.com/oracle/tribuo/issues/223
+        // modelId = trainKmeansWithIrisData(irisIndexName, false);
+        // MLModel kMeansModel = getModel(kMeansModelId);
+        // assertNotNull(kMeansModel);
 
         batchRcfModelId = trainBatchRCFWithDataFrame(500, false);
         fitRcfModelId = trainFitRCFWithDataFrame(500, false);
@@ -80,11 +82,13 @@ public class PredictionITTests extends MLCommonsIntegTestCase {
         assertNotNull(batchRcfModel);
     }
 
+    @LuceneTestCase.AwaitsFix(bugUrl = "https://github.com/oracle/tribuo/issues/223")
     public void testPredictionWithSearchInput_KMeans() {
         MLInputDataset inputDataset = new SearchQueryInputDataset(ImmutableList.of(irisIndexName), irisDataQuery());
         predictAndVerify(kMeansModelId, inputDataset, FunctionName.KMEANS, null, IRIS_DATA_SIZE);
     }
 
+    @LuceneTestCase.AwaitsFix(bugUrl = "https://github.com/oracle/tribuo/issues/223")
     public void testPredictionWithDataInput_KMeans() {
         MLInputDataset inputDataset = new DataFrameInputDataset(irisDataFrame());
         predictAndVerify(kMeansModelId, inputDataset, FunctionName.KMEANS, null, IRIS_DATA_SIZE);
@@ -94,17 +98,18 @@ public class PredictionITTests extends MLCommonsIntegTestCase {
         exceptionRule.expect(ActionRequestValidationException.class);
         exceptionRule.expectMessage("input data can't be null");
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).build();
-        MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest(kMeansModelId, mlInput, null);
+        MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest(kMeansModelId, mlInput, null, null);
         ActionFuture<MLTaskResponse> predictionFuture = client().execute(MLPredictionTaskAction.INSTANCE, predictionRequest);
         predictionFuture.actionGet();
     }
 
+    @LuceneTestCase.AwaitsFix(bugUrl = "https://github.com/oracle/tribuo/issues/223")
     public void testPredictionWithEmptyDataset_KMeans() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("No document found");
         MLInputDataset emptySearchInputDataset = emptyQueryInputDataSet(irisIndexName);
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).inputDataset(emptySearchInputDataset).build();
-        MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest(kMeansModelId, mlInput, null);
+        MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest(kMeansModelId, mlInput, null, null);
         ActionFuture<MLTaskResponse> predictionFuture = client().execute(MLPredictionTaskAction.INSTANCE, predictionRequest);
         predictionFuture.actionGet();
     }

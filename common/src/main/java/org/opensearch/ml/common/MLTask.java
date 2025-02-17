@@ -6,7 +6,9 @@
 package org.opensearch.ml.common;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.USER;
+import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -72,6 +74,7 @@ public class MLTask implements ToXContentObject, Writeable {
     private boolean async;
     @Setter
     private Map<String, Object> remoteJob;
+    private String tenantId;
 
     @Builder(toBuilder = true)
     public MLTask(
@@ -89,7 +92,8 @@ public class MLTask implements ToXContentObject, Writeable {
         String error,
         User user,
         boolean async,
-        Map<String, Object> remoteJob
+        Map<String, Object> remoteJob,
+        String tenantId
     ) {
         this.taskId = taskId;
         this.modelId = modelId;
@@ -106,6 +110,7 @@ public class MLTask implements ToXContentObject, Writeable {
         this.user = user;
         this.async = async;
         this.remoteJob = remoteJob;
+        this.tenantId = tenantId;
     }
 
     public MLTask(StreamInput input) throws IOException {
@@ -134,9 +139,10 @@ public class MLTask implements ToXContentObject, Writeable {
         this.async = input.readBoolean();
         if (streamInputVersion.onOrAfter(MLTask.MINIMAL_SUPPORTED_VERSION_FOR_BATCH_PREDICTION_JOB)) {
             if (input.readBoolean()) {
-                this.remoteJob = input.readMap(s -> s.readString(), s -> s.readGenericValue());
+                this.remoteJob = input.readMap(StreamInput::readString, StreamInput::readGenericValue);
             }
         }
+        tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
     }
 
     @Override
@@ -172,6 +178,9 @@ public class MLTask implements ToXContentObject, Writeable {
             } else {
                 out.writeBoolean(false);
             }
+        }
+        if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
+            out.writeOptionalString(tenantId);
         }
     }
 
@@ -221,12 +230,14 @@ public class MLTask implements ToXContentObject, Writeable {
         if (remoteJob != null) {
             builder.field(REMOTE_JOB_FIELD, remoteJob);
         }
+        if (tenantId != null) {
+            builder.field(TENANT_ID_FIELD, tenantId);
+        }
         return builder.endObject();
     }
 
     public static MLTask fromStream(StreamInput in) throws IOException {
-        MLTask mlTask = new MLTask(in);
-        return mlTask;
+        return new MLTask(in);
     }
 
     public static MLTask parse(XContentParser parser) throws IOException {
@@ -245,6 +256,7 @@ public class MLTask implements ToXContentObject, Writeable {
         User user = null;
         boolean async = false;
         Map<String, Object> remoteJob = null;
+        String tenantId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -305,6 +317,9 @@ public class MLTask implements ToXContentObject, Writeable {
                 case REMOTE_JOB_FIELD:
                     remoteJob = parser.map();
                     break;
+                case TENANT_ID_FIELD:
+                    tenantId = parser.textOrNull();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -327,6 +342,7 @@ public class MLTask implements ToXContentObject, Writeable {
             .user(user)
             .async(async)
             .remoteJob(remoteJob)
+            .tenantId(tenantId)
             .build();
     }
 }

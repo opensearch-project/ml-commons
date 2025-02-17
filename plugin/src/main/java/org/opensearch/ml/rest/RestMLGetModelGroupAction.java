@@ -8,28 +8,33 @@ package org.opensearch.ml.rest;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_GROUP_ID;
 import static org.opensearch.ml.utils.RestActionUtils.getParameterId;
+import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
 
-import org.opensearch.client.node.NodeClient;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetRequest;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
+import org.opensearch.transport.client.node.NodeClient;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 
 public class RestMLGetModelGroupAction extends BaseRestHandler {
     private static final String ML_GET_MODEL_GROUP_ACTION = "ml_get_model_group_action";
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     /**
      * Constructor
      */
-    public RestMLGetModelGroupAction() {}
+    public RestMLGetModelGroupAction(MLFeatureEnabledSetting mlFeatureEnabledSetting) {
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+    }
 
     @Override
     public String getName() {
@@ -59,7 +64,7 @@ public class RestMLGetModelGroupAction extends BaseRestHandler {
     @VisibleForTesting
     MLModelGroupGetRequest getRequest(RestRequest request) throws IOException {
         String modelGroupId = getParameterId(request, PARAMETER_MODEL_GROUP_ID);
-
-        return new MLModelGroupGetRequest(modelGroupId);
+        String tenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
+        return new MLModelGroupGetRequest(modelGroupId, tenantId);
     }
 }

@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
@@ -60,6 +61,7 @@ public class AgentUtils {
     public static final String PROMPT_CHAT_HISTORY_PREFIX = "prompt.chat_history_prefix";
     public static final String DISABLE_TRACE = "disable_trace";
     public static final String VERBOSE = "verbose";
+    public static final String LLM_GEN_INPUT = "llm_generated_input";
 
     public static String addExamplesToPrompt(Map<String, String> parameters, String prompt) {
         Map<String, String> examplesMap = new HashMap<>();
@@ -169,7 +171,7 @@ public class AgentUtils {
         Map<String, String> contextMap = new HashMap<>();
         contextMap.put(CONTEXT, parameters.getOrDefault(CONTEXT, ""));
         parameters.put(CONTEXT, contextMap.get(CONTEXT));
-        if (contextMap.size() > 0) {
+        if (!contextMap.isEmpty()) {
             StringSubstitutor substitutor = new StringSubstitutor(contextMap, "${parameters.", "}");
             return substitutor.replace(prompt);
         }
@@ -409,16 +411,22 @@ public class AgentUtils {
         Map<String, String> params,
         List<MLToolSpec> toolSpecs,
         Map<String, Tool> tools,
-        Map<String, MLToolSpec> toolSpecMap
+        Map<String, MLToolSpec> toolSpecMap,
+        MLAgent mlAgent
     ) {
         for (MLToolSpec toolSpec : toolSpecs) {
-            Tool tool = createTool(toolFactories, params, toolSpec);
+            Tool tool = createTool(toolFactories, params, toolSpec, mlAgent.getTenantId());
             tools.put(tool.getName(), tool);
             toolSpecMap.put(tool.getName(), toolSpec);
         }
     }
 
-    public static Tool createTool(Map<String, Tool.Factory> toolFactories, Map<String, String> params, MLToolSpec toolSpec) {
+    public static Tool createTool(
+        Map<String, Tool.Factory> toolFactories,
+        Map<String, String> params,
+        MLToolSpec toolSpec,
+        String tenantId
+    ) {
         if (!toolFactories.containsKey(toolSpec.getType())) {
             throw new IllegalArgumentException("Tool not found: " + toolSpec.getType());
         }
@@ -426,6 +434,7 @@ public class AgentUtils {
         if (toolSpec.getParameters() != null) {
             executeParams.putAll(toolSpec.getParameters());
         }
+        executeParams.put(TENANT_ID_FIELD, tenantId);
         for (String key : params.keySet()) {
             String toolNamePrefix = getToolName(toolSpec) + ".";
             if (key.startsWith(toolNamePrefix)) {
@@ -465,18 +474,32 @@ public class AgentUtils {
     ) {
         Map<String, String> toolParams = new HashMap<>();
         Map<String, String> toolSpecParams = toolSpecMap.get(action).getParameters();
+        Map<String, String> toolSpecConfigMap = toolSpecMap.get(action).getConfigMap();
         if (toolSpecParams != null) {
             toolParams.putAll(toolSpecParams);
+        }
+        if (toolSpecConfigMap != null) {
+            toolParams.putAll(toolSpecConfigMap);
+        }
+        toolParams.put(LLM_GEN_INPUT, actionInput);
+        if (isJson(actionInput)) {
+            Map<String, String> params = getParameterMap(gson.fromJson(actionInput, Map.class));
+            toolParams.putAll(params);
         }
         if (tools.get(action).useOriginalInput()) {
             toolParams.put("input", question);
             lastActionInput.set(question);
-        } else {
-            toolParams.put("input", actionInput);
-            if (isJson(actionInput)) {
-                Map<String, String> params = getParameterMap(gson.fromJson(actionInput, Map.class));
+        } else if (toolSpecConfigMap != null && toolSpecConfigMap.containsKey("input")) {
+            String input = toolSpecConfigMap.get("input");
+            StringSubstitutor substitutor = new StringSubstitutor(toolParams, "${parameters.", "}");
+            input = substitutor.replace(input);
+            toolParams.put("input", input);
+            if (isJson(input)) {
+                Map<String, String> params = getParameterMap(gson.fromJson(input, Map.class));
                 toolParams.putAll(params);
             }
+        } else {
+            toolParams.put("input", actionInput);
         }
         return toolParams;
     }

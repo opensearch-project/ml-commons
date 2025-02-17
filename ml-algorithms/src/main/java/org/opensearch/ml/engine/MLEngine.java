@@ -5,6 +5,9 @@
 
 package org.opensearch.ml.engine;
 
+import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
+import static org.opensearch.ml.common.connector.HttpConnector.REGION_FIELD;
+
 import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Map;
@@ -12,6 +15,7 @@ import java.util.Map;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataset;
@@ -120,6 +124,21 @@ public class MLEngine {
         return trainable.train(mlInput);
     }
 
+    public Map<String, String> getConnectorCredential(Connector connector) {
+        connector
+            .decrypt(
+                PREDICT.name(),
+                (credential, tenantId) -> encryptor.decrypt(credential, connector.getTenantId()),
+                connector.getTenantId()
+            );
+        Map<String, String> decryptedCredential = connector.getDecryptedCredential();
+        String region = connector.getParameters().get(REGION_FIELD);
+        if (region != null) {
+            decryptedCredential.putIfAbsent(REGION_FIELD, region);
+        }
+        return decryptedCredential;
+    }
+
     public Predictable deploy(MLModel mlModel, Map<String, Object> params) {
         Predictable predictable = MLEngineClassLoader.initInstance(mlModel.getAlgorithm(), null, MLAlgoParams.class);
         predictable.initModel(mlModel, params, encryptor);
@@ -197,8 +216,8 @@ public class MLEngine {
         }
     }
 
-    public String encrypt(String credential) {
-        return encryptor.encrypt(credential);
+    public String encrypt(String credential, String tenantId) {
+        return encryptor.encrypt(credential, tenantId);
     }
 
 }

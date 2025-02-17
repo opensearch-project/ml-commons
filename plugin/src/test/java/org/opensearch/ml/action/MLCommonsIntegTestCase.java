@@ -362,7 +362,7 @@ public class MLCommonsIntegTestCase extends ParameterizedStaticSettingsOpenSearc
         int size
     ) {
         MLInput mlInput = MLInput.builder().algorithm(functionName).inputDataset(inputDataset).parameters(parameters).build();
-        MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest(modelId, mlInput, null);
+        MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest(modelId, mlInput, null, null);
         ActionFuture<MLTaskResponse> predictionFuture = client().execute(MLPredictionTaskAction.INSTANCE, predictionRequest);
         MLTaskResponse predictionResponse = predictionFuture.actionGet();
         MLPredictionOutput mlPredictionOutput = (MLPredictionOutput) predictionResponse.getOutput();
@@ -373,7 +373,7 @@ public class MLCommonsIntegTestCase extends ParameterizedStaticSettingsOpenSearc
 
     public MLTaskResponse predict(String modelId, FunctionName functionName, MLInputDataset inputDataset, MLAlgoParams parameters) {
         MLInput mlInput = MLInput.builder().algorithm(functionName).inputDataset(inputDataset).parameters(parameters).build();
-        MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest(modelId, mlInput, null);
+        MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest(modelId, mlInput, null, null);
         ActionFuture<MLTaskResponse> predictionFuture = client().execute(MLPredictionTaskAction.INSTANCE, predictionRequest);
         MLTaskResponse predictionResponse = predictionFuture.actionGet();
         return predictionResponse;
@@ -387,19 +387,19 @@ public class MLCommonsIntegTestCase extends ParameterizedStaticSettingsOpenSearc
     }
 
     public MLTask getTask(String taskId) {
-        MLTaskGetRequest getRequest = new MLTaskGetRequest(taskId);
+        MLTaskGetRequest getRequest = new MLTaskGetRequest(taskId, null);
         MLTaskGetResponse response = client().execute(MLTaskGetAction.INSTANCE, getRequest).actionGet(5000);
         return response.getMlTask();
     }
 
     public MLModel getModel(String modelId) {
-        MLModelGetRequest getRequest = new MLModelGetRequest(modelId, false, true);
+        MLModelGetRequest getRequest = new MLModelGetRequest(modelId, false, true, null);
         MLModelGetResponse response = client().execute(MLModelGetAction.INSTANCE, getRequest).actionGet(5000);
         return response.getMlModel();
     }
 
     public MLModelGroup getModelGroup(String modelGroupId) {
-        MLModelGroupGetRequest getRequest = new MLModelGroupGetRequest(modelGroupId);
+        MLModelGroupGetRequest getRequest = new MLModelGroupGetRequest(modelGroupId, null);
         MLModelGroupGetResponse response = client().execute(MLModelGroupGetAction.INSTANCE, getRequest).actionGet(5000);
         return response.getMlModelGroup();
     }

@@ -77,6 +77,9 @@ public class MachineLearningClientTest {
     ActionListener<MLOutput> dataFrameActionListener;
 
     @Mock
+    ActionListener<MLModel> mlModelActionListener;
+
+    @Mock
     DeleteResponse deleteResponse;
 
     @Mock
@@ -106,12 +109,12 @@ public class MachineLearningClientTest {
     @Mock
     MLConfigGetResponse configGetResponse;
 
-    private String modekId = "test_model_id";
+    private final String modekId = "test_model_id";
     private MLModel mlModel;
     private MLTask mlTask;
     private MLConfig mlConfig;
     private ToolMetadata toolMetadata;
-    private List<ToolMetadata> toolsList = new ArrayList<>();
+    private final List<ToolMetadata> toolsList = new ArrayList<>();
 
     @Before
     public void setUp() {
@@ -141,8 +144,9 @@ public class MachineLearningClientTest {
             .build();
 
         machineLearningClient = new MachineLearningClient() {
+
             @Override
-            public void predict(String modelId, MLInput mlInput, ActionListener<MLOutput> listener) {
+            public void predict(String modelId, String tenantId, MLInput mlInput, ActionListener<MLOutput> listener) {
                 listener.onResponse(output);
             }
 
@@ -162,12 +166,12 @@ public class MachineLearningClientTest {
             }
 
             @Override
-            public void getModel(String modelId, ActionListener<MLModel> listener) {
+            public void getModel(String modelId, String tenantId, ActionListener<MLModel> listener) {
                 listener.onResponse(mlModel);
             }
 
             @Override
-            public void deleteModel(String modelId, ActionListener<DeleteResponse> listener) {
+            public void deleteModel(String modelId, String tenantId, ActionListener<DeleteResponse> listener) {
                 listener.onResponse(deleteResponse);
             }
 
@@ -177,12 +181,12 @@ public class MachineLearningClientTest {
             }
 
             @Override
-            public void getTask(String taskId, ActionListener<MLTask> listener) {
+            public void getTask(String taskId, String tenantId, ActionListener<MLTask> listener) {
                 listener.onResponse(mlTask);
             }
 
             @Override
-            public void deleteTask(String taskId, ActionListener<DeleteResponse> listener) {
+            public void deleteTask(String taskId, String tenantId, ActionListener<DeleteResponse> listener) {
                 listener.onResponse(deleteResponse);
             }
 
@@ -197,12 +201,12 @@ public class MachineLearningClientTest {
             }
 
             @Override
-            public void deploy(String modelId, ActionListener<MLDeployModelResponse> listener) {
+            public void deploy(String modelId, String tenantId, ActionListener<MLDeployModelResponse> listener) {
                 listener.onResponse(deployModelResponse);
             }
 
             @Override
-            public void undeploy(String[] modelIds, String[] nodeIds, ActionListener<MLUndeployModelsResponse> listener) {
+            public void undeploy(String[] modelIds, String[] nodeIds, String tenantId, ActionListener<MLUndeployModelsResponse> listener) {
                 listener.onResponse(undeployModelsResponse);
             }
 
@@ -217,7 +221,7 @@ public class MachineLearningClientTest {
             }
 
             @Override
-            public void deleteConnector(String connectorId, ActionListener<DeleteResponse> listener) {
+            public void deleteConnector(String connectorId, String tenantId, ActionListener<DeleteResponse> listener) {
                 listener.onResponse(deleteResponse);
             }
 
@@ -244,12 +248,12 @@ public class MachineLearningClientTest {
             }
 
             @Override
-            public void deleteAgent(String agentId, ActionListener<DeleteResponse> listener) {
+            public void deleteAgent(String agentId, String tenantId, ActionListener<DeleteResponse> listener) {
                 listener.onResponse(deleteResponse);
             }
 
             @Override
-            public void getConfig(String configId, ActionListener<MLConfig> listener) {
+            public void getConfig(String configId, String tenantId, ActionListener<MLConfig> listener) {
                 listener.onResponse(mlConfig);
             }
         };
@@ -287,7 +291,7 @@ public class MachineLearningClientTest {
     public void predict_WithAlgoAndInputDataAndListener() {
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).inputDataset(new DataFrameInputDataset(input)).build();
         ArgumentCaptor<MLOutput> dataFrameArgumentCaptor = ArgumentCaptor.forClass(MLOutput.class);
-        machineLearningClient.predict(null, mlInput, dataFrameActionListener);
+        machineLearningClient.predict(null, null, mlInput, dataFrameActionListener);
         verify(dataFrameActionListener).onResponse(dataFrameArgumentCaptor.capture());
         assertEquals(output, dataFrameArgumentCaptor.getValue());
     }
@@ -348,6 +352,22 @@ public class MachineLearningClientTest {
     }
 
     @Test
+    public void getModelActionListener() {
+        ArgumentCaptor<MLModel> dataFrameArgumentCaptor = ArgumentCaptor.forClass(MLModel.class);
+        machineLearningClient.getModel("modelId", mlModelActionListener);
+        verify(mlModelActionListener).onResponse(dataFrameArgumentCaptor.capture());
+        assertEquals(mlModel, dataFrameArgumentCaptor.getValue());
+        assertEquals(mlModel.getTenantId(), dataFrameArgumentCaptor.getValue().getTenantId());
+    }
+
+    @Test
+    public void undeploy_WithSpecificNodes() {
+        String[] modelIds = new String[] { "model1", "model2" };
+        String[] nodeIds = new String[] { "node1", "node2" };
+        assertEquals(undeployModelsResponse, machineLearningClient.undeploy(modelIds, nodeIds).actionGet());
+    }
+
+    @Test
     public void deleteModel() {
         assertEquals(deleteResponse, machineLearningClient.deleteModel("modelId").actionGet());
     }
@@ -355,6 +375,11 @@ public class MachineLearningClientTest {
     @Test
     public void searchModel() {
         assertEquals(searchResponse, machineLearningClient.searchModel(new SearchRequest()).actionGet());
+    }
+
+    @Test
+    public void deleteConnector_WithTenantId() {
+        assertEquals(deleteResponse, machineLearningClient.deleteConnector("connectorId").actionGet());
     }
 
     @Test
@@ -448,8 +473,8 @@ public class MachineLearningClientTest {
     @Test
     public void executeMetricsCorrelation() {
         List<float[]> inputData = new ArrayList<>(
-            Arrays
-                .asList(
+            List
+                .of(
                     new float[] {
                         0.89451003f,
                         4.2006273f,

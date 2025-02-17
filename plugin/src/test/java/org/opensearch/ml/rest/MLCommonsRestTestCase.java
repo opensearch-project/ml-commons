@@ -977,7 +977,7 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
             }
             return taskDone.get();
         }, CUSTOM_MODEL_TIMEOUT, TimeUnit.SECONDS);
-        assertTrue(taskDone.get());
+        assertTrue(String.format(Locale.ROOT, "Task Id %s could not get to %s state", taskId, targetState.name()), taskDone.get());
     }
 
     public String registerConnector(String createConnectorInput) throws IOException, InterruptedException {
@@ -1002,15 +1002,11 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         String connectorId = (String) responseMap.get("connector_id");
         response = RestMLRemoteInferenceIT.registerRemoteModel(modelName, modelName, connectorId);
         responseMap = parseResponseToMap(response);
-        String taskId = (String) responseMap.get("task_id");
-        waitForTask(taskId, MLTaskState.COMPLETED);
-        response = RestMLRemoteInferenceIT.getTask(taskId);
-        responseMap = parseResponseToMap(response);
         String modelId = (String) responseMap.get("model_id");
         if (deploy) {
             response = RestMLRemoteInferenceIT.deployRemoteModel(modelId);
             responseMap = parseResponseToMap(response);
-            taskId = (String) responseMap.get("task_id");
+            String taskId = (String) responseMap.get("task_id");
             waitForTask(taskId, MLTaskState.COMPLETED);
         }
         return modelId;

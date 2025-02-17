@@ -29,7 +29,6 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
@@ -62,9 +61,12 @@ import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.MLExceptionUtils;
 import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.ml.utils.TenantAwareHelper;
+import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -78,6 +80,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
     ClusterService clusterService;
     ThreadPool threadPool;
     Client client;
+    SdkClient sdkClient;
 
     Settings settings;
     NamedXContentRegistry xContentRegistry;
@@ -87,8 +90,8 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
     MLStats mlStats;
 
     private volatile boolean allowCustomDeploymentPlan;
-    private ModelAccessControlHelper modelAccessControlHelper;
-    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private final ModelAccessControlHelper modelAccessControlHelper;
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Inject
     public TransportDeployModelAction(
@@ -99,6 +102,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         ClusterService clusterService,
         ThreadPool threadPool,
         Client client,
+        SdkClient sdkClient,
         NamedXContentRegistry xContentRegistry,
         DiscoveryNodeHelper nodeFilter,
         MLTaskDispatcher mlTaskDispatcher,
@@ -115,6 +119,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         this.clusterService = clusterService;
         this.threadPool = threadPool;
         this.client = client;
+        this.sdkClient = sdkClient;
         this.xContentRegistry = xContentRegistry;
         this.nodeFilter = nodeFilter;
         this.mlTaskDispatcher = mlTaskDispatcher;
@@ -133,26 +138,33 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLDeployModelResponse> listener) {
         MLDeployModelRequest deployModelRequest = MLDeployModelRequest.fromActionRequest(request);
         String modelId = deployModelRequest.getModelId();
-        Boolean isUserInitiatedDeployRequest = deployModelRequest.isUserInitiatedDeployRequest();
+        String tenantId = deployModelRequest.getTenantId();
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, listener)) {
+            return;
+        }
+        boolean isUserInitiatedDeployRequest = deployModelRequest.isUserInitiatedDeployRequest();
         User user = RestActionUtils.getUserContext(client);
         boolean isSuperAdmin = isSuperAdminUserWrapper(clusterService, client);
         String[] excludes = new String[] { MLModel.MODEL_CONTENT_FIELD, MLModel.OLD_MODEL_CONTENT_FIELD };
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<MLDeployModelResponse> wrappedListener = ActionListener.runBefore(listener, () -> context.restore());
-            mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
+            ActionListener<MLDeployModelResponse> wrappedListener = ActionListener.runBefore(listener, context::restore);
+            mlModelManager.getModel(modelId, tenantId, null, excludes, ActionListener.wrap(mlModel -> {
                 FunctionName functionName = mlModel.getAlgorithm();
                 Boolean isHidden = mlModel.getIsHidden();
+                if (!TenantAwareHelper.validateTenantResource(mlFeatureEnabledSetting, tenantId, mlModel.getTenantId(), listener)) {
+                    return;
+                }
                 if (functionName == FunctionName.REMOTE && !mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
                     throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
                 } else if (FunctionName.isDLModel(functionName) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
                     throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
                 }
                 if (!isUserInitiatedDeployRequest) {
-                    deployModel(deployModelRequest, mlModel, modelId, wrappedListener, listener);
-                } else if (isHidden != null && isHidden) {
+                    deployModel(deployModelRequest, mlModel, modelId, tenantId, wrappedListener, listener);
+                } else if (Boolean.TRUE.equals(isHidden)) {
                     if (isSuperAdmin) {
-                        deployModel(deployModelRequest, mlModel, modelId, wrappedListener, listener);
+                        deployModel(deployModelRequest, mlModel, modelId, tenantId, wrappedListener, listener);
                     } else {
                         wrappedListener
                             .onFailure(
@@ -174,7 +186,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                                         )
                                     );
                             } else {
-                                deployModel(deployModelRequest, mlModel, modelId, wrappedListener, listener);
+                                deployModel(deployModelRequest, mlModel, modelId, tenantId, wrappedListener, listener);
                             }
                         }, e -> {
                             log.error(getErrorMessage("Failed to Validate Access for the given model", modelId, isHidden), e);
@@ -197,6 +209,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         MLDeployModelRequest deployModelRequest,
         MLModel mlModel,
         String modelId,
+        String tenantId,
         ActionListener<MLDeployModelResponse> wrappedListener,
         ActionListener<MLDeployModelResponse> listener
     ) {
@@ -225,8 +238,8 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
             String[] workerNodes = mlModelManager.getWorkerNodes(modelId, mlModel.getAlgorithm());
             if (workerNodes != null && workerNodes.length > 0) {
                 Set<String> difference = new HashSet<String>(Arrays.asList(workerNodes));
-                difference.removeAll(Arrays.asList(targetNodeIds));
-                if (difference.size() > 0) {
+                Arrays.asList(targetNodeIds).forEach(difference::remove);
+                if (!difference.isEmpty()) {
                     wrappedListener
                         .onFailure(
                             new IllegalArgumentException(
@@ -244,7 +257,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
             eligibleNodeIds.addAll(allEligibleNodeIds);
             eligibleNodes.addAll(Arrays.asList(allEligibleNodes));
         }
-        if (eligibleNodeIds.size() == 0) {
+        if (eligibleNodeIds.isEmpty()) {
             wrappedListener.onFailure(new IllegalArgumentException("no eligible node found"));
             return;
         }
@@ -266,6 +279,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
             .lastUpdateTime(Instant.now())
             .state(MLTaskState.CREATED)
             .workerNodes(eligibleNodeIds)
+            .tenantId(tenantId)
             .build();
         mlTaskManager.createMLTask(mlTask, ActionListener.wrap(response -> {
             String taskId = response.getId();
@@ -284,6 +298,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                         () -> updateModelDeployStatusAndTriggerOnNodesAction(
                             modelId,
                             taskId,
+                            tenantId,
                             mlModel,
                             localNodeId,
                             mlTask,
@@ -296,6 +311,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                 mlTaskManager
                     .updateMLTask(
                         taskId,
+                        tenantId,
                         Map.of(STATE_FIELD, FAILED, ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(ex)),
                         TASK_SEMAPHORE_TIMEOUT,
                         true
@@ -306,7 +322,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
             if (mlModel.getIsHidden()) {
                 log.error("Failed to create deploy model task for the provided model", exception);
             } else {
-                log.error("Failed to create deploy model task for " + modelId, exception);
+                log.error("Failed to create deploy model task for {}", modelId, exception);
             }
 
             wrappedListener.onFailure(exception);
@@ -329,7 +345,8 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
             eligibleNodes.size(),
             localNodeId,
             deployToAllNodes,
-            mlTask
+            mlTask,
+            mlModel.getTenantId()
         );
 
         MLDeployModelNodesRequest deployModelRequest = new MLDeployModelNodesRequest(
@@ -340,13 +357,15 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         ActionListener<MLDeployModelNodesResponse> actionListener = deployModelNodesResponseListener(
             mlTask.getTaskId(),
             mlModel.getModelId(),
+            mlModel.getTenantId(),
             mlModel.getIsHidden(),
             listener
         );
-        List<String> workerNodes = eligibleNodes.stream().map(n -> n.getId()).collect(Collectors.toList());
+        List<String> workerNodes = eligibleNodes.stream().map(DiscoveryNode::getId).collect(Collectors.toList());
         mlModelManager
             .updateModel(
                 mlModel.getModelId(),
+                mlModel.getTenantId(),
                 Map
                     .of(
                         MLModel.MODEL_STATE_FIELD,
@@ -369,24 +388,26 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
     private ActionListener<MLDeployModelNodesResponse> deployModelNodesResponseListener(
         String taskId,
         String modelId,
+        String tenantId,
         Boolean isHidden,
         ActionListener<MLDeployModelResponse> listener
     ) {
         return ActionListener.wrap(r -> {
             if (mlTaskManager.contains(taskId)) {
-                mlTaskManager.updateMLTask(taskId, Map.of(STATE_FIELD, MLTaskState.RUNNING), TASK_SEMAPHORE_TIMEOUT, false);
+                mlTaskManager.updateMLTask(taskId, tenantId, Map.of(STATE_FIELD, MLTaskState.RUNNING), TASK_SEMAPHORE_TIMEOUT, false);
             }
             listener.onResponse(new MLDeployModelResponse(taskId, MLTaskType.DEPLOY_MODEL, MLTaskState.COMPLETED.name()));
         }, e -> {
-            log.error("Failed to deploy model " + modelId, e);
+            log.error("Failed to deploy model {}", modelId, e);
             mlTaskManager
                 .updateMLTask(
                     taskId,
+                    tenantId,
                     Map.of(MLTask.ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(e), STATE_FIELD, FAILED),
                     TASK_SEMAPHORE_TIMEOUT,
                     true
                 );
-            mlModelManager.updateModel(modelId, isHidden, Map.of(MLModel.MODEL_STATE_FIELD, MLModelState.DEPLOY_FAILED));
+            mlModelManager.updateModel(modelId, tenantId, isHidden, Map.of(MLModel.MODEL_STATE_FIELD, MLModelState.DEPLOY_FAILED));
             listener.onFailure(e);
         });
     }
@@ -395,6 +416,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
     void updateModelDeployStatusAndTriggerOnNodesAction(
         String modelId,
         String taskId,
+        String tenantId,
         MLModel mlModel,
         String localNodeId,
         MLTask mlTask,
@@ -408,7 +430,8 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
             eligibleNodes.size(),
             localNodeId,
             deployToAllNodes,
-            mlTask
+            mlTask,
+            tenantId
         );
         MLDeployModelNodesRequest deployModelRequest = new MLDeployModelNodesRequest(
             eligibleNodes.toArray(new DiscoveryNode[0]),
@@ -416,24 +439,33 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         );
         ActionListener<MLDeployModelNodesResponse> actionListener = ActionListener.wrap(r -> {
             if (mlTaskManager.contains(taskId)) {
-                mlTaskManager.updateMLTask(taskId, Map.of(STATE_FIELD, MLTaskState.RUNNING), TASK_SEMAPHORE_TIMEOUT, false);
+                mlTaskManager
+                    .updateMLTask(taskId, mlModel.getTenantId(), Map.of(STATE_FIELD, MLTaskState.RUNNING), TASK_SEMAPHORE_TIMEOUT, false);
             }
         }, e -> {
-            log.error("Failed to deploy model " + modelId, e);
+            log.error("Failed to deploy model {}", modelId, e);
             mlTaskManager
                 .updateMLTask(
                     taskId,
+                    mlModel.getTenantId(),
                     Map.of(MLTask.ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(e), STATE_FIELD, FAILED),
                     TASK_SEMAPHORE_TIMEOUT,
                     true
                 );
-            mlModelManager.updateModel(modelId, mlModel.getIsHidden(), Map.of(MLModel.MODEL_STATE_FIELD, MLModelState.DEPLOY_FAILED));
+            mlModelManager
+                .updateModel(
+                    modelId,
+                    mlModel.getTenantId(),
+                    mlModel.getIsHidden(),
+                    Map.of(MLModel.MODEL_STATE_FIELD, MLModelState.DEPLOY_FAILED)
+                );
         });
 
-        List<String> workerNodes = eligibleNodes.stream().map(n -> n.getId()).collect(Collectors.toList());
+        List<String> workerNodes = eligibleNodes.stream().map(DiscoveryNode::getId).toList();
         mlModelManager
             .updateModel(
                 modelId,
+                mlModel.getTenantId(),
                 Map
                     .of(
                         MLModel.MODEL_STATE_FIELD,

@@ -1,0 +1,52 @@
+{
+  "_meta": {
+    "schema_version": 4
+  },
+  "properties": {
+    "model_id": {
+      "type": "keyword"
+    },
+    "task_type": {
+      "type": "keyword"
+    },
+    "function_name": {
+      "type": "keyword"
+    },
+    "state": {
+      "type": "keyword"
+    },
+    "input_type": {
+      "type": "keyword"
+    },
+    "progress": {
+      "type": "float"
+    },
+    "output_index": {
+      "type": "keyword"
+    },
+    "worker_node": {
+      "type": "keyword"
+    },
+    "create_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "last_update_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "error": {
+      "type": "text"
+    },
+    "tenant_id": {
+      "type": "keyword"
+    },
+    "is_async": {
+      "type": "boolean"
+    },
+    "remote_job": {
+      "type": "flat_object"
+    },
+    "user": USER_MAPPING_PLACEHOLDER
+  }
+}

@@ -15,7 +15,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.function.Function;
+import java.util.function.BiFunction;
 
 import org.junit.Assert;
 import org.junit.Before;
@@ -38,8 +38,8 @@ public class HttpConnectorTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
-    Function<String, String> encryptFunction;
-    Function<String, String> decryptFunction;
+    BiFunction<String, String, String> encryptFunction;
+    BiFunction<String, String, String> decryptFunction;
 
     String TEST_CONNECTOR_JSON_STRING = "{\"name\":\"test_connector_name\",\"version\":\"1\","
         + "\"description\":\"this is a test connector\",\"protocol\":\"http\","
@@ -55,8 +55,8 @@ public class HttpConnectorTest {
 
     @Before
     public void setUp() {
-        encryptFunction = s -> "encrypted: " + s.toLowerCase(Locale.ROOT);
-        decryptFunction = s -> "decrypted: " + s.toUpperCase(Locale.ROOT);
+        encryptFunction = (s, v) -> "encrypted: " + s.toLowerCase(Locale.ROOT);
+        decryptFunction = (s, v) -> "decrypted: " + s.toUpperCase(Locale.ROOT);
     }
 
     @Test
@@ -85,12 +85,12 @@ public class HttpConnectorTest {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         connector.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String content = TestHelper.xContentBuilderToString(builder);
+
         Assert.assertEquals(TEST_CONNECTOR_JSON_STRING, content);
     }
 
     @Test
     public void constructor_Parser() throws IOException {
-
         XContentParser parser = XContentType.JSON
             .xContent()
             .createParser(
@@ -124,7 +124,7 @@ public class HttpConnectorTest {
     @Test
     public void decrypt() {
         HttpConnector connector = createHttpConnector();
-        connector.decrypt(PREDICT.name(), decryptFunction);
+        connector.decrypt(PREDICT.name(), decryptFunction, null);
         Map<String, String> decryptedCredential = connector.getDecryptedCredential();
         Assert.assertEquals(1, decryptedCredential.size());
         Assert.assertEquals("decrypted: TEST_KEY_VALUE", decryptedCredential.get("key"));
@@ -141,7 +141,7 @@ public class HttpConnectorTest {
     @Test
     public void encrypted() {
         HttpConnector connector = createHttpConnector();
-        connector.encrypt(encryptFunction);
+        connector.encrypt(encryptFunction, null);
         Map<String, String> credential = connector.getCredential();
         Assert.assertEquals(1, credential.size());
         Assert.assertEquals("encrypted: test_key_value", credential.get("key"));
@@ -323,6 +323,88 @@ public class HttpConnectorTest {
             .connectorClientConfig(httpClientConfig)
             .build();
         return connector;
+    }
+
+    @Test
+    public void writeToAndReadFrom_WithTenantId() throws IOException {
+        HttpConnector originalConnector = HttpConnector
+            .builder()
+            .name("test_connector_name")
+            .description("this is a test connector")
+            .protocol("http")
+            .tenantId("test_tenant")
+            .build();
+
+        BytesStreamOutput output = new BytesStreamOutput();
+        originalConnector.writeTo(output);
+
+        HttpConnector deserializedConnector = new HttpConnector(output.bytes().streamInput());
+        Assert.assertEquals("test_tenant", deserializedConnector.getTenantId());
+        Assert.assertEquals(originalConnector, deserializedConnector);
+    }
+
+    @Test
+    public void writeToAndReadFrom_WithoutTenantId() throws IOException {
+        HttpConnector originalConnector = HttpConnector
+            .builder()
+            .name("test_connector_name")
+            .description("this is a test connector")
+            .protocol("http")
+            .build();
+
+        BytesStreamOutput output = new BytesStreamOutput();
+        originalConnector.writeTo(output);
+
+        HttpConnector deserializedConnector = new HttpConnector(output.bytes().streamInput());
+        Assert.assertNull(deserializedConnector.getTenantId());
+        Assert.assertEquals(originalConnector, deserializedConnector);
+    }
+
+    @Test
+    public void toXContent_WithTenantId() throws IOException {
+        HttpConnector connector = HttpConnector
+            .builder()
+            .name("test_connector_name")
+            .description("this is a test connector")
+            .protocol("http")
+            .tenantId("test_tenant")
+            .build();
+
+        XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
+        connector.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String content = TestHelper.xContentBuilderToString(builder);
+
+        Assert.assertTrue(content.contains("\"tenant_id\":\"test_tenant\""));
+    }
+
+    @Test
+    public void constructor_WithTenantId() {
+        HttpConnector connector = HttpConnector
+            .builder()
+            .name("test_connector_name")
+            .description("this is a test connector")
+            .protocol("http")
+            .tenantId("test_tenant")
+            .build();
+
+        Assert.assertEquals("test_tenant", connector.getTenantId());
+    }
+
+    @Test
+    public void parse_WithTenantId() throws IOException {
+        String jsonStr = "{\"name\":\"test_connector_name\",\"protocol\":\"http\",\"tenant_id\":\"test_tenant\"}";
+
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                jsonStr
+            );
+        parser.nextToken();
+
+        HttpConnector connector = new HttpConnector("http", parser);
+        Assert.assertEquals("test_tenant", connector.getTenantId());
     }
 
 }

@@ -20,7 +20,6 @@ import java.util.Set;
 import org.opensearch.action.FailedNodeException;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.nodes.TransportNodesAction;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.settings.Settings;
@@ -44,6 +43,7 @@ import org.opensearch.ml.task.MLTaskCache;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableMap;
@@ -222,6 +222,7 @@ public class TransportSyncUpOnNodeAction extends
                 mlTaskManager
                     .updateMLTask(
                         taskId,
+                        null,
                         ImmutableMap
                             .of(MLTask.STATE_FIELD, MLTaskState.FAILED, MLTask.ERROR_FIELD, "timeout after " + mlTaskTimeout + " seconds"),
                         10_000,
@@ -236,7 +237,7 @@ public class TransportSyncUpOnNodeAction extends
         Path deployModelRootPath = mlEngine.getDeployModelRootPath();
         Path modelCacheRootPath = mlEngine.getModelCacheRootPath();
         Set<String> modelsInCacheFolder = FileUtils.getFileNames(registerModelRootPath, deployModelRootPath, modelCacheRootPath);
-        if (modelsInCacheFolder.size() > 0) {
+        if (!modelsInCacheFolder.isEmpty()) {
             log
                 .debug(
                     "Found {} models in cache folder: {}",

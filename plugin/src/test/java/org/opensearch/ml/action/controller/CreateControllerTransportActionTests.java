@@ -35,7 +35,6 @@ import org.opensearch.action.FailedNodeException;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.node.DiscoveryNodes;
@@ -57,9 +56,11 @@ import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
 
 public class CreateControllerTransportActionTests extends OpenSearchTestCase {
     @Mock
@@ -104,6 +105,9 @@ public class CreateControllerTransportActionTests extends OpenSearchTestCase {
     @Mock
     MLDeployControllerNodesResponse mlDeployControllerNodesResponse;
 
+    @Mock
+    MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
@@ -138,7 +142,7 @@ public class CreateControllerTransportActionTests extends OpenSearchTestCase {
 
         DiscoveryNodes nodes = DiscoveryNodes.builder().add(node1).add(node2).build();
         String[] targetNodeIds = new String[] { node1.getId(), node2.getId() };
-
+        when(mlFeatureEnabledSetting.isControllerEnabled()).thenReturn(true);
         createControllerTransportAction = spy(
             new CreateControllerTransportAction(
                 transportService,
@@ -148,7 +152,8 @@ public class CreateControllerTransportActionTests extends OpenSearchTestCase {
                 clusterService,
                 modelAccessControlHelper,
                 mlModelCacheHelper,
-                mlModelManager
+                mlModelManager,
+                mlFeatureEnabledSetting
             )
         );
 
@@ -204,6 +209,18 @@ public class CreateControllerTransportActionTests extends OpenSearchTestCase {
     public void testCreateControllerSuccess() {
         createControllerTransportAction.doExecute(null, createControllerRequest, actionListener);
         verify(actionListener).onResponse(any(MLCreateControllerResponse.class));
+    }
+
+    @Test
+    public void testCreateControllerFailedWithControllerFeatureFlagDisabled() {
+        when(mlFeatureEnabledSetting.isControllerEnabled()).thenReturn(false);
+        createControllerTransportAction.doExecute(null, createControllerRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+                "Controller is currently disabled. To enable it, update the setting \"plugins.ml_commons.controller_enabled\" to true.",
+                argumentCaptor.getValue().getMessage()
+        );
     }
 
     @Test

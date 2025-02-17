@@ -17,8 +17,10 @@ import org.apache.hc.core5.http.message.BasicHeader;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Rule;
+import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.opensearch.client.Response;
+import org.opensearch.client.ResponseException;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.utils.TestHelper;
 
@@ -76,31 +78,55 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         Thread.sleep(20000);
     }
 
-    public void testCreateConnector() throws IOException {
-        Response response = createConnector(completionModelConnectorEntity);
-        Map responseMap = parseResponseToMap(response);
-        assertNotNull((String) responseMap.get("connector_id"));
-    }
-
-    public void testGetConnector() throws IOException {
+    public void testCreate_Get_DeleteConnector() throws IOException {
         Response response = createConnector(completionModelConnectorEntity);
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
+        assertNotNull(connectorId);    // Testing create connector
+
+        // Testing Get connector
         response = TestHelper.makeRequest(client(), "GET", "/_plugins/_ml/connectors/" + connectorId, null, "", null);
         responseMap = parseResponseToMap(response);
-        assertEquals("OpenAI Connector", (String) responseMap.get("name"));
-        assertEquals("1", (String) responseMap.get("version"));
-        assertEquals("The connector to public OpenAI model service for GPT 3.5", (String) responseMap.get("description"));
-        assertEquals("http", (String) responseMap.get("protocol"));
-    }
+        assertEquals("OpenAI Connector", responseMap.get("name"));
+        assertEquals("1", responseMap.get("version"));
+        assertEquals("The connector to public OpenAI model service for GPT 3.5", responseMap.get("description"));
+        assertEquals("http", responseMap.get("protocol"));
 
-    public void testDeleteConnector() throws IOException {
-        Response response = createConnector(completionModelConnectorEntity);
-        Map responseMap = parseResponseToMap(response);
-        String connectorId = (String) responseMap.get("connector_id");
+        // Testing delete connector
         response = TestHelper.makeRequest(client(), "DELETE", "/_plugins/_ml/connectors/" + connectorId, null, "", null);
         responseMap = parseResponseToMap(response);
-        assertEquals("deleted", (String) responseMap.get("result"));
+        assertEquals("deleted", responseMap.get("result"));
+
+    }
+
+    private static String maskSensitiveInfo(String input) {
+        // Regex to remove the whole credential object and replace it with "***"
+        String regex = "\"credential\":\\{.*?}";
+        return input.replaceAll(regex, "\"credential\": \"***\"");
+    }
+
+    @Test
+    public void testMaskSensitiveInfo_withCredential() {
+        String input = "{\"credential\":{\"username\":\"admin\",\"password\":\"secret\"}}";
+        String expectedOutput = "{\"credential\": \"***\"}";
+        String actualOutput = maskSensitiveInfo(input);
+        assertEquals(expectedOutput, actualOutput);
+    }
+
+    @Test
+    public void testMaskSensitiveInfo_noCredential() {
+        String input = "{\"otherInfo\":\"someValue\"}";
+        String expectedOutput = "{\"otherInfo\":\"someValue\"}";
+        String actualOutput = maskSensitiveInfo(input);
+        assertEquals(expectedOutput, actualOutput);
+    }
+
+    @Test
+    public void testMaskSensitiveInfo_emptyInput() {
+        String input = "";
+        String expectedOutput = "";
+        String actualOutput = maskSensitiveInfo(input);
+        assertEquals(expectedOutput, actualOutput);
     }
 
     public void testSearchConnectors_beforeCreation() throws IOException {
@@ -108,7 +134,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         Response response = TestHelper
             .makeRequest(client(), "GET", "/_plugins/_ml/connectors/_search", null, TestHelper.toHttpEntity(searchEntity), null);
         Map responseMap = parseResponseToMap(response);
-        assertEquals((Double) 0.0, (Double) ((Map) ((Map) responseMap.get("hits")).get("total")).get("value"));
+        assertEquals(0.0, ((Map) ((Map) responseMap.get("hits")).get("total")).get("value"));
     }
 
     public void testSearchConnectors_afterCreation() throws IOException {
@@ -125,7 +151,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         Response response = TestHelper
             .makeRequest(client(), "GET", "/_plugins/_ml/models/_search", null, TestHelper.toHttpEntity(searchEntity), null);
         Map responseMap = parseResponseToMap(response);
-        assertEquals((Double) 0.0, (Double) ((Map) ((Map) responseMap.get("hits")).get("total")).get("value"));
+        assertEquals(0.0, ((Map) ((Map) responseMap.get("hits")).get("total")).get("value"));
     }
 
     public void testSearchRemoteModels_afterCreation() throws IOException {
@@ -134,7 +160,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         Response response = TestHelper
             .makeRequest(client(), "GET", "/_plugins/_ml/models/_search", null, TestHelper.toHttpEntity(searchEntity), null);
         Map responseMap = parseResponseToMap(response);
-        assertEquals((Double) 1.0, (Double) ((Map) ((Map) responseMap.get("hits")).get("total")).get("value"));
+        assertEquals(1.0, ((Map) ((Map) responseMap.get("hits")).get("total")).get("value"));
     }
 
     public void testSearchModelGroups_beforeCreation() throws IOException {
@@ -142,7 +168,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         Response response = TestHelper
             .makeRequest(client(), "GET", "/_plugins/_ml/model_groups/_search", null, TestHelper.toHttpEntity(searchEntity), null);
         Map responseMap = parseResponseToMap(response);
-        assertEquals((Double) 0.0, (Double) ((Map) ((Map) responseMap.get("hits")).get("total")).get("value"));
+        assertEquals(0.0, ((Map) ((Map) responseMap.get("hits")).get("total")).get("value"));
     }
 
     public void testSearchModelGroups_afterCreation() throws IOException {
@@ -151,7 +177,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         Response response = TestHelper
             .makeRequest(client(), "GET", "/_plugins/_ml/model_groups/_search", null, TestHelper.toHttpEntity(searchEntity), null);
         Map responseMap = parseResponseToMap(response);
-        assertEquals((Double) 1.0, (Double) ((Map) ((Map) responseMap.get("hits")).get("total")).get("value"));
+        assertEquals(1.0, ((Map) ((Map) responseMap.get("hits")).get("total")).get("value"));
     }
 
     public void testSearchMLTasks_beforeCreation() throws IOException {
@@ -159,7 +185,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         Response response = TestHelper
             .makeRequest(client(), "GET", "/_plugins/_ml/tasks/_search", null, TestHelper.toHttpEntity(searchEntity), null);
         Map responseMap = parseResponseToMap(response);
-        assertEquals((Double) 0.0, (Double) ((Map) ((Map) responseMap.get("hits")).get("total")).get("value"));
+        assertEquals(0.0, ((Map) ((Map) responseMap.get("hits")).get("total")).get("value"));
     }
 
     public void testSearchMLTasks_afterCreation() throws IOException {
@@ -169,7 +195,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         Response response = TestHelper
             .makeRequest(client(), "GET", "/_plugins/_ml/tasks/_search", null, TestHelper.toHttpEntity(searchEntity), null);
         Map responseMap = parseResponseToMap(response);
-        assertEquals((Double) 1.0, (Double) ((Map) ((Map) responseMap.get("hits")).get("total")).get("value"));
+        assertEquals(1.0, ((Map) ((Map) responseMap.get("hits")).get("total")).get("value"));
     }
 
     public void testDeployRemoteModel() throws IOException, InterruptedException {
@@ -185,7 +211,7 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         String modelId = (String) responseMap.get("model_id");
         response = deployRemoteModel(modelId);
         responseMap = parseResponseToMap(response);
-        assertEquals("COMPLETED", (String) responseMap.get("status"));
+        assertEquals("COMPLETED", responseMap.get("status"));
         taskId = (String) responseMap.get("task_id");
         waitForTask(taskId, MLTaskState.COMPLETED);
     }
@@ -574,14 +600,6 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         }, null);
     }
 
-    public void testOpenAITextEmbeddingModel_ISO8859_1() throws IOException, InterruptedException {
-        testOpenAITextEmbeddingModel("ISO-8859-1", null, (exception) -> {
-            assertTrue(exception instanceof org.opensearch.client.ResponseException);
-            String stackTrace = ExceptionUtils.getStackTrace(exception);
-            assertTrue(stackTrace.contains("'utf-8' codec can't decode byte 0xeb"));
-        });
-    }
-
     private void testOpenAITextEmbeddingModel(String charset, Consumer<Map> verifyResponse, Consumer<Exception> verifyException)
         throws IOException,
         InterruptedException {
@@ -722,123 +740,13 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         assertFalse(((String) responseMap.get("text")).isEmpty());
     }
 
-    @Ignore
-    public void testCohereClassifyModel() throws IOException, InterruptedException {
-        // Skip test if key is null
-        if (COHERE_KEY == null) {
-            return;
-        }
-        String entity = "{\n"
-            + "  \"name\": \"Cohere classify model Connector\",\n"
-            + "  \"description\": \"The connector to public Cohere classify model service\",\n"
-            + "  \"version\": 1,\n"
-            + "  \"client_config\": {\n"
-            + "    \"max_connection\": 20,\n"
-            + "    \"connection_timeout\": 50000,\n"
-            + "    \"read_timeout\": 50000\n"
-            + "  },\n"
-            + "  \"protocol\": \"http\",\n"
-            + "  \"parameters\": {\n"
-            + "      \"endpoint\": \"api.cohere.ai\",\n"
-            + "      \"auth\": \"API_Key\",\n"
-            + "      \"content_type\": \"application/json\",\n"
-            + "      \"max_tokens\": \"20\"\n"
-            + "  },\n"
-            + "  \"credential\": {\n"
-            + "      \"cohere_key\": \""
-            + COHERE_KEY
-            + "\"\n"
-            + "  },\n"
-            + "  \"actions\": [\n"
-            + "      {\n"
-            + "      \"action_type\": \"predict\",\n"
-            + "          \"method\": \"POST\",\n"
-            + "          \"url\": \"https://${parameters.endpoint}/v1/classify\",\n"
-            + "          \"headers\": { \n"
-            + "          \"Authorization\": \"Bearer ${credential.cohere_key}\"\n"
-            + "          },\n"
-            + "          \"request_body\": \"{ \\\"inputs\\\": ${parameters.inputs}, \\\"examples\\\": ${parameters.examples}, \\\"truncate\\\": \\\"END\\\" }\"\n"
-            + "      }\n"
-            + "  ]\n"
-            + "}";
-        Response response = createConnector(entity);
-        Map responseMap = parseResponseToMap(response);
-        String connectorId = (String) responseMap.get("connector_id");
-        response = registerRemoteModel("cohere classify model", connectorId);
-        responseMap = parseResponseToMap(response);
-        String taskId = (String) responseMap.get("task_id");
-        waitForTask(taskId, MLTaskState.COMPLETED);
-        response = getTask(taskId);
-        responseMap = parseResponseToMap(response);
-        String modelId = (String) responseMap.get("model_id");
-        response = deployRemoteModel(modelId);
-        responseMap = parseResponseToMap(response);
-        taskId = (String) responseMap.get("task_id");
-        waitForTask(taskId, MLTaskState.COMPLETED);
-        String predictInput = "{\n"
-            + "  \"parameters\": {\n"
-            + "      \"inputs\": [\n"
-            + "            \"Confirm your email address\",\n"
-            + "            \"hey i need u to send some $\"\n"
-            + "        ],\n"
-            + "        \"examples\": [\n"
-            + "            {\n"
-            + "                \"text\": \"Dermatologists don't like her!\",\n"
-            + "                \"label\": \"Spam\"\n"
-            + "            },\n"
-            + "            {\n"
-            + "                \"text\": \"Hello, open to this?\",\n"
-            + "                \"label\": \"Spam\"\n"
-            + "            },\n"
-            + "            {\n"
-            + "                \"text\": \"I need help please wire me $1000 right now\",\n"
-            + "                \"label\": \"Spam\"\n"
-            + "            },\n"
-            + "            {\n"
-            + "                \"text\": \"Nice to know you ;)\",\n"
-            + "                \"label\": \"Spam\"\n"
-            + "            },\n"
-            + "            {\n"
-            + "                \"text\": \"Please help me?\",\n"
-            + "                \"label\": \"Spam\"\n"
-            + "            },\n"
-            + "            {\n"
-            + "                \"text\": \"Your parcel will be delivered today\",\n"
-            + "                \"label\": \"Not spam\"\n"
-            + "            },\n"
-            + "            {\n"
-            + "                \"text\": \"Review changes to our Terms and Conditions\",\n"
-            + "                \"label\": \"Not spam\"\n"
-            + "            },\n"
-            + "            {\n"
-            + "                \"text\": \"Weekly sync notes\",\n"
-            + "                \"label\": \"Not spam\"\n"
-            + "            },\n"
-            + "            {\n"
-            + "                \"text\": \"Re: Follow up from todays meeting\",\n"
-            + "                \"label\": \"Not spam\"\n"
-            + "            },\n"
-            + "            {\n"
-            + "                \"text\": \"Pre-read for tomorrow\",\n"
-            + "                \"label\": \"Not spam\"\n"
-            + "            }\n"
-            + "        ]\n"
-            + "  }\n"
-            + "}";
-
-        response = predictRemoteModel(modelId, predictInput);
-        responseMap = parseResponseToMap(response);
-        List responseList = (List) responseMap.get("inference_results");
-        responseMap = (Map) responseList.get(0);
-        responseList = (List) responseMap.get("output");
-        responseMap = (Map) responseList.get(0);
-        responseMap = (Map) responseMap.get("dataAsMap");
-        responseList = (List) responseMap.get("classifications");
-        assertFalse(responseList.isEmpty());
-    }
-
     public static Response createConnector(String input) throws IOException {
-        return TestHelper.makeRequest(client(), "POST", "/_plugins/_ml/connectors/_create", null, TestHelper.toHttpEntity(input), null);
+        try {
+            return TestHelper.makeRequest(client(), "POST", "/_plugins/_ml/connectors/_create", null, TestHelper.toHttpEntity(input), null);
+        } catch (ResponseException e) {
+            String sanitizedMessage = maskSensitiveInfo(e.getMessage());// Log sanitized message
+            throw new RuntimeException("Request failed: " + sanitizedMessage);  // Re-throw sanitized exception
+        }
     }
 
     public static Response registerRemoteModel(String name, String connectorId) throws IOException {

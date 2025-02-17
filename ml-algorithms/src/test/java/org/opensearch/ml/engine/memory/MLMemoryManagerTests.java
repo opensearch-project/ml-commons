@@ -35,9 +35,6 @@ import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.SearchResponseSections;
 import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.action.update.UpdateResponse;
-import org.opensearch.client.AdminClient;
-import org.opensearch.client.Client;
-import org.opensearch.client.IndicesAdminClient;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.metadata.Metadata;
 import org.opensearch.cluster.service.ClusterService;
@@ -74,6 +71,9 @@ import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.aggregations.InternalAggregations;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.client.AdminClient;
+import org.opensearch.transport.client.Client;
+import org.opensearch.transport.client.IndicesAdminClient;
 
 public class MLMemoryManagerTests {
 
@@ -249,7 +249,7 @@ public class MLMemoryManagerTests {
     @Test
     public void testGetInteractions_NoAccessNoUser_ThenFail() {
         doReturn(true).when(metadata).hasIndex(anyString());
-        String userstr = "";
+        String userStr = "";
         doAnswer(invocation -> {
             ActionListener<Boolean> al = invocation.getArgument(1);
             al.onResponse(false);
@@ -258,7 +258,7 @@ public class MLMemoryManagerTests {
 
         doAnswer(invocation -> {
             ThreadContext tc = new ThreadContext(Settings.EMPTY);
-            tc.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, userstr);
+            tc.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, userStr);
             return tc;
         }).when(threadPool).getThreadContext();
         mlMemoryManager.getFinalInteractions("cid", 10, interactionListActionListener);

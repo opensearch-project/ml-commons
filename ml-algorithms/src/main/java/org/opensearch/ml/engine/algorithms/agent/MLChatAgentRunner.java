@@ -39,7 +39,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.StepListener;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
@@ -66,6 +65,7 @@ import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.engine.tools.MLModelTool;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.ml.repackage.com.google.common.collect.Lists;
+import org.opensearch.transport.client.Client;
 
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -152,7 +152,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 }
 
                 StringBuilder chatHistoryBuilder = new StringBuilder();
-                if (messageList.size() > 0) {
+                if (!messageList.isEmpty()) {
                     String chatHistoryPrefix = params.getOrDefault(PROMPT_CHAT_HISTORY_PREFIX, CHAT_HISTORY_PREFIX);
                     chatHistoryBuilder.append(chatHistoryPrefix);
                     for (Message message : messageList) {
@@ -173,9 +173,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
         List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, params);
         Map<String, Tool> tools = new HashMap<>();
         Map<String, MLToolSpec> toolSpecMap = new HashMap<>();
-        createTools(toolFactories, params, toolSpecs, tools, toolSpecMap);
+        createTools(toolFactories, params, toolSpecs, tools, toolSpecMap, mlAgent);
 
-        runReAct(mlAgent.getLlm(), tools, toolSpecMap, params, memory, sessionId, listener);
+        runReAct(mlAgent.getLlm(), tools, toolSpecMap, params, memory, sessionId, mlAgent.getTenantId(), listener);
     }
 
     private void runReAct(
@@ -185,6 +185,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         Map<String, String> parameters,
         Memory memory,
         String sessionId,
+        String tenantId,
         ActionListener<Object> listener
     ) {
         Map<String, String> tmpParameters = constructLLMParams(llm, parameters);
@@ -371,7 +372,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                 .builder()
                                 .algorithm(FunctionName.REMOTE)
                                 .inputDataset(RemoteInferenceInputDataSet.builder().parameters(tmpParameters).build())
-                                .build()
+                                .build(),
+                            null,
+                            tenantId
                         );
                         client.execute(MLPredictionTaskAction.INSTANCE, request, (ActionListener<MLTaskResponse>) nextStepListener);
                     }
@@ -391,7 +394,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 .builder()
                 .algorithm(FunctionName.REMOTE)
                 .inputDataset(RemoteInferenceInputDataSet.builder().parameters(tmpParameters).build())
-                .build()
+                .build(),
+            null,
+            tenantId
         );
         client.execute(MLPredictionTaskAction.INSTANCE, request, firstListener);
     }

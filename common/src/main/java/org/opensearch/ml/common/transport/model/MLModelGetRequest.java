@@ -6,12 +6,14 @@
 package org.opensearch.ml.common.transport.model;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
+import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 
+import org.opensearch.Version;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
@@ -36,27 +38,36 @@ public class MLModelGetRequest extends ActionRequest {
     // delete/update options, we also perform get operation. This field is to distinguish between
     // these two situations.
     boolean isUserInitiatedGetRequest;
+    String tenantId;
 
     @Builder
-    public MLModelGetRequest(String modelId, boolean returnContent, boolean isUserInitiatedGetRequest) {
+    public MLModelGetRequest(String modelId, boolean returnContent, boolean isUserInitiatedGetRequest, String tenantId) {
         this.modelId = modelId;
         this.returnContent = returnContent;
         this.isUserInitiatedGetRequest = isUserInitiatedGetRequest;
+        this.tenantId = tenantId;
     }
 
     public MLModelGetRequest(StreamInput in) throws IOException {
         super(in);
+        Version streamInputVersion = in.getVersion();
         this.modelId = in.readString();
         this.returnContent = in.readBoolean();
         this.isUserInitiatedGetRequest = in.readBoolean();
+        this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? in.readOptionalString() : null;
+
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
+        Version streamOutputVersion = out.getVersion();
         out.writeString(this.modelId);
         out.writeBoolean(returnContent);
         out.writeBoolean(isUserInitiatedGetRequest);
+        if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
+            out.writeOptionalString(tenantId);
+        }
     }
 
     @Override

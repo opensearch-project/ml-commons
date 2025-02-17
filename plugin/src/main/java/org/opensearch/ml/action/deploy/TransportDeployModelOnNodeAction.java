@@ -17,7 +17,6 @@ import org.opensearch.action.ActionListenerResponseHandler;
 import org.opensearch.action.FailedNodeException;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.nodes.TransportNodesAction;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.cluster.service.ClusterService;
@@ -47,6 +46,7 @@ import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.MLExceptionUtils;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -127,6 +127,7 @@ public class TransportDeployModelOnNodeAction extends
 
     private MLDeployModelNodeResponse createDeployModelNodeResponse(MLDeployModelNodesRequest MLDeployModelNodesRequest) {
         MLDeployModelInput deployModelInput = MLDeployModelNodesRequest.getMlDeployModelInput();
+        final String tenantId = MLDeployModelNodesRequest.getMlDeployModelInput().getTenantId();
         String modelId = deployModelInput.getModelId();
         String taskId = deployModelInput.getTaskId();
         String coordinatingNodeId = deployModelInput.getCoordinatingNodeId();
@@ -140,12 +141,13 @@ public class TransportDeployModelOnNodeAction extends
         String localNodeId = clusterService.localNode().getId();
 
         ActionListener<MLForwardResponse> taskDoneListener = ActionListener
-            .wrap(res -> { log.info("deploy model task done " + taskId); }, ex -> {
+            .wrap(res -> { log.info("deploy model task done {}", taskId); }, ex -> {
                 logException("Deploy model task failed: " + taskId, ex, log);
             });
 
         deployModel(
             modelId,
+            tenantId,
             modelContentHash,
             mlTask.getFunctionName(),
             localNodeId,
@@ -159,6 +161,7 @@ public class TransportDeployModelOnNodeAction extends
                     .taskId(taskId)
                     .modelId(modelId)
                     .workerNodeId(clusterService.localNode().getId())
+                    .tenantId(tenantId)
                     .build();
                 MLForwardRequest deployModelDoneMessage = new MLForwardRequest(mlForwardInput);
 
@@ -179,6 +182,7 @@ public class TransportDeployModelOnNodeAction extends
                     .modelId(modelId)
                     .workerNodeId(clusterService.localNode().getId())
                     .error(MLExceptionUtils.getRootCauseMessage(e))
+                    .tenantId(tenantId)
                     .build();
                 MLForwardRequest deployModelDoneMessage = new MLForwardRequest(mlForwardInput);
 
@@ -211,6 +215,7 @@ public class TransportDeployModelOnNodeAction extends
 
     private void deployModel(
         String modelId,
+        String tenantId,
         String modelContentHash,
         FunctionName functionName,
         String localNodeId,
@@ -224,6 +229,7 @@ public class TransportDeployModelOnNodeAction extends
             mlModelManager
                 .deployModel(
                     modelId,
+                    tenantId,
                     modelContentHash,
                     functionName,
                     deployToAllNodes,
