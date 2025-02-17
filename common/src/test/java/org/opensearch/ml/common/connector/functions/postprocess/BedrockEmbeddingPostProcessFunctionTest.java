@@ -31,19 +31,19 @@ public class BedrockEmbeddingPostProcessFunctionTest {
     public void process_WrongInput_NotList() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Post process function input is not a List.");
-        function.apply("abc");
+        function.apply("abc", null);
     }
 
     @Test
     public void process_WrongInput_NotNumberList() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("The embedding should be a non-empty List containing Float values.");
-        function.apply(Arrays.asList("abc"));
+        function.apply(Arrays.asList("abc"), null);
     }
 
     @Test
     public void process_CorrectInput() {
-        List<ModelTensor> result = function.apply(Arrays.asList(1.1, 1.2, 1.3));
+        List<ModelTensor> result = function.apply(Arrays.asList(1.1, 1.2, 1.3), null);
         assertEquals(1, result.size());
         assertEquals(3, result.get(0).getData().length);
         assertEquals(1.1, result.get(0).getData()[0]);
