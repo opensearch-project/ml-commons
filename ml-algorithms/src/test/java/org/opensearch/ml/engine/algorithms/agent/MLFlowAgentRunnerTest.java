@@ -39,7 +39,6 @@ import org.mockito.stubbing.Answer;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.StepListener;
 import org.opensearch.action.update.UpdateResponse;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
@@ -58,6 +57,7 @@ import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
+import org.opensearch.transport.client.Client;
 
 import software.amazon.awssdk.utils.ImmutableMap;
 

@@ -17,7 +17,6 @@ import org.apache.logging.log4j.util.Strings;
 import org.opensearch.action.admin.indices.get.GetIndexRequest;
 import org.opensearch.action.admin.indices.get.GetIndexResponse;
 import org.opensearch.action.support.IndicesOptions;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.unit.TimeValue;
@@ -26,6 +25,7 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
+import org.opensearch.transport.client.Client;
 
 import lombok.Getter;
 import lombok.Setter;

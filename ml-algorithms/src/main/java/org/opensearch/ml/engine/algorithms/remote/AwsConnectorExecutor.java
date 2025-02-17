@@ -17,7 +17,6 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 import org.apache.logging.log4j.Logger;
-import org.opensearch.client.Client;
 import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.util.TokenBucket;
 import org.opensearch.core.action.ActionListener;
@@ -30,6 +29,7 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.annotation.ConnectorExecutor;
 import org.opensearch.ml.engine.httpclient.MLHttpClientFactory;
 import org.opensearch.script.ScriptService;
+import org.opensearch.transport.client.Client;
 
 import lombok.Getter;
 import lombok.Setter;

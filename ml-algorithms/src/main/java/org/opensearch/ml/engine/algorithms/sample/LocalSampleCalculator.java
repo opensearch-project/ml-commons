@@ -8,7 +8,6 @@ package org.opensearch.ml.engine.algorithms.sample;
 import java.util.Comparator;
 import java.util.List;
 
-import org.opensearch.client.Client;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
@@ -18,6 +17,7 @@ import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalculatorOutput;
 import org.opensearch.ml.engine.Executable;
 import org.opensearch.ml.engine.annotation.Function;
+import org.opensearch.transport.client.Client;
 
 import lombok.Data;
 import lombok.NoArgsConstructor;

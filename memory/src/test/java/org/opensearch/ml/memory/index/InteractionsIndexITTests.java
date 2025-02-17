@@ -29,7 +29,6 @@ import org.opensearch.action.LatchedActionListener;
 import org.opensearch.action.StepListener;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.index.query.MatchQueryBuilder;
@@ -38,6 +37,7 @@ import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.test.OpenSearchIntegTestCase;
+import org.opensearch.transport.client.Client;
 
 import com.carrotsearch.randomizedtesting.annotations.ThreadLeakScope;
 

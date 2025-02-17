@@ -24,13 +24,13 @@ import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
-import org.opensearch.client.Client;
 import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.DeprecationHandler;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.transport.client.Client;
 
 public class VisualizationsToolTests {
     @Mock

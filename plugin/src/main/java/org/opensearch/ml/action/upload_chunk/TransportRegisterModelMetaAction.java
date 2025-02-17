@@ -11,7 +11,6 @@ import org.apache.commons.lang3.StringUtils;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
-import org.opensearch.client.Client;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
@@ -27,6 +26,7 @@ import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -69,7 +69,7 @@ public class TransportRegisterModelMetaAction extends HandledTransportAction<Act
             mlModelGroupManager.validateUniqueModelGroupName(mlUploadInput.getName(), null, ActionListener.wrap(modelGroups -> {
                 if (modelGroups != null
                     && modelGroups.getHits().getTotalHits() != null
-                    && modelGroups.getHits().getTotalHits().value != 0) {
+                    && modelGroups.getHits().getTotalHits().value() != 0) {
                     String modelGroupIdOfTheNameProvided = modelGroups.getHits().getAt(0).getId();
                     mlUploadInput.setModelGroupId(modelGroupIdOfTheNameProvided);
                     checkUserAccess(mlUploadInput, listener, true);

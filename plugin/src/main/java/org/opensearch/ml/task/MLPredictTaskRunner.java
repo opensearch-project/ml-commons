@@ -30,7 +30,6 @@ import org.opensearch.action.ActionListenerResponseHandler;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ThreadedActionListener;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
@@ -78,6 +77,7 @@ import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportResponseHandler;
 import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableList;
 
@@ -596,7 +596,11 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                         output.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS).toString()
                     );
             } catch (Exception e) {
-                throw new OpenSearchStatusException("Error validating output schema: " + e.getMessage(), RestStatus.BAD_REQUEST);
+                throw new OpenSearchStatusException(
+                    "Error validating output schema, if you think this is expected, please update your 'output' field in the 'interface' field for this model: "
+                        + e.getMessage(),
+                    RestStatus.BAD_REQUEST
+                );
             }
         }
     }
