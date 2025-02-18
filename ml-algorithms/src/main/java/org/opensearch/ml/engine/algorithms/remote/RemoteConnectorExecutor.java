@@ -47,9 +47,13 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.script.ScriptService;
+import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
+import lombok.Builder;
+
 public interface RemoteConnectorExecutor {
+
     public String RETRY_EXECUTOR = "opensearch_ml_predict_remote";
 
     default void executeAction(String action, MLInput mlInput, ActionListener<MLTaskResponse> actionListener) {
@@ -253,38 +257,23 @@ public interface RemoteConnectorExecutor {
         ExecutionContext executionContext,
         ActionListener<Tuple<Integer, ModelTensors>> actionListener
     ) {
-        final RetryableAction<Tuple<Integer, ModelTensors>> invokeRemoteModelAction = new RetryableAction<>(
+        final RetryableAction<Tuple<Integer, ModelTensors>> invokeRemoteModelAction = new RetryableActionExtension(
             getLogger(),
             getClient().threadPool(),
             TimeValue.timeValueMillis(getConnectorClientConfig().getRetryBackoffMillis()),
             TimeValue.timeValueSeconds(getConnectorClientConfig().getRetryTimeoutSeconds()),
             actionListener,
             getRetryBackoffPolicy(getConnectorClientConfig()),
-            RETRY_EXECUTOR
-        ) {
-            int retryTimes = 0;
-
-            @Override
-            public void tryAction(ActionListener<Tuple<Integer, ModelTensors>> listener) {
-                // the listener here is RetryingListener
-                // If the request success, or can not retry, will call delegate listener
-                invokeRemoteService(action, mlInput, parameters, payload, executionContext, listener);
-            }
-
-            @Override
-            public boolean shouldRetry(Exception e) {
-                Throwable cause = ExceptionsHelper.unwrapCause(e);
-                Integer maxRetryTimes = getConnectorClientConfig().getMaxRetryTimes();
-                boolean shouldRetry = cause instanceof RemoteConnectorThrottlingException;
-                if (++retryTimes > maxRetryTimes && maxRetryTimes != -1) {
-                    shouldRetry = false;
-                }
-                if (shouldRetry) {
-                    getLogger().debug(String.format(Locale.ROOT, "The %d-th retry for invoke remote model", retryTimes), e);
-                }
-                return shouldRetry;
-            }
-        };
+            RetryableActionExtensionArgs
+                .builder()
+                .connectionExecutor(this)
+                .mlInput(mlInput)
+                .action(action)
+                .parameters(parameters)
+                .executionContext(executionContext)
+                .payload(payload)
+                .build()
+        );
         invokeRemoteModelAction.run();
     };
 
@@ -296,4 +285,56 @@ public interface RemoteConnectorExecutor {
         ExecutionContext executionContext,
         ActionListener<Tuple<Integer, ModelTensors>> actionListener
     );
+
+    static class RetryableActionExtension extends RetryableAction<Tuple<Integer, ModelTensors>> {
+        private final RetryableActionExtensionArgs args;
+        int retryTimes = 0;
+
+        RetryableActionExtension(
+            Logger logger,
+            ThreadPool threadPool,
+            TimeValue initialDelay,
+            TimeValue timeoutValue,
+            ActionListener<Tuple<Integer, ModelTensors>> listener,
+            BackoffPolicy backoffPolicy,
+            RetryableActionExtensionArgs args
+        ) {
+            super(logger, threadPool, initialDelay, timeoutValue, listener, backoffPolicy, RETRY_EXECUTOR);
+            this.args = args;
+        }
+
+        @Override
+        public void tryAction(ActionListener<Tuple<Integer, ModelTensors>> listener) {
+            // the listener here is RetryingListener
+            // If the request success, or can not retry, will call delegate listener
+            args.connectionExecutor
+                .invokeRemoteService(args.action, args.mlInput, args.parameters, args.payload, args.executionContext, listener);
+        }
+
+        @Override
+        public boolean shouldRetry(Exception e) {
+            Throwable cause = ExceptionsHelper.unwrapCause(e);
+            Integer maxRetryTimes = args.connectionExecutor.getConnectorClientConfig().getMaxRetryTimes();
+            boolean shouldRetry = cause instanceof RemoteConnectorThrottlingException;
+            if (++retryTimes > maxRetryTimes && maxRetryTimes != -1) {
+                shouldRetry = false;
+            }
+            if (shouldRetry) {
+                args.connectionExecutor
+                    .getLogger()
+                    .debug(String.format(Locale.ROOT, "The %d-th retry for invoke remote model", retryTimes), e);
+            }
+            return shouldRetry;
+        }
+    }
+
+    @Builder
+    class RetryableActionExtensionArgs {
+        private final RemoteConnectorExecutor connectionExecutor;
+        private final MLInput mlInput;
+        private final String action;
+        private final Map<String, String> parameters;
+        private final ExecutionContext executionContext;
+        private final String payload;
+    }
 }
