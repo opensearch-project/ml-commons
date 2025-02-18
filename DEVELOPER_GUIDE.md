@@ -82,7 +82,7 @@ opensearch.username: "admin" # Default username
 opensearch.password: "admin" # Default password
 ```
 
-### 🚀 Run OpenSearch from Source Code using Docker
+### Run OpenSearch from Source Code using Docker
 
 #### 1. Build the Distributions
 First, compile the source code to build the distributions:
@@ -93,7 +93,6 @@ First, compile the source code to build the distributions:
 
 After the build completes, you'll find an artifact like `opensearch-ml-3.0.0.0-SNAPSHOT.zip` in the `plugin/build/distributions` directory.
 
----
 
 #### 2. Run OpenSearch Using Docker Compose
 Navigate to the root directory of the project and start OpenSearch with the following command:
@@ -102,11 +101,12 @@ Navigate to the root directory of the project and start OpenSearch with the foll
 docker-compose -f docs/docker/dev-docker-compose.yml up
 ```
 
----
 
 #### 3. Access OpenSearch
-After a few minutes, the server will be ready. You can make requests using `curl` or other HTTP clients
-
+After a few minutes, the server will be ready. You can make requests using `curl` or other HTTP clients. For example,
+```bash
+curl -X GET http://localhost:9200/ 
+```
 
 ### Build
 

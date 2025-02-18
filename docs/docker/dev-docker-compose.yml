@@ -4,18 +4,18 @@ services:
     image: opensearchstaging/opensearch:3.0.0
     container_name: opensearch-node1
     environment:
-      - cluster.name=opensearch-cluster
-      - node.name=opensearch-node1
-      - discovery.seed_hosts=opensearch-node1,opensearch-node2
-      - cluster.initial_cluster_manager_nodes=opensearch-node1,opensearch-node2
+      - cluster.name=opensearch-cluster # Sets the name of the OpenSearch cluster
+      - node.name=opensearch-node1 # Sets the name of the node in the cluster
+      - discovery.seed_hosts=opensearch-node1,opensearch-node2 # Defines initial nodes for cluster discovery
+      - cluster.initial_cluster_manager_nodes=opensearch-node1,opensearch-node2 # Defines initial cluster manager nodes
       - bootstrap.memory_lock=true # along with the memlock settings below, disables swapping
-      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=MyPassword123!
-      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
-      - "DISABLE_SECURITY_PLUGIN=true"
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=MyPassword123! # Sets the initial admin password
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m" # Sets JVM heap size to 512MB
+      - "DISABLE_SECURITY_PLUGIN=true" # Disables the security plugin for easy access
 
     ulimits:
       memlock:
-        soft: -1
+        soft: -1 # Ensures unlimited memory locking
         hard: -1
       nofile:
         soft: 65536 # maximum number of open files for the OpenSearch user, set to at least 65536 on modern systems
@@ -33,12 +33,12 @@ services:
     # Start the OpenSearch service using the Docker entrypoint script
     command: bash -c "bin/opensearch-plugin remove opensearch-skills; bin/opensearch-plugin remove opensearch-ml; bin/opensearch-plugin install --batch file:///usr/share/opensearch/dev/opensearch-ml-3.0.0.0-SNAPSHOT.zip; ./opensearch-docker-entrypoint.sh opensearch"
     ports:
-      - 9200:9200
+      - 9200:9200 # Main OpenSearch API port
       - 9600:9600 # required for Performance Analyzer
-      - 5005:5005
+      - 5005:5005 # Debugging port
 
     networks:
-      - opensearch-net
+      - opensearch-net # Connects to OpenSearch network
   opensearch-node2:
     image: opensearchstaging/opensearch:3.0.0
     container_name: opensearch-node2
@@ -80,7 +80,7 @@ services:
     environment:
       - cluster.name=opensearch-cluster
       - node.name=opensearch-ml1
-      - node.roles=ml
+      - node.roles=ml # Defines this node as an ML node
       - discovery.seed_hosts=opensearch-node1,opensearch-node2
       - cluster.initial_cluster_manager_nodes=opensearch-node1,opensearch-node2
       - bootstrap.memory_lock=true
