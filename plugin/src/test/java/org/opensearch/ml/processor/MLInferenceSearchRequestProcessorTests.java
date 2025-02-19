@@ -706,7 +706,7 @@ public class MLInferenceSearchRequestProcessorTests extends AbstractBuilderTestC
         };
 
         requestProcessor.processRequestAsync(request, requestContext, listener);
-
+        assertEquals(requestProcessor.isIgnoreFailure(), true);
     }
 
     /**
@@ -749,7 +749,7 @@ public class MLInferenceSearchRequestProcessorTests extends AbstractBuilderTestC
         };
 
         requestProcessor.processRequestAsync(request, requestContext, Listener);
-
+        assertEquals(requestProcessor.isIgnoreFailure(), false);
     }
 
     /**
@@ -788,7 +788,7 @@ public class MLInferenceSearchRequestProcessorTests extends AbstractBuilderTestC
         };
 
         requestProcessor.processRequestAsync(request, requestContext, Listener);
-
+        assertEquals(requestProcessor.isIgnoreFailure(), true);
     }
 
     /**
@@ -851,7 +851,7 @@ public class MLInferenceSearchRequestProcessorTests extends AbstractBuilderTestC
         };
 
         requestProcessor.processRequestAsync(request, requestContext, Listener);
-
+        assertEquals(requestProcessor.isIgnoreFailure(), false);
     }
 
     /**
@@ -998,7 +998,7 @@ public class MLInferenceSearchRequestProcessorTests extends AbstractBuilderTestC
             }
         };
         requestProcessor.processRequestAsync(request, requestContext, Listener);
-
+        assertEquals(requestProcessor.isIgnoreFailure(), true);
     }
 
     /**
@@ -1444,6 +1444,7 @@ public class MLInferenceSearchRequestProcessorTests extends AbstractBuilderTestC
         assertNotNull(MLInferenceSearchRequestProcessor);
         assertEquals(MLInferenceSearchRequestProcessor.getTag(), processorTag);
         assertEquals(MLInferenceSearchRequestProcessor.getType(), MLInferenceSearchRequestProcessor.TYPE);
+        assertEquals(MLInferenceSearchRequestProcessor.isIgnoreFailure(), false);
     }
 
     /**
@@ -1478,6 +1479,7 @@ public class MLInferenceSearchRequestProcessorTests extends AbstractBuilderTestC
         assertNotNull(MLInferenceSearchRequestProcessor);
         assertEquals(MLInferenceSearchRequestProcessor.getTag(), processorTag);
         assertEquals(MLInferenceSearchRequestProcessor.getType(), MLInferenceSearchRequestProcessor.TYPE);
+        assertEquals(MLInferenceSearchRequestProcessor.isIgnoreFailure(), false);
     }
 
     /**
@@ -1675,9 +1677,11 @@ public class MLInferenceSearchRequestProcessorTests extends AbstractBuilderTestC
         String processorTag = randomAlphaOfLength(10);
 
         MLInferenceSearchRequestProcessor MLInferenceSearchRequestProcessor = factory
-            .create(Collections.emptyMap(), processorTag, null, false, config, null);
+            .create(Collections.emptyMap(), processorTag, "test", true, config, null);
         assertNotNull(MLInferenceSearchRequestProcessor);
         assertEquals(MLInferenceSearchRequestProcessor.getTag(), processorTag);
         assertEquals(MLInferenceSearchRequestProcessor.getType(), MLInferenceSearchRequestProcessor.TYPE);
+        assertEquals(MLInferenceSearchRequestProcessor.isIgnoreFailure(), true);
+        assertEquals(MLInferenceSearchRequestProcessor.getDescription(), "test");
     }
 }
