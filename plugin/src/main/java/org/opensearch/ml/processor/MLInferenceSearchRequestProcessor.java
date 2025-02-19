@@ -597,9 +597,6 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
             boolean fullResponsePath = ConfigurationUtils
                 .readBooleanProperty(TYPE, processorTag, config, FULL_RESPONSE_PATH, defaultFullResponsePath);
 
-            ignoreFailure = ConfigurationUtils
-                .readBooleanProperty(TYPE, processorTag, config, ConfigurationUtils.IGNORE_FAILURE_KEY, false);
-
             // convert model config user input data structure to Map<String, String>
             Map<String, String> modelConfigMaps = null;
             if (modelConfigInput != null) {
