@@ -5,21 +5,20 @@
 
 package org.opensearch.ml.rest;
 
-import lombok.SneakyThrows;
-import lombok.extern.log4j.Log4j2;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
+
 import org.apache.commons.lang3.StringUtils;
 import org.junit.Before;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
+import lombok.SneakyThrows;
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class RestBedRockV2PostProcessFunctionInferenceIT extends MLCommonsRestTestCase {
@@ -27,14 +26,10 @@ public class RestBedRockV2PostProcessFunctionInferenceIT extends MLCommonsRestTe
     private static final String AWS_SECRET_ACCESS_KEY = System.getenv("AWS_SECRET_ACCESS_KEY");
     private static final String AWS_SESSION_TOKEN = System.getenv("AWS_SESSION_TOKEN");
     private static final String GITHUB_CI_AWS_REGION = "us-west-2";
-    private static final List<String> POST_PROCESS_FUNCTIONS = List.of(
-        "connector.post_process.bedrock_v2.embedding.float",
-        "connector.post_process.bedrock_v2.embedding.binary"
-    );
-    private static final Map<String, String> DATA_TYPE = Map.of(
-        "connector.post_process.bedrock_v2.embedding.float", "FLOAT32",
-        "connector.post_process.bedrock_v2.embedding.binary", "BINARY"
-    );
+    private static final List<String> POST_PROCESS_FUNCTIONS = List
+        .of("connector.post_process.bedrock_v2.embedding.float", "connector.post_process.bedrock_v2.embedding.binary");
+    private static final Map<String, String> DATA_TYPE = Map
+        .of("connector.post_process.bedrock_v2.embedding.float", "FLOAT32", "connector.post_process.bedrock_v2.embedding.binary", "BINARY");
 
     @SneakyThrows
     @Before
