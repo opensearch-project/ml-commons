@@ -282,12 +282,7 @@ public class ConnectorAction implements ToXContentObject, Writeable {
                 case COHERE:
                     if (!(COHERE_EMBEDDING.equals(postProcessFunction) || COHERE_RERANK.equals(postProcessFunction))) {
                         throw new IllegalArgumentException(
-                            "LLM service is "
-                                + COHERE
-                                + ", so PostProcessFunction should be "
-                                + COHERE_EMBEDDING
-                                + " or "
-                                + COHERE_RERANK
+                            "LLM service is " + COHERE + ", so PostProcessFunction should be " + COHERE_EMBEDDING + " or " + COHERE_RERANK
                         );
                     }
                     break;
