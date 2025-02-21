@@ -493,7 +493,7 @@ public class ListIndexTool implements Tool {
         GetSettingsResponse getSettingsResponse,
         Queue<Collection<ActionResponse>> responses
     ) {
-        if (responses == null || responses.isEmpty()) {
+        if (responses == null || responses.isEmpty() || responses.peek().isEmpty()) {
             return null;
         }
         Tuple<Map<String, IndexStats>, Map<String, ClusterIndexHealth>> tuple = aggregateResults(responses);
