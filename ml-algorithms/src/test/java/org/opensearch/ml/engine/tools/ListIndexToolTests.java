@@ -102,11 +102,47 @@ public class ListIndexToolTests {
     }
 
     @Test
-    public void test_run_successful() {
-        Map<String, String> parameters = new HashMap<>();
-        parameters.put("indices", "[\"index-1\"]");
-        parameters.put("page_size", "10");
+    public void test_run_successful_1() {
+        mockUp();
+        Tool tool = ListIndexTool.Factory.getInstance().create(Collections.emptyMap());
+        verifyResult(tool, createParameters("[\"index-1\"]", "true", "10", "true"));
+    }
 
+    @Test
+    public void test_run_successful_2() {
+        mockUp();
+        Tool tool = ListIndexTool.Factory.getInstance().create(Collections.emptyMap());
+        verifyResult(tool, createParameters(null, null, null, null));
+    }
+
+    private Map<String, String> createParameters(String indices, String local, String pageSize, String includeUnloadedSegments) {
+        Map<String, String> parameters = new HashMap<>();
+        if (indices != null) {
+            parameters.put("indices", indices);
+        }
+        if (local != null) {
+            parameters.put("local", local);
+        }
+        if (pageSize != null) {
+            parameters.put("page_size", pageSize);
+        }
+        if (includeUnloadedSegments != null) {
+            parameters.put("include_unloaded_segments", includeUnloadedSegments);
+        }
+        return parameters;
+    }
+
+    private void verifyResult(Tool tool, Map<String, String> parameters) {
+        ActionListener<String> listener = mock(ActionListener.class);
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        tool.run(parameters, listener);
+        verify(listener).onResponse(captor.capture());
+        System.out.println(captor.getValue());
+        assert captor.getValue().contains("1,red,open,index-1");
+        assert captor.getValue().contains("5,1,100,10,100kb,100kb");
+    }
+
+    private void mockUp() {
         doAnswer(invocation -> {
             ActionListener<GetSettingsResponse> actionListener = invocation.getArgument(1);
             GetSettingsResponse response = mock(GetSettingsResponse.class);
@@ -177,15 +213,50 @@ public class ListIndexToolTests {
             actionListener.onResponse(response);
             return null;
         }).when(clusterAdminClient).health(any(ClusterHealthRequest.class), isA(ActionListener.class));
+    }
 
+    @Test
+    public void test_run_withEmptyTableResult() {
+        Map<String, String> parameters = createParameters("[\"index-1\"]", "true", "10", "true");
         Tool tool = ListIndexTool.Factory.getInstance().create(Collections.emptyMap());
+        doAnswer(invocation -> {
+            ActionListener<GetSettingsResponse> actionListener = invocation.getArgument(1);
+            GetSettingsResponse response = mock(GetSettingsResponse.class);
+            Map<String, Settings> indexToSettings = new HashMap<>();
+            indexToSettings.put("index-1", Settings.EMPTY);
+            indexToSettings.put("index-2", Settings.EMPTY);
+            when(response.getIndexToSettings()).thenReturn(indexToSettings);
+            actionListener.onResponse(response);
+            return null;
+        }).when(indicesAdminClient).getSettings(any(GetSettingsRequest.class), isA(ActionListener.class));
+
+        // clusterStateResponse.getState().getMetadata().spliterator()
+        doAnswer(invocation -> {
+            ActionListener<ClusterStateResponse> actionListener = invocation.getArgument(1);
+            ClusterStateResponse response = mock(ClusterStateResponse.class);
+            when(response.getState()).thenReturn(clusterState);
+            actionListener.onResponse(response);
+            return null;
+        }).when(clusterAdminClient).state(any(ClusterStateRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<IndicesStatsResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(null);
+            return null;
+        }).when(indicesAdminClient).stats(any(IndicesStatsRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<ClusterHealthResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(null);
+            return null;
+        }).when(clusterAdminClient).health(any(ClusterHealthRequest.class), isA(ActionListener.class));
+
         ActionListener<String> listener = mock(ActionListener.class);
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
         tool.run(parameters, listener);
         verify(listener).onResponse(captor.capture());
         System.out.println(captor.getValue());
-        assert captor.getValue().contains("1,red,open,index-1");
-        assert captor.getValue().contains("5,1,100,10,100kb,100kb");
+        assert captor.getValue().contains("There were no results searching the indices parameter");
     }
 
     @Test
@@ -213,6 +284,8 @@ public class ListIndexToolTests {
     public void test_validate() {
         Tool tool = ListIndexTool.Factory.getInstance().create(Collections.emptyMap());
         assert tool.validate(ImmutableMap.of("runtimeParameter", "value1"));
+        assert !tool.validate(null);
+        assert !tool.validate(Collections.emptyMap());
     }
 
     @Test
