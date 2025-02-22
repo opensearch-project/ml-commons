@@ -306,9 +306,9 @@ Search the index, can see the document contains chunks and embedding generated.
 GET opensearch_docs/_search
 ```
 
-## 4. Searh with ML inference processor
+## 4. Search with ML inference processor
 
-Create ingest pipeline with ML inference processor generating input text into embedding.
+Create search pipeline with ML inference processor generating input text into embedding.
 ```
 PUT _search/pipeline/bedrock_semantic_search_pipeline
 {
