@@ -11,7 +11,6 @@ services:
       - bootstrap.memory_lock=true # along with the memlock settings below, disables swapping
       - OPENSEARCH_INITIAL_ADMIN_PASSWORD=MyPassword123! # Sets the initial admin password
       - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m" # Sets JVM heap size to 512MB
-      - "DISABLE_SECURITY_PLUGIN=true" # Disables the security plugin for easy access
 
     ulimits:
       memlock:
@@ -50,7 +49,6 @@ services:
       - bootstrap.memory_lock=true
       - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
       - OPENSEARCH_INITIAL_ADMIN_PASSWORD=MyPassword123!
-      - "DISABLE_SECURITY_PLUGIN=true"
 
     ulimits:
       memlock:
@@ -86,7 +84,6 @@ services:
       - bootstrap.memory_lock=true
       - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
       - OPENSEARCH_INITIAL_ADMIN_PASSWORD=MyPassword123!
-      - "DISABLE_SECURITY_PLUGIN=true"
 
     ulimits:
       memlock:
@@ -122,7 +119,6 @@ services:
       - bootstrap.memory_lock=true
       - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
       - OPENSEARCH_INITIAL_ADMIN_PASSWORD=MyPassword123!
-      - "DISABLE_SECURITY_PLUGIN=true"
 
     ulimits:
       memlock:
@@ -143,6 +139,18 @@ services:
     # Install the new version of the 'opensearch-ml' plugin from a local distribution file
     # Start the OpenSearch service using the Docker entrypoint script
     command: bash -c "bin/opensearch-plugin remove opensearch-skills; bin/opensearch-plugin remove opensearch-ml; bin/opensearch-plugin install --batch file:///usr/share/opensearch/dev/opensearch-ml-3.0.0.0-SNAPSHOT.zip; ./opensearch-docker-entrypoint.sh opensearch"
+    networks:
+      - opensearch-net
+
+  opensearch-dashboards:
+    image: opensearchstaging/opensearch-dashboards:3.0.0
+    container_name: opensearch-dashboards
+    ports:
+      - 5601:5601
+    expose:
+      - "5601"
+    environment:
+      OPENSEARCH_HOSTS: '["https://opensearch-node1:9200","https://opensearch-node2:9200"]'
     networks:
       - opensearch-net
 

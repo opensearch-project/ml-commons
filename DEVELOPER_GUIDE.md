@@ -85,16 +85,18 @@ opensearch.password: "admin" # Default password
 ### Run OpenSearch from Source Code using Docker
 
 #### 1. Build the Distributions
+
 First, compile the source code to build the distributions:
 
 ```bash
 ./gradlew assemble
 ```
 
-After the build completes, you'll find an artifact like `opensearch-ml-3.0.0.0-SNAPSHOT.zip` in the `plugin/build/distributions` directory.
+After the build completes, you'll find an artifact like `opensearch-ml-3.0.0.0-SNAPSHOT.zip` in the `plugin/build/distributions` directory. The version of the artifact is dynamically set in the `build.gradle` file using the `opensearch.version` system property.
 
 
 #### 2. Run OpenSearch Using Docker Compose
+
 Navigate to the root directory of the project and start OpenSearch with the following command:
 
 ```bash
@@ -103,9 +105,20 @@ docker-compose -f docs/docker/dev-docker-compose.yml up
 
 
 #### 3. Access OpenSearch
-After a few minutes, the server will be ready. You can make requests using `curl` or other HTTP clients. For example,
+
+After a few minutes, the server will be ready. You can now visit [OpenSearch Dashboards](http://localhost:5601).
+
+##### OpenSearch Dashboards Credentials
+
+```yml
+username: admin
+password: MyPassword123!
+```
+
+You also can make requests using `curl` or other HTTP clients. For example,
+
 ```bash
-curl -X GET http://localhost:9200/ 
+curl -X GET -k -u admin:MyPassword123! https://localhost:9200/
 ```
 
 ### Build
