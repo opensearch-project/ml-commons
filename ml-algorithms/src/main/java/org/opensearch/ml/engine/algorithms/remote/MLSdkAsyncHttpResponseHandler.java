@@ -89,6 +89,7 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         log.debug("received response headers: " + sdkResponse.headers());
         this.statusCode = sdkResponse.statusCode();
         if (statusCode < HttpStatus.SC_OK || statusCode > HttpStatus.SC_MULTIPLE_CHOICES) {
+            log.error("Received error from remote service with status code {}, response headers: {}", statusCode, sdkResponse.headers());
             handleThrottlingInHeader(sdkResponse);
             // add more handling here for other exceptions in headers
         }
@@ -101,7 +102,7 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
 
     @Override
     public void onError(Throwable error) {
-        log.error(error.getMessage(), error);
+        log.error("Received error from remote service: {}", error.getMessage(), error);
         RestStatus status = (statusCode == null) ? RestStatus.INTERNAL_SERVER_ERROR : RestStatus.fromCode(statusCode);
         String errorMessage = "Error communicating with remote model: " + error.getMessage();
         actionListener.onFailure(new OpenSearchStatusException(errorMessage, status));
@@ -173,6 +174,7 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         String body = responseBody.toString();
 
         if (exceptionHolder.get() != null) {
+            log.error("Remote server returned exception with status code: {} and body: {}", statusCode, body);
             actionListener.onFailure(exceptionHolder.get());
             return;
         }
@@ -184,7 +186,7 @@ public class MLSdkAsyncHttpResponseHandler implements SdkAsyncHttpResponseHandle
         }
 
         if (statusCode < HttpStatus.SC_OK || statusCode > HttpStatus.SC_MULTIPLE_CHOICES) {
-            log.error("Remote server returned error code: {}", statusCode);
+            log.error("Remote service returned error code: {} with body: {}", statusCode, body);
             actionListener.onFailure(new OpenSearchStatusException(REMOTE_SERVICE_ERROR + body, RestStatus.fromCode(statusCode)));
             return;
         }
