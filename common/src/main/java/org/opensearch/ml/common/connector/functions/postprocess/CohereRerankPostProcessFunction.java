@@ -33,7 +33,7 @@ public class CohereRerankPostProcessFunction extends ConnectorPostProcessFunctio
     }
 
     @Override
-    public List<ModelTensor> process(List<Map<String, Object>> rerankResults) {
+    public List<ModelTensor> process(List<Map<String, Object>> rerankResults, MLResultDataType dataType) {
         List<ModelTensor> modelTensors = new ArrayList<>();
 
         if (rerankResults.size() > 0) {

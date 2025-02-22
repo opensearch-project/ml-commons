@@ -31,26 +31,26 @@ public class EmbeddingPostProcessFunctionTest {
     public void process_WrongInput_NotList() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Post process function input is not a List.");
-        function.apply("abc");
+        function.apply("abc", null);
     }
 
     @Test
     public void process_WrongInput_NotListOfList() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("The embedding should be a non-empty List containing List of Float values.");
-        function.apply(Arrays.asList("abc"));
+        function.apply(Arrays.asList("abc"), null);
     }
 
     @Test
     public void process_WrongInput_NotListOfNumber() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("The embedding should be a non-empty List containing Float values.");
-        function.apply(List.of(Arrays.asList("abc")));
+        function.apply(List.of(Arrays.asList("abc")), null);
     }
 
     @Test
     public void process_CorrectInput() {
-        List<ModelTensor> result = function.apply(List.of(List.of(1.1, 1.2, 1.3), List.of(2.1, 2.2, 2.3)));
+        List<ModelTensor> result = function.apply(List.of(List.of(1.1, 1.2, 1.3), List.of(2.1, 2.2, 2.3)), null);
         assertEquals(2, result.size());
         assertEquals(3, result.get(0).getData().length);
         assertEquals(1.1, result.get(0).getData()[0]);
