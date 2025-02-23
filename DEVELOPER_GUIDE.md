@@ -114,6 +114,7 @@ After a few minutes, the server will be ready. You can now visit [OpenSearch Das
 username: admin
 password: MyPassword123!
 ```
+The above password (`MyPassword123!`) comes from the environment variable `OPENSEARCH_INITIAL_ADMIN_PASSWORD`, defined in `docs/docker/dev-docker-compose.yml`.
 
 You also can make requests using `curl` or other HTTP clients. For example,
 
