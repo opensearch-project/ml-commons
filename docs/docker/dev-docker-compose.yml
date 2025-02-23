@@ -1,0 +1,165 @@
+version: '3'
+services:
+  opensearch-node1:
+    image: opensearchstaging/opensearch:3.0.0
+    container_name: opensearch-node1
+    environment:
+      - cluster.name=opensearch-cluster # Sets the name of the OpenSearch cluster
+      - node.name=opensearch-node1 # Sets the name of the node in the cluster
+      - discovery.seed_hosts=opensearch-node1,opensearch-node2 # Defines initial nodes for cluster discovery
+      - cluster.initial_cluster_manager_nodes=opensearch-node1,opensearch-node2 # Defines initial cluster manager nodes
+      - bootstrap.memory_lock=true # along with the memlock settings below, disables swapping
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=MyPassword123! # Sets the initial admin password
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m" # Sets JVM heap size to 512MB
+
+    ulimits:
+      memlock:
+        soft: -1 # Ensures unlimited memory locking
+        hard: -1
+      nofile:
+        soft: 65536 # maximum number of open files for the OpenSearch user, set to at least 65536 on modern systems
+        hard: 65536
+    volumes:
+      # Persist data for the first OpenSearch node to ensure cluster state, indexes, and metadata are retained
+      - opensearch-data1:/usr/share/opensearch/data
+
+      # Mount the local plugin build directory into the container to make custom plugins available for installation
+      - ../../plugin/build/distributions:/usr/share/opensearch/dev
+
+    # We will now remove the existing 'opensearch-skills' plugin to prevent version conflicts
+    # Remove the existing 'opensearch-ml' plugin to ensure a clean installation
+    # Install the new version of the 'opensearch-ml' plugin from a local distribution file
+    # Start the OpenSearch service using the Docker entrypoint script
+    command: bash -c "bin/opensearch-plugin remove opensearch-skills; bin/opensearch-plugin remove opensearch-ml; bin/opensearch-plugin install --batch file:///usr/share/opensearch/dev/opensearch-ml-3.0.0.0-SNAPSHOT.zip; ./opensearch-docker-entrypoint.sh opensearch"
+    ports:
+      - 9200:9200 # Main OpenSearch API port
+      - 9600:9600 # required for Performance Analyzer
+      - 5005:5005 # Debugging port
+
+    networks:
+      - opensearch-net # Connects to OpenSearch network
+  opensearch-node2:
+    image: opensearchstaging/opensearch:3.0.0
+    container_name: opensearch-node2
+    environment:
+      - cluster.name=opensearch-cluster
+      - node.name=opensearch-node2
+      - discovery.seed_hosts=opensearch-node1,opensearch-node2
+      - cluster.initial_cluster_manager_nodes=opensearch-node1,opensearch-node2
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=MyPassword123!
+
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      # Persist data for the second OpenSearch node to maintain high availability and redundancy
+      - opensearch-data2:/usr/share/opensearch/data
+
+      # Mount the local plugin build directory into the container to make custom plugins available for installation
+      - ../../plugin/build/distributions:/usr/share/opensearch/dev
+
+    # We will now remove the existing 'opensearch-skills' plugin to prevent version conflicts
+    # Remove the existing 'opensearch-ml' plugin to ensure a clean installation
+    # Install the new version of the 'opensearch-ml' plugin from a local distribution file
+    # Start the OpenSearch service using the Docker entrypoint script
+    command: bash -c "bin/opensearch-plugin remove opensearch-skills; bin/opensearch-plugin remove opensearch-ml; bin/opensearch-plugin install --batch file:///usr/share/opensearch/dev/opensearch-ml-3.0.0.0-SNAPSHOT.zip; ./opensearch-docker-entrypoint.sh opensearch"
+    networks:
+      - opensearch-net
+
+  opensearch-ml1:
+    image: opensearchstaging/opensearch:3.0.0
+    container_name: opensearch-ml1
+    environment:
+      - cluster.name=opensearch-cluster
+      - node.name=opensearch-ml1
+      - node.roles=ml # Defines this node as an ML node
+      - discovery.seed_hosts=opensearch-node1,opensearch-node2
+      - cluster.initial_cluster_manager_nodes=opensearch-node1,opensearch-node2
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=MyPassword123!
+
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      # Persist machine learning-related data for the first ML node to store model metadata and results
+      - opensearch-ml1:/usr/share/opensearch/data
+
+      # Mount the local plugin build directory into the container to make custom plugins available for installation
+      - ../../plugin/build/distributions:/usr/share/opensearch/dev
+
+    # We will now remove the existing 'opensearch-skills' plugin to prevent version conflicts
+    # Remove the existing 'opensearch-ml' plugin to ensure a clean installation
+    # Install the new version of the 'opensearch-ml' plugin from a local distribution file
+    # Start the OpenSearch service using the Docker entrypoint script
+    command: bash -c "bin/opensearch-plugin remove opensearch-skills; bin/opensearch-plugin remove opensearch-ml; bin/opensearch-plugin install --batch file:///usr/share/opensearch/dev/opensearch-ml-3.0.0.0-SNAPSHOT.zip; ./opensearch-docker-entrypoint.sh opensearch"
+    networks:
+      - opensearch-net
+
+  opensearch-ml2:
+    image: opensearchstaging/opensearch:3.0.0
+    container_name: opensearch-ml2
+    environment:
+      - cluster.name=opensearch-cluster
+      - node.name=opensearch-ml2
+      - node.roles=ml
+      - discovery.seed_hosts=opensearch-node1,opensearch-node2
+      - cluster.initial_cluster_manager_nodes=opensearch-node1,opensearch-node2
+      - bootstrap.memory_lock=true
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      - OPENSEARCH_INITIAL_ADMIN_PASSWORD=MyPassword123!
+
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      # Persist machine learning-related data for the second ML node to support distributed ML processing and data redundancy
+      - opensearch-ml2:/usr/share/opensearch/data
+
+      # Mount the local plugin build directory into the container to make custom plugins available for installation
+      - ../../plugin/build/distributions:/usr/share/opensearch/dev
+
+    # We will now remove the existing 'opensearch-skills' plugin to prevent version conflicts
+    # Remove the existing 'opensearch-ml' plugin to ensure a clean installation
+    # Install the new version of the 'opensearch-ml' plugin from a local distribution file
+    # Start the OpenSearch service using the Docker entrypoint script
+    command: bash -c "bin/opensearch-plugin remove opensearch-skills; bin/opensearch-plugin remove opensearch-ml; bin/opensearch-plugin install --batch file:///usr/share/opensearch/dev/opensearch-ml-3.0.0.0-SNAPSHOT.zip; ./opensearch-docker-entrypoint.sh opensearch"
+    networks:
+      - opensearch-net
+
+  opensearch-dashboards:
+    image: opensearchstaging/opensearch-dashboards:3.0.0
+    container_name: opensearch-dashboards
+    ports:
+      - 5601:5601
+    expose:
+      - "5601"
+    environment:
+      OPENSEARCH_HOSTS: '["https://opensearch-node1:9200","https://opensearch-node2:9200"]'
+    networks:
+      - opensearch-net
+
+volumes:
+  opensearch-data1:
+  opensearch-data2:
+  opensearch-ml1:
+  opensearch-ml2:
+
+
+networks:
+  opensearch-net:

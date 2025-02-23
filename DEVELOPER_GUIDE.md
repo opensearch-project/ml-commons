@@ -82,6 +82,46 @@ opensearch.username: "admin" # Default username
 opensearch.password: "admin" # Default password
 ```
 
+### Run OpenSearch from Source Code using Docker
+
+#### 1. Build the Distributions
+
+First, compile the source code to build the distributions:
+
+```bash
+./gradlew assemble
+```
+
+After the build completes, you'll find an artifact like `opensearch-ml-3.0.0.0-SNAPSHOT.zip` in the `plugin/build/distributions` directory. The version of the artifact is dynamically set in the `build.gradle` file using the `opensearch.version` system property.
+
+
+#### 2. Run OpenSearch Using Docker Compose
+
+Navigate to the root directory of the project and start OpenSearch with the following command:
+
+```bash
+docker-compose -f docs/docker/dev-docker-compose.yml up
+```
+
+
+#### 3. Access OpenSearch
+
+After a few minutes, the server will be ready. You can now visit [OpenSearch Dashboards](http://localhost:5601).
+
+##### OpenSearch Dashboards Credentials
+
+```yml
+username: admin
+password: MyPassword123!
+```
+The above password (`MyPassword123!`) comes from the environment variable `OPENSEARCH_INITIAL_ADMIN_PASSWORD`, defined in `docs/docker/dev-docker-compose.yml`.
+
+You also can make requests using `curl` or other HTTP clients. For example,
+
+```bash
+curl -X GET -k -u admin:MyPassword123! https://localhost:9200/
+```
+
 ### Build
 
 This package uses the [Gradle](https://docs.gradle.org/current/userguide/userguide.html) build system. Gradle comes with excellent documentation that should be your first stop when trying to figure out how to operate or modify the build. we also use the OpenSearch build tools for Gradle. These tools are idiosyncratic and don't always follow the conventions and instructions for building regular Java code using Gradle. Not everything in this package will work the way it's described in the Gradle documentation. If you encounter such a situation, the OpenSearch build tools [source code](https://github.com/opensearch-project/OpenSearch/tree/main/buildSrc/src/main/groovy/org/opensearch/gradle) is your best bet for figuring out what's going on.
