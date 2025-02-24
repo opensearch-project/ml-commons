@@ -84,23 +84,18 @@ jobs:
                                echo "::add-mask::$COHERE_KEY" &&
                                echo "build and run tests" && ./gradlew build -x spotlessJava &&
                                echo "Publish to Maven Local" && ./gradlew publishToMavenLocal -x spotlessJava &&
-                               echo "Multi Nodes Integration Testing" && ./gradlew integTest -PnumNodes=3 -x spotlessJava'
+                               echo "Multi Nodes Integration Testing" && ./gradlew integTest -PnumNodes=3 -x spotlessJava
+                               echo "Run Jacoco test coverage" && && ./gradlew jacocoTestReport && cp -v build/reports/jacoco/test/jacocoTestReport.xml ./jacocoTestReport.xml'
           plugin=`basename $(ls plugin/build/distributions/*.zip)`
           echo $plugin
           mv -v plugin/build/distributions/$plugin ./
           echo "build-test-linux=$plugin" >> $GITHUB_OUTPUT
 
-      - name: Upload Coverage Report
-        uses: codecov/codecov-action@v3
-        with:
-          flags: ml-commons
-          token: ${{ secrets.CODECOV_TOKEN }}
-
       - uses: actions/upload-artifact@v4
+        if: ${{ matrix.os }} == "ubuntu-latest"
         with:
-          name: ml-plugin-linux-${{ matrix.java }}
-          path: ${{ steps.step-build-test-linux.outputs.build-test-linux }}
-          if-no-files-found: error
+          name: coverage-report-${{ matrix.os }}-${{ matrix.java }}
+          path: ./jacocoTestReport.xml
 
 
   Test-ml-linux-docker:
@@ -199,6 +194,24 @@ jobs:
         with:
           flags: ml-commons
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  Precommit-codecov:
+    needs: Build-ml-linux
+    strategy:
+      matrix:
+        java: [21, 23]
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage-report-${{ matrix.os }}-${{ matrix.java }}
+          path: ./
+      - name: Upload Coverage Report
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./jacocoTestReport.xml
 
   Build-ml-windows:
     strategy:
