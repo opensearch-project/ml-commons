@@ -11,7 +11,6 @@ import java.util.Locale;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.admin.indices.stats.IndicesStatsRequest;
 import org.opensearch.action.search.SearchRequest;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.health.ClusterIndexHealth;
 import org.opensearch.cluster.metadata.IndexMetadata;
 import org.opensearch.cluster.service.ClusterService;
@@ -28,6 +27,7 @@ import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.transport.client.Client;
 
 public class IndexUtils {
     /**
@@ -127,7 +127,7 @@ public class IndexUtils {
                 searchRequest.source(builder).indices(indexName);
 
                 client.search(searchRequest, ActionListener.runBefore(ActionListener.wrap(r -> {
-                    long count = r.getHits().getTotalHits().value;
+                    long count = r.getHits().getTotalHits().value();
                     listener.onResponse(count);
                 }, e -> { listener.onFailure(e); }), () -> context.restore()));
             } catch (Exception e) {

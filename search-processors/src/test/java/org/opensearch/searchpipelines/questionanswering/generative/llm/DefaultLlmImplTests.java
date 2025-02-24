@@ -34,7 +34,6 @@ import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.opensearch.client.Client;
 import org.opensearch.common.action.ActionFuture;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
@@ -49,6 +48,7 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.searchpipelines.questionanswering.generative.client.MachineLearningInternalClient;
 import org.opensearch.searchpipelines.questionanswering.generative.prompt.PromptUtil;
 import org.opensearch.test.OpenSearchTestCase;
+import org.opensearch.transport.client.Client;
 
 public class DefaultLlmImplTests extends OpenSearchTestCase {
 

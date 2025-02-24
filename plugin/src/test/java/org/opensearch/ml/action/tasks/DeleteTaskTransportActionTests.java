@@ -25,7 +25,6 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
-import org.opensearch.client.Client;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
@@ -46,6 +45,7 @@ import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
 
 public class DeleteTaskTransportActionTests extends OpenSearchTestCase {
     @Mock

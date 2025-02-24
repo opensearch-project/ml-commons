@@ -10,6 +10,7 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.Map;
 
@@ -20,7 +21,6 @@ import org.opensearch.action.ActionRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -53,6 +53,7 @@ import org.opensearch.search.SearchHit;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableList;
 
@@ -183,6 +184,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         ActionListener<MLUpdateModelGroupResponse> listener,
         User user
     ) {
+        source.put(MLModelGroup.LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
         String modelGroupName = (String) source.get(MLModelGroup.MODEL_GROUP_NAME_FIELD);
         if (updateModelGroupInput.getModelAccessMode() != null) {
             source.put(MLModelGroup.ACCESS, updateModelGroupInput.getModelAccessMode().getValue());
@@ -210,7 +212,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
                     ActionListener.wrap(modelGroups -> {
                         if (modelGroups != null
                             && modelGroups.getHits().getTotalHits() != null
-                            && modelGroups.getHits().getTotalHits().value != 0) {
+                            && modelGroups.getHits().getTotalHits().value() != 0) {
                             for (SearchHit documentFields : modelGroups.getHits()) {
                                 String id = documentFields.getId();
                                 listener
@@ -242,6 +244,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         Map<String, Object> source,
         ActionListener<MLUpdateModelGroupResponse> listener
     ) {
+        source.put(MLModelGroup.LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
         UpdateDataObjectRequest updateDataObjectRequest = UpdateDataObjectRequest
             .builder()
             .index(ML_MODEL_GROUP_INDEX)

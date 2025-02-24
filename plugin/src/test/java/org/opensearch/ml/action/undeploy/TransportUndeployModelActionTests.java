@@ -28,6 +28,7 @@ import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.mockito.Spy;
 import org.opensearch.Version;
@@ -35,7 +36,6 @@ import org.opensearch.action.FailedNodeException;
 import org.opensearch.action.bulk.BulkResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.nodes.TransportNodesAction;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.ClusterName;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.node.DiscoveryNode;
@@ -58,10 +58,13 @@ import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesResponse;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
 
 public class TransportUndeployModelActionTests extends OpenSearchTestCase {
 
@@ -82,6 +85,8 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
 
     @Mock
     private Client client;
+
+    private SdkClient sdkClient;
 
     @Mock
     ClusterState clusterState;
@@ -132,6 +137,7 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
         Settings settings = Settings.builder().build();
+        sdkClient = Mockito.spy(SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap()));
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
@@ -150,6 +156,7 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
                 clusterService,
                 threadPool,
                 client,
+                sdkClient,
                 nodeFilter,
                 mlStats
             )
@@ -241,8 +248,14 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
     }
 
     public void testProcessUndeployModelResponseAndUpdateNullResponse() {
-        when(undeployModelNodesResponse.getNodes()).thenReturn(null);
-        action.processUndeployModelResponseAndUpdate(undeployModelNodesResponse, actionListener);
+        MLUndeployModelNodesResponse undeployResponse = mock(MLUndeployModelNodesResponse.class);
+
+        when(undeployResponse.getNodes()).thenReturn(null);
+
+        action.processUndeployModelResponseAndUpdate(null, undeployResponse, actionListener);
+
+        // Verify that the response is handled correctly
+        verify(actionListener).onResponse(undeployResponse);
     }
 
     public void testProcessUndeployModelResponseAndUpdateResponse() {
@@ -276,7 +289,7 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(MLSyncUpNodesRequest.class), any());
 
-        action.processUndeployModelResponseAndUpdate(response, actionListener);
+        action.processUndeployModelResponseAndUpdate(null, response, actionListener);
         verify(actionListener).onResponse(response);
     }
 
@@ -310,7 +323,7 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(MLSyncUpNodesRequest.class), any());
 
-        action.processUndeployModelResponseAndUpdate(response, actionListener);
+        action.processUndeployModelResponseAndUpdate(null, response, actionListener);
         verify(actionListener).onResponse(response);
     }
 
@@ -344,7 +357,7 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(MLSyncUpNodesRequest.class), any());
 
-        action.processUndeployModelResponseAndUpdate(response, actionListener);
+        action.processUndeployModelResponseAndUpdate(null, response, actionListener);
         verify(actionListener).onResponse(response);
     }
 
@@ -379,7 +392,7 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(MLSyncUpNodesRequest.class), any());
 
-        action.processUndeployModelResponseAndUpdate(response, actionListener);
+        action.processUndeployModelResponseAndUpdate(null, response, actionListener);
         verify(actionListener).onResponse(response);
     }
 
@@ -416,7 +429,7 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(MLSyncUpNodesRequest.class), any());
 
-        action.processUndeployModelResponseAndUpdate(response, actionListener);
+        action.processUndeployModelResponseAndUpdate(null, response, actionListener);
         verify(actionListener).onResponse(response);
     }
 
@@ -451,7 +464,7 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(MLSyncUpNodesRequest.class), any());
 
-        action.processUndeployModelResponseAndUpdate(response, actionListener);
+        action.processUndeployModelResponseAndUpdate(null, response, actionListener);
         verify(actionListener).onResponse(response);
     }
 
@@ -474,7 +487,7 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
         final List<FailedNodeException> failures = new ArrayList<>();
         final MLUndeployModelNodesResponse response = action.newResponse(nodesRequest, responses, failures);
 
-        action.processUndeployModelResponseAndUpdate(response, actionListener);
+        action.processUndeployModelResponseAndUpdate(null, response, actionListener);
     }
 
     public void testProcessUndeployModelResponseAndUpdateResponseUndeployModelWorkerNodeBeforeRemovalNull() {
@@ -494,7 +507,120 @@ public class TransportUndeployModelActionTests extends OpenSearchTestCase {
         final List<FailedNodeException> failures = new ArrayList<>();
         final MLUndeployModelNodesResponse response = action.newResponse(nodesRequest, responses, failures);
 
-        action.processUndeployModelResponseAndUpdate(response, actionListener);
+        action.processUndeployModelResponseAndUpdate(null, response, actionListener);
+    }
+
+    public void testDoExecuteWithEmptyRequest() {
+        MLUndeployModelNodesRequest nodesRequest = new MLUndeployModelNodesRequest(new String[] {}, new String[] {});
+        action.doExecute(task, nodesRequest, actionListener);
+        verify(actionListener).onResponse(any(MLUndeployModelNodesResponse.class));
+    }
+
+    public void testProcessUndeployModelResponseAndUpdateNoUndeployments() {
+        MLUndeployModelNodesRequest nodesRequest = new MLUndeployModelNodesRequest(
+            new String[] { "nodeId1", "nodeId2" },
+            new String[] { "modelId1", "modelId2" }
+        );
+
+        MLUndeployModelNodeResponse response = new MLUndeployModelNodeResponse(localNode, Collections.emptyMap(), new HashMap<>());
+        MLUndeployModelNodesResponse undeployModelNodesResponse = new MLUndeployModelNodesResponse(
+            clusterService.getClusterName(),
+            List.of(response),
+            new ArrayList<>()
+        );
+
+        action.processUndeployModelResponseAndUpdate(null, undeployModelNodesResponse, actionListener);
+
+        verify(actionListener).onResponse(undeployModelNodesResponse);
+    }
+
+    public void testDoExecuteExceptionHandling() {
+        doAnswer(invocation -> {
+            ActionListener<MLUndeployModelNodesResponse> listener = invocation.getArgument(2);
+            listener.onFailure(new RuntimeException("Simulated Exception"));
+            return null;
+        }).when(action).doExecute(any(), any(), any());
+
+        MLUndeployModelNodesRequest nodesRequest = new MLUndeployModelNodesRequest(new String[] { "nodeId1" }, new String[] { "modelId1" });
+
+        action.doExecute(task, nodesRequest, actionListener);
+
+        verify(actionListener).onFailure(any(RuntimeException.class));
+    }
+
+    public void testProcessUndeployModelResponseAndUpdateSyncUpFailure() {
+        MLUndeployModelNodesRequest nodesRequest = new MLUndeployModelNodesRequest(
+            new String[] { "nodeId1", "nodeId2" },
+            new String[] { "modelId1" }
+        );
+
+        Map<String, String> modelUndeployStatus = new HashMap<>();
+        modelUndeployStatus.put("modelId1", "undeployed");
+
+        Map<String, String[]> modelWorkerNodeCounts = new HashMap<>();
+        modelWorkerNodeCounts.put("modelId1", new String[] { "foo0", "foo0" });
+
+        MLUndeployModelNodeResponse response = new MLUndeployModelNodeResponse(localNode, modelUndeployStatus, modelWorkerNodeCounts);
+        MLUndeployModelNodesResponse undeployModelNodesResponse = new MLUndeployModelNodesResponse(
+            clusterService.getClusterName(),
+            List.of(response),
+            new ArrayList<>()
+        );
+
+        BulkResponse bulkResponse = mock(BulkResponse.class);
+        doAnswer(invocation -> {
+            ActionListener<BulkResponse> listener = invocation.getArgument(1);
+            listener.onResponse(bulkResponse);
+            return null;
+        }).when(client).bulk(any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<MLSyncUpNodesResponse> listener = invocation.getArgument(2);
+            listener.onFailure(new RuntimeException("Sync-Up Failure"));
+            return null;
+        }).when(client).execute(any(), any(MLSyncUpNodesRequest.class), any());
+
+        action.processUndeployModelResponseAndUpdate(null, undeployModelNodesResponse, actionListener);
+
+        verify(actionListener).onResponse(undeployModelNodesResponse);
+    }
+
+    public void testProcessUndeployModelResponseAndUpdateSyncUpSuccess() {
+        MLUndeployModelNodesRequest nodesRequest = new MLUndeployModelNodesRequest(
+            new String[] { "nodeId1", "nodeId2" },
+            new String[] { "modelId1" }
+        );
+
+        Map<String, String> modelUndeployStatus = new HashMap<>();
+        modelUndeployStatus.put("modelId1", "undeployed");
+
+        Map<String, String[]> modelWorkerNodeCounts = new HashMap<>();
+        modelWorkerNodeCounts.put("modelId1", new String[] { "foo0", "foo0" });
+
+        MLUndeployModelNodeResponse response = new MLUndeployModelNodeResponse(localNode, modelUndeployStatus, modelWorkerNodeCounts);
+        MLUndeployModelNodesResponse undeployModelNodesResponse = new MLUndeployModelNodesResponse(
+            clusterService.getClusterName(),
+            List.of(response),
+            new ArrayList<>()
+        );
+
+        BulkResponse bulkResponse = mock(BulkResponse.class);
+        doAnswer(invocation -> {
+            ActionListener<BulkResponse> listener = invocation.getArgument(1);
+            listener.onResponse(bulkResponse);
+            return null;
+        }).when(client).bulk(any(), any());
+
+        MLSyncUpNodesResponse syncUpNodesResponse = mock(MLSyncUpNodesResponse.class);
+        doAnswer(invocation -> {
+            ActionListener<MLSyncUpNodesResponse> listener = invocation.getArgument(2);
+            listener.onResponse(syncUpNodesResponse);
+            return null;
+        }).when(client).execute(any(), any(MLSyncUpNodesRequest.class), any());
+
+        action.processUndeployModelResponseAndUpdate(null, undeployModelNodesResponse, actionListener);
+
+        verify(actionListener).onResponse(undeployModelNodesResponse);
     }
 
     public void testNewResponseWithNotFoundModelStatus() {

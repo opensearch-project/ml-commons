@@ -32,7 +32,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.action.StepListener;
 import org.opensearch.action.update.UpdateResponse;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.json.JsonXContent;
@@ -54,6 +53,7 @@ import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
+import org.opensearch.transport.client.Client;
 
 import lombok.Data;
 import lombok.NoArgsConstructor;

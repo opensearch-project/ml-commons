@@ -26,7 +26,6 @@ import org.apache.logging.log4j.Logger;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.support.GroupedActionListener;
-import org.opensearch.client.Client;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
@@ -43,6 +42,7 @@ import org.opensearch.search.pipeline.AbstractProcessor;
 import org.opensearch.search.pipeline.PipelineProcessingContext;
 import org.opensearch.search.pipeline.Processor;
 import org.opensearch.search.pipeline.SearchRequestProcessor;
+import org.opensearch.transport.client.Client;
 
 import com.jayway.jsonpath.Configuration;
 import com.jayway.jsonpath.JsonPath;
@@ -596,9 +596,6 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
             boolean defaultFullResponsePath = !functionName.equalsIgnoreCase(FunctionName.REMOTE.name());
             boolean fullResponsePath = ConfigurationUtils
                 .readBooleanProperty(TYPE, processorTag, config, FULL_RESPONSE_PATH, defaultFullResponsePath);
-
-            ignoreFailure = ConfigurationUtils
-                .readBooleanProperty(TYPE, processorTag, config, ConfigurationUtils.IGNORE_FAILURE_KEY, false);
 
             // convert model config user input data structure to Map<String, String>
             Map<String, String> modelConfigMaps = null;

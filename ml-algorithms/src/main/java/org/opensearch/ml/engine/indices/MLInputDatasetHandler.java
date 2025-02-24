@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.Map;
 
 import org.opensearch.action.search.SearchRequest;
-import org.opensearch.client.Client;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.dataframe.DataFrame;
 import org.opensearch.ml.common.dataframe.DataFrameBuilder;
@@ -20,6 +19,7 @@ import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
+import org.opensearch.transport.client.Client;
 
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -53,7 +53,7 @@ public class MLInputDatasetHandler {
         searchRequest.indices(indices);
 
         client.search(searchRequest, ActionListener.wrap(r -> {
-            if (r == null || r.getHits() == null || r.getHits().getTotalHits() == null || r.getHits().getTotalHits().value == 0) {
+            if (r == null || r.getHits() == null || r.getHits().getTotalHits() == null || r.getHits().getTotalHits().value() == 0) {
                 listener.onFailure(new IllegalArgumentException("No document found"));
                 return;
             }

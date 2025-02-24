@@ -12,7 +12,6 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.settings.Settings;
@@ -43,6 +42,7 @@ import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
 
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
@@ -265,7 +265,11 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                 String processedInputString = MLNodeUtils.processRemoteInferenceInputDataSetParametersValue(InputString);
                 MLNodeUtils.validateSchema(inputSchemaString, processedInputString);
             } catch (Exception e) {
-                throw new OpenSearchStatusException("Error validating input schema: " + e.getMessage(), RestStatus.BAD_REQUEST);
+                throw new OpenSearchStatusException(
+                    "Error validating input schema, if you think this is expected, please update your 'input' field in the 'interface' field for this model: "
+                        + e.getMessage(),
+                    RestStatus.BAD_REQUEST
+                );
             }
         }
     }
