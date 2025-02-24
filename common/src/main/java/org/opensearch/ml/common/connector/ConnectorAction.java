@@ -212,9 +212,14 @@ public class ConnectorAction implements ToXContentObject, Writeable {
     }
 
     public void validatePrePostProcessFunctions(Map<String, String> parameters) {
-        var substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
-        var endPoint = substitutor.replace(url);
-        var remoteServer = getRemoteServerFromURL(endPoint);
+        StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
+        String endPoint = substitutor.replace(url);
+        String remoteServer = getRemoteServerFromURL(endPoint);
+        validatePreProcessFunctions(remoteServer);
+        validatePostProcessFunctions(remoteServer);
+    }
+
+    private void validatePreProcessFunctions(String remoteServer) {
         if (isInBuiltFunction(preProcessFunction)) {
             switch (remoteServer) {
                 case OPENAI:
@@ -270,6 +275,9 @@ public class ConnectorAction implements ToXContentObject, Writeable {
                     }
             }
         }
+    }
+
+    private void validatePostProcessFunctions(String remoteServer) {
         if (isInBuiltFunction(postProcessFunction)) {
             switch (remoteServer) {
                 case OPENAI:

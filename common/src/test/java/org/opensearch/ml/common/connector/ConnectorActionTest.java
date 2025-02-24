@@ -87,23 +87,31 @@ public class ConnectorActionTest {
 
     @Test
     public void connectorWithNullPreProcessFunction() {
-        var action = new ConnectorAction(TEST_ACTION_TYPE, TEST_METHOD_HTTP, OPENAI_URL, null, TEST_REQUEST_BODY, null, null);
+        ConnectorAction action = new ConnectorAction(TEST_ACTION_TYPE, TEST_METHOD_HTTP, OPENAI_URL, null, TEST_REQUEST_BODY, null, null);
         action.validatePrePostProcessFunctions(Map.of());
         assertNotNull(action);
     }
 
     @Test
     public void connectorWithCustomPainlessScriptPreProcessFunction() {
-        var preProcessFunction =
+        String preProcessFunction =
             "\"\\n    StringBuilder builder = new StringBuilder();\\n    builder.append(\\\"\\\\\\\"\\\");\\n    String first = params.text_docs[0];\\n    builder.append(first);\\n    builder.append(\\\"\\\\\\\"\\\");\\n    def parameters = \\\"{\\\" +\\\"\\\\\\\"text_inputs\\\\\\\":\\\" + builder + \\\"}\\\";\\n    return  \\\"{\\\" +\\\"\\\\\\\"parameters\\\\\\\":\\\" + parameters + \\\"}\\\";\"";
-        var action = new ConnectorAction(TEST_ACTION_TYPE, TEST_METHOD_HTTP, OPENAI_URL, null, TEST_REQUEST_BODY, preProcessFunction, null);
+        ConnectorAction action = new ConnectorAction(
+            TEST_ACTION_TYPE,
+            TEST_METHOD_HTTP,
+            OPENAI_URL,
+            null,
+            TEST_REQUEST_BODY,
+            preProcessFunction,
+            null
+        );
         action.validatePrePostProcessFunctions(null);
         assertNotNull(action);
     }
 
     @Test
     public void openAIConnectorWithCorrectInBuiltPrePostProcessFunction() {
-        var action = new ConnectorAction(
+        ConnectorAction action = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
             "https://${parameters.endpoint}/v1/chat/completions",
@@ -118,7 +126,7 @@ public class ConnectorActionTest {
 
     @Test
     public void openAIConnectorWithWrongInBuiltPrePostProcessFunction() {
-        var action1 = new ConnectorAction(
+        ConnectorAction action1 = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
             OPENAI_URL,
@@ -132,7 +140,7 @@ public class ConnectorActionTest {
             "LLM service is openai, so PreProcessFunction should be connector.pre_process.openai.embedding",
             exception.getMessage()
         );
-        var action2 = new ConnectorAction(
+        ConnectorAction action2 = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
             OPENAI_URL,
@@ -150,7 +158,7 @@ public class ConnectorActionTest {
 
     @Test
     public void cohereConnectorWithCorrectInBuiltPrePostProcessFunction() {
-        var action = new ConnectorAction(
+        ConnectorAction action = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
             COHERE_URL,
@@ -187,7 +195,7 @@ public class ConnectorActionTest {
 
     @Test
     public void cohereConnectorWithWrongInBuiltPrePostProcessFunction() {
-        var action1 = new ConnectorAction(
+        ConnectorAction action1 = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
             COHERE_URL,
@@ -202,7 +210,7 @@ public class ConnectorActionTest {
                 + " or connector.pre_process.cohere.multimodal_embedding or connector.pre_process.cohere.rerank",
             exception.getMessage()
         );
-        var action2 = new ConnectorAction(
+        ConnectorAction action2 = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
             COHERE_URL,
@@ -221,7 +229,7 @@ public class ConnectorActionTest {
 
     @Test
     public void bedrockConnectorWithCorrectInBuiltPrePostProcessFunction() {
-        var action = new ConnectorAction(
+        ConnectorAction action = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
             BEDROCK_URL,
@@ -258,7 +266,7 @@ public class ConnectorActionTest {
 
     @Test
     public void bedrockConnectorWithWrongInBuiltPrePostProcessFunction() {
-        var action1 = new ConnectorAction(
+        ConnectorAction action1 = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
             BEDROCK_URL,
@@ -273,7 +281,7 @@ public class ConnectorActionTest {
                 + " or connector.pre_process.bedrock.multimodal_embedding or connector.pre_process.bedrock.rerank",
             exception.getMessage()
         );
-        var action2 = new ConnectorAction(
+        ConnectorAction action2 = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
             BEDROCK_URL,
@@ -292,7 +300,7 @@ public class ConnectorActionTest {
 
     @Test
     public void sagemakerConnectorWithCorrectInBuiltPrePostProcessFunction() {
-        var action = new ConnectorAction(
+        ConnectorAction action = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
             SAGEMAKER_URL,
@@ -318,7 +326,7 @@ public class ConnectorActionTest {
 
     @Test
     public void sagemakerConnectorWithWrongInBuiltPrePostProcessFunction() {
-        var action1 = new ConnectorAction(
+        ConnectorAction action1 = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
             SAGEMAKER_URL,
@@ -333,7 +341,7 @@ public class ConnectorActionTest {
                 + " or connector.pre_process.default.rerank",
             exception.getMessage()
         );
-        var action2 = new ConnectorAction(
+        ConnectorAction action2 = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
             SAGEMAKER_URL,
