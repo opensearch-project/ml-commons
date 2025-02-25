@@ -27,10 +27,10 @@ public class QuestionAnsweringInputDataSet extends MLInputDataset {
     @Builder(toBuilder = true)
     public QuestionAnsweringInputDataSet(String question, String context) {
         super(MLInputDataType.QUESTION_ANSWERING);
-        if (question == null) {
+        if (question == null || question.isEmpty()) {
             throw new IllegalArgumentException("Question is not provided");
         }
-        if (context == null) {
+        if (context == null || context.isEmpty()) {
             throw new IllegalArgumentException("Context is not provided");
         }
         this.question = question;
