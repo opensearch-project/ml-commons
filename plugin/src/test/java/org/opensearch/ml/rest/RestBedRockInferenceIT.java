@@ -246,7 +246,12 @@ public class RestBedRockInferenceIT extends MLCommonsRestTestCase {
         final List<String> postProcessFunctions = List
             .of("connector.post_process.bedrock_v2.embedding.float", "connector.post_process.bedrock_v2.embedding.binary");
         final Map<String, String> dataType = Map
-            .of("connector.post_process.bedrock_v2.embedding.float", "FLOAT32", "connector.post_process.bedrock_v2.embedding.binary", "BINARY");
+            .of(
+                "connector.post_process.bedrock_v2.embedding.float",
+                "FLOAT32",
+                "connector.post_process.bedrock_v2.embedding.binary",
+                "BINARY"
+            );
         // Skip test if key is null
         if (tokenNotSet()) {
             return;
