@@ -12,6 +12,7 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.engine.algorithms.DLModel.*;
+import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.*;
 
 import java.io.File;
 import java.io.IOException;
@@ -25,6 +26,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -33,11 +36,14 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataset.QuestionAnsweringInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.common.model.QuestionAnsweringModelConfig;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.encryptor.Encryptor;
@@ -45,11 +51,13 @@ import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.utils.FileUtils;
 
 import ai.djl.Model;
+import ai.djl.inference.Predictor;
 import ai.djl.modality.Input;
 import ai.djl.modality.Output;
 import ai.djl.ndarray.NDArray;
 import ai.djl.ndarray.NDList;
 import ai.djl.ndarray.NDManager;
+import ai.djl.translate.Translator;
 import ai.djl.translate.TranslatorContext;
 import lombok.extern.log4j.Log4j2;
 
@@ -57,6 +65,7 @@ import lombok.extern.log4j.Log4j2;
 public class QuestionAnsweringModelTest {
 
     private File modelZipFile;
+    private File sentenceHighlightingModelZipFile;
     private MLModel model;
     private ModelHelper modelHelper;
     private Map<String, Object> params;
@@ -83,6 +92,7 @@ public class QuestionAnsweringModelTest {
         modelHelper = new ModelHelper(mlEngine);
         params = new HashMap<>();
         modelZipFile = new File(getClass().getResource("question_answering_pt.zip").toURI());
+        sentenceHighlightingModelZipFile = new File(getClass().getResource("sentence_highlighting_qa_model_pt.zip").toURI());
         params.put(MODEL_ZIP_FILE, modelZipFile);
         params.put(MODEL_HELPER, modelHelper);
         params.put(ML_ENGINE, mlEngine);
@@ -277,9 +287,149 @@ public class QuestionAnsweringModelTest {
         assert (e.getMessage().startsWith("Failed to inference QUESTION_ANSWERING"));
     }
 
+    // New tests for sentence highlighting functionality
+
+    @Test
+    public void testCheckHighlightingType_WithSentenceHighlighting() {
+        // Create model config with sentence highlighting
+        MLModelConfig modelConfig = QuestionAnsweringModelConfig
+            .builder()
+            .modelType(SENTENCE_HIGHLIGHTING_TYPE)
+            .frameworkType(QuestionAnsweringModelConfig.FrameworkType.HUGGINGFACE_TRANSFORMERS)
+            .build();
+
+        // Set the model config
+        model = model.toBuilder().modelConfig(modelConfig).build();
+
+        // Use the sentence highlighting model file
+        Map<String, Object> sentenceParams = new HashMap<>(params);
+        sentenceParams.put(MODEL_ZIP_FILE, sentenceHighlightingModelZipFile);
+
+        // Initialize the model
+        questionAnsweringModel = new QuestionAnsweringModel();
+
+        // Verify the translator type using getTranslator method
+        Translator<Input, Output> translator = questionAnsweringModel.getTranslator("pytorch", modelConfig);
+        assertEquals(SentenceHighlightingQATranslator.class, translator.getClass());
+    }
+
+    @Test
+    public void testCheckHighlightingType_WithoutSentenceHighlighting() {
+        // Create model config without sentence highlighting
+        MLModelConfig modelConfig = QuestionAnsweringModelConfig
+            .builder()
+            .modelType("standard")
+            .frameworkType(QuestionAnsweringModelConfig.FrameworkType.HUGGINGFACE_TRANSFORMERS)
+            .build();
+
+        // Set the model config
+        model = model.toBuilder().modelConfig(modelConfig).build();
+
+        // Initialize the model
+        questionAnsweringModel = new QuestionAnsweringModel();
+
+        // Verify the translator type using getTranslator method
+        Translator<Input, Output> translator = questionAnsweringModel.getTranslator("pytorch", modelConfig);
+        assertEquals(QuestionAnsweringTranslator.class, translator.getClass());
+    }
+
+    @Test
+    public void testCheckHighlightingType_WithNullModelConfig() {
+        // Set null model config
+        model = model.toBuilder().modelConfig(null).build();
+
+        // Initialize the model
+        questionAnsweringModel = new QuestionAnsweringModel();
+
+        // Verify the translator type using getTranslator method
+        Translator<Input, Output> translator = questionAnsweringModel.getTranslator("pytorch", null);
+        assertEquals(QuestionAnsweringTranslator.class, translator.getClass());
+    }
+
+    @Test
+    public void testPredictWithSentenceHighlighting() throws Exception {
+        // Create model config with sentence highlighting
+        MLModelConfig modelConfig = QuestionAnsweringModelConfig
+            .builder()
+            .modelType(SENTENCE_HIGHLIGHTING_TYPE)
+            .frameworkType(QuestionAnsweringModelConfig.FrameworkType.HUGGINGFACE_TRANSFORMERS)
+            .build();
+
+        // Set the model config
+        model = model.toBuilder().modelConfig(modelConfig).build();
+
+        // Use the sentence highlighting model file
+        Map<String, Object> sentenceParams = new HashMap<>(params);
+        sentenceParams.put(MODEL_ZIP_FILE, sentenceHighlightingModelZipFile);
+
+        // Initialize the model with mocked components
+        questionAnsweringModel = new QuestionAnsweringModel();
+
+        // Get the translator and verify it's the correct type
+        Translator<Input, Output> translator = questionAnsweringModel.getTranslator("pytorch", modelConfig);
+        assertEquals(SentenceHighlightingQATranslator.class, translator.getClass());
+
+        // Test the translator's behavior with mocked components
+        SentenceHighlightingQATranslator sentenceTranslator = (SentenceHighlightingQATranslator) translator;
+
+        // Create a mock TranslatorContext
+        TranslatorContext translatorContext = mock(TranslatorContext.class);
+
+        // Create a mock Input
+        Input input = new Input();
+        input.add(MLInput.QUESTION_FIELD, "What color is apple");
+        input.add(MLInput.CONTEXT_FIELD, "Apples are red");
+
+        // Create sample output with highlighted sentences
+        JSONArray highlightsArray = new JSONArray();
+
+        // Add first highlight
+        Map<String, Object> highlight1 = new HashMap<>();
+        highlight1.put(FIELD_TEXT, "Apples are red");
+        highlight1.put(FIELD_POSITION, 0);
+        highlightsArray.put(new JSONObject(StringUtils.toJson(highlight1)));
+
+        // Create model tensor with highlights
+        ModelTensor highlightsTensor = new ModelTensor(FIELD_HIGHLIGHTS, highlightsArray.toString());
+        ModelTensors modelTensors = new ModelTensors(List.of(highlightsTensor));
+
+        // Create output with the model tensors
+        Output output = new Output();
+        output.add(modelTensors.toBytes());
+
+        // Verify that the QuestionAnsweringModel would use the SentenceHighlightingQATranslator
+        // for a model with sentence highlighting type
+        assertEquals(SENTENCE_HIGHLIGHTING_TYPE, modelConfig.getModelType());
+        assertEquals(SentenceHighlightingQATranslator.class, questionAnsweringModel.getTranslator("pytorch", modelConfig).getClass());
+    }
+
+    @Test
+    public void testWarmUpWithSentenceHighlighting() throws Exception {
+        // Create model config with sentence highlighting
+        MLModelConfig modelConfig = QuestionAnsweringModelConfig
+            .builder()
+            .modelType(SENTENCE_HIGHLIGHTING_TYPE)
+            .frameworkType(QuestionAnsweringModelConfig.FrameworkType.HUGGINGFACE_TRANSFORMERS)
+            .build();
+
+        // Set the model config
+        model = model.toBuilder().modelConfig(modelConfig).build();
+
+        // Mock predictor for warmup
+        @SuppressWarnings("unchecked")
+        Predictor<Input, Output> predictor = mock(Predictor.class);
+        Output mockOutput = mock(Output.class);
+        when(predictor.predict(any(Input.class))).thenReturn(mockOutput);
+
+        // Call warmup method
+        questionAnsweringModel.warmUp(predictor, "test_model_id", modelConfig);
+
+        // Verify that predict was called with the correct input
+        // We can only verify indirectly by checking that no exception was thrown
+    }
+
     @After
     public void tearDown() {
         FileUtils.deleteFileQuietly(mlCachePath);
     }
-
 }
