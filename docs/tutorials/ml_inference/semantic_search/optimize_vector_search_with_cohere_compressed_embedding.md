@@ -79,6 +79,8 @@ Sample response
 ### 1.2 Create Model
 Now, let's create a model using the connector we just set up:
 
+Note: The `interface` parameter is optional. If you don't need an interface, you can simply set it as an empty object: `"interface": {}`. For more information about model interfaces, see the [model interface documentation](https://opensearch.org/docs/latest/ml-commons-plugin/api/model-apis/register-model/#the-interface-parameter).
+
 ```
 POST _plugins/_ml/models/_register?deploy=true
 {
