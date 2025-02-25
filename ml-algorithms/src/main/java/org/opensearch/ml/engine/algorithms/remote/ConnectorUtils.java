@@ -249,7 +249,7 @@ public class ConnectorUtils {
 
     private static MLResultDataType parseMLResultDataTypeFromResponseFilter(String responseFilter) {
         for (MLResultDataType type : MLResultDataType.values()) {
-            if (responseFilter.contains("." + type.name()) || responseFilter.contains("." + type.name().toLowerCase(Locale.ROOT))) {
+            if (StringUtils.containsIgnoreCase(responseFilter, type.name())) {
                 return type;
             }
         }
