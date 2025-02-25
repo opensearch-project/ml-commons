@@ -27,12 +27,12 @@ Create a connector by following this [blueprint](https://github.com/opensearch-p
 Note: We don't need  pre/post process function in this tutorial as we are going to use ML inference processor.
 
 `"embedding_types": ["int8"]` specifies that we want 8-bit integer quantized embeddings from the Cohere model.
-This meaans embeddings are compressed from 32-bit floats to 8-bit integers.
+This means embeddings are compressed from 32-bit floats to 8-bit integers.
 It reduces storage space and improves computation speed.
 There's a minor trade-off in precision, but it's usually negligible for search tasks.
 It's compatible with OpenSearch's KNN index, which supports byte vectors.
 
-You can find more details about model parameters on [Cohere docment](https://docs.cohere.com/v2/docs/embeddings).
+You can find more details about model parameters on [Cohere docment](https://docs.cohere.com/v2/docs/embeddings) and [AWS Bedrock document](https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-embed.html).
 
 ```
 POST _plugins/_ml/connectors/_create
@@ -111,9 +111,7 @@ POST _plugins/_ml/models/t64OPpUBX2k07okSZc2n/_predict
 {
   "parameters": {
     "texts": ["Say this is a test"],
-    "embedding_types": [
-      "float", "int8"
-    ]
+    "embedding_types": [ "int8" ]
   }
 }
 ```
@@ -132,13 +130,6 @@ Sample response
               "Say this is a test"
             ],
             "embeddings": {
-              "float": [
-                [
-                  -0.020187378,
-                  0.025726318,
-                  ...
-                ]
-              ],
               "int8": [
                 [
                   -26.0,
