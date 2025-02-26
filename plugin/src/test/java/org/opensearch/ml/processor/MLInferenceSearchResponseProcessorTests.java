@@ -18,6 +18,8 @@ import static org.opensearch.ml.processor.InferenceProcessorAttributes.MAX_PREDI
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.MODEL_CONFIG;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.MODEL_ID;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.OUTPUT_MAP;
+import static org.opensearch.ml.processor.MLInferenceSearchRequestProcessor.OPTIONAL_INPUT_MAP;
+import static org.opensearch.ml.processor.MLInferenceSearchRequestProcessor.OPTIONAL_OUTPUT_MAP;
 import static org.opensearch.ml.processor.MLInferenceSearchResponseProcessor.DEFAULT_MAX_PREDICTION_TASKS;
 import static org.opensearch.ml.processor.MLInferenceSearchResponseProcessor.DEFAULT_OUTPUT_FIELD_NAME;
 import static org.opensearch.ml.processor.MLInferenceSearchResponseProcessor.FULL_RESPONSE_PATH;
@@ -86,6 +88,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
     );
     private static final String PROCESSOR_TAG = "inference";
     private static final String DESCRIPTION = "inference_test";
+    private List<Map<String, String>> optionalOutputMaps = null;
+    private List<Map<String, String>> optionalInputMaps = null;
 
     @Before
     public void setup() {
@@ -207,6 +211,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             inputMap,
             outputMap,
+            optionalInputMaps,
+            optionalOutputMaps,
             modelConfig,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -294,6 +300,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             inputMap,
             outputMap,
+            optionalInputMaps,
+            optionalOutputMaps,
             modelConfig,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -382,6 +390,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             inputMap,
             outputMap,
+            optionalInputMaps,
+            optionalOutputMaps,
             modelConfig,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -460,6 +470,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             inputMap,
             outputMap,
+            optionalInputMaps,
+            optionalOutputMaps,
             modelConfig,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -548,6 +560,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             inputMap,
             outputMap,
+            optionalInputMaps,
+            optionalOutputMaps,
             modelConfig,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -632,6 +646,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             inputMap,
             outputMap,
+            optionalInputMaps,
+            optionalOutputMaps,
             modelConfig,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -729,6 +745,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             inputMap,
             outputMap,
+            optionalInputMaps,
+            optionalOutputMaps,
             modelConfig,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -821,6 +839,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             inputMap,
             null,
+            optionalInputMaps,
+            optionalOutputMaps,
             modelConfig,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -898,6 +918,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             inputMap,
             null,
+            optionalInputMaps,
+            optionalOutputMaps,
             modelConfig,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -979,6 +1001,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             inputMap,
             outputMap,
+            optionalInputMaps,
+            optionalOutputMaps,
             modelConfig,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -1037,6 +1061,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             null,
             null,
+            optionalInputMaps,
+            optionalOutputMaps,
             null,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -1119,6 +1145,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             inputMap,
             outputMap,
+            optionalInputMaps,
+            optionalOutputMaps,
             null,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -1207,6 +1235,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             null,
             outputMap,
+            optionalInputMaps,
+            optionalOutputMaps,
             null,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -1297,6 +1327,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             null,
             outputMap,
+            optionalInputMaps,
+            optionalOutputMaps,
             null,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -1359,6 +1391,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             null,
             outputMap,
+            optionalInputMaps,
+            optionalOutputMaps,
             null,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -1416,6 +1450,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             null,
             outputMap,
+            optionalInputMaps,
+            optionalOutputMaps,
             null,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -1474,6 +1510,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             null,
             outputMap,
+            optionalInputMaps,
+            optionalOutputMaps,
             null,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -1566,6 +1604,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             null,
             outputMap,
+            optionalInputMaps,
+            optionalOutputMaps,
             null,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -1653,6 +1693,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             null,
             outputMap,
+            optionalInputMaps,
+            optionalOutputMaps,
             null,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -1737,6 +1779,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             null,
             outputMap,
+            optionalInputMaps,
+            optionalOutputMaps,
             null,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -1823,6 +1867,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             null,
             outputMap,
+            optionalInputMaps,
+            optionalOutputMaps,
             null,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -1885,6 +1931,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             null,
             outputMap,
+            optionalInputMaps,
+            optionalOutputMaps,
             null,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -1949,6 +1997,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             null,
             outputMap,
+            optionalInputMaps,
+            optionalOutputMaps,
             null,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -2006,6 +2056,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             null,
             outputMap,
+            optionalInputMaps,
+            optionalOutputMaps,
             null,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -2069,6 +2121,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             null,
             outputMap,
+            optionalInputMaps,
+            optionalOutputMaps,
             null,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -2152,6 +2206,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             inputMap,
             outputMap,
+            optionalInputMaps,
+            optionalOutputMaps,
             null,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -2283,6 +2339,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             inputMap,
             outputMap,
+            optionalInputMaps,
+            optionalOutputMaps,
             null,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -2384,6 +2442,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             inputMap,
             outputMap,
+            optionalInputMaps,
+            optionalOutputMaps,
             null,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -2495,6 +2555,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             inputMap,
             outputMap,
+            optionalInputMaps,
+            optionalOutputMaps,
             null,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -2560,6 +2622,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             null,
             null,
+            optionalInputMaps,
+            optionalOutputMaps,
             null,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -2641,6 +2705,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             inputMap,
             null,
+            optionalInputMaps,
+            optionalOutputMaps,
             null,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -3182,6 +3248,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             inputMap,
             outputMap,
+            optionalInputMaps,
+            optionalOutputMaps,
             null,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -3269,6 +3337,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             inputMap,
             outputMap,
+            optionalInputMaps,
+            optionalOutputMaps,
             null,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -3336,6 +3406,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             null,
             null,
+            optionalInputMaps,
+            optionalOutputMaps,
             null,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -3382,6 +3454,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             null,
             null,
+            optionalInputMaps,
+            optionalOutputMaps,
             null,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -3433,6 +3507,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             null,
             null,
+            optionalInputMaps,
+            optionalOutputMaps,
             null,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -3485,6 +3561,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             null,
             null,
+            optionalInputMaps,
+            optionalOutputMaps,
             null,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -3530,6 +3608,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             null,
             null,
+            optionalInputMaps,
+            optionalOutputMaps,
             null,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -3584,6 +3664,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             null,
             outputMap,
+            optionalInputMaps,
+            optionalOutputMaps,
             null,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -3652,6 +3734,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             null,
             outputMap,
+            optionalInputMaps,
+            optionalOutputMaps,
             null,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -3720,6 +3804,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             null,
             outputMap,
+            optionalInputMaps,
+            optionalOutputMaps,
             null,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -3949,6 +4035,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             inputMap,
             outputMap,
+            optionalInputMaps,
+            optionalOutputMaps,
             modelConfig,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -4035,6 +4123,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             inputMap,
             outputMap,
+            optionalInputMaps,
+            optionalOutputMaps,
             modelConfig,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -4107,6 +4197,603 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
 
         responseProcessor.processResponseAsync(request, mLInferenceSearchResponse, responseContext, listener);
 
+    }
+
+    /**
+     * Tests the successful processing of a response with a single pair of optional input and required output mappings.
+     * Send one prediction based on one hit.
+     * @throws Exception if an error occurs during the test
+     */
+    @Test
+    public void testProcessResponseOptionalInputMapOneToOneSuccess() throws Exception {
+        String modelInputFieldText = "inputText";
+        String modelInputFieldImage = "inputImage";
+        String originalDocumentFieldText = "text";
+        String originalDocumentFieldImage = "image";
+        String newDocumentField = "multi_modal_embedding";
+        String modelOutputField = "response";
+        List<Map<String, String>> optionalInputMapsMultiModal = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        input.put(modelInputFieldText, originalDocumentFieldText);
+        input.put(modelInputFieldImage, originalDocumentFieldImage);
+        optionalInputMapsMultiModal.add(input);
+
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+        Map<String, String> model_config = new HashMap<>();
+        model_config.put("truncate_result", "false");
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            null,
+            outputMap,
+            optionalInputMapsMultiModal,
+            null,
+            model_config,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            true
+        );
+
+        assertEquals(responseProcessor.getType(), TYPE);
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(5, true, fieldName);
+
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .dataAsMap(ImmutableMap.of("response", Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)))
+            .build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                assertEquals(newSearchResponse.getHits().getHits().length, 5);
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[0].getSourceAsMap().get(newDocumentField),
+                    Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[1].getSourceAsMap().get(newDocumentField),
+                    Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[2].getSourceAsMap().get(newDocumentField),
+                    Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[3].getSourceAsMap().get(newDocumentField),
+                    Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[4].getSourceAsMap().get(newDocumentField),
+                    Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)
+                );
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException(e);
+            }
+        };
+
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+        verify(client, times(5)).execute(any(), any(), any());
+    }
+
+    /**
+     * Tests the successful processing of a response with a single pair of optional input and required output mappings.
+     * Send one prediction based on all hits.
+     * @throws Exception if an error occurs during the test
+     */
+    @Test
+    public void testProcessResponseOptionalInputMapManyToOneSuccess() throws Exception {
+        String modelInputFieldText = "inputText";
+        String modelInputFieldImage = "inputImage";
+        String originalDocumentFieldText = "text";
+        String originalDocumentFieldImage = "image";
+        String newDocumentField = "multi_modal_embedding";
+        String modelOutputField = "response";
+        List<Map<String, String>> optionalInputMapsMultiModal = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        input.put(modelInputFieldText, originalDocumentFieldText);
+        input.put(modelInputFieldImage, originalDocumentFieldImage);
+        optionalInputMapsMultiModal.add(input);
+
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+        Map<String, String> model_config = new HashMap<>();
+        model_config.put("truncate_result", "false");
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            null,
+            outputMap,
+            optionalInputMapsMultiModal,
+            null,
+            model_config,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            false
+        );
+
+        assertEquals(responseProcessor.getType(), TYPE);
+        SearchRequest request = getSearchRequest();
+        String fieldName = "image";
+        SearchResponse response = getSearchResponse(5, true, fieldName);
+
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .dataAsMap(ImmutableMap.of("response", Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)))
+            .build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                assertEquals(newSearchResponse.getHits().getHits().length, 5);
+                assertEquals(newSearchResponse.getHits().getHits()[0].getSourceAsMap().get(newDocumentField), 0.0);
+                assertEquals(newSearchResponse.getHits().getHits()[1].getSourceAsMap().get(newDocumentField), 1.0);
+                assertEquals(newSearchResponse.getHits().getHits()[2].getSourceAsMap().get(newDocumentField), 2.0);
+                assertEquals(newSearchResponse.getHits().getHits()[3].getSourceAsMap().get(newDocumentField), 3.0);
+                assertEquals(newSearchResponse.getHits().getHits()[4].getSourceAsMap().get(newDocumentField), 4.0);
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException(e);
+            }
+        };
+
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+        verify(client, times(1)).execute(any(), any(), any());
+    }
+
+    /**
+     * Tests the successful processing of a response with an optional input, a required output and an optional output.
+     * Send one prediction based on one hit.
+     * @throws Exception if an error occurs during the test
+     */
+    @Test
+    public void testProcessResponseOptionalOutputMapOneToOneSuccess() throws Exception {
+        String modelInputFieldText = "inputText";
+        String modelInputFieldImage = "inputImage";
+        String originalDocumentFieldText = "text";
+        String originalDocumentFieldImage = "image";
+        String newDocumentField = "multi_modal_embedding";
+        String modelOutputField = "response";
+        String newOptionalDocumentField = "multi_modal_embedding_size";
+        String optionalModelOutputField = "embedding_size";
+        List<Map<String, String>> optionalInputMapsMultiModal = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        input.put(modelInputFieldText, originalDocumentFieldText);
+        input.put(modelInputFieldImage, originalDocumentFieldImage);
+        optionalInputMapsMultiModal.add(input);
+
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+
+        List<Map<String, String>> optionalOutputMap = new ArrayList<>();
+        Map<String, String> optionalOutput = new HashMap<>();
+        optionalOutput.put(newOptionalDocumentField, optionalModelOutputField);
+        optionalOutputMap.add(output);
+
+        Map<String, String> model_config = new HashMap<>();
+        model_config.put("truncate_result", "false");
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            null,
+            outputMap,
+            optionalInputMapsMultiModal,
+            optionalOutputMap,
+            model_config,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            true
+        );
+
+        assertEquals(responseProcessor.getType(), TYPE);
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(5, true, fieldName);
+
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .dataAsMap(ImmutableMap.of("response", Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)))
+            .build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                assertEquals(newSearchResponse.getHits().getHits().length, 5);
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[0].getSourceAsMap().get(newDocumentField),
+                    Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[1].getSourceAsMap().get(newDocumentField),
+                    Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[2].getSourceAsMap().get(newDocumentField),
+                    Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[3].getSourceAsMap().get(newDocumentField),
+                    Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[4].getSourceAsMap().get(newDocumentField),
+                    Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)
+                );
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException(e);
+            }
+        };
+
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+        verify(client, times(5)).execute(any(), any(), any());
+    }
+
+    /**
+     * Tests the successful processing of a response with an optional input, a required output and an optional output.
+     * Send one prediction based on one hit.
+     * When there is the third hit missed all input fields. When ignoreFailure is true, the thrid hit will be skipped.
+     * But the rest of the hits should have the newDocumentField.
+     * @throws Exception if an error occurs during the test
+     */
+    @Test
+    public void testProcessResponseOptionalOutputMapOneToOneMissAllInput() throws Exception {
+        String modelInputFieldText = "inputText";
+        String modelInputFieldImage = "inputImage";
+        String originalDocumentFieldText = "text";
+        String originalDocumentFieldImage = "image";
+        String newDocumentField = "multi_modal_embedding";
+        String modelOutputField = "response";
+        String newOptionalDocumentField = "multi_modal_embedding_size";
+        String optionalModelOutputField = "embedding_size";
+        List<Map<String, String>> optionalInputMapsMultiModal = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        input.put(modelInputFieldText, originalDocumentFieldText);
+        input.put(modelInputFieldImage, originalDocumentFieldImage);
+        optionalInputMapsMultiModal.add(input);
+
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+
+        List<Map<String, String>> optionalOutputMap = new ArrayList<>();
+        Map<String, String> optionalOutput = new HashMap<>();
+        optionalOutput.put(newOptionalDocumentField, optionalModelOutputField);
+        optionalOutputMap.add(output);
+
+        Map<String, String> model_config = new HashMap<>();
+        model_config.put("truncate_result", "false");
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            null,
+            outputMap,
+            optionalInputMapsMultiModal,
+            optionalOutputMap,
+            model_config,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            true,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            true
+        );
+
+        assertEquals(responseProcessor.getType(), TYPE);
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponseMissingField(5, true, fieldName);
+
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .dataAsMap(ImmutableMap.of("response", Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)))
+            .build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        AtomicInteger executionCount = new AtomicInteger(0);
+
+        doAnswer(invocation -> {
+            int count = executionCount.incrementAndGet();
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+
+            if (count == 3) {
+                actionListener.onFailure(new RuntimeException("Simulated model failure"));
+            } else if (count <= 5) {
+                actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            } else {
+                actionListener.onFailure(new RuntimeException("Unexpected execution count: " + count));
+            }
+
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                assertEquals(newSearchResponse.getHits().getHits().length, 5);
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[0].getSourceAsMap().get(newDocumentField),
+                    Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[1].getSourceAsMap().get(newDocumentField),
+                    Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)
+                );
+                assertEquals(newSearchResponse.getHits().getHits()[2].getSourceAsMap().get(newDocumentField), null);
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[3].getSourceAsMap().get(newDocumentField),
+                    Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[4].getSourceAsMap().get(newDocumentField),
+                    Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)
+                );
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException(e);
+            }
+        };
+
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+        verify(client, times(5)).execute(any(), any(), any());
+    }
+
+    /**
+     * Tests the successful processing of a response with an optional input, a required output and an optional output.
+     * Send one prediction based on all hits.
+     * @throws Exception if an error occurs during the test
+     */
+    @Test
+    public void testProcessResponseOptionalOutputMapManyToOneSuccess() throws Exception {
+        String modelInputFieldText = "inputText";
+        String modelInputFieldImage = "inputImage";
+        String originalDocumentFieldText = "text";
+        String originalDocumentFieldImage = "image";
+        String newDocumentField = "multi_modal_embedding";
+        String modelOutputField = "response";
+        String newOptionalDocumentField = "multi_modal_embedding_size";
+        String optionalModelOutputField = "embedding_size";
+        List<Map<String, String>> optionalInputMapsMultiModal = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        input.put(modelInputFieldText, originalDocumentFieldText);
+        input.put(modelInputFieldImage, originalDocumentFieldImage);
+        optionalInputMapsMultiModal.add(input);
+
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+        Map<String, String> model_config = new HashMap<>();
+
+        List<Map<String, String>> optionalOutputMap = new ArrayList<>();
+        Map<String, String> optionalOutput = new HashMap<>();
+        optionalOutput.put(newOptionalDocumentField, optionalModelOutputField);
+        optionalOutputMap.add(output);
+
+        model_config.put("truncate_result", "false");
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            null,
+            outputMap,
+            optionalInputMapsMultiModal,
+            null,
+            model_config,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            false
+        );
+
+        assertEquals(responseProcessor.getType(), TYPE);
+        SearchRequest request = getSearchRequest();
+        String fieldName = "image";
+        SearchResponse response = getSearchResponse(5, true, fieldName);
+
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .dataAsMap(ImmutableMap.of("response", Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)))
+            .build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                assertEquals(newSearchResponse.getHits().getHits().length, 5);
+                assertEquals(newSearchResponse.getHits().getHits()[0].getSourceAsMap().get(newDocumentField), 0.0);
+                assertEquals(newSearchResponse.getHits().getHits()[1].getSourceAsMap().get(newDocumentField), 1.0);
+                assertEquals(newSearchResponse.getHits().getHits()[2].getSourceAsMap().get(newDocumentField), 2.0);
+                assertEquals(newSearchResponse.getHits().getHits()[3].getSourceAsMap().get(newDocumentField), 3.0);
+                assertEquals(newSearchResponse.getHits().getHits()[4].getSourceAsMap().get(newDocumentField), 4.0);
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException(e);
+            }
+        };
+
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+        verify(client, times(1)).execute(any(), any(), any());
+    }
+
+    /**
+     * Tests the successful processing of a response with no input mapping or optional input mapping .
+     * then all document fields are passed to the model directly as input.
+     * when one to one is true, send one prediction based on all hits.
+     * @throws Exception if an error occurs during the test
+     */
+    @Test
+    public void testProcessResponseNoInputMappings() throws Exception {
+        String newDocumentField = "multi_modal_embedding";
+        String modelOutputField = "response";
+
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+        Map<String, String> model_config = new HashMap<>();
+
+        model_config.put("truncate_result", "false");
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            null,
+            outputMap,
+            null,
+            null,
+            model_config,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            true
+        );
+
+        assertEquals(responseProcessor.getType(), TYPE);
+        SearchRequest request = getSearchRequest();
+        String fieldName = "image";
+        SearchResponse response = getSearchResponse(5, true, fieldName);
+
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .dataAsMap(ImmutableMap.of("response", Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)))
+            .build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                assertEquals(newSearchResponse.getHits().getHits().length, 5);
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[0].getSourceAsMap().get(newDocumentField),
+                    Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[1].getSourceAsMap().get(newDocumentField),
+                    Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[2].getSourceAsMap().get(newDocumentField),
+                    Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[3].getSourceAsMap().get(newDocumentField),
+                    Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)
+                );
+                assertEquals(
+                    newSearchResponse.getHits().getHits()[4].getSourceAsMap().get(newDocumentField),
+                    Arrays.asList(0.0, 1.0, 2.0, 3.0, 4.0)
+                );
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException(e);
+            }
+        };
+
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+        verify(client, times(5)).execute(any(), any(), any());
     }
 
     private static SearchRequest getSearchRequest() {
@@ -4189,6 +4876,8 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             "model1",
             inputMap,
             outputMap,
+            optionalInputMaps,
+            optionalOutputMaps,
             model_config,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -4436,7 +5125,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
         } catch (IllegalArgumentException e) {
             assertEquals(
                 e.getMessage(),
-                ("The number of prediction task setting in this process is 3. It exceeds the max_prediction_tasks of 2. Please reduce the size of input_map or increase max_prediction_tasks.")
+                ("The number of prediction task setting in this process is 3. It exceeds the max_prediction_tasks of 2. Please reduce the size of input_map or optional_input_map or increase max_prediction_tasks.")
             );
         }
     }
@@ -4477,7 +5166,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
         } catch (IllegalArgumentException e) {
             assertEquals(
                 e.getMessage(),
-                "when output_maps and input_maps are provided, their length needs to match. The input_maps is in length of 2, while output_maps is in the length of 3. Please adjust mappings."
+                "when output_maps/optional_output_maps and input_maps/optional_input_maps are provided, their length needs to match. The input is in length of 2, while output_maps is in the length of 2. Please adjust mappings."
             );
 
         }
@@ -4504,9 +5193,19 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
         Map<String, String> output = new HashMap<>();
         output.put("text_embedding", "response");
         outputMap.add(output);
+        List<Map<String, String>> optionalInputMap = new ArrayList<>();
+        Map<String, String> optionalInput = new HashMap<>();
+        optionalInput.put("optionalInputs", "text_size");
+        optionalInputMap.add(optionalInput);
+        List<Map<String, String>> optionalOutputMap = new ArrayList<>();
+        Map<String, String> optionalOutput = new HashMap<>();
+        optionalOutput.put("metadata", "response_details");
+        optionalOutputMap.add(optionalOutput);
         config.put(INPUT_MAP, inputMap);
         config.put(OUTPUT_MAP, outputMap);
         config.put(MAX_PREDICTION_TASKS, 5);
+        config.put(OPTIONAL_INPUT_MAP, optionalInputMap);
+        config.put(OPTIONAL_OUTPUT_MAP, optionalOutputMap);
         String processorTag = randomAlphaOfLength(10);
 
         MLInferenceSearchResponseProcessor MLInferenceSearchResponseProcessor = factory

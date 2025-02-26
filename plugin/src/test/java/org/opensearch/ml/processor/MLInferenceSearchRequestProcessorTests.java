@@ -17,6 +17,8 @@ import static org.opensearch.ml.processor.MLInferenceSearchRequestProcessor.DEFA
 import static org.opensearch.ml.processor.MLInferenceSearchRequestProcessor.FULL_RESPONSE_PATH;
 import static org.opensearch.ml.processor.MLInferenceSearchRequestProcessor.FUNCTION_NAME;
 import static org.opensearch.ml.processor.MLInferenceSearchRequestProcessor.MODEL_INPUT;
+import static org.opensearch.ml.processor.MLInferenceSearchRequestProcessor.OPTIONAL_INPUT_MAP;
+import static org.opensearch.ml.processor.MLInferenceSearchRequestProcessor.OPTIONAL_OUTPUT_MAP;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -126,8 +128,11 @@ public class MLInferenceSearchRequestProcessorTests extends AbstractBuilderTestC
      */
     public void testProcessRequestAsyncWithNoMappings() throws Exception {
 
+        List<Map<String, String>> outputMaps;
         MLInferenceSearchRequestProcessor requestProcessor = new MLInferenceSearchRequestProcessor(
             "model1",
+            null,
+            null,
             null,
             null,
             null,
@@ -1355,6 +1360,434 @@ public class MLInferenceSearchRequestProcessorTests extends AbstractBuilderTestC
     }
 
     /**
+     * Tests when there are two optional input fields
+     * but only the first optional input is present in the query
+     * the successful rewriting of a single string in a term query based on the model output.
+     *
+     * @throws Exception if an error occurs during the test
+     */
+    public void testExecute_rewriteTermQueryWithFirstOptionalMappingSuccess() throws Exception {
+
+        /**
+         * example term query: {"query":{"term":{"text":{"value":"foo","boost":1.0}}}}
+         */
+
+        String modelInputField = "inputs";
+        String originalQueryField = "query.term.text.value";
+        String newQueryField = "query.term.text.value";
+
+        String originalQueryField2 = "query.term.title.value";
+        String newQueryField2 = "query.term.title.value";
+
+        String modelOutputField = "response";
+
+        List<Map<String, String>> optionalInputMap = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        input.put(modelInputField, originalQueryField);
+        input.put(originalQueryField2, newQueryField2);
+        optionalInputMap.add(input);
+
+        List<Map<String, String>> optionalOutputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newQueryField, modelOutputField);
+        output.put(newQueryField2, modelOutputField);
+        optionalOutputMap.add(output);
+
+        MLInferenceSearchRequestProcessor requestProcessor = new MLInferenceSearchRequestProcessor(
+            "model1",
+            null,
+            null,
+            null,
+            optionalInputMap,
+            optionalOutputMap,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY
+        );
+
+        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "eng")).build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        QueryBuilder incomingQuery = new TermQueryBuilder("text", "foo");
+        SearchSourceBuilder source = new SearchSourceBuilder().query(incomingQuery);
+        SearchRequest request = new SearchRequest().source(source);
+        QueryBuilder expectedQuery = new TermQueryBuilder("text", "eng");
+
+        ActionListener<SearchRequest> Listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchRequest newSearchRequest) {
+                assertEquals(expectedQuery, newSearchRequest.source().query());
+                assertEquals(request.toString(), newSearchRequest.toString());
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException("Failed in executing processRequestAsync." + e.getMessage());
+            }
+        };
+
+        requestProcessor.processRequestAsync(request, requestContext, Listener);
+
+    }
+
+    /**
+     * Tests when there are two optional input fields
+     * but only the second optional input is present in the query
+     * the successful rewriting of a single string in a term query based on the model output.
+     *
+     * @throws Exception if an error occurs during the test
+     */
+    public void testExecute_rewriteTermQueryWithSecondOptionalMappingSuccess() throws Exception {
+
+        /**
+         * example term query: {"query":{"term":{"text":{"value":"foo","boost":1.0}}}}
+         */
+
+        String modelInputField = "inputs";
+        String originalQueryField = "query.term.text.value";
+        String newQueryField = "query.term.text.value";
+
+        String originalQueryField2 = "query.term.title.value";
+        String newQueryField2 = "query.term.title.value";
+
+        String modelOutputField = "response";
+
+        List<Map<String, String>> optionalInputMap = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        input.put(modelInputField, originalQueryField);
+        input.put(originalQueryField2, newQueryField2);
+        optionalInputMap.add(input);
+
+        List<Map<String, String>> optionalOutputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newQueryField, modelOutputField);
+        output.put(newQueryField2, modelOutputField);
+        optionalOutputMap.add(output);
+
+        MLInferenceSearchRequestProcessor requestProcessor = new MLInferenceSearchRequestProcessor(
+            "model1",
+            null,
+            null,
+            null,
+            optionalInputMap,
+            optionalOutputMap,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY
+        );
+
+        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "eng")).build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        QueryBuilder incomingQuery = new TermQueryBuilder("title", "foo");
+        SearchSourceBuilder source = new SearchSourceBuilder().query(incomingQuery);
+        SearchRequest request = new SearchRequest().source(source);
+        QueryBuilder expectedQuery = new TermQueryBuilder("title", "eng");
+
+        ActionListener<SearchRequest> Listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchRequest newSearchRequest) {
+                assertEquals(expectedQuery, newSearchRequest.source().query());
+                assertEquals(request.toString(), newSearchRequest.toString());
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException("Failed in executing processRequestAsync." + e.getMessage());
+            }
+        };
+
+        requestProcessor.processRequestAsync(request, requestContext, Listener);
+
+    }
+
+    /**
+     * Tests when there are two optional output fields
+     * but the model output has a typo on the field name, ignoreMissing is false.
+     * expect exception to be thrown.
+     *
+     * @throws Exception if an error occurs during the test
+     */
+    public void testExecute_optionalMappingWithWrongModelOutputMapping() throws Exception {
+
+        /**
+         * example term query: {"query":{"term":{"text":{"value":"foo","boost":1.0}}}}
+         */
+
+        String modelInputField = "inputs";
+        String originalQueryField = "query.term.text.value";
+        String newQueryField = "query.term.text.value";
+
+        String originalQueryField2 = "query.term.title.value";
+        String newQueryField2 = "query.term.title.value";
+
+        String modelOutputField = "response1";
+
+        List<Map<String, String>> optionalInputMap = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        input.put(modelInputField, originalQueryField);
+        input.put(originalQueryField2, newQueryField2);
+        optionalInputMap.add(input);
+
+        List<Map<String, String>> optionalOutputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newQueryField, modelOutputField);
+        output.put(newQueryField2, modelOutputField);
+        optionalOutputMap.add(output);
+
+        MLInferenceSearchRequestProcessor requestProcessor = new MLInferenceSearchRequestProcessor(
+            "model1",
+            null,
+            null,
+            null,
+            optionalInputMap,
+            optionalOutputMap,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY
+        );
+
+        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "eng")).build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        QueryBuilder incomingQuery = new TermQueryBuilder("text", "foo");
+        SearchSourceBuilder source = new SearchSourceBuilder().query(incomingQuery);
+        SearchRequest request = new SearchRequest().source(source);
+
+        ActionListener<SearchRequest> Listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchRequest newSearchRequest) {
+                throw new RuntimeException("error handling not properly.");
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                String expectedErrorMessage = "model inference output cannot find field name: response1";
+                assertTrue(e.getMessage().contains(expectedErrorMessage));
+            }
+        };
+
+        requestProcessor.processRequestAsync(request, requestContext, Listener);
+
+    }
+
+    /**
+     * Tests when there are two optional output fields
+     * but the model output has a typo on the field name, ignoreMissing is true.
+     * instead of returning the mapped model output, it will try to rewrite with the entire model output.
+     * expect the exception throwing to advise query cannot accept the entire model output.
+     *
+     * @throws Exception if an error occurs during the test
+     */
+    public void testExecute_optionalMappingWithWrongModelOutputMappingIgnoreMissing() throws Exception {
+
+        /**
+         * example term query: {"query":{"term":{"text":{"value":"foo","boost":1.0}}}}
+         */
+
+        String modelInputField = "inputs";
+        String originalQueryField = "query.term.text.value";
+        String newQueryField = "query.term.text.value";
+
+        String originalQueryField2 = "query.term.title.value";
+        String newQueryField2 = "query.term.title.value";
+
+        String modelOutputField = "response1";
+
+        List<Map<String, String>> optionalInputMap = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        input.put(modelInputField, originalQueryField);
+        input.put(originalQueryField2, newQueryField2);
+        optionalInputMap.add(input);
+
+        List<Map<String, String>> optionalOutputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newQueryField, modelOutputField);
+        output.put(newQueryField2, modelOutputField);
+        optionalOutputMap.add(output);
+
+        MLInferenceSearchRequestProcessor requestProcessor = new MLInferenceSearchRequestProcessor(
+            "model1",
+            null,
+            null,
+            null,
+            optionalInputMap,
+            optionalOutputMap,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            true,
+            "remote",
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY
+        );
+
+        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "eng")).build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        QueryBuilder incomingQuery = new TermQueryBuilder("text", "foo");
+        SearchSourceBuilder source = new SearchSourceBuilder().query(incomingQuery);
+        SearchRequest request = new SearchRequest().source(source);
+        QueryBuilder expectedQuery = new TermQueryBuilder("text", "eng");
+
+        ActionListener<SearchRequest> Listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchRequest newSearchRequest) {
+                throw new RuntimeException("error handling not properly.");
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                assertTrue(e.getMessage().contains("[term] query does not support [response]"));
+            }
+        };
+
+        requestProcessor.processRequestAsync(request, requestContext, Listener);
+
+    }
+
+    /**
+     * Tests when there are two optional output fields
+     * but the model output has a typo on the field name, ignoreMissing is true and ignoreFailure is true.
+     * instead of returning the mapped model output, it will try to rewrite with the entire model output.
+     * expect the exception throwing to advise query cannot accept the entire model output.
+     *
+     * @throws Exception if an error occurs during the test
+     */
+    public void testExecute_optionalMappingWithWrongModelOutputMappingIgnoreMissingIgnoreFailure() throws Exception {
+
+        /**
+         * example term query: {"query":{"term":{"text":{"value":"foo","boost":1.0}}}}
+         */
+
+        String modelInputField = "inputs";
+        String originalQueryField = "query.term.text.value";
+        String newQueryField = "query.term.text.value";
+
+        String originalQueryField2 = "query.term.title.value";
+        String newQueryField2 = "query.term.title.value";
+
+        String modelOutputField = "response1";
+
+        List<Map<String, String>> optionalInputMap = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        input.put(modelInputField, originalQueryField);
+        input.put(originalQueryField2, newQueryField2);
+        optionalInputMap.add(input);
+
+        List<Map<String, String>> optionalOutputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newQueryField, modelOutputField);
+        output.put(newQueryField2, modelOutputField);
+        optionalOutputMap.add(output);
+
+        MLInferenceSearchRequestProcessor requestProcessor = new MLInferenceSearchRequestProcessor(
+            "model1",
+            null,
+            null,
+            null,
+            optionalInputMap,
+            optionalOutputMap,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            true,
+            "remote",
+            false,
+            true,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY
+        );
+
+        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "eng")).build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        QueryBuilder incomingQuery = new TermQueryBuilder("text", "foo");
+        SearchSourceBuilder source = new SearchSourceBuilder().query(incomingQuery);
+        SearchRequest request = new SearchRequest().source(source);
+
+        ActionListener<SearchRequest> Listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchRequest newSearchRequest) {
+                assertEquals(incomingQuery, newSearchRequest.source().query());
+                assertEquals(request.toString(), newSearchRequest.toString());
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException("error handling not properly.");
+            }
+        };
+
+        requestProcessor.processRequestAsync(request, requestContext, Listener);
+    }
+
+    /**
      * Helper method to create an instance of the MLInferenceSearchRequestProcessor with the specified parameters.
      *
      * @param queryTemplate     the query template
@@ -1390,6 +1823,8 @@ public class MLInferenceSearchRequestProcessorTests extends AbstractBuilderTestC
             queryTemplate,
             inputMap,
             outputMap,
+            null,
+            null,
             null,
             DEFAULT_MAX_PREDICTION_TASKS,
             PROCESSOR_TAG,
@@ -1546,8 +1981,11 @@ public class MLInferenceSearchRequestProcessorTests extends AbstractBuilderTestC
             MLInferenceSearchRequestProcessor MLInferenceSearchRequestProcessor = factory
                 .create(Collections.emptyMap(), processorTag, null, false, config, null);
             fail("factory create should have failed");
-        } catch (OpenSearchParseException e) {
-            assertEquals(e.getMessage(), ("[input_map] required property is missing"));
+        } catch (IllegalArgumentException e) {
+            assertEquals(
+                e.getMessage(),
+                ("Please provide at least one non-empty input_map or optional_input_map for ML Inference Search Request Processor")
+            );
         }
     }
 
@@ -1569,8 +2007,11 @@ public class MLInferenceSearchRequestProcessorTests extends AbstractBuilderTestC
             MLInferenceSearchRequestProcessor MLInferenceSearchRequestProcessor = factory
                 .create(Collections.emptyMap(), processorTag, null, false, config, null);
             fail("factory create should have failed");
-        } catch (OpenSearchParseException e) {
-            assertEquals(e.getMessage(), ("[output_map] required property is missing"));
+        } catch (IllegalArgumentException e) {
+            assertEquals(
+                e.getMessage(),
+                ("Please provide at least one non-empty output_map or optional_output_map for ML Inference Search Request Processor")
+            );
         }
     }
 
@@ -1606,7 +2047,7 @@ public class MLInferenceSearchRequestProcessorTests extends AbstractBuilderTestC
         } catch (IllegalArgumentException e) {
             assertEquals(
                 e.getMessage(),
-                ("The number of prediction task setting in this process is 3. It exceeds the max_prediction_tasks of 2. Please reduce the size of input_map or increase max_prediction_tasks.")
+                ("The number of prediction task setting in this process is 3. It exceeds the max_prediction_tasks of 2. Please reduce the size of input_map or optional_input_map or increase max_prediction_tasks.")
             );
         }
     }
@@ -1646,7 +2087,10 @@ public class MLInferenceSearchRequestProcessorTests extends AbstractBuilderTestC
         try {
             factory.create(Collections.emptyMap(), processorTag, null, false, config, null);
         } catch (IllegalArgumentException e) {
-            assertEquals(e.getMessage(), ("The length of output_map and the length of input_map do no match."));
+            assertEquals(
+                e.getMessage(),
+                ("when output_maps/optional_output_maps and input_maps/optional_input_maps are provided, their length needs to match. The input is in length of 2, while output_maps is in the length of 2. Please adjust mappings.")
+            );
         }
     }
 
@@ -1671,6 +2115,19 @@ public class MLInferenceSearchRequestProcessorTests extends AbstractBuilderTestC
         Map<String, String> output = new HashMap<>();
         output.put("text_embedding", "response");
         outputMap.add(output);
+        List<Map<String, String>> optionalInputMap = new ArrayList<>();
+        Map<String, String> optionalInput = new HashMap<>();
+        optionalInput.put("optionalInputs", "text_size");
+        optionalInputMap.add(optionalInput);
+        List<Map<String, String>> optionalOutputMap = new ArrayList<>();
+        Map<String, String> optionalOutput = new HashMap<>();
+        optionalOutput.put("metadata", "response_details");
+        optionalOutputMap.add(optionalOutput);
+        config.put(INPUT_MAP, inputMap);
+        config.put(OUTPUT_MAP, outputMap);
+        config.put(MAX_PREDICTION_TASKS, 5);
+        config.put(OPTIONAL_INPUT_MAP, optionalInputMap);
+        config.put(OPTIONAL_OUTPUT_MAP, optionalOutputMap);
         config.put(INPUT_MAP, inputMap);
         config.put(OUTPUT_MAP, outputMap);
         config.put(MAX_PREDICTION_TASKS, 5);
@@ -1684,4 +2141,58 @@ public class MLInferenceSearchRequestProcessorTests extends AbstractBuilderTestC
         assertEquals(MLInferenceSearchRequestProcessor.isIgnoreFailure(), true);
         assertEquals(MLInferenceSearchRequestProcessor.getDescription(), "test");
     }
+
+    /**
+     * Tests the creation of the MLInferenceSearchRequestProcessor with empty input_map fields.
+     *
+     * @throws Exception if an error occurs during the test
+     */
+    public void testCreateNoInputMapFields() throws Exception {
+        Map<String, Object> config = new HashMap<>();
+        config.put(MODEL_ID, "model1");
+        List<Map<String, String>> inputMap = new ArrayList<>();
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put("text_embedding", "$.inference_results[0].output[0].data");
+        outputMap.add(output);
+        config.put(INPUT_MAP, inputMap);
+        config.put(OUTPUT_MAP, outputMap);
+        String processorTag = randomAlphaOfLength(10);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            factory.create(Collections.emptyMap(), processorTag, null, false, config, null);
+        });
+
+        assertEquals(
+            "Please provide at least one non-empty input_map or optional_input_map for ML Inference Search Request Processor",
+            exception.getMessage()
+        );
+    }
+
+    /**
+     * Tests the creation of the MLInferenceSearchRequestProcessor with empty output_map fields.
+     *
+     * @throws Exception if an error occurs during the test
+     */
+    public void testCreateNoOutputMapFields() throws Exception {
+        Map<String, Object> config = new HashMap<>();
+        config.put(MODEL_ID, "model1");
+        List<Map<String, String>> inputMap = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        input.put("text_docs", "text");
+        inputMap.add(input);
+        List<Map<String, String>> outputMap = new ArrayList<>();
+
+        config.put(INPUT_MAP, inputMap);
+        config.put(OUTPUT_MAP, outputMap);
+        String processorTag = randomAlphaOfLength(10);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            factory.create(Collections.emptyMap(), processorTag, null, false, config, null);
+        });
+
+        assertEquals(
+            "Please provide at least one non-empty output_map or optional_output_map for ML Inference Search Request Processor",
+            exception.getMessage()
+        );
+    }
+
 }
