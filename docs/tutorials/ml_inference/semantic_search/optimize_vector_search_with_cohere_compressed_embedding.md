@@ -1,6 +1,6 @@
 # Topic
 
-This tutorial is compatible with version 2.19 and later.
+This tutorial is mostly compatible with version 2.17 and later, except for the "4.1 Search with Template Query and Search Pipeline" section, which requires version 2.19 or later.
 
 This tutorial demonstrates how to optimize vector search by integrating Cohere compression embedding with OpenSearch. Cohere's compression embedding allows for more efficient storage and faster retrieval of vector representations, making it ideal for large-scale search applications.
 
@@ -213,7 +213,7 @@ PUT _ingest/pipeline/ml_inference_pipeline_cohere
         "model_id": "t64OPpUBX2k07okSZc2n",
         "input_map": [
           {
-            "texts": "$.title_desc_tmp"
+            "texts": "title_desc_tmp"
           }
         ],
         "output_map": [
@@ -223,9 +223,7 @@ PUT _ingest/pipeline/ml_inference_pipeline_cohere
           }
         ],
         "model_config": {
-          "embedding_types": [
-            "int8"
-          ]
+          "embedding_types": ["int8"]
         },
         "ignore_failure": true
       }
@@ -378,7 +376,11 @@ PUT _search/pipeline/ml_inference_pipeline_cohere_search
           {
             "ext.ml_inference.vector": "embeddings.int8[0]"
           }
-        ]
+        ],
+        "model_config": {
+          "input_type": "search_query",
+          "embedding_types": ["int8"]
+        }
       }
     }
   ]
@@ -437,7 +439,8 @@ PUT _search/pipeline/ml_inference_pipeline_cohere_search2
           }
         ],
         "model_config": {
-          "input_type": "search_query"
+          "input_type": "search_query",
+          "embedding_types": ["int8"]
         },
         "query_template": """
           {
@@ -525,3 +528,73 @@ Sample response
   }
 }
 ```
+
+## 5. Extending to Binary Embeddings
+In this section, we'll extend our setup to support binary embeddings, which can offer even more efficient storage and faster retrieval. Binary embeddings can significantly reduce storage requirements and improve search speed, making them ideal for large-scale applications.
+
+We don't need to change the connector and model, just update the KNN index, ingest pipeline, and search pipeline.
+
+### 5.1 Create Ingest Pipeline
+Create a new ingest pipeline `ml_inference_pipeline_cohere_binary` using the same configuration as in Step 2, but changing all `int8` to `binary`
+
+1. change `"title_embedding": "embeddings.int8[0]",` to `"title_embedding": "embeddings.binary[0]",`
+1. change `"description_embedding": "embeddings.int8[0]"` to `"description_embedding": "embeddings.binary[0]"`
+1. Chagne `"embedding_types": ["int8"]` to `"embedding_types": ["binary"]`
+
+
+### 5.2 Create KNN Index
+Create a new KNN index with [binary vector](https://opensearch.org/docs/latest/field-types/supported-field-types/knn-vector#binary-vectors) field. Read more details about binary vectors in this [blog](https://opensearch.org/blog/lower-your-cost-on-opensearch-using-binary-vectors/)
+```
+PUT books_binary_embedding
+{
+  "settings": {
+    "index": {
+      "default_pipeline": "ml_inference_pipeline_cohere_binary",
+      "knn": true
+    }
+  },
+  "mappings": {
+    "properties": {
+      "title_embedding": {
+        "type": "knn_vector",
+        "dimension": 1024,
+        "data_type": "binary",
+        "space_type": "hamming",
+        "method": {
+          "name": "hnsw",
+          "engine": "faiss"
+        }
+      },
+      "description_embedding": {
+        "type": "knn_vector",
+        "dimension": 1024,
+        "data_type": "binary",
+        "space_type": "hamming",
+        "method": {
+          "name": "hnsw",
+          "engine": "faiss"
+        }
+      }
+    }
+  }
+}
+```
+
+Load test data into index
+```
+POST _bulk
+{"index":{"_index":"books_binary_embedding"}}
+{"title":"The Great Gatsby","author":"F. Scott Fitzgerald","description":"A novel of decadence and excess in the Jazz Age, exploring themes of wealth, love, and the American Dream.","publication_year":1925,"genre":"Classic Fiction"}
+{"index":{"_index":"books_binary_embedding"}}
+{"title":"To Kill a Mockingbird","author":"Harper Lee","description":"A powerful story of racial injustice and loss of innocence in the American South during the Great Depression.","publication_year":1960,"genre":"Literary Fiction"}
+{"index":{"_index":"books_binary_embedding"}}
+{"title":"Pride and Prejudice","author":"Jane Austen","description":"A romantic novel of manners that follows the character development of Elizabeth Bennet as she learns about the repercussions of hasty judgments and comes to appreciate the difference between superficial goodness and actual goodness.","publication_year":1813,"genre":"Romance"}
+
+```
+### 5.3 Create Search Pipeline
+Create a new ingest pipeline `ml_inference_pipeline_cohere_search_binary` using the same configuration as in Step 4, but changing all `int8` to `binary`
+
+1. change `embeddings.int8[0]` to `embeddings.binary[0]`
+1. change `"embedding_types": ["int8"]` to `"embedding_types": ["binary"]`
+
+Then you can use the search pipeline to run vector search like Step 4.
