@@ -917,6 +917,52 @@ public class MLInferenceSearchRequestProcessorTests extends AbstractBuilderTestC
     }
 
     /**
+     * Tests the case where the query field specified in the input mapping is not found in the original query string,
+     * and an exception is expected.
+     * when ignorMissing, this processor is ignored return original query
+     * @throws Exception if an error occurs during the test
+     */
+    public void testExecute_queryFieldNotFoundInOriginalQueryExceptionIgnoreMissing() throws Exception {
+        String modelInputField = "inputs";
+        // test typo in query field name
+        String originalQueryField = "query.term.text.value1";
+        String newQueryField = "modelPredictionScore";
+        String modelOutputField = "response";
+        String queryTemplate = "";
+
+        MLInferenceSearchRequestProcessor requestProcessor = getMlInferenceSearchRequestProcessor(
+            queryTemplate,
+            modelInputField,
+            originalQueryField,
+            newQueryField,
+            modelOutputField,
+            false,
+            true
+        );
+
+        QueryBuilder incomingQuery = new TermQueryBuilder("text", "foo");
+        SearchSourceBuilder source = new SearchSourceBuilder().query(incomingQuery);
+        SearchRequest request = new SearchRequest().source(source);
+
+        /**
+         * example input term query: {"query":{"term":{"text":{"value":"foo","boost":1.0}}}}
+         */
+
+        ActionListener<SearchRequest> Listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchRequest newSearchRequest) {
+                assertEquals(newSearchRequest.source().query(), incomingQuery);
+            }
+
+            @Override
+            public void onFailure(Exception ex) {
+                throw new RuntimeException("error handling not properly");
+            }
+        };
+        requestProcessor.processRequestAsync(request, requestContext, Listener);
+    }
+
+    /**
      * Tests the case where the query field specified in the input mapping is not found in the query template,
      * and an exception is expected.
      *

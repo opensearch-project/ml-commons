@@ -208,11 +208,11 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
         }
 
         try {
-            if (!validateQueryFieldInQueryString(processInputMap, processOutputMap, queryString)) {
+            if (!validateQueryFieldInQueryString(processInputMap, processOutputMap, queryString, ignoreMissing)) {
                 requestListener.onResponse(request);
             }
         } catch (Exception e) {
-            if (ignoreMissing) {
+            if (ignoreFailure) {
                 requestListener.onResponse(request);
                 return;
             } else {
@@ -397,7 +397,11 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
         }, Math.max(inputMapSize, 1));
     }
 
-    private boolean validateRequiredInputMappingFields(List<Map<String, String>> processInputMap, String queryString) {
+    private boolean validateRequiredInputMappingFields(
+        List<Map<String, String>> processInputMap,
+        String queryString,
+        boolean ignoreMissing
+    ) {
         // Suppress errors thrown by JsonPath and instead return null if a path does not exist in a JSON blob.
         Configuration suppressExceptionConfiguration = Configuration.defaultConfiguration().addOptions(Option.SUPPRESS_EXCEPTIONS);
         ReadContext jsonData = JsonPath.using(suppressExceptionConfiguration).parse(queryString);
@@ -409,14 +413,24 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
                 String queryField = entry.getValue();
                 Object pathData = jsonData.read(queryField);
                 if (pathData == null) {
-                    throw new IllegalArgumentException("cannot find field: " + queryField + " in query string: " + jsonData.jsonString());
+                    if (!ignoreMissing) {
+                        throw new IllegalArgumentException(
+                            "cannot find field: " + queryField + " in query string: " + jsonData.jsonString()
+                        );
+                    } else {
+                        return false;
+                    }
                 }
             }
         }
         return true;
     }
 
-    private boolean validateRequiredOutputMappingFields(List<Map<String, String>> processOutputMap, String queryString) {
+    private boolean validateRequiredOutputMappingFields(
+        List<Map<String, String>> processOutputMap,
+        String queryString,
+        boolean ignoreMissing
+    ) {
         // Suppress errors thrown by JsonPath and instead return null if a path does not exist in a JSON blob.
         Configuration suppressExceptionConfiguration = Configuration.defaultConfiguration().addOptions(Option.SUPPRESS_EXCEPTIONS);
         ReadContext jsonData = JsonPath.using(suppressExceptionConfiguration).parse(queryString);
@@ -430,9 +444,13 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
                     if (queryField.startsWith("query.") || queryField.startsWith("$.query.")) {
                         Object pathData = jsonData.read(queryField);
                         if (pathData == null) {
-                            throw new IllegalArgumentException(
-                                "cannot find field: " + queryField + " in query string: " + jsonData.jsonString()
-                            );
+                            if (!ignoreMissing) {
+                                throw new IllegalArgumentException(
+                                    "cannot find field: " + queryField + " in query string: " + jsonData.jsonString()
+                                );
+                            } else {
+                                return false;
+                            }
                         }
                     }
                 }
@@ -443,24 +461,27 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
 
     /**
      * Validates that the query fields specified in the input and output mappings exist in the query string.
+     *
      * @param processInputMap  the list of input mappings
      * @param processOutputMap the list of output mappings
      * @param queryString      the query string to be validated
+     * @param ignoreMissing
      * @return true if all query fields exist in the query string, false otherwise
      */
     private boolean validateQueryFieldInQueryString(
         List<Map<String, String>> processInputMap,
         List<Map<String, String>> processOutputMap,
-        String queryString
+        String queryString,
+        boolean ignoreMissing
     ) {
         if (!CollectionUtils.isEmpty(processInputMap)) {
-            if (!validateRequiredInputMappingFields(processInputMap, queryString)) {
+            if (!validateRequiredInputMappingFields(processInputMap, queryString, ignoreMissing)) {
                 return false;
             }
         }
 
         if (!CollectionUtils.isEmpty(processOutputMap)) {
-            if (!validateRequiredOutputMappingFields(processOutputMap, queryString)) {
+            if (!validateRequiredOutputMappingFields(processOutputMap, queryString, ignoreMissing)) {
                 return false;
             }
         }
