@@ -13,6 +13,8 @@ import static org.opensearch.ml.processor.InferenceProcessorAttributes.MODEL_CON
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.MODEL_ID;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.OUTPUT_MAP;
 import static org.opensearch.ml.processor.MLInferenceIngestProcessor.OVERRIDE;
+import static org.opensearch.ml.processor.MLInferenceSearchRequestProcessor.OPTIONAL_INPUT_MAP;
+import static org.opensearch.ml.processor.MLInferenceSearchRequestProcessor.OPTIONAL_OUTPUT_MAP;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -36,6 +38,7 @@ import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.xcontent.XContentHelper;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
+import org.opensearch.core.common.util.CollectionUtils;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.MediaType;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -58,11 +61,14 @@ import org.opensearch.transport.client.Client;
 
 import com.jayway.jsonpath.JsonPath;
 
+import lombok.Getter;
+
 public class MLInferenceSearchResponseProcessor extends AbstractProcessor implements SearchResponseProcessor, ModelExecutor {
 
     public static final String REQUEST_PREFIX = "_request.";
     private final NamedXContentRegistry xContentRegistry;
     private static final Logger logger = LogManager.getLogger(MLInferenceSearchResponseProcessor.class);
+    @Getter
     private final InferenceProcessorAttributes inferenceProcessorAttributes;
     private final boolean ignoreMissing;
     private final String functionName;
@@ -88,11 +94,17 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
     // allow to write to the extension of the search response, the path to point to search extension
     // is prefix with ext.ml_inference
     public static final String EXTENSION_PREFIX = "ext.ml_inference";
+    @Getter
+    private final List<Map<String, String>> optionalInputMaps;
+    @Getter
+    private final List<Map<String, String>> optionalOutputMaps;
 
     protected MLInferenceSearchResponseProcessor(
         String modelId,
         List<Map<String, String>> inputMaps,
         List<Map<String, String>> outputMaps,
+        List<Map<String, String>> optionalInputMaps,
+        List<Map<String, String>> optionalOutputMaps,
         Map<String, String> modelConfigMaps,
         int maxPredictionTask,
         String tag,
@@ -116,6 +128,8 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
             modelConfigMaps,
             maxPredictionTask
         );
+        this.optionalInputMaps = optionalInputMaps;
+        this.optionalOutputMaps = optionalOutputMaps;
         this.ignoreMissing = ignoreMissing;
         this.functionName = functionName;
         this.fullResponsePath = fullResponsePath;
@@ -316,8 +330,13 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
         throws IOException {
         List<Map<String, String>> processInputMap = inferenceProcessorAttributes.getInputMaps();
         List<Map<String, String>> processOutputMap = inferenceProcessorAttributes.getOutputMaps();
-        int inputMapSize = (processInputMap == null) ? 0 : processInputMap.size();
 
+        // Combine processInputMap and optionalInputMaps
+        List<Map<String, String>> combinedInputMaps = ModelExecutor.combineMaps(processInputMap, optionalInputMaps);
+        // Combine processOutputMap and optionalOutputMaps
+        List<Map<String, String>> combinedOutputMaps = ModelExecutor.combineMaps(processOutputMap, optionalOutputMaps);
+
+        int inputMapSize = (combinedInputMaps == null) ? 0 : combinedInputMaps.size();
         // hitCountInPredictions keeps track of the count of hit that have the required input fields for each round of prediction
         Map<Integer, Integer> hitCountInPredictions = new HashMap<>();
 
@@ -325,7 +344,8 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
             response,
             responseListener,
             processInputMap,
-            processOutputMap,
+            combinedInputMaps,
+            combinedOutputMaps,
             hitCountInPredictions
         );
 
@@ -334,8 +354,9 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
             inputMapSize
         );
         SearchHit[] hits = response.getHits().getHits();
+
         for (int inputMapIndex = 0; inputMapIndex < max(inputMapSize, 1); inputMapIndex++) {
-            processPredictions(hits, processInputMap, inputMapIndex, batchPredictionListener, hitCountInPredictions, queryString);
+            processPredictions(hits, combinedInputMaps, inputMapIndex, batchPredictionListener, hitCountInPredictions, queryString);
         }
     }
 
@@ -373,7 +394,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
         Map<String, Object> modelInputParameters = new HashMap<>();
 
         Map<String, String> inputMapping;
-        if (processInputMap != null && !processInputMap.isEmpty()) {
+        if (!CollectionUtils.isEmpty(processInputMap)) {
             inputMapping = processInputMap.get(inputMapIndex);
             boolean isRequestInputMissing = checkIsRequestInputMissing(queryString, inputMapping);
             if (isRequestInputMissing) {
@@ -384,9 +405,17 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
                 }
             }
 
+            List<Map<String, String>> requiredInputFields = this.getInferenceProcessorAttributes().getInputMaps();
+            Map<String, String> requiredInputMapping;
+            if (requiredInputFields != null && requiredInputFields.size() > inputMapIndex) {
+                requiredInputMapping = requiredInputFields.get(inputMapIndex);
+            } else {
+                requiredInputMapping = new HashMap<>();
+            }
+
             for (SearchHit hit : hits) {
                 Map<String, Object> document = hit.getSourceAsMap();
-                boolean isDocumentFieldMissing = checkIsDocumentFieldMissing(document, inputMapping);
+                boolean isDocumentFieldMissing = checkIsDocumentFieldMissing(document, requiredInputMapping);
                 if (!isDocumentFieldMissing) {
                     MapUtils.incrementCounter(hitCountInPredictions, inputMapIndex);
                     for (Map.Entry<String, String> entry : inputMapping.entrySet()) {
@@ -536,6 +565,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
      *
      * @param response              the search response
      * @param responseListener      the listener to be notified when the response is processed
+     * @param requiredInputFields   the list of required input fields
      * @param processInputMap       the list of input mappings
      * @param processOutputMap      the list of output mappings
      * @param hitCountInPredictions a map to keep track of the count of hits that have the required input fields for each round of prediction
@@ -544,6 +574,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
     private ActionListener<Map<Integer, MLOutput>> createRewriteResponseListener(
         SearchResponse response,
         ActionListener<SearchResponse> responseListener,
+        List<Map<String, String>> requiredInputFields,
         List<Map<String, String>> processInputMap,
         List<Map<String, String>> processOutputMap,
         Map<Integer, Integer> hitCountInPredictions
@@ -568,13 +599,17 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
                             for (Map.Entry<Integer, MLOutput> entry : multipleMLOutputs.entrySet()) {
                                 Integer mappingIndex = entry.getKey();
                                 MLOutput mlOutput = entry.getValue();
-
-                                Map<String, String> inputMapping = getDefaultInputMapping(sourceAsMap, mappingIndex, processInputMap);
                                 Map<String, String> outputMapping = getDefaultOutputMapping(mappingIndex, processOutputMap);
+                                Map<String, String> requiredInputMapping;
+                                if (requiredInputFields != null && requiredInputFields.size() > mappingIndex) {
+                                    requiredInputMapping = requiredInputFields.get(mappingIndex);
+                                } else {
+                                    requiredInputMapping = new HashMap<>();
+                                }
 
                                 boolean isDocumentFieldMissing = false;
-                                if (processInputMap != null && !processInputMap.isEmpty()) {
-                                    isDocumentFieldMissing = checkIsDocumentFieldMissing(document, inputMapping);
+                                if (!CollectionUtils.isEmpty(processInputMap)) {
+                                    isDocumentFieldMissing = checkIsDocumentFieldMissing(document, requiredInputMapping);
                                 }
                                 if (!isDocumentFieldMissing) {
                                     // Iterate over outputMapping
@@ -756,7 +791,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
     ) {
         Map<String, String> inputMapping;
 
-        if (processInputMap == null || processInputMap.size() == 0) {
+        if (!CollectionUtils.isEmpty(processInputMap)) {
             inputMapping = new HashMap<>();
             inputMapping.putAll(StringUtils.getParameterMap(sourceAsMap));
         } else {
@@ -819,6 +854,12 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
 
             List<Map<String, String>> inputMaps = ConfigurationUtils.readOptionalList(TYPE, processorTag, config, INPUT_MAP);
             List<Map<String, String>> outputMaps = ConfigurationUtils.readOptionalList(TYPE, processorTag, config, OUTPUT_MAP);
+
+            List<Map<String, String>> optionalInputMaps = ConfigurationUtils
+                .readOptionalList(TYPE, processorTag, config, OPTIONAL_INPUT_MAP);
+            List<Map<String, String>> optionalOutputMaps = ConfigurationUtils
+                .readOptionalList(TYPE, processorTag, config, OPTIONAL_OUTPUT_MAP);
+
             int maxPredictionTask = ConfigurationUtils
                 .readIntProperty(TYPE, processorTag, config, MAX_PREDICTION_TASKS, DEFAULT_MAX_PREDICTION_TASKS);
             boolean ignoreMissing = ConfigurationUtils.readBooleanProperty(TYPE, processorTag, config, IGNORE_MISSING, false);
@@ -845,25 +886,32 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
             if (modelConfigInput != null) {
                 modelConfigMaps = StringUtils.getParameterMap(modelConfigInput);
             }
+
+            // Combine processInputMap and optionalInputMaps
+            List<Map<String, String>> combinedInputMaps = ModelExecutor.combineMaps(inputMaps, optionalInputMaps);
+            // Combine processOutputMap and optionalOutputMaps
+            List<Map<String, String>> combinedOutputMaps = ModelExecutor.combineMaps(outputMaps, optionalOutputMaps);
+
             // check if the number of prediction tasks exceeds max prediction tasks
-            if (inputMaps != null && inputMaps.size() > maxPredictionTask) {
+            if (combinedInputMaps != null && combinedInputMaps.size() > maxPredictionTask) {
                 throw new IllegalArgumentException(
                     "The number of prediction task setting in this process is "
-                        + inputMaps.size()
+                        + combinedInputMaps.size()
                         + ". It exceeds the max_prediction_tasks of "
                         + maxPredictionTask
-                        + ". Please reduce the size of input_map or increase max_prediction_tasks."
+                        + ". Please reduce the size of input_map or optional_input_map or increase max_prediction_tasks."
                 );
             }
-            if (outputMaps != null && inputMaps != null && outputMaps.size() != inputMaps.size()) {
+            if (combinedOutputMaps != null && combinedInputMaps != null && combinedOutputMaps.size() != combinedInputMaps.size()) {
                 throw new IllegalArgumentException(
-                    "when output_maps and input_maps are provided, their length needs to match. The input_maps is in length of "
-                        + inputMaps.size()
+                    "when output_maps/optional_output_maps and input_maps/optional_input_maps are provided, their length needs to match. The input is in length of "
+                        + combinedInputMaps.size()
                         + ", while output_maps is in the length of "
-                        + outputMaps.size()
+                        + combinedInputMaps.size()
                         + ". Please adjust mappings."
                 );
             }
+
             boolean writeToSearchExtension = false;
 
             if (outputMaps != null) {
@@ -882,6 +930,8 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
                 modelId,
                 inputMaps,
                 outputMaps,
+                optionalInputMaps,
+                optionalOutputMaps,
                 modelConfigMaps,
                 maxPredictionTask,
                 processorTag,
