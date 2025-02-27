@@ -38,6 +38,7 @@ import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.xcontent.XContentHelper;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
+import org.opensearch.core.common.util.CollectionUtils;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.MediaType;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -93,7 +94,9 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
     // allow to write to the extension of the search response, the path to point to search extension
     // is prefix with ext.ml_inference
     public static final String EXTENSION_PREFIX = "ext.ml_inference";
+    @Getter
     private final List<Map<String, String>> optionalInputMaps;
+    @Getter
     private final List<Map<String, String>> optionalOutputMaps;
 
     protected MLInferenceSearchResponseProcessor(
@@ -391,7 +394,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
         Map<String, Object> modelInputParameters = new HashMap<>();
 
         Map<String, String> inputMapping;
-        if (processInputMap != null && !processInputMap.isEmpty()) {
+        if (!CollectionUtils.isEmpty(processInputMap)) {
             inputMapping = processInputMap.get(inputMapIndex);
             boolean isRequestInputMissing = checkIsRequestInputMissing(queryString, inputMapping);
             if (isRequestInputMissing) {
@@ -605,7 +608,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
                                 }
 
                                 boolean isDocumentFieldMissing = false;
-                                if (processInputMap != null && !processInputMap.isEmpty()) {
+                                if (!CollectionUtils.isEmpty(processInputMap)) {
                                     isDocumentFieldMissing = checkIsDocumentFieldMissing(document, requiredInputMapping);
                                 }
                                 if (!isDocumentFieldMissing) {
@@ -788,7 +791,7 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
     ) {
         Map<String, String> inputMapping;
 
-        if (processInputMap == null || processInputMap.size() == 0) {
+        if (!CollectionUtils.isEmpty(processInputMap)) {
             inputMapping = new HashMap<>();
             inputMapping.putAll(StringUtils.getParameterMap(sourceAsMap));
         } else {

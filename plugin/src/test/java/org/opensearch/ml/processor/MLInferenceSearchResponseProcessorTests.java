@@ -5215,6 +5215,25 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
         assertEquals(MLInferenceSearchResponseProcessor.getType(), MLInferenceSearchResponseProcessor.TYPE);
         assertEquals(MLInferenceSearchResponseProcessor.isIgnoreFailure(), true);
         assertEquals(MLInferenceSearchResponseProcessor.getDescription(), "test");
+        assertEquals(MLInferenceSearchResponseProcessor.getInferenceProcessorAttributes().getModelId(), "model2");
+        assertEquals(MLInferenceSearchResponseProcessor.getInferenceProcessorAttributes().getModelConfigMaps().get("hidden_size"), "768");
+        assertEquals(
+            MLInferenceSearchResponseProcessor.getInferenceProcessorAttributes().getModelConfigMaps().get("gradient_checkpointing"),
+            "false"
+        );
+        assertEquals(
+            MLInferenceSearchResponseProcessor.getInferenceProcessorAttributes().getModelConfigMaps().get("position_embedding_type"),
+            "absolute"
+        );
+        assertEquals(MLInferenceSearchResponseProcessor.getInferenceProcessorAttributes().getInputMaps().get(0).get("inputs"), "text");
+        assertEquals(
+            MLInferenceSearchResponseProcessor.getInferenceProcessorAttributes().getOutputMaps().get(0).get("text_embedding"),
+            "response"
+        );
+        assertEquals(MLInferenceSearchResponseProcessor.getInferenceProcessorAttributes().getMaxPredictionTask(), 5);
+        assertEquals(MLInferenceSearchResponseProcessor.getOptionalInputMaps().get(0).get("optionalInputs"), "text_size");
+        assertEquals(MLInferenceSearchResponseProcessor.getOptionalOutputMaps().get(0).get("metadata"), "response_details");
+
     }
 
     /**

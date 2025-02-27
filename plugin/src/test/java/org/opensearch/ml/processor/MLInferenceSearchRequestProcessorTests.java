@@ -6,8 +6,11 @@
 package org.opensearch.ml.processor;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.opensearch.ml.common.utils.StringUtils.toJson;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.INPUT_MAP;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.MAX_PREDICTION_TASKS;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.MODEL_CONFIG;
@@ -28,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.Before;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchParseException;
@@ -42,10 +46,14 @@ import org.opensearch.index.query.RangeQueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.ingest.Processor;
+import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
+import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
+import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.ml.searchext.MLInferenceRequestParameters;
 import org.opensearch.ml.searchext.MLInferenceRequestParametersExtBuilder;
@@ -1459,6 +1467,7 @@ public class MLInferenceSearchRequestProcessorTests extends AbstractBuilderTestC
          */
 
         String modelInputField = "inputs";
+        String modelInputField2 = "optional_inputs";
         String originalQueryField = "query.term.text.value";
         String newQueryField = "query.term.text.value";
 
@@ -1469,8 +1478,8 @@ public class MLInferenceSearchRequestProcessorTests extends AbstractBuilderTestC
 
         List<Map<String, String>> optionalInputMap = new ArrayList<>();
         Map<String, String> input = new HashMap<>();
-        input.put(modelInputField, originalQueryField);
-        input.put(originalQueryField2, newQueryField2);
+        input.put(modelInputField, originalQueryField2);
+        input.put(modelInputField2, originalQueryField);
         optionalInputMap.add(input);
 
         List<Map<String, String>> optionalOutputMap = new ArrayList<>();
@@ -1526,8 +1535,114 @@ public class MLInferenceSearchRequestProcessorTests extends AbstractBuilderTestC
                 throw new RuntimeException("Failed in executing processRequestAsync." + e.getMessage());
             }
         };
+        ArgumentCaptor<MLPredictionTaskRequest> argCaptor = ArgumentCaptor.forClass(MLPredictionTaskRequest.class);
 
         requestProcessor.processRequestAsync(request, requestContext, Listener);
+
+        verify(client, times(1)).execute(eq(MLPredictionTaskAction.INSTANCE), argCaptor.capture(), any());
+        MLPredictionTaskRequest req = argCaptor.getValue();
+        MLInput mlInput = req.getMlInput();
+        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) mlInput.getInputDataset();
+        assertEquals(toJson(inputDataSet.getParameters()), "{\"inputs\":\"foo\"}");
+
+    }
+
+    /**
+     * Tests the successful rewriting of a term query to a range query based on the model output
+     * and the provided query template.
+     *
+     * @throws Exception if an error occurs during the test
+     */
+    public void testExecute_rewriteOptionMappingFromTermQueryToRangeQuerySuccess() throws Exception {
+        /**
+         * example term query: {"query":{"term":{"text":{"value":"foo","boost":1.0}}}}
+         */
+        String modelInputField = "inputs";
+        String originalQueryField = "query.term.text.value";
+        String originalQueryField2 = "query.term.title.value";
+        String newQueryField = "modelPredictionScore";
+        String newQueryField2 = "modelPredictionScore";
+        String modelOutputField = "response";
+        String queryTemplate = "{\"query\":{\"range\":{\"text\":{\"gte\":${modelPredictionScore}}}}}";
+
+        List<Map<String, String>> optionalInputMap = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        input.put(modelInputField, originalQueryField);
+        input.put(originalQueryField2, newQueryField2);
+        optionalInputMap.add(input);
+
+        List<Map<String, String>> optionalOutputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newQueryField, modelOutputField);
+        output.put(newQueryField2, modelOutputField);
+        optionalOutputMap.add(output);
+
+        MLInferenceSearchRequestProcessor requestProcessor = new MLInferenceSearchRequestProcessor(
+            "model1",
+            queryTemplate,
+            null,
+            null,
+            optionalInputMap,
+            optionalOutputMap,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY
+        );
+
+        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "0.123")).build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        QueryBuilder incomingQuery = new TermQueryBuilder("text", "foo");
+        SearchSourceBuilder source = new SearchSourceBuilder().query(incomingQuery);
+        SearchRequest request = new SearchRequest().source(source);
+
+        /**
+         * example input term query: {"query":{"term":{"text":{"value":foo,"boost":1.0}}}}
+         */
+        /**
+         * example output range query: {"query":{"range":{"text":{"gte":"2"}}}}
+         */
+
+        ActionListener<SearchRequest> Listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchRequest newSearchRequest) {
+                RangeQueryBuilder expectedQuery = new RangeQueryBuilder("text");
+                expectedQuery.from(0.123);
+                expectedQuery.includeLower(true);
+                assertEquals(expectedQuery, newSearchRequest.source().query());
+                assertEquals(request.toString(), newSearchRequest.toString());
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException("Failed in executing processRequestAsync.");
+            }
+        };
+
+        ArgumentCaptor<MLPredictionTaskRequest> argCaptor = ArgumentCaptor.forClass(MLPredictionTaskRequest.class);
+
+        requestProcessor.processRequestAsync(request, requestContext, Listener);
+
+        verify(client, times(1)).execute(eq(MLPredictionTaskAction.INSTANCE), argCaptor.capture(), any());
+        MLPredictionTaskRequest req = argCaptor.getValue();
+        MLInput mlInput = req.getMlInput();
+        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) mlInput.getInputDataset();
+        assertEquals(toJson(inputDataSet.getParameters()), "{\"inputs\":\"foo\"}");
 
     }
 
@@ -2133,13 +2248,18 @@ public class MLInferenceSearchRequestProcessorTests extends AbstractBuilderTestC
         config.put(MAX_PREDICTION_TASKS, 5);
         String processorTag = randomAlphaOfLength(10);
 
-        MLInferenceSearchRequestProcessor MLInferenceSearchRequestProcessor = factory
+        MLInferenceSearchRequestProcessor mLInferenceSearchRequestProcessor = factory
             .create(Collections.emptyMap(), processorTag, "test", true, config, null);
-        assertNotNull(MLInferenceSearchRequestProcessor);
-        assertEquals(MLInferenceSearchRequestProcessor.getTag(), processorTag);
-        assertEquals(MLInferenceSearchRequestProcessor.getType(), MLInferenceSearchRequestProcessor.TYPE);
-        assertEquals(MLInferenceSearchRequestProcessor.isIgnoreFailure(), true);
-        assertEquals(MLInferenceSearchRequestProcessor.getDescription(), "test");
+        assertNotNull(mLInferenceSearchRequestProcessor);
+        assertEquals(mLInferenceSearchRequestProcessor.getTag(), processorTag);
+        assertEquals(mLInferenceSearchRequestProcessor.getType(), MLInferenceSearchRequestProcessor.TYPE);
+        assertEquals(mLInferenceSearchRequestProcessor.isIgnoreFailure(), true);
+        assertEquals(mLInferenceSearchRequestProcessor.getDescription(), "test");
+        assertEquals(mLInferenceSearchRequestProcessor.getOptionalInputMaps(), optionalInputMap);
+        assertEquals(mLInferenceSearchRequestProcessor.getOptionalOutputMaps(), optionalOutputMap);
+        assertEquals(mLInferenceSearchRequestProcessor.getInferenceProcessorAttributes().getModelId(), "model2");
+        assertEquals(mLInferenceSearchRequestProcessor.getInferenceProcessorAttributes().getInputMaps(), inputMap);
+        assertEquals(mLInferenceSearchRequestProcessor.getInferenceProcessorAttributes().getOutputMaps(), outputMap);
     }
 
     /**

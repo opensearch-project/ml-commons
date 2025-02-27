@@ -30,6 +30,7 @@ import org.opensearch.action.support.GroupedActionListener;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.util.CollectionUtils;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ingest.ConfigurationUtils;
@@ -51,6 +52,8 @@ import com.jayway.jsonpath.Option;
 import com.jayway.jsonpath.PathNotFoundException;
 import com.jayway.jsonpath.ReadContext;
 
+import lombok.Getter;
+
 /**
  * MLInferenceSearchRequestProcessor requires a modelId string to call model inferences
  * maps fields from query string for model input, and maps model inference output to the query strings or query template
@@ -59,10 +62,13 @@ import com.jayway.jsonpath.ReadContext;
 public class MLInferenceSearchRequestProcessor extends AbstractProcessor implements SearchRequestProcessor, ModelExecutor {
     private final NamedXContentRegistry xContentRegistry;
     private static final Logger logger = LogManager.getLogger(MLInferenceSearchRequestProcessor.class);
+    @Getter
     private final InferenceProcessorAttributes inferenceProcessorAttributes;
     private final boolean ignoreMissing;
     private final String functionName;
+    @Getter
     private final List<Map<String, String>> optionalInputMaps;
+    @Getter
     private final List<Map<String, String>> optionalOutputMaps;
     private String queryTemplate;
     private final boolean fullResponsePath;
@@ -82,7 +88,6 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
     // it can be overwritten using max_prediction_tasks when creating processor
     public static final int DEFAULT_MAX_PREDICTION_TASKS = 10;
     public static final String OPTIONAL_INPUT_MAP = "optional_input_map";
-
     public static final String OPTIONAL_OUTPUT_MAP = "optional_output_map";
 
     protected MLInferenceSearchRequestProcessor(
@@ -448,22 +453,19 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
         List<Map<String, String>> processOutputMap,
         String queryString
     ) {
-        boolean isInputValid;
-        boolean isOutputValid;
-        if (processInputMap != null && processInputMap.size() > 0) {
-            isInputValid = validateRequiredInputMappingFields(processInputMap, queryString);
-        } else {
-            isInputValid = true;
+        if (!CollectionUtils.isEmpty(processInputMap)) {
+            if (!validateRequiredInputMappingFields(processInputMap, queryString)) {
+                return false;
+            }
         }
 
-        if (processOutputMap != null && processOutputMap.size() > 0) {
-            isOutputValid = validateRequiredOutputMappingFields(processOutputMap, queryString);
-        } else {
-            isOutputValid = true;
+        if (!CollectionUtils.isEmpty(processOutputMap)) {
+            if (!validateRequiredOutputMappingFields(processOutputMap, queryString)) {
+                return false;
+            }
         }
 
-        return isInputValid && isOutputValid;
-
+        return true;
     }
 
     /**
@@ -629,13 +631,13 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
             List<Map<String, String>> optionalOutputMaps = ConfigurationUtils
                 .readOptionalList(TYPE, processorTag, config, OPTIONAL_OUTPUT_MAP);
 
-            if ((inputMaps == null || inputMaps.isEmpty()) && (optionalInputMaps == null || optionalInputMaps.isEmpty())) {
+            if (CollectionUtils.isEmpty(inputMaps) && CollectionUtils.isEmpty(optionalInputMaps)) {
                 throw new IllegalArgumentException(
                     "Please provide at least one non-empty input_map or optional_input_map for ML Inference Search Request Processor"
                 );
             }
 
-            if ((outputMaps == null || outputMaps.isEmpty()) && (optionalOutputMaps == null || optionalOutputMaps.isEmpty())) {
+            if (CollectionUtils.isEmpty(outputMaps) && CollectionUtils.isEmpty(optionalOutputMaps)) {
                 throw new IllegalArgumentException(
                     "Please provide at least one non-empty output_map or optional_output_map for ML Inference Search Request Processor"
                 );
@@ -693,9 +695,9 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
                 modelId,
                 queryTemplate,
                 inputMaps,
+                outputMaps,
                 optionalInputMaps,
                 optionalOutputMaps,
-                outputMaps,
                 modelConfigMaps,
                 maxPredictionTask,
                 processorTag,
