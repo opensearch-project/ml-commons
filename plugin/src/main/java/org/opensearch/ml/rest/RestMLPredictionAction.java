@@ -126,10 +126,14 @@ public class RestMLPredictionAction extends BaseRestHandler {
     }
 
     /**
-     * Creates a MLPredictionTaskRequest from a RestRequest
+     * Creates a MLPredictionTaskRequest from a RestRequest. This method validates the request based on
+     * enabled features and model types, and parses the input data for prediction.
      *
-     * @param request RestRequest
-     * @return MLPredictionTaskRequest
+     * @param modelId The ID of the ML model to use for prediction
+     * @param modelType The type of the ML model, extracted from model cache to specify if its a remote model or a local model
+     * @param userAlgorithm The algorithm specified by the user for prediction, this is used todetermine the interface of the model
+     * @param request The REST request containing prediction input data
+     * @return MLPredictionTaskRequest configured with the model and input parameters
      */
     @VisibleForTesting
     MLPredictionTaskRequest getRequest(String modelId, String modelType, String userAlgorithm, RestRequest request) throws IOException {
