@@ -11,7 +11,7 @@ import java.util.List;
 import org.opensearch.ml.common.output.model.MLResultDataType;
 import org.opensearch.ml.common.output.model.ModelTensor;
 
-public class EmbeddingPostProcessFunction extends ConnectorPostProcessFunction<List<List<Float>>> {
+public class EmbeddingPostProcessFunction extends ConnectorPostProcessFunction<List<List<Number>>> {
 
     @Override
     public void validate(Object input) {
@@ -34,7 +34,7 @@ public class EmbeddingPostProcessFunction extends ConnectorPostProcessFunction<L
     }
 
     @Override
-    public List<ModelTensor> process(List<List<Float>> embeddings) {
+    public List<ModelTensor> process(List<List<Number>> embeddings, MLResultDataType dataType) {
         List<ModelTensor> modelTensors = new ArrayList<>();
         embeddings
             .forEach(
@@ -43,7 +43,7 @@ public class EmbeddingPostProcessFunction extends ConnectorPostProcessFunction<L
                         ModelTensor
                             .builder()
                             .name("sentence_embedding")
-                            .dataType(MLResultDataType.FLOAT32)
+                            .dataType(dataType == null ? MLResultDataType.FLOAT32 : dataType)
                             .shape(new long[] { embedding.size() })
                             .data(embedding.toArray(new Number[0]))
                             .build()

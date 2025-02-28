@@ -15,7 +15,9 @@ public enum MLResultDataType {
     INT64(Format.INT, 8),
     BOOLEAN(Format.BOOLEAN, 1),
     UNKNOWN(Format.UNKNOWN, 0),
-    STRING(Format.STRING, -1);
+    STRING(Format.STRING, -1),
+    BINARY(Format.BINARY, -1),
+    UBINARY(Format.UBINARY, -1);
 
     /** The general data type format categories. */
     public enum Format {
@@ -24,6 +26,8 @@ public enum MLResultDataType {
         INT,
         BOOLEAN,
         STRING,
+        BINARY,
+        UBINARY,
         UNKNOWN
     }
 
@@ -69,5 +73,21 @@ public enum MLResultDataType {
      */
     public boolean isString() {
         return format == Format.STRING;
+    }
+
+    /**
+     * Checks whether it is a binary data type.
+     * @return true if is a binary type, otherwise false
+     */
+    public boolean isBinary() {
+        return format == Format.BINARY;
+    }
+
+    /**
+     * Checks whether it is a ubinary data type.
+     * @return true if is a ubinary type, otherwise false
+     */
+    public boolean isUbinary() {
+        return format == Format.UBINARY;
     }
 }

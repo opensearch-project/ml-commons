@@ -242,6 +242,70 @@ public class RestBedRockInferenceIT extends MLCommonsRestTestCase {
         }
     }
 
+    public void test_bedrock_embedding_v2_model_with_postProcessFunction() throws Exception {
+        final List<String> postProcessFunctions = List
+            .of("connector.post_process.bedrock_v2.embedding.float", "connector.post_process.bedrock_v2.embedding.binary");
+        final Map<String, String> dataType = Map
+            .of(
+                "connector.post_process.bedrock_v2.embedding.float",
+                "FLOAT32",
+                "connector.post_process.bedrock_v2.embedding.binary",
+                "BINARY"
+            );
+        // Skip test if key is null
+        if (tokenNotSet()) {
+            return;
+        }
+        String templates = Files
+            .readString(
+                Path
+                    .of(
+                        RestMLPredictionAction.class
+                            .getClassLoader()
+                            .getResource("org/opensearch/ml/rest/templates/BedRockV2ConnectorBodies.json")
+                            .toURI()
+                    )
+            );
+        for (String postProcessFunction : postProcessFunctions) {
+            String bedrockEmbeddingModelName = "bedrock embedding model: " + postProcessFunction;
+            String modelId = registerRemoteModel(
+                String
+                    .format(
+                        templates,
+                        GITHUB_CI_AWS_REGION,
+                        AWS_ACCESS_KEY_ID,
+                        AWS_SECRET_ACCESS_KEY,
+                        AWS_SESSION_TOKEN,
+                        org.apache.commons.lang3.StringUtils.substringAfterLast(postProcessFunction, "."),
+                        postProcessFunction
+                    ),
+                bedrockEmbeddingModelName,
+                true
+            );
+            String errorMsg = String.format("failed to test: %s", postProcessFunction);
+            TextDocsInputDataSet inputDataSet = TextDocsInputDataSet.builder().docs(List.of("hello", "world")).build();
+            MLInput mlInput = MLInput.builder().inputDataset(inputDataSet).algorithm(FunctionName.TEXT_EMBEDDING).build();
+            Map inferenceResult = predictTextEmbeddingModel(modelId, mlInput);
+            assertTrue(errorMsg, inferenceResult.containsKey("inference_results"));
+            List output = (List) inferenceResult.get("inference_results");
+            assertEquals(errorMsg, 2, output.size());
+            assertTrue(errorMsg, output.get(0) instanceof Map);
+            assertTrue(errorMsg, output.get(1) instanceof Map);
+            validateOutput(errorMsg, (Map) output.get(0), dataType.get(postProcessFunction));
+            validateOutput(errorMsg, (Map) output.get(1), dataType.get(postProcessFunction));
+        }
+    }
+
+    private void validateOutput(String errorMsg, Map<String, Object> output, String dataType) {
+        assertTrue(errorMsg, output.containsKey("output"));
+        assertTrue(errorMsg, output.get("output") instanceof List);
+        List outputList = (List) output.get("output");
+        assertEquals(errorMsg, 1, outputList.size());
+        assertTrue(errorMsg, outputList.get(0) instanceof Map);
+        assertTrue(errorMsg, ((Map<?, ?>) outputList.get(0)).get("data") instanceof List);
+        assertEquals(errorMsg, ((Map<?, ?>) outputList.get(0)).get("data_type"), dataType);
+    }
+
     private boolean tokenNotSet() {
         if (AWS_ACCESS_KEY_ID == null || AWS_SECRET_ACCESS_KEY == null || AWS_SESSION_TOKEN == null) {
             log.info("#### The AWS credentials are not set. Skipping test. ####");
