@@ -45,7 +45,7 @@ public class ScriptUtilsTest {
     @Test
     public void test_executeBuildInPostProcessFunction() {
         List<List<Float>> input = Arrays.asList(Arrays.asList(1.0f, 2.0f), Arrays.asList(3.0f, 4.0f));
-        List<ModelTensor> modelTensors = MLPostProcessFunction.get(MLPostProcessFunction.DEFAULT_EMBEDDING).apply(input);
+        List<ModelTensor> modelTensors = MLPostProcessFunction.get(MLPostProcessFunction.DEFAULT_EMBEDDING).apply(input, null);
         assertNotNull(modelTensors);
         assertEquals(2, modelTensors.size());
     }
