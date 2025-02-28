@@ -92,7 +92,7 @@ public class RestMLPredictionAction extends BaseRestHandler {
         }
 
         if (algorithm != null) {
-            MLPredictionTaskRequest mlPredictionTaskRequest = getRequest(modelId, algorithm, request);
+            MLPredictionTaskRequest mlPredictionTaskRequest = getRequest(modelId, functionName.get().name(), algorithm, request);
             return channel -> client
                 .execute(MLPredictionTaskAction.INSTANCE, mlPredictionTaskRequest, new RestToXContentListener<>(channel));
         }
@@ -103,7 +103,7 @@ public class RestMLPredictionAction extends BaseRestHandler {
                 client
                     .execute(
                         MLPredictionTaskAction.INSTANCE,
-                        getRequest(modelId, algoName, request),
+                        getRequest(modelId, functionName.get().name(), algoName, request),
                         new RestToXContentListener<>(channel)
                     );
             }, e -> {
@@ -132,12 +132,12 @@ public class RestMLPredictionAction extends BaseRestHandler {
      * @return MLPredictionTaskRequest
      */
     @VisibleForTesting
-    MLPredictionTaskRequest getRequest(String modelId, String algorithm, RestRequest request) throws IOException {
+    MLPredictionTaskRequest getRequest(String modelId, String modelType, String userAlgorithm, RestRequest request) throws IOException {
         String tenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
         ActionType actionType = ActionType.from(getActionTypeFromRestRequest(request));
-        if (FunctionName.REMOTE.name().equals(algorithm) && !mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
+        if (FunctionName.REMOTE.name().equals(modelType) && !mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
             throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
-        } else if (FunctionName.isDLModel(FunctionName.from(algorithm.toUpperCase(Locale.ROOT)))
+        } else if (FunctionName.isDLModel(FunctionName.from(modelType.toUpperCase(Locale.ROOT)))
             && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
             throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
         } else if (ActionType.BATCH_PREDICT == actionType && !mlFeatureEnabledSetting.isOfflineBatchInferenceEnabled()) {
@@ -148,7 +148,7 @@ public class RestMLPredictionAction extends BaseRestHandler {
 
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-        MLInput mlInput = MLInput.parse(parser, algorithm, actionType);
+        MLInput mlInput = MLInput.parse(parser, userAlgorithm, actionType);
         return new MLPredictionTaskRequest(modelId, mlInput, null, tenantId);
     }
 
