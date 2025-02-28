@@ -19,6 +19,7 @@ import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -83,27 +84,24 @@ public class RestMLPredictionAction extends BaseRestHandler {
 
     @Override
     public RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
-        String algorithm = request.param(PARAMETER_ALGORITHM);
+        String userAlgorithm = request.param(PARAMETER_ALGORITHM);
         String modelId = getParameterId(request, PARAMETER_MODEL_ID);
         Optional<FunctionName> functionName = modelManager.getOptionalModelFunctionName(modelId);
 
-        if (algorithm == null && functionName.isPresent()) {
-            algorithm = functionName.get().name();
-        }
-
-        if (algorithm != null) {
-            MLPredictionTaskRequest mlPredictionTaskRequest = getRequest(modelId, functionName.get().name(), algorithm, request);
+        if (userAlgorithm != null && functionName.isPresent()) {
+            MLPredictionTaskRequest mlPredictionTaskRequest = getRequest(modelId, functionName.get().name(), userAlgorithm, request);
             return channel -> client
                 .execute(MLPredictionTaskAction.INSTANCE, mlPredictionTaskRequest, new RestToXContentListener<>(channel));
         }
 
         return channel -> {
             ActionListener<MLModel> listener = ActionListener.wrap(mlModel -> {
-                String algoName = mlModel.getAlgorithm().name();
+                String modelType = mlModel.getAlgorithm().name();
+                String modelAlgorithm = Objects.requireNonNullElse(userAlgorithm, mlModel.getAlgorithm().name());
                 client
                     .execute(
                         MLPredictionTaskAction.INSTANCE,
-                        getRequest(modelId, functionName.get().name(), algoName, request),
+                        getRequest(modelId, modelType, modelAlgorithm, request),
                         new RestToXContentListener<>(channel)
                     );
             }, e -> {
