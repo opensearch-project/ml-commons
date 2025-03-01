@@ -10,16 +10,18 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
+import lombok.SneakyThrows;
+import lombok.extern.log4j.Log4j2;
 import org.apache.commons.lang3.StringUtils;
 import org.junit.Before;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 
+@Log4j2
 public class RestCohereInferenceIT extends MLCommonsRestTestCase {
-    private final String COHERE_KEY = Optional.ofNullable(System.getenv("COHERE_KEY")).orElse("UzRF34a6gj0OKkvHOO6FZxLItv8CNpK5dFdCaUDW");
+    private final String COHERE_KEY = System.getenv("COHERE_KEY");
     private final Map<String, String> DATA_TYPE = Map
         .of(
             "connector.post_process.cohere_v2.embedding.float",
@@ -47,7 +49,12 @@ public class RestCohereInferenceIT extends MLCommonsRestTestCase {
         updateClusterSettings("plugins.ml_commons.trusted_connector_endpoints_regex", List.of("^.*$"));
     }
 
-    public void test_cohereInference_withDifferent_postProcessFunction() throws URISyntaxException, IOException, InterruptedException {
+    @SneakyThrows
+    public void test_cohereInference_withDifferent_postProcessFunction() {
+        if (StringUtils.isEmpty(COHERE_KEY)) {
+            log.info("COHERE_KEY is null, skipping the test!");
+            return;
+        }
         String templates = Files
             .readString(
                 Path
