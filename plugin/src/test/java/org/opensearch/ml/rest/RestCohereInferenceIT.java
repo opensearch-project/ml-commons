@@ -10,13 +10,14 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
-import lombok.SneakyThrows;
-import lombok.extern.log4j.Log4j2;
 import org.apache.commons.lang3.StringUtils;
 import org.junit.Before;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
+
+import lombok.SneakyThrows;
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class RestCohereInferenceIT extends MLCommonsRestTestCase {
