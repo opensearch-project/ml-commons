@@ -4,7 +4,6 @@
  */
 package org.opensearch.ml.rest;
 
-import static org.junit.Assert.assertEquals;
 import static org.opensearch.ml.common.MLModel.MODEL_ID_FIELD;
 import static org.opensearch.ml.utils.TestData.SENTENCE_TRANSFORMER_MODEL_URL;
 import static org.opensearch.ml.utils.TestHelper.makeRequest;
@@ -439,7 +438,7 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
             return;
         }
         String createPipelineRequestBody = "{\n"
-            + "  \"response\": [\n"
+            + "  \"response_processors\": [\n"
             + "    {\n"
             + "      \"ml_inference\": {\n"
             + "        \"tag\": \"ml_inference\",\n"
@@ -449,7 +448,7 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
             + "\",\n"
             + "        \"optional_input_map\": [\n"
             + "          {\n"
-            + "            \"inputText\": \"diary\",\n"
+            + "            \"inputText\": \"diary[0]\",\n"
             + "            \"inputImage\": \"diary_image\"\n"
             + "          }\n"
             + "        ],\n"
@@ -474,7 +473,7 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
         Map response = searchWithPipeline(client(), index_name, pipelineName, query);
 
         assertEquals((int) JsonPath.parse(response).read("$.hits.hits.length()"), 1);
-        Assert.assertEquals(JsonPath.parse(response).read("$.hits.hits[0]._source.multi_modal_embedding.length()"), "1024");
+        assertEquals((int) JsonPath.parse(response).read("$.hits.hits[0]._source.multi_modal_embedding.length()"), 1024);
     }
 
     /**

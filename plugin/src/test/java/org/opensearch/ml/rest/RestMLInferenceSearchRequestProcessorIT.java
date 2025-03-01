@@ -170,14 +170,19 @@ public class RestMLInferenceSearchRequestProcessorIT extends MLCommonsRestTestCa
             + "    \"properties\": {\n"
             + "      \"diary_embedding_size\": {\n"
             + "        \"type\": \"keyword\"\n"
+            + "      },\n"
+            + "      \"diary_embedding_size_int\": {\n"
+            + "        \"type\": \"integer\"\n"
             + "      }\n"
             + "    }\n"
             + "  }\n"
             + "}";
+
         String uploadDocumentRequestBodyDoc1 = "{\n"
             + "  \"id\": 1,\n"
             + "  \"diary\": [\"happy\",\"first day at school\"],\n"
             + "  \"diary_embedding_size\": \"1536\",\n" // embedding size for ada model
+            + "  \"diary_embedding_size_int\": 1536,\n"
             + "  \"weather\": \"rainy\"\n"
             + "  }";
 
@@ -185,6 +190,7 @@ public class RestMLInferenceSearchRequestProcessorIT extends MLCommonsRestTestCa
             + "  \"id\": 2,\n"
             + "  \"diary\": [\"bored\",\"at home\"],\n"
             + "  \"diary_embedding_size\": \"768\",\n"  // embedding size for local text embedding model
+            + "  \"diary_embedding_size_int\": 768,\n"
             + "  \"weather\": \"sunny\"\n"
             + "  }";
 
@@ -389,7 +395,7 @@ public class RestMLInferenceSearchRequestProcessorIT extends MLCommonsRestTestCa
             + "        \"model_id\": \""
             + this.bedrockMultiModalEmbeddingModelId
             + "\",\n"
-            + "        \"query_template\": \"{\\\"size\\\": 2,\\\"query\\\": {\\\"range\\\": {\\\"diary_embedding_size\\\": {\\\"gte\\\": ${modelPrediction}}}}}\",\n"
+            + "        \"query_template\": \"{\\\"size\\\": 2,\\\"query\\\": {\\\"range\\\": {\\\"diary_embedding_size_int\\\": {\\\"gte\\\": ${modelPrediction}}}}}\",\n"
             + "        \"optional_input_map\": [\n"
             + "          {\n"
             + "            \"inputText\": \"query.term.diary.value\",\n"
@@ -415,9 +421,8 @@ public class RestMLInferenceSearchRequestProcessorIT extends MLCommonsRestTestCa
         createSearchPipelineProcessor(createPipelineRequestBody, pipelineName);
 
         Map response = searchWithPipeline(client(), index_name, pipelineName, query);
-
         assertEquals((int) JsonPath.parse(response).read("$.hits.hits.length()"), 1);
-        Assert.assertEquals(JsonPath.parse(response).read("$.hits.hits[0]._source.diary_embedding_size"), "1536");
+        assertEquals((double) JsonPath.parse(response).read("$.hits.hits[0]._source.diary_embedding_size_int"), 1536.0, 0.0001);
     }
 
     /**
