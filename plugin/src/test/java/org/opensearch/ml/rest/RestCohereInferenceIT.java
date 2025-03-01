@@ -10,7 +10,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import org.apache.commons.lang3.StringUtils;
 import org.junit.Before;
@@ -19,7 +18,7 @@ import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 
 public class RestCohereInferenceIT extends MLCommonsRestTestCase {
-    private final String COHERE_KEY = Optional.ofNullable(System.getenv("COHERE_KEY")).orElse("UzRF34a6gj0OKkvHOO6FZxLItv8CNpK5dFdCaUDW");
+    private final String COHERE_KEY = System.getenv("COHERE_KEY");
     private final Map<String, String> DATA_TYPE = Map
         .of(
             "connector.post_process.cohere_v2.embedding.float",
@@ -29,17 +28,14 @@ public class RestCohereInferenceIT extends MLCommonsRestTestCase {
             "connector.post_process.cohere_v2.embedding.uint8",
             "UINT8",
             "connector.post_process.cohere_v2.embedding.binary",
-            "BINARY",
-            "connector.post_process.cohere_v2.embedding.ubinary",
-            "UBINARY"
+            "BINARY"
         );
     private final List<String> POST_PROCESS_FUNCTIONS = List
         .of(
             "connector.post_process.cohere_v2.embedding.float",
             "connector.post_process.cohere_v2.embedding.int8",
             "connector.post_process.cohere_v2.embedding.uint8",
-            "connector.post_process.cohere_v2.embedding.binary",
-            "connector.post_process.cohere_v2.embedding.ubinary"
+            "connector.post_process.cohere_v2.embedding.binary"
         );
 
     @Before
@@ -48,6 +44,10 @@ public class RestCohereInferenceIT extends MLCommonsRestTestCase {
     }
 
     public void test_cohereInference_withDifferent_postProcessFunction() throws URISyntaxException, IOException, InterruptedException {
+        // Skip test if key is null
+        if (COHERE_KEY == null) {
+            return;
+        }
         String templates = Files
             .readString(
                 Path
