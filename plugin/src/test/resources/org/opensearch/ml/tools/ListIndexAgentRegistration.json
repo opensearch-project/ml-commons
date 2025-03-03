@@ -11,8 +11,8 @@
   },
   "tools": [
     {
-      "type": "CatIndexTool",
-      "name": "CatIndexTool"
+      "type": "ListIndexTool",
+      "name": "ListIndexTool"
     }
   ],
   "app_type": "my_app"
