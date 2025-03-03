@@ -5,12 +5,10 @@
 package org.opensearch.ml.rest;
 
 import java.io.IOException;
-import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import org.apache.commons.lang3.StringUtils;
 import org.junit.Before;
@@ -18,8 +16,12 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 
+import lombok.SneakyThrows;
+import lombok.extern.log4j.Log4j2;
+
+@Log4j2
 public class RestCohereInferenceIT extends MLCommonsRestTestCase {
-    private final String COHERE_KEY = Optional.ofNullable(System.getenv("COHERE_KEY")).orElse("UzRF34a6gj0OKkvHOO6FZxLItv8CNpK5dFdCaUDW");
+    private final String COHERE_KEY = System.getenv("COHERE_KEY");
     private final Map<String, String> DATA_TYPE = Map
         .of(
             "connector.post_process.cohere_v2.embedding.float",
@@ -47,7 +49,12 @@ public class RestCohereInferenceIT extends MLCommonsRestTestCase {
         updateClusterSettings("plugins.ml_commons.trusted_connector_endpoints_regex", List.of("^.*$"));
     }
 
-    public void test_cohereInference_withDifferent_postProcessFunction() throws URISyntaxException, IOException, InterruptedException {
+    @SneakyThrows
+    public void test_cohereInference_withDifferent_postProcessFunction() {
+        if (StringUtils.isEmpty(COHERE_KEY)) {
+            log.info("COHERE_KEY is null, skipping the test!");
+            return;
+        }
         String templates = Files
             .readString(
                 Path
@@ -81,7 +88,10 @@ public class RestCohereInferenceIT extends MLCommonsRestTestCase {
         List outputList = (List) output.get("output");
         assertEquals(errorMsg, 2, outputList.size());
         assertTrue(errorMsg, outputList.get(0) instanceof Map);
-        assertTrue(errorMsg, ((Map<?, ?>) outputList.get(0)).get("data") instanceof List);
+        String typeErrorMsg = errorMsg
+            + " first element in the output list is type of: "
+            + ((Map<?, ?>) outputList.get(0)).get("data").getClass().getName();
+        assertTrue(typeErrorMsg, ((Map<?, ?>) outputList.get(0)).get("data") instanceof List);
         assertTrue(errorMsg, ((Map<?, ?>) outputList.get(0)).get("data_type").equals(dataType));
     }
 
