@@ -74,12 +74,6 @@ public class RestCohereInferenceIT extends MLCommonsRestTestCase {
             TextDocsInputDataSet inputDataSet = TextDocsInputDataSet.builder().docs(List.of("hello", "world")).build();
             MLInput mlInput = MLInput.builder().inputDataset(inputDataSet).algorithm(FunctionName.TEXT_EMBEDDING).build();
             Map inferenceResult = predictTextEmbeddingModel(modelId, mlInput);
-            log
-                .info(
-                    "Current post process function is: {}, inferenceResult: {}",
-                    postProcessFunction,
-                    org.opensearch.ml.common.utils.StringUtils.gson.toJson(inferenceResult)
-                );
             assertTrue(errorMsg, inferenceResult.containsKey("inference_results"));
             List output = (List) inferenceResult.get("inference_results");
             assertEquals(errorMsg, 1, output.size());
@@ -94,7 +88,8 @@ public class RestCohereInferenceIT extends MLCommonsRestTestCase {
         List outputList = (List) output.get("output");
         assertEquals(errorMsg, 2, outputList.size());
         assertTrue(errorMsg, outputList.get(0) instanceof Map);
-        assertTrue(errorMsg, ((Map<?, ?>) outputList.get(0)).get("data") instanceof List);
+        String typeErrorMsg = errorMsg + " first element in the output list is type of: " + ((Map<?, ?>)outputList.get(0)).get("data").getClass().getName();
+        assertTrue(typeErrorMsg, ((Map<?, ?>) outputList.get(0)).get("data") instanceof List);
         assertTrue(errorMsg, ((Map<?, ?>) outputList.get(0)).get("data_type").equals(dataType));
     }
 
