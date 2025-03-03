@@ -74,6 +74,7 @@ public class RestCohereInferenceIT extends MLCommonsRestTestCase {
             TextDocsInputDataSet inputDataSet = TextDocsInputDataSet.builder().docs(List.of("hello", "world")).build();
             MLInput mlInput = MLInput.builder().inputDataset(inputDataSet).algorithm(FunctionName.TEXT_EMBEDDING).build();
             Map inferenceResult = predictTextEmbeddingModel(modelId, mlInput);
+            log.info("Current post process function is: {}, inferenceResult: {}", postProcessFunction, org.opensearch.ml.common.utils.StringUtils.gson.toJson(inferenceResult));
             assertTrue(errorMsg, inferenceResult.containsKey("inference_results"));
             List output = (List) inferenceResult.get("inference_results");
             assertEquals(errorMsg, 1, output.size());
