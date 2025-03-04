@@ -1,6 +1,6 @@
 # Topic
 
-This tutorial explains how to use conversational search with Bedrock Claude2 model. For more information, see [Conversational search](https://opensearch.org/docs/latest/search-plugins/conversational-search/).
+This tutorial explains how to use conversational search with Bedrock Claude 3.5 and Claude 2 model. For more information, see [Conversational search](https://opensearch.org/docs/latest/search-plugins/conversational-search/).
 
 Note: Replace the placeholders that start with `your_` with your own values.
 Claude3 model not supported yet.
@@ -29,17 +29,16 @@ POST _bulk
 
 ```
 
-## 1. Create connector and model
+This tutorial will show two options by using Bedrock Converse and Invoke APIs.
+## Option 1. Bedrock Converse API
+### 1.1 Create connector and model:
 
-1. Create connector for Bedrock Claude2 model:
-
-Follow [this blueprint](https://github.com/opensearch-project/ml-commons/blob/2.x/docs/remote_inference_blueprints/bedrock_connector_anthropic_claude_blueprint.md)
-
+Note: replace `"model": "anthropic.claude-3-5-sonnet-20240620-v1:0"` as `"model": "anthropic.claude-v2"` if need to use Claude 2.
 ```
 POST _plugins/_ml/connectors/_create
 {
-    "name": "Bedrock Claude2",
-    "description": "Connector for Bedrock Claude2",
+    "name": "Amazon Bedrock claude v3",
+    "description": "Test connector for Amazon Bedrock claude v3",
     "version": 1,
     "protocol": "aws_sigv4",
     "credential": {
@@ -50,7 +49,7 @@ POST _plugins/_ml/connectors/_create
     "parameters": {
         "region": "your_aws_region",
         "service_name": "bedrock",
-        "model": "anthropic.claude-v2"
+        "model": "anthropic.claude-3-5-sonnet-20240620-v1:0"
     },
     "actions": [
         {
@@ -59,8 +58,8 @@ POST _plugins/_ml/connectors/_create
             "headers": {
                 "content-type": "application/json"
             },
-            "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/invoke",
-            "request_body": "{\"prompt\":\"\\n\\nHuman: ${parameters.inputs}\\n\\nAssistant:\",\"max_tokens_to_sample\":300,\"temperature\":0.5,\"top_k\":250,\"top_p\":1,\"stop_sequences\":[\"\\\\n\\\\nHuman:\"]}"
+            "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/converse",
+            "request_body": "{ \"system\": [{\"text\": \"you are a helpful assistant.\"}], \"messages\": ${parameters.messages} , \"inferenceConfig\": {\"temperature\": 0.0, \"topP\": 0.9, \"maxTokens\": 1000} }"
         }
     ]
 }
@@ -68,26 +67,35 @@ POST _plugins/_ml/connectors/_create
 
 Note the connector ID; you will use it to create the model.
 
-2. Create model:
+Create model:
 ```
 POST /_plugins/_ml/models/_register?deploy=true
 {
-    "name": "Bedrock Claude2 model",
+    "name": "Bedrock Claude3.5 model",
+    "description": "Bedrock Claude3.5 model",
     "function_name": "remote",
-    "description": "Bedrock Claude2 model",
     "connector_id": "your_connector_id"
 }
 ```
 
 Note the model ID; you will use it in the following steps.
 
-3. Test the model:
+Test the model:
 ```
 POST /_plugins/_ml/models/your_model_id/_predict
 {
-    "parameters": {
-      "inputs": "Who won the world series in 2020?"
-    }
+  "parameters": {
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "text": "hello"
+          }
+        ]
+      }
+    ]
+  }
 }
 ```
 Sample response:
@@ -99,10 +107,25 @@ Sample response:
         {
           "name": "response",
           "dataAsMap": {
-            "type": "completion",
-            "completion": " The Los Angeles Dodgers won the 2020 World Series, defeating the Tampa Bay Rays 4 games to 2. The World Series was played at a neutral site in Arlington, Texas due to the COVID-19 pandemic. It was the Dodgers' first World Series championship since 1988.",
-            "stop_reason": "stop_sequence",
-            "stop": "\n\nHuman:"
+            "metrics": {
+              "latencyMs": 955.0
+            },
+            "output": {
+              "message": {
+                "content": [
+                  {
+                    "text": "Hello! How can I assist you today? Feel free to ask me any questions or let me know if you need help with anything."
+                  }
+                ],
+                "role": "assistant"
+              }
+            },
+            "stopReason": "end_turn",
+            "usage": {
+              "inputTokens": 14.0,
+              "outputTokens": 30.0,
+              "totalTokens": 44.0
+            }
           }
         }
       ],
@@ -111,19 +134,16 @@ Sample response:
   ]
 }
 ```
-
-## 2. Conversational search
-
-### 2.1 Create pipeline
+### 1.2 Create search pipeline and run RAG
 ```
-PUT /_search/pipeline/my-conversation-search-pipeline-claude2
+PUT /_search/pipeline/my-conversation-search-pipeline-claude
 {
   "response_processors": [
     {
       "retrieval_augmented_generation": {
         "tag": "Demo pipeline",
-        "description": "Demo pipeline Using Bedrock Claude2",
-        "model_id": "your_model_id_created_in_step1",
+        "description": "Demo pipeline Using Bedrock Claude",
+        "model_id": "your_model_id",
         "context_field_list": [
           "text"
         ],
@@ -133,13 +153,11 @@ PUT /_search/pipeline/my-conversation-search-pipeline-claude2
     }
   ]
 }
-
 ```
 
-### 2.2 Search
-Conversational search has some extra parameters you specify in `generative_qa_parameters`:
+Search
 ```
-GET /qa_demo/_search?search_pipeline=my-conversation-search-pipeline-claude2
+GET /qa_demo/_search?search_pipeline=my-conversation-search-pipeline-claude
 {
   "query": {
     "match": {
@@ -152,10 +170,9 @@ GET /qa_demo/_search?search_pipeline=my-conversation-search-pipeline-claude2
   ],
   "ext": {
     "generative_qa_parameters": {
-      "llm_model": "bedrock/claude",
+      "llm_model": "bedrock-converse/anthropic.claude-3-sonnet-20240229-v1:0",
       "llm_question": "What's the population increase of New York City from 2021 to 2023?",
-      "context_size": 5,
-      "timeout": 15
+      "context_size": 5
     }
   }
 }
@@ -190,8 +207,139 @@ Sample response:
   },
   "ext": {
     "retrieval_augmented_generation": {
-      "answer": " The population of the New York City metro area increased by 114,000 people from 2021 to 2023, going from 18,823,000 in 2021 to 18,937,000 in 2023. This represents a 0.6% increase over the two year period."
+      "answer": "The population of the New York City metro area increased by 114,000 people from 2021 to 2023. In 2021, the population was 18,823,000. By 2023, it had grown to 18,937,000. This represents a total increase of about 0.61% over the two-year period, with growth rates of 0.23% from 2021 to 2022 and 0.37% from 2022 to 2023."
     }
   }
 }
 ```
+
+## Option 2. Bedrock Invoke API
+This one doesn't works for Claude 3.x as 3.x model interface is different. 
+
+### 2.1. Create connector and model:
+
+```
+POST _plugins/_ml/connectors/_create
+{
+    "name": "Bedrock Claude2",
+    "description": "Connector for Bedrock Claude2",
+    "version": 1,
+    "protocol": "aws_sigv4",
+    "credential": {
+        "access_key": "your_access_key",
+        "secret_key": "your_secret_key",
+        "session_token": "your_session_token"
+    },
+    "parameters": {
+        "region": "your_aws_region",
+        "service_name": "bedrock",
+        "model": "anthropic.claude-v2"
+    },
+    "actions": [
+        {
+            "action_type": "predict",
+            "method": "POST",
+            "headers": {
+                "content-type": "application/json"
+            },
+            "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/invoke",
+            "request_body": "{\"prompt\":\"\\n\\nHuman: ${parameters.inputs}\\n\\nAssistant:\",\"max_tokens_to_sample\":300,\"temperature\":0.5,\"top_k\":250,\"top_p\":1,\"stop_sequences\":[\"\\\\n\\\\nHuman:\"]}"
+        }
+    ]
+}
+```
+
+Note the connector ID; you will use it to create the model.
+
+Create model:
+```
+POST /_plugins/_ml/models/_register?deploy=true
+{
+    "name": "Bedrock Claude2 model",
+    "function_name": "remote",
+    "description": "Bedrock Claude2 model",
+    "connector_id": "your_connector_id"
+}
+```
+
+Note the model ID; you will use it in the following steps.
+
+Test the model:
+```
+POST /_plugins/_ml/models/your_model_id/_predict
+{
+    "parameters": {
+      "inputs": "Who won the world series in 2020?"
+    }
+}
+```
+Sample response:
+```
+{
+  "inference_results": [
+    {
+      "output": [
+        {
+          "name": "response",
+          "dataAsMap": {
+            "type": "completion",
+            "completion": " The Los Angeles Dodgers won the 2020 World Series, defeating the Tampa Bay Rays 4 games to 2. The World Series was played at a neutral site in Arlington, Texas due to the COVID-19 pandemic. It was the Dodgers' first World Series championship since 1988.",
+            "stop_reason": "stop_sequence",
+            "stop": "\n\nHuman:"
+          }
+        }
+      ],
+      "status_code": 200
+    }
+  ]
+}
+```
+
+## 2.2 Create search pipeline and search
+
+Create pipeline
+```
+PUT /_search/pipeline/my-conversation-search-pipeline-claude2
+{
+  "response_processors": [
+    {
+      "retrieval_augmented_generation": {
+        "tag": "Demo pipeline",
+        "description": "Demo pipeline Using Bedrock Claude2",
+        "model_id": "your_model_id_created_in_step1",
+        "context_field_list": [
+          "text"
+        ],
+        "system_prompt": "You are a helpful assistant",
+        "user_instructions": "Generate a concise and informative answer in less than 100 words for the given question"
+      }
+    }
+  ]
+}
+
+```
+
+Search
+```
+GET /qa_demo/_search?search_pipeline=my-conversation-search-pipeline-claude2
+{
+  "query": {
+    "match": {
+      "text": "What's the population increase of New York City from 2021 to 2023?"
+    }
+  },
+  "size": 1,
+  "_source": [
+    "text"
+  ],
+  "ext": {
+    "generative_qa_parameters": {
+      "llm_model": "bedrock/claude",
+      "llm_question": "What's the population increase of New York City from 2021 to 2023?",
+      "context_size": 5,
+      "timeout": 15
+    }
+  }
+}
+```
+Sample response is similar to option1.
