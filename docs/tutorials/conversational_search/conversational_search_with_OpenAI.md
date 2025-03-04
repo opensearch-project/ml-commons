@@ -162,8 +162,8 @@ PUT /_search/pipeline/my-conversation-search-pipeline-openai
 
 ```
 
-### 2.2 Search
-Conversational search has some extra parameters you specify in `generative_qa_parameters`:
+### 2.2 Basic RAG Search
+Basic RAG search without storing conversation history.
 ```
 GET /qa_demo/_search?search_pipeline=my-conversation-search-pipeline-openai
 {

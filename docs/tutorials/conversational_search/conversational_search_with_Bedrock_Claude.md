@@ -159,7 +159,7 @@ PUT /_search/pipeline/my-conversation-search-pipeline-claude
 }
 ```
 
-Search
+Basic RAG search without storing conversation history.
 ```
 GET /qa_demo/_search?search_pipeline=my-conversation-search-pipeline-claude
 {
