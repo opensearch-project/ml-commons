@@ -2,7 +2,7 @@
 
 This tutorial is compatible with version 2.17 and later.
 
-This tutorial shows how to build multi-modal semantic search  [ML inference ingest processor](https://opensearch.org/docs/latest/ingest-pipelines/processors/ml-inference/) and [ML inference search request processor](https://opensearch.org/docs/latest/search-plugins/search-pipelines/ml-inference-search-request/).
+This tutorial shows how to build multi-modal semantic search with [ML inference ingest processor](https://opensearch.org/docs/latest/ingest-pipelines/processors/ml-inference/) and [ML inference search request processor](https://opensearch.org/docs/latest/search-plugins/search-pipelines/ml-inference-search-request/).
 By using ML inference processors in OpenSearch, you can effectively handle multimodal queries (text, image, or both) and leverage KNN search for semantic search tasks. This approach allows you to retrieve the most relevant documents based on both textual and visual content, enabling powerful search capabilities for rich, multimodal data.
 
 
@@ -50,7 +50,7 @@ Sample response
 }
 ```
 
-- Create model
+- Create model, see [more info about register model](https://opensearch.org/docs/latest/ml-commons-plugin/api/model-apis/register-model/) 
 ```
 POST _plugins/_ml/models/_register?deploy=true
 {
