@@ -302,10 +302,11 @@ public class RestBedRockInferenceIT extends MLCommonsRestTestCase {
         List outputList = (List) output.get("output");
         assertEquals(errorMsg, 1, outputList.size());
         assertTrue(errorMsg, outputList.get(0) instanceof Map);
-        String typeErrorMsg = errorMsg
-            + " first element in the output list is type of: "
-            + ((Map<?, ?>) outputList.get(0)).get("data").getClass().getName();
-        assertTrue(typeErrorMsg, ((Map<?, ?>) outputList.get(0)).get("data") instanceof List);
+        assertNotNull(
+            "data in output list is null which is unexpected, output is: " + StringUtils.gson.toJson(output),
+            ((Map<?, ?>) outputList.get(0)).get("data")
+        );
+        assertTrue(errorMsg, ((Map<?, ?>) outputList.get(0)).get("data") instanceof List);
         assertEquals(errorMsg, ((Map<?, ?>) outputList.get(0)).get("data_type"), dataType);
     }
 
