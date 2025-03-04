@@ -9,7 +9,7 @@ Bedrock supports compressed embeddings from Cohere Embed now ([blog](https://aws
 We'll use the following OpenSearch features:
 - [ML inference ingest processor](https://opensearch.org/docs/latest/ingest-pipelines/processors/ml-inference/) to generate embedding when ingest data; 
 - [ML inference search request processor](https://opensearch.org/docs/latest/search-plugins/search-pipelines/ml-inference-search-request/)
-- [Search template query](https://opensearch.org/docs/latest/api-reference/search-template/) for searching.
+- [Template query](https://opensearch.org/docs/latest/query-dsl/specialized/template/) for searching.
 - [k-NN index](https://opensearch.org/docs/latest/search-plugins/knn/index/) and [k-NN byte vector](https://opensearch.org/docs/latest/field-types/supported-field-types/knn-vector/#byte-vectors)
 
 Note: Replace the placeholders that start with `your_` with your own values.
