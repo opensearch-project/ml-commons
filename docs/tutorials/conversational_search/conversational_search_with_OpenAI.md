@@ -178,7 +178,7 @@ GET /qa_demo/_search?search_pipeline=my-conversation-search-pipeline-openai
   ],
   "ext": {
     "generative_qa_parameters": {
-      "llm_model": "bedrock/claude",
+      "llm_model": "gpt-4o",
       "llm_question": "What's the population increase of New York City from 2021 to 2023?",
       "context_size": 5,
       "timeout": 15
@@ -216,7 +216,145 @@ Sample response:
   },
   "ext": {
     "retrieval_augmented_generation": {
-      "answer": "The population of New York City increased by 114,000 from 2021 to 2023, rising from 18,823,000 in 2021 to 18,937,000 in 2023."
+      "answer": "The population of the New York City metro area increased by 114,000 from 2021 to 2023, rising from 18,823,000 in 2021 to 18,937,000 in 2023."
+    }
+  }
+}
+```
+
+### 2.3 Conversational Search
+You can store conversation history to memory and continue the conversation later. 
+
+1. Create memory
+```
+POST /_plugins/_ml/memory/
+{
+  "name": "Conversation about NYC population"
+}
+```
+Sample response
+```
+{
+  "memory_id": "rBAbY5UBSzdNxlHvIyI3"
+}
+```
+
+2. Search by specify memory id
+```
+GET /qa_demo/_search?search_pipeline=my-conversation-search-pipeline-openai
+{
+  "query": {
+    "match": {
+      "text": "What's the population increase of New York City from 2021 to 2023?"
+    }
+  },
+  "size": 1,
+  "_source": [
+    "text"
+  ],
+  "ext": {
+    "generative_qa_parameters": {
+      "llm_model": "gpt-4o",
+      "llm_question": "What's the population increase of New York City from 2021 to 2023?",
+      "context_size": 5,
+      "timeout": 15,
+      "memory_id": "rBAbY5UBSzdNxlHvIyI3"
+    }
+  }
+}
+```
+Sample response
+```
+{
+  "took": 1,
+  "timed_out": false,
+  "_shards": {
+    "total": 1,
+    "successful": 1,
+    "skipped": 0,
+    "failed": 0
+  },
+  "hits": {
+    "total": {
+      "value": 6,
+      "relation": "eq"
+    },
+    "max_score": 9.042081,
+    "hits": [
+      {
+        "_index": "qa_demo",
+        "_id": "2",
+        "_score": 9.042081,
+        "_source": {
+          "text": "Chart and table of population level and growth rate for the New York City metro area from 1950 to 2023. United Nations population projections are also included through the year 2035.\\nThe current metro area population of New York City in 2023 is 18,937,000, a 0.37% increase from 2022.\\nThe metro area population of New York City in 2022 was 18,867,000, a 0.23% increase from 2021.\\nThe metro area population of New York City in 2021 was 18,823,000, a 0.1% increase from 2020.\\nThe metro area population of New York City in 2020 was 18,804,000, a 0.01% decline from 2019."
+        }
+      }
+    ]
+  },
+  "ext": {
+    "retrieval_augmented_generation": {
+      "answer": "The population of the New York City metro area increased from 18,823,000 in 2021 to 18,937,000 in 2023. This represents an increase of 114,000 people over the two-year period.",
+      "message_id": "rRAcY5UBSzdNxlHvyiI1"
+    }
+  }
+}
+```
+3. Continue conversation
+```
+GET /qa_demo/_search?search_pipeline=my-conversation-search-pipeline-openai
+{
+  "query": {
+    "match": {
+      "text": "What's the population increase of Miami from 2021 to 2023?"
+    }
+  },
+  "size": 1,
+  "_source": [
+    "text"
+  ],
+  "ext": {
+    "generative_qa_parameters": {
+      "llm_model": "gpt-4o",
+      "llm_question": "compare population increase of New York City and Miami",
+      "context_size": 5,
+      "timeout": 15,
+      "memory_id": "rBAbY5UBSzdNxlHvIyI3"
+    }
+  }
+}
+```
+Response
+```
+{
+  "took": 1,
+  "timed_out": false,
+  "_shards": {
+    "total": 1,
+    "successful": 1,
+    "skipped": 0,
+    "failed": 0
+  },
+  "hits": {
+    "total": {
+      "value": 6,
+      "relation": "eq"
+    },
+    "max_score": 3.6660428,
+    "hits": [
+      {
+        "_index": "qa_demo",
+        "_id": "4",
+        "_score": 3.6660428,
+        "_source": {
+          "text": "Chart and table of population level and growth rate for the Miami metro area from 1950 to 2023. United Nations population projections are also included through the year 2035.\\nThe current metro area population of Miami in 2023 is 6,265,000, a 0.8% increase from 2022.\\nThe metro area population of Miami in 2022 was 6,215,000, a 0.78% increase from 2021.\\nThe metro area population of Miami in 2021 was 6,167,000, a 0.74% increase from 2020.\\nThe metro area population of Miami in 2020 was 6,122,000, a 0.71% increase from 2019."
+        }
+      }
+    ]
+  },
+  "ext": {
+    "retrieval_augmented_generation": {
+      "answer": "From 2021 to 2023, the New York City metro area increased by 114,000 people, while the Miami metro area grew by 98,000 people. This means New York City saw a slightly larger population increase compared to Miami over the same period.",
+      "message_id": "rhAdY5UBSzdNxlHv5SKa"
     }
   }
 }

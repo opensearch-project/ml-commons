@@ -217,6 +217,131 @@ Sample response:
 }
 ```
 
+### 1.3 Conversational Search
+You can store conversation history to memory and continue the conversation later. 
+
+1. Create memory
+```
+POST /_plugins/_ml/memory/
+{
+  "name": "Conversation about NYC population"
+}
+```
+Sample response
+```
+{
+  "memory_id": "mBAIY5UBSzdNxlHvziII"
+}
+```
+
+2. Search by specify memory id
+```
+GET /qa_demo/_search?search_pipeline=my-conversation-search-pipeline-claude
+{
+  "query": {
+    "match": {
+      "text": "What's the population increase of New York City from 2021 to 2023?"
+    }
+  },
+  "size": 1,
+  "_source": [
+    "text"
+  ],
+  "ext": {
+    "generative_qa_parameters": {
+      "llm_model": "bedrock-converse/anthropic.claude-3-sonnet-20240229-v1:0",
+      "llm_question": "What's the population increase of New York City from 2021 to 2023?",
+      "context_size": 5,
+      "memory_id": "mBAIY5UBSzdNxlHvziII"
+    }
+  }
+}
+```
+Sample response
+```
+{
+  "took": 1,
+  "timed_out": false,
+  "_shards": {
+    "total": 1,
+    "successful": 1,
+    "skipped": 0,
+    "failed": 0
+  },
+  "hits": {
+    "total": {
+      "value": 6,
+      "relation": "eq"
+    },
+    "max_score": 9.042081,
+    "hits": [
+      {
+        "_index": "qa_demo",
+        "_id": "2",
+        "_score": 9.042081,
+        "_source": {
+          "text": "Chart and table of population level and growth rate for the New York City metro area from 1950 to 2023. United Nations population projections are also included through the year 2035.\\nThe current metro area population of New York City in 2023 is 18,937,000, a 0.37% increase from 2022.\\nThe metro area population of New York City in 2022 was 18,867,000, a 0.23% increase from 2021.\\nThe metro area population of New York City in 2021 was 18,823,000, a 0.1% increase from 2020.\\nThe metro area population of New York City in 2020 was 18,804,000, a 0.01% decline from 2019."
+        }
+      }
+    ]
+  },
+  "ext": {
+    "retrieval_augmented_generation": {
+      "answer": "The population of the New York City metro area increased by 114,000 people from 2021 to 2023. In 2021, the population was 18,823,000. By 2023, it had grown to 18,937,000. This represents a total increase of about 0.61% over the two-year period, with growth rates of 0.23% from 2021 to 2022 and 0.37% from 2022 to 2023.",
+      "message_id": "nRALY5UBSzdNxlHvPyIY"
+    }
+  }
+}
+```
+3. Continue conversation
+```
+GET /qa_demo/_search?search_pipeline=my-conversation-search-pipeline-claude
+{
+  "query": {
+    "match_all": {}
+  },
+  "size": 0,
+  "_source": [
+    "text"
+  ],
+  "ext": {
+    "generative_qa_parameters": {
+      "llm_model": "bedrock-converse/anthropic.claude-3-sonnet-20240229-v1:0",
+      "llm_question": "Translate last answer to Chinese",
+      "context_size": 5,
+      "memory_id": "mBAIY5UBSzdNxlHvziII"
+    }
+  }
+}
+```
+Response
+```
+{
+  "took": 1,
+  "timed_out": false,
+  "_shards": {
+    "total": 1,
+    "successful": 1,
+    "skipped": 0,
+    "failed": 0
+  },
+  "hits": {
+    "total": {
+      "value": 6,
+      "relation": "eq"
+    },
+    "max_score": 3.6660428,
+    "hits": []
+  },
+  "ext": {
+    "retrieval_augmented_generation": {
+      "answer": "以下是上一个回答的中文翻译：\n\n纽约市都会区的人口从2021年到2023年增加了114,000人。2021年的人口为18,823,000。到2023年，人口增长到18,937,000。这代表在两年期间总共增长了约0.61%，其中2021年到2022年的增长率为0.23%，2022年到2023年的增长率为0.37%。",
+      "message_id": "ohAQY5UBSzdNxlHvfiKi"
+    }
+  }
+}
+```
+
 ## Option 2. Bedrock Invoke API
 This one doesn't works for Claude 3.x as 3.x model interface is different. 
 
@@ -347,3 +472,4 @@ GET /qa_demo/_search?search_pipeline=my-conversation-search-pipeline-claude2
 }
 ```
 Sample response is similar to option1.
+
