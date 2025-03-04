@@ -239,7 +239,7 @@ Sample response
 }
 ```
 
-2. Search by specify memory id
+2. Search by specifying memory id
 ```
 GET /qa_demo/_search?search_pipeline=my-conversation-search-pipeline-openai
 {

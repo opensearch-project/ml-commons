@@ -230,11 +230,11 @@ POST /_plugins/_ml/memory/
 Sample response
 ```
 {
-  "memory_id": "mBAIY5UBSzdNxlHvziII"
+  "memory_id": "sBAqY5UBSzdNxlHvrSJK"
 }
 ```
 
-2. Search by specify memory id
+2. Search by specifying memory id
 ```
 GET /qa_demo/_search?search_pipeline=my-conversation-search-pipeline-claude
 {
@@ -252,7 +252,7 @@ GET /qa_demo/_search?search_pipeline=my-conversation-search-pipeline-claude
       "llm_model": "bedrock-converse/anthropic.claude-3-sonnet-20240229-v1:0",
       "llm_question": "What's the population increase of New York City from 2021 to 2023?",
       "context_size": 5,
-      "memory_id": "mBAIY5UBSzdNxlHvziII"
+      "memory_id": "sBAqY5UBSzdNxlHvrSJK"
     }
   }
 }
@@ -288,7 +288,7 @@ Sample response
   "ext": {
     "retrieval_augmented_generation": {
       "answer": "The population of the New York City metro area increased by 114,000 people from 2021 to 2023. In 2021, the population was 18,823,000. By 2023, it had grown to 18,937,000. This represents a total increase of about 0.61% over the two-year period, with growth rates of 0.23% from 2021 to 2022 and 0.37% from 2022 to 2023.",
-      "message_id": "nRALY5UBSzdNxlHvPyIY"
+      "message_id": "sRAqY5UBSzdNxlHvzCIL"
     }
   }
 }
@@ -298,18 +298,20 @@ Sample response
 GET /qa_demo/_search?search_pipeline=my-conversation-search-pipeline-claude
 {
   "query": {
-    "match_all": {}
+    "match": {
+      "text": "What's the population increase of Chicago from 2021 to 2023?"
+    }
   },
-  "size": 0,
+  "size": 1,
   "_source": [
     "text"
   ],
   "ext": {
     "generative_qa_parameters": {
       "llm_model": "bedrock-converse/anthropic.claude-3-sonnet-20240229-v1:0",
-      "llm_question": "Translate last answer to Chinese",
+      "llm_question": "can you compare the population increase of Chicago with New York City",
       "context_size": 5,
-      "memory_id": "mBAIY5UBSzdNxlHvziII"
+      "memory_id": "sBAqY5UBSzdNxlHvrSJK"
     }
   }
 }
@@ -331,12 +333,21 @@ Response
       "relation": "eq"
     },
     "max_score": 3.6660428,
-    "hits": []
+    "hits": [
+      {
+        "_index": "qa_demo",
+        "_id": "3",
+        "_score": 3.6660428,
+        "_source": {
+          "text": "Chart and table of population level and growth rate for the Chicago metro area from 1950 to 2023. United Nations population projections are also included through the year 2035.\\nThe current metro area population of Chicago in 2023 is 8,937,000, a 0.4% increase from 2022.\\nThe metro area population of Chicago in 2022 was 8,901,000, a 0.27% increase from 2021.\\nThe metro area population of Chicago in 2021 was 8,877,000, a 0.14% increase from 2020.\\nThe metro area population of Chicago in 2020 was 8,865,000, a 0.03% increase from 2019."
+        }
+      }
+    ]
   },
   "ext": {
     "retrieval_augmented_generation": {
-      "answer": "以下是上一个回答的中文翻译：\n\n纽约市都会区的人口从2021年到2023年增加了114,000人。2021年的人口为18,823,000。到2023年，人口增长到18,937,000。这代表在两年期间总共增长了约0.61%，其中2021年到2022年的增长率为0.23%，2022年到2023年的增长率为0.37%。",
-      "message_id": "ohAQY5UBSzdNxlHvfiKi"
+      "answer": "Based on the provided data for Chicago, we can compare its population increase to New York City from 2021 to 2023:\n\nChicago's population increased from 8,877,000 in 2021 to 8,937,000 in 2023, a total increase of 60,000 people or about 0.68%.\n\nNew York City's population increased by 114,000 people or 0.61% in the same period.\n\nWhile New York City had a larger absolute increase, Chicago experienced a slightly higher percentage growth rate during this two-year period.",
+      "message_id": "shArY5UBSzdNxlHvQyL-"
     }
   }
 }
@@ -473,3 +484,4 @@ GET /qa_demo/_search?search_pipeline=my-conversation-search-pipeline-claude2
 ```
 Sample response is similar to option1.
 
+Refer to Step 1.3 for conversational search
