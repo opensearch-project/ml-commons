@@ -66,13 +66,13 @@ public class RestMLPredictionAction extends BaseRestHandler {
     @Override
     public List<Route> routes() {
         return ImmutableList
-                .of(
-                        new Route(
-                                RestRequest.Method.POST,
-                                String.format(Locale.ROOT, "%s/_predict/{%s}/{%s}", ML_BASE_URI, PARAMETER_ALGORITHM, PARAMETER_MODEL_ID)
-                        ),
-                        new Route(RestRequest.Method.POST, String.format(Locale.ROOT, "%s/models/{%s}/_predict", ML_BASE_URI, PARAMETER_MODEL_ID))
-                );
+            .of(
+                new Route(
+                    RestRequest.Method.POST,
+                    String.format(Locale.ROOT, "%s/_predict/{%s}/{%s}", ML_BASE_URI, PARAMETER_ALGORITHM, PARAMETER_MODEL_ID)
+                ),
+                new Route(RestRequest.Method.POST, String.format(Locale.ROOT, "%s/models/{%s}/_predict", ML_BASE_URI, PARAMETER_MODEL_ID))
+            );
     }
 
     @Override
@@ -84,10 +84,10 @@ public class RestMLPredictionAction extends BaseRestHandler {
         // check if the model is in cache
         if (functionName.isPresent()) {
             MLPredictionTaskRequest predictionRequest = getRequest(
-                    modelId,
-                    functionName.get().name(),
-                    Objects.requireNonNullElse(userAlgorithm, functionName.get().name()),
-                    request
+                modelId,
+                functionName.get().name(),
+                Objects.requireNonNullElse(userAlgorithm, functionName.get().name()),
+                request
             );
             return channel -> client.execute(MLPredictionTaskAction.INSTANCE, predictionRequest, new RestToXContentListener<>(channel));
         }
@@ -100,11 +100,11 @@ public class RestMLPredictionAction extends BaseRestHandler {
                 String modelType = mlModel.getAlgorithm().name();
                 String modelAlgorithm = Objects.requireNonNullElse(userAlgorithm, mlModel.getAlgorithm().name());
                 client
-                        .execute(
-                                MLPredictionTaskAction.INSTANCE,
-                                getRequest(modelId, modelType, modelAlgorithm, request),
-                                new RestToXContentListener<>(channel)
-                        );
+                    .execute(
+                        MLPredictionTaskAction.INSTANCE,
+                        getRequest(modelId, modelType, modelAlgorithm, request),
+                        new RestToXContentListener<>(channel)
+                    );
             }, e -> {
                 log.error("Failed to get ML model", e);
                 try {
@@ -140,4 +140,3 @@ public class RestMLPredictionAction extends BaseRestHandler {
     }
 
 }
-

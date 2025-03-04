@@ -108,7 +108,7 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
     public void testGetRequest() throws IOException {
         RestRequest request = getRestRequest_PredictModel();
         MLPredictionTaskRequest mlPredictionTaskRequest = restMLPredictionAction
-                .getRequest("modelId", FunctionName.KMEANS.name(), FunctionName.KMEANS.name(), request);
+            .getRequest("modelId", FunctionName.KMEANS.name(), FunctionName.KMEANS.name(), request);
 
         MLInput mlInput = mlPredictionTaskRequest.getMlInput();
         verifyParsedKMeansMLInput(mlInput);
@@ -121,7 +121,7 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
         when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(false);
         RestRequest request = getRestRequest_PredictModel();
         MLPredictionTaskRequest mlPredictionTaskRequest = restMLPredictionAction
-                .getRequest("modelId", FunctionName.REMOTE.name(), "text_embedding", request);
+            .getRequest("modelId", FunctionName.REMOTE.name(), "text_embedding", request);
     }
 
     public void testPrepareRequest() throws Exception {
@@ -167,4 +167,3 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
         return request;
     }
 }
-
