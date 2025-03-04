@@ -49,7 +49,11 @@ POST _plugins/_ml/connectors/_create
     "parameters": {
         "region": "your_aws_region",
         "service_name": "bedrock",
-        "model": "anthropic.claude-3-5-sonnet-20240620-v1:0"
+        "model": "anthropic.claude-3-5-sonnet-20240620-v1:0",
+        "system_prompt": "you are a helpful assistant.",
+        "temperature": 0.0,
+        "top_p": 0.9,
+        "max_tokens": 1000
     },
     "actions": [
         {
@@ -59,7 +63,7 @@ POST _plugins/_ml/connectors/_create
                 "content-type": "application/json"
             },
             "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/converse",
-            "request_body": "{ \"system\": [{\"text\": \"you are a helpful assistant.\"}], \"messages\": ${parameters.messages} , \"inferenceConfig\": {\"temperature\": 0.0, \"topP\": 0.9, \"maxTokens\": 1000} }"
+            "request_body": "{ \"system\": [{\"text\": \"${parameters.system_prompt}\"}], \"messages\": ${parameters.messages} , \"inferenceConfig\": {\"temperature\": ${parameters.temperature}, \"topP\": ${parameters.top_p}, \"maxTokens\": ${parameters.max_tokens}} }"
         }
     ]
 }
@@ -295,7 +299,7 @@ Sample response:
 }
 ```
 
-## 2.2 Create search pipeline and search
+### 2.2 Create search pipeline and search
 
 Create pipeline
 ```
@@ -306,7 +310,7 @@ PUT /_search/pipeline/my-conversation-search-pipeline-claude2
       "retrieval_augmented_generation": {
         "tag": "Demo pipeline",
         "description": "Demo pipeline Using Bedrock Claude2",
-        "model_id": "your_model_id_created_in_step1",
+        "model_id": "your_model_id",
         "context_field_list": [
           "text"
         ],
