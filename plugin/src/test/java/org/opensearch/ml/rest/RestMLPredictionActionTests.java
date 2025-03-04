@@ -45,7 +45,6 @@ import org.opensearch.rest.action.RestToXContentListener;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
-import org.opensearch.transport.client.node.NodeClient;
 
 public class RestMLPredictionActionTests extends OpenSearchTestCase {
     @Rule
