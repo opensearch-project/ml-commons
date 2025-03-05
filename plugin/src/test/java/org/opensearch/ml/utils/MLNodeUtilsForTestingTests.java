@@ -5,7 +5,16 @@
 
 package org.opensearch.ml.utils;
 
-import com.fasterxml.jackson.core.JsonParseException;
+import static java.util.Collections.emptyMap;
+import static org.opensearch.ml.common.utils.ModelInterfaceUtils.BEDROCK_COHERE_EMBED_ENGLISH_V3_MODEL_INTERFACE;
+import static org.opensearch.ml.common.utils.ModelInterfaceUtils.BEDROCK_TITAN_EMBED_MULTI_MODAL_V1_MODEL_INTERFACE;
+import static org.opensearch.ml.common.utils.ModelInterfaceUtils.BEDROCK_TITAN_EMBED_TEXT_V1_MODEL_INTERFACE;
+import static org.opensearch.ml.utils.TestHelper.ML_ROLE;
+
+import java.io.IOException;
+import java.util.HashSet;
+import java.util.Set;
+
 import org.junit.Assert;
 import org.junit.Test;
 import org.opensearch.Version;
@@ -20,15 +29,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.test.OpenSearchTestCase;
 
-import java.io.IOException;
-import java.util.HashSet;
-import java.util.Set;
-
-import static java.util.Collections.emptyMap;
-import static org.opensearch.ml.common.utils.ModelInterfaceUtils.BEDROCK_COHERE_EMBED_ENGLISH_V3_MODEL_INTERFACE;
-import static org.opensearch.ml.common.utils.ModelInterfaceUtils.BEDROCK_TITAN_EMBED_MULTI_MODAL_V1_MODEL_INTERFACE;
-import static org.opensearch.ml.common.utils.ModelInterfaceUtils.BEDROCK_TITAN_EMBED_TEXT_V1_MODEL_INTERFACE;
-import static org.opensearch.ml.utils.TestHelper.ML_ROLE;
+import com.fasterxml.jackson.core.JsonParseException;
 
 public class MLNodeUtilsForTestingTests extends OpenSearchTestCase {
 
