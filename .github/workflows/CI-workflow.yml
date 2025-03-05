@@ -30,13 +30,13 @@ jobs:
         with:
           java-version: ${{ matrix.java }}
 
-      - uses: aws-actions/configure-aws-credentials@v2
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.ML_ROLE }}
           aws-region: us-west-2
 
       - name: Checkout MLCommons
-        uses: actions/checkout@v3
+        uses: actions/checkout@v
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
@@ -108,7 +108,7 @@ jobs:
           fi
 
       - name: Upload Coverage Report
-        uses: codecov/codecov-action@v1
+        uses: codecov/codecov-action@v4
         with:
           flags: ml-commons
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -128,14 +128,14 @@ jobs:
         with:
           java-version: ${{ matrix.java }}
 
-      - uses: aws-actions/configure-aws-credentials@v2
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.ML_ROLE }}
           aws-region: us-west-2
 
       # ml-commons
       - name: Checkout MLCommons
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
