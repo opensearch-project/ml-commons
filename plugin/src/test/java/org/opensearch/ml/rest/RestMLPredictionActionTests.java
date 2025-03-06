@@ -66,7 +66,7 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        when(modelManager.getOptionalModelFunctionName(anyString())).thenReturn(Optional.empty());
+        when(modelManager.getOptionalModelFunctionName(anyString())).thenReturn(Optional.of(FunctionName.REMOTE));
         when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(true);
         when(mlFeatureEnabledSetting.isLocalModelEnabled()).thenReturn(true);
         restMLPredictionAction = new RestMLPredictionAction(modelManager, mlFeatureEnabledSetting);
@@ -109,7 +109,8 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
 
     public void testGetRequest() throws IOException {
         RestRequest request = getRestRequest_PredictModel();
-        MLPredictionTaskRequest mlPredictionTaskRequest = restMLPredictionAction.getRequest("modelId", FunctionName.KMEANS.name(), request);
+        MLPredictionTaskRequest mlPredictionTaskRequest = restMLPredictionAction
+            .getRequest("modelId", FunctionName.KMEANS.name(), FunctionName.KMEANS.name(), request);
 
         MLInput mlInput = mlPredictionTaskRequest.getMlInput();
         verifyParsedKMeansMLInput(mlInput);
@@ -121,7 +122,8 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
 
         when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(false);
         RestRequest request = getRestRequest_PredictModel();
-        MLPredictionTaskRequest mlPredictionTaskRequest = restMLPredictionAction.getRequest("modelId", FunctionName.REMOTE.name(), request);
+        MLPredictionTaskRequest mlPredictionTaskRequest = restMLPredictionAction
+            .getRequest("modelId", FunctionName.REMOTE.name(), "text_embedding", request);
     }
 
     public void testGetRequest_LocalModelInferenceDisabled() throws IOException {
@@ -131,7 +133,7 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
         when(mlFeatureEnabledSetting.isLocalModelEnabled()).thenReturn(false);
         RestRequest request = getRestRequest_PredictModel();
         MLPredictionTaskRequest mlPredictionTaskRequest = restMLPredictionAction
-            .getRequest("modelId", FunctionName.TEXT_EMBEDDING.name(), request);
+            .getRequest("modelId", FunctionName.TEXT_EMBEDDING.name(), "text_embedding", request);
     }
 
     public void testPrepareRequest() throws Exception {
