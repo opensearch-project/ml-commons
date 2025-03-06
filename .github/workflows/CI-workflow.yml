@@ -44,13 +44,13 @@ jobs:
         with:
           java-version: ${{ matrix.java }}
 
-      - uses: aws-actions/configure-aws-credentials@v2
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.ML_ROLE }}
           aws-region: us-west-2
 
       - name: Checkout MLCommons
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
@@ -72,12 +72,12 @@ jobs:
           echo "build-test-linux=$plugin" >> $GITHUB_OUTPUT
 
       - name: Upload Coverage Report
-        uses: codecov/codecov-action@v1
+        uses: codecov/codecov-action@v3
         with:
           flags: ml-commons
           token: ${{ secrets.CODECOV_TOKEN }}
 
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: ml-plugin-linux-${{ matrix.java }}
           path: ${{ steps.step-build-test-linux.outputs.build-test-linux }}
@@ -96,17 +96,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: aws-actions/configure-aws-credentials@v2
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.ML_ROLE }}
           aws-region: us-west-2
 
       - name: Checkout MLCommons
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
-      - uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
           name: ml-plugin-linux-${{ matrix.java }}
 
@@ -171,7 +171,7 @@ jobs:
           fi
 
       - name: Upload Coverage Report
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           flags: ml-commons
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -191,14 +191,14 @@ jobs:
         with:
           java-version: ${{ matrix.java }}
 
-      - uses: aws-actions/configure-aws-credentials@v2
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.ML_ROLE }}
           aws-region: us-west-2
 
       # ml-commons
       - name: Checkout MLCommons
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
 
