@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.opensearch.ml.common.output.model.MLResultDataType;
 import org.opensearch.ml.common.output.model.ModelTensor;
 
 public class BedrockBatchJobArnPostProcessFunction extends ConnectorPostProcessFunction<Map<String, String>> {
@@ -28,7 +29,7 @@ public class BedrockBatchJobArnPostProcessFunction extends ConnectorPostProcessF
     }
 
     @Override
-    public List<ModelTensor> process(Map<String, String> jobInfo) {
+    public List<ModelTensor> process(Map<String, String> jobInfo, MLResultDataType dataType) {
         List<ModelTensor> modelTensors = new ArrayList<>();
         Map<String, String> processedResult = new HashMap<>();
         processedResult.putAll(jobInfo);

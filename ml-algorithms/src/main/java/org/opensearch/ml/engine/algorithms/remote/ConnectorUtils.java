@@ -40,6 +40,7 @@ import org.opensearch.ml.common.dataset.TextSimilarityInputDataSet;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLGuard;
+import org.opensearch.ml.common.output.model.MLResultDataType;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.script.ScriptService;
@@ -221,11 +222,12 @@ public class ConnectorUtils {
         String responseFilter = parameters.get(RESPONSE_FILTER_FIELD);
         if (MLPostProcessFunction.contains(postProcessFunction)) {
             // in this case, we can use jsonpath to build a List<List<Float>> result from model response.
-            if (StringUtils.isBlank(responseFilter))
+            if (StringUtils.isBlank(responseFilter)) {
                 responseFilter = MLPostProcessFunction.getResponseFilter(postProcessFunction);
-
+            }
             Object filteredOutput = JsonPath.read(modelResponse, responseFilter);
-            List<ModelTensor> processedResponse = MLPostProcessFunction.get(postProcessFunction).apply(filteredOutput);
+            MLResultDataType dataType = parseMLResultDataTypeFromResponseFilter(responseFilter);
+            List<ModelTensor> processedResponse = MLPostProcessFunction.get(postProcessFunction).apply(filteredOutput, dataType);
             return ModelTensors.builder().mlModelTensors(processedResponse).build();
         }
 
@@ -242,6 +244,15 @@ public class ConnectorUtils {
             connector.parseResponse(filteredResponse, modelTensors, scriptReturnModelTensor);
         }
         return ModelTensors.builder().mlModelTensors(modelTensors).build();
+    }
+
+    private static MLResultDataType parseMLResultDataTypeFromResponseFilter(String responseFilter) {
+        for (MLResultDataType type : MLResultDataType.values()) {
+            if (StringUtils.containsIgnoreCase(responseFilter, "." + type.name())) {
+                return type;
+            }
+        }
+        return null;
     }
 
     private static String fillProcessFunctionParameter(Map<String, String> parameters, String processFunction) {
