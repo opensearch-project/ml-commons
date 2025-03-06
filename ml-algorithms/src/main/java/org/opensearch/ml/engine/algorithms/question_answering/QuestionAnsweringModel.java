@@ -5,7 +5,9 @@
 
 package org.opensearch.ml.engine.algorithms.question_answering;
 
-import static org.opensearch.ml.engine.ModelHelper.*;
+import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.DEFAULT_WARMUP_CONTEXT;
+import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.DEFAULT_WARMUP_QUESTION;
+import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.SENTENCE_HIGHLIGHTING_TYPE;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -28,20 +30,43 @@ import ai.djl.translate.Translator;
 import ai.djl.translate.TranslatorFactory;
 import lombok.extern.log4j.Log4j2;
 
+/**
+ * Question answering model implementation that supports both standard QA and
+ * highlighting sentence.
+ */
 @Log4j2
 @Function(FunctionName.QUESTION_ANSWERING)
 public class QuestionAnsweringModel extends DLModel {
 
     @Override
     public void warmUp(Predictor predictor, String modelId, MLModelConfig modelConfig) throws TranslateException {
-        String question = "How is the weather?";
-        String context = "The weather is nice, it is beautiful day.";
-        Input input = new Input();
-        input.add(question);
-        input.add(context);
+        if (predictor == null) {
+            throw new IllegalArgumentException("predictor is null");
+        }
+        if (modelId == null) {
+            throw new IllegalArgumentException("model id is null");
+        }
 
-        // First request takes longer time. Predict once to warm up model.
+        // Create input for the predictor
+        Input input = new Input();
+        input.add(DEFAULT_WARMUP_QUESTION);
+        input.add(DEFAULT_WARMUP_CONTEXT);
+
+        // Run prediction to warm up the model
         predictor.predict(input);
+    }
+
+    /**
+     * Checks if the model is configured for sentence highlighting.
+     *
+     * @param modelConfig The model configuration
+     * @return true if the model is configured for sentence highlighting, false otherwise
+     */
+    private boolean isSentenceHighlightingType(MLModelConfig modelConfig) {
+        if (modelConfig != null) {
+            return SENTENCE_HIGHLIGHTING_TYPE.equalsIgnoreCase(modelConfig.getModelType());
+        }
+        return false;
     }
 
     @Override
@@ -62,6 +87,9 @@ public class QuestionAnsweringModel extends DLModel {
 
     @Override
     public Translator<Input, Output> getTranslator(String engine, MLModelConfig modelConfig) throws IllegalArgumentException {
+        if (isSentenceHighlightingType(modelConfig)) {
+            return SentenceHighlightingQATranslator.createDefault();
+        }
         return new QuestionAnsweringTranslator();
     }
 
@@ -69,5 +97,4 @@ public class QuestionAnsweringModel extends DLModel {
     public TranslatorFactory getTranslatorFactory(String engine, MLModelConfig modelConfig) {
         return null;
     }
-
 }
