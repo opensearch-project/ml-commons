@@ -4,7 +4,6 @@
  */
 package org.opensearch.ml.rest;
 
-import static org.junit.Assert.assertEquals;
 import static org.opensearch.ml.common.MLModel.MODEL_ID_FIELD;
 import static org.opensearch.ml.utils.TestData.SENTENCE_TRANSFORMER_MODEL_URL;
 import static org.opensearch.ml.utils.TestHelper.makeRequest;
@@ -38,6 +37,7 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
     private String bedrockEmbeddingModelId;
     private String localModelId;
     private String bedrockClaudeModelId;
+    private String bedrockMultiModalEmbeddingModelId;
     private final String completionModelConnectorEntity = "{\n"
         + "  \"name\": \"OpenAI text embedding model Connector\",\n"
         + "  \"description\": \"The connector to public OpenAI text embedding model service\",\n"
@@ -149,6 +149,43 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
         + "  ]\n"
         + "}";
 
+    private final String bedrockMultiModalEmbeddingModelConnectorEntity = "{\n"
+        + "  \"name\": \"Amazon Bedrock Connector: bedrock Titan multi-modal embedding model\",\n"
+        + "  \"description\": \"Test connector for Amazon Bedrock Titan multi-modal embedding model\",\n"
+        + "  \"version\": 1,\n"
+        + "  \"protocol\": \"aws_sigv4\",\n"
+        + "  \"parameters\": {\n"
+        + "    \"region\": \""
+        + GITHUB_CI_AWS_REGION
+        + "\",\n"
+        + "    \"service_name\": \"bedrock\",\n"
+        + "    \"model\": \"amazon.titan-embed-image-v1\",\n"
+        + "    \"input_docs_processed_step_size\": 2\n"
+        + "  },\n"
+        + "  \"credential\": {\n"
+        + "    \"access_key\": \""
+        + AWS_ACCESS_KEY_ID
+        + "\",\n"
+        + "    \"secret_key\": \""
+        + AWS_SECRET_ACCESS_KEY
+        + "\",\n"
+        + "    \"session_token\": \""
+        + AWS_SESSION_TOKEN
+        + "\"\n"
+        + "  },\n"
+        + "  \"actions\": [\n"
+        + "    {\n"
+        + "      \"action_type\": \"predict\",\n"
+        + "      \"method\": \"POST\",\n"
+        + "      \"url\": \"https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/invoke\",\n"
+        + "      \"headers\": {\n"
+        + "        \"content-type\": \"application/json\"\n"
+        + "      },\n"
+        + "      \"request_body\": \"{\\\"inputText\\\": \\\"${parameters.inputText:-null}\\\", \\\"inputImage\\\": \\\"${parameters.inputImage:-null}\\\"}\"\n"
+        + "    }\n"
+        + "  ]\n"
+        + "}";
+
     /**
      * Registers two remote models and creates an index and documents before running the tests.
      *
@@ -164,6 +201,13 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
         this.bedrockEmbeddingModelId = registerRemoteModel(bedrockEmbeddingModelConnectorEntity, bedrockEmbeddingModelName, true);
         String bedrockClaudeModelName = "bedrock claude model " + randomAlphaOfLength(5);
         this.bedrockClaudeModelId = registerRemoteModel(bedrockClaudeModelConnectorEntity, bedrockClaudeModelName, true);
+        String bedrockMultiModalEmbeddingModelName = "bedrock multi modal embedding model " + randomAlphaOfLength(5);
+        this.bedrockMultiModalEmbeddingModelId = registerRemoteModel(
+            bedrockMultiModalEmbeddingModelConnectorEntity,
+            bedrockMultiModalEmbeddingModelName,
+            true
+        );
+
         String index_name = "daily_index";
         String createIndexRequestBody = "{\n"
             + "  \"mappings\": {\n"
@@ -377,6 +421,59 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
         Assert.assertEquals(embeddingList.size(), 1536);
         Assert.assertEquals((Double) embeddingList.get(0), 0.734375, 0.005);
         Assert.assertEquals((Double) embeddingList.get(1), 0.87109375, 0.005);
+    }
+
+    /**
+     * Tests the MLInferenceSearchResponseProcessor with a remote model and
+     * read the optional model input from string field from search hits
+     * It creates a search pipeline with the processor configured to use the remote model,
+     * runs one to one prediction by sending one document to one prediction
+     * performs a search using the pipeline, and verifies the inference results.
+     *
+     * @throws Exception if any error occurs during the test
+     */
+    public void testMLInferenceProcessorRemoteModelOptionalInputs() throws Exception {
+        // Skip test if key is null
+        if (AWS_ACCESS_KEY_ID == null || AWS_SECRET_ACCESS_KEY == null || AWS_SESSION_TOKEN == null) {
+            return;
+        }
+        String createPipelineRequestBody = "{\n"
+            + "  \"response_processors\": [\n"
+            + "    {\n"
+            + "      \"ml_inference\": {\n"
+            + "        \"tag\": \"ml_inference\",\n"
+            + "        \"description\": \"This processor is to run knn query when query on both text and image\",\n"
+            + "        \"model_id\": \""
+            + this.bedrockMultiModalEmbeddingModelId
+            + "\",\n"
+            + "        \"optional_input_map\": [\n"
+            + "          {\n"
+            + "            \"inputText\": \"diary[0]\",\n"
+            + "            \"inputImage\": \"diary_image\"\n"
+            + "          }\n"
+            + "        ],\n"
+            + "        \"output_map\": [\n"
+            + "          {\n"
+            + "            \"multi_modal_embedding\": \"embedding\"\n"
+            + "          }\n"
+            + "        ],\n"
+            + "        \"model_config\": {},\n"
+            + "        \"one_to_one\": true,\n"
+            + "        \"ignore_failure\": false\n"
+            + "      }\n"
+            + "    }\n"
+            + "  ]\n"
+            + "}";
+        String index_name = "daily_index";
+
+        String pipelineName = "diary_multimodal_embedding_pipeline";
+        String query = "{\"query\":{\"term\":{\"diary\":{\"value\":\"happy\"}}}}";
+        createSearchPipelineProcessor(createPipelineRequestBody, pipelineName);
+
+        Map response = searchWithPipeline(client(), index_name, pipelineName, query);
+
+        assertEquals((int) JsonPath.parse(response).read("$.hits.hits.length()"), 1);
+        assertEquals((int) JsonPath.parse(response).read("$.hits.hits[0]._source.multi_modal_embedding.length()"), 1024);
     }
 
     /**

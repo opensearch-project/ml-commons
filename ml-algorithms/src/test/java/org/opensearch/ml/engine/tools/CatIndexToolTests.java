@@ -190,7 +190,7 @@ public class CatIndexToolTests {
         ShardRouting routing = TestShardRouting.newShardRouting(shId, "node", true, ShardRoutingState.STARTED);
         CommonStats commonStats = new CommonStats(CommonStatsFlags.ALL);
         IndexStats fooStats = new IndexStatsBuilder(index.getName(), index.getUUID())
-            .add(new ShardStats(routing, shardPath, commonStats, null, null, null))
+            .add(new ShardStats(routing, shardPath, commonStats, null, null, null, null))
             .build();
         when(indicesStatsResponse.getIndices()).thenReturn(Map.of(indexName, fooStats));
 
