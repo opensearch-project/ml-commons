@@ -34,6 +34,7 @@ import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupRespon
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsResponse;
+import org.opensearch.ml.memory.action.conversation.CreateConversationResponse;
 
 /**
  * A client to provide interfaces for machine learning jobs. This will be used by other plugins.
@@ -553,4 +554,22 @@ public interface MachineLearningClient {
      * @param listener a listener to be notified of the result
      */
     void getConfig(String configId, String tenantId, ActionListener<MLConfig> listener);
+
+    /**
+     * Create conversational memory for conversation
+     * @param name name of the conversation, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/memory-apis/create-memory/
+     * @return the result future
+     */
+    default ActionFuture<CreateConversationResponse> createConversation(String name) {
+        PlainActionFuture<CreateConversationResponse> actionFuture = PlainActionFuture.newFuture();
+        createConversation(name, actionFuture);
+        return actionFuture;
+    }
+
+    /**
+     * Create conversational memory for conversation
+     * @param name name of the conversation, refer: https://opensearch.org/docs/latest/ml-commons-plugin/api/memory-apis/create-memory/
+     * @param listener action listener
+     */
+    void createConversation(String name, ActionListener<CreateConversationResponse> listener);
 }
