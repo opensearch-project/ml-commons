@@ -49,6 +49,7 @@ import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLTrainingOutput;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
+import org.opensearch.ml.common.transport.config.MLConfigGetResponse;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorResponse;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
@@ -58,7 +59,6 @@ import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupRespon
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsResponse;
-import org.opensearch.ml.memory.action.conversation.CreateConversationResponse;
 
 public class MachineLearningClientTest {
 
@@ -107,7 +107,7 @@ public class MachineLearningClientTest {
     MLRegisterAgentResponse registerAgentResponse;
 
     @Mock
-    CreateConversationResponse createConversationResponse;
+    MLConfigGetResponse configGetResponse;
 
     private final String modekId = "test_model_id";
     private MLModel mlModel;
@@ -255,11 +255,6 @@ public class MachineLearningClientTest {
             @Override
             public void getConfig(String configId, String tenantId, ActionListener<MLConfig> listener) {
                 listener.onResponse(mlConfig);
-            }
-
-            @Override
-            public void createConversation(String name, ActionListener<CreateConversationResponse> listener) {
-                listener.onResponse(createConversationResponse);
             }
         };
     }
@@ -558,10 +553,5 @@ public class MachineLearningClientTest {
     @Test
     public void getConfig() {
         assertEquals(mlConfig, machineLearningClient.getConfig("configId").actionGet());
-    }
-
-    @Test
-    public void createConversation() {
-        assertEquals(createConversationResponse, machineLearningClient.createConversation("Conversation for a RAG pipeline").actionGet());
     }
 }
