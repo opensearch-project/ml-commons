@@ -222,6 +222,17 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
             System.out.println("OPENAI_KEY is null");
             return;
         }
+        Response updateCBSettingResponse = TestHelper
+            .makeRequest(
+                client(),
+                "PUT",
+                "_cluster/settings",
+                null,
+                "{\"persistent\":{\"plugins.ml_commons.jvm_heap_memory_threshold\":100}}",
+                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
+            );
+        assertEquals(200, updateCBSettingResponse.getStatusLine().getStatusCode());
+
         Response response = createConnector(completionModelConnectorEntity);
         Map responseMap = parseResponseToMap(response);
         String connectorId = (String) responseMap.get("connector_id");
