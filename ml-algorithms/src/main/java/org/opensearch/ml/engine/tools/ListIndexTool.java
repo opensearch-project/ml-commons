@@ -10,15 +10,20 @@ import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Queue;
 import java.util.Spliterators;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
+import org.apache.commons.lang3.math.NumberUtils;
 import org.apache.logging.log4j.util.Strings;
 import org.opensearch.action.admin.cluster.health.ClusterHealthRequest;
 import org.opensearch.action.admin.cluster.health.ClusterHealthResponse;
@@ -30,6 +35,9 @@ import org.opensearch.action.admin.indices.stats.CommonStats;
 import org.opensearch.action.admin.indices.stats.IndexStats;
 import org.opensearch.action.admin.indices.stats.IndicesStatsRequest;
 import org.opensearch.action.admin.indices.stats.IndicesStatsResponse;
+import org.opensearch.action.pagination.IndexPaginationStrategy;
+import org.opensearch.action.pagination.PageParams;
+import org.opensearch.action.pagination.PageToken;
 import org.opensearch.action.support.GroupedActionListener;
 import org.opensearch.action.support.IndicesOptions;
 import org.opensearch.cluster.health.ClusterIndexHealth;
@@ -37,6 +45,7 @@ import org.opensearch.cluster.metadata.IndexMetadata;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.Table;
 import org.opensearch.common.Table.Cell;
+import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.core.action.ActionListener;
@@ -50,10 +59,15 @@ import org.opensearch.transport.client.Client;
 
 import lombok.Getter;
 import lombok.Setter;
+import lombok.extern.log4j.Log4j2;
 
-@ToolAnnotation(CatIndexTool.TYPE)
-public class CatIndexTool implements Tool {
-    public static final String TYPE = "CatIndexTool";
+@Log4j2
+@ToolAnnotation(ListIndexTool.TYPE)
+public class ListIndexTool implements Tool {
+    public static final String TYPE = "ListIndexTool";
+    // This needs to be changed once it's changed in opensearch core in RestIndicesListAction.
+    private static final int MAX_SUPPORTED_LIST_INDICES_PAGE_SIZE = 5000;
+    public static final int DEFAULT_PAGE_SIZE = 100;
     private static final String DEFAULT_DESCRIPTION = String
         .join(
             " ",
@@ -65,7 +79,7 @@ public class CatIndexTool implements Tool {
 
     @Setter
     @Getter
-    private String name = CatIndexTool.TYPE;
+    private String name = ListIndexTool.TYPE;
     @Getter
     @Setter
     private String description = DEFAULT_DESCRIPTION;
@@ -80,7 +94,7 @@ public class CatIndexTool implements Tool {
     @SuppressWarnings("unused")
     private ClusterService clusterService;
 
-    public CatIndexTool(Client client, ClusterService clusterService) {
+    public ListIndexTool(Client client, ClusterService clusterService) {
         this.client = client;
         this.clusterService = clusterService;
 
@@ -96,9 +110,8 @@ public class CatIndexTool implements Tool {
 
     @Override
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
-        // TODO: This logic exactly matches the OpenSearch _cat/indices REST action. If code at
-        // o.o.rest/action/cat/RestIndicesAction.java changes those changes need to be reflected here
-        // https://github.com/opensearch-project/ml-commons/pull/1582#issuecomment-1796962876
+        // TODO: This logic exactly matches the OpenSearch _list/indices REST action. If code at
+        // o.o.rest/action/list/RestIndicesListAction.java changes those changes need to be reflected here
         @SuppressWarnings("unchecked")
         List<String> indexList = parameters.containsKey("indices")
             ? gson.fromJson(parameters.get("indices"), List.class)
@@ -106,13 +119,16 @@ public class CatIndexTool implements Tool {
         final String[] indices = indexList.toArray(Strings.EMPTY_ARRAY);
 
         final IndicesOptions indicesOptions = IndicesOptions.strictExpand();
-        final boolean local = parameters.containsKey("local") ? Boolean.parseBoolean("local") : false;
-        final TimeValue clusterManagerNodeTimeout = DEFAULT_CLUSTER_MANAGER_NODE_TIMEOUT;
+        final boolean local = parameters.containsKey("local") && Boolean.parseBoolean(parameters.get("local"));
         final boolean includeUnloadedSegments = Boolean.parseBoolean(parameters.get("include_unloaded_segments"));
+        final int pageSize = parameters.containsKey("page_size")
+            ? NumberUtils.toInt(parameters.get("page_size"), DEFAULT_PAGE_SIZE)
+            : DEFAULT_PAGE_SIZE;
+        final PageParams pageParams = new PageParams(null, PageParams.PARAM_ASC_SORT_VALUE, pageSize);
 
         final ActionListener<Table> internalListener = ActionListener.notifyOnce(ActionListener.wrap(table -> {
             // Handle empty table
-            if (table.getRows().isEmpty()) {
+            if (table == null || table.getRows().isEmpty()) {
                 @SuppressWarnings("unchecked")
                 T empty = (T) ("There were no results searching the indices parameter [" + parameters.get("indices") + "].");
                 listener.onResponse(empty);
@@ -131,55 +147,149 @@ public class CatIndexTool implements Tool {
             listener.onResponse(response);
         }, listener::onFailure));
 
-        sendGetSettingsRequest(
+        fetchClusterInfoAndPages(
             indices,
+            local,
+            includeUnloadedSegments,
+            pageParams,
             indicesOptions,
+            new ConcurrentLinkedQueue<>(),
+            internalListener
+        );
+    }
+
+    private void fetchClusterInfoAndPages(
+        String[] indices,
+        boolean local,
+        boolean includeUnloadedSegments,
+        PageParams pageParams,
+        IndicesOptions indicesOptions,
+        Queue<Collection<ActionResponse>> pageResults,
+        ActionListener<Table> originalListener
+    ) {
+        // First fetch metadata like index setting and cluster states and then fetch index details in batches to save efforts.
+        sendGetSettingsRequest(indices, indicesOptions, local, client, new ActionListener<>() {
+            @Override
+            public void onResponse(final GetSettingsResponse getSettingsResponse) {
+                // The list of indices that will be returned is determined by the indices returned from the Get Settings call.
+                // All the other requests just provide additional detail, and wildcards may be resolved differently depending on the
+                // type of request in the presence of security plugins (looking at you, ClusterHealthRequest), so
+                // force the IndicesOptions for all the sub-requests to be as inclusive as possible.
+                final IndicesOptions subRequestIndicesOptions = IndicesOptions.lenientExpandHidden();
+                // Indices that were successfully resolved during the get settings request might be deleted when the
+                // subsequent cluster state, cluster health and indices stats requests execute. We have to distinguish two cases:
+                // 1) the deleted index was explicitly passed as parameter to the /_cat/indices request. In this case we
+                // want the subsequent requests to fail.
+                // 2) the deleted index was resolved as part of a wildcard or _all. In this case, we want the subsequent
+                // requests not to fail on the deleted index (as we want to ignore wildcards that cannot be resolved).
+                // This behavior can be ensured by letting the cluster state, cluster health and indices stats requests
+                // re-resolve the index names with the same indices options that we used for the initial cluster state
+                // request (strictExpand).
+                sendClusterStateRequest(indices, subRequestIndicesOptions, local, client, new ActionListener<>() {
+                    @Override
+                    public void onResponse(ClusterStateResponse clusterStateResponse) {
+                        // Starts to fetch index details here, if a batch fails build whatever we have and return.
+                        fetchPages(
+                            indices,
+                            local,
+                            DEFAULT_CLUSTER_MANAGER_NODE_TIMEOUT,
+                            includeUnloadedSegments,
+                            pageParams,
+                            pageResults,
+                            clusterStateResponse,
+                            getSettingsResponse,
+                            subRequestIndicesOptions,
+                            originalListener
+                        );
+                    }
+
+                    @Override
+                    public void onFailure(final Exception e) {
+                        originalListener.onFailure(e);
+                    }
+                });
+            }
+
+            @Override
+            public void onFailure(final Exception e) {
+                originalListener.onFailure(e);
+            }
+        });
+    }
+
+    private void fetchPages(
+        String[] indices,
+        boolean local,
+        TimeValue clusterManagerNodeTimeout,
+        boolean includeUnloadedSegments,
+        PageParams pageParams,
+        Queue<Collection<ActionResponse>> pageResults,
+        ClusterStateResponse clusterStateResponse,
+        GetSettingsResponse getSettingsResponse,
+        IndicesOptions subRequestIndicesOptions,
+        ActionListener<Table> originalListener
+    ) {
+        final ActionListener<PageToken> iterativeListener = ActionListener.wrap(r -> {
+            // when previous response returns, build next request with response and invoke again.
+            PageParams nextPageParams = new PageParams(r.getNextToken(), pageParams.getSort(), pageParams.getSize());
+            // when next page doesn't exist or reaches max supported page size, return.
+            if (r.getNextToken() == null || pageResults.size() >= MAX_SUPPORTED_LIST_INDICES_PAGE_SIZE) {
+                Table table = buildTable(clusterStateResponse, getSettingsResponse, pageResults);
+                originalListener.onResponse(table);
+            } else {
+                fetchPages(
+                    indices,
+                    local,
+                    clusterManagerNodeTimeout,
+                    includeUnloadedSegments,
+                    nextPageParams,
+                    pageResults,
+                    clusterStateResponse,
+                    getSettingsResponse,
+                    subRequestIndicesOptions,
+                    originalListener
+                );
+            }
+        }, e -> {
+            log.error("Failed to fetch index info for page: {}", pageParams.getRequestedToken());
+            // Do not throw the exception, just return whatever we have.
+            originalListener.onResponse(buildTable(clusterStateResponse, getSettingsResponse, pageResults));
+        });
+        IndexPaginationStrategy paginationStrategy = getPaginationStrategy(pageParams, clusterStateResponse);
+        // For non-paginated queries, indicesToBeQueried would be same as indices retrieved from
+        // rest request and unresolved, while for paginated queries, it would be a list of indices
+        // already resolved by ClusterStateRequest and to be displayed in a page.
+        final String[] indicesToBeQueried = Objects.isNull(paginationStrategy)
+            ? indices
+            : paginationStrategy.getRequestedEntities().toArray(new String[0]);
+        // After the group listener returns, one page complete and prepare for next page.
+        // We put the single page result into the pageResults queue for future buildTable.
+        final GroupedActionListener<ActionResponse> groupedListener = createGroupedListener(
+            pageResults,
+            paginationStrategy.getResponseToken(),
+            iterativeListener
+        );
+
+        sendIndicesStatsRequest(
+            indicesToBeQueried,
+            subRequestIndicesOptions,
+            includeUnloadedSegments,
+            client,
+            ActionListener.wrap(groupedListener::onResponse, groupedListener::onFailure)
+        );
+
+        sendClusterHealthRequest(
+            indicesToBeQueried,
+            subRequestIndicesOptions,
             local,
             clusterManagerNodeTimeout,
             client,
-            new ActionListener<GetSettingsResponse>() {
-                @Override
-                public void onResponse(final GetSettingsResponse getSettingsResponse) {
-                    final GroupedActionListener<ActionResponse> groupedListener = createGroupedListener(4, internalListener);
-                    groupedListener.onResponse(getSettingsResponse);
-
-                    // The list of indices that will be returned is determined by the indices returned from the Get Settings call.
-                    // All the other requests just provide additional detail, and wildcards may be resolved differently depending on the
-                    // type of request in the presence of security plugins (looking at you, ClusterHealthRequest), so
-                    // force the IndicesOptions for all the sub-requests to be as inclusive as possible.
-                    final IndicesOptions subRequestIndicesOptions = IndicesOptions.lenientExpandHidden();
-
-                    sendIndicesStatsRequest(
-                        indices,
-                        subRequestIndicesOptions,
-                        includeUnloadedSegments,
-                        client,
-                        ActionListener.wrap(groupedListener::onResponse, groupedListener::onFailure)
-                    );
-                    sendClusterStateRequest(
-                        indices,
-                        subRequestIndicesOptions,
-                        local,
-                        clusterManagerNodeTimeout,
-                        client,
-                        ActionListener.wrap(groupedListener::onResponse, groupedListener::onFailure)
-                    );
-                    sendClusterHealthRequest(
-                        indices,
-                        subRequestIndicesOptions,
-                        local,
-                        clusterManagerNodeTimeout,
-                        client,
-                        ActionListener.wrap(groupedListener::onResponse, groupedListener::onFailure)
-                    );
-                }
-
-                @Override
-                public void onFailure(final Exception e) {
-                    internalListener.onFailure(e);
-                }
-            }
+            ActionListener.wrap(groupedListener::onResponse, groupedListener::onFailure)
         );
+    }
+
+    protected IndexPaginationStrategy getPaginationStrategy(PageParams pageParams, ClusterStateResponse clusterStateResponse) {
+        return new IndexPaginationStrategy(pageParams, clusterStateResponse.getState());
     }
 
     @Override
@@ -199,7 +309,6 @@ public class CatIndexTool implements Tool {
         final String[] indices,
         final IndicesOptions indicesOptions,
         final boolean local,
-        final TimeValue clusterManagerNodeTimeout,
         final Client client,
         final ActionListener<GetSettingsResponse> listener
     ) {
@@ -207,7 +316,7 @@ public class CatIndexTool implements Tool {
         request.indices(indices);
         request.indicesOptions(indicesOptions);
         request.local(local);
-        request.clusterManagerNodeTimeout(clusterManagerNodeTimeout);
+        request.clusterManagerNodeTimeout(DEFAULT_CLUSTER_MANAGER_NODE_TIMEOUT);
         request.names(IndexSettings.INDEX_SEARCH_THROTTLED.getKey());
 
         client.admin().indices().getSettings(request, listener);
@@ -217,7 +326,6 @@ public class CatIndexTool implements Tool {
         final String[] indices,
         final IndicesOptions indicesOptions,
         final boolean local,
-        final TimeValue clusterManagerNodeTimeout,
         final Client client,
         final ActionListener<ClusterStateResponse> listener
     ) {
@@ -226,7 +334,7 @@ public class CatIndexTool implements Tool {
         request.indices(indices);
         request.indicesOptions(indicesOptions);
         request.local(local);
-        request.clusterManagerNodeTimeout(clusterManagerNodeTimeout);
+        request.clusterManagerNodeTimeout(DEFAULT_CLUSTER_MANAGER_NODE_TIMEOUT);
 
         client.admin().cluster().state(request, listener);
     }
@@ -266,39 +374,24 @@ public class CatIndexTool implements Tool {
         client.admin().indices().stats(request, listener);
     }
 
-    private GroupedActionListener<ActionResponse> createGroupedListener(final int size, final ActionListener<Table> listener) {
-        return new GroupedActionListener<>(new ActionListener<Collection<ActionResponse>>() {
+    // group listener only accept two action response: IndicesStatsResponse and ClusterHealthResponse
+    private GroupedActionListener<ActionResponse> createGroupedListener(
+        final Queue<Collection<ActionResponse>> pageResults,
+        final PageToken pageToken,
+        final ActionListener<PageToken> listener
+    ) {
+        return new GroupedActionListener<>(new ActionListener<>() {
             @Override
             public void onResponse(final Collection<ActionResponse> responses) {
-                try {
-                    GetSettingsResponse settingsResponse = extractResponse(responses, GetSettingsResponse.class);
-                    Map<String, Settings> indicesSettings = StreamSupport
-                        .stream(Spliterators.spliterator(settingsResponse.getIndexToSettings().entrySet(), 0), false)
-                        .collect(Collectors.toMap(cursor -> cursor.getKey(), cursor -> cursor.getValue()));
-
-                    ClusterStateResponse stateResponse = extractResponse(responses, ClusterStateResponse.class);
-                    Map<String, IndexMetadata> indicesStates = StreamSupport
-                        .stream(stateResponse.getState().getMetadata().spliterator(), false)
-                        .collect(Collectors.toMap(indexMetadata -> indexMetadata.getIndex().getName(), Function.identity()));
-
-                    ClusterHealthResponse healthResponse = extractResponse(responses, ClusterHealthResponse.class);
-                    Map<String, ClusterIndexHealth> indicesHealths = healthResponse.getIndices();
-
-                    IndicesStatsResponse statsResponse = extractResponse(responses, IndicesStatsResponse.class);
-                    Map<String, IndexStats> indicesStats = statsResponse.getIndices();
-
-                    Table responseTable = buildTable(indicesSettings, indicesHealths, indicesStats, indicesStates);
-                    listener.onResponse(responseTable);
-                } catch (Exception e) {
-                    onFailure(e);
-                }
+                pageResults.add(responses);
+                listener.onResponse(pageToken);
             }
 
             @Override
             public void onFailure(final Exception e) {
                 listener.onFailure(e);
             }
-        }, size);
+        }, 2);
     }
 
     @Override
@@ -307,9 +400,9 @@ public class CatIndexTool implements Tool {
     }
 
     /**
-     * Factory for the {@link CatIndexTool}
+     * Factory for the {@link ListIndexTool}
      */
-    public static class Factory implements Tool.Factory<CatIndexTool> {
+    public static class Factory implements Tool.Factory<ListIndexTool> {
         private Client client;
         private ClusterService clusterService;
 
@@ -322,7 +415,7 @@ public class CatIndexTool implements Tool {
             if (INSTANCE != null) {
                 return INSTANCE;
             }
-            synchronized (CatIndexTool.class) {
+            synchronized (ListIndexTool.class) {
                 if (INSTANCE != null) {
                     return INSTANCE;
                 }
@@ -342,8 +435,8 @@ public class CatIndexTool implements Tool {
         }
 
         @Override
-        public CatIndexTool create(Map<String, Object> map) {
-            return new CatIndexTool(client, clusterService);
+        public ListIndexTool create(Map<String, Object> map) {
+            return new ListIndexTool(client, clusterService);
         }
 
         @Override
@@ -396,21 +489,34 @@ public class CatIndexTool implements Tool {
     }
 
     private Table buildTable(
-        final Map<String, Settings> indicesSettings,
-        final Map<String, ClusterIndexHealth> indicesHealths,
-        final Map<String, IndexStats> indicesStats,
-        final Map<String, IndexMetadata> indicesMetadatas
+        ClusterStateResponse clusterStateResponse,
+        GetSettingsResponse getSettingsResponse,
+        Queue<Collection<ActionResponse>> responses
     ) {
+        if (responses == null || responses.isEmpty() || responses.peek().isEmpty()) {
+            return null;
+        }
+        Tuple<Map<String, IndexStats>, Map<String, ClusterIndexHealth>> tuple = aggregateResults(responses);
         final Table table = getTableWithHeader();
         AtomicInteger rowNum = new AtomicInteger(0);
+        Map<String, Settings> indicesSettings = StreamSupport
+            .stream(Spliterators.spliterator(getSettingsResponse.getIndexToSettings().entrySet(), 0), false)
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+        Map<String, IndexMetadata> indicesStates = StreamSupport
+            .stream(clusterStateResponse.getState().getMetadata().spliterator(), false)
+            .collect(Collectors.toMap(indexMetadata -> indexMetadata.getIndex().getName(), Function.identity()));
+
+        Map<String, ClusterIndexHealth> indicesHealths = tuple.v2();
+        Map<String, IndexStats> indicesStats = tuple.v1();
         indicesSettings.forEach((indexName, settings) -> {
-            if (!indicesMetadatas.containsKey(indexName)) {
+            if (!indicesStates.containsKey(indexName)) {
                 // the index exists in the Get Indices response but is not present in the cluster state:
                 // it is likely that the index was deleted in the meanwhile, so we ignore it.
                 return;
             }
 
-            final IndexMetadata indexMetadata = indicesMetadatas.get(indexName);
+            final IndexMetadata indexMetadata = indicesStates.get(indexName);
             final IndexMetadata.State indexState = indexMetadata.getState();
             final IndexStats indexStats = indicesStats.get(indexName);
 
@@ -448,15 +554,28 @@ public class CatIndexTool implements Tool {
 
             table.addCell(totalStats.getStore() == null ? null : totalStats.getStore().size());
             table.addCell(primaryStats.getStore() == null ? null : primaryStats.getStore().size());
-
             table.endRow();
         });
-
         return table;
     }
 
-    @SuppressWarnings("unchecked")
-    private static <A extends ActionResponse> A extractResponse(final Collection<? extends ActionResponse> responses, Class<A> c) {
-        return (A) responses.stream().filter(c::isInstance).findFirst().get();
+    private Tuple<Map<String, IndexStats>, Map<String, ClusterIndexHealth>> aggregateResults(Queue<Collection<ActionResponse>> responses) {
+        // Each batch produces a collection of action response, aggregate them together to build table easier.
+        Map<String, IndexStats> indexStatsMap = new HashMap<>();
+        Map<String, ClusterIndexHealth> clusterIndexHealthMap = new HashMap<>();
+        for (Collection<ActionResponse> response : responses) {
+            if (response != null && !response.isEmpty()) {
+                response.forEach(x -> {
+                    if (x instanceof IndicesStatsResponse) {
+                        indexStatsMap.putAll(((IndicesStatsResponse) x).getIndices());
+                    } else if (x instanceof ClusterHealthResponse) {
+                        clusterIndexHealthMap.putAll(((ClusterHealthResponse) x).getIndices());
+                    } else {
+                        throw new IllegalStateException("Unexpected action response type: " + x.getClass().getName());
+                    }
+                });
+            }
+        }
+        return new Tuple<>(indexStatsMap, clusterIndexHealthMap);
     }
 }
