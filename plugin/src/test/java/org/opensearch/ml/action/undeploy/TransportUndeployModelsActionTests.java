@@ -18,10 +18,12 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.common.CommonValue.NOT_FOUND;
 import static org.opensearch.ml.task.MLPredictTaskRunnerTests.USER_STRING;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -346,6 +348,63 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
 
         verify(actionListener).onResponse(any(MLUndeployModelsResponse.class));
         verify(client).bulk(any(BulkRequest.class), any(ActionListener.class));
+    }
+
+    public void testDoExecute_bulkRequestFired_WhenModelNotFoundInAllNodes() {
+        MLModel mlModel = MLModel
+            .builder()
+            .user(User.parse(USER_STRING))
+            .modelGroupId("111")
+            .version("111")
+            .name(this.modelIds[0])
+            .modelId(this.modelIds[0])
+            .algorithm(FunctionName.BATCH_RCF)
+            .content("content")
+            .totalChunks(2)
+            .isHidden(true)
+            .build();
+
+        // Mock MLModel manager response
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(mlModel);
+            return null;
+        }).when(mlModelManager).getModel(any(), any(), any(), any(), isA(ActionListener.class));
+
+        doReturn(true).when(transportUndeployModelsAction).isSuperAdminUserWrapper(clusterService, client);
+
+        List<MLUndeployModelNodeResponse> responseList = new ArrayList<>();
+
+        for (String nodeId : this.nodeIds) {
+            Map<String, String> stats = new HashMap<>();
+            stats.put(this.modelIds[0], NOT_FOUND);
+            MLUndeployModelNodeResponse nodeResponse = mock(MLUndeployModelNodeResponse.class);
+            when(nodeResponse.getModelUndeployStatus()).thenReturn(stats);
+            responseList.add(nodeResponse);
+        }
+
+        List<FailedNodeException> failuresList = new ArrayList<>();
+        MLUndeployModelNodesResponse nodesResponse = new MLUndeployModelNodesResponse(clusterName, responseList, failuresList);
+
+        doAnswer(invocation -> {
+            ActionListener<MLUndeployModelNodesResponse> listener = invocation.getArgument(2);
+            listener.onResponse(nodesResponse);
+            return null;
+        }).when(client).execute(any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<BulkResponse> listener = invocation.getArgument(1);
+            listener.onResponse(mock(BulkResponse.class));
+            return null;
+        }).when(client).bulk(any(BulkRequest.class), any(ActionListener.class));
+
+        MLUndeployModelsRequest request = new MLUndeployModelsRequest(modelIds, nodeIds, null);
+
+        transportUndeployModelsAction.doExecute(task, request, actionListener);
+
+        // Verify that bulk request was fired because all nodes reported "not_found"
+        verify(client).bulk(any(BulkRequest.class), any(ActionListener.class));
+        verify(actionListener).onResponse(any(MLUndeployModelsResponse.class));
     }
 
     public void testHiddenModelPermissionError() {
