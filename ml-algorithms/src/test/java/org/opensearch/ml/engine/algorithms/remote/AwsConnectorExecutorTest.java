@@ -618,7 +618,7 @@ public class AwsConnectorExecutorTest {
             .builder()
             .actionType(PREDICT)
             .method("POST")
-            .url("http://openai.com/mock")
+            .url("http://bedrock.com/mock")
             .requestBody("{\"input\": ${parameters.input}}")
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_BEDROCK_EMBEDDING_INPUT)
             .build();

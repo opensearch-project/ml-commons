@@ -6,8 +6,26 @@
 package org.opensearch.ml.common.connector;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.isValidActionInModelPrediction;
+import static org.opensearch.ml.common.connector.MLPostProcessFunction.BEDROCK_BATCH_JOB_ARN;
+import static org.opensearch.ml.common.connector.MLPostProcessFunction.BEDROCK_EMBEDDING;
+import static org.opensearch.ml.common.connector.MLPostProcessFunction.BEDROCK_RERANK;
+import static org.opensearch.ml.common.connector.MLPostProcessFunction.COHERE_EMBEDDING;
+import static org.opensearch.ml.common.connector.MLPostProcessFunction.COHERE_RERANK;
+import static org.opensearch.ml.common.connector.MLPostProcessFunction.DEFAULT_EMBEDDING;
+import static org.opensearch.ml.common.connector.MLPostProcessFunction.DEFAULT_RERANK;
+import static org.opensearch.ml.common.connector.MLPostProcessFunction.OPENAI_EMBEDDING;
+import static org.opensearch.ml.common.connector.MLPreProcessFunction.IMAGE_TO_COHERE_MULTI_MODAL_EMBEDDING_INPUT;
+import static org.opensearch.ml.common.connector.MLPreProcessFunction.TEXT_DOCS_TO_BEDROCK_EMBEDDING_INPUT;
+import static org.opensearch.ml.common.connector.MLPreProcessFunction.TEXT_DOCS_TO_COHERE_EMBEDDING_INPUT;
+import static org.opensearch.ml.common.connector.MLPreProcessFunction.TEXT_DOCS_TO_DEFAULT_EMBEDDING_INPUT;
+import static org.opensearch.ml.common.connector.MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT;
+import static org.opensearch.ml.common.connector.MLPreProcessFunction.TEXT_IMAGE_TO_BEDROCK_EMBEDDING_INPUT;
+import static org.opensearch.ml.common.connector.MLPreProcessFunction.TEXT_SIMILARITY_TO_BEDROCK_RERANK_INPUT;
+import static org.opensearch.ml.common.connector.MLPreProcessFunction.TEXT_SIMILARITY_TO_COHERE_RERANK_INPUT;
+import static org.opensearch.ml.common.connector.MLPreProcessFunction.TEXT_SIMILARITY_TO_DEFAULT_INPUT;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -33,6 +51,11 @@ public class ConnectorActionTest {
     private static final String TEST_METHOD_HTTP = "http";
     private static final String TEST_REQUEST_BODY = "{\"input\": \"${parameters.input}\"}";
     private static final String URL = "https://test.com";
+    private static final String OPENAI_URL = "https://api.openai.com/v1/chat/completions";
+    private static final String COHERE_URL = "https://api.cohere.ai/v1/embed";
+    private static final String BEDROCK_URL = "https://bedrock-runtime.us-east-1.amazonaws.com/model/amazon.titan-embed-text-v1/invoke";
+    private static final String SAGEMAKER_URL =
+        "https://runtime.sagemaker.us-west-2.amazonaws.com/endpoints/lmi-model-2023-06-24-01-35-32-275/invocations";
 
     @Test
     public void constructor_NullActionType() {
@@ -60,6 +83,279 @@ public class ConnectorActionTest {
             () -> new ConnectorAction(TEST_ACTION_TYPE, null, URL, null, TEST_REQUEST_BODY, null, null)
         );
         assertEquals("method can't be null", exception.getMessage());
+    }
+
+    @Test
+    public void connectorWithNullPreProcessFunction() {
+        ConnectorAction action = new ConnectorAction(TEST_ACTION_TYPE, TEST_METHOD_HTTP, OPENAI_URL, null, TEST_REQUEST_BODY, null, null);
+        action.validatePrePostProcessFunctions(Map.of());
+        assertNotNull(action);
+    }
+
+    @Test
+    public void connectorWithCustomPainlessScriptPreProcessFunction() {
+        String preProcessFunction =
+            "\"\\n    StringBuilder builder = new StringBuilder();\\n    builder.append(\\\"\\\\\\\"\\\");\\n    String first = params.text_docs[0];\\n    builder.append(first);\\n    builder.append(\\\"\\\\\\\"\\\");\\n    def parameters = \\\"{\\\" +\\\"\\\\\\\"text_inputs\\\\\\\":\\\" + builder + \\\"}\\\";\\n    return  \\\"{\\\" +\\\"\\\\\\\"parameters\\\\\\\":\\\" + parameters + \\\"}\\\";\"";
+        ConnectorAction action = new ConnectorAction(
+            TEST_ACTION_TYPE,
+            TEST_METHOD_HTTP,
+            OPENAI_URL,
+            null,
+            TEST_REQUEST_BODY,
+            preProcessFunction,
+            null
+        );
+        action.validatePrePostProcessFunctions(null);
+        assertNotNull(action);
+    }
+
+    @Test
+    public void openAIConnectorWithCorrectInBuiltPrePostProcessFunction() {
+        ConnectorAction action = new ConnectorAction(
+            TEST_ACTION_TYPE,
+            TEST_METHOD_HTTP,
+            "https://${parameters.endpoint}/v1/chat/completions",
+            null,
+            TEST_REQUEST_BODY,
+            TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT,
+            OPENAI_EMBEDDING
+        );
+        action.validatePrePostProcessFunctions(Map.of("endpoint", "api.openai.com"));
+        assertNotNull(action);
+    }
+
+    @Test
+    public void openAIConnectorWithWrongInBuiltPrePostProcessFunction() {
+        ConnectorAction action1 = new ConnectorAction(
+            TEST_ACTION_TYPE,
+            TEST_METHOD_HTTP,
+            OPENAI_URL,
+            null,
+            TEST_REQUEST_BODY,
+            TEXT_DOCS_TO_BEDROCK_EMBEDDING_INPUT,
+            OPENAI_EMBEDDING
+        );
+        Throwable exception = assertThrows(IllegalArgumentException.class, () -> action1.validatePrePostProcessFunctions(Map.of()));
+        assertEquals(
+            "LLM service is openai, so PreProcessFunction should be connector.pre_process.openai.embedding",
+            exception.getMessage()
+        );
+        ConnectorAction action2 = new ConnectorAction(
+            TEST_ACTION_TYPE,
+            TEST_METHOD_HTTP,
+            OPENAI_URL,
+            null,
+            TEST_REQUEST_BODY,
+            TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT,
+            COHERE_EMBEDDING
+        );
+        exception = assertThrows(IllegalArgumentException.class, () -> action2.validatePrePostProcessFunctions(Map.of()));
+        assertEquals(
+            "LLM service is openai, so PostProcessFunction should be connector.post_process.openai.embedding",
+            exception.getMessage()
+        );
+    }
+
+    @Test
+    public void cohereConnectorWithCorrectInBuiltPrePostProcessFunction() {
+        ConnectorAction action = new ConnectorAction(
+            TEST_ACTION_TYPE,
+            TEST_METHOD_HTTP,
+            COHERE_URL,
+            null,
+            TEST_REQUEST_BODY,
+            TEXT_DOCS_TO_COHERE_EMBEDDING_INPUT,
+            COHERE_EMBEDDING
+        );
+        action.validatePrePostProcessFunctions(Map.of());
+        assertNotNull(action);
+        action = new ConnectorAction(
+            TEST_ACTION_TYPE,
+            TEST_METHOD_HTTP,
+            COHERE_URL,
+            null,
+            TEST_REQUEST_BODY,
+            IMAGE_TO_COHERE_MULTI_MODAL_EMBEDDING_INPUT,
+            COHERE_EMBEDDING
+        );
+        action.validatePrePostProcessFunctions(Map.of());
+        assertNotNull(action);
+        action = new ConnectorAction(
+            TEST_ACTION_TYPE,
+            TEST_METHOD_HTTP,
+            COHERE_URL,
+            null,
+            TEST_REQUEST_BODY,
+            TEXT_SIMILARITY_TO_COHERE_RERANK_INPUT,
+            COHERE_RERANK
+        );
+        action.validatePrePostProcessFunctions(Map.of());
+        assertNotNull(action);
+    }
+
+    @Test
+    public void cohereConnectorWithWrongInBuiltPrePostProcessFunction() {
+        ConnectorAction action1 = new ConnectorAction(
+            TEST_ACTION_TYPE,
+            TEST_METHOD_HTTP,
+            COHERE_URL,
+            null,
+            TEST_REQUEST_BODY,
+            TEXT_DOCS_TO_BEDROCK_EMBEDDING_INPUT,
+            COHERE_EMBEDDING
+        );
+        Throwable exception = assertThrows(IllegalArgumentException.class, () -> action1.validatePrePostProcessFunctions(Map.of()));
+        assertEquals(
+            "LLM service is cohere, so PreProcessFunction should be connector.pre_process.cohere.embedding"
+                + " or connector.pre_process.cohere.multimodal_embedding or connector.pre_process.cohere.rerank",
+            exception.getMessage()
+        );
+        ConnectorAction action2 = new ConnectorAction(
+            TEST_ACTION_TYPE,
+            TEST_METHOD_HTTP,
+            COHERE_URL,
+            null,
+            TEST_REQUEST_BODY,
+            TEXT_DOCS_TO_COHERE_EMBEDDING_INPUT,
+            OPENAI_EMBEDDING
+        );
+        exception = assertThrows(IllegalArgumentException.class, () -> action2.validatePrePostProcessFunctions(Map.of()));
+        assertEquals(
+            "LLM service is cohere, so PostProcessFunction should be connector.post_process.cohere.embedding"
+                + " or connector.post_process.cohere.rerank",
+            exception.getMessage()
+        );
+    }
+
+    @Test
+    public void bedrockConnectorWithCorrectInBuiltPrePostProcessFunction() {
+        ConnectorAction action = new ConnectorAction(
+            TEST_ACTION_TYPE,
+            TEST_METHOD_HTTP,
+            BEDROCK_URL,
+            null,
+            TEST_REQUEST_BODY,
+            TEXT_DOCS_TO_BEDROCK_EMBEDDING_INPUT,
+            BEDROCK_EMBEDDING
+        );
+        action.validatePrePostProcessFunctions(Map.of());
+        assertNotNull(action);
+        action = new ConnectorAction(
+            TEST_ACTION_TYPE,
+            TEST_METHOD_HTTP,
+            BEDROCK_URL,
+            null,
+            TEST_REQUEST_BODY,
+            TEXT_IMAGE_TO_BEDROCK_EMBEDDING_INPUT,
+            BEDROCK_BATCH_JOB_ARN
+        );
+        action.validatePrePostProcessFunctions(Map.of());
+        assertNotNull(action);
+        action = new ConnectorAction(
+            TEST_ACTION_TYPE,
+            TEST_METHOD_HTTP,
+            BEDROCK_URL,
+            null,
+            TEST_REQUEST_BODY,
+            TEXT_SIMILARITY_TO_BEDROCK_RERANK_INPUT,
+            BEDROCK_RERANK
+        );
+        action.validatePrePostProcessFunctions(Map.of());
+        assertNotNull(action);
+    }
+
+    @Test
+    public void bedrockConnectorWithWrongInBuiltPrePostProcessFunction() {
+        ConnectorAction action1 = new ConnectorAction(
+            TEST_ACTION_TYPE,
+            TEST_METHOD_HTTP,
+            BEDROCK_URL,
+            null,
+            TEST_REQUEST_BODY,
+            TEXT_DOCS_TO_COHERE_EMBEDDING_INPUT,
+            BEDROCK_EMBEDDING
+        );
+        Throwable exception = assertThrows(IllegalArgumentException.class, () -> action1.validatePrePostProcessFunctions(Map.of()));
+        assertEquals(
+            "LLM service is bedrock, so PreProcessFunction should be connector.pre_process.bedrock.embedding"
+                + " or connector.pre_process.bedrock.multimodal_embedding or connector.pre_process.bedrock.rerank",
+            exception.getMessage()
+        );
+        ConnectorAction action2 = new ConnectorAction(
+            TEST_ACTION_TYPE,
+            TEST_METHOD_HTTP,
+            BEDROCK_URL,
+            null,
+            TEST_REQUEST_BODY,
+            TEXT_IMAGE_TO_BEDROCK_EMBEDDING_INPUT,
+            COHERE_EMBEDDING
+        );
+        exception = assertThrows(IllegalArgumentException.class, () -> action2.validatePrePostProcessFunctions(Map.of()));
+        assertEquals(
+            "LLM service is bedrock, so PostProcessFunction should be connector.post_process.bedrock.embedding"
+                + " or connector.post_process.bedrock.batch_job_arn or connector.post_process.bedrock.rerank",
+            exception.getMessage()
+        );
+    }
+
+    @Test
+    public void sagemakerConnectorWithCorrectInBuiltPrePostProcessFunction() {
+        ConnectorAction action = new ConnectorAction(
+            TEST_ACTION_TYPE,
+            TEST_METHOD_HTTP,
+            SAGEMAKER_URL,
+            null,
+            TEST_REQUEST_BODY,
+            TEXT_DOCS_TO_DEFAULT_EMBEDDING_INPUT,
+            DEFAULT_EMBEDDING
+        );
+        action.validatePrePostProcessFunctions(Map.of());
+        assertNotNull(action);
+        action = new ConnectorAction(
+            TEST_ACTION_TYPE,
+            TEST_METHOD_HTTP,
+            SAGEMAKER_URL,
+            null,
+            TEST_REQUEST_BODY,
+            TEXT_SIMILARITY_TO_DEFAULT_INPUT,
+            DEFAULT_RERANK
+        );
+        action.validatePrePostProcessFunctions(Map.of());
+        assertNotNull(action);
+    }
+
+    @Test
+    public void sagemakerConnectorWithWrongInBuiltPrePostProcessFunction() {
+        ConnectorAction action1 = new ConnectorAction(
+            TEST_ACTION_TYPE,
+            TEST_METHOD_HTTP,
+            SAGEMAKER_URL,
+            null,
+            TEST_REQUEST_BODY,
+            TEXT_DOCS_TO_COHERE_EMBEDDING_INPUT,
+            DEFAULT_EMBEDDING
+        );
+        Throwable exception = assertThrows(IllegalArgumentException.class, () -> action1.validatePrePostProcessFunctions(Map.of()));
+        assertEquals(
+            "LLM service is sagemaker, so PreProcessFunction should be connector.pre_process.default.embedding"
+                + " or connector.pre_process.default.rerank",
+            exception.getMessage()
+        );
+        ConnectorAction action2 = new ConnectorAction(
+            TEST_ACTION_TYPE,
+            TEST_METHOD_HTTP,
+            SAGEMAKER_URL,
+            null,
+            TEST_REQUEST_BODY,
+            TEXT_DOCS_TO_DEFAULT_EMBEDDING_INPUT,
+            BEDROCK_EMBEDDING
+        );
+        exception = assertThrows(IllegalArgumentException.class, () -> action2.validatePrePostProcessFunctions(Map.of()));
+        assertEquals(
+            "LLM service is sagemaker, so PostProcessFunction should be connector.post_process.default.embedding"
+                + " or connector.post_process.default.rerank",
+            exception.getMessage()
+        );
     }
 
     @Test
