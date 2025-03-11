@@ -29,8 +29,6 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.test.OpenSearchTestCase;
 
-import com.fasterxml.jackson.core.JsonParseException;
-
 public class MLNodeUtilsForTestingTests extends OpenSearchTestCase {
 
     public void testIsMLNode() {
@@ -103,6 +101,5 @@ public class MLNodeUtilsForTestingTests extends OpenSearchTestCase {
         String json = "{\"text_docs\":[ \"today is sunny\", \"today is sunny\"]}";
         MLNodeUtilsForTesting.validateSchema(schema, json);
     }
-
 
 }
