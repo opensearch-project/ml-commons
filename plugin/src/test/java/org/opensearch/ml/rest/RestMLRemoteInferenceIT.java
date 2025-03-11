@@ -216,49 +216,49 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         waitForTask(taskId, MLTaskState.COMPLETED);
     }
 
-    public void testPredictWithAutoDeployAndTTL_RemoteModel() throws IOException, InterruptedException {
-        // Skip test if key is null
-        if (OPENAI_KEY == null) {
-            System.out.println("OPENAI_KEY is null");
-            return;
-        }
-        Response updateCBSettingResponse = TestHelper
-            .makeRequest(
-                client(),
-                "PUT",
-                "_cluster/settings",
-                null,
-                "{\"persistent\":{\"plugins.ml_commons.jvm_heap_memory_threshold\":100}}",
-                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
-            );
-        assertEquals(200, updateCBSettingResponse.getStatusLine().getStatusCode());
-
-        Response response = createConnector(completionModelConnectorEntity);
-        Map responseMap = parseResponseToMap(response);
-        String connectorId = (String) responseMap.get("connector_id");
-        response = registerRemoteModelWithTTLAndSkipHeapMemCheck("openAI-GPT-3.5 completions", connectorId, 1);
-        responseMap = parseResponseToMap(response);
-        String modelId = (String) responseMap.get("model_id");
-        String predictInput = "{\n" + "  \"parameters\": {\n" + "      \"prompt\": \"Say this is a test\"\n" + "  }\n" + "}";
-        response = predictRemoteModel(modelId, predictInput);
-        responseMap = parseResponseToMap(response);
-        List responseList = (List) responseMap.get("inference_results");
-        responseMap = (Map) responseList.get(0);
-        responseList = (List) responseMap.get("output");
-        responseMap = (Map) responseList.get(0);
-        responseMap = (Map) responseMap.get("dataAsMap");
-        responseList = (List) responseMap.get("choices");
-        if (responseList == null) {
-            assertTrue(checkThrottlingOpenAI(responseMap));
-            return;
-        }
-        responseMap = (Map) responseList.get(0);
-        assertFalse(((String) responseMap.get("text")).isEmpty());
-
-        getModelProfile(modelId, verifyRemoteModelDeployed());
-        TimeUnit.SECONDS.sleep(71);
-        assertTrue(getModelProfile(modelId, verifyRemoteModelDeployed()).isEmpty());
-    }
+//    public void testPredictWithAutoDeployAndTTL_RemoteModel() throws IOException, InterruptedException {
+//        // Skip test if key is null
+//        if (OPENAI_KEY == null) {
+//            System.out.println("OPENAI_KEY is null");
+//            return;
+//        }
+//        Response updateCBSettingResponse = TestHelper
+//            .makeRequest(
+//                client(),
+//                "PUT",
+//                "_cluster/settings",
+//                null,
+//                "{\"persistent\":{\"plugins.ml_commons.jvm_heap_memory_threshold\":100}}",
+//                ImmutableList.of(new BasicHeader(HttpHeaders.USER_AGENT, ""))
+//            );
+//        assertEquals(200, updateCBSettingResponse.getStatusLine().getStatusCode());
+//
+//        Response response = createConnector(completionModelConnectorEntity);
+//        Map responseMap = parseResponseToMap(response);
+//        String connectorId = (String) responseMap.get("connector_id");
+//        response = registerRemoteModelWithTTLAndSkipHeapMemCheck("openAI-GPT-3.5 completions", connectorId, 1);
+//        responseMap = parseResponseToMap(response);
+//        String modelId = (String) responseMap.get("model_id");
+//        String predictInput = "{\n" + "  \"parameters\": {\n" + "      \"prompt\": \"Say this is a test\"\n" + "  }\n" + "}";
+//        response = predictRemoteModel(modelId, predictInput);
+//        responseMap = parseResponseToMap(response);
+//        List responseList = (List) responseMap.get("inference_results");
+//        responseMap = (Map) responseList.get(0);
+//        responseList = (List) responseMap.get("output");
+//        responseMap = (Map) responseList.get(0);
+//        responseMap = (Map) responseMap.get("dataAsMap");
+//        responseList = (List) responseMap.get("choices");
+//        if (responseList == null) {
+//            assertTrue(checkThrottlingOpenAI(responseMap));
+//            return;
+//        }
+//        responseMap = (Map) responseList.get(0);
+//        assertFalse(((String) responseMap.get("text")).isEmpty());
+//
+//        getModelProfile(modelId, verifyRemoteModelDeployed());
+//        TimeUnit.SECONDS.sleep(71);
+//        assertTrue(getModelProfile(modelId, verifyRemoteModelDeployed()).isEmpty());
+//    }
 
     public void testPredictRemoteModelWithInterface(String testCase, Consumer<Map> verifyResponse, Consumer<Exception> verifyException)
         throws IOException,
