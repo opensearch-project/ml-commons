@@ -14,8 +14,10 @@ import java.util.List;
 
 import org.apache.lucene.tests.util.LuceneTestCase;
 import org.junit.Before;
+import org.junit.FixMethodOrder;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
+import org.junit.runners.MethodSorters;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.action.ActionFuture;
 import org.opensearch.common.settings.Settings;
@@ -42,6 +44,7 @@ import org.opensearch.test.OpenSearchIntegTestCase;
 
 import com.google.common.collect.ImmutableList;
 
+@FixMethodOrder(MethodSorters.NAME_ASCENDING)
 @OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.SUITE, numDataNodes = 2)
 public class PredictionITTests extends MLCommonsIntegTestCase {
     private String irisIndexName;
