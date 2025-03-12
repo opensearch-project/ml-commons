@@ -9,8 +9,15 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.connector.MLPostProcessFunction.BEDROCK_BATCH_JOB_ARN;
 import static org.opensearch.ml.common.connector.MLPostProcessFunction.BEDROCK_EMBEDDING;
 import static org.opensearch.ml.common.connector.MLPostProcessFunction.BEDROCK_RERANK;
+import static org.opensearch.ml.common.connector.MLPostProcessFunction.BEDROCK_V2_EMBEDDING_BINARY;
+import static org.opensearch.ml.common.connector.MLPostProcessFunction.BEDROCK_V2_EMBEDDING_FLOAT;
 import static org.opensearch.ml.common.connector.MLPostProcessFunction.COHERE_EMBEDDING;
 import static org.opensearch.ml.common.connector.MLPostProcessFunction.COHERE_RERANK;
+import static org.opensearch.ml.common.connector.MLPostProcessFunction.COHERE_V2_EMBEDDING_BINARY;
+import static org.opensearch.ml.common.connector.MLPostProcessFunction.COHERE_V2_EMBEDDING_FLOAT32;
+import static org.opensearch.ml.common.connector.MLPostProcessFunction.COHERE_V2_EMBEDDING_INT8;
+import static org.opensearch.ml.common.connector.MLPostProcessFunction.COHERE_V2_EMBEDDING_UBINARY;
+import static org.opensearch.ml.common.connector.MLPostProcessFunction.COHERE_V2_EMBEDDING_UINT8;
 import static org.opensearch.ml.common.connector.MLPostProcessFunction.DEFAULT_EMBEDDING;
 import static org.opensearch.ml.common.connector.MLPostProcessFunction.DEFAULT_RERANK;
 import static org.opensearch.ml.common.connector.MLPostProcessFunction.OPENAI_EMBEDDING;
@@ -288,16 +295,39 @@ public class ConnectorAction implements ToXContentObject, Writeable {
                     }
                     break;
                 case COHERE:
-                    if (!(COHERE_EMBEDDING.equals(postProcessFunction) || COHERE_RERANK.equals(postProcessFunction))) {
+                    if (!(COHERE_EMBEDDING.equals(postProcessFunction)
+                        || COHERE_RERANK.equals(postProcessFunction)
+                        || COHERE_V2_EMBEDDING_FLOAT32.equals(postProcessFunction)
+                        || COHERE_V2_EMBEDDING_INT8.equals(postProcessFunction)
+                        || COHERE_V2_EMBEDDING_UINT8.equals(postProcessFunction)
+                        || COHERE_V2_EMBEDDING_BINARY.equals(postProcessFunction)
+                        || COHERE_V2_EMBEDDING_UBINARY.equals(postProcessFunction))) {
                         throw new IllegalArgumentException(
-                            "LLM service is " + COHERE + ", so PostProcessFunction should be " + COHERE_EMBEDDING + " or " + COHERE_RERANK
+                            "LLM service is "
+                                + COHERE
+                                + ", so PostProcessFunction should be "
+                                + COHERE_EMBEDDING
+                                + " or "
+                                + COHERE_RERANK
+                                + " or "
+                                + COHERE_V2_EMBEDDING_FLOAT32
+                                + " or "
+                                + COHERE_V2_EMBEDDING_INT8
+                                + " or "
+                                + COHERE_V2_EMBEDDING_UINT8
+                                + " or "
+                                + COHERE_V2_EMBEDDING_BINARY
+                                + " or "
+                                + COHERE_V2_EMBEDDING_UBINARY
                         );
                     }
                     break;
                 case BEDROCK:
                     if (!(BEDROCK_EMBEDDING.equals(postProcessFunction)
                         || BEDROCK_BATCH_JOB_ARN.equals(postProcessFunction)
-                        || BEDROCK_RERANK.equals(postProcessFunction))) {
+                        || BEDROCK_RERANK.equals(postProcessFunction)
+                        || BEDROCK_V2_EMBEDDING_FLOAT.equals(postProcessFunction)
+                        || BEDROCK_V2_EMBEDDING_BINARY.equals(postProcessFunction))) {
                         throw new IllegalArgumentException(
                             "LLM service is "
                                 + BEDROCK
@@ -307,6 +337,10 @@ public class ConnectorAction implements ToXContentObject, Writeable {
                                 + BEDROCK_BATCH_JOB_ARN
                                 + " or "
                                 + BEDROCK_RERANK
+                                + " or "
+                                + BEDROCK_V2_EMBEDDING_FLOAT
+                                + " or "
+                                + BEDROCK_V2_EMBEDDING_BINARY
                         );
                     }
                     break;
