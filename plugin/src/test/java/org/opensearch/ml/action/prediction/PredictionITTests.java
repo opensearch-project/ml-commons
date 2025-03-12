@@ -37,6 +37,7 @@ import org.opensearch.ml.common.input.parameter.rcf.FitRCFParams;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.utils.RetryRule;
 import org.opensearch.ml.utils.TestData;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
@@ -51,6 +52,9 @@ public class PredictionITTests extends MLCommonsIntegTestCase {
     private String linearRegressionModelId;
     private String logisticRegressionModelId;
     private int batchRcfDataSize = 100;
+
+    @Rule
+    public RetryRule retryRule = new RetryRule(3);
 
     /**
      * set ML_COMMONS_SYNC_UP_JOB_INTERVAL_IN_SECONDS to 0 to disable ML_COMMONS_SYNC_UP_JOB
