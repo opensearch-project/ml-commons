@@ -222,7 +222,9 @@ public class ConnectorActionTest {
         exception = assertThrows(IllegalArgumentException.class, () -> action2.validatePrePostProcessFunctions(Map.of()));
         assertEquals(
             "LLM service is cohere, so PostProcessFunction should be connector.post_process.cohere.embedding"
-                + " or connector.post_process.cohere.rerank",
+                + " or connector.post_process.cohere.rerank or connector.post_process.cohere_v2.embedding.float"
+                + " or connector.post_process.cohere_v2.embedding.int8 or connector.post_process.cohere_v2.embedding.uint8"
+                + " or connector.post_process.cohere_v2.embedding.binary or connector.post_process.cohere_v2.embedding.ubinary",
             exception.getMessage()
         );
     }
@@ -293,7 +295,8 @@ public class ConnectorActionTest {
         exception = assertThrows(IllegalArgumentException.class, () -> action2.validatePrePostProcessFunctions(Map.of()));
         assertEquals(
             "LLM service is bedrock, so PostProcessFunction should be connector.post_process.bedrock.embedding"
-                + " or connector.post_process.bedrock.batch_job_arn or connector.post_process.bedrock.rerank",
+                + " or connector.post_process.bedrock.batch_job_arn or connector.post_process.bedrock.rerank"
+                + " or connector.post_process.bedrock_v2.embedding.float or connector.post_process.bedrock_v2.embedding.binary",
             exception.getMessage()
         );
     }
