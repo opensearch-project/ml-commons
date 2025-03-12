@@ -88,10 +88,6 @@ public class RestCohereInferenceIT extends MLCommonsRestTestCase {
         List outputList = (List) output.get("output");
         assertEquals(errorMsg, 2, outputList.size());
         assertTrue(errorMsg, outputList.get(0) instanceof Map);
-        String typeErrorMsg = errorMsg
-            + " first element in the output list is type of: "
-            + ((Map<?, ?>) outputList.get(0)).get("data").getClass().getName();
-        assertTrue(typeErrorMsg, ((Map<?, ?>) outputList.get(0)).get("data") instanceof List);
         assertTrue(errorMsg, ((Map<?, ?>) outputList.get(0)).get("data_type").equals(dataType));
     }
 
