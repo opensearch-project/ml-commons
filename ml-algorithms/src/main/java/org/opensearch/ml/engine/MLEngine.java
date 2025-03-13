@@ -11,7 +11,9 @@ import static org.opensearch.ml.common.connector.HttpConnector.REGION_FIELD;
 import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.Supplier;
 
+import org.opensearch.arrow.spi.StreamManager;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
@@ -49,11 +51,14 @@ public class MLEngine {
 
     private Encryptor encryptor;
 
-    public MLEngine(Path opensearchDataFolder, Encryptor encryptor) {
+    private Supplier<StreamManager> streamManager;
+
+    public MLEngine(Path opensearchDataFolder, Encryptor encryptor, Supplier<StreamManager> streamManager) {
         this.mlCachePath = opensearchDataFolder.resolve("ml_cache");
         this.mlModelsCachePath = mlCachePath.resolve("models_cache");
         this.mlConfigPath = mlCachePath.resolve("config");
         this.encryptor = encryptor;
+        this.streamManager = streamManager;
     }
 
     public String getPrebuiltModelMetaListPath() {
@@ -141,7 +146,7 @@ public class MLEngine {
 
     public Predictable deploy(MLModel mlModel, Map<String, Object> params) {
         Predictable predictable = MLEngineClassLoader.initInstance(mlModel.getAlgorithm(), null, MLAlgoParams.class);
-        predictable.initModel(mlModel, params, encryptor);
+        predictable.initModel(mlModel, params, encryptor, streamManager);
         return predictable;
     }
 

@@ -57,6 +57,19 @@ dependencies {
     implementation project(':opensearch-ml-algorithms')
     implementation project(':opensearch-ml-search-processors')
     implementation project(':opensearch-ml-memory')
+
+    implementation "org.opensearch:opensearch-arrow-spi:${opensearchVersion}"
+    implementation "org.apache.arrow:arrow-vector:${versions.arrow}"
+    implementation "org.apache.arrow:arrow-format:${versions.arrow}"
+    implementation "org.apache.arrow:arrow-memory-core:${versions.arrow}"
+    runtimeOnly "org.apache.arrow:arrow-memory-netty:${versions.arrow}"
+    runtimeOnly "org.apache.arrow:arrow-memory-netty-buffer-patch:${versions.arrow}"
+
+    implementation "io.netty:netty-buffer:${versions.netty}"
+    implementation "io.netty:netty-common:${versions.netty}"
+    compileOnly 'org.checkerframework:checker-qual:3.44.0'
+
+
     compileOnly "com.google.guava:guava:32.1.3-jre"
 
     implementation group: 'software.amazon.awssdk', name: 'aws-core', version: "2.30.18"
@@ -424,6 +437,16 @@ configurations.all {
     resolutionStrategy.force "jakarta.json:jakarta.json-api:2.1.3"
     resolutionStrategy.force "org.opensearch:opensearch:${opensearch_version}"
     resolutionStrategy.force "org.bouncycastle:bcprov-jdk18on:1.78.1"
+    resolutionStrategy.force "org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.10"
+    resolutionStrategy.force "org.jetbrains.kotlin:kotlin-stdlib:1.9.10"
+    resolutionStrategy.force "org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.10"
+    resolutionStrategy.force "org.jetbrains.kotlin:kotlin-stdlib-common:1.9.10"
+    resolutionStrategy.force "org.checkerframework:checker-qual:3.44.0"
+    resolutionStrategy.force 'io.netty:netty-buffer:4.1.118.Final'
+    resolutionStrategy.force 'io.netty:netty-common:4.1.118.Final'
+    resolutionStrategy.force 'com.fasterxml.jackson.core:jackson-annotations:2.18.2'
+    resolutionStrategy.force 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.18.2'
+    resolutionStrategy.force 'com.google.flatbuffers:flatbuffers-java:24.3.25'
 }
 
 apply plugin: 'com.netflix.nebula.ospackage'

@@ -36,6 +36,9 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
@@ -346,6 +349,10 @@ public class HttpConnector extends AbstractConnector {
 
             if (!isJson(payload)) {
                 throw new IllegalArgumentException("Invalid payload: " + payload);
+            } else if (parameters.containsKey("stream")) {
+                JsonObject jsonObject = JsonParser.parseString(payload).getAsJsonObject();
+                jsonObject.addProperty("stream", true);
+                payload = jsonObject.toString();
             }
             return (T) payload;
         }
