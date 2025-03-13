@@ -190,9 +190,9 @@ import org.opensearch.ml.engine.indices.MLInputDatasetHandler;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
 import org.opensearch.ml.engine.tools.AgentTool;
-import org.opensearch.ml.engine.tools.CatIndexTool;
 import org.opensearch.ml.engine.tools.ConnectorTool;
 import org.opensearch.ml.engine.tools.IndexMappingTool;
+import org.opensearch.ml.engine.tools.ListIndexTool;
 import org.opensearch.ml.engine.tools.MLModelTool;
 import org.opensearch.ml.engine.tools.SearchIndexTool;
 import org.opensearch.ml.engine.tools.VisualizationsTool;
@@ -644,7 +644,7 @@ public class MachineLearningPlugin extends Plugin
 
         MLModelTool.Factory.getInstance().init(client);
         AgentTool.Factory.getInstance().init(client);
-        CatIndexTool.Factory.getInstance().init(client, clusterService);
+        ListIndexTool.Factory.getInstance().init(client, clusterService);
         IndexMappingTool.Factory.getInstance().init(client);
         SearchIndexTool.Factory.getInstance().init(client, xContentRegistry);
         VisualizationsTool.Factory.getInstance().init(client);
@@ -652,7 +652,7 @@ public class MachineLearningPlugin extends Plugin
 
         toolFactories.put(MLModelTool.TYPE, MLModelTool.Factory.getInstance());
         toolFactories.put(AgentTool.TYPE, AgentTool.Factory.getInstance());
-        toolFactories.put(CatIndexTool.TYPE, CatIndexTool.Factory.getInstance());
+        toolFactories.put(ListIndexTool.TYPE, ListIndexTool.Factory.getInstance());
         toolFactories.put(IndexMappingTool.TYPE, IndexMappingTool.Factory.getInstance());
         toolFactories.put(SearchIndexTool.TYPE, SearchIndexTool.Factory.getInstance());
         toolFactories.put(VisualizationsTool.TYPE, VisualizationsTool.Factory.getInstance());
