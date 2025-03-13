@@ -88,6 +88,12 @@ public class RestMLPredictionAction extends BaseRestHandler {
         String modelId = getParameterId(request, PARAMETER_MODEL_ID);
         Optional<FunctionName> functionName = modelManager.getOptionalModelFunctionName(modelId);
 
+        if (userAlgorithm != null) {
+            MLPredictionTaskRequest mlPredictionTaskRequest = getRequest(modelId, "", userAlgorithm, request);
+            return channel -> client
+                .execute(MLPredictionTaskAction.INSTANCE, mlPredictionTaskRequest, new RestToXContentListener<>(channel));
+        }
+
         // check if the model is in cache
         if (functionName.isPresent()) {
             MLPredictionTaskRequest predictionRequest = getRequest(
