@@ -6,7 +6,9 @@
 package org.opensearch.ml.engine;
 
 import java.util.Map;
+import java.util.function.Supplier;
 
+import org.opensearch.arrow.spi.StreamManager;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.input.MLInput;
@@ -47,7 +49,13 @@ public interface Predictable {
      * @param params other parameters
      * @param encryptor encryptor
      */
-    void initModel(MLModel model, Map<String, Object> params, Encryptor encryptor);
+    default void initModel(MLModel model, Map<String, Object> params, Encryptor encryptor) {
+
+    };
+
+    default void initModel(MLModel model, Map<String, Object> params, Encryptor encryptor, Supplier<StreamManager> streamManager) {
+
+    };
 
     /**
      * Close resources like deployed model.

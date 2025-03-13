@@ -41,6 +41,7 @@ import java.util.function.Supplier;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.opensearch.action.ActionRequest;
+import org.opensearch.arrow.spi.StreamManager;
 import org.opensearch.cluster.metadata.IndexNameExpressionResolver;
 import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.cluster.service.ClusterService;
@@ -337,6 +338,7 @@ import org.opensearch.plugins.IngestPlugin;
 import org.opensearch.plugins.Plugin;
 import org.opensearch.plugins.SearchPipelinePlugin;
 import org.opensearch.plugins.SearchPlugin;
+import org.opensearch.plugins.StreamManagerPlugin;
 import org.opensearch.plugins.SystemIndexPlugin;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
@@ -369,7 +371,8 @@ public class MachineLearningPlugin extends Plugin
         SearchPipelinePlugin,
         ExtensiblePlugin,
         IngestPlugin,
-        SystemIndexPlugin {
+        SystemIndexPlugin,
+        StreamManagerPlugin {
     public static final String ML_THREAD_POOL_PREFIX = "thread_pool.ml_commons.";
     public static final String GENERAL_THREAD_POOL = "opensearch_ml_general";
     public static final String SDK_CLIENT_THREAD_POOL = "opensearch_ml_sdkclient";
@@ -380,6 +383,7 @@ public class MachineLearningPlugin extends Plugin
     public static final String INGEST_THREAD_POOL = "opensearch_ml_ingest";
     public static final String REGISTER_THREAD_POOL = "opensearch_ml_register";
     public static final String DEPLOY_THREAD_POOL = "opensearch_ml_deploy";
+    public static final String STREAM_PREDICT_THREAD_POOL = "opensearch_ml_predict_stream";
     public static final String ML_BASE_URI = "/_plugins/_ml";
 
     private MLStats mlStats;
@@ -423,6 +427,14 @@ public class MachineLearningPlugin extends Plugin
     private Map<String, Tool.Factory> toolFactories;
     private ScriptService scriptService;
     private Encryptor encryptor;
+
+    private StreamManager streamManager;
+
+    private StreamManager getStreamManagerRef() {
+        return this.streamManager;
+    }
+
+    private Supplier<StreamManager> streamManagerSupplier = () -> { return getStreamManagerRef(); };
 
     public MachineLearningPlugin(Settings settings) {
         // Handle this here as this feature is tied to Search/Query API, not to a ml-common API
@@ -553,7 +565,7 @@ public class MachineLearningPlugin extends Plugin
 
         encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
 
-        mlEngine = new MLEngine(dataPath, encryptor);
+        mlEngine = new MLEngine(dataPath, encryptor, streamManagerSupplier);
         nodeHelper = new DiscoveryNodeHelper(clusterService, settings);
         modelCacheHelper = new MLModelCacheHelper(clusterService, settings);
         cmHandler = new OpenSearchConversationalMemoryHandler(client, clusterService);
@@ -790,7 +802,8 @@ public class MachineLearningPlugin extends Plugin
                 mlModelAutoRedeployer,
                 cmHandler,
                 sdkClient,
-                toolFactoryWrapper
+                toolFactoryWrapper,
+                streamManagerSupplier
             );
     }
 
@@ -808,6 +821,11 @@ public class MachineLearningPlugin extends Plugin
         RestMLTrainingAction restMLTrainingAction = new RestMLTrainingAction();
         RestMLTrainAndPredictAction restMLTrainAndPredictAction = new RestMLTrainAndPredictAction();
         RestMLPredictionAction restMLPredictionAction = new RestMLPredictionAction(mlModelManager, mlFeatureEnabledSetting);
+        RestMLPredictionStreamingAction restMLPredictionStreamingAction = new RestMLPredictionStreamingAction(
+            mlModelManager,
+            mlFeatureEnabledSetting,
+            streamManagerSupplier
+        );
         RestMLExecuteAction restMLExecuteAction = new RestMLExecuteAction(mlFeatureEnabledSetting);
         RestMLGetModelAction restMLGetModelAction = new RestMLGetModelAction(mlFeatureEnabledSetting);
         RestMLDeleteModelAction restMLDeleteModelAction = new RestMLDeleteModelAction(mlFeatureEnabledSetting);
@@ -876,6 +894,7 @@ public class MachineLearningPlugin extends Plugin
                 restMLStatsAction,
                 restMLTrainingAction,
                 restMLPredictionAction,
+                restMLPredictionStreamingAction,
                 restMLExecuteAction,
                 restMLTrainAndPredictAction,
                 restMLGetModelAction,
@@ -1007,6 +1026,14 @@ public class MachineLearningPlugin extends Plugin
             ML_THREAD_POOL_PREFIX + INGEST_THREAD_POOL,
             false
         );
+        FixedExecutorBuilder streamPredictThreadPool = new FixedExecutorBuilder(
+            settings,
+            STREAM_PREDICT_THREAD_POOL,
+            OpenSearchExecutors.allocatedProcessors(settings) * 2,
+            10000,
+            ML_THREAD_POOL_PREFIX + STREAM_PREDICT_THREAD_POOL,
+            false
+        );
 
         return ImmutableList
             .of(
@@ -1018,7 +1045,8 @@ public class MachineLearningPlugin extends Plugin
                 predictThreadPool,
                 remotePredictThreadPool,
                 batchIngestThreadPool,
-                sdkClientThreadPool
+                sdkClientThreadPool,
+                streamPredictThreadPool
             );
     }
 
@@ -1267,4 +1295,9 @@ public class MachineLearningPlugin extends Plugin
             );
         return factories;
     }
+
+    public void onStreamManagerInitialized(Supplier<StreamManager> streamManager) {
+        this.streamManager = streamManager.get();
+    }
+
 }
