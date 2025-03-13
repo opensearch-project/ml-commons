@@ -17,6 +17,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 
 import org.apache.logging.log4j.Logger;
 import org.opensearch.ExceptionsHelper;
@@ -24,6 +25,7 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.bulk.BackoffPolicy;
 import org.opensearch.action.support.GroupedActionListener;
 import org.opensearch.action.support.RetryableAction;
+import org.opensearch.arrow.spi.StreamManager;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.unit.TimeValue;
@@ -221,6 +223,8 @@ public interface RemoteConnectorExecutor {
             }
             if (getConnectorClientConfig().getMaxRetryTimes() != 0) {
                 invokeRemoteServiceWithRetry(action, mlInput, parameters, payload, executionContext, actionListener);
+            } else if (parameters.containsKey("stream")) {
+                invokeRemoteServiceStream(action, mlInput, parameters, payload, executionContext, actionListener);
             } else {
                 invokeRemoteService(action, mlInput, parameters, payload, executionContext, actionListener);
             }
@@ -337,4 +341,19 @@ public interface RemoteConnectorExecutor {
         private final ExecutionContext executionContext;
         private final String payload;
     }
+
+    void invokeRemoteServiceStream(
+        String action,
+        MLInput mlInput,
+        Map<String, String> parameters,
+        String payload,
+        ExecutionContext executionContext,
+        ActionListener<Tuple<Integer, ModelTensors>> actionListener
+    );
+
+    default void setStreamManager(Supplier<StreamManager> streamManager) {}
+
+    default Supplier<StreamManager> getStreamManager() {
+        return null;
+    };
 }
