@@ -232,7 +232,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         String modelId
     ) {
         String requestId = mlPredictionTaskRequest.getRequestID();
-        log.debug("receive predict request {} for model {}", requestId, mlPredictionTaskRequest.getModelId());
+        log.info("receive predict request {} for model {}", requestId, mlPredictionTaskRequest.getModelId());
         long startTime = System.nanoTime();
         // For remote text embedding model, neural search will set mlPredictionTaskRequest.getMlInput().getAlgorithm() as
         // TEXT_EMBEDDING. In ml-commons we should always use the real function name of model: REMOTE. So we try to get
@@ -251,7 +251,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                     double durationInMs = (endTime - startTime) / 1e6;
                     modelCacheHelper.addPredictRequestDuration(modelId, durationInMs);
                     modelCacheHelper.refreshLastAccessTime(modelId);
-                    log.debug("completed predict request {} for model {}", requestId, modelId);
+                    log.info("completed predict request {} for model {}", requestId, modelId);
                 })
             );
     }

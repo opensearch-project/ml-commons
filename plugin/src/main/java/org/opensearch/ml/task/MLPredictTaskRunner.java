@@ -587,6 +587,11 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
     }
 
     public void validateOutputSchema(String modelId, ModelTensorOutput output) {
+        if (output.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap().containsKey("stream_ticket")) {
+            log.info("[jngz] skip validating ModelTensorOutput for stream ticket");
+            return;
+        }
+
         if (mlModelManager.getModelInterface(modelId) != null && mlModelManager.getModelInterface(modelId).get("output") != null) {
             String outputSchemaString = mlModelManager.getModelInterface(modelId).get("output");
             try {
