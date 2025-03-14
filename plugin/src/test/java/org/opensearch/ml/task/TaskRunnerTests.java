@@ -139,8 +139,20 @@ public class TaskRunnerTests extends OpenSearchTestCase {
         TransportService transportService = mock(TransportService.class);
         ActionListener listener = mock(ActionListener.class);
         MLTaskRequest request = new MLTaskRequest(false);
-        expectThrows(CircuitBreakingException.class, () -> mlTaskRunner.run(FunctionName.REMOTE, request, transportService, listener));
+        expectThrows(CircuitBreakingException.class, () -> mlTaskRunner.run(FunctionName.BATCH_RCF, request, transportService, listener));
         Long value = (Long) mlStats.getStat(MLNodeLevelStat.ML_CIRCUIT_BREAKER_TRIGGER_COUNT).getValue();
         assertEquals(1L, value.longValue());
+    }
+
+    public void testRun_NoCircuitbreakerforRemote() {
+        when(mlCircuitBreakerService.checkOpenCB()).thenReturn(thresholdCircuitBreaker);
+        when(thresholdCircuitBreaker.getName()).thenReturn("Memory Circuit Breaker");
+        when(thresholdCircuitBreaker.getThreshold()).thenReturn(87);
+        TransportService transportService = mock(TransportService.class);
+        ActionListener listener = mock(ActionListener.class);
+        MLTaskRequest request = new MLTaskRequest(false);
+        mlTaskRunner.run(FunctionName.REMOTE, request, transportService, listener);
+        Long value = (Long) mlStats.getStat(MLNodeLevelStat.ML_CIRCUIT_BREAKER_TRIGGER_COUNT).getValue();
+        assertEquals(0L, value.longValue());
     }
 }
