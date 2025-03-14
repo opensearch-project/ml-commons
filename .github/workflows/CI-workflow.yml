@@ -85,7 +85,7 @@ jobs:
                                echo "build and run tests" && ./gradlew build -x spotlessJava &&
                                echo "Publish to Maven Local" && ./gradlew publishToMavenLocal -x spotlessJava &&
                                echo "Multi Nodes Integration Testing" && ./gradlew integTest -PnumNodes=3 -x spotlessJava &&
-                               echo "Run Jacoco test coverage" && && ./gradlew jacocoTestReport && cp -v plugin/build/reports/jacoco/test/jacocoTestReport.xml ./jacocoTestReport.xml'
+                               echo "Run Jacoco test coverage" && ./gradlew jacocoTestReport && cp -v plugin/build/reports/jacoco/test/jacocoTestReport.xml ./jacocoTestReport.xml'
           plugin=`basename $(ls plugin/build/distributions/*.zip)`
           echo $plugin
           mv -v plugin/build/distributions/$plugin ./
