@@ -255,7 +255,7 @@ POST _plugins/_ml/agents/_register
       }
     },
     {
-      "type": "CatIndexTool",
+      "type": "ListIndexTool",
       "description": "Use this tool to get OpenSearch index information: (health, status, index, uuid, primary count, replica count, docs.count, docs.deleted, store.size, primary.store.size). \nIt takes 2 optional arguments named `index` which is a comma-delimited list of one or more indices to get information from (default is an empty list meaning all indices), and `local` which means whether to return information from the local node only instead of the cluster manager node (default is false)."
     },
     {
@@ -287,14 +287,14 @@ Tips:
    2. Provide a detailed tool description to clarify what the tool can do. 
    3. Specify the tool to use in the LLM question, for example, `Can you use the PPLTool to query index opensearch_dashboards_sample_data_ecommerce to calculate how many orders there were during last week?`
    4. Specify the tool to use when executing an agent, 
-   for example, tell the agent to only use the `PPLTool` and `CatIndexTool` in the current request.
+   for example, tell the agent to only use the `PPLTool` and `ListIndexTool` in the current request.
    ```
    POST _plugins/_ml/agents/your_agent_id/_execute
    {
      "parameters": {
        "question": "Can you query with index opensearch_dashboards_sample_data_ecommerce to calculate how many orders in last week?",
        "verbose": false,
-       "selected_tools": ["PPLTool", "CatIndexTool"]
+       "selected_tools": ["PPLTool", "ListIndexTool"]
      }
    }
    ```

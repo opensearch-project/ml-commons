@@ -159,7 +159,7 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
         });
         mlRegisterModelInput = createRegisterModelInput(modelGroupId);
 
-        mlAgent = createCatIndexToolMLAgent();
+        mlAgent = createListIndexToolMLAgent();
     }
 
     @After
