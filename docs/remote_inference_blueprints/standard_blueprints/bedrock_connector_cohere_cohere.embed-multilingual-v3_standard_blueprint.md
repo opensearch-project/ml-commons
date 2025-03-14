@@ -1,25 +1,9 @@
 # Bedrock connector standard blueprint example for Cohere embed-multilingual-v3 model
 This blueprint demonstrates how to deploy a cohere.embed-multilingual-v3 using the Bedrock connector without pre and post processing functions.
-This is recommended for models to use the ML inference processor to handle input/output mapping.
+This is recommended for version after OS 2.14.0 for models to use the ML inference processor to handle input/output mapping.
 Note that if using a model that requires pre and post processing functions, you must provide the functions in the blueprint. Please refer to legacy blueprint: [Bedrock connector blueprint example for Cohere embed-multilingual-v3 model](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/bedrock_connector_cohere_cohere.embed-multilingual-v3_blueprint.md)
 
-## 1. Add connector endpoint to trusted URLs:
-
-Note: no need to do this after 2.11.0
-
-```json
-PUT /_cluster/settings
-{
-    "persistent": {
-        "plugins.ml_commons.trusted_connector_endpoints_regex": [
-            "^https://bedrock-runtime\\..*[a-z0-9-]\\.amazonaws\\.com/.*$"
-        ]
-    }
-}
-```
-
-
-## 2. Create connector for Amazon Bedrock:
+## 1. Create connector for Amazon Bedrock:
 
 If you are using self-managed Opensearch, you should supply AWS credentials:
 
@@ -100,7 +84,7 @@ Sample response:
 ```
 For more information of the model inference parameters in the connector, please refer to this [AWS doc](https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-embed.html)
 
-## 3. Create model group:
+## 2. Create model group(optional):
 
 ```json
 POST /_plugins/_ml/model_groups/_register
@@ -118,7 +102,7 @@ Sample response:
 }
 ```
 
-## 4. Register model to model group & deploy model:
+## 3. Register model to model group & deploy model:
 
 ```json
 POST /_plugins/_ml/models/_register?deploy=true
@@ -140,7 +124,7 @@ Sample response:
 }
 ```
 
-## 5. Test model inference
+## 4. Test model inference
 
 ```json
 POST /_plugins/_ml/models/KSj-wZABNrAVdFa937iS/_predict

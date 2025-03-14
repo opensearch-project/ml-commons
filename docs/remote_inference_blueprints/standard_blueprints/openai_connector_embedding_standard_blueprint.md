@@ -1,23 +1,10 @@
 # OpenAI connector standard blueprint example for embedding model
 
 This blueprint demonstrates how to deploy a text-embedding-ada-002 using the OpenAI connector without pre and post processing functions.
-This is recommended for models to use the ML inference processor to handle input/output mapping.
+This is recommended for version after OS 2.14.0 for models to use the ML inference processor to handle input/output mapping.
 Note that if using a model that requires pre and post processing functions, you must provide the functions in the blueprint. Please refer to legacy blueprint: [Bedrock connector blueprint example for Cohere embed-english-v3 model](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/bedrock_connector_cohere_cohere.embed-english-v3_blueprint.md)
 
-## 1. Add connector endpoint to trusted URLs:
-
-```json
-PUT /_cluster/settings
-{
-  "persistent": {
-    "plugins.ml_commons.trusted_connector_endpoints_regex": [
-      "^https://api\\.openai\\.com/.*$"
-    ]
-  }
-}
-```
-
-## 2. Create connector for OpenAI embedding model:
+## 1. Create connector for OpenAI embedding model:
 
 Refer to OpenAI [official doc](https://platform.openai.com/docs/guides/embeddings).
 
@@ -88,7 +75,7 @@ Sample response:
 }
 ```
 
-## 3. Create model group:
+## 2. Create model group:
 
 ```json
 POST /_plugins/_ml/model_groups/_register
@@ -106,7 +93,7 @@ Sample response:
 }
 ```
 
-## 4. Register model to model group & deploy model:
+## 3. Register model to model group & deploy model:
 
 ```json
 POST /_plugins/_ml/models/_register?deploy=true
@@ -143,7 +130,7 @@ POST /_plugins/_ml/models/yQ9ZlZUB_BtQcl4Fp-UN/_deploy
 }
 ```
 
-## 5. Test model inference
+## 4. Test model inference
 
 Get Text Embedding:
 

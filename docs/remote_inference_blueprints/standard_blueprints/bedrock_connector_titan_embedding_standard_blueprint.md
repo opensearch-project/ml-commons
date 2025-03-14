@@ -1,43 +1,11 @@
 # Bedrock connector standard blueprint example for Titan embedding model
 
 This blueprint demonstrates how to deploy a Titan embedding model v1 and v2 using the Bedrock connector without pre and post processing functions. 
-This is recommended for models to use the ML inference processor to handle input/output mapping. 
+This is recommended for models for version after OS 2.14.0 to use the ML inference processor to handle input/output mapping. 
 Note that if using a model that requires pre and post processing functions, you must provide the functions in the blueprint. Please refer to legacy blueprint: [Bedrock connector blueprint example for Titan embedding model](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/bedrock_connector_titan_embedding_blueprint.md)
 
-## 1. Add connector endpoint to trusted URLs:
-
-Note: no need to do this after 2.11.0
-
-```json
-PUT /_cluster/settings
-{
-    "persistent": {
-        "plugins.ml_commons.trusted_connector_endpoints_regex": [
-            "^https://bedrock-runtime\\..*[a-z0-9-]\\.amazonaws\\.com/.*$"
-        ]
-    }
-}
-```
-
-Sample response:
-```json
-{
-  "acknowledged": true,
-  "persistent": {
-    "plugins": {
-      "ml_commons": {
-        "trusted_connector_endpoints_regex": [
-          "^https://bedrock-runtime\\..*[a-z0-9-]\\.amazonaws\\.com/.*$"
-        ]
-      }
-    }
-  },
-  "transient": {}
-}
-```
-
-## 2. Create connector for Amazon Bedrock:
-### 2.1 Titan text embedding model v1
+## 1. Create connector for Amazon Bedrock:
+### 1.1 Titan text embedding model v1
 If you are using self-managed Opensearch, you should supply AWS credentials:
 
 ```json
@@ -122,12 +90,11 @@ Sample response:
 ```
 
 
-### 2.2 Titan text embedding model v2
+### 1.2 Titan text embedding model v2
 
 Follow Titan text embedding model v1, just change "model" to `amazon.titan-embed-text-v2:0` and configure extra parameters and request body as:
 
-
-```
+```json
 POST /_plugins/_ml/connectors/_create
 {
   "name": "Amazon Bedrock Connector: embedding",
@@ -154,9 +121,10 @@ POST /_plugins/_ml/connectors/_create
       "url": "https://bedrock-runtime.${parameters.region}.amazonaws.com/model/${parameters.model}/invoke",
       "headers": {
         "content-type": "application/json",
-        "x-amz-content-sha256": "required"   "request_body": "{ \"inputText\": \"${parameters.inputText}\", \"dimensions\": ${parameters.dimensions}, \"normalize\": ${parameters.normalize}, \"embeddingTypes\": ${parameters.embeddingTypes} }"
-  
+        "x-amz-content-sha256": "required"
       },
+        "request_body": "{ \"inputText\": \"${parameters.inputText}\", \"dimensions\": ${parameters.dimensions}, \"normalize\": ${parameters.normalize}, \"embeddingTypes\": ${parameters.embeddingTypes} }"
+      }
      }
   ]
 }
@@ -172,42 +140,44 @@ Sample response:
 }
 ```
 
-## 3. Register model & deploy model:
+## 2. Register model & deploy model:
 
 ```json
-POST /_plugins/_ml/models/_register
+POST /_plugins/_ml/models/_register?deploy=true
 {
-  "name": "Bedrock embedding model",
+  "name": "Bedrock text embedding model",
   "function_name": "remote",
   "description": "test model",
   "connector_id": "nzh9PIsBnGXNcxYpPEcv"
 }
 ```
+
 Sample response:
 ```json
-
 {
-    "task_id": "ow9Wh5UB_BtQcl4FkMEI",
-    "status": "CREATED",
-    "model_id": "pA9Wh5UB_BtQcl4FkMEo"
+  "task_id": "HA-ojJUB_BtQcl4FDchE",
+  "status": "CREATED",
+  "model_id": "pA9Wh5UB_BtQcl4FkMEo"
 }
 ```
-Get model id from response. Deploy model, in this demo the model id is `pA9Wh5UB_BtQcl4FkMEo`
+
+Model should be deployed already. in this demo the model id is `Ir_6HIwBpSwPfTzcmemX`
+If we still need to deploy the model
 
 ```json
 POST /_plugins/_ml/models/pA9Wh5UB_BtQcl4FkMEo/_deploy
 ```
-Sample response:
 
 ```json
 {
-    "task_id": "aQ9QjJUB_BtQcl4FS8dH",
+    "task_id": "IQ-ojJUB_BtQcl4FyMhB",
     "task_type": "DEPLOY_MODEL",
     "status": "COMPLETED"
 }
 ```
 
-## 4. Test model inference
+
+## 3. Test model inference
 
 ```json
 POST /_plugins/_ml/models/pA9Wh5UB_BtQcl4FkMEo/_predict

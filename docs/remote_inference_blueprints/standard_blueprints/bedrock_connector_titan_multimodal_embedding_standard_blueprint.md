@@ -4,39 +4,7 @@ This blueprint demonstrates how to deploy a amazon.titan-embed-image-v1 using th
 This is recommended for models to use the ML inference processor to handle input/output mapping.
 Note that if using a model that requires pre and post processing functions, you must provide the functions in the blueprint. Please refer to legacy blueprint: [Bedrock connector blueprint example for Titan multimodal embedding model](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/bedrock_connector_titan_multimodal_embedding_blueprint.md)
 
-## 1. Add connector endpoint to trusted URLs:
-
-Note: no need to do this after 2.11.0
-
-```json
-PUT /_cluster/settings
-{
-    "persistent": {
-        "plugins.ml_commons.trusted_connector_endpoints_regex": [
-            "^https://bedrock-runtime\\..*[a-z0-9-]\\.amazonaws\\.com/.*$"
-        ]
-    }
-}
-```
-
-Sample response:
-```json
-{
-  "acknowledged": true,
-  "persistent": {
-    "plugins": {
-      "ml_commons": {
-        "trusted_connector_endpoints_regex": [
-          "^https://bedrock-runtime\\..*[a-z0-9-]\\.amazonaws\\.com/.*$"
-        ]
-      }
-    }
-  },
-  "transient": {}
-}
-```
-
-## 2. Create connector for Amazon Bedrock:
+## 1. Create connector for Amazon Bedrock:
 ```json
 POST /_plugins/_ml/connectors/_create
 {
@@ -112,7 +80,7 @@ POST /_plugins/_ml/models/HQ-ojJUB_BtQcl4FDchU/_deploy
 }
 ```
 
-## 5. Test model inference
+## 3. Test model inference
 
 Get Text Embedding:
 

@@ -1,7 +1,7 @@
 # Cohere Image Embedding Connector Standard Blueprint:
 
 This blueprint demonstrates how to deploy an image embedding model using embed-english-v2.0 and embed-english-v3.0 using the Cohere connector without pre and post processing functions.
-This is recommended for models to use the ML inference processor to handle input/output mapping.
+This is recommended for models for version after OS 2.14.0 to use the ML inference processor to handle input/output mapping.
 Note that if using a model that requires pre and post processing functions, you must provide the functions in the blueprint. Please refer to legacy blueprint: [Cohere Embedding Connector Blueprint for image embedding mode](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/cohere_connector_image_embedding_blueprint.md)
 
 - embed-english-v3.0 1024
@@ -9,36 +9,7 @@ Note that if using a model that requires pre and post processing functions, you 
 
 See [Cohere's /embed API docs](https://docs.cohere.com/reference/embed) for more details.
 
-## 1. Add connector endpoint to trusted URLs:
-
-```json
-PUT /_cluster/settings
-{
-    "persistent": {
-        "plugins.ml_commons.trusted_connector_endpoints_regex": [
-          "^https://api\\.cohere\\.ai/.*$"
-        ]
-    }
-}
-```
-Sample response:
-```json
-{
-    "acknowledged": true,
-    "persistent": {
-        "plugins": {
-            "ml_commons": {
-                "trusted_connector_endpoints_regex": [
-                    "^https://api\\.cohere\\.ai/.*$"
-                ]
-            }
-        }
-    },
-    "transient": {}
-}
-```
-
-## 2. Create a connector 
+## 1. Create a connector 
 See above for all the values the `parameters > model` parameter can take.
 
 ```json
@@ -52,7 +23,7 @@ POST /_plugins/_ml/connectors/_create
     "cohere_key": "<ENTER_COHERE_API_KEY_HERE>"
   },
   "parameters": {
-    "model": "<ENTER_MODEL_NAME_HERE>", // Choose a Model from the provided list above
+    "model": "embed-english-v3.0", // Choose a Model from the provided list above
     "input_type":"image",
     "truncate": "END"
   },
@@ -79,7 +50,7 @@ Sample response:
 }
 ```
 
-## 3.  Register model to model group & deploy model:
+## 2.  Register model to model group & deploy model:
 
 You can now register your model with the `model_group_id` and `connector_id` created from the previous steps.
 
@@ -119,7 +90,7 @@ POST /_plugins/_ml/models/0g9slZUB_BtQcl4Fx-Vi/_deploy
 }
 ```
 
-## 4. Test model inference
+## 3. Test model inference
 
 ```json
 POST /_plugins/_ml/models/<MODEL_ID_HERE>/_predict

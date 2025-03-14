@@ -3,7 +3,7 @@
 OpenSearch provides two approaches for implementing embedding models, depending on your needs:
 
 ## Standard Blueprints (Using ML Inference Processor)
-Recommended for new implementations
+Recommended for new implementations for version after OS 2.14.0
 
 These blueprints use the ML inference processor to handle input/output mapping, offering:
 
@@ -20,7 +20,6 @@ These blueprints use the ML inference processor to handle input/output mapping, 
 - Cohere
   - text embedding: [embed-english-v3.0 & embed-english-v2.0](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/standard_blueprints/cohere_connector_text_embedding_standard_blueprint.md)
   - image embedding: [embed-multimodal-v3.0 & embed-multimodal-v2.0](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/standard_blueprints/cohere_connector_image_embedding_blueprint.md)
-- 
 - OpenAI:
   - [text-embedding-ada-002](https://github.com/opensearch-project/ml-commons/blob/main/docs/remote_inference_blueprints/standard_blueprints/openai_connector_embedding_standard_blueprint.md)
 
