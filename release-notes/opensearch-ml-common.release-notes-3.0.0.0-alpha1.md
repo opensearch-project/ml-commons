@@ -2,6 +2,9 @@
 
 Compatible with OpenSearch 3.0.0.0-alpha1
 
+#### Breaking Changes
+* Use _list/indices API instead of _cat/index API in CatIndexTool (#3243)[https://github.com/opensearch-project/ml-commons/pull/3243]
+
 ### Bug Fixes
 * Fix building error due to a breaking change from core (#3617)[https://github.com/opensearch-project/ml-commons/pull/3617]
 
@@ -10,7 +13,6 @@ Compatible with OpenSearch 3.0.0.0-alpha1
 * Fix template query link (#3612)[https://github.com/opensearch-project/ml-commons/pull/3612]
 
 ### Enhancements
-* Use _list/indices API instead of _cat/index API in CatIndexTool (#3243)[https://github.com/opensearch-project/ml-commons/pull/3243]
 * Support sentence highlighting QA model (#3600)[https://github.com/opensearch-project/ml-commons/pull/3600]
 
 ### Maintenance
