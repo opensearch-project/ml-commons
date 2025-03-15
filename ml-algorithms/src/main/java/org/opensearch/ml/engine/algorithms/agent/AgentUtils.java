@@ -40,6 +40,10 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.google.gson.reflect.TypeToken;
+import com.jayway.jsonpath.DocumentContext;
+import com.jayway.jsonpath.JsonPath;
+import com.jayway.jsonpath.PathNotFoundException;
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.core.common.Strings;
 import org.opensearch.ml.common.agent.MLAgent;
@@ -48,11 +52,6 @@ import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.utils.StringUtils;
-
-import com.google.gson.reflect.TypeToken;
-import com.jayway.jsonpath.DocumentContext;
-import com.jayway.jsonpath.JsonPath;
-import com.jayway.jsonpath.PathNotFoundException;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -68,6 +67,7 @@ public class AgentUtils {
     public static final String DISABLE_TRACE = "disable_trace";
     public static final String VERBOSE = "verbose";
     public static final String LLM_GEN_INPUT = "llm_generated_input";
+
     public static final String LLM_RESPONSE_EXCLUDE_PATH = "llm_response_exclude_path";
     public static final String LLM_RESPONSE_FILTER = "llm_response_filter";
     public static final String TOOL_RESULT = "tool_result";
@@ -75,6 +75,22 @@ public class AgentUtils {
     public static final String LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE = "bedrock/converse/claude";
     public static final String LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS = "openai/v1/chat/completions";
     public static final String LLM_INTERFACE_BEDROCK_CONVERSE_DEEPSEEK_R1 = "bedrock/converse/deepseek_r1";
+
+    public static final String TOOL_CALLS_PATH = "tool_calls_path";
+    public static final String TOOL_CALLS_TOOL_NAME = "tool_calls.tool_name";
+    public static final String TOOL_CALLS_TOOL_INPUT = "tool_calls.tool_input";
+    public static final String TOOL_CALL_ID_PATH = "tool_calls.id_path";
+
+    public static final String NO_ESCAPE_PARAMS = "no_escape_params";
+    public static final String TOOLS = "_tools";
+    public static final String TOOL_TEMPLATE = "tool_template";
+    public static final String INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS = "interaction_template.assistant_tool_calls";
+    public static final String INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS_PATH = "interaction_template.assistant_tool_calls_path";
+    public static final String INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS_EXCLUDE_PATH = "interaction_template.assistant_tool_calls_exclude_path";
+    public static final String INTERACTIONS_PREFIX = "${_interactions.";
+    public static final String LLM_FINAL_RESPONSE_POST_FILTER = "llm_final_response_post_filter";
+    public static final String LLM_FINISH_REASON_PATH = "llm_finish_reason_path";
+    public static final String LLM_FINISH_REASON_TOOL_USE = "llm_finish_reason_tool_use";
 
     public static String addExamplesToPrompt(Map<String, String> parameters, String prompt) {
         Map<String, String> examplesMap = new HashMap<>();
@@ -114,6 +130,39 @@ public class AgentUtils {
     }
 
     public static String addToolsToPrompt(Map<String, Tool> tools, Map<String, String> parameters, List<String> inputTools, String prompt) {
+        if (parameters.containsKey(TOOL_TEMPLATE)) {
+            return addToolsToFunctionCalling(tools, parameters, inputTools, prompt);
+        } else {
+            return addToolsToPromptString(tools, parameters, inputTools, prompt);
+        }
+    }
+
+    public static String addToolsToFunctionCalling(Map<String, Tool> tools, Map<String, String> parameters, List<String> inputTools, String prompt) {
+        String toolTemplate = parameters.get("tool_template");
+        List<String> toolInfos = new ArrayList<>();
+        for (String toolName : inputTools) {
+            if (!tools.containsKey(toolName)) {
+                throw new IllegalArgumentException("Tool [" + toolName + "] not registered for model");
+            }
+            Tool tool = tools.get(toolName);
+            Map<String, Object> toolParams = new HashMap<>();
+            toolParams.put("name", tool.getName());
+            toolParams.put("description", tool.getDescription());
+            Map<String, ?> attributes = tool.getAttributes();
+            if (attributes != null) {
+                for (String key : attributes.keySet()) {
+                    toolParams.put("attributes." + key, attributes.get(key));
+                }
+            }
+            StringSubstitutor substitutor = new StringSubstitutor(toolParams, "${tool.", "}");
+            String chatQuestionMessage = substitutor.replace(toolTemplate);
+            toolInfos.add(chatQuestionMessage);
+        }
+        parameters.put(TOOLS, String.join(", ", toolInfos) );
+        return prompt;
+    }
+
+    public static String addToolsToPromptString(Map<String, Tool> tools, Map<String, String> parameters, List<String> inputTools, String prompt) {
         StringBuilder toolsBuilder = new StringBuilder();
         StringBuilder toolNamesBuilder = new StringBuilder();
 
@@ -199,12 +248,18 @@ public class AgentUtils {
     }
 
     public static Map<String, String> parseLLMOutput(
+        Map<String, String> parameters,
         ModelTensorOutput tmpModelTensorOutput,
         List<String> llmResponsePatterns,
-        Set<String> inputTools
+        Set<String> inputTools,
+        List<String> interactions
     ) {
         Map<String, String> modelOutput = new HashMap<>();
         Map<String, ?> dataAsMap = tmpModelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
+        String llmResponseExcludePath = parameters.get(LLM_RESPONSE_EXCLUDE_PATH);
+        if (llmResponseExcludePath != null) {
+            dataAsMap = removeJsonPath(dataAsMap, llmResponseExcludePath, true);
+        }
         if (dataAsMap.size() == 1 && dataAsMap.containsKey("response")) {
             String llmReasoningResponse = (String) dataAsMap.get("response");
             String thoughtResponse = null;
@@ -216,6 +271,68 @@ public class AgentUtils {
                 thoughtResponse = llmReasoningResponse;
             }
             parseThoughtResponse(modelOutput, thoughtResponse);
+        } else if (parameters.containsKey("tool_calls_path")) {
+            modelOutput.put(THOUGHT_RESPONSE, StringUtils.toJson(dataAsMap));
+            Object response = JsonPath.read(dataAsMap, parameters.get(LLM_RESPONSE_FILTER));
+
+            String llmFinishReasonPath = parameters.get(LLM_FINISH_REASON_PATH);
+            String llmFinishReason = "";
+            if (llmFinishReasonPath.startsWith("_llm_response.")) {//TODO: support _llm_response for all other places
+                Map<String, Object> llmResponse = StringUtils.fromJson(response.toString(), "response");
+                llmFinishReason = JsonPath.read(llmResponse, llmFinishReasonPath.substring("_llm_response.".length()));
+            } else {
+                llmFinishReason = JsonPath.read(dataAsMap, llmFinishReasonPath);
+            }
+            if (parameters.get(LLM_FINISH_REASON_TOOL_USE).equalsIgnoreCase(llmFinishReason)) {
+                List toolCalls = null;
+                try {
+                    String toolCallsPath = parameters.get(TOOL_CALLS_PATH);
+                    if (toolCallsPath.startsWith("_llm_response.")) {
+                        Map<String, Object> llmResponse = StringUtils.fromJson(response.toString(), "response");
+                        toolCalls = JsonPath.read(llmResponse, toolCallsPath.substring("_llm_response.".length()));
+                    } else {
+                        toolCalls = JsonPath.read(dataAsMap, toolCallsPath);
+                    }
+                    String toolCallsMsgPath = parameters.get(INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS_PATH);
+                    String toolCallsMsgExcludePath = parameters.get(INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS_EXCLUDE_PATH);
+                    if (toolCallsMsgPath != null) {
+                        if (toolCallsMsgExcludePath != null) {
+
+                            Map<String, ?> newDataAsMap = removeJsonPath(dataAsMap, toolCallsMsgExcludePath, false);
+                            Object toolCallsMsg = JsonPath.read(newDataAsMap, toolCallsMsgPath);
+                            interactions.add(StringUtils.toJson(toolCallsMsg));
+                        } else {
+                            Object toolCallsMsg = JsonPath.read(dataAsMap, toolCallsMsgPath);
+                            interactions.add(StringUtils.toJson(toolCallsMsg));
+                        }
+
+                    } else {
+                        interactions.add(substitute(parameters.get(INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS), Map.of("tool_calls", StringUtils.toJson(toolCalls)), INTERACTIONS_PREFIX));
+                    }
+                    String toolName = JsonPath.read(toolCalls.get(0), parameters.get(TOOL_CALLS_TOOL_NAME));
+                    String toolInput = StringUtils.toJson(JsonPath.read(toolCalls.get(0), parameters.get(TOOL_CALLS_TOOL_INPUT)));
+                    String toolCallId = JsonPath.read(toolCalls.get(0), parameters.get(TOOL_CALL_ID_PATH));
+                    modelOutput.put(THOUGHT, "");
+                    modelOutput.put(ACTION, toolName);
+                    modelOutput.put(ACTION_INPUT, toolInput);
+                    modelOutput.put("tool_call_id", toolCallId);
+                } catch (PathNotFoundException e) {
+                    if (StringUtils.isJson(response.toString())) {
+                        Map<String, Object> llmResponse = StringUtils.fromJson(response.toString(), "response");
+                        modelOutput.put(FINAL_ANSWER, StringUtils.toJson(postFilterFinalAnswer(parameters, llmResponse)));
+                    } else {
+                        modelOutput.put(FINAL_ANSWER, StringUtils.toJson(response));
+                    }
+                }
+            } else {
+                if (StringUtils.isJson(response.toString())) {
+                    Map<String, Object> llmResponse = StringUtils.fromJson(response.toString(), "response");
+                    modelOutput.put(FINAL_ANSWER, StringUtils.toJson(postFilterFinalAnswer(parameters, llmResponse)));
+                } else {
+                    modelOutput.put(FINAL_ANSWER, StringUtils.toJson(response));
+                }
+
+            }
         } else {
             extractParams(modelOutput, dataAsMap, THOUGHT);
             extractParams(modelOutput, dataAsMap, ACTION);
@@ -240,6 +357,54 @@ public class AgentUtils {
             modelOutput.put(FINAL_ANSWER, modelOutput.get(THOUGHT_RESPONSE));
         }
         return modelOutput;
+    }
+
+    private static String postFilterFinalAnswer(Map<String, String> parameters, Map<String, Object> llmResponse) {
+        String filter = parameters.get(LLM_FINAL_RESPONSE_POST_FILTER);
+        if (filter != null) {
+            return StringUtils.toJson(JsonPath.read(llmResponse, filter));
+        }
+        return StringUtils.toJson(llmResponse);
+    }
+
+    private static Map<String, ?> removeJsonPath(Map<String, ?> json, String excludePaths, boolean inPlace) {
+        Type listType = new TypeToken<List<String>>(){}.getType();
+        List<String> excludedPath = gson.fromJson(excludePaths, listType);
+        return removeJsonPath(json, excludedPath, inPlace);
+    }
+
+    private static Map<String, ?> removeJsonPath(Map<String, ?> json, List<String> excludePaths, boolean inPlace) {
+
+        if (json == null || excludePaths == null || excludePaths.isEmpty()) {
+            return json;
+        }
+        if (inPlace) {
+            DocumentContext context = JsonPath.parse(json);
+            for (String path : excludePaths) {
+                try {
+                    context.delete(path);
+                } catch (PathNotFoundException e) {
+                    log.warn("can't find path: {}", path);
+                }
+            }
+            return json;
+        } else {
+            Map<String, Object> copy = StringUtils.fromJson(gson.toJson(json), "response");
+            DocumentContext context = JsonPath.parse(copy);
+            for (String path : excludePaths) {
+                try {
+                    context.delete(path);
+                } catch (PathNotFoundException e) {
+                    log.warn("can't find path: {}", path);
+                }
+            }
+            return context.json();
+        }
+    }
+
+    public static String substitute(String template, Map<String, String> params, String prefix) {
+        StringSubstitutor substitutor = new StringSubstitutor(params, prefix, "}");
+        return substitutor.replace(template);
     }
 
     public static String getMatchedTool(Collection<String> tools, String action) {
@@ -430,6 +595,15 @@ public class AgentUtils {
         for (MLToolSpec toolSpec : toolSpecs) {
             Tool tool = createTool(toolFactories, params, toolSpec, mlAgent.getTenantId());
             tools.put(tool.getName(), tool);
+            if (toolSpec.getAttributes() != null) {
+                if (tool.getAttributes() == null) {
+                    Map<String, Object> attributes = new HashMap<>();
+                    attributes.putAll(toolSpec.getAttributes());
+                    tool.setAttributes(attributes);
+                } else {
+                    tool.getAttributes().putAll(toolSpec.getAttributes());
+                }
+            }
             toolSpecMap.put(tool.getName(), toolSpec);
         }
     }
@@ -515,41 +689,5 @@ public class AgentUtils {
             toolParams.put("input", actionInput);
         }
         return toolParams;
-    }
-
-    public static Map<String, ?> removeJsonPath(Map<String, ?> json, String excludePaths, boolean inPlace) {
-        Type listType = new TypeToken<List<String>>() {
-        }.getType();
-        List<String> excludedPath = gson.fromJson(excludePaths, listType);
-        return removeJsonPath(json, excludedPath, inPlace);
-    }
-
-    private static Map<String, ?> removeJsonPath(Map<String, ?> json, List<String> excludePaths, boolean inPlace) {
-
-        if (json == null || excludePaths == null || excludePaths.isEmpty()) {
-            return json;
-        }
-        if (inPlace) {
-            DocumentContext context = JsonPath.parse(json);
-            for (String path : excludePaths) {
-                try {
-                    context.delete(path);
-                } catch (PathNotFoundException e) {
-                    log.warn("can't find path: {}", path);
-                }
-            }
-            return json;
-        } else {
-            Map<String, Object> copy = StringUtils.fromJson(gson.toJson(json), "response");
-            DocumentContext context = JsonPath.parse(copy);
-            for (String path : excludePaths) {
-                try {
-                    context.delete(path);
-                } catch (PathNotFoundException e) {
-                    log.warn("can't find path: {}", path);
-                }
-            }
-            return context.json();
-        }
     }
 }
