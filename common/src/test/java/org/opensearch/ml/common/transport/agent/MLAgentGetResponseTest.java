@@ -41,7 +41,7 @@ public class MLAgentGetResponseTest {
             .name("test_agent")
             .appType("test_app")
             .type(MLAgentType.FLOW.name())
-            .tools(Arrays.asList(MLToolSpec.builder().type("CatIndexTool").build()))
+            .tools(Arrays.asList(MLToolSpec.builder().type("ListIndexTool").build()))
             .build();
     }
 
