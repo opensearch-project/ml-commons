@@ -48,6 +48,10 @@ public class AgentTool implements Tool {
     @Setter
     private String description = DEFAULT_DESCRIPTION;
 
+    @Getter
+    @Setter
+    private Map<String, Object> attributes;
+
     public AgentTool(Client client, String agentId) {
         this.client = client;
         this.agentId = agentId;

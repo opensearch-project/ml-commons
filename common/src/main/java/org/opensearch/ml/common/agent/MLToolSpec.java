@@ -8,6 +8,7 @@ package org.opensearch.ml.common.agent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_2_19_1;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 import java.io.IOException;
@@ -35,6 +36,7 @@ public class MLToolSpec implements ToXContentObject {
     public static final String TOOL_NAME_FIELD = "name";
     public static final String DESCRIPTION_FIELD = "description";
     public static final String PARAMETERS_FIELD = "parameters";
+    public static final String ATTRIBUTES_FIELD = "attributes";
     public static final String INCLUDE_OUTPUT_IN_AGENT_RESPONSE = "include_output_in_agent_response";
     public static final String CONFIG_FIELD = "config";
 
@@ -42,6 +44,7 @@ public class MLToolSpec implements ToXContentObject {
     private String name;
     private String description;
     private Map<String, String> parameters;
+    private Map<String, String> attributes;
     private boolean includeOutputInAgentResponse;
     private Map<String, String> configMap;
     @Setter
@@ -53,6 +56,7 @@ public class MLToolSpec implements ToXContentObject {
         String name,
         String description,
         Map<String, String> parameters,
+        Map<String, String> attributes,
         boolean includeOutputInAgentResponse,
         Map<String, String> configMap,
         String tenantId
@@ -64,6 +68,7 @@ public class MLToolSpec implements ToXContentObject {
         this.name = name;
         this.description = description;
         this.parameters = parameters;
+        this.attributes = attributes;
         this.includeOutputInAgentResponse = includeOutputInAgentResponse;
         this.configMap = configMap;
         this.tenantId = tenantId;
@@ -82,6 +87,9 @@ public class MLToolSpec implements ToXContentObject {
             configMap = input.readMap(StreamInput::readString, StreamInput::readOptionalString);
         }
         this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
+        if (input.available() > 0 && input.readBoolean()) {
+            parameters = input.readMap(StreamInput::readString, StreamInput::readOptionalString);
+        }
     }
 
     public void writeTo(StreamOutput out) throws IOException {
@@ -107,6 +115,14 @@ public class MLToolSpec implements ToXContentObject {
         if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
             out.writeOptionalString(tenantId);
         }
+        if (streamOutputVersion.after(VERSION_2_19_1)) {
+            if (attributes != null && !attributes.isEmpty()) {
+                out.writeBoolean(true);
+                out.writeMap(attributes, StreamOutput::writeString, StreamOutput::writeOptionalString);
+            } else {
+                out.writeBoolean(false);
+            }
+        }
     }
 
     @Override
@@ -120,6 +136,9 @@ public class MLToolSpec implements ToXContentObject {
         }
         if (description != null) {
             builder.field(DESCRIPTION_FIELD, description);
+        }
+        if (attributes != null && !attributes.isEmpty()) {
+            builder.field(ATTRIBUTES_FIELD, attributes);
         }
         if (parameters != null && !parameters.isEmpty()) {
             builder.field(PARAMETERS_FIELD, parameters);
@@ -139,6 +158,7 @@ public class MLToolSpec implements ToXContentObject {
         String type = null;
         String name = null;
         String description = null;
+        Map<String, String> attributes = null;
         Map<String, String> parameters = null;
         boolean includeOutputInAgentResponse = false;
         Map<String, String> configMap = null;
@@ -158,6 +178,9 @@ public class MLToolSpec implements ToXContentObject {
                     break;
                 case DESCRIPTION_FIELD:
                     description = parser.text();
+                    break;
+                case ATTRIBUTES_FIELD:
+                    attributes = getParameterMap(parser.map());
                     break;
                 case PARAMETERS_FIELD:
                     parameters = getParameterMap(parser.map());
@@ -181,6 +204,7 @@ public class MLToolSpec implements ToXContentObject {
             .type(type)
             .name(name)
             .description(description)
+            .attributes(attributes)
             .parameters(parameters)
             .includeOutputInAgentResponse(includeOutputInAgentResponse)
             .configMap(configMap)
