@@ -64,6 +64,8 @@ public interface Tool {
      */
     String getDescription();
 
+    Map<String, Object> getAttributes();
+    void setAttributes(Map<String, Object> attributes);
     /**
      * Set tool description.
      * @param description the description to set

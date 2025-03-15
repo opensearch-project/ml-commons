@@ -9,6 +9,7 @@ import static org.opensearch.action.support.clustermanager.ClusterManagerNodeReq
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -49,6 +50,9 @@ public class IndexMappingTool implements Tool {
     private String name = IndexMappingTool.TYPE;
     @Getter
     @Setter
+    private Map<String, Object> attributes;
+    @Getter
+    @Setter
     private String description = DEFAULT_DESCRIPTION;
     @Getter
     private String version;
@@ -61,6 +65,10 @@ public class IndexMappingTool implements Tool {
 
     public IndexMappingTool(Client client) {
         this.client = client;
+
+        this.attributes = new HashMap<>();
+        attributes.put("input_schema", "{\"type\":\"object\",\"properties\":{\"index\":{\"type\":\"string\",\"description\":\"OpenSearch index name\"}},\"required\":[\"index\"],\"additionalProperties\":false}");
+        attributes.put("strict", true);
 
         outputParser = new Parser<>() {
             @Override

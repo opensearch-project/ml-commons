@@ -54,7 +54,7 @@ public class SearchIndexTool implements Tool {
         "Use this tool to search an index by providing two parameters: 'index' for the index name, and 'query' for the OpenSearch DSL formatted query. Only use this tool when both index name and DSL query is available.";
 
     private String name = TYPE;
-
+    private Map<String, Object> attributes;
     private String description = DEFAULT_DESCRIPTION;
 
     private Client client;
