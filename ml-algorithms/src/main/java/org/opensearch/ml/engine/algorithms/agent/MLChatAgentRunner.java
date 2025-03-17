@@ -152,7 +152,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
             }
             params.put(LLM_RESPONSE_FILTER, "$.choices[0].message.content");
 
-            params.put("tool_template", "{\"type\": \"function\", \"function\": { \"name\": \"${tool.name}\", \"description\": \"${tool.description}\", \"parameters\": ${tool.attributes.input_schema}, \"strict\": ${tool.attributes.strict} } }");
+            params.put("tool_template", "{\"type\": \"function\", \"function\": { \"name\": \"${tool.name}\", \"description\": \"${tool.description}\", \"parameters\": ${tool.attributes.input_schema}, \"strict\": ${tool.attributes.strict:-false} } }");
             params.put("tool_calls_path", "$.choices[0].message.tool_calls");
             params.put("tool_calls.tool_name", "function.name");
             params.put("tool_calls.tool_input", "function.arguments");
