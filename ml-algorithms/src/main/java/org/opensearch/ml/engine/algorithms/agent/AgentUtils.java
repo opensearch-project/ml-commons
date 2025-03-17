@@ -25,9 +25,11 @@ import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.TOOL_N
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.LAST_N_INTERACTIONS;
 
 import java.lang.reflect.Type;
+import java.net.http.HttpClient;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -36,14 +38,23 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import com.jayway.jsonpath.DocumentContext;
 import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.PathNotFoundException;
+import io.modelcontextprotocol.client.McpClient;
+import io.modelcontextprotocol.client.McpSyncClient;
+import io.modelcontextprotocol.client.transport.HttpClientSseClientTransport;
+import io.modelcontextprotocol.spec.ClientMcpTransport;
+import io.modelcontextprotocol.spec.McpSchema;
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.core.common.Strings;
 import org.opensearch.ml.common.agent.MLAgent;
@@ -574,7 +585,94 @@ public class AgentUtils {
             }
             toolSpecs = selectedToolSpecs;
         }
+        List<MLToolSpec> mcpToolSpecs = getMcpToolSpecs(mlAgent.getParameters());
+        toolSpecs.addAll(mcpToolSpecs);
         return toolSpecs;
+    }
+
+    public static List<MLToolSpec> getMcpToolSpecs(Map<String, String> params) {
+        List<MLToolSpec> mcpToolSpecs = new ArrayList<>();
+        if (!params.containsKey("mcp_server_url")) {
+            return mcpToolSpecs;
+        }
+        try {
+            AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
+                String mcpServerUrl = params.get("mcp_server_url");
+
+                // Create a privileged executor service
+                ExecutorService executor = Executors.newCachedThreadPool(r -> {
+                    Thread thread = new Thread(r);
+                    thread.setDaemon(true);
+                    return thread;
+                });
+
+                // Build HTTP client with proper configuration
+                HttpClient httpClient = HttpClient.newBuilder()
+                        .executor(executor)
+                        .connectTimeout(Duration.ofSeconds(30))
+                        .build();
+
+                // Create transport with the HTTP client
+                ClientMcpTransport transport = new HttpClientSseClientTransport(
+                        httpClient,
+                        mcpServerUrl,
+                        new ObjectMapper()
+                );
+
+                // Create and initialize client
+                McpSyncClient client = McpClient.sync(transport)
+                        .requestTimeout(Duration.ofSeconds(30))
+                        .capabilities(McpSchema.ClientCapabilities.builder()
+                                .roots(false)
+                                .sampling()
+                                .build())
+                        .sampling(request -> new McpSchema.CreateMessageResult(
+                                McpSchema.Role.USER,
+                                new McpSchema.TextContent("test"),
+                                "Claude3.7",
+                                McpSchema.CreateMessageResult.StopReason.END_TURN))
+                        .build();
+
+                client.initialize();
+                McpSchema.ListToolsResult tools = client.listTools();
+
+                // Process the results
+                Gson gson = new Gson();
+                String json = gson.toJson(tools, McpSchema.ListToolsResult.class);
+                Map<?, ?> map = gson.fromJson(json, Map.class);
+
+                List<?> mcpTools = (List<?>) map.get("tools");
+                Set<String> basicMetaFields = Set.of("name", "description");
+
+                for (Object tool : mcpTools) {
+                    Map<String, String> attributes = new HashMap<>();
+                    Map<?, ?> toolMap = (Map<?, ?>) tool;
+
+                    for (Object key : toolMap.keySet()) {
+                        String keyStr = (String) key;
+                        if (!basicMetaFields.contains(keyStr)) {
+                            //TODO: change to more flexible way
+                            attributes.put("input_schema", StringUtils.toJson(toolMap.get(keyStr)));
+                        }
+                    }
+
+                    MLToolSpec mlToolSpec = MLToolSpec.builder()
+                            .type("McpSseTool")
+                            .name(toolMap.get("name").toString())
+                            .description(StringUtils.processTextDoc(toolMap.get("description").toString()))
+                            .attributes(attributes)
+                            .build();
+                    mlToolSpec.addRuntimeResource("mcp_client", client);
+                    mcpToolSpecs.add(mlToolSpec);
+                }
+                return null;
+            });
+
+            return mcpToolSpecs;
+        } catch (PrivilegedActionException e) {
+            log.error("Failed to get MCP tools", e);
+            return mcpToolSpecs;
+        }
     }
 
     public static void createTools(
@@ -621,7 +719,10 @@ public class AgentUtils {
                 executeParams.put(key.replace(toolNamePrefix, ""), params.get(key));
             }
         }
-        Tool tool = toolFactories.get(toolSpec.getType()).create(executeParams);
+        Map<String, Object> toolParams = new HashMap<>();
+        toolParams.putAll(executeParams);
+        toolParams.putAll(toolSpec.getRuntimeResources());
+        Tool tool = toolFactories.get(toolSpec.getType()).create(toolParams);
         String toolName = getToolName(toolSpec);
         tool.setName(toolName);
 
