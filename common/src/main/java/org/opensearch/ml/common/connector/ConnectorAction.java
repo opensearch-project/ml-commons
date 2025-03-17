@@ -6,29 +6,9 @@
 package org.opensearch.ml.common.connector;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.connector.MLPostProcessFunction.BEDROCK_BATCH_JOB_ARN;
-import static org.opensearch.ml.common.connector.MLPostProcessFunction.BEDROCK_EMBEDDING;
-import static org.opensearch.ml.common.connector.MLPostProcessFunction.BEDROCK_RERANK;
-import static org.opensearch.ml.common.connector.MLPostProcessFunction.BEDROCK_V2_EMBEDDING_BINARY;
-import static org.opensearch.ml.common.connector.MLPostProcessFunction.BEDROCK_V2_EMBEDDING_FLOAT;
-import static org.opensearch.ml.common.connector.MLPostProcessFunction.COHERE_EMBEDDING;
-import static org.opensearch.ml.common.connector.MLPostProcessFunction.COHERE_RERANK;
-import static org.opensearch.ml.common.connector.MLPostProcessFunction.COHERE_V2_EMBEDDING_BINARY;
-import static org.opensearch.ml.common.connector.MLPostProcessFunction.COHERE_V2_EMBEDDING_FLOAT32;
-import static org.opensearch.ml.common.connector.MLPostProcessFunction.COHERE_V2_EMBEDDING_INT8;
-import static org.opensearch.ml.common.connector.MLPostProcessFunction.COHERE_V2_EMBEDDING_UBINARY;
-import static org.opensearch.ml.common.connector.MLPostProcessFunction.COHERE_V2_EMBEDDING_UINT8;
 import static org.opensearch.ml.common.connector.MLPostProcessFunction.DEFAULT_EMBEDDING;
 import static org.opensearch.ml.common.connector.MLPostProcessFunction.DEFAULT_RERANK;
-import static org.opensearch.ml.common.connector.MLPostProcessFunction.OPENAI_EMBEDDING;
-import static org.opensearch.ml.common.connector.MLPreProcessFunction.IMAGE_TO_COHERE_MULTI_MODAL_EMBEDDING_INPUT;
-import static org.opensearch.ml.common.connector.MLPreProcessFunction.TEXT_DOCS_TO_BEDROCK_EMBEDDING_INPUT;
-import static org.opensearch.ml.common.connector.MLPreProcessFunction.TEXT_DOCS_TO_COHERE_EMBEDDING_INPUT;
 import static org.opensearch.ml.common.connector.MLPreProcessFunction.TEXT_DOCS_TO_DEFAULT_EMBEDDING_INPUT;
-import static org.opensearch.ml.common.connector.MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT;
-import static org.opensearch.ml.common.connector.MLPreProcessFunction.TEXT_IMAGE_TO_BEDROCK_EMBEDDING_INPUT;
-import static org.opensearch.ml.common.connector.MLPreProcessFunction.TEXT_SIMILARITY_TO_BEDROCK_RERANK_INPUT;
-import static org.opensearch.ml.common.connector.MLPreProcessFunction.TEXT_SIMILARITY_TO_COHERE_RERANK_INPUT;
 import static org.opensearch.ml.common.connector.MLPreProcessFunction.TEXT_SIMILARITY_TO_DEFAULT_INPUT;
 
 import java.io.IOException;
@@ -227,140 +207,75 @@ public class ConnectorAction implements ToXContentObject, Writeable {
     }
 
     private void validatePreProcessFunctions(String remoteServer) {
-        if (isInBuiltFunction(preProcessFunction)) {
-            switch (remoteServer) {
-                case OPENAI:
-                    if (!TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT.equals(preProcessFunction)) {
-                        throw new IllegalArgumentException(
-                            "LLM service is " + OPENAI + ", so PreProcessFunction should be " + TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT
-                        );
-                    }
-                    break;
-                case COHERE:
-                    if (!(TEXT_DOCS_TO_COHERE_EMBEDDING_INPUT.equals(preProcessFunction)
-                        || IMAGE_TO_COHERE_MULTI_MODAL_EMBEDDING_INPUT.equals(preProcessFunction)
-                        || TEXT_SIMILARITY_TO_COHERE_RERANK_INPUT.equals(preProcessFunction))) {
-                        throw new IllegalArgumentException(
-                            "LLM service is "
-                                + COHERE
-                                + ", so PreProcessFunction should be "
-                                + TEXT_DOCS_TO_COHERE_EMBEDDING_INPUT
-                                + " or "
-                                + IMAGE_TO_COHERE_MULTI_MODAL_EMBEDDING_INPUT
-                                + " or "
-                                + TEXT_SIMILARITY_TO_COHERE_RERANK_INPUT
-                        );
-                    }
-                    break;
-                case BEDROCK:
-                    if (!(TEXT_DOCS_TO_BEDROCK_EMBEDDING_INPUT.equals(preProcessFunction)
-                        || TEXT_IMAGE_TO_BEDROCK_EMBEDDING_INPUT.equals(preProcessFunction)
-                        || TEXT_SIMILARITY_TO_BEDROCK_RERANK_INPUT.equals(preProcessFunction))) {
-                        throw new IllegalArgumentException(
-                            "LLM service is "
-                                + BEDROCK
-                                + ", so PreProcessFunction should be "
-                                + TEXT_DOCS_TO_BEDROCK_EMBEDDING_INPUT
-                                + " or "
-                                + TEXT_IMAGE_TO_BEDROCK_EMBEDDING_INPUT
-                                + " or "
-                                + TEXT_SIMILARITY_TO_BEDROCK_RERANK_INPUT
-                        );
-                    }
-                    break;
-                case SAGEMAKER:
-                    if (!(TEXT_DOCS_TO_DEFAULT_EMBEDDING_INPUT.equals(preProcessFunction)
-                        || TEXT_SIMILARITY_TO_DEFAULT_INPUT.equals(preProcessFunction))) {
-                        throw new IllegalArgumentException(
-                            "LLM service is "
-                                + SAGEMAKER
-                                + ", so PreProcessFunction should be "
-                                + TEXT_DOCS_TO_DEFAULT_EMBEDDING_INPUT
-                                + " or "
-                                + TEXT_SIMILARITY_TO_DEFAULT_INPUT
-                        );
-                    }
-            }
+        if (!isInBuiltProcessFunction(preProcessFunction)) {
+            return;
+        }
+        switch (remoteServer) {
+            case OPENAI:
+                if (!preProcessFunction.contains(OPENAI)) {
+                    throw new IllegalArgumentException(invalidProcessFuncExcText(OPENAI, "PreProcessFunction"));
+                }
+                break;
+            case COHERE:
+                if (!preProcessFunction.contains(COHERE)) {
+                    throw new IllegalArgumentException(invalidProcessFuncExcText(COHERE, "PreProcessFunction"));
+                }
+                break;
+            case BEDROCK:
+                if (!preProcessFunction.contains(BEDROCK)) {
+                    throw new IllegalArgumentException(invalidProcessFuncExcText(BEDROCK, "PreProcessFunction"));
+                }
+                break;
+            case SAGEMAKER:
+                if (!(TEXT_DOCS_TO_DEFAULT_EMBEDDING_INPUT.equals(preProcessFunction)
+                    || TEXT_SIMILARITY_TO_DEFAULT_INPUT.equals(preProcessFunction))) {
+                    throw new IllegalArgumentException(
+                        "LLM service is "
+                            + SAGEMAKER
+                            + ", so PreProcessFunction should be "
+                            + TEXT_DOCS_TO_DEFAULT_EMBEDDING_INPUT
+                            + " or "
+                            + TEXT_SIMILARITY_TO_DEFAULT_INPUT
+                    );
+                }
         }
     }
 
     private void validatePostProcessFunctions(String remoteServer) {
-        if (isInBuiltFunction(postProcessFunction)) {
-            switch (remoteServer) {
-                case OPENAI:
-                    if (!OPENAI_EMBEDDING.equals(postProcessFunction)) {
-                        throw new IllegalArgumentException(
-                            "LLM service is " + OPENAI + ", so PostProcessFunction should be " + OPENAI_EMBEDDING
-                        );
-                    }
-                    break;
-                case COHERE:
-                    if (!(COHERE_EMBEDDING.equals(postProcessFunction)
-                        || COHERE_RERANK.equals(postProcessFunction)
-                        || COHERE_V2_EMBEDDING_FLOAT32.equals(postProcessFunction)
-                        || COHERE_V2_EMBEDDING_INT8.equals(postProcessFunction)
-                        || COHERE_V2_EMBEDDING_UINT8.equals(postProcessFunction)
-                        || COHERE_V2_EMBEDDING_BINARY.equals(postProcessFunction)
-                        || COHERE_V2_EMBEDDING_UBINARY.equals(postProcessFunction))) {
-                        throw new IllegalArgumentException(
-                            "LLM service is "
-                                + COHERE
-                                + ", so PostProcessFunction should be "
-                                + COHERE_EMBEDDING
-                                + " or "
-                                + COHERE_RERANK
-                                + " or "
-                                + COHERE_V2_EMBEDDING_FLOAT32
-                                + " or "
-                                + COHERE_V2_EMBEDDING_INT8
-                                + " or "
-                                + COHERE_V2_EMBEDDING_UINT8
-                                + " or "
-                                + COHERE_V2_EMBEDDING_BINARY
-                                + " or "
-                                + COHERE_V2_EMBEDDING_UBINARY
-                        );
-                    }
-                    break;
-                case BEDROCK:
-                    if (!(BEDROCK_EMBEDDING.equals(postProcessFunction)
-                        || BEDROCK_BATCH_JOB_ARN.equals(postProcessFunction)
-                        || BEDROCK_RERANK.equals(postProcessFunction)
-                        || BEDROCK_V2_EMBEDDING_FLOAT.equals(postProcessFunction)
-                        || BEDROCK_V2_EMBEDDING_BINARY.equals(postProcessFunction))) {
-                        throw new IllegalArgumentException(
-                            "LLM service is "
-                                + BEDROCK
-                                + ", so PostProcessFunction should be "
-                                + BEDROCK_EMBEDDING
-                                + " or "
-                                + BEDROCK_BATCH_JOB_ARN
-                                + " or "
-                                + BEDROCK_RERANK
-                                + " or "
-                                + BEDROCK_V2_EMBEDDING_FLOAT
-                                + " or "
-                                + BEDROCK_V2_EMBEDDING_BINARY
-                        );
-                    }
-                    break;
-                case SAGEMAKER:
-                    if (!(DEFAULT_EMBEDDING.equals(postProcessFunction) || DEFAULT_RERANK.equals(postProcessFunction))) {
-                        throw new IllegalArgumentException(
-                            "LLM service is "
-                                + SAGEMAKER
-                                + ", so PostProcessFunction should be "
-                                + DEFAULT_EMBEDDING
-                                + " or "
-                                + DEFAULT_RERANK
-                        );
-                    }
-            }
+        if (!isInBuiltProcessFunction(postProcessFunction)) {
+            return;
+        }
+        switch (remoteServer) {
+            case OPENAI:
+                if (!postProcessFunction.contains(OPENAI)) {
+                    throw new IllegalArgumentException(invalidProcessFuncExcText(OPENAI, "PostProcessFunction"));
+                }
+                break;
+            case COHERE:
+                if (!postProcessFunction.contains(COHERE)) {
+                    throw new IllegalArgumentException(invalidProcessFuncExcText(COHERE, "PostProcessFunction"));
+                }
+                break;
+            case BEDROCK:
+                if (!postProcessFunction.contains(BEDROCK)) {
+                    throw new IllegalArgumentException(invalidProcessFuncExcText(BEDROCK, "PostProcessFunction"));
+                }
+                break;
+            case SAGEMAKER:
+                if (!(DEFAULT_EMBEDDING.equals(postProcessFunction) || DEFAULT_RERANK.equals(postProcessFunction))) {
+                    throw new IllegalArgumentException(
+                        "LLM service is " + SAGEMAKER + ", so PostProcessFunction should be " + DEFAULT_EMBEDDING + " or " + DEFAULT_RERANK
+                    );
+                }
         }
     }
 
-    private boolean isInBuiltFunction(String function) {
-        return (function != null && function.startsWith(INBUILT_FUNC_PREFIX));
+    private String invalidProcessFuncExcText(String remoteServer, String func) {
+        return "LLM service is " + remoteServer + ", so " + func + " should be " + remoteServer + " " + func;
+    }
+
+    private boolean isInBuiltProcessFunction(String processFunction) {
+        return (processFunction != null && processFunction.startsWith(INBUILT_FUNC_PREFIX));
     }
 
     public static String getRemoteServerFromURL(String url) {

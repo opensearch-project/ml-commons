@@ -136,10 +136,7 @@ public class ConnectorActionTest {
             OPENAI_EMBEDDING
         );
         Throwable exception = assertThrows(IllegalArgumentException.class, () -> action1.validatePrePostProcessFunctions(Map.of()));
-        assertEquals(
-            "LLM service is openai, so PreProcessFunction should be connector.pre_process.openai.embedding",
-            exception.getMessage()
-        );
+        assertEquals("LLM service is openai, so PreProcessFunction should be openai PreProcessFunction", exception.getMessage());
         ConnectorAction action2 = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
@@ -150,10 +147,7 @@ public class ConnectorActionTest {
             COHERE_EMBEDDING
         );
         exception = assertThrows(IllegalArgumentException.class, () -> action2.validatePrePostProcessFunctions(Map.of()));
-        assertEquals(
-            "LLM service is openai, so PostProcessFunction should be connector.post_process.openai.embedding",
-            exception.getMessage()
-        );
+        assertEquals("LLM service is openai, so PostProcessFunction should be openai PostProcessFunction", exception.getMessage());
     }
 
     @Test
@@ -205,11 +199,7 @@ public class ConnectorActionTest {
             COHERE_EMBEDDING
         );
         Throwable exception = assertThrows(IllegalArgumentException.class, () -> action1.validatePrePostProcessFunctions(Map.of()));
-        assertEquals(
-            "LLM service is cohere, so PreProcessFunction should be connector.pre_process.cohere.embedding"
-                + " or connector.pre_process.cohere.multimodal_embedding or connector.pre_process.cohere.rerank",
-            exception.getMessage()
-        );
+        assertEquals("LLM service is cohere, so PreProcessFunction should be cohere PreProcessFunction", exception.getMessage());
         ConnectorAction action2 = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
@@ -220,13 +210,7 @@ public class ConnectorActionTest {
             OPENAI_EMBEDDING
         );
         exception = assertThrows(IllegalArgumentException.class, () -> action2.validatePrePostProcessFunctions(Map.of()));
-        assertEquals(
-            "LLM service is cohere, so PostProcessFunction should be connector.post_process.cohere.embedding"
-                + " or connector.post_process.cohere.rerank or connector.post_process.cohere_v2.embedding.float"
-                + " or connector.post_process.cohere_v2.embedding.int8 or connector.post_process.cohere_v2.embedding.uint8"
-                + " or connector.post_process.cohere_v2.embedding.binary or connector.post_process.cohere_v2.embedding.ubinary",
-            exception.getMessage()
-        );
+        assertEquals("LLM service is cohere, so PostProcessFunction should be cohere PostProcessFunction", exception.getMessage());
     }
 
     @Test
@@ -278,11 +262,7 @@ public class ConnectorActionTest {
             BEDROCK_EMBEDDING
         );
         Throwable exception = assertThrows(IllegalArgumentException.class, () -> action1.validatePrePostProcessFunctions(Map.of()));
-        assertEquals(
-            "LLM service is bedrock, so PreProcessFunction should be connector.pre_process.bedrock.embedding"
-                + " or connector.pre_process.bedrock.multimodal_embedding or connector.pre_process.bedrock.rerank",
-            exception.getMessage()
-        );
+        assertEquals("LLM service is bedrock, so PreProcessFunction should be bedrock PreProcessFunction", exception.getMessage());
         ConnectorAction action2 = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
@@ -293,12 +273,7 @@ public class ConnectorActionTest {
             COHERE_EMBEDDING
         );
         exception = assertThrows(IllegalArgumentException.class, () -> action2.validatePrePostProcessFunctions(Map.of()));
-        assertEquals(
-            "LLM service is bedrock, so PostProcessFunction should be connector.post_process.bedrock.embedding"
-                + " or connector.post_process.bedrock.batch_job_arn or connector.post_process.bedrock.rerank"
-                + " or connector.post_process.bedrock_v2.embedding.float or connector.post_process.bedrock_v2.embedding.binary",
-            exception.getMessage()
-        );
+        assertEquals("LLM service is bedrock, so PostProcessFunction should be bedrock PostProcessFunction", exception.getMessage());
     }
 
     @Test
