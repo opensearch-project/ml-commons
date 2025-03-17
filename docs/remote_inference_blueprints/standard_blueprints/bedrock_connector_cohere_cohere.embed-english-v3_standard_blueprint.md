@@ -129,7 +129,7 @@ Sample response:
 POST /_plugins/_ml/models/lyjxwZABNrAVdFa9zrcZ/_predict
 {
   "parameters": {
-    "texts" : ["上海", "This is a test"]
+    "texts" : ["Hello World", "This is a test"]
   }
 }
 ```
@@ -137,39 +137,38 @@ POST /_plugins/_ml/models/lyjxwZABNrAVdFa9zrcZ/_predict
 Sample response:
 ```json
 {
-    "inference_results": [
+  "inference_results": [
+    {
+      "output": [
         {
-            "output": [
-                {
-                    "name": "response",
-                    "dataAsMap": {
-                        "id": "2fe5b994-f343-49cb-94a5-a7c8c5af77e6",
-                        "texts": [
-                            "上 海",
-                            "this is a test"
-                        ],
-                        "embeddings": [
-                            [
-                                -0.034820557,
-                                0.013900757,
-                                -0.036987305, 
-                                ...
-                            ],
-                          [
-                            -0.013885498,
-                            0.009994507,
-                            -0.03253174,
-                            -0.024993896,
-                             ...
-                          ]
-                        ],
-                      "response_type": "embeddings_floats"
-                    }
-                }
+          "name": "response",
+          "dataAsMap": {
+            "id": "74372fce-e09d-483e-af6a-b45c84e3999e",
+            "texts": [
+              "hello world",
+              "this is a test"
             ],
-          "status_code": 200
+            "embeddings": [
+              [
+                -0.029205322,
+                -0.02357483,
+                -0.05987549,
+                ...
+              ],
+              [
+                -0.013885498,
+                0.009994507,
+                -0.03253174,
+                ...
+              ]
+            ],
+            "response_type": "embeddings_floats"
+          }
         }
-    ]
+      ],
+      "status_code": 200
+    }
+  ]
 }
 ```
 
