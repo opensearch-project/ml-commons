@@ -78,7 +78,9 @@ public class RestCohereInferenceIT extends MLCommonsRestTestCase {
             List output = (List) inferenceResult.get("inference_results");
             assertEquals(errorMsg, 1, output.size());
             assertTrue(errorMsg, output.get(0) instanceof Map);
-            validateOutput(errorMsg, (Map) output.get(0), DATA_TYPE.get(postProcessFunction));
+            if (output != null && DATA_TYPE != null) {
+                validateOutput(errorMsg, (Map) output.get(0), DATA_TYPE.get(postProcessFunction));
+            }
         }
     }
 
