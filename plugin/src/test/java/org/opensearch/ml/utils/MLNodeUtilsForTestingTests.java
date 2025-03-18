@@ -15,7 +15,6 @@ import java.io.IOException;
 import java.util.HashSet;
 import java.util.Set;
 
-import com.fasterxml.jackson.core.JsonParseException;
 import org.junit.Assert;
 import org.junit.Test;
 import org.opensearch.Version;
@@ -29,6 +28,8 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.test.OpenSearchTestCase;
+
+import com.fasterxml.jackson.core.JsonParseException;
 
 public class MLNodeUtilsForTestingTests extends OpenSearchTestCase {
 
@@ -107,11 +108,11 @@ public class MLNodeUtilsForTestingTests extends OpenSearchTestCase {
     public void testValidateRemoteInputWithTitanMultiModalRemoteSchema() throws IOException {
         String schema = BEDROCK_TITAN_EMBED_MULTI_MODAL_V1_MODEL_INTERFACE.get("input");
         String json = "{\n"
-                + "  \"parameters\": {\n"
-                + "    \"inputText\": \"Say this is a test\",\n"
-                + "    \"inputImage\": \"/9jk=\"\n"
-                + "  }\n"
-                + "}";
+            + "  \"parameters\": {\n"
+            + "    \"inputText\": \"Say this is a test\",\n"
+            + "    \"inputImage\": \"/9jk=\"\n"
+            + "  }\n"
+            + "}";
         MLNodeUtilsForTesting.validateSchema(schema, json);
     }
 
@@ -153,9 +154,9 @@ public class MLNodeUtilsForTestingTests extends OpenSearchTestCase {
     @Test
     public void testProcessRemoteInferenceInputDataSetParametersValueWithParametersProcessObject() throws IOException {
         String json =
-                "{\"key1\":\"foo\",\"key2\":123,\"key3\":true,\"parameters\":{\"messages\":\"{\\\"role\\\":\\\"system\\\",\\\"foo\\\":\\\"{\\\\\\\"a\\\\\\\": \\\\\\\"b\\\\\\\"}\\\",\\\"content\\\":{\\\"a\\\":\\\"b\\\"}}\"}}}";
+            "{\"key1\":\"foo\",\"key2\":123,\"key3\":true,\"parameters\":{\"messages\":\"{\\\"role\\\":\\\"system\\\",\\\"foo\\\":\\\"{\\\\\\\"a\\\\\\\": \\\\\\\"b\\\\\\\"}\\\",\\\"content\\\":{\\\"a\\\":\\\"b\\\"}}\"}}}";
         String expectedJson =
-                "{\"key1\":\"foo\",\"key2\":123,\"key3\":true,\"parameters\":{\"messages\":{\"role\":\"system\",\"foo\":\"{\\\"a\\\": \\\"b\\\"}\",\"content\":{\"a\":\"b\"}}}}";
+            "{\"key1\":\"foo\",\"key2\":123,\"key3\":true,\"parameters\":{\"messages\":{\"role\":\"system\",\"foo\":\"{\\\"a\\\": \\\"b\\\"}\",\"content\":{\"a\":\"b\"}}}}";
         String processedJson = MLNodeUtilsForTesting.processRemoteInferenceInputDataSetParametersValue(json);
         assertEquals(expectedJson, processedJson);
     }
@@ -170,7 +171,7 @@ public class MLNodeUtilsForTestingTests extends OpenSearchTestCase {
     @Test
     public void testProcessRemoteInferenceInputDataSetParametersValueWithParametersInvalidJson() throws IOException {
         String json =
-                "{\"key1\":\"foo\",\"key2\":123,\"key3\":true,\"parameters\":{\"key1\":\"foo\",\"key2\":123,\"key3\":true,\"texts\":\"[\\\"Hello\\\",\\\"world\\\"\"}}";
+            "{\"key1\":\"foo\",\"key2\":123,\"key3\":true,\"parameters\":{\"key1\":\"foo\",\"key2\":123,\"key3\":true,\"texts\":\"[\\\"Hello\\\",\\\"world\\\"\"}}";
         String processedJson = MLNodeUtilsForTesting.processRemoteInferenceInputDataSetParametersValue(json);
         assertEquals(json, processedJson);
     }
