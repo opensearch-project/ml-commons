@@ -70,6 +70,7 @@ import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.engine.tools.MLModelTool;
+import org.opensearch.ml.engine.tools.McpSseTool;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.ml.repackage.com.google.common.collect.Lists;
 import org.opensearch.transport.client.Client;
@@ -372,6 +373,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             additionalInfo,
                             finalAnswer
                         );
+                        cleanUpResource(tools);
                         return;
                     }
 
@@ -520,6 +522,14 @@ public class MLChatAgentRunner implements MLAgentRunner {
             tenantId
         );
         client.execute(MLPredictionTaskAction.INSTANCE, request, firstListener);
+    }
+
+    private void cleanUpResource(Map<String, Tool> tools) {
+        for (String key : tools.keySet()) {
+            if (tools.get(key) instanceof McpSseTool) {//TODO: make this more general, avoid checking specific tool type
+                ((McpSseTool)tools.get(key)).getMcpSyncClient().closeGracefully();
+            }
+        }
     }
 
     private static List<ModelTensors> createFinalAnswerTensors(List<ModelTensors> sessionId, List<ModelTensor> lastThought) {
