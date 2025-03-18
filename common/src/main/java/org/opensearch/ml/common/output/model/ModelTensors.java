@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.common.output.model;
 
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -17,6 +19,7 @@ import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.exception.MLException;
 
 import lombok.Builder;
@@ -138,5 +141,34 @@ public class ModelTensors implements Writeable, ToXContentObject {
             String errorMsg = "Failed to parse output";
             throw new MLException(errorMsg, e);
         }
+    }
+
+    public static ModelTensors parse(XContentParser parser) throws IOException {
+        Integer statusCode = null;
+        List<ModelTensor> mlModelTensors = new ArrayList<>();
+        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
+
+        while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
+            String fieldName = parser.currentName();
+            parser.nextToken();
+
+            switch (fieldName) {
+                case STATUS_CODE_FIELD:
+                    statusCode = parser.intValue(false);
+                    break;
+                case OUTPUT_FIELD:
+                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                        mlModelTensors.add(ModelTensor.parser(parser));
+                    }
+                    break;
+                default:
+                    parser.skipChildren();
+                    break;
+            }
+        }
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(mlModelTensors).build();
+        modelTensors.setStatusCode(statusCode);
+        return modelTensors;
     }
 }
