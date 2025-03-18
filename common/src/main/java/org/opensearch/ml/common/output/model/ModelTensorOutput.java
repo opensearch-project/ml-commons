@@ -5,12 +5,15 @@
 
 package org.opensearch.ml.common.output.model;
 
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+
 import lombok.Builder;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.annotation.MLAlgoOutput;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLOutputType;
@@ -79,4 +82,24 @@ public class ModelTensorOutput extends MLOutput {
         return OUTPUT_TYPE;
     }
 
+    public static ModelTensorOutput parse(XContentParser parser) throws IOException {
+        List<ModelTensors> mlModelOutputs = new ArrayList<>();
+
+        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
+        while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
+            String fieldName = parser.currentName();
+            parser.nextToken();
+
+            if (fieldName.equals(INFERENCE_RESULT_FIELD)) {
+                ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                    mlModelOutputs.add(ModelTensors.parse(parser));
+                }
+            } else {
+                parser.skipChildren();
+            }
+        }
+
+        return ModelTensorOutput.builder().mlModelOutputs(mlModelOutputs).build();
+    }
 }
