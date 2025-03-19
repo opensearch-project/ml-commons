@@ -182,10 +182,10 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
             assertOK(restResponse);
             SearchResponse searchResponse = searchResponseFromResponse(restResponse);
             if (multiTenancyEnabled) {
-                assertEquals(1, searchResponse.getHits().getTotalHits().value);
+                assertEquals(1, searchResponse.getHits().getTotalHits().value());
                 assertEquals(tenantId, searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID_FIELD));
             } else {
-                assertEquals(2, searchResponse.getHits().getTotalHits().value);
+                assertEquals(2, searchResponse.getHits().getTotalHits().value());
                 assertNull(searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID_FIELD));
                 assertNull(searchResponse.getHits().getHits()[1].getSourceAsMap().get(TENANT_ID_FIELD));
             }
@@ -197,10 +197,10 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
             assertOK(restResponse);
             SearchResponse searchResponse = searchResponseFromResponse(restResponse);
             if (multiTenancyEnabled) {
-                assertEquals(1, searchResponse.getHits().getTotalHits().value);
+                assertEquals(1, searchResponse.getHits().getTotalHits().value());
                 assertEquals(otherTenantId, searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID_FIELD));
             } else {
-                assertEquals(2, searchResponse.getHits().getTotalHits().value);
+                assertEquals(2, searchResponse.getHits().getTotalHits().value());
                 assertNull(searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID_FIELD));
                 assertNull(searchResponse.getHits().getHits()[1].getSourceAsMap().get(TENANT_ID_FIELD));
             }
@@ -220,7 +220,7 @@ public class RestMLConnectorTenantAwareIT extends MLCommonsTenantAwareRestTestCa
             response = makeRequest(nullTenantMatchAllRequest, GET, CONNECTORS_PATH + "_search");
             assertOK(response);
             SearchResponse searchResponse = searchResponseFromResponse(response);
-            assertEquals(2, searchResponse.getHits().getTotalHits().value);
+            assertEquals(2, searchResponse.getHits().getTotalHits().value());
             assertNull(searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID_FIELD));
             assertNull(searchResponse.getHits().getHits()[1].getSourceAsMap().get(TENANT_ID_FIELD));
         }

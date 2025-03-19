@@ -223,7 +223,7 @@ public abstract class MLCommonsTenantAwareRestTestCase extends MLCommonsRestTest
             Response response = makeRequest(searchRequest, GET, restPath + "_search");
             assertOK(response);
             SearchResponse searchResponse = searchResponseFromResponse(response);
-            assertEquals(hits, searchResponse.getHits().getTotalHits().value);
+            assertEquals(hits, searchResponse.getHits().getTotalHits().value());
         }, 20, TimeUnit.SECONDS);
     }
 
