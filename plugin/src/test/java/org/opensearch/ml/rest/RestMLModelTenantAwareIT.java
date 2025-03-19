@@ -15,6 +15,7 @@ import java.util.concurrent.TimeUnit;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Response;
 import org.opensearch.client.ResponseException;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.rest.RestRequest;
 
 public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
@@ -32,7 +33,14 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
         Map<String, Object> map = responseToMap(response);
         assertTrue(map.containsKey(CONNECTOR_ID));
         String connectorId = map.get(CONNECTOR_ID).toString();
-        // Create a second connector from other tenant
+        // Create a second connector with same tenant for deletion tests later
+        response = makeRequest(createConnectorRequest, POST, CONNECTORS_PATH + "_create");
+        assertOK(response);
+        map = responseToMap(response);
+        assertTrue(map.containsKey(CONNECTOR_ID));
+        String secondConnectorId = map.get(CONNECTOR_ID).toString();
+
+        // Create a third connector from other tenant
         createConnectorRequest = getRestRequestWithHeadersAndContent(otherTenantId, COHERE_CONNECTOR_BLUEPRINT);
         response = makeRequest(createConnectorRequest, POST, CONNECTORS_PATH + "_create");
         assertOK(response);
@@ -308,6 +316,17 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
             assertEquals(MISSING_TENANT_REASON, getErrorReasonFromResponseMap(map));
         }
 
+        // Try to delete connector while model exists
+        ResponseException ex = assertThrows(
+            ResponseException.class,
+            () -> makeRequest(tenantRequest, DELETE, CONNECTORS_PATH + connectorId)
+        );
+        response = ex.getResponse();
+        assertEquals(RestStatus.CONFLICT.getStatus(), response.getStatusLine().getStatusCode());
+        // but it should work with the connector not in a model
+        response = makeRequest(tenantRequest, DELETE, CONNECTORS_PATH + secondConnectorId);
+        assertOK(response);
+
         // Now actually do the deletions. Same result whether multi-tenancy is enabled.
         // Verify still exists
         response = makeRequest(tenantRequest, GET, MODELS_PATH + modelId);
@@ -320,7 +339,7 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
         assertEquals(modelId, map.get(DOC_ID).toString());
 
         // Verify the deletion
-        ResponseException ex = assertThrows(ResponseException.class, () -> makeRequest(tenantRequest, GET, MODELS_PATH + modelId));
+        ex = assertThrows(ResponseException.class, () -> makeRequest(tenantRequest, GET, MODELS_PATH + modelId));
         response = ex.getResponse();
         assertNotFound(response);
         map = responseToMap(response);
