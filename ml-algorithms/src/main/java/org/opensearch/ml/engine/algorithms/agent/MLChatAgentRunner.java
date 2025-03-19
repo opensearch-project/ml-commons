@@ -19,6 +19,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.PROMPT_SUFFIX
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.RESPONSE_FORMAT_INSTRUCTION;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_RESPONSE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.VERBOSE;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.constructLLMInterfaceParams;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.constructToolParams;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTools;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMessageHistoryLimit;
@@ -147,74 +148,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         }
 
         String llmInterface = params.get(LLM_INTERFACE);
-        if ("openai/v1/chat/completions".equalsIgnoreCase(llmInterface)) {
-            if (!params.containsKey(NO_ESCAPE_PARAMS)) {
-                params.put(NO_ESCAPE_PARAMS, DEFAULT_NO_ESCAPE_PARAMS);
-            }
-            params.put(LLM_RESPONSE_FILTER, "$.choices[0].message.content");
-
-            params.put("tool_template", "{\"type\": \"function\", \"function\": { \"name\": \"${tool.name}\", \"description\": \"${tool.description}\", \"parameters\": ${tool.attributes.input_schema}, \"strict\": ${tool.attributes.strict:-false} } }");
-            params.put("tool_calls_path", "$.choices[0].message.tool_calls");
-            params.put("tool_calls.tool_name", "function.name");
-            params.put("tool_calls.tool_input", "function.arguments");
-            params.put("tool_calls.id_path", "id");
-
-            params.put("tool_choice", "auto");
-            params.put("parallel_tool_calls", "false");
-
-            params.put("interaction_template.assistant_tool_calls_path", "$.choices[0].message");
-            params.put("interaction_template.tool_response", "{ \"role\": \"tool\", \"tool_call_id\": \"${_interactions.tool_call_id}\", \"content\": \"${_interactions.tool_response}\" }");
-
-            params.put("chat_history_template.user_question", "{\"role\": \"user\",\"content\": \"${_chat_history.message.question}\"}");
-            params.put("chat_history_template.ai_response", "{\"role\": \"assistant\",\"content\": \"${_chat_history.message.response}\"}");
-
-            params.put("llm_finish_reason_path", "$.choices[0].finish_reason");
-            params.put("llm_finish_reason_tool_use", "tool_calls");
-            params.put("llm_response_filter", "$.choices[0].message.content");
-        } else if ("bedrock/converse/claude".equalsIgnoreCase(llmInterface)) {
-            if (!params.containsKey(NO_ESCAPE_PARAMS)) {
-                params.put(NO_ESCAPE_PARAMS, DEFAULT_NO_ESCAPE_PARAMS + ",tool_configs");
-            }
-            params.put(LLM_RESPONSE_FILTER, "$.output.message.content[0].text");
-
-            params.put("tool_template", "{\"toolSpec\":{\"name\":\"${tool.name}\",\"description\":\"${tool.description}\",\"inputSchema\": {\"json\": ${tool.attributes.input_schema} } }}");
-            params.put("tool_calls_path", "$.output.message.content[*].toolUse");
-            params.put("tool_calls.tool_name", "name");
-            params.put("tool_calls.tool_input", "input");
-            params.put("tool_calls.id_path", "toolUseId");
-            params.put("tool_configs", ", \"toolConfig\": {\"tools\": [${parameters._tools:-}]}");
-
-            params.put("interaction_template.assistant_tool_calls_path", "$.output.message");
-            params.put("interaction_template.tool_response", "{\"role\":\"user\",\"content\":[{\"toolResult\":{\"toolUseId\":\"${_interactions.tool_call_id}\",\"content\":[{\"text\":\"${_interactions.tool_response}\"}]}}]}");
-
-            params.put("chat_history_template.user_question", "{\"role\":\"user\",\"content\":[{\"text\":\"${_chat_history.message.question}\"}]}");
-            params.put("chat_history_template.ai_response", "{\"role\":\"assistant\",\"content\":[{\"text\":\"${_chat_history.message.response}\"}]}");
-
-            params.put("llm_finish_reason_path", "$.stopReason");
-            params.put("llm_finish_reason_tool_use", "tool_use");
-        } else if ("bedrock/converse/deepseek_r1".equalsIgnoreCase(llmInterface)) {
-            if (!params.containsKey(NO_ESCAPE_PARAMS)) {
-                params.put(NO_ESCAPE_PARAMS, "_chat_history,_interactions");
-            }
-            params.put(LLM_RESPONSE_FILTER, "$.output.message.content[0].text");
-            params.put("llm_final_response_post_filter", "$.message.content[0].text");
-
-            params.put("tool_template", "{\"toolSpec\":{\"name\":\"${tool.name}\",\"description\":\"${tool.description}\",\"inputSchema\": {\"json\": ${tool.attributes.input_schema} } }}");
-            params.put("tool_calls_path", "_llm_response.tool_calls");
-            params.put("tool_calls.tool_name", "tool_name");
-            params.put("tool_calls.tool_input", "input");
-            params.put("tool_calls.id_path", "id");
-
-            params.put("interaction_template.assistant_tool_calls_path", "$.output.message");
-            params.put("interaction_template.assistant_tool_calls_exclude_path", "[ \"$.output.message.content[?(@.reasoningContent)]\" ]");
-            params.put("interaction_template.tool_response", "{\"role\":\"user\",\"content\":[ {\"text\":\"{\\\"tool_call_id\\\":\\\"${_interactions.tool_call_id}\\\",\\\"tool_result\\\": \\\"${_interactions.tool_response}\\\"\"} ]}");
-
-            params.put("chat_history_template.user_question", "{\"role\":\"user\",\"content\":[{\"text\":\"${_chat_history.message.question}\"}]}");
-            params.put("chat_history_template.ai_response", "{\"role\":\"assistant\",\"content\":[{\"text\":\"${_chat_history.message.response}\"}]}");
-
-            params.put("llm_finish_reason_path", "_llm_response.stop_reason");
-            params.put("llm_finish_reason_tool_use", "tool_use");
-        }
+        constructLLMInterfaceParams(llmInterface, params);
         String memoryType = mlAgent.getMemory().getType();
         String memoryId = params.get(MLAgentExecutor.MEMORY_ID);
         String appType = mlAgent.getAppType();
