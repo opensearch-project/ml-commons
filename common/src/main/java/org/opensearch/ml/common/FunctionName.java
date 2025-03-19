@@ -31,7 +31,8 @@ public enum FunctionName {
     TEXT_SIMILARITY,
     QUESTION_ANSWERING,
     AGENT,
-    CONNECTOR;
+    CONNECTOR,
+    IMAGE_EMBEDDING;
 
     public static FunctionName from(String value) {
         try {
@@ -42,7 +43,7 @@ public enum FunctionName {
     }
 
     private static final HashSet<FunctionName> DL_MODELS = new HashSet<>(
-        Set.of(TEXT_EMBEDDING, TEXT_SIMILARITY, SPARSE_ENCODING, SPARSE_TOKENIZE, QUESTION_ANSWERING)
+        Set.of(TEXT_EMBEDDING, TEXT_SIMILARITY, SPARSE_ENCODING, SPARSE_TOKENIZE, QUESTION_ANSWERING, IMAGE_EMBEDDING)
     );
 
     /**
