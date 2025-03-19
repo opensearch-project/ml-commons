@@ -7,7 +7,6 @@ package org.opensearch.ml.action.connector;
 
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
-import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -137,9 +136,6 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
     private SearchDataObjectRequest buildModelSearchRequest(String connectorId, String tenantId) {
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
         sourceBuilder.query(QueryBuilders.matchQuery(MLModel.CONNECTOR_ID_FIELD, connectorId));
-        if (mlFeatureEnabledSetting.isMultiTenancyEnabled()) {
-            sourceBuilder.query(QueryBuilders.matchQuery(TENANT_ID_FIELD, tenantId));
-        }
 
         return SearchDataObjectRequest.builder().indices(ML_MODEL_INDEX).tenantId(tenantId).searchSourceBuilder(sourceBuilder).build();
     }
