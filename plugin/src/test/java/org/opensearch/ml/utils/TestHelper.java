@@ -12,7 +12,7 @@ import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE
 import static org.opensearch.cluster.node.DiscoveryNodeRole.DATA_ROLE;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.INGEST_ROLE;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.REMOTE_CLUSTER_CLIENT_ROLE;
-import static org.opensearch.cluster.node.DiscoveryNodeRole.SEARCH_ROLE;
+import static org.opensearch.cluster.node.DiscoveryNodeRole.WARM_ROLE;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
@@ -105,7 +105,7 @@ public class TestHelper {
 
     public static SortedSet<DiscoveryNodeRole> ALL_ROLES = Collections
         .unmodifiableSortedSet(
-            new TreeSet<>(Arrays.asList(DATA_ROLE, INGEST_ROLE, CLUSTER_MANAGER_ROLE, REMOTE_CLUSTER_CLIENT_ROLE, SEARCH_ROLE, ML_ROLE))
+            new TreeSet<>(Arrays.asList(DATA_ROLE, INGEST_ROLE, CLUSTER_MANAGER_ROLE, REMOTE_CLUSTER_CLIENT_ROLE, WARM_ROLE, ML_ROLE))
         );
 
     public static XContentParser parser(String xc) throws IOException {
