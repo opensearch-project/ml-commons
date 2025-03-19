@@ -184,7 +184,7 @@ integTest {
     // Only rest case can run with remote cluster
     if (System.getProperty("tests.rest.cluster") != null) {
         filter {
-            includeTestsMatching "org.opensearch.ml.rest.*IT"
+//            includeTestsMatching "org.opensearch.ml.rest.*IT"
             // mock LLM run in localhost, it will not reachable for docker or remote cluster
             excludeTestsMatching "org.opensearch.ml.tools.VisualizationsToolIT"
         }
@@ -292,7 +292,7 @@ task integTestRemote(type: RestIntegTestTask) {
     // Only rest case can run with remote cluster
     if (System.getProperty("tests.rest.cluster") != null) {
         filter {
-            includeTestsMatching "org.opensearch.ml.rest.*IT"
+//            includeTestsMatching "org.opensearch.ml.rest.*IT"
             // mock LLM run in localhost, it will not reachable for docker or remote cluster
             excludeTestsMatching "org.opensearch.ml.tools.VisualizationsToolIT"
         }
