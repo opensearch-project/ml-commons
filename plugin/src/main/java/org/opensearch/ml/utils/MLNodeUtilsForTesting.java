@@ -45,7 +45,7 @@ public class MLNodeUtilsForTesting {
     }
 
     public static XContentParser createXContentParserFromRegistry(NamedXContentRegistry xContentRegistry, BytesReference bytesReference)
-            throws IOException {
+        throws IOException {
         return XContentHelper.createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, bytesReference, XContentType.JSON);
     }
 
@@ -80,12 +80,12 @@ public class MLNodeUtilsForTesting {
         Set<ValidationMessage> errors = schema.validate(jsonNode);
         if (!errors.isEmpty()) {
             throw new OpenSearchParseException(
-                    "Validation failed: "
-                            + Arrays.toString(errors.toArray(new ValidationMessage[0]))
-                            + " for instance: "
-                            + instanceString
-                            + " with schema: "
-                            + schemaString
+                "Validation failed: "
+                    + Arrays.toString(errors.toArray(new ValidationMessage[0]))
+                    + " for instance: "
+                    + instanceString
+                    + " with schema: "
+                    + schemaString
             );
         }
     }
@@ -128,8 +128,8 @@ public class MLNodeUtilsForTesting {
         if (openCircuitBreaker != null) {
             mlStats.getStat(MLNodeLevelStat.ML_CIRCUIT_BREAKER_TRIGGER_COUNT).increment();
             throw new CircuitBreakingException(
-                    openCircuitBreaker.getName() + " is open, please check your resources!",
-                    CircuitBreaker.Durability.TRANSIENT
+                openCircuitBreaker.getName() + " is open, please check your resources!",
+                CircuitBreaker.Durability.TRANSIENT
             );
         }
     }
