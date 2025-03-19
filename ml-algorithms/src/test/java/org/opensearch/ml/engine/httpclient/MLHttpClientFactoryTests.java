@@ -36,9 +36,9 @@ public class MLHttpClientFactoryTests {
     @Test
     public void test_validateIp_validIp_noException() throws Exception {
         MLHttpClientFactory.validate(HTTP, TEST_HOST, 80, PRIVATE_IP_DISABLED);
-        MLHttpClientFactory.validate(HTTPS, TEST_HOST, 80, PRIVATE_IP_DISABLED);
+        MLHttpClientFactory.validate(HTTPS, TEST_HOST, 443, PRIVATE_IP_DISABLED);
         MLHttpClientFactory.validate(HTTP, "127.0.0.1", 80, PRIVATE_IP_ENABLED);
-        MLHttpClientFactory.validate(HTTPS, "127.0.0.1", 80, PRIVATE_IP_ENABLED);
+        MLHttpClientFactory.validate(HTTPS, "127.0.0.1", 443, PRIVATE_IP_ENABLED);
         MLHttpClientFactory.validate(HTTP, "177.16.0.1", 80, PRIVATE_IP_DISABLED);
         MLHttpClientFactory.validate(HTTP, "177.0.1.1", 80, PRIVATE_IP_DISABLED);
         MLHttpClientFactory.validate(HTTP, "177.0.0.2", 80, PRIVATE_IP_DISABLED);
@@ -105,16 +105,16 @@ public class MLHttpClientFactoryTests {
     @Test
     public void test_validateIp_rarePrivateIp_NotThrowException() throws Exception {
         MLHttpClientFactory.validate(HTTP, "0254.020.00.01", 80, PRIVATE_IP_ENABLED);
-        MLHttpClientFactory.validate(HTTPS, "0254.020.00.01", 80, PRIVATE_IP_ENABLED);
+        MLHttpClientFactory.validate(HTTPS, "0254.020.00.01", 443, PRIVATE_IP_ENABLED);
         MLHttpClientFactory.validate(HTTP, "172.1048577", 80, PRIVATE_IP_ENABLED);
         MLHttpClientFactory.validate(HTTP, "2886729729", 80, PRIVATE_IP_ENABLED);
         MLHttpClientFactory.validate(HTTP, "192.11010049", 80, PRIVATE_IP_ENABLED);
         MLHttpClientFactory.validate(HTTP, "3232300545", 80, PRIVATE_IP_ENABLED);
         MLHttpClientFactory.validate(HTTP, "0:0:0:0:0:ffff:127.0.0.1", 80, PRIVATE_IP_ENABLED);
-        MLHttpClientFactory.validate(HTTPS, "0:0:0:0:0:ffff:127.0.0.1", 80, PRIVATE_IP_ENABLED);
+        MLHttpClientFactory.validate(HTTPS, "0:0:0:0:0:ffff:127.0.0.1", 443, PRIVATE_IP_ENABLED);
         MLHttpClientFactory.validate(HTTP, "153.24.76.232", 80, PRIVATE_IP_ENABLED);
         MLHttpClientFactory.validate(HTTP, "10.24.76.186", 80, PRIVATE_IP_ENABLED);
-        MLHttpClientFactory.validate(HTTPS, "10.24.76.186", 80, PRIVATE_IP_ENABLED);
+        MLHttpClientFactory.validate(HTTPS, "10.24.76.186", 443, PRIVATE_IP_ENABLED);
     }
 
     @Test
