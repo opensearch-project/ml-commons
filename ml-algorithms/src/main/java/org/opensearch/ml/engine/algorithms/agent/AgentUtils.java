@@ -96,6 +96,7 @@ public class AgentUtils {
     public static final String LLM_FINISH_REASON_PATH = "llm_finish_reason_path";
     public static final String LLM_FINISH_REASON_TOOL_USE = "llm_finish_reason_tool_use";
     public static final String LLM_RESPONSE_EXCLUDE_PATH = "llm_response_exclude_path";
+    public static final String LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE = "bedrock/converse/claude";
 
     public static String addExamplesToPrompt(Map<String, String> parameters, String prompt) {
         Map<String, String> examplesMap = new HashMap<>();
@@ -372,7 +373,7 @@ public class AgentUtils {
         return StringUtils.toJson(llmResponse);
     }
 
-    private static Map<String, ?> removeJsonPath(Map<String, ?> json, String excludePaths, boolean inPlace) {
+    public static Map<String, ?> removeJsonPath(Map<String, ?> json, String excludePaths, boolean inPlace) {
         Type listType = new TypeToken<List<String>>(){}.getType();
         List<String> excludedPath = gson.fromJson(excludePaths, listType);
         return removeJsonPath(json, excludedPath, inPlace);
