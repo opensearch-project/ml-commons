@@ -133,6 +133,18 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
         }
     }
 
+    @Override
+    public void invokeRemoteServiceStream(
+        String action,
+        MLInput mlInput,
+        Map<String, String> parameters,
+        String payload,
+        ExecutionContext executionContext,
+        ActionListener<Tuple<Integer, ModelTensors>> actionListener
+    ) {
+        throw new RuntimeException("Unsupported stream remote service.");
+    }
+
     private void validateHttpClientParameters(String action, Map<String, String> parameters) throws Exception {
         String endpoint = connector.getActionEndpoint(action, parameters);
         URL url = new URL(endpoint);

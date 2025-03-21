@@ -230,4 +230,8 @@ public class MLEngine {
         return encryptor.encrypt(credential, tenantId);
     }
 
+    public void setStreamManager(Supplier<StreamManager> streamManager) {
+        this.streamManager = streamManager;
+    }
+
 }
