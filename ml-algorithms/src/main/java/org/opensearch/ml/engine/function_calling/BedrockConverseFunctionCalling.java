@@ -73,7 +73,7 @@ public class BedrockConverseFunctionCalling implements FunctionCalling {
             toolMessage.getContent().add(result);
         }
 
-        return null;
+        return toolMessage;
     }
 
     @Data
