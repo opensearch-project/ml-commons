@@ -115,7 +115,7 @@ public abstract class MLTaskRunner<Request extends MLTaskRequest, Response exten
                 checkCBAndExecute(functionName, request, listener);
             } else {
                 // Execute ML task remotely
-                log.debug("Execute ML request {} remotely on node {}", request.getRequestID(), nodeId);
+                log.info("Execute ML request {} remotely on node {}", request.getRequestID(), nodeId);
                 request.setDispatchTask(false);
                 transportService.sendRequest(node, getTransportActionName(), request, getResponseHandler(listener));
             }

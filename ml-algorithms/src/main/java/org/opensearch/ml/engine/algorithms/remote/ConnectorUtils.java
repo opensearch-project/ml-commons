@@ -51,6 +51,8 @@ import org.opensearch.script.ScriptService;
 import com.jayway.jsonpath.JsonPath;
 
 import lombok.extern.log4j.Log4j2;
+import okhttp3.MediaType;
+import okhttp3.Request;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentials;
 import software.amazon.awssdk.auth.credentials.AwsSessionCredentials;
@@ -341,6 +343,28 @@ public class ConnectorUtils {
             builder.putHeader("Content-Length", requestBody.optionalContentLength().get().toString());
         }
         return builder.build();
+    }
+
+    public static Request buildOKHttpRequestPOST(String action, Connector connector, Map<String, String> parameters, String payload) {
+        String charset = parameters.getOrDefault("charset", "UTF-8");
+        okhttp3.RequestBody requestBody;
+        if (payload != null) {
+            requestBody = okhttp3.RequestBody.create(payload, MediaType.parse("application/json; charset=utf-8"));
+        } else {
+            throw new IllegalArgumentException("Content length is 0. Aborting request to remote model");
+        }
+
+        String endpoint = connector.getActionEndpoint(action, parameters);
+        Request.Builder requestBuilder = new Request.Builder();
+        Request request = requestBuilder
+            .url(endpoint)
+            .header("Accept-Encoding", "")
+            .header("Accept", "text/event-stream")
+            .header("Cache-Control", "no-cache")
+            .post(requestBody)
+            .build();
+
+        return request;
     }
 
     public static ConnectorAction createConnectorAction(Connector connector, ConnectorAction.ActionType actionType) {
