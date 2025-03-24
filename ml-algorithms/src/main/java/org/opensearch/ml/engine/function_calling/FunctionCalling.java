@@ -29,5 +29,5 @@ public interface FunctionCalling {
      * @param toolResults results from tools
      * @return a LLMMessage containing tool results.
      */
-    LLMMessage supply(List<Map<String, String>> toolResults);
+    List<LLMMessage> supply(List<Map<String, Object>> toolResults);
 }

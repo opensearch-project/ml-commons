@@ -100,6 +100,9 @@ public class AgentUtils {
     public static final String LLM_RESPONSE_EXCLUDE_PATH = "llm_response_exclude_path";
     public static final String LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE = "bedrock/converse/claude";
     public static final String LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS = "openai/v1/chat/completions";
+    public static final String LLM_INTERFACE_BEDROCK_CONVERSE_DEEPSEEK_R1 = "bedrock/converse/deepseek_r1";
+    public static final String TOOL_RESULT = "tool_result";
+    public static final String TOOL_CALL_ID = "tool_call_id";
 
     public static String addExamplesToPrompt(Map<String, String> parameters, String prompt) {
         Map<String, String> examplesMap = new HashMap<>();

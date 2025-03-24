@@ -1,6 +1,8 @@
 package org.opensearch.ml.engine.function_calling;
 
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_EXCLUDE_PATH;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALL_ID;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_RESULT;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.removeJsonPath;
 
 import java.util.ArrayList;
@@ -13,8 +15,6 @@ import org.opensearch.ml.common.utils.StringUtils;
 
 import com.jayway.jsonpath.JsonPath;
 
-import lombok.Data;
-
 public class OpenaiV1ChatCompletionsFunctionCalling implements FunctionCalling {
     private static final String FINISH_REASON_PATH = "$.choices[0].finish_reason";
     private static final String FINISH_REASON = "tool_calls";
@@ -22,8 +22,6 @@ public class OpenaiV1ChatCompletionsFunctionCalling implements FunctionCalling {
     private static final String NAME = "function.name";
     private static final String INPUT = "function.arguments";
     private static final String ID_PATH = "id";
-    private static final String TOOL_ERROR = "tool_error";
-    private static final String TOOL_RESULT = "tool_result";
 
     @Override
     public void configure(Map<String, String> params) {
@@ -60,27 +58,19 @@ public class OpenaiV1ChatCompletionsFunctionCalling implements FunctionCalling {
     }
 
     @Override
-    public LLMMessage supply(List<Map<String, String>> toolResults) {
-        LLMMessage toolMessage = new LLMMessage();
+    public List<LLMMessage> supply(List<Map<String, Object>> toolResults) {
+        List<LLMMessage> messages = new ArrayList<>();
+        OpenaiMessage toolMessage = new OpenaiMessage();
         for (Map toolResult : toolResults) {
-            String toolUseId = (String) toolResult.get(ID_PATH);
+            String toolUseId = (String) toolResult.get(TOOL_CALL_ID);
             if (toolUseId == null) {
                 continue;
             }
-            ToolResult result = new ToolResult();
-            result.setRole("tool");
-            result.setToolUseId(toolUseId);
-            result.setContent((String) toolResult.get(TOOL_RESULT));
-            toolMessage.getContent().add(result);
+            toolMessage.setToolCallId(toolUseId);
+            toolMessage.setContent((String) toolResult.get(TOOL_RESULT));
+            messages.add(toolMessage);
         }
 
-        return toolMessage;
-    }
-
-    @Data
-    public static class ToolResult {
-        private String role;
-        private String toolUseId;
-        private String content;
+        return messages;
     }
 }
