@@ -1,9 +1,9 @@
 package org.opensearch.ml.engine.function_calling;
 
-import org.opensearch.ml.common.output.model.ModelTensorOutput;
-
 import java.util.List;
 import java.util.Map;
+
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
 
 /**
  * A general LLM function calling interface.

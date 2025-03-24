@@ -111,7 +111,11 @@ public class ListIndexTool implements Tool {
         };
 
         this.attributes = new HashMap<>();
-        attributes.put("input_schema", "{\"type\":\"object\",\"properties\":{\"indices\":{\"type\":\"string\",\"description\":\"OpenSearch index name list, separated by comma. for example: index1, index2\"}},\"additionalProperties\":false}");
+        attributes
+            .put(
+                "input_schema",
+                "{\"type\":\"object\",\"properties\":{\"indices\":{\"type\":\"string\",\"description\":\"OpenSearch index name list, separated by comma. for example: index1, index2\"}},\"additionalProperties\":false}"
+            );
         attributes.put("strict", false);
     }
 

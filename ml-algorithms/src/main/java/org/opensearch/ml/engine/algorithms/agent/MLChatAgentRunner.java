@@ -11,8 +11,6 @@ import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.common.utils.StringUtils.processTextDoc;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DISABLE_TRACE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.INTERACTIONS_PREFIX;
-import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_FILTER;
-import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.NO_ESCAPE_PARAMS;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.PROMPT_CHAT_HISTORY_PREFIX;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.PROMPT_PREFIX;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.PROMPT_SUFFIX;
@@ -193,14 +191,14 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         List<String> chatHistory = new ArrayList<>();
                         for (Message message : messageList) {
                             Map<String, String> messageParams = new HashMap<>();
-                            messageParams.put("question", processTextDoc(((ConversationIndexMessage)message).getQuestion()));
+                            messageParams.put("question", processTextDoc(((ConversationIndexMessage) message).getQuestion()));
 
                             StringSubstitutor substitutor = new StringSubstitutor(messageParams, CHAT_HISTORY_MESSAGE_PREFIX, "}");
                             String chatQuestionMessage = substitutor.replace(chatHistoryQuestionTemplate);
                             chatHistory.add(chatQuestionMessage);
 
                             messageParams.clear();
-                            messageParams.put("response", processTextDoc(((ConversationIndexMessage)message).getResponse()));
+                            messageParams.put("response", processTextDoc(((ConversationIndexMessage) message).getResponse()));
                             substitutor = new StringSubstitutor(messageParams, CHAT_HISTORY_MESSAGE_PREFIX, "}");
                             String chatResponseMessage = substitutor.replace(chatHistoryResponseTemplate);
                             chatHistory.add(chatResponseMessage);
@@ -283,7 +281,13 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     MLTaskResponse llmResponse = (MLTaskResponse) output;
                     ModelTensorOutput tmpModelTensorOutput = (ModelTensorOutput) llmResponse.getOutput();
                     List<String> llmResponsePatterns = gson.fromJson(tmpParameters.get("llm_response_pattern"), List.class);
-                    Map<String, String> modelOutput = parseLLMOutput(parameters, tmpModelTensorOutput, llmResponsePatterns, tools.keySet(), interactions);
+                    Map<String, String> modelOutput = parseLLMOutput(
+                        parameters,
+                        tmpModelTensorOutput,
+                        llmResponsePatterns,
+                        tools.keySet(),
+                        interactions
+                    );
 
                     String thought = String.valueOf(modelOutput.get(THOUGHT));
                     String toolCallId = String.valueOf(modelOutput.get("tool_call_id"));
@@ -354,7 +358,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             action,
                             actionInput,
                             toolParams,
-                            interactions, toolCallId
+                            interactions,
+                            toolCallId
                         );
                     } else {
                         String res = String.format(Locale.ROOT, "Failed to run the tool %s which is unsupported.", action);
@@ -460,8 +465,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
     private void cleanUpResource(Map<String, Tool> tools) {
         for (String key : tools.keySet()) {
-            if (tools.get(key) instanceof McpSseTool) {//TODO: make this more general, avoid checking specific tool type
-                ((McpSseTool)tools.get(key)).getMcpSyncClient().closeGracefully();
+            if (tools.get(key) instanceof McpSseTool) {// TODO: make this more general, avoid checking specific tool type
+                ((McpSseTool) tools.get(key)).getMcpSyncClient().closeGracefully();
             }
         }
     }
@@ -533,12 +538,24 @@ public class MLChatAgentRunner implements MLAgentRunner {
             try {
                 String finalAction = action;
                 ActionListener<Object> toolListener = ActionListener.wrap(r -> {
-                    interactions.add(substitute(tmpParameters.get(INTERACTION_TEMPLATE_TOOL_RESPONSE),
-                            Map.of("tool_call_id", toolCallId, "tool_response", processTextDoc(StringUtils.toJson(r))), INTERACTIONS_PREFIX));
+                    interactions
+                        .add(
+                            substitute(
+                                tmpParameters.get(INTERACTION_TEMPLATE_TOOL_RESPONSE),
+                                Map.of("tool_call_id", toolCallId, "tool_response", processTextDoc(StringUtils.toJson(r))),
+                                INTERACTIONS_PREFIX
+                            )
+                        );
                     nextStepListener.onResponse(r);
                 }, e -> {
-                    interactions.add(substitute(tmpParameters.get(INTERACTION_TEMPLATE_TOOL_RESPONSE),
-                            Map.of("tool_call_id", toolCallId, "tool_response", "Tool " + action + " failed: " + e.getMessage()), INTERACTIONS_PREFIX));
+                    interactions
+                        .add(
+                            substitute(
+                                tmpParameters.get(INTERACTION_TEMPLATE_TOOL_RESPONSE),
+                                Map.of("tool_call_id", toolCallId, "tool_response", "Tool " + action + " failed: " + e.getMessage()),
+                                INTERACTIONS_PREFIX
+                            )
+                        );
                     nextStepListener
                         .onResponse(
                             String.format(Locale.ROOT, "Failed to run the tool %s with the error message %s.", finalAction, e.getMessage())
@@ -560,7 +577,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 nextStepListener
                     .onResponse(String.format(Locale.ROOT, "Failed to run the tool %s with the error message %s.", action, e.getMessage()));
             }
-        } else { //TODO: add failure to interaction to let LLM regenerate ?
+        } else { // TODO: add failure to interaction to let LLM regenerate ?
             String res = String.format(Locale.ROOT, "Failed to run the tool %s due to wrong input %s.", action, actionInput);
             nextStepListener.onResponse(res);
         }

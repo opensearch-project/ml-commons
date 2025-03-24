@@ -1,11 +1,12 @@
 package org.opensearch.ml.engine.function_calling;
 
-import org.apache.commons.lang3.StringUtils;
-import org.opensearch.ml.common.exception.MLException;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
 
 import java.util.Locale;
 
-import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE;
+import org.apache.commons.lang3.StringUtils;
+import org.opensearch.ml.common.exception.MLException;
 
 public class FunctionCallingFactory {
     public FunctionCalling create(String llmInterface) {
@@ -16,6 +17,8 @@ public class FunctionCallingFactory {
         switch (llmInterface.trim().toLowerCase(Locale.ROOT)) {
             case LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE:
                 return new BedrockConverseFunctionCalling();
+            case LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS:
+                return new OpenaiV1ChatCompletionsFunctionCalling();
             default:
                 throw new MLException(String.format("Unsupported llm interface: {}.", llmInterface));
         }

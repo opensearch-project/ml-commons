@@ -15,13 +15,13 @@ import com.jayway.jsonpath.JsonPath;
 
 import lombok.Data;
 
-public class BedrockConverseFunctionCalling implements FunctionCalling {
-    private static final String FINISH_REASON_PATH = "$.stopReason";
-    private static final String FINISH_REASON = "tool_use";
-    private static final String CALL_PATH = "$.output.message.content[*].toolUse";
-    private static final String NAME = "name";
-    private static final String INPUT = "input";
-    private static final String ID_PATH = "toolUseId";
+public class OpenaiV1ChatCompletionsFunctionCalling implements FunctionCalling {
+    private static final String FINISH_REASON_PATH = "$.choices[0].finish_reason";
+    private static final String FINISH_REASON = "tool_calls";
+    private static final String CALL_PATH = "$.choices[0].message.tool_calls";
+    private static final String NAME = "function.name";
+    private static final String INPUT = "function.arguments";
+    private static final String ID_PATH = "id";
     private static final String TOOL_ERROR = "tool_error";
     private static final String TOOL_RESULT = "tool_result";
 
@@ -30,9 +30,8 @@ public class BedrockConverseFunctionCalling implements FunctionCalling {
         params
             .put(
                 "tool_template",
-                "{\"toolSpec\":{\"name\":\"${tool.name}\",\"description\":\"${tool.description}\",\"inputSchema\": {\"json\": ${tool.attributes.input_schema} } }}"
+                "{\"type\": \"function\", \"function\": { \"name\": \"${tool.name}\", \"description\": \"${tool.description}\", \"parameters\": ${tool.attributes.input_schema}, \"strict\": ${tool.attributes.strict:-false} } }"
             );
-        params.put("tool_configs", ", \"toolConfig\": {\"tools\": [${parameters._tools:-}]}");
     }
 
     @Override
@@ -69,11 +68,9 @@ public class BedrockConverseFunctionCalling implements FunctionCalling {
                 continue;
             }
             ToolResult result = new ToolResult();
+            result.setRole("tool");
             result.setToolUseId(toolUseId);
-            result.getContent().add(Map.of("text", toolResult.get(TOOL_RESULT)));
-            if (toolResult.containsKey(TOOL_ERROR)) {
-                result.setStatus("error");
-            }
+            result.setContent((String) toolResult.get(TOOL_RESULT));
             toolMessage.getContent().add(result);
         }
 
@@ -82,8 +79,8 @@ public class BedrockConverseFunctionCalling implements FunctionCalling {
 
     @Data
     public static class ToolResult {
+        private String role;
         private String toolUseId;
-        private List<Map<String, Object>> content = new ArrayList<>();
-        private String status;
+        private String content;
     }
 }
