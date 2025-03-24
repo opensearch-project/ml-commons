@@ -67,7 +67,11 @@ public class IndexMappingTool implements Tool {
         this.client = client;
 
         this.attributes = new HashMap<>();
-        attributes.put("input_schema", "{\"type\":\"object\",\"properties\":{\"index\":{\"type\":\"string\",\"description\":\"OpenSearch index name\"}},\"required\":[\"index\"],\"additionalProperties\":false}");
+        attributes
+            .put(
+                "input_schema",
+                "{\"type\":\"object\",\"properties\":{\"index\":{\"type\":\"string\",\"description\":\"OpenSearch index name\"}},\"required\":[\"index\"],\"additionalProperties\":false}"
+            );
         attributes.put("strict", true);
 
         outputParser = new Parser<>() {

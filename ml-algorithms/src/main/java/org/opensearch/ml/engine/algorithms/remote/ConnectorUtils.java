@@ -182,7 +182,7 @@ public class ConnectorUtils {
                 } else if (org.opensearch.ml.common.utils.StringUtils.isJson(value)) {
                     // no need to escape if it's already valid json
                     newParameters.put(key, value);
-                } else if (!noEscapParamSet.contains(key)){
+                } else if (!noEscapParamSet.contains(key)) {
                     newParameters.put(key, escapeJson(value));
                 } else {
                     newParameters.put(key, value);
