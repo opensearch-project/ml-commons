@@ -5,11 +5,9 @@
 
 package org.opensearch.ml.engine.tools;
 
-import io.modelcontextprotocol.client.McpSyncClient;
-import io.modelcontextprotocol.spec.McpSchema;
-import lombok.Getter;
-import lombok.Setter;
-import lombok.extern.log4j.Log4j2;
+import java.util.List;
+import java.util.Map;
+
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
@@ -17,8 +15,11 @@ import org.opensearch.ml.common.spi.tools.WithModelTool;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 
-import java.util.List;
-import java.util.Map;
+import io.modelcontextprotocol.client.McpSyncClient;
+import io.modelcontextprotocol.spec.McpSchema;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.extern.log4j.Log4j2;
 
 /**
  * This tool supports running any ml-commons model.
@@ -40,7 +41,7 @@ public class McpSseTool implements WithModelTool {
     @Setter
     private String description = DEFAULT_DESCRIPTION;
     @Getter
-    private McpSyncClient mcpSyncClient; //TODO:// close client when agent run finish
+    private McpSyncClient mcpSyncClient; // TODO:// close client when agent run finish
     @Setter
     private Parser inputParser;
     @Setter
@@ -57,11 +58,9 @@ public class McpSseTool implements WithModelTool {
         try {
             String input = parameters.get("input");
             Map<String, Object> inputArgs = StringUtils.fromJson(input, "input");
-            McpSchema.CallToolResult result = mcpSyncClient.callTool(
-                    new McpSchema.CallToolRequest(this.name, inputArgs)
-            );
+            McpSchema.CallToolResult result = mcpSyncClient.callTool(new McpSchema.CallToolRequest(this.name, inputArgs));
             String resultJson = StringUtils.toJson(result.content());
-            listener.onResponse((T)resultJson);
+            listener.onResponse((T) resultJson);
         } catch (Exception e) {
             log.error("Failed to call MCP tool: {}", this.getName(), e);
             listener.onFailure(e);
@@ -116,7 +115,7 @@ public class McpSseTool implements WithModelTool {
 
         @Override
         public McpSseTool create(Map<String, Object> map) {
-            return new McpSseTool((McpSyncClient)map.get("mcp_client"));
+            return new McpSseTool((McpSyncClient) map.get("mcp_client"));
         }
 
         @Override

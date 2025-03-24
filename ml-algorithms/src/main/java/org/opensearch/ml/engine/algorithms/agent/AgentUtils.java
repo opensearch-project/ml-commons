@@ -45,17 +45,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
-import com.jayway.jsonpath.DocumentContext;
-import com.jayway.jsonpath.JsonPath;
-import com.jayway.jsonpath.PathNotFoundException;
-import io.modelcontextprotocol.client.McpClient;
-import io.modelcontextprotocol.client.McpSyncClient;
-import io.modelcontextprotocol.client.transport.HttpClientSseClientTransport;
-import io.modelcontextprotocol.spec.ClientMcpTransport;
-import io.modelcontextprotocol.spec.McpSchema;
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.core.common.Strings;
 import org.opensearch.ml.common.agent.MLAgent;
@@ -65,6 +54,18 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.utils.StringUtils;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import com.jayway.jsonpath.DocumentContext;
+import com.jayway.jsonpath.JsonPath;
+import com.jayway.jsonpath.PathNotFoundException;
+
+import io.modelcontextprotocol.client.McpClient;
+import io.modelcontextprotocol.client.McpSyncClient;
+import io.modelcontextprotocol.client.transport.HttpClientSseClientTransport;
+import io.modelcontextprotocol.spec.ClientMcpTransport;
+import io.modelcontextprotocol.spec.McpSchema;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
@@ -89,7 +90,8 @@ public class AgentUtils {
     public static final String TOOL_TEMPLATE = "tool_template";
     public static final String INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS = "interaction_template.assistant_tool_calls";
     public static final String INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS_PATH = "interaction_template.assistant_tool_calls_path";
-    public static final String INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS_EXCLUDE_PATH = "interaction_template.assistant_tool_calls_exclude_path";
+    public static final String INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS_EXCLUDE_PATH =
+        "interaction_template.assistant_tool_calls_exclude_path";
     public static final String INTERACTIONS_PREFIX = "${_interactions.";
     public static final String LLM_RESPONSE_FILTER = "llm_response_filter";
     public static final String LLM_FINAL_RESPONSE_POST_FILTER = "llm_final_response_post_filter";
@@ -97,6 +99,7 @@ public class AgentUtils {
     public static final String LLM_FINISH_REASON_TOOL_USE = "llm_finish_reason_tool_use";
     public static final String LLM_RESPONSE_EXCLUDE_PATH = "llm_response_exclude_path";
     public static final String LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE = "bedrock/converse/claude";
+    public static final String LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS = "openai/v1/chat/completions";
 
     public static String addExamplesToPrompt(Map<String, String> parameters, String prompt) {
         Map<String, String> examplesMap = new HashMap<>();
@@ -143,7 +146,12 @@ public class AgentUtils {
         }
     }
 
-    public static String addToolsToFunctionCalling(Map<String, Tool> tools, Map<String, String> parameters, List<String> inputTools, String prompt) {
+    public static String addToolsToFunctionCalling(
+        Map<String, Tool> tools,
+        Map<String, String> parameters,
+        List<String> inputTools,
+        String prompt
+    ) {
         String toolTemplate = parameters.get("tool_template");
         List<String> toolInfos = new ArrayList<>();
         for (String toolName : inputTools) {
@@ -164,11 +172,16 @@ public class AgentUtils {
             String chatQuestionMessage = substitutor.replace(toolTemplate);
             toolInfos.add(chatQuestionMessage);
         }
-        parameters.put(TOOLS, String.join(", ", toolInfos) );
+        parameters.put(TOOLS, String.join(", ", toolInfos));
         return prompt;
     }
 
-    public static String addToolsToPromptString(Map<String, Tool> tools, Map<String, String> parameters, List<String> inputTools, String prompt) {
+    public static String addToolsToPromptString(
+        Map<String, Tool> tools,
+        Map<String, String> parameters,
+        List<String> inputTools,
+        String prompt
+    ) {
         StringBuilder toolsBuilder = new StringBuilder();
         StringBuilder toolNamesBuilder = new StringBuilder();
 
@@ -283,7 +296,7 @@ public class AgentUtils {
 
             String llmFinishReasonPath = parameters.get(LLM_FINISH_REASON_PATH);
             String llmFinishReason = "";
-            if (llmFinishReasonPath.startsWith("_llm_response.")) {//TODO: support _llm_response for all other places
+            if (llmFinishReasonPath.startsWith("_llm_response.")) {// TODO: support _llm_response for all other places
                 Map<String, Object> llmResponse = StringUtils.fromJson(response.toString(), "response");
                 llmFinishReason = JsonPath.read(llmResponse, llmFinishReasonPath.substring("_llm_response.".length()));
             } else {
@@ -313,7 +326,14 @@ public class AgentUtils {
                         }
 
                     } else {
-                        interactions.add(substitute(parameters.get(INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS), Map.of("tool_calls", StringUtils.toJson(toolCalls)), INTERACTIONS_PREFIX));
+                        interactions
+                            .add(
+                                substitute(
+                                    parameters.get(INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS),
+                                    Map.of("tool_calls", StringUtils.toJson(toolCalls)),
+                                    INTERACTIONS_PREFIX
+                                )
+                            );
                     }
                     String toolName = JsonPath.read(toolCalls.get(0), parameters.get(TOOL_CALLS_TOOL_NAME));
                     String toolInput = StringUtils.toJson(JsonPath.read(toolCalls.get(0), parameters.get(TOOL_CALLS_TOOL_INPUT)));
@@ -374,7 +394,8 @@ public class AgentUtils {
     }
 
     public static Map<String, ?> removeJsonPath(Map<String, ?> json, String excludePaths, boolean inPlace) {
-        Type listType = new TypeToken<List<String>>(){}.getType();
+        Type listType = new TypeToken<List<String>>() {
+        }.getType();
         List<String> excludedPath = gson.fromJson(excludePaths, listType);
         return removeJsonPath(json, excludedPath, inPlace);
     }
@@ -609,31 +630,25 @@ public class AgentUtils {
                 });
 
                 // Build HTTP client with proper configuration
-                HttpClient httpClient = HttpClient.newBuilder()
-                        .executor(executor)
-                        .connectTimeout(Duration.ofSeconds(30))
-                        .build();
+                HttpClient httpClient = HttpClient.newBuilder().executor(executor).connectTimeout(Duration.ofSeconds(30)).build();
 
                 // Create transport with the HTTP client
-                ClientMcpTransport transport = new HttpClientSseClientTransport(
-                        httpClient,
-                        mcpServerUrl,
-                        new ObjectMapper()
-                );
+                ClientMcpTransport transport = new HttpClientSseClientTransport(httpClient, mcpServerUrl, new ObjectMapper());
 
                 // Create and initialize client
-                McpSyncClient client = McpClient.sync(transport)
-                        .requestTimeout(Duration.ofSeconds(30))
-                        .capabilities(McpSchema.ClientCapabilities.builder()
-                                .roots(false)
-                                .sampling()
-                                .build())
-                        .sampling(request -> new McpSchema.CreateMessageResult(
-                                McpSchema.Role.USER,
-                                new McpSchema.TextContent("test"),
-                                "Claude3.7",
-                                McpSchema.CreateMessageResult.StopReason.END_TURN))
-                        .build();
+                McpSyncClient client = McpClient
+                    .sync(transport)
+                    .requestTimeout(Duration.ofSeconds(30))
+                    .capabilities(McpSchema.ClientCapabilities.builder().roots(false).sampling().build())
+                    .sampling(
+                        request -> new McpSchema.CreateMessageResult(
+                            McpSchema.Role.USER,
+                            new McpSchema.TextContent("test"),
+                            "Claude3.7",
+                            McpSchema.CreateMessageResult.StopReason.END_TURN
+                        )
+                    )
+                    .build();
 
                 client.initialize();
                 McpSchema.ListToolsResult tools = client.listTools();
@@ -653,17 +668,18 @@ public class AgentUtils {
                     for (Object key : toolMap.keySet()) {
                         String keyStr = (String) key;
                         if (!basicMetaFields.contains(keyStr)) {
-                            //TODO: change to more flexible way
+                            // TODO: change to more flexible way
                             attributes.put("input_schema", StringUtils.toJson(toolMap.get(keyStr)));
                         }
                     }
 
-                    MLToolSpec mlToolSpec = MLToolSpec.builder()
-                            .type("McpSseTool")
-                            .name(toolMap.get("name").toString())
-                            .description(StringUtils.processTextDoc(toolMap.get("description").toString()))
-                            .attributes(attributes)
-                            .build();
+                    MLToolSpec mlToolSpec = MLToolSpec
+                        .builder()
+                        .type("McpSseTool")
+                        .name(toolMap.get("name").toString())
+                        .description(StringUtils.processTextDoc(toolMap.get("description").toString()))
+                        .attributes(attributes)
+                        .build();
                     mlToolSpec.addRuntimeResource("mcp_client", client);
                     mcpToolSpecs.add(mlToolSpec);
                 }
@@ -799,7 +815,11 @@ public class AgentUtils {
             }
             params.put(LLM_RESPONSE_FILTER, "$.choices[0].message.content");
 
-            params.put("tool_template", "{\"type\": \"function\", \"function\": { \"name\": \"${tool.name}\", \"description\": \"${tool.description}\", \"parameters\": ${tool.attributes.input_schema}, \"strict\": ${tool.attributes.strict:-false} } }");
+            params
+                .put(
+                    "tool_template",
+                    "{\"type\": \"function\", \"function\": { \"name\": \"${tool.name}\", \"description\": \"${tool.description}\", \"parameters\": ${tool.attributes.input_schema}, \"strict\": ${tool.attributes.strict:-false} } }"
+                );
             params.put("tool_calls_path", "$.choices[0].message.tool_calls");
             params.put("tool_calls.tool_name", "function.name");
             params.put("tool_calls.tool_input", "function.arguments");
@@ -809,7 +829,11 @@ public class AgentUtils {
             params.put("parallel_tool_calls", "false");
 
             params.put("interaction_template.assistant_tool_calls_path", "$.choices[0].message");
-            params.put("interaction_template.tool_response", "{ \"role\": \"tool\", \"tool_call_id\": \"${_interactions.tool_call_id}\", \"content\": \"${_interactions.tool_response}\" }");
+            params
+                .put(
+                    "interaction_template.tool_response",
+                    "{ \"role\": \"tool\", \"tool_call_id\": \"${_interactions.tool_call_id}\", \"content\": \"${_interactions.tool_response}\" }"
+                );
 
             params.put("chat_history_template.user_question", "{\"role\": \"user\",\"content\": \"${_chat_history.message.question}\"}");
             params.put("chat_history_template.ai_response", "{\"role\": \"assistant\",\"content\": \"${_chat_history.message.response}\"}");
@@ -823,7 +847,11 @@ public class AgentUtils {
             }
             params.put(LLM_RESPONSE_FILTER, "$.output.message.content[0].text");
 
-            params.put("tool_template", "{\"toolSpec\":{\"name\":\"${tool.name}\",\"description\":\"${tool.description}\",\"inputSchema\": {\"json\": ${tool.attributes.input_schema} } }}");
+            params
+                .put(
+                    "tool_template",
+                    "{\"toolSpec\":{\"name\":\"${tool.name}\",\"description\":\"${tool.description}\",\"inputSchema\": {\"json\": ${tool.attributes.input_schema} } }}"
+                );
             params.put("tool_calls_path", "$.output.message.content[*].toolUse");
             params.put("tool_calls.tool_name", "name");
             params.put("tool_calls.tool_input", "input");
@@ -831,10 +859,22 @@ public class AgentUtils {
             params.put("tool_configs", ", \"toolConfig\": {\"tools\": [${parameters._tools:-}]}");
 
             params.put("interaction_template.assistant_tool_calls_path", "$.output.message");
-            params.put("interaction_template.tool_response", "{\"role\":\"user\",\"content\":[{\"toolResult\":{\"toolUseId\":\"${_interactions.tool_call_id}\",\"content\":[{\"text\":\"${_interactions.tool_response}\"}]}}]}");
+            params
+                .put(
+                    "interaction_template.tool_response",
+                    "{\"role\":\"user\",\"content\":[{\"toolResult\":{\"toolUseId\":\"${_interactions.tool_call_id}\",\"content\":[{\"text\":\"${_interactions.tool_response}\"}]}}]}"
+                );
 
-            params.put("chat_history_template.user_question", "{\"role\":\"user\",\"content\":[{\"text\":\"${_chat_history.message.question}\"}]}");
-            params.put("chat_history_template.ai_response", "{\"role\":\"assistant\",\"content\":[{\"text\":\"${_chat_history.message.response}\"}]}");
+            params
+                .put(
+                    "chat_history_template.user_question",
+                    "{\"role\":\"user\",\"content\":[{\"text\":\"${_chat_history.message.question}\"}]}"
+                );
+            params
+                .put(
+                    "chat_history_template.ai_response",
+                    "{\"role\":\"assistant\",\"content\":[{\"text\":\"${_chat_history.message.response}\"}]}"
+                );
 
             params.put("llm_finish_reason_path", "$.stopReason");
             params.put("llm_finish_reason_tool_use", "tool_use");
@@ -845,7 +885,11 @@ public class AgentUtils {
             params.put(LLM_RESPONSE_FILTER, "$.output.message.content[0].text");
             params.put("llm_final_response_post_filter", "$.message.content[0].text");
 
-            params.put("tool_template", "{\"toolSpec\":{\"name\":\"${tool.name}\",\"description\":\"${tool.description}\",\"inputSchema\": {\"json\": ${tool.attributes.input_schema} } }}");
+            params
+                .put(
+                    "tool_template",
+                    "{\"toolSpec\":{\"name\":\"${tool.name}\",\"description\":\"${tool.description}\",\"inputSchema\": {\"json\": ${tool.attributes.input_schema} } }}"
+                );
             params.put("tool_calls_path", "_llm_response.tool_calls");
             params.put("tool_calls.tool_name", "tool_name");
             params.put("tool_calls.tool_input", "input");
@@ -853,10 +897,22 @@ public class AgentUtils {
 
             params.put("interaction_template.assistant_tool_calls_path", "$.output.message");
             params.put("interaction_template.assistant_tool_calls_exclude_path", "[ \"$.output.message.content[?(@.reasoningContent)]\" ]");
-            params.put("interaction_template.tool_response", "{\"role\":\"user\",\"content\":[ {\"text\":\"{\\\"tool_call_id\\\":\\\"${_interactions.tool_call_id}\\\",\\\"tool_result\\\": \\\"${_interactions.tool_response}\\\"\"} ]}");
+            params
+                .put(
+                    "interaction_template.tool_response",
+                    "{\"role\":\"user\",\"content\":[ {\"text\":\"{\\\"tool_call_id\\\":\\\"${_interactions.tool_call_id}\\\",\\\"tool_result\\\": \\\"${_interactions.tool_response}\\\"\"} ]}"
+                );
 
-            params.put("chat_history_template.user_question", "{\"role\":\"user\",\"content\":[{\"text\":\"${_chat_history.message.question}\"}]}");
-            params.put("chat_history_template.ai_response", "{\"role\":\"assistant\",\"content\":[{\"text\":\"${_chat_history.message.response}\"}]}");
+            params
+                .put(
+                    "chat_history_template.user_question",
+                    "{\"role\":\"user\",\"content\":[{\"text\":\"${_chat_history.message.question}\"}]}"
+                );
+            params
+                .put(
+                    "chat_history_template.ai_response",
+                    "{\"role\":\"assistant\",\"content\":[{\"text\":\"${_chat_history.message.response}\"}]}"
+                );
 
             params.put("llm_finish_reason_path", "_llm_response.stop_reason");
             params.put("llm_finish_reason_tool_use", "tool_use");
