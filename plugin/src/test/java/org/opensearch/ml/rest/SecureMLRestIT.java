@@ -408,7 +408,7 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
         train(mlReadOnlyClient, FunctionName.KMEANS, irisIndex, kMeansParams, searchSourceBuilder, null, false);
     }
 
-    public void testPredictWithReadOnlyMLAccess() throws IOException {
+    public void testPredictWithReadOnlyMLAccessModelExisting() throws IOException {
         KMeansParams kMeansParams = KMeansParams.builder().build();
         train(mlFullAccessClient, FunctionName.KMEANS, irisIndex, kMeansParams, searchSourceBuilder, trainResult -> {
             String modelId = (String) trainResult.get("model_id");
@@ -434,6 +434,13 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
                 fail("Unexpected IOException: " + e.getMessage());
             }
         }, false);
+    }
+
+    public void testPredictWithReadOnlyMLAccessModelNonExisting() throws IOException {
+        exceptionRule.expect(ResponseException.class);
+        exceptionRule.expectMessage("no permissions for [cluster:admin/opensearch/ml/predict]");
+        KMeansParams kMeansParams = KMeansParams.builder().build();
+        predict(mlReadOnlyClient, FunctionName.KMEANS, "modelId", irisIndex, kMeansParams, searchSourceBuilder, null);
     }
 
     public void testTrainAndPredictWithFullAccess() throws IOException {
