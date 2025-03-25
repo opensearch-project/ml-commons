@@ -1,6 +1,7 @@
 package org.opensearch.ml.engine.function_calling;
 
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_EXCLUDE_PATH;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_FILTER;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALL_ID;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_RESULT;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.removeJsonPath;
@@ -15,15 +16,13 @@ import org.opensearch.ml.common.utils.StringUtils;
 
 import com.jayway.jsonpath.JsonPath;
 
-import lombok.Data;
-
-public class BedrockConverseFunctionCalling implements FunctionCalling {
-    private static final String FINISH_REASON_PATH = "$.stopReason";
+public class BedrockConverseDeepseekR1FunctionCalling implements FunctionCalling {
+    private static final String FINISH_REASON_PATH = "stop_reason";
     private static final String FINISH_REASON = "tool_use";
-    private static final String CALL_PATH = "$.output.message.content[*].toolUse";
-    private static final String NAME = "name";
+    private static final String CALL_PATH = "tool_calls";
+    private static final String NAME = "tool_name";
     private static final String INPUT = "input";
-    private static final String ID_PATH = "toolUseId";
+    private static final String ID_PATH = "id";
     private static final String TOOL_ERROR = "tool_error";
 
     @Override
@@ -33,7 +32,6 @@ public class BedrockConverseFunctionCalling implements FunctionCalling {
                 "tool_template",
                 "{\"toolSpec\":{\"name\":\"${tool.name}\",\"description\":\"${tool.description}\",\"inputSchema\": {\"json\": ${tool.attributes.input_schema} } }}"
             );
-        params.put("tool_configs", ", \"toolConfig\": {\"tools\": [${parameters._tools:-}]}");
     }
 
     @Override
@@ -44,11 +42,13 @@ public class BedrockConverseFunctionCalling implements FunctionCalling {
         if (llmResponseExcludePath != null) {
             dataAsMap = removeJsonPath(dataAsMap, llmResponseExcludePath, true);
         }
-        String llmFinishReason = JsonPath.read(dataAsMap, FINISH_REASON_PATH);
+        Object response = JsonPath.read(dataAsMap, parameters.get(LLM_RESPONSE_FILTER));
+        Map<String, Object> llmResponse = StringUtils.fromJson(response.toString(), "response");
+        String llmFinishReason = JsonPath.read(llmResponse, FINISH_REASON_PATH);
         if (!llmFinishReason.contentEquals(FINISH_REASON)) {
             return output;
         }
-        List toolCalls = JsonPath.read(dataAsMap, CALL_PATH);
+        List toolCalls = JsonPath.read(llmResponse, CALL_PATH);
         if (CollectionUtils.isEmpty(toolCalls)) {
             return output;
         }
@@ -69,22 +69,9 @@ public class BedrockConverseFunctionCalling implements FunctionCalling {
             if (toolUseId == null) {
                 continue;
             }
-            ToolResult result = new ToolResult();
-            result.setToolUseId(toolUseId);
-            result.getContent().add(toolResult.get(TOOL_RESULT));
-            if (toolResult.containsKey(TOOL_ERROR)) {
-                result.setStatus("error");
-            }
-            toolMessage.getContent().add(result);
+            toolMessage.getContent().add(Map.of("text", Map.of(TOOL_CALL_ID, toolUseId, TOOL_RESULT, toolResult.get(TOOL_RESULT))));
         }
 
         return List.of(toolMessage);
-    }
-
-    @Data
-    public static class ToolResult {
-        private String toolUseId;
-        private List<Object> content = new ArrayList<>();
-        private String status;
     }
 }
