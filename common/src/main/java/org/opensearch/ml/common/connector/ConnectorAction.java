@@ -198,18 +198,42 @@ public class ConnectorAction implements ToXContentObject, Writeable {
             .build();
     }
 
+    /**
+     * Validates whether pre and post process functions corresponding to the same llm service or not.
+     * There are specific pre and post process functions defined for each end llm services, so if you are
+     * configuring the pre-built functions it has to be from the corresponding list. This method throws
+     * IllegalArgumentException exception if it is configured wrongly.
+     *
+     * @param parameters - connector parameters
+     */
     public void validatePrePostProcessFunctions(Map<String, String> parameters) {
         StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
         String endPoint = substitutor.replace(url);
         String remoteServer = getRemoteServerFromURL(endPoint);
-        validatePreProcessFunctions(remoteServer);
-        validatePostProcessFunctions(remoteServer);
+        if (isInBuiltProcessFunction(preProcessFunction)) {
+            validatePreProcessFunctions(remoteServer);
+        }
+        if (isInBuiltProcessFunction(postProcessFunction)) {
+            validatePostProcessFunctions(remoteServer);
+        }
+    }
+
+    /**
+     * To get the remote server name from ULR
+     *
+     * @param url - remote server url
+     * @return - returns the corresponding remote server name for url, if server is not in the pre-defined list,
+     * it returns null
+     */
+    public static String getRemoteServerFromURL(String url) {
+        return SUPPORTED_REMOTE_SERVERS_FOR_DEFAULT_ACTION_TYPES.stream().filter(url::contains).findFirst().orElse("");
+    }
+
+    private boolean isInBuiltProcessFunction(String processFunction) {
+        return (processFunction != null && processFunction.startsWith(INBUILT_FUNC_PREFIX));
     }
 
     private void validatePreProcessFunctions(String remoteServer) {
-        if (!isInBuiltProcessFunction(preProcessFunction)) {
-            return;
-        }
         switch (remoteServer) {
             case OPENAI:
                 if (!preProcessFunction.contains(OPENAI)) {
@@ -242,9 +266,6 @@ public class ConnectorAction implements ToXContentObject, Writeable {
     }
 
     private void validatePostProcessFunctions(String remoteServer) {
-        if (!isInBuiltProcessFunction(postProcessFunction)) {
-            return;
-        }
         switch (remoteServer) {
             case OPENAI:
                 if (!postProcessFunction.contains(OPENAI)) {
@@ -272,14 +293,6 @@ public class ConnectorAction implements ToXContentObject, Writeable {
 
     private String invalidProcessFuncExcText(String remoteServer, String func) {
         return "LLM service is " + remoteServer + ", so " + func + " should be " + remoteServer + " " + func;
-    }
-
-    private boolean isInBuiltProcessFunction(String processFunction) {
-        return (processFunction != null && processFunction.startsWith(INBUILT_FUNC_PREFIX));
-    }
-
-    public static String getRemoteServerFromURL(String url) {
-        return SUPPORTED_REMOTE_SERVERS_FOR_DEFAULT_ACTION_TYPES.stream().filter(url::contains).findFirst().orElse("");
     }
 
     public enum ActionType {
