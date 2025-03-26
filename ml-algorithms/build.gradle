@@ -73,7 +73,6 @@ dependencies {
     implementation ('com.amazonaws:aws-encryption-sdk-java:2.4.1') {
         exclude group: 'org.bouncycastle', module: 'bcprov-ext-jdk18on'
     }
-    implementation 'org.bouncycastle:bcprov-jdk18on:1.78.1'
 
     compileOnly group: 'software.amazon.awssdk', name: 'aws-core', version: "2.30.18"
     compileOnly group: 'software.amazon.awssdk', name: 's3', version: "2.30.18"
