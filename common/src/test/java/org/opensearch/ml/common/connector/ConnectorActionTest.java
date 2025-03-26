@@ -86,14 +86,13 @@ public class ConnectorActionTest {
     }
 
     @Test
-    public void connectorWithNullPreProcessFunction() {
+    public void testValidatePrePostProcessFunctionsWithNullPreProcessFunctionSuccess() {
         ConnectorAction action = new ConnectorAction(TEST_ACTION_TYPE, TEST_METHOD_HTTP, OPENAI_URL, null, TEST_REQUEST_BODY, null, null);
         action.validatePrePostProcessFunctions(Map.of());
-        assertNotNull(action);
     }
 
     @Test
-    public void connectorWithCustomPainlessScriptPreProcessFunction() {
+    public void testValidatePrePostProcessFunctionsWithCustomPainlessScriptPreProcessFunctionSuccess() {
         String preProcessFunction =
             "\"\\n    StringBuilder builder = new StringBuilder();\\n    builder.append(\\\"\\\\\\\"\\\");\\n    String first = params.text_docs[0];\\n    builder.append(first);\\n    builder.append(\\\"\\\\\\\"\\\");\\n    def parameters = \\\"{\\\" +\\\"\\\\\\\"text_inputs\\\\\\\":\\\" + builder + \\\"}\\\";\\n    return  \\\"{\\\" +\\\"\\\\\\\"parameters\\\\\\\":\\\" + parameters + \\\"}\\\";\"";
         ConnectorAction action = new ConnectorAction(
@@ -106,11 +105,10 @@ public class ConnectorActionTest {
             null
         );
         action.validatePrePostProcessFunctions(null);
-        assertNotNull(action);
     }
 
     @Test
-    public void openAIConnectorWithCorrectInBuiltPrePostProcessFunction() {
+    public void testValidatePrePostProcessFunctionsWithOpenAIConnectorCorrectInBuiltPrePostProcessFunctionAndParamsSuccess() {
         ConnectorAction action = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
@@ -121,11 +119,10 @@ public class ConnectorActionTest {
             OPENAI_EMBEDDING
         );
         action.validatePrePostProcessFunctions(Map.of("endpoint", "api.openai.com"));
-        assertNotNull(action);
     }
 
     @Test
-    public void openAIConnectorWithWrongInBuiltPrePostProcessFunction() {
+    public void testValidatePrePostProcessFunctionsWithOpenAIConnectorWrongInBuiltPrePostProcessFunctionThrowsException() {
         ConnectorAction action1 = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
@@ -151,7 +148,7 @@ public class ConnectorActionTest {
     }
 
     @Test
-    public void cohereConnectorWithCorrectInBuiltPrePostProcessFunction() {
+    public void testValidatePrePostProcessFunctionsWithCohereConnectorCorrectInBuiltPrePostProcessFunctionSuccess() {
         ConnectorAction action = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
@@ -162,7 +159,6 @@ public class ConnectorActionTest {
             COHERE_EMBEDDING
         );
         action.validatePrePostProcessFunctions(Map.of());
-        assertNotNull(action);
         action = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
@@ -173,7 +169,6 @@ public class ConnectorActionTest {
             COHERE_EMBEDDING
         );
         action.validatePrePostProcessFunctions(Map.of());
-        assertNotNull(action);
         action = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
@@ -188,7 +183,7 @@ public class ConnectorActionTest {
     }
 
     @Test
-    public void cohereConnectorWithWrongInBuiltPrePostProcessFunction() {
+    public void testValidatePrePostProcessFunctionsWithCohereConnectorWrongInBuiltPrePostProcessFunctionThrowsException() {
         ConnectorAction action1 = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
@@ -214,7 +209,7 @@ public class ConnectorActionTest {
     }
 
     @Test
-    public void bedrockConnectorWithCorrectInBuiltPrePostProcessFunction() {
+    public void testValidatePrePostProcessFunctionsWithBedrockConnectorCorrectInBuiltPrePostProcessFunctionSuccess() {
         ConnectorAction action = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
@@ -225,7 +220,6 @@ public class ConnectorActionTest {
             BEDROCK_EMBEDDING
         );
         action.validatePrePostProcessFunctions(Map.of());
-        assertNotNull(action);
         action = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
@@ -236,7 +230,6 @@ public class ConnectorActionTest {
             BEDROCK_BATCH_JOB_ARN
         );
         action.validatePrePostProcessFunctions(Map.of());
-        assertNotNull(action);
         action = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
@@ -247,11 +240,10 @@ public class ConnectorActionTest {
             BEDROCK_RERANK
         );
         action.validatePrePostProcessFunctions(Map.of());
-        assertNotNull(action);
     }
 
     @Test
-    public void bedrockConnectorWithWrongInBuiltPrePostProcessFunction() {
+    public void testValidatePrePostProcessFunctionsWithBedrockConnectorWrongInBuiltPrePostProcessFunctionThrowsException() {
         ConnectorAction action1 = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
@@ -277,7 +269,7 @@ public class ConnectorActionTest {
     }
 
     @Test
-    public void sagemakerConnectorWithCorrectInBuiltPrePostProcessFunction() {
+    public void testValidatePrePostProcessFunctionsWithSagemakerConnectorWithCorrectInBuiltPrePostProcessFunctionSuccess() {
         ConnectorAction action = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
@@ -288,7 +280,6 @@ public class ConnectorActionTest {
             DEFAULT_EMBEDDING
         );
         action.validatePrePostProcessFunctions(Map.of());
-        assertNotNull(action);
         action = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
@@ -299,11 +290,10 @@ public class ConnectorActionTest {
             DEFAULT_RERANK
         );
         action.validatePrePostProcessFunctions(Map.of());
-        assertNotNull(action);
     }
 
     @Test
-    public void sagemakerConnectorWithWrongInBuiltPrePostProcessFunction() {
+    public void testValidatePrePostProcessFunctionsWithSagemakerConnectorWrongInBuiltPrePostProcessFunctionThrowsException() {
         ConnectorAction action1 = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
