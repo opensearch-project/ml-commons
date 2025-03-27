@@ -234,7 +234,6 @@ import org.opensearch.ml.processor.MLInferenceIngestProcessor;
 import org.opensearch.ml.processor.MLInferenceSearchRequestProcessor;
 import org.opensearch.ml.processor.MLInferenceSearchResponseProcessor;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
-import org.opensearch.ml.rest.RestMLBatchIngestAction;
 import org.opensearch.ml.rest.RestMLCancelBatchJobAction;
 import org.opensearch.ml.rest.RestMLCreateConnectorAction;
 import org.opensearch.ml.rest.RestMLCreateControllerAction;
@@ -829,7 +828,6 @@ public class MachineLearningPlugin extends Plugin
         RestMLListToolsAction restMLListToolsAction = new RestMLListToolsAction(toolFactories);
         RestMLGetToolAction restMLGetToolAction = new RestMLGetToolAction(toolFactories);
         RestMLGetConfigAction restMLGetConfigAction = new RestMLGetConfigAction(mlFeatureEnabledSetting);
-        RestMLBatchIngestAction restMLBatchIngestAction = new RestMLBatchIngestAction();
         RestMLCancelBatchJobAction restMLCancelBatchJobAction = new RestMLCancelBatchJobAction();
         return ImmutableList
             .of(
@@ -884,7 +882,6 @@ public class MachineLearningPlugin extends Plugin
                 restMLListToolsAction,
                 restMLGetToolAction,
                 restMLGetConfigAction,
-                restMLBatchIngestAction,
                 restMLCancelBatchJobAction
             );
     }
