@@ -8,6 +8,7 @@ package org.opensearch.ml.common.transport.connector;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_2_19_1;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 import java.io.IOException;
@@ -51,6 +52,9 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
     public static final String ACCESS_MODE_FIELD = "access_mode";
     public static final String DRY_RUN_FIELD = "dry_run";
 
+    public static final String CONNECTOR_URL_FIELD = "url";
+    public static final String CONNECTOR_HEADER_FIELD = "headers";
+
     private static final Version MINIMAL_SUPPORTED_VERSION_FOR_CLIENT_CONFIG = CommonValue.VERSION_2_13_0;
 
     public static final String DRY_RUN_CONNECTOR_NAME = "dryRunConnector";
@@ -71,6 +75,9 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
     private boolean updateConnector;
     private ConnectorClientConfig connectorClientConfig;
 
+    private String url;
+    private Map<String, String> headers;
+
     @Builder(toBuilder = true)
     public MLCreateConnectorInput(
         String name,
@@ -86,8 +93,9 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         boolean dryRun,
         boolean updateConnector,
         ConnectorClientConfig connectorClientConfig,
-        String tenantId
-
+        String tenantId,
+        String url,
+        Map<String, String> headers
     ) {
         if (!dryRun && !updateConnector) {
             if (name == null) {
@@ -117,7 +125,8 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         this.updateConnector = updateConnector;
         this.connectorClientConfig = connectorClientConfig;
         this.tenantId = tenantId;
-
+        this.url = url;
+        this.headers = headers;
     }
 
     public static MLCreateConnectorInput parse(XContentParser parser) throws IOException {
@@ -138,6 +147,8 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         boolean dryRun = false;
         ConnectorClientConfig connectorClientConfig = null;
         String tenantId = null;
+        String url = null;
+        Map<String, String> headers = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -192,6 +203,12 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                 case TENANT_ID_FIELD:
                     tenantId = parser.textOrNull();
                     break;
+                case CONNECTOR_URL_FIELD:
+                    url = parser.textOrNull();
+                    break;
+                case CONNECTOR_HEADER_FIELD:
+                    headers = parser.mapStrings();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -211,7 +228,9 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
             dryRun,
             updateConnector,
             connectorClientConfig,
-            tenantId
+            tenantId,
+            url,
+            headers
         );
     }
 
@@ -253,6 +272,12 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         }
         if (tenantId != null) {
             builder.field(TENANT_ID_FIELD, tenantId);
+        }
+        if (url != null) {
+            builder.field(CONNECTOR_URL_FIELD, url);
+        }
+        if (headers != null) {
+            builder.field(CONNECTOR_HEADER_FIELD, headers);
         }
         builder.endObject();
         return builder;
@@ -312,6 +337,17 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
         if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
             output.writeOptionalString(tenantId);
         }
+        if (streamOutputVersion.onOrAfter(VERSION_2_19_1)) {
+            output.writeOptionalString(url);
+        }
+        if (streamOutputVersion.after(VERSION_2_19_1)) {
+            if (headers != null) {
+                output.writeBoolean(true);
+                output.writeMap(headers, StreamOutput::writeString, StreamOutput::writeString);
+            } else {
+                output.writeBoolean(false);
+            }
+        }
     }
 
     public MLCreateConnectorInput(StreamInput input) throws IOException {
@@ -348,5 +384,11 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
             }
         }
         this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
+        this.url = streamInputVersion.onOrAfter(VERSION_2_19_1) ? input.readOptionalString() : null;
+        if (streamInputVersion.onOrAfter(VERSION_2_19_1)) {
+            if (input.readBoolean()) {
+                this.headers = input.readMap(s -> s.readString(), s -> s.readString());
+            }
+        }
     }
 }

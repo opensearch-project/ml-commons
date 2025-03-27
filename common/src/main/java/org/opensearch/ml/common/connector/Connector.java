@@ -165,7 +165,11 @@ public interface Connector extends ToXContentObject, Writeable {
     }
 
     default void validateConnectorURL(List<String> urlRegexes) {
-        if (getActions() == null) {
+        String protocol = getProtocol();
+        if (protocol.equals(ConnectorProtocols.MCP_SSE)) {
+            return;
+        }
+        if ((protocol.equals(ConnectorProtocols.AWS_SIGV4) || protocol.equals(ConnectorProtocols.HTTP)) && getActions() == null) {
             throw new IllegalArgumentException("No actions configured for this connector");
         }
         Map<String, String> parameters = getParameters();
