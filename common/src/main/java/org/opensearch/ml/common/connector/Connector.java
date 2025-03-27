@@ -169,7 +169,7 @@ public interface Connector extends ToXContentObject, Writeable {
         if (protocol.equals(ConnectorProtocols.MCP_SSE)) {
             return;
         }
-        if ((protocol.equals(ConnectorProtocols.AWS_SIGV4) || protocol.equals(ConnectorProtocols.HTTP)) && getActions() == null) {
+        if (getActions() == null) {
             throw new IllegalArgumentException("No actions configured for this connector");
         }
         Map<String, String> parameters = getParameters();
