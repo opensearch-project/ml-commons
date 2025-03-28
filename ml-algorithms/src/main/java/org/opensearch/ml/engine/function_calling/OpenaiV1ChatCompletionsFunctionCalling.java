@@ -49,9 +49,9 @@ public class OpenaiV1ChatCompletionsFunctionCalling implements FunctionCalling {
             return output;
         }
         for (Object call : toolCalls) {
-            String toolName = JsonPath.read(call, parameters.get(NAME));
-            String toolInput = StringUtils.toJson(JsonPath.read(call, parameters.get(INPUT)));
-            String toolCallId = JsonPath.read(call, parameters.get(ID_PATH));
+            String toolName = JsonPath.read(call, NAME);
+            String toolInput = StringUtils.toJson(JsonPath.read(call, INPUT));
+            String toolCallId = JsonPath.read(call, ID_PATH);
             output.add(Map.of("tool_name", toolName, "tool_input", toolInput, "tool_call_id", toolCallId));
         }
         return output;
