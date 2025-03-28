@@ -8,8 +8,6 @@ package org.opensearch.ml.rest;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
-import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
-import static org.opensearch.ml.utils.MLExceptionUtils.REMOTE_INFERENCE_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
 import static org.opensearch.ml.utils.TestHelper.getBatchRestRequest;
 import static org.opensearch.ml.utils.TestHelper.getBatchRestRequest_WrongActionType;
@@ -127,33 +125,10 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
     @Test
     public void testGetRequest() throws IOException {
         RestRequest request = getRestRequest_PredictModel();
-        MLPredictionTaskRequest mlPredictionTaskRequest = restMLPredictionAction
-            .getRequest("modelId", FunctionName.KMEANS.name(), FunctionName.KMEANS.name(), request);
+        MLPredictionTaskRequest mlPredictionTaskRequest = restMLPredictionAction.getRequest("modelId", FunctionName.KMEANS.name(), request);
 
         MLInput mlInput = mlPredictionTaskRequest.getMlInput();
         verifyParsedKMeansMLInput(mlInput);
-    }
-
-    @Test
-    public void testGetRequest_RemoteInferenceDisabled() throws IOException {
-        thrown.expect(IllegalStateException.class);
-        thrown.expectMessage(REMOTE_INFERENCE_DISABLED_ERR_MSG);
-
-        when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(false);
-        RestRequest request = getRestRequest_PredictModel();
-        MLPredictionTaskRequest mlPredictionTaskRequest = restMLPredictionAction
-            .getRequest("modelId", FunctionName.REMOTE.name(), "text_embedding", request);
-    }
-
-    @Test
-    public void testGetRequest_LocalModelInferenceDisabled() throws IOException {
-        thrown.expect(IllegalStateException.class);
-        thrown.expectMessage(LOCAL_MODEL_DISABLED_ERR_MSG);
-
-        when(mlFeatureEnabledSetting.isLocalModelEnabled()).thenReturn(false);
-        RestRequest request = getRestRequest_PredictModel();
-        MLPredictionTaskRequest mlPredictionTaskRequest = restMLPredictionAction
-            .getRequest("modelId", FunctionName.TEXT_EMBEDDING.name(), "text_embedding", request);
     }
 
     @Test
@@ -196,7 +171,7 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
         thrown.expectMessage("Wrong Action Type");
 
         RestRequest request = getBatchRestRequest_WrongActionType();
-        restMLPredictionAction.getRequest("model id", "remote", "text_embedding", request);
+        restMLPredictionAction.getRequest("model id", "text_embedding", request);
     }
 
     @Ignore
@@ -234,17 +209,7 @@ public class RestMLPredictionActionTests extends OpenSearchTestCase {
         thrown.expectMessage("Wrong Action Type of models");
 
         RestRequest request = getBatchRestRequest_WrongActionType();
-        restMLPredictionAction.getRequest("model_id", FunctionName.REMOTE.name(), "text_embedding", request);
-    }
-
-    @Test
-    public void testGetRequest_UnsupportedAlgorithm() throws IOException {
-        thrown.expect(IllegalArgumentException.class);
-        thrown.expectMessage("Wrong function name");
-
-        // Create a RestRequest with an unsupported algorithm
-        RestRequest request = getRestRequest_PredictModel();
-        restMLPredictionAction.getRequest("model_id", "INVALID_ALGO", "text_embedding", request);
+        restMLPredictionAction.getRequest("model_id", "text_embedding", request);
     }
 
     private RestRequest getRestRequest_PredictModel() {
