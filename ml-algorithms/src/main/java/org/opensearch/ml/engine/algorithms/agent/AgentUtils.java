@@ -38,7 +38,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -104,6 +103,9 @@ public class AgentUtils {
     public static final String LLM_INTERFACE_BEDROCK_CONVERSE_DEEPSEEK_R1 = "bedrock/converse/deepseek_r1";
     public static final String TOOL_RESULT = "tool_result";
     public static final String TOOL_CALL_ID = "tool_call_id";
+    public static final String MCP_CONNECTORS_FIELD = "mcp_connectors";
+    public static final String MCP_CONNECTOR_ID_FIELD = "mcp_connector_id";
+    public static final String TOOL_FILTERS_FIELD = "tool_filters";
 
     public static String addExamplesToPrompt(Map<String, String> parameters, String prompt) {
         Map<String, String> examplesMap = new HashMap<>();
@@ -622,15 +624,15 @@ public class AgentUtils {
         List<MLToolSpec> mcpToolSpec = new ArrayList<>();
         String tenantId = mlAgent.getTenantId();
 
-        String mcpConnectorConfigJSON = mlAgent.getParameters().get("mcp_connectors");
+        String mcpConnectorConfigJSON = mlAgent.getParameters().get(MCP_CONNECTORS_FIELD);
 
         Type listType = new TypeToken<List<Map<String, Object>>>() {
         }.getType();
         List<Map<String, Object>> mcpConnectorConfigs = gson.fromJson(mcpConnectorConfigJSON, listType);
 
         for (Map<String, Object> mcpConnectorConfig : mcpConnectorConfigs) {
-            String connectorId = (String) mcpConnectorConfig.get("mcp_connector_id");
-            List<String> toolFilters = (List<String>) mcpConnectorConfig.get("tool_filters");
+            String connectorId = (String) mcpConnectorConfig.get(MCP_CONNECTOR_ID_FIELD);
+            List<String> toolFilters = (List<String>) mcpConnectorConfig.get(TOOL_FILTERS_FIELD);
             List<MLToolSpec> mcpTools = getMCPToolsFromConnector(connectorId, tenantId, client);
 
             if (toolFilters == null || toolFilters.isEmpty()) {
@@ -671,9 +673,7 @@ public class AgentUtils {
         MLConnectorGetResponse response = null;
         try {
             response = connectorFuture.get();
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        } catch (ExecutionException e) {
+        } catch (Exception e) {
             throw new RuntimeException(e);
         }
         Connector connector = response.getMlConnector();

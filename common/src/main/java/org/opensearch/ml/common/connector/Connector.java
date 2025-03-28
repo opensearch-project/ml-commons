@@ -165,10 +165,6 @@ public interface Connector extends ToXContentObject, Writeable {
     }
 
     default void validateConnectorURL(List<String> urlRegexes) {
-        String protocol = getProtocol();
-        if (protocol.equals(ConnectorProtocols.MCP_SSE)) {
-            return;
-        }
         if (getActions() == null) {
             throw new IllegalArgumentException("No actions configured for this connector");
         }

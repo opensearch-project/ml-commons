@@ -5,6 +5,9 @@
 
 package org.opensearch.ml.common.connector;
 
+import static org.opensearch.ml.common.CommonValue.ACCESS_KEY_FIELD;
+import static org.opensearch.ml.common.CommonValue.SECRET_KEY_FIELD;
+import static org.opensearch.ml.common.CommonValue.SESSION_TOKEN_FIELD;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.AWS_SIGV4;
 
 import java.io.IOException;

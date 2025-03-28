@@ -27,7 +27,6 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.CommonValue;
-import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorClientConfig;
 
@@ -197,7 +196,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                 case DRY_RUN_FIELD:
                     dryRun = parser.booleanValue();
                     break;
-                case AbstractConnector.CLIENT_CONFIG_FIELD:
+                case CommonValue.CLIENT_CONFIG_FIELD:
                     connectorClientConfig = ConnectorClientConfig.parse(parser);
                     break;
                 case TENANT_ID_FIELD:
@@ -268,7 +267,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
             builder.field(ACCESS_MODE_FIELD, access);
         }
         if (connectorClientConfig != null) {
-            builder.field(AbstractConnector.CLIENT_CONFIG_FIELD, connectorClientConfig);
+            builder.field(CommonValue.CLIENT_CONFIG_FIELD, connectorClientConfig);
         }
         if (tenantId != null) {
             builder.field(TENANT_ID_FIELD, tenantId);

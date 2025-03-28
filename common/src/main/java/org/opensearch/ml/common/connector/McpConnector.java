@@ -6,9 +6,20 @@
 package org.opensearch.ml.common.connector;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.ACCESS_FIELD;
+import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
+import static org.opensearch.ml.common.CommonValue.CLIENT_CONFIG_FIELD;
+import static org.opensearch.ml.common.CommonValue.CREATED_TIME_FIELD;
+import static org.opensearch.ml.common.CommonValue.CREDENTIAL_FIELD;
+import static org.opensearch.ml.common.CommonValue.DESCRIPTION_FIELD;
+import static org.opensearch.ml.common.CommonValue.HEADERS_FIELD;
+import static org.opensearch.ml.common.CommonValue.LAST_UPDATED_TIME_FIELD;
+import static org.opensearch.ml.common.CommonValue.NAME_FIELD;
+import static org.opensearch.ml.common.CommonValue.OWNER_FIELD;
+import static org.opensearch.ml.common.CommonValue.PROTOCOL_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
-import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
-import static org.opensearch.ml.common.CommonValue.VERSION_2_19_1;
+import static org.opensearch.ml.common.CommonValue.URL_FIELD;
+import static org.opensearch.ml.common.CommonValue.VERSION_FIELD;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_SSE;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.validateProtocol;
 
@@ -20,6 +31,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiFunction;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.Version;
@@ -47,21 +60,6 @@ import lombok.extern.log4j.Log4j2;
 @org.opensearch.ml.common.annotation.Connector(MCP_SSE)
 public class McpConnector implements Connector {
 
-    public static final String NAME_FIELD = "name";
-    public static final String VERSION_FIELD = "version";
-    public static final String DESCRIPTION_FIELD = "description";
-    public static final String PROTOCOL_FIELD = "protocol";
-    public static final String CREDENTIAL_FIELD = "credential";
-    public static final String PARAMETERS_FIELD = "parameters";
-    public static final String CREATED_TIME_FIELD = "created_time";
-    public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
-    public static final String BACKEND_ROLES_FIELD = "backend_roles";
-    public static final String OWNER_FIELD = "owner";
-    public static final String ACCESS_FIELD = "access";
-    public static final String CLIENT_CONFIG_FIELD = "client_config";
-    public static final String URL_FIELD = "url";
-    public static final String HEADERS_FIELD = "headers";
-
     protected String name;
     protected String description;
     protected String version;
@@ -86,6 +84,7 @@ public class McpConnector implements Connector {
     @Setter
     protected String tenantId;
     @Setter
+    @Getter
     protected String url;
     @Setter
     protected Map<String, String> headers;
@@ -190,8 +189,8 @@ public class McpConnector implements Connector {
         }
         Map<String, String> decryptedHeaders = new HashMap<>();
         StringSubstitutor substitutor = new StringSubstitutor(getDecryptedCredential(), "${credential.", "}");
-        for (String key : headers.keySet()) {
-            decryptedHeaders.put(key, substitutor.replace(headers.get(key)));
+        for (Map.Entry<String, String> entry : headers.entrySet()) {
+            decryptedHeaders.put(entry.getKey(), substitutor.replace(entry.getValue()));
         }
         return decryptedHeaders;
     }
@@ -252,13 +251,12 @@ public class McpConnector implements Connector {
         if (input.readBoolean()) {
             this.connectorClientConfig = new ConnectorClientConfig(input);
         }
-        this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
-        this.url = streamInputVersion.onOrAfter(VERSION_2_19_1) ? input.readString() : null;
-        if (streamInputVersion.onOrAfter(VERSION_2_19_1)) {
-            if (input.readBoolean()) {
-                this.headers = input.readMap(s -> s.readString(), s -> s.readString());
-            }
+        this.tenantId = input.readOptionalString();
+        this.url = input.readString();
+        if (input.readBoolean()) {
+            this.headers = input.readMap(s -> s.readString(), s -> s.readString());
         }
+
     }
 
     @Override
@@ -302,20 +300,17 @@ public class McpConnector implements Connector {
         } else {
             out.writeBoolean(false);
         }
-        if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
-            out.writeOptionalString(tenantId);
+        out.writeOptionalString(tenantId);
+
+        out.writeString(url);
+
+        if (headers != null) {
+            out.writeBoolean(true);
+            out.writeMap(headers, StreamOutput::writeString, StreamOutput::writeString);
+        } else {
+            out.writeBoolean(false);
         }
-        if (streamOutputVersion.onOrAfter(VERSION_2_19_1)) {
-            out.writeString(url);
-        }
-        if (streamOutputVersion.onOrAfter(VERSION_2_19_1)) {
-            if (headers != null) {
-                out.writeBoolean(true);
-                out.writeMap(headers, StreamOutput::writeString, StreamOutput::writeString);
-            } else {
-                out.writeBoolean(false);
-            }
-        }
+
     }
 
     @Override
@@ -405,6 +400,22 @@ public class McpConnector implements Connector {
         }
         builder.endObject();
         return builder;
+    }
+
+    @Override
+    public void validateConnectorURL(List<String> urlRegexes) {
+        Boolean hasMatchedUrl = false;
+        for (String urlRegex : urlRegexes) {
+            Pattern pattern = Pattern.compile(urlRegex);
+            Matcher matcher = pattern.matcher(url);
+            if (matcher.matches()) {
+                hasMatchedUrl = true;
+                break;
+            }
+        }
+        if (!hasMatchedUrl) {
+            throw new IllegalArgumentException("Connector URL is not matching the trusted connector endpoint regex, URL is: " + url);
+        }
     }
 
     @Override

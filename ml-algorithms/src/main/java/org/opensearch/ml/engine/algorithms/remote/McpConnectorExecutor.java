@@ -95,15 +95,7 @@ public class McpConnectorExecutor extends AbstractConnectorExecutor {
                 McpSyncClient client = McpClient
                     .sync(transport)
                     .requestTimeout(readTimeout)
-                    .capabilities(McpSchema.ClientCapabilities.builder().roots(false).sampling().build())
-                    .sampling(
-                        request -> new McpSchema.CreateMessageResult(
-                            McpSchema.Role.USER,
-                            new McpSchema.TextContent("test"),
-                            "Claude3.7",
-                            McpSchema.CreateMessageResult.StopReason.END_TURN
-                        )
-                    )
+                    .capabilities(McpSchema.ClientCapabilities.builder().roots(false).build())
                     .build();
 
                 client.initialize();

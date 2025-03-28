@@ -6,8 +6,19 @@
 package org.opensearch.ml.common.connector;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.ACCESS_FIELD;
+import static org.opensearch.ml.common.CommonValue.ACTIONS_FIELD;
+import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
+import static org.opensearch.ml.common.CommonValue.CLIENT_CONFIG_FIELD;
+import static org.opensearch.ml.common.CommonValue.CREATED_TIME_FIELD;
+import static org.opensearch.ml.common.CommonValue.DESCRIPTION_FIELD;
+import static org.opensearch.ml.common.CommonValue.LAST_UPDATED_TIME_FIELD;
+import static org.opensearch.ml.common.CommonValue.NAME_FIELD;
+import static org.opensearch.ml.common.CommonValue.OWNER_FIELD;
+import static org.opensearch.ml.common.CommonValue.PROTOCOL_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_FIELD;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.validateProtocol;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
