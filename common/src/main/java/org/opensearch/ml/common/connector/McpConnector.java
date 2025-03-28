@@ -7,23 +7,21 @@ package org.opensearch.ml.common.connector;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ACCESS_FIELD;
-import static org.opensearch.ml.common.CommonValue.ACTIONS_FIELD;
 import static org.opensearch.ml.common.CommonValue.BACKEND_ROLES_FIELD;
 import static org.opensearch.ml.common.CommonValue.CLIENT_CONFIG_FIELD;
 import static org.opensearch.ml.common.CommonValue.CREATED_TIME_FIELD;
+import static org.opensearch.ml.common.CommonValue.CREDENTIAL_FIELD;
 import static org.opensearch.ml.common.CommonValue.DESCRIPTION_FIELD;
+import static org.opensearch.ml.common.CommonValue.HEADERS_FIELD;
 import static org.opensearch.ml.common.CommonValue.LAST_UPDATED_TIME_FIELD;
 import static org.opensearch.ml.common.CommonValue.NAME_FIELD;
 import static org.opensearch.ml.common.CommonValue.OWNER_FIELD;
 import static org.opensearch.ml.common.CommonValue.PROTOCOL_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
-import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
+import static org.opensearch.ml.common.CommonValue.URL_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_FIELD;
-import static org.opensearch.ml.common.connector.ConnectorProtocols.HTTP;
+import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_SSE;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.validateProtocol;
-import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
-import static org.opensearch.ml.common.utils.StringUtils.isJson;
-import static org.opensearch.ml.common.utils.StringUtils.parseParameters;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -45,58 +43,83 @@ import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 @NoArgsConstructor
 @EqualsAndHashCode
-@org.opensearch.ml.common.annotation.Connector(HTTP)
-public class HttpConnector extends AbstractConnector {
-    public static final String CREDENTIAL_FIELD = "credential";
-    public static final String RESPONSE_FILTER_FIELD = "response_filter";
-    public static final String PARAMETERS_FIELD = "parameters";
-    public static final String SERVICE_NAME_FIELD = "service_name";
-    public static final String REGION_FIELD = "region";
+@Getter
+@org.opensearch.ml.common.annotation.Connector(MCP_SSE)
+public class McpConnector implements Connector {
 
-    // TODO: add RequestConfig like request time out,
+    protected String name;
+    protected String description;
+    protected String version;
+    protected String protocol;
+
+    protected Map<String, String> credential;
+    protected Map<String, String> decryptedHeaders;
+    @Setter
+    protected Map<String, String> decryptedCredential;
+    @Setter
+    protected List<String> backendRoles;
+    @Setter
+    protected User owner;
+    @Setter
+    protected AccessMode access;
+    @Setter
+    protected Instant createdTime;
+    @Setter
+    protected Instant lastUpdateTime;
+    @Setter
+    protected ConnectorClientConfig connectorClientConfig;
+    @Setter
+    protected String tenantId;
+    @Setter
+    @Getter
+    protected String url;
+    @Setter
+    protected Map<String, String> headers;
 
     @Builder
-    public HttpConnector(
+    public McpConnector(
         String name,
         String description,
         String version,
         String protocol,
-        Map<String, String> parameters,
         Map<String, String> credential,
-        List<ConnectorAction> actions,
         List<String> backendRoles,
         AccessMode accessMode,
         User owner,
         ConnectorClientConfig connectorClientConfig,
-        String tenantId
+        String tenantId,
+        String url,
+        Map<String, String> headers
     ) {
         validateProtocol(protocol);
         this.name = name;
         this.description = description;
         this.version = version;
         this.protocol = protocol;
-        this.parameters = parameters;
         this.credential = credential;
-        this.actions = actions;
         this.backendRoles = backendRoles;
         this.access = accessMode;
         this.owner = owner;
         this.connectorClientConfig = connectorClientConfig;
         this.tenantId = tenantId;
-
+        this.url = url;
+        this.headers = headers;
     }
 
-    public HttpConnector(String protocol, XContentParser parser) throws IOException {
+    public McpConnector(String protocol, XContentParser parser) throws IOException {
         this.protocol = protocol;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
@@ -117,20 +140,9 @@ public class HttpConnector extends AbstractConnector {
                 case PROTOCOL_FIELD:
                     this.protocol = parser.text();
                     break;
-                case PARAMETERS_FIELD:
-                    Map<String, Object> map = parser.map();
-                    parameters = getParameterMap(map);
-                    break;
                 case CREDENTIAL_FIELD:
                     credential = new HashMap<>();
                     credential.putAll(parser.mapStrings());
-                    break;
-                case ACTIONS_FIELD:
-                    actions = new ArrayList<>();
-                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
-                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
-                        actions.add(ConnectorAction.parse(parser));
-                    }
                     break;
                 case BACKEND_ROLES_FIELD:
                     ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
@@ -157,6 +169,13 @@ public class HttpConnector extends AbstractConnector {
                 case TENANT_ID_FIELD:
                     tenantId = parser.textOrNull();
                     break;
+                case URL_FIELD:
+                    url = parser.textOrNull();
+                    break;
+                case HEADERS_FIELD:
+                    headers = new HashMap<>();
+                    headers.putAll(parser.mapStrings());
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -164,61 +183,50 @@ public class HttpConnector extends AbstractConnector {
         }
     }
 
+    protected Map<String, String> createDecryptedHeaders(Map<String, String> headers) {
+        if (headers == null) {
+            return null;
+        }
+        Map<String, String> decryptedHeaders = new HashMap<>();
+        StringSubstitutor substitutor = new StringSubstitutor(getDecryptedCredential(), "${credential.", "}");
+        for (Map.Entry<String, String> entry : headers.entrySet()) {
+            decryptedHeaders.put(entry.getKey(), substitutor.replace(entry.getValue()));
+        }
+        return decryptedHeaders;
+    }
+
     @Override
-    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-        builder.startObject();
-        if (name != null) {
-            builder.field(NAME_FIELD, name);
+    public void decrypt(String action, BiFunction<String, String, String> function, String tenantId) {
+        Map<String, String> decrypted = new HashMap<>();
+        for (String key : credential.keySet()) {
+            decrypted.put(key, function.apply(credential.get(key), tenantId));
         }
-        if (version != null) {
-            builder.field(VERSION_FIELD, version);
-        }
-        if (description != null) {
-            builder.field(DESCRIPTION_FIELD, description);
-        }
-        if (protocol != null) {
-            builder.field(PROTOCOL_FIELD, protocol);
-        }
-        if (parameters != null) {
-            builder.field(PARAMETERS_FIELD, parameters);
-        }
-        if (credential != null) {
-            builder.field(CREDENTIAL_FIELD, credential);
-        }
-        if (actions != null) {
-            builder.field(ACTIONS_FIELD, actions);
-        }
-        if (backendRoles != null) {
-            builder.field(BACKEND_ROLES_FIELD, backendRoles);
-        }
-        if (owner != null) {
-            builder.field(OWNER_FIELD, owner);
-        }
-        if (access != null) {
-            builder.field(ACCESS_FIELD, access.getValue());
-        }
-        if (createdTime != null) {
-            builder.field(CREATED_TIME_FIELD, createdTime.toEpochMilli());
-        }
-        if (lastUpdateTime != null) {
-            builder.field(LAST_UPDATED_TIME_FIELD, lastUpdateTime.toEpochMilli());
-        }
-        if (connectorClientConfig != null) {
-            builder.field(CLIENT_CONFIG_FIELD, connectorClientConfig);
-        }
-        if (tenantId != null) {
-            builder.field(TENANT_ID_FIELD, tenantId);
-        }
-        builder.endObject();
-        return builder;
+        this.decryptedCredential = decrypted;
+        Optional<ConnectorAction> connectorAction = findAction(action);
+        Map<String, String> headers = connectorAction.map(ConnectorAction::getHeaders).orElse(null);
+        this.decryptedHeaders = createDecryptedHeaders(headers);
     }
 
-    public HttpConnector(String protocol, StreamInput input) throws IOException {
-        this.protocol = protocol;
-        parseFromStream(input);
+    @Override
+    public void encrypt(BiFunction<String, String, String> function, String tenantId) {
+        for (String key : credential.keySet()) {
+            String encrypted = function.apply(credential.get(key), tenantId);
+            credential.put(key, encrypted);
+        }
     }
 
-    public HttpConnector(StreamInput input) throws IOException {
+    @Override
+    public Connector cloneConnector() {
+        try (BytesStreamOutput bytesStreamOutput = new BytesStreamOutput()) {
+            this.writeTo(bytesStreamOutput);
+            StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
+            return new McpConnector(streamInput);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public McpConnector(StreamInput input) throws IOException {
         this.protocol = input.readString();
         parseFromStream(input);
     }
@@ -229,17 +237,7 @@ public class HttpConnector extends AbstractConnector {
         this.version = input.readOptionalString();
         this.description = input.readOptionalString();
         if (input.readBoolean()) {
-            parameters = input.readMap(StreamInput::readString, StreamInput::readString);
-        }
-        if (input.readBoolean()) {
             credential = input.readMap(StreamInput::readString, StreamInput::readString);
-        }
-        if (input.readBoolean()) {
-            actions = new ArrayList<>();
-            int size = input.readInt();
-            for (int i = 0; i < size; i++) {
-                actions.add(new ConnectorAction(input));
-            }
         }
         backendRoles = input.readOptionalStringList();
         if (input.readBoolean()) {
@@ -253,7 +251,19 @@ public class HttpConnector extends AbstractConnector {
         if (input.readBoolean()) {
             this.connectorClientConfig = new ConnectorClientConfig(input);
         }
-        this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
+        this.tenantId = input.readOptionalString();
+        this.url = input.readString();
+        if (input.readBoolean()) {
+            this.headers = input.readMap(s -> s.readString(), s -> s.readString());
+        }
+
+    }
+
+    @Override
+    public void removeCredential() {
+        this.credential = null;
+        this.decryptedCredential = null;
+        this.decryptedHeaders = null;
     }
 
     @Override
@@ -263,24 +273,9 @@ public class HttpConnector extends AbstractConnector {
         out.writeOptionalString(name);
         out.writeOptionalString(version);
         out.writeOptionalString(description);
-        if (parameters != null) {
-            out.writeBoolean(true);
-            out.writeMap(parameters, StreamOutput::writeString, StreamOutput::writeString);
-        } else {
-            out.writeBoolean(false);
-        }
         if (credential != null) {
             out.writeBoolean(true);
             out.writeMap(credential, StreamOutput::writeString, StreamOutput::writeString);
-        } else {
-            out.writeBoolean(false);
-        }
-        if (actions != null) {
-            out.writeBoolean(true);
-            out.writeInt(actions.size());
-            for (ConnectorAction action : actions) {
-                action.writeTo(out);
-            }
         } else {
             out.writeBoolean(false);
         }
@@ -305,9 +300,17 @@ public class HttpConnector extends AbstractConnector {
         } else {
             out.writeBoolean(false);
         }
-        if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
-            out.writeOptionalString(tenantId);
+        out.writeOptionalString(tenantId);
+
+        out.writeString(url);
+
+        if (headers != null) {
+            out.writeBoolean(true);
+            out.writeMap(headers, StreamOutput::writeString, StreamOutput::writeString);
+        } else {
+            out.writeBoolean(false);
         }
+
     }
 
     @Override
@@ -324,15 +327,9 @@ public class HttpConnector extends AbstractConnector {
         if (updateContent.getProtocol() != null) {
             this.protocol = updateContent.getProtocol();
         }
-        if (updateContent.getParameters() != null && !updateContent.getParameters().isEmpty()) {
-            getParameters().putAll(updateContent.getParameters());
-        }
         if (updateContent.getCredential() != null && !updateContent.getCredential().isEmpty()) {
             this.credential = updateContent.getCredential();
             encrypt(function, this.tenantId);
-        }
-        if (updateContent.getActions() != null) {
-            this.actions = updateContent.getActions();
         }
         if (updateContent.getBackendRoles() != null) {
             this.backendRoles = updateContent.getBackendRoles();
@@ -343,84 +340,116 @@ public class HttpConnector extends AbstractConnector {
         if (updateContent.getConnectorClientConfig() != null) {
             this.connectorClientConfig = updateContent.getConnectorClientConfig();
         }
+        if (updateContent.getUrl() != null) {
+            this.url = updateContent.getUrl();
+        }
+        if (updateContent.getHeaders() != null) {
+            this.headers = updateContent.getHeaders();
+        }
     }
 
     @Override
-    public <T> T createPayload(String action, Map<String, String> parameters) {
-        Optional<ConnectorAction> connectorAction = findAction(action);
-        if (connectorAction.isPresent() && connectorAction.get().getRequestBody() != null) {
-            String payload = connectorAction.get().getRequestBody();
-            payload = fillNullParameters(parameters, payload);
-            parseParameters(parameters);
-            StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
-            payload = substitutor.replace(payload);
+    public <T> void parseResponse(T orElse, List<ModelTensor> modelTensors, boolean b) throws IOException {
+        throw new UnsupportedOperationException("Not implemented.");
+    }
 
-            if (!isJson(payload)) {
-                throw new IllegalArgumentException("Invalid payload: " + payload);
+    @Override
+    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
+        builder.startObject();
+        if (name != null) {
+            builder.field(NAME_FIELD, name);
+        }
+        if (version != null) {
+            builder.field(VERSION_FIELD, version);
+        }
+        if (description != null) {
+            builder.field(DESCRIPTION_FIELD, description);
+        }
+        if (protocol != null) {
+            builder.field(PROTOCOL_FIELD, protocol);
+        }
+        if (credential != null) {
+            builder.field(CREDENTIAL_FIELD, credential);
+        }
+        if (backendRoles != null) {
+            builder.field(BACKEND_ROLES_FIELD, backendRoles);
+        }
+        if (owner != null) {
+            builder.field(OWNER_FIELD, owner);
+        }
+        if (access != null) {
+            builder.field(ACCESS_FIELD, access.getValue());
+        }
+        if (createdTime != null) {
+            builder.field(CREATED_TIME_FIELD, createdTime.toEpochMilli());
+        }
+        if (lastUpdateTime != null) {
+            builder.field(LAST_UPDATED_TIME_FIELD, lastUpdateTime.toEpochMilli());
+        }
+        if (connectorClientConfig != null) {
+            builder.field(CLIENT_CONFIG_FIELD, connectorClientConfig);
+        }
+        if (tenantId != null) {
+            builder.field(TENANT_ID_FIELD, tenantId);
+        }
+        if (url != null) {
+            builder.field(URL_FIELD, url);
+        }
+        if (headers != null) {
+            builder.field(HEADERS_FIELD, headers);
+        }
+        builder.endObject();
+        return builder;
+    }
+
+    @Override
+    public void validateConnectorURL(List<String> urlRegexes) {
+        Boolean hasMatchedUrl = false;
+        for (String urlRegex : urlRegexes) {
+            Pattern pattern = Pattern.compile(urlRegex);
+            Matcher matcher = pattern.matcher(url);
+            if (matcher.matches()) {
+                hasMatchedUrl = true;
+                break;
             }
-            return (T) payload;
         }
-        return (T) parameters.get("http_body");
-    }
-
-    protected String fillNullParameters(Map<String, String> parameters, String payload) {
-        List<String> bodyParams = findStringParametersWithNullDefaultValue(payload);
-        String newPayload = payload;
-        for (String key : bodyParams) {
-            if (!parameters.containsKey(key) || parameters.get(key) == null) {
-                newPayload = newPayload.replace("\"${parameters." + key + ":-null}\"", "null");
-            }
-        }
-        return newPayload;
-    }
-
-    private List<String> findStringParametersWithNullDefaultValue(String input) {
-        String regex = "\"\\$\\{parameters\\.(\\w+):-null}\"";
-        Pattern pattern = Pattern.compile(regex);
-        Matcher matcher = pattern.matcher(input);
-
-        List<String> paramList = new ArrayList<>();
-        while (matcher.find()) {
-            String parameterValue = matcher.group(1);
-            paramList.add(parameterValue);
-        }
-        return paramList;
-    }
-
-    @Override
-    public void decrypt(String action, BiFunction<String, String, String> function, String tenantId) {
-        Map<String, String> decrypted = new HashMap<>();
-        for (String key : credential.keySet()) {
-            decrypted.put(key, function.apply(credential.get(key), tenantId));
-        }
-        this.decryptedCredential = decrypted;
-        Optional<ConnectorAction> connectorAction = findAction(action);
-        Map<String, String> headers = connectorAction.map(ConnectorAction::getHeaders).orElse(null);
-        this.decryptedHeaders = createDecryptedHeaders(headers);
-    }
-
-    @Override
-    public Connector cloneConnector() {
-        try (BytesStreamOutput bytesStreamOutput = new BytesStreamOutput()) {
-            this.writeTo(bytesStreamOutput);
-            StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
-            return new HttpConnector(streamInput);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+        if (!hasMatchedUrl) {
+            throw new IllegalArgumentException("Connector URL is not matching the trusted connector endpoint regex, URL is: " + url);
         }
     }
 
     @Override
-    public void encrypt(BiFunction<String, String, String> function, String tenantId) {
-        for (String key : credential.keySet()) {
-            String encrypted = function.apply(credential.get(key), tenantId);
-            credential.put(key, encrypted);
-        }
+    public Map<String, String> getParameters() {
+        throw new UnsupportedOperationException("Not implemented.");
+    }
+
+    @Override
+    public List<ConnectorAction> getActions() {
+        throw new UnsupportedOperationException("Not implemented.");
+    }
+
+    @Override
+    public void addAction(ConnectorAction action) {
+        throw new UnsupportedOperationException("Not implemented.");
+    }
+
+    @Override
+    public String getActionEndpoint(String action, Map<String, String> parameters) {
+        throw new UnsupportedOperationException("Not implemented.");
     }
 
     @Override
     public String getActionHttpMethod(String action) {
-        return findAction(action).get().getMethod();
+        throw new UnsupportedOperationException("Not implemented.");
     }
 
+    @Override
+    public <T> T createPayload(String action, Map<String, String> parameters) {
+        throw new UnsupportedOperationException("Not implemented.");
+    }
+
+    @Override
+    public Optional<ConnectorAction> findAction(String action) {
+        throw new UnsupportedOperationException("Not implemented.");
+    }
 }

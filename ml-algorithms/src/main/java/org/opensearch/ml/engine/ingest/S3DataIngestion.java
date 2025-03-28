@@ -5,9 +5,9 @@
 
 package org.opensearch.ml.engine.ingest;
 
-import static org.opensearch.ml.common.connector.AbstractConnector.ACCESS_KEY_FIELD;
-import static org.opensearch.ml.common.connector.AbstractConnector.SECRET_KEY_FIELD;
-import static org.opensearch.ml.common.connector.AbstractConnector.SESSION_TOKEN_FIELD;
+import static org.opensearch.ml.common.CommonValue.ACCESS_KEY_FIELD;
+import static org.opensearch.ml.common.CommonValue.SECRET_KEY_FIELD;
+import static org.opensearch.ml.common.CommonValue.SESSION_TOKEN_FIELD;
 import static org.opensearch.ml.common.connector.HttpConnector.REGION_FIELD;
 
 import java.io.BufferedReader;
