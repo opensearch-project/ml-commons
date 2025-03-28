@@ -10,7 +10,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.opensearch.ml.common.exception.MLException;
 
 public class FunctionCallingFactory {
-    public FunctionCalling create(String llmInterface) {
+    public static FunctionCalling create(String llmInterface) {
         if (StringUtils.isBlank(llmInterface)) {
             return null;
         }
@@ -21,7 +21,7 @@ public class FunctionCallingFactory {
             case LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS:
                 return new OpenaiV1ChatCompletionsFunctionCalling();
             case LLM_INTERFACE_BEDROCK_CONVERSE_DEEPSEEK_R1:
-                return null;
+                return new BedrockConverseDeepseekR1FunctionCalling();
             default:
                 throw new MLException(String.format("Unsupported llm interface: {}.", llmInterface));
         }
