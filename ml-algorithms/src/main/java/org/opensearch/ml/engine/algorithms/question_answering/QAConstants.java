@@ -27,6 +27,7 @@ public final class QAConstants {
     public static final String INPUT_IDS = "input_ids";
     public static final String ATTENTION_MASK = "attention_mask";
     public static final String TOKEN_TYPE_IDS = "token_type_ids";
+    public static final String SENTENCE_IDS = "sentence_ids";
 
     // Default values for warm-up
     public static final String DEFAULT_WARMUP_QUESTION = "How is the weather?";
