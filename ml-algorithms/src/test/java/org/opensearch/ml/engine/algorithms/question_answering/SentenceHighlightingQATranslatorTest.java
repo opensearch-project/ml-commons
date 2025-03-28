@@ -5,9 +5,8 @@
 package org.opensearch.ml.engine.algorithms.question_answering;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.*;
@@ -68,7 +67,9 @@ public class SentenceHighlightingQATranslatorTest {
         assertNotNull(translator);
         assertNotNull(translator.getSegmenter());
         assertEquals(DefaultSentenceSegmenter.class, translator.getSegmenter().getClass());
-        // Removed check for gson as we're now using StringUtils.toJson instead of a local Gson instance
+
+        // The tokenizer will be initialized in prepare() method
+        assertNull(translator.getTokenizer());
     }
 
     @Test
@@ -76,15 +77,10 @@ public class SentenceHighlightingQATranslatorTest {
         // Mock context with sentences
         when(translatorContext.getAttachment(KEY_SENTENCES)).thenReturn(sentences);
         
-        // Mock model output - 1 means relevant, 0 means not relevant
-        // Sentences 0, 3, and 4 are relevant (value 1)
+        // Mock model output with sentence indices
         NDArray mockOutput = mock(NDArray.class);
-        when(mockOutput.getShape()).thenReturn(new Shape(5));
-        when(mockOutput.getLong(0)).thenReturn(1L); // Relevant
-        when(mockOutput.getLong(1)).thenReturn(0L); // Not relevant
-        when(mockOutput.getLong(2)).thenReturn(0L); // Not relevant
-        when(mockOutput.getLong(3)).thenReturn(1L); // Relevant
-        when(mockOutput.getLong(4)).thenReturn(1L); // Relevant
+        when(mockOutput.getShape()).thenReturn(new Shape(2));
+        when(mockOutput.toLongArray()).thenReturn(new long[]{0, 3}); // Indices of relevant sentences
         
         NDList mockList = new NDList(mockOutput);
         
@@ -107,20 +103,28 @@ public class SentenceHighlightingQATranslatorTest {
         Map<String, Object> dataMap = (Map<String, Object>) highlightsTensor.getDataAsMap();
         assertNotNull(dataMap);
         
+        // Should have no error
+        assertNull(dataMap.get(FIELD_ERROR));
+        
+        // Should have highlights
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> highlights = (List<Map<String, Object>>) dataMap.get(FIELD_HIGHLIGHTS);
         assertNotNull(highlights);
+        assertEquals(2, highlights.size());
         
-        // Should have 3 highlighted sentences (0, 3, 4)
-        assertEquals(3, highlights.size());
-        
-        // Verify the first highlighted sentence
-        @SuppressWarnings("unchecked")
-        Map<String, Object> firstHighlight = (Map<String, Object>) highlights.get(0);
-        assertEquals(0, ((Number) firstHighlight.get(FIELD_POSITION)).intValue());
+        // Verify first highlight
+        Map<String, Object> firstHighlight = highlights.get(0);
+        assertEquals(0.0, firstHighlight.get(FIELD_POSITION));
         assertEquals("Many coastal cities face increased flooding during storms.", firstHighlight.get(FIELD_TEXT));
-        assertEquals(0, ((Number) firstHighlight.get(FIELD_START)).intValue());
-        assertEquals(58, ((Number) firstHighlight.get(FIELD_END)).intValue());
+        assertEquals(0.0, firstHighlight.get(FIELD_START));
+        assertEquals(58.0, firstHighlight.get(FIELD_END));
+        
+        // Verify second highlight
+        Map<String, Object> secondHighlight = highlights.get(1);
+        assertEquals(3.0, secondHighlight.get(FIELD_POSITION));
+        assertEquals("Global temperatures have risen significantly over the past century.", secondHighlight.get(FIELD_TEXT));
+        assertEquals(208.0, secondHighlight.get(FIELD_START));
+        assertEquals(275.0, secondHighlight.get(FIELD_END));
     }
 
     @Test
@@ -128,14 +132,10 @@ public class SentenceHighlightingQATranslatorTest {
         // Mock context with sentences
         when(translatorContext.getAttachment(KEY_SENTENCES)).thenReturn(sentences);
         
-        // Mock model output - all sentences are not relevant (value 0)
+        // Mock model output - empty array to indicate no relevant sentences
         NDArray mockOutput = mock(NDArray.class);
-        when(mockOutput.getShape()).thenReturn(new Shape(5));
-        when(mockOutput.getLong(0)).thenReturn(0L); // Not relevant
-        when(mockOutput.getLong(1)).thenReturn(0L); // Not relevant
-        when(mockOutput.getLong(2)).thenReturn(0L); // Not relevant
-        when(mockOutput.getLong(3)).thenReturn(0L); // Not relevant
-        when(mockOutput.getLong(4)).thenReturn(0L); // Not relevant
+        when(mockOutput.getShape()).thenReturn(new Shape(0));
+        when(mockOutput.toLongArray()).thenReturn(new long[]{}); // Empty array = no relevant sentences
         
         NDList mockList = new NDList(mockOutput);
         
@@ -148,21 +148,24 @@ public class SentenceHighlightingQATranslatorTest {
         ModelTensors tensorOutput = ModelTensors.fromBytes(bytes);
         List<ModelTensor> modelTensorsList = tensorOutput.getMlModelTensors();
         
-        // Should have one tensor with the highlights
+        // Should have one tensor with the error
         assertEquals(1, modelTensorsList.size());
-        ModelTensor highlightsTensor = modelTensorsList.get(0);
-        assertEquals(FIELD_HIGHLIGHTS, highlightsTensor.getName());
+        ModelTensor errorTensor = modelTensorsList.get(0);
+        assertEquals(FIELD_ERROR, errorTensor.getName());
         
-        // Get the highlights from the dataAsMap
+        // Get the error from the dataAsMap
         @SuppressWarnings("unchecked")
-        Map<String, Object> dataMap = (Map<String, Object>) highlightsTensor.getDataAsMap();
+        Map<String, Object> dataMap = (Map<String, Object>) errorTensor.getDataAsMap();
         assertNotNull(dataMap);
         
+        // Should have an error message
+        assertNotNull(dataMap.get(FIELD_ERROR));
+        assertEquals("No relevant sentences found", dataMap.get(FIELD_ERROR));
+        
+        // Should have an empty highlights list
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> highlights = (List<Map<String, Object>>) dataMap.get(FIELD_HIGHLIGHTS);
         assertNotNull(highlights);
-        
-        // Should have 0 highlighted sentences
         assertEquals(0, highlights.size());
     }
 
@@ -207,6 +210,7 @@ public class SentenceHighlightingQATranslatorTest {
         // Mock model output
         NDArray mockOutput = mock(NDArray.class);
         when(mockOutput.getShape()).thenReturn(new Shape(0));
+        when(mockOutput.toLongArray()).thenReturn(new long[0]);
         
         NDList mockList = new NDList(mockOutput);
         
@@ -230,6 +234,7 @@ public class SentenceHighlightingQATranslatorTest {
         
         // Should have an error message
         assertNotNull(dataMap.get(FIELD_ERROR));
+        assertEquals("No sentences found in context", dataMap.get(FIELD_ERROR));
         
         // Should have an empty highlights list
         @SuppressWarnings("unchecked")
@@ -239,31 +244,10 @@ public class SentenceHighlightingQATranslatorTest {
     }
 
     @Test
-    public void testIsRelevantPrediction() throws Exception {
-        // Use reflection to access the protected method
-        java.lang.reflect.Method isRelevantPredictionMethod = SentenceHighlightingQATranslator.class
-            .getDeclaredMethod("isRelevantPrediction", long.class);
-        isRelevantPredictionMethod.setAccessible(true);
-
-        // Test with relevant value (1)
-        boolean isRelevant = (boolean) isRelevantPredictionMethod.invoke(translator, 1L);
-        assertTrue("Value 1 should be considered relevant", isRelevant);
-
-        // Test with non-relevant value (0)
-        boolean isNotRelevant = (boolean) isRelevantPredictionMethod.invoke(translator, 0L);
-        assertFalse("Value 0 should not be considered relevant", isNotRelevant);
-
-        // Test with other values
-        boolean isOtherValueRelevant = (boolean) isRelevantPredictionMethod.invoke(translator, 2L);
-        assertFalse("Value 2 should not be considered relevant", isOtherValueRelevant);
-    }
-
-    @Test
     public void testCreateDefault() {
         SentenceHighlightingQATranslator translator = SentenceHighlightingQATranslator.createDefault();
         assertNotNull(translator);
         assertNotNull(translator.getSegmenter());
         assertEquals(DefaultSentenceSegmenter.class, translator.getSegmenter().getClass());
-        // Removed check for gson as we're now using StringUtils.toJson instead of a local Gson instance
     }
 }

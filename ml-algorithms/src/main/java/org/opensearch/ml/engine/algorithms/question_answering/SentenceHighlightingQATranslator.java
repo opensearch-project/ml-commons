@@ -14,15 +14,19 @@ import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants
 import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.FIELD_TEXT;
 import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.INPUT_IDS;
 import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.KEY_SENTENCES;
+import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.SENTENCE_IDS;
 import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.TOKEN_TYPE_IDS;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import org.jetbrains.annotations.NotNull;
 import org.opensearch.ml.common.input.MLInput;
@@ -48,33 +52,15 @@ import lombok.extern.log4j.Log4j2;
 /**
  * Translator for sentence highlighting question answering model.
  *
- * <p>Expected model output format:
- * The model should output binary predictions for each sentence, where:
- * - 1 indicates a relevant sentence (that answers the question)
- * - 0 indicates a non-relevant sentence
- * 
- * This format can be customized by overriding the isRelevantPrediction method.
  */
 @Log4j2
 @Getter
 @Builder
 public class SentenceHighlightingQATranslator implements ServingTranslator {
     /**
-     * Default relevance value that indicates a sentence is relevant.
-     * By default, 1 means relevant and 0 means not relevant.
-     * The method specifically checks for equality with RELEVANT_VALUE (1) to determine relevance.
+     * This translator works with the semantic sentence highlighting model, which returns
+     * sentence indices directly rather than binary relevance scores.
      */
-    private static final long RELEVANT_VALUE = 1L;
-
-    /**
-     * Determines if a prediction value indicates a relevant sentence.
-     * 
-     * @param predictionValue The prediction value from the model
-     * @return true if the prediction indicates a relevant sentence, false otherwise
-     */
-    protected boolean isRelevantPrediction(long predictionValue) {
-        return predictionValue == RELEVANT_VALUE;
-    }
 
     @Builder.Default
     private final SentenceSegmenter segmenter = new DefaultSentenceSegmenter();
@@ -93,7 +79,16 @@ public class SentenceHighlightingQATranslator implements ServingTranslator {
     @Override
     public void prepare(TranslatorContext ctx) throws IOException {
         Path path = ctx.getModel().getModelPath();
-        tokenizer = HuggingFaceTokenizer.builder().optPadding(true).optTokenizerPath(path.resolve("tokenizer.json")).build();
+        tokenizer = HuggingFaceTokenizer
+            .builder()
+            .optTokenizerPath(path.resolve("tokenizer.json"))
+            .optMaxLength(512)
+            .optStride(128)
+            .optWithOverflowingTokens(true)
+            .optTruncateSecondOnly()
+            .optPadding(false)
+            .optAddSpecialTokens(true)
+            .build();
     }
 
     @Override
@@ -107,89 +102,188 @@ public class SentenceHighlightingQATranslator implements ServingTranslator {
             NDManager manager = ctx.getNDManager();
             String question = input.getAsString(0);
             String context = input.getAsString(1);
+            int chunkNumber = Integer.parseInt(input.getAsString(2));
 
+            // Store the full context and question for reference
+            ctx.setAttachment("question", question);
+            ctx.setAttachment(MLInput.CONTEXT_FIELD, context);
+
+            // Step 1: Split context into sentences (using full context)
             List<Sentence> sentences = segmenter.segment(context);
             ctx.setAttachment(KEY_SENTENCES, sentences);
-            ctx.setAttachment(MLInput.QUESTION_FIELD, question);
 
-            Encoding encodings = tokenizer.encode(question, context);
+            // Step 2: Create word-level sentence IDs from full context
+            int[] wordLevelSentenceIds = createWordLevelSentenceIds(sentences, context);
 
-            NDArray indicesArray = manager.create(encodings.getIds());
-            indicesArray.setName(INPUT_IDS);
+            // Step 3: Get the target chunk's encoding
+            Encoding targetEncoding = getChunkEncoding(question, context, chunkNumber);
 
-            NDArray attentionMaskArray = manager.create(encodings.getAttentionMask());
-            if (attentionMaskArray.isEmpty()) {
-                throw new IllegalArgumentException("Attention mask is empty in sentence highlighting QA model input");
-            }
-            attentionMaskArray.setName(ATTENTION_MASK);
+            // Step 4: Create sentence IDs array for this chunk
+            int[] sentenceIdsArray = createSentenceIdsArray(targetEncoding, wordLevelSentenceIds, chunkNumber);
 
-            NDArray tokenTypeIdsArray = manager.create(encodings.getTypeIds());
-            tokenTypeIdsArray.setName(TOKEN_TYPE_IDS);
+            // Step 5: Create NDArrays for model input
+            return createModelInputs(manager, targetEncoding, sentenceIdsArray);
 
-            return new NDList(indicesArray, attentionMaskArray, tokenTypeIdsArray);
         } catch (Exception e) {
+            log.error("Error processing input", e);
             throw new IllegalArgumentException(String.format(Locale.ROOT, "Error processing input: %s", e.getMessage()), e);
         }
+    }
+
+    /**
+     * Get the encoding for a specific chunk
+     */
+    private Encoding getChunkEncoding(String question, String context, int chunkNumber) {
+        Encoding fullEncoding = tokenizer.encode(question, context);
+
+        if (chunkNumber == 0) {
+            return fullEncoding;
+        } else {
+            Encoding[] overflowEncodings = fullEncoding.getOverflowing();
+            if (overflowEncodings != null && chunkNumber <= overflowEncodings.length) {
+                return overflowEncodings[chunkNumber - 1];
+            } else {
+                throw new IllegalArgumentException("Invalid chunk number: " + chunkNumber);
+            }
+        }
+    }
+
+    /**
+     * Create sentence IDs array for the given chunk
+     */
+    private int[] createSentenceIdsArray(Encoding encoding, int[] wordLevelSentenceIds, int chunkNumber) {
+        long[] wordIds = encoding.getWordIds();
+        int[] sentenceIdsArray = new int[wordIds.length];
+        Arrays.fill(sentenceIdsArray, -100); // Initialize with -100 (ignore token)
+
+        // Find where the context starts in this chunk
+        long[] typeIds = encoding.getTypeIds();
+        int contextStartIndex = findContextStartIndex(typeIds);
+
+        // Map word IDs to sentence IDs
+        for (int i = contextStartIndex; i < wordIds.length; i++) {
+            long wordId = wordIds[i];
+            if (wordId != -1 && wordId < wordLevelSentenceIds.length) {
+                sentenceIdsArray[i] = wordLevelSentenceIds[(int) wordId];
+            }
+        }
+
+        return sentenceIdsArray;
+    }
+
+    /**
+     * Find where the context starts in the token sequence
+     */
+    private int findContextStartIndex(long[] typeIds) {
+        for (int i = 0; i < typeIds.length; i++) {
+            if (typeIds[i] == 1) {
+                return i;
+            }
+        }
+        return 0;  // Default to 0 if not found
+    }
+
+    /**
+     * Create model inputs from encodings and sentence IDs
+     */
+    private NDList createModelInputs(NDManager manager, Encoding encoding, int[] sentenceIdsArray) {
+        NDArray sentenceIdsNDArray = manager.create(sentenceIdsArray);
+        NDArray inputIds = manager.create(encoding.getIds());
+        NDArray attentionMask = manager.create(encoding.getAttentionMask());
+        NDArray tokenTypeIds = manager.create(encoding.getTypeIds());
+
+        sentenceIdsNDArray.setName(SENTENCE_IDS);
+        inputIds.setName(INPUT_IDS);
+        attentionMask.setName(ATTENTION_MASK);
+        tokenTypeIds.setName(TOKEN_TYPE_IDS);
+
+        return new NDList(inputIds, attentionMask, tokenTypeIds, sentenceIdsNDArray);
+    }
+
+    /**
+     * Creates an array mapping each word in the context to its sentence ID
+     */
+    private int[] createWordLevelSentenceIds(List<Sentence> sentences, String context) {
+        String[] contextWords = context.split("\\s+");
+        int[] wordSentenceIds = new int[contextWords.length];
+
+        // For each sentence
+        for (int sentIdx = 0; sentIdx < sentences.size(); sentIdx++) {
+            Sentence sentence = sentences.get(sentIdx);
+            int startIndex = sentence.getStartIndex();
+            int endIndex = sentence.getEndIndex();
+
+            // Find all words within the sentence's start and end indices
+            for (int wordIdx = 0; wordIdx < contextWords.length; wordIdx++) {
+                int wordStart = 0;
+                for (int i = 0; i < wordIdx; i++) {
+                    wordStart += contextWords[i].length() + 1; // +1 for space
+                }
+                int wordEnd = wordStart + contextWords[wordIdx].length();
+
+                // If word is within sentence boundaries, assign it this sentence ID
+                if (wordStart >= startIndex && wordEnd <= endIndex) {
+                    wordSentenceIds[wordIdx] = sentIdx;
+                }
+            }
+        }
+
+        return wordSentenceIds;
     }
 
     @Override
     public Output processOutput(TranslatorContext ctx, NDList list) {
         try {
-            Output output = new Output(200, "OK");
-
+            // Get the sentences we stored during input processing
             @SuppressWarnings("unchecked")
             List<Sentence> sentences = (List<Sentence>) ctx.getAttachment(KEY_SENTENCES);
-            boolean[] isRelevant = new boolean[sentences.size()];
-
-            // Check if we have valid output from the model
-            if (list == null || list.isEmpty()) {
-                return createErrorOutput("Model returned empty or null output");
+            if (sentences == null || sentences.isEmpty()) {
+                return createErrorOutput("No sentences found in context");
             }
 
-            // The model returns a tensor where 1 means relevant, 0 means not relevant
-            NDArray binaryPreds = list.getFirst();
-
-            // Validate prediction shape
-            if (binaryPreds.getShape().dimension() == 0 || binaryPreds.getShape().get(0) == 0) {
-                return createErrorOutput(String.format("Invalid prediction shape: %s", binaryPreds.getShape()));
-            }
-
-            // Convert to boolean array
-            for (int i = 0; i < Math.min(sentences.size(), binaryPreds.getShape().get(0)); i++) {
-                try {
-                    long predValue = binaryPreds.getLong(i);
-                    isRelevant[i] = isRelevantPrediction(predValue);
-                } catch (Exception e) {
-                    log.warn(String.format("Error processing prediction for sentence %d: %s", i, e.getMessage()));
-                    isRelevant[i] = false;
+            // Process model output to get highlighted sentence indices
+            Set<Integer> highlightedIndices = new HashSet<>();
+            for (NDArray array : list) {
+                long[] indices = array.toLongArray();
+                for (long idx : indices) {
+                    if (idx >= 0 && idx < sentences.size()) {
+                        highlightedIndices.add((int) idx);
+                    }
                 }
             }
 
-            // Create sentence data objects
+            if (highlightedIndices.isEmpty()) {
+                log.warn("No relevant sentences found in model output");
+                return createErrorOutput("No relevant sentences found");
+            }
+
+            // Convert indices to SentenceData objects
             List<SentenceData> sentenceDataList = new ArrayList<>();
             for (int i = 0; i < sentences.size(); i++) {
                 Sentence sentence = sentences.get(i);
-                boolean relevant = isRelevant[i];
-                sentenceDataList.add(new SentenceData(sentence.getText(), relevant, sentence.getPosition()));
+                boolean isRelevant = highlightedIndices.contains(i);
+                sentenceDataList.add(new SentenceData(sentence.getText(), isRelevant, i));
             }
 
-            // Prepare output list for relevant sentences
-            List<Map<String, Object>> relevantSentenceDetails = getRelevantSentenceDetails(sentenceDataList, sentences);
-            log.info("Relevant sentence details: {}", relevantSentenceDetails);
+            // Get the relevant sentence details
+            List<Map<String, Object>> highlights = getRelevantSentenceDetails(sentenceDataList, sentences);
 
-            // Create a map to hold our data
-            Map<String, Object> dataMap = new HashMap<>();
-            dataMap.put(FIELD_HIGHLIGHTS, relevantSentenceDetails);
+            // Create output map
+            Map<String, Object> outputMap = new HashMap<>();
+            outputMap.put(FIELD_HIGHLIGHTS, highlights);
 
-            // Create the ModelTensor using the builder pattern
-            ModelTensor tensor = ModelTensor.builder().name(FIELD_HIGHLIGHTS).dataAsMap(dataMap).build();
+            // Create output tensor
+            ModelTensor tensor = ModelTensor.builder().name(FIELD_HIGHLIGHTS).dataAsMap(outputMap).build();
 
-            // Wrap in ModelTensors and convert to bytes
-            ModelTensors modelTensorOutput = new ModelTensors(List.of(tensor));
-            output.add(modelTensorOutput.toBytes());
+            // Create final output
+            Output output = new Output();
+            output.add(new ModelTensors(List.of(tensor)).toBytes());
+
             return output;
+
         } catch (Exception e) {
-            return createErrorOutput(String.format("Error processing output: %s", e.getMessage()));
+            log.error("Error processing model output", e);
+            return createErrorOutput("Error processing model output: " + e.getMessage());
         }
     }
 
@@ -199,22 +293,23 @@ public class SentenceHighlightingQATranslator implements ServingTranslator {
     ) {
         List<Map<String, Object>> relevantSentenceDetails = new ArrayList<>();
 
-        for (SentenceData data : sentenceDataList) {
+        // Process each sentence - use array index for position
+        for (int i = 0; i < sentenceDataList.size(); i++) {
+            SentenceData data = sentenceDataList.get(i);
             if (data.isRelevant) {
-                // Find the corresponding sentence to get start and end indices
-                for (Sentence sentence : sentences) {
-                    if (sentence.getPosition() == data.position) {
-                        Map<String, Object> sentenceDetail = new HashMap<>();
-                        sentenceDetail.put(FIELD_TEXT, data.text);
-                        sentenceDetail.put(FIELD_POSITION, data.position);
-                        sentenceDetail.put(FIELD_START, sentence.getStartIndex());
-                        sentenceDetail.put(FIELD_END, sentence.getEndIndex());
-                        relevantSentenceDetails.add(sentenceDetail);
-                        break;
-                    }
-                }
+                // Get the corresponding sentence object
+                Sentence sentence = sentences.get(i);
+
+                // Create details map for this sentence
+                Map<String, Object> sentenceDetail = new HashMap<>();
+                sentenceDetail.put(FIELD_TEXT, data.text);
+                sentenceDetail.put(FIELD_POSITION, i);
+                sentenceDetail.put(FIELD_START, sentence.getStartIndex());
+                sentenceDetail.put(FIELD_END, sentence.getEndIndex());
+                relevantSentenceDetails.add(sentenceDetail);
             }
         }
+
         return relevantSentenceDetails;
     }
 
