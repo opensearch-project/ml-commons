@@ -217,7 +217,7 @@ public class MLDeepResearchAgentRunner implements MLAgentRunner {
         ActionListener<Object> finalListener
     ) {
         // todo: maybe just setting up the tools into the params map is enough cause we dont actually execute the tool
-        List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, allParams);
+        List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, allParams, client);
 
         Map<String, Tool> tools = new HashMap<>();
         Map<String, MLToolSpec> toolSpecMap = new HashMap<>();
