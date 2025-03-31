@@ -270,7 +270,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         tmpParameters.put(PROMPT, newPrompt.get());
 
         List<ModelTensors> traceTensors = createModelTensors(sessionId, parentInteractionId);
-        int maxIterations = Integer.parseInt(tmpParameters.getOrDefault(MAX_ITERATION, "3")) * 2;
+        int maxIterations = Integer.parseInt(tmpParameters.getOrDefault(MAX_ITERATION, "3")) * 5;
         for (int i = 0; i < maxIterations; i++) {
             int finalI = i;
             StepListener<?> nextStepListener = new StepListener<>();
@@ -583,7 +583,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         }
     }
 
-    private static void saveTraceData(
+    public static void saveTraceData(
         ConversationIndexMemory conversationIndexMemory,
         String memory,
         String question,
@@ -659,7 +659,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         }
     }
 
-    private static List<ModelTensors> createModelTensors(String sessionId, String parentInteractionId) {
+    public static List<ModelTensors> createModelTensors(String sessionId, String parentInteractionId) {
         List<ModelTensors> cotModelTensors = new ArrayList<>();
 
         cotModelTensors
