@@ -31,8 +31,6 @@ import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
-import org.opensearch.ml.common.output.MLOutput;
-import org.opensearch.ml.common.output.Output;
 
 @Getter
 @EqualsAndHashCode

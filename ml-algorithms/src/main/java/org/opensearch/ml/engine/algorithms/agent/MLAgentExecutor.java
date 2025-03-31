@@ -23,8 +23,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;
@@ -68,7 +66,6 @@ import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.ml.memory.action.conversation.GetInteractionAction;
 import org.opensearch.ml.memory.action.conversation.GetInteractionRequest;
-//import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.PutDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -77,6 +74,8 @@ import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.gson.Gson;
 
 import lombok.Data;
@@ -95,12 +94,12 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     public static final String REGENERATE_INTERACTION_ID = "regenerate_interaction_id";
     public static final String MESSAGE_HISTORY_LIMIT = "message_history_limit";
     public static final ImmutableSet<MLTaskState> TASK_DONE_STATES = ImmutableSet
-            .of(MLTaskState.COMPLETED, MLTaskState.COMPLETED_WITH_ERROR, MLTaskState.FAILED, MLTaskState.CANCELLED);
+        .of(MLTaskState.COMPLETED, MLTaskState.COMPLETED_WITH_ERROR, MLTaskState.FAILED, MLTaskState.CANCELLED);
 
     private Client client;
     private SdkClient sdkClient;
     private Settings settings;
-//    private MLTaskManager mlTaskManager;
+    // private MLTaskManager mlTaskManager;
     private ClusterService clusterService;
     private NamedXContentRegistry xContentRegistry;
     private Map<String, Tool.Factory> toolFactories;
@@ -213,16 +212,16 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                         String question = inputDataSet.getParameters().get(QUESTION);
 
                                         MLTask mlTask = MLTask
-                                                .builder()
-                                                .taskType(MLTaskType.AGENT_EXECUTION)
-                                                .functionName(FunctionName.AGENT)
-                                                .state(MLTaskState.CREATED)
-                                                .workerNodes(ImmutableList.of(clusterService.localNode().getId()))
-                                                .createTime(Instant.now())
-                                                .lastUpdateTime(Instant.now())
-                                                .async(false)
-                                                .tenantId(tenantId)
-                                                .build();
+                                            .builder()
+                                            .taskType(MLTaskType.AGENT_EXECUTION)
+                                            .functionName(FunctionName.AGENT)
+                                            .state(MLTaskState.CREATED)
+                                            .workerNodes(ImmutableList.of(clusterService.localNode().getId()))
+                                            .createTime(Instant.now())
+                                            .lastUpdateTime(Instant.now())
+                                            .async(false)
+                                            .tenantId(tenantId)
+                                            .build();
 
                                         if (memoryId == null && regenerateInteractionId != null) {
                                             throw new IllegalArgumentException("A memory ID must be provided to regenerate.");
@@ -271,7 +270,15 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                                 })
                                                             );
                                                     } else {
-                                                        saveRootInteractionAndExecute(listener, agentActionListener, memory, inputDataSet, mlAgent, isAsync, mlTask);
+                                                        saveRootInteractionAndExecute(
+                                                            listener,
+                                                            agentActionListener,
+                                                            memory,
+                                                            inputDataSet,
+                                                            mlAgent,
+                                                            isAsync,
+                                                            mlTask
+                                                        );
                                                     }
                                                 }, ex -> {
                                                     log.error("Failed to read conversation memory", ex);
@@ -352,10 +359,11 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     .getMemoryManager()
                     .deleteInteractionAndTrace(
                         regenerateInteractionId,
-                        ActionListener.wrap(deleted -> executeAgent(inputDataSet, mlAgent, isAsync, mlTask, actionListener, listener), e -> {
-                            log.error("Failed to regenerate for interaction {}", regenerateInteractionId, e);
-                            listener.onFailure(e);
-                        })
+                        ActionListener
+                            .wrap(deleted -> executeAgent(inputDataSet, mlAgent, isAsync, mlTask, actionListener, listener), e -> {
+                                log.error("Failed to regenerate for interaction {}", regenerateInteractionId, e);
+                                listener.onFailure(e);
+                            })
                     );
             } else {
                 executeAgent(inputDataSet, mlAgent, isAsync, mlTask, actionListener, listener);
@@ -366,31 +374,39 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         }));
     }
 
-    private void executeAgent(RemoteInferenceInputDataSet inputDataSet, MLAgent mlAgent, boolean isAsync, MLTask mlTask, ActionListener<Output> listener, ActionListener<Object> agentActionListener) {
+    private void executeAgent(
+        RemoteInferenceInputDataSet inputDataSet,
+        MLAgent mlAgent,
+        boolean isAsync,
+        MLTask mlTask,
+        ActionListener<Output> listener,
+        ActionListener<Object> agentActionListener
+    ) {
         MLAgentRunner mlAgentRunner = getAgentRunner(mlAgent);
         if (isAsync) {
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 sdkClient
-                        .putDataObjectAsync(
-                                PutDataObjectRequest.builder().index(ML_TASK_INDEX).tenantId(mlTask.getTenantId()).dataObject(mlTask).build()
-                        )
-                        .whenComplete((r, throwable) -> {
-                            context.restore();
-                            if (throwable != null) {
-                                Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                                log.error("Failed to index ML task", cause);
-                                listener.onFailure(cause);
-                            } else {
-                                try {
-                                    IndexResponse indexResponse = IndexResponse.fromXContent(r.parser());
-                                    String taskId = indexResponse.getId();
-                                    mlTask.setTaskId(taskId);
-                                    listener.onResponse(MLPredictionOutput.builder().taskId(taskId).status(MLTaskState.CREATED.toString()).build());
-                                } catch (Exception e) {
-                                    listener.onFailure(e);
-                                }
+                    .putDataObjectAsync(
+                        PutDataObjectRequest.builder().index(ML_TASK_INDEX).tenantId(mlTask.getTenantId()).dataObject(mlTask).build()
+                    )
+                    .whenComplete((r, throwable) -> {
+                        context.restore();
+                        if (throwable != null) {
+                            Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                            log.error("Failed to index ML task", cause);
+                            listener.onFailure(cause);
+                        } else {
+                            try {
+                                IndexResponse indexResponse = IndexResponse.fromXContent(r.parser());
+                                String taskId = indexResponse.getId();
+                                mlTask.setTaskId(taskId);
+                                listener
+                                    .onResponse(MLPredictionOutput.builder().taskId(taskId).status(MLTaskState.CREATED.toString()).build());
+                            } catch (Exception e) {
+                                listener.onFailure(e);
                             }
-                        });
+                        }
+                    });
             } catch (Exception e) {
                 log.error("Failed to create ML task for {}, {}", mlTask.getFunctionName(), mlTask.getTaskType(), e);
                 listener.onFailure(e);
@@ -445,9 +461,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
 
                     updateMLTaskDirectly(taskId, updatedTask, ActionListener.wrap(response -> {
                         log.info("Updated ML task {} with agent execution results", taskId);
-                    }, e -> {
-                        log.error("Failed to update ML task {} with agent execution results", taskId);
-                    }));
+                    }, e -> { log.error("Failed to update ML task {} with agent execution results", taskId); }));
                     return;
                 }
                 listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(outputs).build());
@@ -467,9 +481,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
 
                 updateMLTaskDirectly(taskId, updatedTask, ActionListener.wrap(response -> {
                     log.info("Updated ML task {} with agent execution failed reason", taskId);
-                }, e -> {
-                    log.error("Failed to update ML task {} with agent execution results", taskId);
-                }));
+                }, e -> { log.error("Failed to update ML task {} with agent execution results", taskId); }));
                 return;
             }
             log.error("Failed to run {} agent", agentType, ex);
