@@ -31,6 +31,8 @@ import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
+import org.opensearch.ml.common.output.MLOutput;
+import org.opensearch.ml.common.output.Output;
 
 @Getter
 @EqualsAndHashCode
@@ -50,7 +52,9 @@ public class MLTask implements ToXContentObject, Writeable {
     public static final String ERROR_FIELD = "error";
     public static final String IS_ASYNC_TASK_FIELD = "is_async";
     public static final String REMOTE_JOB_FIELD = "remote_job";
+    public static final String RESPONSE_FIELD = "response";
     public static final Version MINIMAL_SUPPORTED_VERSION_FOR_BATCH_PREDICTION_JOB = CommonValue.VERSION_2_17_0;
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_AGENT_ASYNC_EXECUTION = CommonValue.VERSION_2_19_0;
 
     @Setter
     private String taskId;
@@ -74,6 +78,8 @@ public class MLTask implements ToXContentObject, Writeable {
     private boolean async;
     @Setter
     private Map<String, Object> remoteJob;
+    @Setter
+    private Map<String, Object> response;
     private String tenantId;
 
     @Builder(toBuilder = true)
@@ -93,6 +99,7 @@ public class MLTask implements ToXContentObject, Writeable {
         User user,
         boolean async,
         Map<String, Object> remoteJob,
+        Map<String, Object> response,
         String tenantId
     ) {
         this.taskId = taskId;
@@ -110,6 +117,7 @@ public class MLTask implements ToXContentObject, Writeable {
         this.user = user;
         this.async = async;
         this.remoteJob = remoteJob;
+        this.response = response;
         this.tenantId = tenantId;
     }
 
@@ -140,6 +148,11 @@ public class MLTask implements ToXContentObject, Writeable {
         if (streamInputVersion.onOrAfter(MLTask.MINIMAL_SUPPORTED_VERSION_FOR_BATCH_PREDICTION_JOB)) {
             if (input.readBoolean()) {
                 this.remoteJob = input.readMap(StreamInput::readString, StreamInput::readGenericValue);
+            }
+        }
+        if (streamInputVersion.onOrAfter(MLTask.MINIMAL_SUPPORTED_VERSION_FOR_AGENT_ASYNC_EXECUTION)) {
+            if (input.readBoolean()) {
+                this.response = input.readMap(StreamInput::readString, StreamInput::readGenericValue);
             }
         }
         tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
@@ -175,6 +188,14 @@ public class MLTask implements ToXContentObject, Writeable {
             if (remoteJob != null) {
                 out.writeBoolean(true);
                 out.writeMap(remoteJob, StreamOutput::writeString, StreamOutput::writeGenericValue);
+            } else {
+                out.writeBoolean(false);
+            }
+        }
+        if (streamOutputVersion.onOrAfter(MLTask.MINIMAL_SUPPORTED_VERSION_FOR_BATCH_PREDICTION_JOB)) {
+            if (response != null) {
+                out.writeBoolean(true);
+                out.writeMap(response, StreamOutput::writeString, StreamOutput::writeGenericValue);
             } else {
                 out.writeBoolean(false);
             }
@@ -230,6 +251,9 @@ public class MLTask implements ToXContentObject, Writeable {
         if (remoteJob != null) {
             builder.field(REMOTE_JOB_FIELD, remoteJob);
         }
+        if (response != null) {
+            builder.field(RESPONSE_FIELD, response);
+        }
         if (tenantId != null) {
             builder.field(TENANT_ID_FIELD, tenantId);
         }
@@ -256,6 +280,7 @@ public class MLTask implements ToXContentObject, Writeable {
         User user = null;
         boolean async = false;
         Map<String, Object> remoteJob = null;
+        Map<String, Object> response = null;
         String tenantId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
@@ -317,6 +342,9 @@ public class MLTask implements ToXContentObject, Writeable {
                 case REMOTE_JOB_FIELD:
                     remoteJob = parser.map();
                     break;
+                case RESPONSE_FIELD:
+                    response = parser.map();
+                    break;
                 case TENANT_ID_FIELD:
                     tenantId = parser.textOrNull();
                     break;
@@ -342,6 +370,7 @@ public class MLTask implements ToXContentObject, Writeable {
             .user(user)
             .async(async)
             .remoteJob(remoteJob)
+            .response(response)
             .tenantId(tenantId)
             .build();
     }

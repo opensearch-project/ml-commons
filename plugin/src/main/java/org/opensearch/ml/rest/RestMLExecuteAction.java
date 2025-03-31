@@ -13,6 +13,7 @@ import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
 import static org.opensearch.ml.utils.RestActionUtils.getAlgorithm;
+import static org.opensearch.ml.utils.RestActionUtils.isAsync;
 import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
 import java.io.IOException;
@@ -106,6 +107,7 @@ public class RestMLExecuteAction extends BaseRestHandler {
     @VisibleForTesting
     MLExecuteTaskRequest getRequest(RestRequest request) throws IOException {
         XContentParser parser = request.contentParser();
+        boolean async = isAsync(request);
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
 
         String uri = request.getHttpRequest().uri();
@@ -121,6 +123,7 @@ public class RestMLExecuteAction extends BaseRestHandler {
             input = MLInput.parse(parser, functionName.name());
             ((AgentMLInput) input).setAgentId(agentId);
             ((AgentMLInput) input).setTenantId(tenantId);
+            ((AgentMLInput) input).setIsAsync(async);
         } else {
             String algorithm = getAlgorithm(request).toUpperCase(Locale.ROOT);
             functionName = FunctionName.from(algorithm);
