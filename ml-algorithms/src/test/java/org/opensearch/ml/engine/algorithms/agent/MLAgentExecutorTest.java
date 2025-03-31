@@ -81,6 +81,8 @@ public class MLAgentExecutorTest {
     private Client client;
     SdkClient sdkClient;
     private Settings settings;
+    // @Mock
+    // private MLTaskManager mlTaskManager;
     @Mock
     private ClusterService clusterService;
     @Mock
@@ -701,7 +703,19 @@ public class MLAgentExecutorTest {
             MLAgentType.CONVERSATIONAL.name(),
             "test",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
-            List.of(new MLToolSpec("memoryType", "test", "test", Collections.emptyMap(), false, Collections.emptyMap(), null)),
+            List
+                .of(
+                    new MLToolSpec(
+                        "memoryType",
+                        "test",
+                        "test",
+                        Collections.emptyMap(),
+                        Collections.emptyMap(),
+                        false,
+                        Collections.emptyMap(),
+                        null
+                    )
+                ),
             Map.of("test", "test"),
             new MLMemorySpec("memoryType", "123", 0),
             Instant.EPOCH,
