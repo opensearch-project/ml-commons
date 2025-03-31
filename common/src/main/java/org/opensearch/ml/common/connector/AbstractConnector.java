@@ -29,22 +29,6 @@ import lombok.Setter;
 
 @Getter
 public abstract class AbstractConnector implements Connector {
-    public static final String ACCESS_KEY_FIELD = "access_key";
-    public static final String SECRET_KEY_FIELD = "secret_key";
-    public static final String SESSION_TOKEN_FIELD = "session_token";
-    public static final String NAME_FIELD = "name";
-    public static final String VERSION_FIELD = "version";
-    public static final String DESCRIPTION_FIELD = "description";
-    public static final String PROTOCOL_FIELD = "protocol";
-    public static final String ACTIONS_FIELD = "actions";
-    public static final String CREDENTIAL_FIELD = "credential";
-    public static final String PARAMETERS_FIELD = "parameters";
-    public static final String CREATED_TIME_FIELD = "created_time";
-    public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
-    public static final String BACKEND_ROLES_FIELD = "backend_roles";
-    public static final String OWNER_FIELD = "owner";
-    public static final String ACCESS_FIELD = "access";
-    public static final String CLIENT_CONFIG_FIELD = "client_config";
 
     protected String name;
     protected String description;

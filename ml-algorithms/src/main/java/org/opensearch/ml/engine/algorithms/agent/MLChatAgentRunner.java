@@ -217,7 +217,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
     }
 
     private void runAgent(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener, Memory memory, String sessionId) {
-        List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, params);
+        List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, params, client);
         Map<String, Tool> tools = new HashMap<>();
         Map<String, MLToolSpec> toolSpecMap = new HashMap<>();
         createTools(toolFactories, params, toolSpecs, tools, toolSpecMap, mlAgent);

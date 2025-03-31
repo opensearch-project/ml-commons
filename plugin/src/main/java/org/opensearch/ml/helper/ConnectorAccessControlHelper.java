@@ -36,7 +36,6 @@ import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.CommonValue;
-import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.MLNodeUtils;
@@ -280,15 +279,15 @@ public class ConnectorAccessControlHelper {
 
     public SearchSourceBuilder addUserBackendRolesFilter(User user, SearchSourceBuilder searchSourceBuilder) {
         BoolQueryBuilder boolQueryBuilder = new BoolQueryBuilder();
-        boolQueryBuilder.should(QueryBuilders.termQuery(AbstractConnector.ACCESS_FIELD, AccessMode.PUBLIC.getValue()));
-        boolQueryBuilder.should(QueryBuilders.termsQuery(AbstractConnector.BACKEND_ROLES_FIELD + ".keyword", user.getBackendRoles()));
+        boolQueryBuilder.should(QueryBuilders.termQuery(CommonValue.ACCESS_FIELD, AccessMode.PUBLIC.getValue()));
+        boolQueryBuilder.should(QueryBuilders.termsQuery(CommonValue.BACKEND_ROLES_FIELD + ".keyword", user.getBackendRoles()));
 
         BoolQueryBuilder privateBoolQuery = new BoolQueryBuilder();
         String ownerName = "owner.name.keyword";
         TermQueryBuilder ownerNameTermQuery = QueryBuilders.termQuery(ownerName, user.getName());
-        NestedQueryBuilder nestedQueryBuilder = new NestedQueryBuilder(AbstractConnector.OWNER_FIELD, ownerNameTermQuery, ScoreMode.None);
+        NestedQueryBuilder nestedQueryBuilder = new NestedQueryBuilder(CommonValue.OWNER_FIELD, ownerNameTermQuery, ScoreMode.None);
         privateBoolQuery.must(nestedQueryBuilder);
-        privateBoolQuery.must(QueryBuilders.termQuery(AbstractConnector.ACCESS_FIELD, AccessMode.PRIVATE.getValue()));
+        privateBoolQuery.must(QueryBuilders.termQuery(CommonValue.ACCESS_FIELD, AccessMode.PRIVATE.getValue()));
         boolQueryBuilder.should(privateBoolQuery);
         QueryBuilder query = searchSourceBuilder.query();
         if (query == null) {

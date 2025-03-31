@@ -69,5 +69,26 @@ public class CommonValue {
     public static final Version VERSION_2_17_0 = Version.fromString("2.17.0");
     public static final Version VERSION_2_18_0 = Version.fromString("2.18.0");
     public static final Version VERSION_2_19_0 = Version.fromString("2.19.0");
+    // TODO: Use 3.0 instead of 2.19.1
     public static final Version VERSION_2_19_1 = Version.fromString("2.19.1");
+
+    // Connector Constants
+    public static final String ACCESS_KEY_FIELD = "access_key";
+    public static final String SECRET_KEY_FIELD = "secret_key";
+    public static final String SESSION_TOKEN_FIELD = "session_token";
+    public static final String NAME_FIELD = "name";
+    public static final String VERSION_FIELD = "version";
+    public static final String DESCRIPTION_FIELD = "description";
+    public static final String PROTOCOL_FIELD = "protocol";
+    public static final String ACTIONS_FIELD = "actions";
+    public static final String CREDENTIAL_FIELD = "credential";
+    public static final String PARAMETERS_FIELD = "parameters";
+    public static final String CREATED_TIME_FIELD = "created_time";
+    public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
+    public static final String BACKEND_ROLES_FIELD = "backend_roles";
+    public static final String OWNER_FIELD = "owner";
+    public static final String ACCESS_FIELD = "access";
+    public static final String CLIENT_CONFIG_FIELD = "client_config";
+    public static final String URL_FIELD = "url";
+    public static final String HEADERS_FIELD = "headers";
 }
