@@ -69,6 +69,7 @@ public class CommonValue {
     public static final Version VERSION_2_17_0 = Version.fromString("2.17.0");
     public static final Version VERSION_2_18_0 = Version.fromString("2.18.0");
     public static final Version VERSION_2_19_0 = Version.fromString("2.19.0");
+    // TODO: Use 3.0 instead of 2.19.1
     public static final Version VERSION_2_19_1 = Version.fromString("2.19.1");
 
     // Connector Constants
