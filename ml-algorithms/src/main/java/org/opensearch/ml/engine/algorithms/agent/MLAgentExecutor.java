@@ -382,6 +382,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 );
             case CONVERSATIONAL:
                 return new MLChatAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryFactoryMap);
+            case DEEP_RESEARCH:
+                return new MLDeepResearchAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryFactoryMap);
             default:
                 throw new IllegalArgumentException("Unsupported agent type: " + mlAgent.getType());
         }
