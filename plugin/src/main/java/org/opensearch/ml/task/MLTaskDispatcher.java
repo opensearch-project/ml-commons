@@ -171,7 +171,7 @@ public class MLTaskDispatcher {
                 "No eligible node found to execute this request. It's best practice to"
                     + " provision ML nodes to serve your models. You can disable this setting to serve the model on your data"
                     + " node for development purposes by disabling the \"plugins.ml_commons.only_run_on_ml_node\" "
-                    + "configuration using the _cluster/setting api"
+                    + "configuration using the _cluster/settings api"
             );
         }
         dispatchTaskWithRoundRobin(eligibleNodes, listener);
