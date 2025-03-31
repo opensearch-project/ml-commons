@@ -624,7 +624,15 @@ public class AgentUtils {
         List<MLToolSpec> mcpToolSpec = new ArrayList<>();
         String tenantId = mlAgent.getTenantId();
 
-        String mcpConnectorConfigJSON = mlAgent.getParameters().get(MCP_CONNECTORS_FIELD);
+        String mcpConnectorConfigJSON = null;
+        if (mlAgent.getParameters() != null) {
+            mcpConnectorConfigJSON = mlAgent.getParameters().get(MCP_CONNECTORS_FIELD);
+        }
+
+        // If mcpConnectorConfigJSON is null, return an empty list
+        if (mcpConnectorConfigJSON == null) {
+            return mcpToolSpec; // No config found, so return an empty list.
+        }
 
         Type listType = new TypeToken<List<Map<String, Object>>>() {
         }.getType();
