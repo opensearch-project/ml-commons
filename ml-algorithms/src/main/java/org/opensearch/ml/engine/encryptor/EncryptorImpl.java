@@ -25,6 +25,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import javax.crypto.spec.SecretKeySpec;
 
+import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.get.GetResponse;
@@ -364,7 +365,7 @@ public class EncryptorImpl implements Encryptor {
     ) {
         Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable, OpenSearchStatusException.class);
         if (cause instanceof VersionConflictEngineException
-            || (cause instanceof OpenSearchStatusException && ((OpenSearchStatusException) cause).status() == RestStatus.CONFLICT)) {
+            || (cause instanceof OpenSearchException && ((OpenSearchException) cause).status() == RestStatus.CONFLICT)) {
             handleVersionConflict(tenantId, masterKeyId, context, exceptionRef, latch);
         } else {
             log.debug("Failed to index ML encryption master key to config index", cause);
