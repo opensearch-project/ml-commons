@@ -576,10 +576,8 @@ public class EncryptorImplTest {
         }).when(mlIndicesHandler).initMLConfigIndex(any());
 
         // Prepare a GetResponse where the _source has ONLY "master_key"
-        Map<String, Object> sourceMap = Map.of(
-                MASTER_KEY, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=",
-                CREATE_TIME_FIELD, Instant.now().toEpochMilli()
-        );
+        Map<String, Object> sourceMap = Map
+            .of(MASTER_KEY, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=", CREATE_TIME_FIELD, Instant.now().toEpochMilli());
 
         XContentBuilder builder = XContentFactory.jsonBuilder();
         builder.startObject();
@@ -608,7 +606,6 @@ public class EncryptorImplTest {
         Assert.assertNotNull(encrypted);
         Assert.assertEquals("test", encryptor.decrypt(encrypted, TENANT_ID));
     }
-
 
     // Helper method to prepare a valid IndexResponse
     private IndexResponse prepareIndexResponse() {
