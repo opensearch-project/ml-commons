@@ -483,7 +483,6 @@ public class EncryptorImplTest {
         Assert.assertNotNull(tenantMasterKey);
 
         // Ensure that the master key for this tenant matches the expected value
-        String expectedMasterKeyId = MASTER_KEY + "_" + hashString(TENANT_ID);
         Assert.assertEquals("m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=", encryptor.getMasterKey(TENANT_ID));
     }
 
@@ -543,7 +542,7 @@ public class EncryptorImplTest {
         // Create the source map with the expected fields
         Map<String, Object> sourceMap = Map
             .of(
-                masterKeyId,
+                MASTER_KEY,
                 "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=", // Valid MASTER_KEY for this tenant
                 CREATE_TIME_FIELD,
                 Instant.now().toEpochMilli()
@@ -564,6 +563,52 @@ public class EncryptorImplTest {
         // Create and return the GetResponse
         return new GetResponse(getResult);
     }
+
+    @Test
+    public void encrypt_MasterKeyFieldMismatch_ShouldThrowNPE() throws IOException {
+        // This test simulates the case where the document ID is `master_key_<hash>`
+        // but the actual `_source` only contains `master_key` (as expected in real DDB).
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> actionListener = (ActionListener) invocation.getArgument(0);
+            actionListener.onResponse(true); // init index success
+            return null;
+        }).when(mlIndicesHandler).initMLConfigIndex(any());
+
+        // Prepare a GetResponse where the _source has ONLY "master_key"
+        Map<String, Object> sourceMap = Map.of(
+                MASTER_KEY, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=",
+                CREATE_TIME_FIELD, Instant.now().toEpochMilli()
+        );
+
+        XContentBuilder builder = XContentFactory.jsonBuilder();
+        builder.startObject();
+        for (Map.Entry<String, Object> entry : sourceMap.entrySet()) {
+            builder.field(entry.getKey(), entry.getValue());
+        }
+        builder.endObject();
+
+        BytesReference sourceBytes = BytesReference.bytes(builder);
+        String masterKeyId = MASTER_KEY + "_" + hashString(TENANT_ID); // Simulate full hashed ID
+        GetResult getResult = new GetResult(ML_CONFIG_INDEX, masterKeyId, 1L, 1L, 1L, true, sourceBytes, null, null);
+        GetResponse getResponse = new GetResponse(getResult);
+
+        // Simulate Get API call returning a GetResponse with only "master_key" field
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
+
+        // Old buggy code would try to access response.source().get(masterKeyId) and get null
+        // This test ensures the new fix works — we access MASTER_KEY properly
+        String encrypted = encryptor.encrypt("test", TENANT_ID);
+        Assert.assertNotNull(encrypted);
+        Assert.assertEquals("test", encryptor.decrypt(encrypted, TENANT_ID));
+    }
+
 
     // Helper method to prepare a valid IndexResponse
     private IndexResponse prepareIndexResponse() {
