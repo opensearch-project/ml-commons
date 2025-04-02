@@ -734,6 +734,44 @@ public class EncryptorImplTest {
         encryptor.encrypt("test", TENANT_ID);
     }
 
+    @Test
+    public void encrypt_GetSourceAsMapIsNull_ShouldThrowResourceNotFound() throws Exception {
+        exceptionRule.expect(ResourceNotFoundException.class);
+        exceptionRule.expectMessage(MASTER_KEY_NOT_READY_ERROR);
+
+        // Simulate ML config index init success
+        doAnswer(invocation -> {
+            ActionListener<Boolean> actionListener = (ActionListener) invocation.getArgument(0);
+            actionListener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConfigIndex(any());
+
+        // Create a GetResult with null sourceBytes
+        String masterKeyId = MASTER_KEY + "_" + hashString(TENANT_ID);
+        GetResult getResult = new GetResult(
+            ML_CONFIG_INDEX,
+            masterKeyId,
+            1L,
+            1L,
+            1L,
+            true,  // exists = true
+            null,  // sourceBytes = null => getSourceAsMap() will return null
+            null,
+            null
+        );
+        GetResponse getResponse = new GetResponse(getResult);
+
+        // Mock the get response
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        // Now run it
+        encryptor.encrypt("test", TENANT_ID);
+    }
+
     // Helper method to prepare a valid IndexResponse
     private IndexResponse prepareIndexResponse() {
         ShardId shardId = new ShardId(ML_CONFIG_INDEX, "index_uuid", 0);
