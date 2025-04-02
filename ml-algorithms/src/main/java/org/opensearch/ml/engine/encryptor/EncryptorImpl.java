@@ -25,6 +25,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import javax.crypto.spec.SecretKeySpec;
 
+import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.get.GetResponse;
@@ -34,6 +35,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.index.engine.VersionConflictEngineException;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
@@ -254,9 +256,20 @@ public class EncryptorImpl implements Encryptor {
         try {
             GetResponse getMasterKeyResponse = response.parser() == null ? null : GetResponse.fromXContent(response.parser());
             if (getMasterKeyResponse != null && getMasterKeyResponse.isExists()) {
-                this.tenantMasterKeys
-                    .put(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID), (String) response.source().get(masterKeyId));
-                log.info("ML encryption master key already initialized, no action needed");
+                Map<String, Object> source = getMasterKeyResponse.getSourceAsMap();
+                if (source != null) {
+                    Object keyValue = source.get(MASTER_KEY);
+                    if (keyValue instanceof String) {
+                        this.tenantMasterKeys.put(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID), (String) keyValue);
+                        log.info("ML encryption master key already initialized, no action needed");
+                    } else {
+                        log.error("Master key not found or not a string for tenantId: {}, masterKeyId: {}", tenantId, masterKeyId);
+                        exceptionRef.set(new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR));
+                    }
+                } else {
+                    log.error("Master key not found or not a string for tenantId: {}, masterKeyId: {}", tenantId, masterKeyId);
+                    exceptionRef.set(new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR));
+                }
                 latch.countDown();
             } else {
                 initializeNewMasterKey(tenantId, masterKeyId, exceptionRef, latch, context);
@@ -351,7 +364,8 @@ public class EncryptorImpl implements Encryptor {
         CountDownLatch latch
     ) {
         Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable, OpenSearchStatusException.class);
-        if (cause instanceof VersionConflictEngineException) {
+        if (cause instanceof VersionConflictEngineException
+            || (cause instanceof OpenSearchException && ((OpenSearchException) cause).status() == RestStatus.CONFLICT)) {
             handleVersionConflict(tenantId, masterKeyId, context, exceptionRef, latch);
         } else {
             log.debug("Failed to index ML encryption master key to config index", cause);
@@ -416,9 +430,20 @@ public class EncryptorImpl implements Encryptor {
         } else {
             GetResponse getMasterKeyResponse = response1.parser() == null ? null : GetResponse.fromXContent(response1.parser());
             if (getMasterKeyResponse != null && getMasterKeyResponse.isExists()) {
-                this.tenantMasterKeys
-                    .put(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID), (String) response1.source().get(masterKeyId));
-                log.info("ML encryption master key already initialized, no action needed");
+                Map<String, Object> source = getMasterKeyResponse.getSourceAsMap();
+                if (source != null) {
+                    Object keyValue = source.get(MASTER_KEY);
+                    if (keyValue instanceof String) {
+                        this.tenantMasterKeys.put(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID), (String) keyValue);
+                        log.info("ML encryption master key already initialized, no action needed");
+                    } else {
+                        log.error("Master key not found or not a string for tenantId: {}, masterKeyId: {}", tenantId, masterKeyId);
+                        exceptionRef.set(new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR));
+                    }
+                } else {
+                    log.error("Master key not found or not a string for tenantId: {}, masterKeyId: {}", tenantId, masterKeyId);
+                    exceptionRef.set(new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR));
+                }
                 latch.countDown();
             } else {
                 exceptionRef.set(new ResourceNotFoundException(MASTER_KEY_NOT_READY_ERROR));
