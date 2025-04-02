@@ -76,6 +76,7 @@ public class EncryptorImplTest {
     ThreadContext threadContext;
     final String USER_STRING = "myuser|role1,role2|myTenant";
     final String TENANT_ID = "myTenant";
+    final String GENERATED_MASTER_KEY = "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=";
 
     Encryptor encryptor;
 
@@ -83,7 +84,7 @@ public class EncryptorImplTest {
     public void setUp() {
         MockitoAnnotations.openMocks(this);
         masterKey = new ConcurrentHashMap<>();
-        masterKey.put(DEFAULT_TENANT_ID, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
+        masterKey.put(DEFAULT_TENANT_ID, GENERATED_MASTER_KEY);
         sdkClient = SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap());
 
         doAnswer(invocation -> {
@@ -483,7 +484,7 @@ public class EncryptorImplTest {
         Assert.assertNotNull(tenantMasterKey);
 
         // Ensure that the master key for this tenant matches the expected value
-        Assert.assertEquals("m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=", encryptor.getMasterKey(TENANT_ID));
+        Assert.assertEquals(GENERATED_MASTER_KEY, encryptor.getMasterKey(TENANT_ID));
     }
 
     @Test
@@ -525,7 +526,7 @@ public class EncryptorImplTest {
         Map<String, Object> sourceMap = Map
             .of(
                 MASTER_KEY,
-                "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=", // Valid MASTER_KEY for this tenant
+                GENERATED_MASTER_KEY, // Valid MASTER_KEY for this tenant
                 CREATE_TIME_FIELD,
                 Instant.now().toEpochMilli()
             );
@@ -558,8 +559,7 @@ public class EncryptorImplTest {
         }).when(mlIndicesHandler).initMLConfigIndex(any());
 
         // Prepare a GetResponse where the _source has ONLY "master_key"
-        Map<String, Object> sourceMap = Map
-            .of(MASTER_KEY, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=", CREATE_TIME_FIELD, Instant.now().toEpochMilli());
+        Map<String, Object> sourceMap = Map.of(MASTER_KEY, GENERATED_MASTER_KEY, CREATE_TIME_FIELD, Instant.now().toEpochMilli());
 
         XContentBuilder builder = XContentFactory.jsonBuilder();
         builder.startObject();
