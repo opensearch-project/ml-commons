@@ -14,7 +14,6 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.opensearch.ExceptionsHelper;
-import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.ShardSearchFailure;
@@ -25,7 +24,6 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.core.rest.RestStatus;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.connector.HttpConnector;
@@ -120,23 +118,9 @@ public class SearchConnectorTransportAction extends HandledTransportAction<MLSea
                 .searchSourceBuilder(request.source())
                 .tenantId(tenantId)
                 .build();
-            sdkClient.searchDataObjectAsync(searchDataObjectRequest).whenComplete((r, throwable) -> {
-                if (throwable != null) {
-                    Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                    log.error("Failed to search connector", cause);
-                    doubleWrappedListener.onFailure(cause);
-                } else {
-                    try {
-                        SearchResponse searchResponse = SearchResponse.fromXContent(r.parser());
-                        log.info("Connector search complete: {}", searchResponse.getHits().getTotalHits());
-                        doubleWrappedListener.onResponse(searchResponse);
-                    } catch (Exception e) {
-                        log.error("Failed to parse search response", e);
-                        doubleWrappedListener
-                            .onFailure(new OpenSearchStatusException("Failed to parse search response", RestStatus.INTERNAL_SERVER_ERROR));
-                    }
-                }
-            });
+            sdkClient
+                .searchDataObjectAsync(searchDataObjectRequest)
+                .whenComplete(SdkClientUtils.wrapSearchCompletion(doubleWrappedListener));
         } catch (Exception e) {
             log.error(e.getMessage(), e);
             actionListener.onFailure(e);
