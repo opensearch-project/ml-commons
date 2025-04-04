@@ -76,6 +76,7 @@ public class SentenceHighlightingQAModelTest {
             .builder()
             .modelType(SENTENCE_HIGHLIGHTING_TYPE)
             .frameworkType(QuestionAnsweringModelConfig.FrameworkType.HUGGINGFACE_TRANSFORMERS)
+            .allConfig("{\"token_max_length\":64,\"token_overlap_stride\":16,\"with_overflowing_tokens\":true,\"padding\":false}")
             .build();
 
         // Create model with config
@@ -101,10 +102,15 @@ public class SentenceHighlightingQAModelTest {
         // Create test input data
         String question = "What are the impacts of climate change?";
         String context = "Many coastal cities face increased flooding during storms. "
+            + "Rising sea levels threaten coastal infrastructure and communities. "
             + "Farmers are experiencing unpredictable growing seasons and crop failures. "
+            + "Droughts are becoming more frequent and severe in many regions. "
             + "Scientists predict these environmental shifts will continue to accelerate. "
             + "Global temperatures have risen significantly over the past century. "
-            + "Polar ice caps are melting at an alarming rate.";
+            + "Polar ice caps are melting at an alarming rate. "
+            + "Extreme weather events are becoming more frequent and intense. "
+            + "Biodiversity is declining as ecosystems struggle to adapt. "
+            + "Mountain glaciers are retreating worldwide at unprecedented rates. ";
 
         inputDataSet = QuestionAnsweringInputDataSet.builder().question(question).context(context).build();
 
@@ -204,7 +210,8 @@ public class SentenceHighlightingQAModelTest {
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> highlights = (List<Map<String, Object>>) dataMap.get(FIELD_HIGHLIGHTS);
         assertNotNull("Highlights should not be null", highlights);
-        assertEquals("Should have two highlights", 2, highlights.size());
+        // expect 4 highlights since chunk
+        assertEquals("Should have four highlights", 4, highlights.size());
 
         // Verify first highlight
         Map<String, Object> firstHighlight = highlights.get(0);
@@ -247,9 +254,6 @@ public class SentenceHighlightingQAModelTest {
 
         // Initialize the model
         questionAnsweringModel.initModel(model, params, encryptor);
-
-        // Create MLInput for prediction
-        MLInput mlInput = MLInput.builder().algorithm(FunctionName.QUESTION_ANSWERING).inputDataset(inputDataSet).build();
 
         // Verify that the model is set up for sentence highlighting
         assertEquals(SENTENCE_HIGHLIGHTING_TYPE, modelConfig.getModelType());

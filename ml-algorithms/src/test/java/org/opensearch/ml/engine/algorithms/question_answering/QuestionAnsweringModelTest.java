@@ -34,6 +34,7 @@ import org.json.JSONObject;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.Mockito;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataset.MLInputDataType;
@@ -296,8 +297,6 @@ public class QuestionAnsweringModelTest {
         assert (e.getMessage().startsWith("Failed to inference QUESTION_ANSWERING"));
     }
 
-    // New tests for sentence highlighting functionality
-
     @Test
     public void testCheckHighlightingType_WithSentenceHighlighting() {
         // Create model config with sentence highlighting
@@ -356,7 +355,7 @@ public class QuestionAnsweringModelTest {
     }
 
     @Test
-    public void testPredictWithSentenceHighlighting() throws Exception {
+    public void testPredictWithSentenceHighlighting() {
         // Create model config with sentence highlighting
         MLModelConfig modelConfig = QuestionAnsweringModelConfig
             .builder()
@@ -377,12 +376,6 @@ public class QuestionAnsweringModelTest {
         // Get the translator and verify it's the correct type
         Translator<Input, Output> translator = questionAnsweringModel.getTranslator("pytorch", modelConfig);
         assertEquals(SentenceHighlightingQATranslator.class, translator.getClass());
-
-        // Test the translator's behavior with mocked components
-        SentenceHighlightingQATranslator sentenceTranslator = (SentenceHighlightingQATranslator) translator;
-
-        // Create a mock TranslatorContext
-        TranslatorContext translatorContext = mock(TranslatorContext.class);
 
         // Create a mock Input
         Input input = new Input();
@@ -736,10 +729,11 @@ public class QuestionAnsweringModelTest {
             assertEquals(SentenceHighlightingQATranslator.class, translator.getClass());
 
             // Check isStandardQAModel returns false for sentence highlighting
-            java.lang.reflect.Method isStandardMethod = QuestionAnsweringModel.class.getDeclaredMethod("isStandardQAModel");
-            isStandardMethod.setAccessible(true);
-            boolean isStandard = (Boolean) isStandardMethod.invoke(model);
-            assertFalse("Model should not be identified as standard QA model", isStandard);
+            java.lang.reflect.Method isSentenceHighlightingModel = QuestionAnsweringModel.class
+                .getDeclaredMethod("isSentenceHighlightingModel");
+            isSentenceHighlightingModel.setAccessible(true);
+            boolean isHighlight = (Boolean) isSentenceHighlightingModel.invoke(model);
+            assertTrue("Model should be identified as sentence highlight QA model", isHighlight);
         } catch (Exception e) {
             fail("Exception thrown: " + e.getMessage());
         }
@@ -777,22 +771,21 @@ public class QuestionAnsweringModelTest {
         ModelTensors tensors = new ModelTensors(List.of(tensor));
         ModelTensorOutput expectedOutput = new ModelTensorOutput(List.of(tensors));
 
-        // Create a new implementation that returns the expected output
-        QuestionAnsweringModel testModel = new QuestionAnsweringModel() {
-            @Override
-            public ModelTensorOutput predict(MLInput mlInput) {
-                QuestionAnsweringInputDataSet qaInputDataSet = (QuestionAnsweringInputDataSet) mlInput.getInputDataset();
-                String q = qaInputDataSet.getQuestion();
-                String c = qaInputDataSet.getContext();
+        QuestionAnsweringModel testModel = Mockito.spy(new QuestionAnsweringModel());
 
-                // Assert input values are correct
-                assertEquals(question, q);
-                assertEquals(context, c);
+        // Set up the spy to return the expected output and verify input
+        Mockito.doAnswer(invocation -> {
+            MLInput mlInput = invocation.getArgument(0);
+            QuestionAnsweringInputDataSet qaInputDataSet = (QuestionAnsweringInputDataSet) mlInput.getInputDataset();
+            String q = qaInputDataSet.getQuestion();
+            String c = qaInputDataSet.getContext();
 
-                // Return expected output
-                return expectedOutput;
-            }
-        };
+            // Assert input values are correct
+            assertEquals(question, q);
+            assertEquals(context, c);
+
+            return expectedOutput;
+        }).when(testModel).predict(any(MLInput.class));
 
         // Set model config using reflection
         java.lang.reflect.Field modelConfigField = QuestionAnsweringModel.class.getDeclaredField("modelConfig");
@@ -805,6 +798,9 @@ public class QuestionAnsweringModelTest {
 
         // Call predict
         ModelTensorOutput output = (ModelTensorOutput) testModel.predict(mlInput);
+
+        // Verify the spy was called with the right input
+        verify(testModel).predict(any(MLInput.class));
 
         // Verify the output
         assertNotNull(output);

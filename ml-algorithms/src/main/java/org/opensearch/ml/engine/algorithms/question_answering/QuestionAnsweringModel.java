@@ -9,6 +9,8 @@ import static org.opensearch.ml.engine.ModelHelper.PYTORCH_ENGINE;
 import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.DEFAULT_WARMUP_CONTEXT;
 import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.DEFAULT_WARMUP_QUESTION;
 import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.FIELD_HIGHLIGHTS;
+import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.HIGHLIGHTING_MODEL_CHUNK_NUMBER_KEY;
+import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.HIGHLIGHTING_MODEL_INITIAL_CHUNK_NUMBER_STRING;
 import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.SENTENCE_HIGHLIGHTING_TYPE;
 
 import java.util.ArrayList;
@@ -68,9 +70,16 @@ public class QuestionAnsweringModel extends DLModel {
 
         // Create input for the predictor
         Input input = new Input();
-        input.add(DEFAULT_WARMUP_QUESTION);
-        input.add(DEFAULT_WARMUP_CONTEXT);
-        input.add("0");
+
+        if (isSentenceHighlightingModel()) {
+            input.add(MLInput.QUESTION_FIELD, DEFAULT_WARMUP_QUESTION);
+            input.add(MLInput.CONTEXT_FIELD, DEFAULT_WARMUP_CONTEXT);
+            // Add initial chunk number key value pair which is needed for sentence highlighting model
+            input.add(HIGHLIGHTING_MODEL_CHUNK_NUMBER_KEY, HIGHLIGHTING_MODEL_INITIAL_CHUNK_NUMBER_STRING);
+        } else {
+            input.add(DEFAULT_WARMUP_QUESTION);
+            input.add(DEFAULT_WARMUP_CONTEXT);
+        }
 
         // Run prediction to warm up the model
         predictor.predict(input);
@@ -83,17 +92,15 @@ public class QuestionAnsweringModel extends DLModel {
         String question = qaInputDataSet.getQuestion();
         String context = qaInputDataSet.getContext();
 
-        if (isStandardQAModel()) {
-            return predictStandardQA(question, context);
+        if (isSentenceHighlightingModel()) {
+            return predictSentenceHighlightingQA(question, context);
         }
 
-        return predictSentenceHighlightingQA(question, context);
+        return predictStandardQA(question, context);
     }
 
-    private boolean isStandardQAModel() {
-        return modelConfig == null
-            || modelConfig.getModelType() == null
-            || !SENTENCE_HIGHLIGHTING_TYPE.equalsIgnoreCase(modelConfig.getModelType());
+    private boolean isSentenceHighlightingModel() {
+        return modelConfig != null && SENTENCE_HIGHLIGHTING_TYPE.equalsIgnoreCase(modelConfig.getModelType());
     }
 
     private ModelTensorOutput predictStandardQA(String question, String context) throws TranslateException {
@@ -132,9 +139,9 @@ public class QuestionAnsweringModel extends DLModel {
 
     private void processInitialChunk(String question, String context, List<Map<String, Object>> allHighlights) throws TranslateException {
         Input initialInput = new Input();
-        initialInput.add(question);
-        initialInput.add(context);
-        initialInput.add("0");
+        initialInput.add(MLInput.QUESTION_FIELD, question);
+        initialInput.add(MLInput.CONTEXT_FIELD, context);
+        initialInput.add(HIGHLIGHTING_MODEL_CHUNK_NUMBER_KEY, HIGHLIGHTING_MODEL_INITIAL_CHUNK_NUMBER_STRING);
 
         List<Output> initialOutputs = getPredictor().batchPredict(List.of(initialInput));
         for (Output output : initialOutputs) {
@@ -164,9 +171,10 @@ public class QuestionAnsweringModel extends DLModel {
         List<Input> overflowInputs = new ArrayList<>();
         for (int i = 0; i < numOverflowChunks; i++) {
             Input chunkInput = new Input();
-            chunkInput.add(question);
-            chunkInput.add(context);
-            chunkInput.add(String.valueOf(i + 1));
+            chunkInput.add(MLInput.QUESTION_FIELD, question);
+            chunkInput.add(MLInput.CONTEXT_FIELD, context);
+            chunkInput.add(HIGHLIGHTING_MODEL_CHUNK_NUMBER_KEY, String.valueOf(i + 1));
+
             overflowInputs.add(chunkInput);
         }
         return overflowInputs;
@@ -193,7 +201,8 @@ public class QuestionAnsweringModel extends DLModel {
         }
     }
 
-    private void processOverflowInputsIndividually(List<Input> overflowInputs, List<Map<String, Object>> allHighlights) {
+    private void processOverflowInputsIndividually(List<Input> overflowInputs, List<Map<String, Object>> allHighlights)
+        throws TranslateException {
         for (int i = 0; i < overflowInputs.size(); i++) {
             processOverflowChunkWithBatch(i + 1, overflowInputs.get(i), allHighlights);
         }
@@ -206,7 +215,8 @@ public class QuestionAnsweringModel extends DLModel {
      * @param chunkInput The prepared input for this chunk
      * @param highlights Collection to add extracted highlights to
      */
-    private void processOverflowChunkWithBatch(int chunkIndex, Input chunkInput, List<Map<String, Object>> highlights) {
+    private void processOverflowChunkWithBatch(int chunkIndex, Input chunkInput, List<Map<String, Object>> highlights)
+        throws TranslateException {
         try {
             // Use batchPredict instead of predict to avoid the bug
             List<Output> outputs = getPredictor().batchPredict(List.of(chunkInput));
@@ -222,8 +232,8 @@ public class QuestionAnsweringModel extends DLModel {
                 highlights.addAll(chunkHighlights);
             }
         } catch (Exception e) {
-            log.warn("Error processing overflow chunk {}", chunkIndex, e);
-            // Continue with next chunk even if one fails
+            log.error("Error processing overflow chunk {}", chunkIndex, e);
+            throw new TranslateException("Failed to process overflow chunk " + chunkIndex, e);
         }
     }
 
@@ -233,15 +243,19 @@ public class QuestionAnsweringModel extends DLModel {
      * @param tensors The model tensors to extract highlights from
      * @return List of highlight data maps
      */
-    private List<Map<String, Object>> extractHighlights(ModelTensors tensors) {
+    private List<Map<String, Object>> extractHighlights(ModelTensors tensors) throws TranslateException {
         List<Map<String, Object>> highlights = new ArrayList<>();
 
         for (ModelTensor tensor : tensors.getMlModelTensors()) {
             Map<String, ?> dataAsMap = tensor.getDataAsMap();
             if (dataAsMap != null && dataAsMap.containsKey(FIELD_HIGHLIGHTS)) {
-                @SuppressWarnings("unchecked")
-                List<Map<String, Object>> tensorHighlights = (List<Map<String, Object>>) dataAsMap.get(FIELD_HIGHLIGHTS);
-                highlights.addAll(tensorHighlights);
+                try {
+                    List<Map<String, Object>> tensorHighlights = (List<Map<String, Object>>) dataAsMap.get(FIELD_HIGHLIGHTS);
+                    highlights.addAll(tensorHighlights);
+                } catch (ClassCastException e) {
+                    log.error("Failed to cast highlights data to expected format", e);
+                    throw new TranslateException("Failed to cast highlights data to expected format", e);
+                }
             }
         }
 
@@ -266,10 +280,8 @@ public class QuestionAnsweringModel extends DLModel {
     @Override
     public Translator<Input, Output> getTranslator(String engine, MLModelConfig modelConfig) throws IllegalArgumentException {
         if (translator == null) {
-            if (modelConfig != null
-                && modelConfig.getModelType() != null
-                && SENTENCE_HIGHLIGHTING_TYPE.equalsIgnoreCase(modelConfig.getModelType())) {
-                translator = SentenceHighlightingQATranslator.createDefault();
+            if (modelConfig != null && SENTENCE_HIGHLIGHTING_TYPE.equalsIgnoreCase(modelConfig.getModelType())) {
+                translator = SentenceHighlightingQATranslator.create(modelConfig);
             } else {
                 translator = new QuestionAnsweringTranslator();
             }

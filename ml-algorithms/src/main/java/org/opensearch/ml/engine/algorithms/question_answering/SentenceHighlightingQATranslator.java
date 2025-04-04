@@ -6,16 +6,27 @@
 package org.opensearch.ml.engine.algorithms.question_answering;
 
 import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.ATTENTION_MASK;
+import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.DEFAULT_PADDING;
+import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.DEFAULT_TOKEN_MAX_LENGTH;
+import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.DEFAULT_TOKEN_OVERLAP_STRIDE_LENGTH;
+import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.DEFAULT_WITH_OVERFLOWING_TOKENS;
 import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.FIELD_END;
 import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.FIELD_ERROR;
 import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.FIELD_HIGHLIGHTS;
 import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.FIELD_POSITION;
 import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.FIELD_START;
 import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.FIELD_TEXT;
+import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.HIGHLIGHTING_MODEL_CHUNK_NUMBER_KEY;
+import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.IGNORE_TOKEN_ID;
 import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.INPUT_IDS;
 import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.KEY_SENTENCES;
+import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.PADDING_KEY;
 import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.SENTENCE_IDS;
+import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.TOKENIZER_FILE_NAME;
+import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.TOKEN_MAX_LENGTH_KEY;
+import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.TOKEN_OVERLAP_STRIDE_LENGTH_KEY;
 import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.TOKEN_TYPE_IDS;
+import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.WITH_OVERFLOWING_TOKENS_KEY;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -29,7 +40,10 @@ import java.util.Map;
 import java.util.Set;
 
 import org.jetbrains.annotations.NotNull;
+import org.opensearch.common.xcontent.json.JsonXContent;
+import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.algorithms.question_answering.sentence.DefaultSentenceSegmenter;
@@ -67,27 +81,83 @@ public class SentenceHighlightingQATranslator implements ServingTranslator {
 
     private HuggingFaceTokenizer tokenizer;
 
+    private final MLModelConfig modelConfig;
+
     /**
-     * Creates a new translator with default settings.
+     * Helper method to read a value from allConfig with a default fallback
+     * @param <T> The type of value to read (String, Integer, Boolean)
+     * @param key The config key to read
+     * @param defaultValue The default value to use if key not found or parsing fails
+     * @param valueType The class of the value type for type safety
+     * @return The value from config or default if not found
+     */
+    private <T> T readFromModelAllConfig(String key, T defaultValue, Class<T> valueType) {
+        if (modelConfig == null || modelConfig.getAllConfig() == null) {
+            return defaultValue;
+        }
+
+        try (XContentParser parser = JsonXContent.jsonXContent.createParser(null, null, modelConfig.getAllConfig())) {
+            Map<String, Object> configMap = parser.map();
+            Object value = configMap.get(key);
+
+            if (value == null) {
+                return defaultValue;
+            }
+
+            // Handle different types
+            if (valueType == String.class) {
+                return valueType.cast(value.toString());
+            } else if (valueType == Integer.class) {
+                return valueType.cast(((Number) value).intValue());
+            } else if (valueType == Boolean.class) {
+                if (value instanceof Boolean) {
+                    return valueType.cast(value);
+                } else {
+                    return valueType.cast(Boolean.valueOf(value.toString()));
+                }
+            }
+
+            // Unsupported type
+            log.warn("Unsupported type {} for config key {}", valueType, key);
+            return defaultValue;
+        } catch (Exception e) {
+            log.warn("Failed to read {} from config, using default value", key, e);
+            return defaultValue;
+        }
+    }
+
+    /**
+     * Creates a new translator with the given model configuration.
      *
+     * @param modelConfig The model configuration
      * @return A new SentenceHighlightingQATranslator instance
      */
-    public static SentenceHighlightingQATranslator createDefault() {
-        return builder().build();
+    public static SentenceHighlightingQATranslator create(MLModelConfig modelConfig) {
+        return builder().modelConfig(modelConfig).build();
     }
 
     @Override
     public void prepare(TranslatorContext ctx) throws IOException {
         Path path = ctx.getModel().getModelPath();
+
+        // read max_seq_len from model config using helper method
+        int tokenMaxLength = readFromModelAllConfig(TOKEN_MAX_LENGTH_KEY, DEFAULT_TOKEN_MAX_LENGTH, Integer.class);
+        int tokenOverlapStride = readFromModelAllConfig(
+            TOKEN_OVERLAP_STRIDE_LENGTH_KEY,
+            DEFAULT_TOKEN_OVERLAP_STRIDE_LENGTH,
+            Integer.class
+        );
+        boolean withOverflowingTokens = readFromModelAllConfig(WITH_OVERFLOWING_TOKENS_KEY, DEFAULT_WITH_OVERFLOWING_TOKENS, Boolean.class);
+        boolean padding = readFromModelAllConfig(PADDING_KEY, DEFAULT_PADDING, Boolean.class);
+
         tokenizer = HuggingFaceTokenizer
             .builder()
-            .optTokenizerPath(path.resolve("tokenizer.json"))
-            .optMaxLength(512)
-            .optStride(128)
-            .optWithOverflowingTokens(true)
+            .optTokenizerPath(path.resolve(TOKENIZER_FILE_NAME))
+            .optMaxLength(tokenMaxLength)
+            .optStride(tokenOverlapStride)
+            .optWithOverflowingTokens(withOverflowingTokens)
             .optTruncateSecondOnly()
-            .optPadding(false)
-            .optAddSpecialTokens(true)
+            .optPadding(padding)
             .build();
     }
 
@@ -100,12 +170,12 @@ public class SentenceHighlightingQATranslator implements ServingTranslator {
     public NDList processInput(TranslatorContext ctx, Input input) {
         try {
             NDManager manager = ctx.getNDManager();
-            String question = input.getAsString(0);
-            String context = input.getAsString(1);
-            int chunkNumber = Integer.parseInt(input.getAsString(2));
+            String question = input.getAsString(MLInput.QUESTION_FIELD);
+            String context = input.getAsString(MLInput.CONTEXT_FIELD);
+            int chunkNumber = Integer.parseInt(input.getAsString(HIGHLIGHTING_MODEL_CHUNK_NUMBER_KEY));
 
             // Store the full context and question for reference
-            ctx.setAttachment("question", question);
+            ctx.setAttachment(MLInput.QUESTION_FIELD, question);
             ctx.setAttachment(MLInput.CONTEXT_FIELD, context);
 
             // Step 1: Split context into sentences (using full context)
@@ -154,7 +224,7 @@ public class SentenceHighlightingQATranslator implements ServingTranslator {
     private int[] createSentenceIdsArray(Encoding encoding, int[] wordLevelSentenceIds, int chunkNumber) {
         long[] wordIds = encoding.getWordIds();
         int[] sentenceIdsArray = new int[wordIds.length];
-        Arrays.fill(sentenceIdsArray, -100); // Initialize with -100 (ignore token)
+        Arrays.fill(sentenceIdsArray, IGNORE_TOKEN_ID); // Initialize with ignore token
 
         // Find where the context starts in this chunk
         long[] typeIds = encoding.getTypeIds();
@@ -235,8 +305,14 @@ public class SentenceHighlightingQATranslator implements ServingTranslator {
     public Output processOutput(TranslatorContext ctx, NDList list) {
         try {
             // Get the sentences we stored during input processing
-            @SuppressWarnings("unchecked")
-            List<Sentence> sentences = (List<Sentence>) ctx.getAttachment(KEY_SENTENCES);
+            List<Sentence> sentences;
+            try {
+                sentences = (List<Sentence>) ctx.getAttachment(KEY_SENTENCES);
+            } catch (ClassCastException e) {
+                log.error("Failed to cast sentences data to expected format", e);
+                return createErrorOutput("Failed to process sentences data");
+            }
+
             if (sentences == null || sentences.isEmpty()) {
                 return createErrorOutput("No sentences found in context");
             }
