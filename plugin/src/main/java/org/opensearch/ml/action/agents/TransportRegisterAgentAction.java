@@ -8,6 +8,8 @@ package org.opensearch.ml.action.agents;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
 
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.opensearch.OpenSearchException;
 import org.opensearch.action.ActionRequest;
@@ -19,10 +21,12 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentAction;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentRequest;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
+import org.opensearch.ml.engine.algorithms.agent.MLDeepResearchAgentRunner;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
@@ -79,13 +83,49 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, listener)) {
             return;
         }
+
+        // If the agent is a deep research agent and does not have a reAct agent id, create a reAct agent
+        if (MLAgentType.from(mlAgent.getType()) == MLAgentType.DEEP_RESEARCH
+            && !mlAgent.getParameters().containsKey(MLDeepResearchAgentRunner.REACT_AGENT_ID_FIELD)) {
+            createConversationAgent(mlAgent, ActionListener.wrap(conversationAgentId -> {
+                Map<String, String> parameters = new HashMap<>(mlAgent.getParameters());
+                parameters.put(MLDeepResearchAgentRunner.REACT_AGENT_ID_FIELD, conversationAgentId);
+                MLAgent updatedAgent = mlAgent.toBuilder().parameters(parameters).build();
+                registerAgentToIndex(updatedAgent, listener);
+            }, listener::onFailure));
+        } else {
+            registerAgentToIndex(mlAgent, listener);
+        }
+    }
+
+    private void createConversationAgent(MLAgent deepResearchAgent, ActionListener<String> listener) {
+        Instant now = Instant.now();
+        boolean isHiddenAgent = RestActionUtils.isSuperAdminUser(clusterService, client);
+
+        // Create CONVERSATION agent with same configuration but different type and name
+        MLAgent conversationAgent = deepResearchAgent
+            .toBuilder()
+            .name(deepResearchAgent.getName() + " (ReAct)")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("Execution Agent for Deep Research Agent - " + deepResearchAgent.getName())
+            .createdTime(now)
+            .lastUpdateTime(now)
+            .isHidden(isHiddenAgent)
+            .build();
+
+        registerAgentToIndex(
+            conversationAgent,
+            ActionListener.wrap(response -> { listener.onResponse(response.getAgentId()); }, listener::onFailure)
+        );
+    }
+
+    private void registerAgentToIndex(MLAgent mlAgent, ActionListener<MLRegisterAgentResponse> listener) {
         mlIndicesHandler.initMLAgentIndex(ActionListener.wrap(result -> {
             if (result) {
                 try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-
                     sdkClient
                         .putDataObjectAsync(
-                            PutDataObjectRequest.builder().index(ML_AGENT_INDEX).tenantId(tenantId).dataObject(mlAgent).build()
+                            PutDataObjectRequest.builder().index(ML_AGENT_INDEX).tenantId(mlAgent.getTenantId()).dataObject(mlAgent).build()
                         )
                         .whenComplete((r, throwable) -> {
                             context.restore();

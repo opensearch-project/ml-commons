@@ -35,6 +35,7 @@ import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
 import org.opensearch.ml.common.input.remote.RemoteInferenceMLInput;
 import org.opensearch.ml.common.output.model.ModelTensor;
@@ -69,7 +70,8 @@ public class MLDeepResearchAgentRunner implements MLAgentRunner {
     private final Map<String, Memory.Factory> memoryFactoryMap;
 
     // defaults
-    private static final String DEFAULT_SYSTEM_PROMPT = "Always respond in JSON format.";
+    private static final String DEFAULT_DEEP_RESEARCH_SYSTEM_PROMPT = "Always respond in JSON format.";
+    private static final String DEFAULT_REACT_SYSTEM_PROMPT = "You are a helpful assistant.";
     private static final String DEFAULT_NO_ESCAPE_PARAMS = "tool_configs,_tools";
 
     // fields
@@ -91,6 +93,7 @@ public class MLDeepResearchAgentRunner implements MLAgentRunner {
     public static final String REACT_AGENT_ID_FIELD = "reAct_agent_id";
     public static final String REACT_AGENT_MEMORY_ID_FIELD = "reAct_agent_memory_id";
     public static final String NO_ESCAPE_PARAMS_FIELD = "no_escape_params";
+    public static final String DEFAULT_PROMPT_TOOLS_FIELD = "tools_prompt";
 
     public MLDeepResearchAgentRunner(
         Client client,
@@ -117,11 +120,14 @@ public class MLDeepResearchAgentRunner implements MLAgentRunner {
         params.put(USER_PROMPT_FIELD, userPrompt);
 
         String userSystemPrompt = params.getOrDefault(SYSTEM_PROMPT_FIELD, "");
-        params.put(SYSTEM_PROMPT_FIELD, userSystemPrompt + DEFAULT_SYSTEM_PROMPT);
+        params.put(SYSTEM_PROMPT_FIELD, userSystemPrompt + DEFAULT_DEEP_RESEARCH_SYSTEM_PROMPT);
 
         params.put(PLANNER_PROMPT_FIELD, DEEP_RESEARCH_PLANNER_PROMPT);
         params.put(REVAL_PROMPT_FIELD, DEEP_RESEARCH_REVALUATION_PROMPT);
         params.put(DEEP_RESEARCH_RESPONSE_FORMAT_FIELD, DEEP_RESEARCH_RESPONSE_FORMAT);
+
+        // empty by default, will be populated if model doesn't support function calling
+        params.put(DEFAULT_PROMPT_TOOLS_FIELD, "");
     }
 
     private void usePlannerPromptTemplate(Map<String, String> params) {
@@ -150,14 +156,20 @@ public class MLDeepResearchAgentRunner implements MLAgentRunner {
     // todo: handle default behavior without function calling
     private void setupToolsInterface(Map<String, String> params) {
         FunctionCallingFactory factory = new FunctionCallingFactory();
-        if (!params.containsKey(LLM_INTERFACE)) {
+        if (!params.containsKey(LLM_INTERFACE) || params.get(LLM_INTERFACE).isEmpty()) {
             // default behavior - add to prompt
             return;
         }
 
-        FunctionCalling functionCalling = factory.create(params.get(LLM_INTERFACE));
-        functionCalling.configure(params);
-        params.put(NO_ESCAPE_PARAMS_FIELD, DEFAULT_NO_ESCAPE_PARAMS);
+        try {
+            FunctionCalling functionCalling = factory.create(params.get(LLM_INTERFACE));
+            functionCalling.configure(params);
+            params.put(NO_ESCAPE_PARAMS_FIELD, DEFAULT_NO_ESCAPE_PARAMS);
+        } catch (MLException e) {
+            // adds tools to prompt if tool interface is invalid
+            log.error("Invalid tool interface: {}", params.get(LLM_INTERFACE));
+            params.remove(LLM_INTERFACE);
+        }
     }
 
     @Override
@@ -216,7 +228,6 @@ public class MLDeepResearchAgentRunner implements MLAgentRunner {
         String conversationId,
         ActionListener<Object> finalListener
     ) {
-        // todo: maybe just setting up the tools into the params map is enough cause we dont actually execute the tool
         List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, allParams, client);
 
         Map<String, Tool> tools = new HashMap<>();
@@ -259,84 +270,84 @@ public class MLDeepResearchAgentRunner implements MLAgentRunner {
             if (parseLLMOutput.get(RESULT_FIELD) != null) {
                 String finalResult = parseLLMOutput.get(RESULT_FIELD);
                 saveAndReturnFinalResult((ConversationIndexMemory) memory, parentInteractionId, finalResult, finalListener);
-            }
+            } else {
+                // todo: optimize double conversion of steps (string to list to string)
+                List<String> steps = Arrays.stream(parseLLMOutput.get(STEPS_FIELD).split(", ")).toList();
+                addSteps(steps, allParams, STEPS_FIELD);
 
-            // todo: optimize double conversion of steps (string to list to string)
-            List<String> steps = Arrays.stream(parseLLMOutput.get(STEPS_FIELD).split(", ")).toList();
-            addSteps(steps, allParams, STEPS_FIELD);
+                String stepToExecute = steps.getFirst();
+                String reActAgentId = allParams.get(REACT_AGENT_ID_FIELD);
+                Map<String, String> reactParams = new HashMap<>();
+                reactParams.put(QUESTION_FIELD, stepToExecute);
+                if (allParams.containsKey(REACT_AGENT_MEMORY_ID_FIELD)) {
+                    reactParams.put(MEMORY_ID_FIELD, allParams.get(REACT_AGENT_MEMORY_ID_FIELD));
+                }
 
-            String stepToExecute = steps.getFirst();
-            String reActAgentId = allParams.get(REACT_AGENT_ID_FIELD);
-            Map<String, String> reactParams = new HashMap<>();
-            // toDo: depends on reAct agent input params, accept from user
-            reactParams.put(QUESTION_FIELD, stepToExecute);
-            if (allParams.containsKey(REACT_AGENT_MEMORY_ID_FIELD)) {
-                reactParams.put(MEMORY_ID_FIELD, allParams.get(REACT_AGENT_MEMORY_ID_FIELD));
-            }
+                reactParams.put(SYSTEM_PROMPT_FIELD, DEFAULT_REACT_SYSTEM_PROMPT);
 
-            AgentMLInput agentInput = AgentMLInput
-                .AgentMLInputBuilder()
-                .agentId(reActAgentId)
-                .functionName(FunctionName.AGENT)
-                .inputDataset(RemoteInferenceInputDataSet.builder().parameters(reactParams).build())
-                .build();
+                AgentMLInput agentInput = AgentMLInput
+                    .AgentMLInputBuilder()
+                    .agentId(reActAgentId)
+                    .functionName(FunctionName.AGENT)
+                    .inputDataset(RemoteInferenceInputDataSet.builder().parameters(reactParams).build())
+                    .build();
 
-            MLExecuteTaskRequest executeRequest = new MLExecuteTaskRequest(FunctionName.AGENT, agentInput);
+                MLExecuteTaskRequest executeRequest = new MLExecuteTaskRequest(FunctionName.AGENT, agentInput);
 
-            client.execute(MLExecuteTaskAction.INSTANCE, executeRequest, ActionListener.wrap(executeResponse -> {
-                ModelTensorOutput reactResult = (ModelTensorOutput) executeResponse.getOutput();
+                client.execute(MLExecuteTaskAction.INSTANCE, executeRequest, ActionListener.wrap(executeResponse -> {
+                    ModelTensorOutput reactResult = (ModelTensorOutput) executeResponse.getOutput();
 
-                // Navigate through the structure to get the response
-                Map<String, String> results = new HashMap<>();
+                    // Navigate through the structure to get the response
+                    Map<String, String> results = new HashMap<>();
 
-                // Process tensors in a single stream
-                reactResult.getMlModelOutputs().stream().flatMap(output -> output.getMlModelTensors().stream()).forEach(tensor -> {
-                    if (MEMORY_ID_FIELD.equals(tensor.getName())) {
-                        results.put(MEMORY_ID_FIELD, tensor.getResult());
-                    } else {
-                        Map<String, ?> dataMap = tensor.getDataAsMap();
-                        if (dataMap != null && dataMap.containsKey(RESPONSE_FIELD)) {
-                            results.put(STEP_RESULT_FIELD, (String) dataMap.get(RESPONSE_FIELD));
+                    // Process tensors in a single stream
+                    reactResult.getMlModelOutputs().stream().flatMap(output -> output.getMlModelTensors().stream()).forEach(tensor -> {
+                        if (MEMORY_ID_FIELD.equals(tensor.getName())) {
+                            results.put(MEMORY_ID_FIELD, tensor.getResult());
+                        } else {
+                            Map<String, ?> dataMap = tensor.getDataAsMap();
+                            if (dataMap != null && dataMap.containsKey(RESPONSE_FIELD)) {
+                                results.put(STEP_RESULT_FIELD, (String) dataMap.get(RESPONSE_FIELD));
+                            }
                         }
+                    });
+
+                    if (!results.containsKey(STEP_RESULT_FIELD)) {
+                        throw new IllegalStateException("No valid response found in ReAct agent output");
                     }
-                });
 
-                if (!results.containsKey(STEP_RESULT_FIELD)) {
-                    throw new IllegalStateException("No valid response found in ReAct agent output");
-                }
+                    // Only add memory_id to params if it exists and is not empty
+                    String reActMemoryId = results.get(MEMORY_ID_FIELD);
+                    if (reActMemoryId != null && !reActMemoryId.isEmpty()) {
+                        allParams.put(REACT_AGENT_MEMORY_ID_FIELD, reActMemoryId);
+                    }
 
-                // Only add memory_id to params if it exists and is not empty
-                String reActMemoryId = results.get(MEMORY_ID_FIELD);
-                if (reActMemoryId != null && !reActMemoryId.isEmpty()) {
-                    allParams.put(REACT_AGENT_MEMORY_ID_FIELD, reActMemoryId);
-                }
+                    completedSteps.add(stepToExecute);
+                    completedSteps.add(results.get(STEP_RESULT_FIELD));
 
-                completedSteps.add(stepToExecute);
-                completedSteps.add(results.get(STEP_RESULT_FIELD));
+                    saveTraceData(
+                        (ConversationIndexMemory) memory,
+                        memory.getType(),
+                        stepToExecute,
+                        results.get(STEP_RESULT_FIELD),
+                        conversationId,
+                        false,
+                        parentInteractionId,
+                        traceNumber,
+                        "DeepResearch LLM"
+                    );
 
-                saveTraceData(
-                    (ConversationIndexMemory) memory,
-                    memory.getType(),
-                    stepToExecute,
-                    results.get(STEP_RESULT_FIELD),
-                    conversationId,
-                    false,
-                    parentInteractionId,
-                    traceNumber,
-                    "DeepResearch LLM"
-                );
+                    // 2. Then add completed steps to params
+                    addSteps(completedSteps, allParams, COMPLETED_STEPS_FIELD);
 
-                // 2. Then add completed steps to params
-                addSteps(completedSteps, allParams, COMPLETED_STEPS_FIELD);
+                    useRevalPromptTemplate(allParams);
 
-                useRevalPromptTemplate(allParams);
-
-                executePlanningLoop(llm, allParams, completedSteps, memory, conversationId, finalListener);
-            }, e -> {
-                log.error("Failed to execute ReAct agent", e);
-                finalListener.onFailure(e);
-            }));
-
+                    executePlanningLoop(llm, allParams, completedSteps, memory, conversationId, finalListener);
+                }, e -> {
+                    log.error("Failed to execute ReAct agent", e);
+                    finalListener.onFailure(e);
+                }));
+            }
         }, e -> {
             log.error("Failed to run deep research agent", e);
             finalListener.onFailure(e);
@@ -407,10 +418,24 @@ public class MLDeepResearchAgentRunner implements MLAgentRunner {
 
     // todo: handle population for default
     private void populateTools(Map<String, Tool> tools, List<String> inputTools, Map<String, String> allParams) {
-        if (allParams.containsKey(LLM_INTERFACE)) {
+        if (allParams.containsKey(LLM_INTERFACE) && !allParams.get(LLM_INTERFACE).isEmpty()) {
             addToolsToFunctionCalling(tools, allParams, inputTools, "");
             return;
         }
+
+        addToolsToPrompt(tools, allParams);
+    }
+
+    private void addToolsToPrompt(Map<String, Tool> tools, Map<String, String> allParams) {
+        StringBuilder toolsPrompt = new StringBuilder("In this environment, you have access to the below tools: \n");
+        for (Map.Entry<String, Tool> entry : tools.entrySet()) {
+            String toolName = entry.getKey();
+            String toolDescription = entry.getValue().getDescription();
+            toolsPrompt.append("- ").append(toolName).append(": ").append(toolDescription).append("\n").append("\n");
+        }
+
+        allParams.put(DEFAULT_PROMPT_TOOLS_FIELD, toolsPrompt.toString());
+        populatePrompt(allParams);
     }
 
     private void addSteps(List<String> steps, Map<String, String> allParams, String field) {
