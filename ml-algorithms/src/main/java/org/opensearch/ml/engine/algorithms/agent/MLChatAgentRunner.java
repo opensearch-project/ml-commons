@@ -137,13 +137,16 @@ public class MLChatAgentRunner implements MLAgentRunner {
     @Override
     public void run(MLAgent mlAgent, Map<String, String> inputParams, ActionListener<Object> listener) {
         Map<String, String> params = new HashMap<>();
-        params.putAll(mlAgent.getParameters());
-        params.putAll(inputParams);
-        for (String key : mlAgent.getParameters().keySet()) {
-            if (key.startsWith("_")) {
-                params.put(key, mlAgent.getParameters().get(key));
+        if (mlAgent.getParameters() != null) {
+            params.putAll(mlAgent.getParameters());
+            for (String key : mlAgent.getParameters().keySet()) {
+                if (key.startsWith("_")) {
+                    params.put(key, mlAgent.getParameters().get(key));
+                }
             }
         }
+
+        params.putAll(inputParams);
 
         String llmInterface = params.get(LLM_INTERFACE);
         constructLLMInterfaceParams(llmInterface, params);

@@ -2,6 +2,7 @@ package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.opensearch.ml.engine.algorithms.agent.MLDeepResearchAgentRunner.COMPLETED_STEPS_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.MLDeepResearchAgentRunner.DEEP_RESEARCH_RESPONSE_FORMAT_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.MLDeepResearchAgentRunner.DEFAULT_PROMPT_TOOLS_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.MLDeepResearchAgentRunner.PLANNER_PROMPT_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.MLDeepResearchAgentRunner.REVAL_PROMPT_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.MLDeepResearchAgentRunner.STEPS_FIELD;
@@ -73,8 +74,8 @@ public class PromptTemplate {
     public static final String DEEP_RESEARCH_REVALUATION_PROMPT =
         "Update your plan accordingly. If no more steps are needed and you can return to the user, then respond with that. Otherwise, fill out the plan. Only add steps to the plan that still NEED to be done. Do not return previously done steps as part of the plan. Please follow the below response format.";
 
-    public static final String DEEP_RESEARCH_RESPONSE_FORMAT =
-        "Always respond with a valid JSON object that strictly follows the below schema:\n"
+    public static final String DEEP_RESEARCH_RESPONSE_FORMAT = "${parameters." + DEFAULT_PROMPT_TOOLS_FIELD + ":-} \n"
+            + "Always respond with a valid JSON object that strictly follows the below schema:\n"
             + "{\n"
             + "\t\"steps\": array[string], \n"
             + "\t\"result\": string \n"
@@ -95,8 +96,8 @@ public class PromptTemplate {
             + "IMPORTANT RULES:\n"
             + "1. DO NOT use commas within individual steps \n"
             + "2. DO NOT add any content before or after the JSON \n"
-            + "3. Respond ONLY with a pure JSON object \n"
-            + "4. I DO NOT WANT TO KNOW WHAT YOU ARE THINKING, JUST RESPOND WITH THE JSON!!! \n"
-            + "5. DO NOT USE ANY TOOLS. TOOLS ARE PROVIDED ONLY FOR YOU TO MAKE A PLAN.";
+            + "3. ONLY respond with a pure JSON object \n"
+            + "4. DO NOT USE ANY TOOLS. TOOLS ARE PROVIDED ONLY FOR YOU TO MAKE A PLAN.";
 
+    public static final String DEFAULT_TOOLS_PLACEHOLDERS_PROMPT = "${parameters.prompt_tools:-}";
 }
