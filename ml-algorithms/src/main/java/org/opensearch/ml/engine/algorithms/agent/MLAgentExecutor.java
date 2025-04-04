@@ -51,7 +51,7 @@ import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
-import org.opensearch.ml.common.output.MLPredictionOutput;
+import org.opensearch.ml.common.output.MLExecutionOutput;
 import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
@@ -240,7 +240,6 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                         outputs,
                                                         modelTensors,
                                                         mlAgent.getType(),
-                                                        memory.getConversationId(),
                                                         isAsync,
                                                         mlTask
                                                     );
@@ -290,11 +289,10 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                 outputs,
                                                 modelTensors,
                                                 mlAgent.getType(),
-                                                memoryId,
                                                 isAsync,
                                                 mlTask
                                             );
-                                            executeAgent(inputDataSet, mlAgent, isAsync, mlTask, listener, agentActionListener);
+                                            executeAgent(inputDataSet, mlAgent, isAsync, mlTask, memoryId, listener, agentActionListener);
                                         }
 
                                     } catch (Exception e) {
@@ -360,13 +358,24 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     .deleteInteractionAndTrace(
                         regenerateInteractionId,
                         ActionListener
-                            .wrap(deleted -> executeAgent(inputDataSet, mlAgent, isAsync, mlTask, actionListener, listener), e -> {
-                                log.error("Failed to regenerate for interaction {}", regenerateInteractionId, e);
-                                listener.onFailure(e);
-                            })
+                            .wrap(
+                                deleted -> executeAgent(
+                                    inputDataSet,
+                                    mlAgent,
+                                    isAsync,
+                                    mlTask,
+                                    memory.getConversationId(),
+                                    actionListener,
+                                    listener
+                                ),
+                                e -> {
+                                    log.error("Failed to regenerate for interaction {}", regenerateInteractionId, e);
+                                    listener.onFailure(e);
+                                }
+                            )
                     );
             } else {
-                executeAgent(inputDataSet, mlAgent, isAsync, mlTask, actionListener, listener);
+                executeAgent(inputDataSet, mlAgent, isAsync, mlTask, memory.getConversationId(), actionListener, listener);
             }
         }, ex -> {
             log.error("Failed to create parent interaction", ex);
@@ -379,6 +388,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         MLAgent mlAgent,
         boolean isAsync,
         MLTask mlTask,
+        String memoryID,
         ActionListener<Output> listener,
         ActionListener<Object> agentActionListener
     ) {
@@ -400,8 +410,20 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                 IndexResponse indexResponse = IndexResponse.fromXContent(r.parser());
                                 String taskId = indexResponse.getId();
                                 mlTask.setTaskId(taskId);
-                                listener
-                                    .onResponse(MLPredictionOutput.builder().taskId(taskId).status(MLTaskState.CREATED.toString()).build());
+
+                                MLExecutionOutput outputbuilder = MLExecutionOutput
+                                    .builder()
+                                    .taskId(taskId)
+                                    .status(MLTaskState.RUNNING.toString())
+                                    .build();
+
+                                if (memoryID != null && !memoryID.isEmpty()) {
+                                    Map<String, Object> agentResponse = new HashMap<>();
+                                    agentResponse.put("memory_id", memoryID);
+                                    mlTask.setResponse(agentResponse);
+                                    outputbuilder.setExecuteResponse(agentResponse);
+                                }
+                                listener.onResponse(outputbuilder);
                             } catch (Exception e) {
                                 listener.onFailure(e);
                             }
@@ -421,7 +443,6 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         List<ModelTensors> outputs,
         List<ModelTensor> modelTensors,
         String agentType,
-        String memoryID,
         boolean isAsync,
         MLTask mlTask
     ) {
@@ -452,8 +473,6 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     String taskId = mlTask.getTaskId();
                     Map<String, Object> agentResponse = new HashMap<>();
                     agentResponse.put("inference_results", outputs);
-                    if (memoryID != null && !memoryID.isEmpty())
-                        agentResponse.put("memory_id", memoryID);
                     Map<String, Object> updatedTask = new HashMap<>();
                     updatedTask.put(RESPONSE_FIELD, agentResponse);
                     updatedTask.put(STATE_FIELD, MLTaskState.COMPLETED);
