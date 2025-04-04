@@ -17,6 +17,7 @@ import java.util.Map;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.algorithms.question_answering.sentence.DefaultSentenceSegmenter;
@@ -245,7 +246,8 @@ public class SentenceHighlightingQATranslatorTest {
 
     @Test
     public void testCreateDefault() {
-        SentenceHighlightingQATranslator translator = SentenceHighlightingQATranslator.createDefault();
+        MLModelConfig modelConfig = mock(MLModelConfig.class);
+        SentenceHighlightingQATranslator translator = SentenceHighlightingQATranslator.create(modelConfig);
         assertNotNull(translator);
         assertNotNull(translator.getSegmenter());
         assertEquals(DefaultSentenceSegmenter.class, translator.getSegmenter().getClass());
