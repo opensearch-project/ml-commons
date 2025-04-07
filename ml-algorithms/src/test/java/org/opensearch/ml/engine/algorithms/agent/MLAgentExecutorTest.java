@@ -5,13 +5,16 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
+import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.MEMORY_ID;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.QUESTION;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.REGENERATE_INTERACTION_ID;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
@@ -23,6 +26,7 @@ import javax.naming.Context;
 
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
@@ -30,10 +34,13 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.ResourceNotFoundException;
+import org.opensearch.Version;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.index.IndexResponse;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.metadata.Metadata;
+import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -41,6 +48,7 @@ import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -55,6 +63,7 @@ import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
+import org.opensearch.ml.common.output.MLExecutionOutput;
 import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
@@ -117,6 +126,15 @@ public class MLAgentExecutorTest {
     @Captor
     private ArgumentCaptor<Exception> exceptionCaptor;
 
+    private DiscoveryNode localNode = new DiscoveryNode(
+        "mockClusterManagerNodeId",
+        "mockClusterManagerNodeId",
+        new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
+        Collections.emptyMap(),
+        Collections.singleton(CLUSTER_MANAGER_ROLE),
+        Version.CURRENT
+    );
+
     MLAgent mlAgent;
 
     @Before
@@ -140,6 +158,7 @@ public class MLAgentExecutorTest {
         }).when(client).get(Mockito.any(), Mockito.any());
         Mockito.when(clusterService.state()).thenReturn(clusterState);
         Mockito.when(clusterState.metadata()).thenReturn(metadata);
+        when(clusterService.localNode()).thenReturn(localNode);
         Mockito.when(metadata.hasIndex(Mockito.anyString())).thenReturn(true);
         Mockito.when(memory.getMemoryManager()).thenReturn(memoryManager);
         when(client.threadPool()).thenReturn(threadPool);
@@ -684,6 +703,40 @@ public class MLAgentExecutorTest {
 
         Mockito.verify(agentActionListener).onFailure(exceptionCaptor.capture());
         Assert.assertNotNull(exceptionCaptor.getValue());
+    }
+
+    @Ignore
+    @Test
+    public void test_AsyncMode_ReturnsTaskId() throws IOException {
+        ModelTensor modelTensor = ModelTensor.builder().name("response").result("test").build();
+        GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
+        sdkClient = SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap());
+
+        Mockito.doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(agentGetResponse);
+            return null;
+        }).when(client).get(Mockito.any(), Mockito.any());
+
+        Mockito.doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            IndexResponse mockResponse = Mockito.mock(IndexResponse.class);
+            listener.onResponse(mockResponse);
+            return null;
+        }).when(client).index(any(), any());
+
+        ArgumentCaptor<Output> asyncResponseCaptor = ArgumentCaptor.forClass(Output.class);
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        AgentMLInput input = getAgentMLInput();
+        input.setIsAsync(true);
+
+        mlAgentExecutor.execute(input, agentActionListener);
+
+        Mockito.verify(agentActionListener).onResponse(asyncResponseCaptor.capture());
+        MLExecutionOutput result = (MLExecutionOutput) asyncResponseCaptor.getValue();
+
+        Assert.assertEquals("task_id", result.getTaskId());
+        Assert.assertEquals("RUNNING", result.getStatus());
     }
 
     private AgentMLInput getAgentMLInput() {
