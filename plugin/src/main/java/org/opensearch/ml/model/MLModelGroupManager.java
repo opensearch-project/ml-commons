@@ -11,6 +11,9 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
@@ -35,6 +38,7 @@ import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLModelGroup;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
@@ -49,6 +53,9 @@ import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
+import org.opensearch.security.spi.resources.sharing.Recipient;
+import org.opensearch.security.spi.resources.sharing.SharedWithActionGroup;
 import org.opensearch.transport.client.Client;
 
 import lombok.extern.log4j.Log4j2;
@@ -84,6 +91,9 @@ public class MLModelGroupManager {
         try {
             String modelName = input.getName();
             User user = RestActionUtils.getUserContext(client);
+            // Create a recipient sharing list
+            AtomicReference<Map<Recipient, Set<String>>> recipientMap = new AtomicReference<>();
+
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 ActionListener<String> wrappedListener = ActionListener.runBefore(listener, context::restore);
                 validateUniqueModelGroupName(input.getName(), input.getTenantId(), ActionListener.wrap(modelGroups -> {
@@ -102,11 +112,17 @@ public class MLModelGroupManager {
                     } else {
                         MLModelGroup.MLModelGroupBuilder builder = MLModelGroup.builder();
                         MLModelGroup mlModelGroup;
+
+                        // TODO: Remove security-related entries from MLModelGroup builder
                         if (modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(user)) {
                             validateRequestForAccessControl(input, user);
                             builder = builder.access(input.getModelAccessMode().getValue());
                             if (Boolean.TRUE.equals(input.getIsAddAllBackendRoles())) {
                                 input.setBackendRoles(user.getBackendRoles());
+
+                                // share with current user's backend-roles
+                                // TODO: check if resource should be shared with user's backend roles by default
+                                recipientMap.set(Map.of(Recipient.BACKEND_ROLES, Set.copyOf(user.getBackendRoles())));
                             }
                             mlModelGroup = builder
                                 .name(modelName)
@@ -119,6 +135,14 @@ public class MLModelGroupManager {
                                 .build();
                         } else {
                             validateSecurityDisabledOrModelAccessControlDisabled(input);
+
+                            // TODO: Check if following line is actually required since by default the model will be pass-through when sec
+                            // is disabled
+                            recipientMap
+                                .set(
+                                    Map.of(Recipient.USERS, Set.of("*"), Recipient.ROLES, Set.of("*"), Recipient.BACKEND_ROLES, Set.of("*"))
+                                );
+
                             mlModelGroup = builder
                                 .name(modelName)
                                 .description(input.getDescription())
@@ -147,13 +171,52 @@ public class MLModelGroupManager {
                                     } else {
                                         try {
                                             IndexResponse indexResponse = IndexResponse.fromXContent(r.parser());
-                                            log
-                                                .info(
-                                                    "Model group creation result: {}, model group id: {}",
-                                                    indexResponse.getResult(),
-                                                    indexResponse.getId()
+
+                                            // Create an entry in resource-sharing index
+                                            String modelGroupId = indexResponse.getId();
+                                            String modelGroupIndex = indexResponse.getIndex();
+                                            SharedWithActionGroup.ActionGroupRecipients recipients =
+                                                new SharedWithActionGroup.ActionGroupRecipients(recipientMap.get());
+
+                                            ResourceSharingClient client = ResourceSharingClientAccessor.getResourceSharingClient();
+
+                                            client
+                                                .shareResource(
+                                                    modelGroupId,
+                                                    modelGroupIndex,
+                                                    recipients,
+                                                    ActionListener.wrap(resourceSharing -> {
+                                                        log
+                                                            .debug(
+                                                                "Successfully shared ml-model-group: {} with entities: {}",
+                                                                modelName,
+                                                                recipientMap
+                                                            );
+                                                        log
+                                                            .info(
+                                                                "Model group creation result: {}, model group id: {}",
+                                                                indexResponse.getResult(),
+                                                                indexResponse.getId()
+                                                            );
+                                                        wrappedListener.onResponse(r.id());
+                                                    }, failure -> {
+                                                        if (failure instanceof OpenSearchStatusException
+                                                            && ((OpenSearchStatusException) failure)
+                                                                .status()
+                                                                .equals(RestStatus.NOT_IMPLEMENTED)) {
+                                                            log
+                                                                .info(
+                                                                    "Model group creation result: {}, model group id: {}",
+                                                                    indexResponse.getResult(),
+                                                                    indexResponse.getId()
+                                                                );
+                                                            wrappedListener.onResponse(r.id());
+                                                        } else {
+                                                            listener.onFailure(failure);
+                                                        }
+                                                    })
                                                 );
-                                            wrappedListener.onResponse(r.id());
+
                                         } catch (Exception e) {
                                             wrappedListener.onFailure(e);
                                         }

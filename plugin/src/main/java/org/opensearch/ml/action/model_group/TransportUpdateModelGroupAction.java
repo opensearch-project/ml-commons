@@ -35,6 +35,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLModelGroup;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupAction;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupInput;
@@ -51,6 +52,7 @@ import org.opensearch.remote.metadata.client.UpdateDataObjectRequest;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -146,12 +148,44 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
                                         mlModelGroup.getTenantId(),
                                         wrappedListener
                                     )) {
-                                    if (modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(user)) {
-                                        validateRequestForAccessControl(updateModelGroupInput, user, mlModelGroup);
-                                    } else {
-                                        validateSecurityDisabledOrModelAccessControlDisabled(updateModelGroupInput);
-                                    }
-                                    updateModelGroup(modelGroupId, r.source(), updateModelGroupInput, wrappedListener, user);
+                                    ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor.getResourceSharingClient();
+                                    resourceSharingClient
+                                        .verifyResourceAccess(modelGroupId, ML_MODEL_GROUP_INDEX, ActionListener.wrap(isAuthorized -> {
+                                            if (!isAuthorized) {
+                                                listener
+                                                    .onFailure(
+                                                        new OpenSearchStatusException(
+                                                            "User "
+                                                                + user.getName()
+                                                                + " is not authorized to update ml-model-group: "
+                                                                + mlModelGroup.getName(),
+                                                            RestStatus.FORBIDDEN
+                                                        )
+                                                    );
+                                                return;
+                                            }
+                                            // call new overloaded method that doesn't store user info in model group
+                                            updateModelGroup(modelGroupId, r.source(), updateModelGroupInput, wrappedListener);
+                                        }, failure -> {
+                                            // if resource-sharing feature is not available, proceed with old flow of evaluating by-backend
+                                            // role with in-house authz.
+                                            if (failure instanceof OpenSearchStatusException
+                                                && ((OpenSearchStatusException) failure).status().equals(RestStatus.NOT_IMPLEMENTED)) {
+
+                                                if (modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(user)) {
+                                                    validateRequestForAccessControl(updateModelGroupInput, user, mlModelGroup);
+                                                } else {
+                                                    validateSecurityDisabledOrModelAccessControlDisabled(updateModelGroupInput);
+                                                }
+
+                                                // TODO: At some point, this call must be replaced by the one above, (i.e. no user info to
+                                                // be stored in model-group index)
+                                                updateModelGroup(modelGroupId, r.source(), updateModelGroupInput, wrappedListener, user);
+                                            } else {
+                                                listener.onFailure(failure);
+                                            }
+                                        }));
+
                                 }
                             } catch (Exception e) {
                                 log.error("Failed to parse ml connector {}", r.id(), e);
@@ -174,6 +208,52 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         } catch (Exception e) {
             logException("Failed to Update model group", e, log);
             listener.onFailure(e);
+        }
+    }
+
+    private void updateModelGroup(
+        String modelGroupId,
+        Map<String, Object> source,
+        MLUpdateModelGroupInput updateModelGroupInput,
+        ActionListener<MLUpdateModelGroupResponse> listener
+    ) {
+        source.put(MLModelGroup.LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
+        String modelGroupName = (String) source.get(MLModelGroup.MODEL_GROUP_NAME_FIELD);
+
+        if (StringUtils.isNotBlank(updateModelGroupInput.getDescription())) {
+            source.put(MLModelGroup.DESCRIPTION_FIELD, updateModelGroupInput.getDescription());
+        }
+        if (StringUtils.isNotBlank(updateModelGroupInput.getName()) && !updateModelGroupInput.getName().equals(modelGroupName)) {
+            mlModelGroupManager
+                .validateUniqueModelGroupName(
+                    updateModelGroupInput.getName(),
+                    updateModelGroupInput.getTenantId(),
+                    ActionListener.wrap(modelGroups -> {
+                        if (modelGroups != null
+                            && modelGroups.getHits().getTotalHits() != null
+                            && modelGroups.getHits().getTotalHits().value() != 0) {
+                            for (SearchHit documentFields : modelGroups.getHits()) {
+                                String id = documentFields.getId();
+                                listener
+                                    .onFailure(
+                                        new IllegalArgumentException(
+                                            "The name you provided is already being used by another model with ID: "
+                                                + id
+                                                + ". Please provide a different name"
+                                        )
+                                    );
+                            }
+                        } else {
+                            source.put(MLModelGroup.MODEL_GROUP_NAME_FIELD, updateModelGroupInput.getName());
+                            updateModelGroup(modelGroupId, updateModelGroupInput.getTenantId(), source, listener);
+                        }
+                    }, e -> {
+                        log.error("Failed to search model group index", e);
+                        listener.onFailure(e);
+                    })
+                );
+        } else {
+            updateModelGroup(modelGroupId, updateModelGroupInput.getTenantId(), source, listener);
         }
     }
 

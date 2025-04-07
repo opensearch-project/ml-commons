@@ -27,6 +27,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.MLModelGroup;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetRequest;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetResponse;
@@ -39,6 +40,7 @@ import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -157,7 +159,32 @@ public class GetModelGroupTransportAction extends HandledTransportAction<ActionR
 
                     if (TenantAwareHelper
                         .validateTenantResource(mlFeatureEnabledSetting, tenantId, mlModelGroup.getTenantId(), wrappedListener)) {
-                        validateModelGroupAccess(user, modelGroupId, mlModelGroup, wrappedListener);
+                        ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor.getResourceSharingClient();
+                        resourceSharingClient.verifyResourceAccess(modelGroupId, ML_MODEL_GROUP_INDEX, ActionListener.wrap(isAuthorized -> {
+                            if (!isAuthorized) {
+                                wrappedListener
+                                    .onFailure(
+                                        new OpenSearchStatusException(
+                                            "User " + user.getName() + " is not authorized to get ml-model-group: " + mlModelGroup.getName(),
+                                            RestStatus.FORBIDDEN
+                                        )
+                                    );
+                                return;
+                            }
+                            wrappedListener.onResponse(MLModelGroupGetResponse.builder().mlModelGroup(mlModelGroup).build());
+                        }, failure -> {
+                            // if resource-sharing feature is not available, proceed with old flow of evaluating by-backend role with
+                            // in-house authz.
+                            if (failure instanceof OpenSearchStatusException
+                                && ((OpenSearchStatusException) failure).status().equals(RestStatus.NOT_IMPLEMENTED)) {
+
+                                // TODO: At some point, this call must be removed to return the resource directly
+                                validateModelGroupAccess(user, modelGroupId, mlModelGroup, wrappedListener);
+                            } else {
+                                wrappedListener.onFailure(failure);
+                            }
+                        }));
+
                     }
                 } catch (Exception e) {
                     log.error("Failed to parse ml connector {}", getDataObjectResponse.id(), e);

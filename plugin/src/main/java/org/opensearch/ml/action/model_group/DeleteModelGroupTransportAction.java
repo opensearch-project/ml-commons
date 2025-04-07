@@ -29,6 +29,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteRequest;
@@ -43,6 +44,7 @@ import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
 import org.opensearch.remote.metadata.client.SearchDataObjectResponse;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -95,7 +97,32 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
-            validateAndDeleteModelGroup(modelGroupId, tenantId, wrappedListener);
+            ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor.getResourceSharingClient();
+            User user = RestActionUtils.getUserContext(client);
+            resourceSharingClient.verifyResourceAccess(modelGroupId, ML_MODEL_GROUP_INDEX, ActionListener.wrap(isAuthorized -> {
+                if (!isAuthorized) {
+                    actionListener
+                        .onFailure(
+                            new OpenSearchStatusException(
+                                "User " + user.getName() + " is not authorized to delete ml-model-group id: " + modelGroupId,
+                                RestStatus.FORBIDDEN
+                            )
+                        );
+                    return;
+                }
+
+                handleAccessValidation(true, modelGroupId, tenantId, actionListener);
+            }, failure -> {
+                // if resource-sharing feature is not available, proceed with old flow of evaluating by-backend role with in-house authz.
+                if (failure instanceof OpenSearchStatusException
+                    && ((OpenSearchStatusException) failure).status().equals(RestStatus.NOT_IMPLEMENTED)) {
+
+                    // TODO: At some point, this call must be removed to delete the resource directly
+                    validateAndDeleteModelGroup(modelGroupId, tenantId, wrappedListener);
+                } else {
+                    handleValidationError(failure, modelGroupId, actionListener);
+                }
+            }));
         }
     }
 

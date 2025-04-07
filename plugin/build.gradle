@@ -44,7 +44,7 @@ opensearchplugin {
     name 'opensearch-ml'
     description 'machine learning plugin for opensearch'
     classname 'org.opensearch.ml.plugin.MachineLearningPlugin'
-    extendedPlugins = ['opensearch-job-scheduler']
+    extendedPlugins = ['opensearch-job-scheduler', 'opensearch-security;optional=true']
 }
 
 configurations {
@@ -71,6 +71,8 @@ dependencies {
 
     zipArchive group: 'org.opensearch.plugin', name:'opensearch-job-scheduler', version: "${opensearch_build}"
     compileOnly "org.opensearch:opensearch-job-scheduler-spi:${opensearch_build}"
+    compileOnly "org.opensearch:opensearch-resource-sharing-spi:${opensearch_build}"
+
     implementation group: 'org.opensearch', name: 'opensearch', version: "${opensearch_version}"
     implementation "org.opensearch.client:opensearch-rest-client:${opensearch_version}"
     // Multi-tenant SDK Client

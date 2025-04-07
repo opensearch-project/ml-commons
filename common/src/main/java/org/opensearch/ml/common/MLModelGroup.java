@@ -23,13 +23,14 @@ import org.opensearch.core.common.util.CollectionUtils;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.security.spi.resources.ShareableResource;
 
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
 
 @Getter
-public class MLModelGroup implements ToXContentObject {
+public class MLModelGroup implements ShareableResource, ToXContentObject {
     public static final String MODEL_GROUP_NAME_FIELD = "name"; // name of the model group
     public static final String DESCRIPTION_FIELD = "description"; // description of the model group
     public static final String LATEST_VERSION_FIELD = "latest_version"; // latest model version added to the model group
@@ -234,5 +235,15 @@ public class MLModelGroup implements ToXContentObject {
 
     public static MLModelGroup fromStream(StreamInput in) throws IOException {
         return new MLModelGroup(in);
+    }
+
+    @Override
+    public String getWriteableName() {
+        return "ml_model_group";
+    }
+
+    @Override
+    public boolean isFragment() {
+        return ShareableResource.super.isFragment();
     }
 }
