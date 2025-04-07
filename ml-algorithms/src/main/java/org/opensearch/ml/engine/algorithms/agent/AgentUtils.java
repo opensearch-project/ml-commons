@@ -367,13 +367,13 @@ public class AgentUtils {
         return StringUtils.toJson(llmResponse);
     }
 
-    private static Map<String, ?> removeJsonPath(Map<String, ?> json, String excludePaths, boolean inPlace) {
+    public static Map<String, ?> removeJsonPath(Map<String, ?> json, String excludePaths, boolean inPlace) {
         Type listType = new TypeToken<List<String>>(){}.getType();
         List<String> excludedPath = gson.fromJson(excludePaths, listType);
         return removeJsonPath(json, excludedPath, inPlace);
     }
 
-    private static Map<String, ?> removeJsonPath(Map<String, ?> json, List<String> excludePaths, boolean inPlace) {
+    public static Map<String, ?> removeJsonPath(Map<String, ?> json, List<String> excludePaths, boolean inPlace) {
 
         if (json == null || excludePaths == null || excludePaths.isEmpty()) {
             return json;

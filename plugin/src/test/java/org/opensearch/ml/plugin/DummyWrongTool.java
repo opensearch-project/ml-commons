@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.plugin;
 
+import java.util.Collections;
 import java.util.Map;
 
 import org.opensearch.core.action.ActionListener;
@@ -21,6 +22,8 @@ public class DummyWrongTool implements Tool {
     static String DEFAULT_DESCRIPTION = "This is a dummy wrong tool.";
 
     private String description = DEFAULT_DESCRIPTION;
+
+    private Map<String, Object> attributes;
 
     public DummyWrongTool() {}
 
@@ -63,6 +66,17 @@ public class DummyWrongTool implements Tool {
     public boolean validate(Map<String, String> parameters) {
         return true;
     }
+
+    @Override
+    public void setAttributes(Map<String, Object> attributes) {
+        this.attributes = Collections.emptyMap();
+    }
+
+    @Override
+    public Map<String, Object> getAttributes() {
+        return this.attributes;
+    }
+
 
     public static class Factory implements Tool.Factory<DummyWrongTool> {
 
