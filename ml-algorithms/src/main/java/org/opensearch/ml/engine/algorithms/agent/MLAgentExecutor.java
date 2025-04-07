@@ -53,7 +53,7 @@ import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
-import org.opensearch.ml.common.output.MLExecutionOutput;
+import org.opensearch.ml.common.output.MLTaskOutput;
 import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
@@ -394,7 +394,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 String taskId = indexResponse.getId();
                 mlTask.setTaskId(taskId);
 
-                MLExecutionOutput outputBuilder = MLExecutionOutput.builder().taskId(taskId).status(MLTaskState.RUNNING.toString()).build();
+                MLTaskOutput outputBuilder = MLTaskOutput.builder().taskId(taskId).status(MLTaskState.RUNNING.toString()).build();
 
                 if (memoryId != null && !memoryId.isEmpty()) {
                     outputBuilder.setExecuteResponse(agentResponse);
