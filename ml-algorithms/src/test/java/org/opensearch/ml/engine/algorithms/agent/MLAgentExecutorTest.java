@@ -63,7 +63,7 @@ import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
-import org.opensearch.ml.common.output.MLExecutionOutput;
+import org.opensearch.ml.common.output.MLTaskOutput;
 import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
@@ -733,7 +733,7 @@ public class MLAgentExecutorTest {
         mlAgentExecutor.execute(input, agentActionListener);
 
         Mockito.verify(agentActionListener).onResponse(asyncResponseCaptor.capture());
-        MLExecutionOutput result = (MLExecutionOutput) asyncResponseCaptor.getValue();
+        MLTaskOutput result = (MLTaskOutput) asyncResponseCaptor.getValue();
 
         Assert.assertEquals("task_id", result.getTaskId());
         Assert.assertEquals("RUNNING", result.getStatus());
