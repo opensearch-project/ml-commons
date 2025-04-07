@@ -24,6 +24,7 @@ import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.TOOL_D
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.TOOL_NAMES;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.LAST_N_INTERACTIONS;
 
+import java.lang.reflect.Type;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
@@ -48,6 +49,11 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.utils.StringUtils;
 
+import com.google.gson.reflect.TypeToken;
+import com.jayway.jsonpath.DocumentContext;
+import com.jayway.jsonpath.JsonPath;
+import com.jayway.jsonpath.PathNotFoundException;
+
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
@@ -62,6 +68,13 @@ public class AgentUtils {
     public static final String DISABLE_TRACE = "disable_trace";
     public static final String VERBOSE = "verbose";
     public static final String LLM_GEN_INPUT = "llm_generated_input";
+    public static final String LLM_RESPONSE_EXCLUDE_PATH = "llm_response_exclude_path";
+    public static final String LLM_RESPONSE_FILTER = "llm_response_filter";
+    public static final String TOOL_RESULT = "tool_result";
+    public static final String TOOL_CALL_ID = "tool_call_id";
+    public static final String LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE = "bedrock/converse/claude";
+    public static final String LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS = "openai/v1/chat/completions";
+    public static final String LLM_INTERFACE_BEDROCK_CONVERSE_DEEPSEEK_R1 = "bedrock/converse/deepseek_r1";
 
     public static String addExamplesToPrompt(Map<String, String> parameters, String prompt) {
         Map<String, String> examplesMap = new HashMap<>();
@@ -502,5 +515,41 @@ public class AgentUtils {
             toolParams.put("input", actionInput);
         }
         return toolParams;
+    }
+
+    public static Map<String, ?> removeJsonPath(Map<String, ?> json, String excludePaths, boolean inPlace) {
+        Type listType = new TypeToken<List<String>>() {
+        }.getType();
+        List<String> excludedPath = gson.fromJson(excludePaths, listType);
+        return removeJsonPath(json, excludedPath, inPlace);
+    }
+
+    private static Map<String, ?> removeJsonPath(Map<String, ?> json, List<String> excludePaths, boolean inPlace) {
+
+        if (json == null || excludePaths == null || excludePaths.isEmpty()) {
+            return json;
+        }
+        if (inPlace) {
+            DocumentContext context = JsonPath.parse(json);
+            for (String path : excludePaths) {
+                try {
+                    context.delete(path);
+                } catch (PathNotFoundException e) {
+                    log.warn("can't find path: {}", path);
+                }
+            }
+            return json;
+        } else {
+            Map<String, Object> copy = StringUtils.fromJson(gson.toJson(json), "response");
+            DocumentContext context = JsonPath.parse(copy);
+            for (String path : excludePaths) {
+                try {
+                    context.delete(path);
+                } catch (PathNotFoundException e) {
+                    log.warn("can't find path: {}", path);
+                }
+            }
+            return context.json();
+        }
     }
 }
