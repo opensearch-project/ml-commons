@@ -19,10 +19,10 @@ import lombok.EqualsAndHashCode;
 
 @Data
 @EqualsAndHashCode(callSuper = false)
-@MLAlgoOutput(MLOutputType.EXECUTION)
-public class MLExecutionOutput extends MLOutput {
+@MLAlgoOutput(MLOutputType.ML_TASK_OUTPUT)
+public class MLTaskOutput extends MLOutput {
 
-    private static final MLOutputType OUTPUT_TYPE = MLOutputType.EXECUTION;
+    private static final MLOutputType OUTPUT_TYPE = MLOutputType.ML_TASK_OUTPUT;
     public static final String TASK_ID_FIELD = "task_id";
     public static final String STATUS_FIELD = "status";
 
@@ -34,14 +34,14 @@ public class MLExecutionOutput extends MLOutput {
     Map<String, Object> executeResponse;
 
     @Builder
-    public MLExecutionOutput(String taskId, String status, Map<String, Object> executeResponse) {
+    public MLTaskOutput(String taskId, String status, Map<String, Object> executeResponse) {
         super(OUTPUT_TYPE);
         this.taskId = taskId;
         this.status = status;
         this.executeResponse = executeResponse;
     }
 
-    public MLExecutionOutput(StreamInput in) throws IOException {
+    public MLTaskOutput(StreamInput in) throws IOException {
         super(OUTPUT_TYPE);
         this.taskId = in.readOptionalString();
         this.status = in.readOptionalString();

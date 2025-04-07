@@ -16,6 +16,7 @@ import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
@@ -31,6 +32,8 @@ public class AgentMLInput extends MLInput {
     public static final String AGENT_ID_FIELD = "agent_id";
     public static final String PARAMETERS_FIELD = "parameters";
     public static final String ASYNC_FIELD = "isAsync";
+
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_ASYNC_EXECUTION = CommonValue.VERSION_3_0_0;
 
     @Getter
     @Setter
@@ -66,7 +69,9 @@ public class AgentMLInput extends MLInput {
         if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
             out.writeOptionalString(tenantId);
         }
-        out.writeOptionalBoolean(isAsync);
+        if (streamOutputVersion.onOrAfter(AgentMLInput.MINIMAL_SUPPORTED_VERSION_FOR_ASYNC_EXECUTION)) {
+            out.writeOptionalBoolean(isAsync);
+        }
     }
 
     public AgentMLInput(StreamInput in) throws IOException {
@@ -74,7 +79,9 @@ public class AgentMLInput extends MLInput {
         Version streamInputVersion = in.getVersion();
         this.agentId = in.readString();
         this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? in.readOptionalString() : null;
-        this.isAsync = in.readOptionalBoolean();
+        if (streamInputVersion.onOrAfter(AgentMLInput.MINIMAL_SUPPORTED_VERSION_FOR_ASYNC_EXECUTION)) {
+            this.isAsync = in.readOptionalBoolean();
+        }
     }
 
     public AgentMLInput(XContentParser parser, FunctionName functionName) throws IOException {

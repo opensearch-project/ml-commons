@@ -11,5 +11,5 @@ public enum MLOutputType {
     SAMPLE_ALGO,
     MODEL_TENSOR,
     MCORR_TENSOR,
-    EXECUTION
+    ML_TASK_OUTPUT
 }

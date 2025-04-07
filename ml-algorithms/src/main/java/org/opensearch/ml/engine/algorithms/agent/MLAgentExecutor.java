@@ -102,7 +102,6 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     private Client client;
     private SdkClient sdkClient;
     private Settings settings;
-    // private MLTaskManager mlTaskManager;
     private ClusterService clusterService;
     private NamedXContentRegistry xContentRegistry;
     private Map<String, Tool.Factory> toolFactories;
@@ -283,7 +282,6 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                         } else {
                                             executeAgent(inputDataSet, mlTask, isAsync, memoryId, mlAgent, outputs, modelTensors, listener);
                                         }
-
                                     } catch (Exception e) {
                                         log.error("Failed to parse ml agent {}", agentId, e);
                                         listener.onFailure(e);
@@ -385,25 +383,29 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         ActionListener<Output> listener
     ) {
         MLAgentRunner mlAgentRunner = getAgentRunner(mlAgent);
+        // If async is true, index ML task and return the taskID. Also add memoryID to the task if it exists
         if (isAsync) {
             Map<String, Object> agentResponse = new HashMap<>();
             if (memoryId != null && !memoryId.isEmpty()) {
                 agentResponse.put(MEMORY_ID, memoryId);
                 mlTask.setResponse(agentResponse);
             }
-            returnMLTask(mlTask, memoryId, ActionListener.wrap(indexResponse -> {
+            indexMLTask(mlTask, ActionListener.wrap(indexResponse -> {
                 String taskId = indexResponse.getId();
                 mlTask.setTaskId(taskId);
 
-                MLExecutionOutput outputbuilder = MLExecutionOutput.builder().taskId(taskId).status(MLTaskState.RUNNING.toString()).build();
+                MLExecutionOutput outputBuilder = MLExecutionOutput.builder().taskId(taskId).status(MLTaskState.RUNNING.toString()).build();
 
                 if (memoryId != null && !memoryId.isEmpty()) {
-                    outputbuilder.setExecuteResponse(agentResponse);
+                    outputBuilder.setExecuteResponse(agentResponse);
                 }
-                listener.onResponse(outputbuilder);
+                listener.onResponse(outputBuilder);
                 ActionListener<Object> agentActionListener = createAsyncTaskUpdater(mlTask, outputs, modelTensors);
                 mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener);
-            }, e -> { listener.onFailure(e); }));
+            }, e -> {
+                log.error("Failed to create task for agent async execution", e);
+                listener.onFailure(e);
+            }));
         } else {
             ActionListener<Object> agentActionListener = createAgentActionListener(listener, outputs, modelTensors, mlAgent.getType());
             mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener);
@@ -521,7 +523,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         }
     }
 
-    public void returnMLTask(MLTask mlTask, String memoryID, ActionListener<IndexResponse> listener) {
+    public void indexMLTask(MLTask mlTask, ActionListener<IndexResponse> listener) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             sdkClient
                 .putDataObjectAsync(

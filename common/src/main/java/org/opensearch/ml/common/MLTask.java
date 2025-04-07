@@ -52,7 +52,7 @@ public class MLTask implements ToXContentObject, Writeable {
     public static final String REMOTE_JOB_FIELD = "remote_job";
     public static final String RESPONSE_FIELD = "response";
     public static final Version MINIMAL_SUPPORTED_VERSION_FOR_BATCH_PREDICTION_JOB = CommonValue.VERSION_2_17_0;
-    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_AGENT_ASYNC_EXECUTION = CommonValue.VERSION_2_19_0;
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_RESPONSE_FIELD = CommonValue.VERSION_3_0_0;
 
     @Setter
     private String taskId;
@@ -148,7 +148,7 @@ public class MLTask implements ToXContentObject, Writeable {
                 this.remoteJob = input.readMap(StreamInput::readString, StreamInput::readGenericValue);
             }
         }
-        if (streamInputVersion.onOrAfter(MLTask.MINIMAL_SUPPORTED_VERSION_FOR_AGENT_ASYNC_EXECUTION)) {
+        if (streamInputVersion.onOrAfter(MLTask.MINIMAL_SUPPORTED_VERSION_FOR_RESPONSE_FIELD)) {
             if (input.readBoolean()) {
                 this.response = input.readMap(StreamInput::readString, StreamInput::readGenericValue);
             }
@@ -190,7 +190,7 @@ public class MLTask implements ToXContentObject, Writeable {
                 out.writeBoolean(false);
             }
         }
-        if (streamOutputVersion.onOrAfter(MLTask.MINIMAL_SUPPORTED_VERSION_FOR_BATCH_PREDICTION_JOB)) {
+        if (streamOutputVersion.onOrAfter(MLTask.MINIMAL_SUPPORTED_VERSION_FOR_RESPONSE_FIELD)) {
             if (response != null) {
                 out.writeBoolean(true);
                 out.writeMap(response, StreamOutput::writeString, StreamOutput::writeGenericValue);

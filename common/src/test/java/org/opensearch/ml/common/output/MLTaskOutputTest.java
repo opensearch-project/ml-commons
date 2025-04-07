@@ -29,9 +29,9 @@ import org.opensearch.ml.common.dataframe.DefaultDataFrame;
 import org.opensearch.ml.common.dataframe.IntValue;
 import org.opensearch.ml.common.dataframe.Row;
 
-public class MLExecutionOutputTest {
+public class MLTaskOutputTest {
 
-    MLExecutionOutput output;
+    MLTaskOutput output;
 
     @Before
     public void setUp() {
@@ -42,7 +42,7 @@ public class MLExecutionOutputTest {
         DataFrame dataFrame = new DefaultDataFrame(columnMetas, rows);
         Map<String, Object> executeResponse = new HashMap<>();
         executeResponse.put("memory_id", "test-memory-id");
-        output = MLExecutionOutput.builder().taskId("test_task_id").status("test_status").executeResponse(executeResponse).build();
+        output = MLTaskOutput.builder().taskId("test_task_id").status("test_status").executeResponse(executeResponse).build();
     }
 
     @Test
@@ -65,7 +65,7 @@ public class MLExecutionOutputTest {
 
     @Test
     public void toXContent_EmptyOutput() throws IOException {
-        MLExecutionOutput output = MLExecutionOutput.builder().build();
+        MLTaskOutput output = MLTaskOutput.builder().build();
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         output.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = builder.toString();
@@ -77,14 +77,14 @@ public class MLExecutionOutputTest {
         readInputStream(output);
     }
 
-    private void readInputStream(MLExecutionOutput output) throws IOException {
+    private void readInputStream(MLTaskOutput output) throws IOException {
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         output.writeTo(bytesStreamOutput);
 
         StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
         MLOutputType outputType = streamInput.readEnum(MLOutputType.class);
-        assertEquals(MLOutputType.EXECUTION, outputType);
-        MLExecutionOutput parsedOutput = new MLExecutionOutput(streamInput);
+        assertEquals(MLOutputType.ML_TASK_OUTPUT, outputType);
+        MLTaskOutput parsedOutput = new MLTaskOutput(streamInput);
         assertEquals(output.getType(), parsedOutput.getType());
         assertEquals(output.getTaskId(), parsedOutput.getTaskId());
         assertEquals(output.getStatus(), parsedOutput.getStatus());
