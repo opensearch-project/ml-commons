@@ -5,6 +5,7 @@
 package org.opensearch.ml.engine.algorithms.question_answering;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -36,17 +37,17 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
+import org.opensearch.ml.engine.algorithms.DLModel;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 
 import com.google.gson.Gson;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonParser;
 
 import ai.djl.inference.Predictor;
 import ai.djl.modality.Input;
 import ai.djl.modality.Output;
+import ai.djl.ndarray.NDArray;
+import ai.djl.ndarray.NDList;
 import ai.djl.translate.TranslateException;
 import lombok.extern.log4j.Log4j2;
 
@@ -76,6 +77,7 @@ public class SentenceHighlightingQAModelTest {
             .builder()
             .modelType(SENTENCE_HIGHLIGHTING_TYPE)
             .frameworkType(QuestionAnsweringModelConfig.FrameworkType.HUGGINGFACE_TRANSFORMERS)
+            .allConfig("{\"token_max_length\":64,\"token_overlap_stride\":16,\"with_overflowing_tokens\":true,\"padding\":false}")
             .build();
 
         // Create model with config
@@ -101,10 +103,15 @@ public class SentenceHighlightingQAModelTest {
         // Create test input data
         String question = "What are the impacts of climate change?";
         String context = "Many coastal cities face increased flooding during storms. "
+            + "Rising sea levels threaten coastal infrastructure and communities. "
             + "Farmers are experiencing unpredictable growing seasons and crop failures. "
+            + "Droughts are becoming more frequent and severe in many regions. "
             + "Scientists predict these environmental shifts will continue to accelerate. "
             + "Global temperatures have risen significantly over the past century. "
-            + "Polar ice caps are melting at an alarming rate.";
+            + "Polar ice caps are melting at an alarming rate. "
+            + "Extreme weather events are becoming more frequent and intense. "
+            + "Biodiversity is declining as ecosystems struggle to adapt. "
+            + "Mountain glaciers are retreating worldwide at unprecedented rates. ";
 
         inputDataSet = QuestionAnsweringInputDataSet.builder().question(question).context(context).build();
 
@@ -113,89 +120,113 @@ public class SentenceHighlightingQAModelTest {
     }
 
     @Test
-    public void testSentenceHighlightingPrediction() throws TranslateException {
-        // Initialize the model with sentence highlighting configuration
+    public void testSentenceHighlightingPrediction() throws TranslateException, NoSuchFieldException, IllegalAccessException {
+        // Initialize the model
         questionAnsweringModel.initModel(model, params, encryptor);
 
         // Create MLInput for prediction
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.QUESTION_ANSWERING).inputDataset(inputDataSet).build();
 
-        // Mock the predictor to return a sample output with highlights
-        @SuppressWarnings("unchecked")
-        Predictor<Input, Output> predictor = mock(Predictor.class);
+        // Mock the predictor to return specific output
+        Predictor<Input, Output> mockPredictor = mock(Predictor.class);
+        Output mockOutput = new Output();
 
-        // Create sample output with highlighted sentences
-        JsonArray highlightsArray = new JsonArray();
+        // Create mock output tensor with sentence indices [3, 0]
+        NDArray mockTensor = mock(NDArray.class);
+        when(mockTensor.toLongArray()).thenReturn(new long[] { 3, 0 });
+        NDList mockNDList = new NDList(mockTensor);
 
-        // Add first highlight
-        Map<String, Object> highlight1 = new HashMap<>();
-        highlight1.put(FIELD_TEXT, "Many coastal cities face increased flooding during storms.");
-        highlight1.put(FIELD_POSITION, 0);
-        highlightsArray.add(JsonParser.parseString(gson.toJson(highlight1)));
+        // Create mock output with the tensor
+        ModelTensor tensor = ModelTensor
+            .builder()
+            .name(FIELD_HIGHLIGHTS)
+            .dataAsMap(
+                Map
+                    .of(
+                        FIELD_HIGHLIGHTS,
+                        List
+                            .of(
+                                Map
+                                    .of(
+                                        FIELD_POSITION,
+                                        3.0,
+                                        FIELD_TEXT,
+                                        "Global temperatures have risen significantly over the past century.",
+                                        FIELD_START,
+                                        208.0,
+                                        FIELD_END,
+                                        275.0
+                                    ),
+                                Map
+                                    .of(
+                                        FIELD_POSITION,
+                                        0.0,
+                                        FIELD_TEXT,
+                                        "Many coastal cities face increased flooding during storms.",
+                                        FIELD_START,
+                                        0.0,
+                                        FIELD_END,
+                                        58.0
+                                    )
+                            )
+                    )
+            )
+            .build();
 
-        // Add second highlight
-        Map<String, Object> highlight2 = new HashMap<>();
-        highlight2.put(FIELD_TEXT, "Global temperatures have risen significantly over the past century.");
-        highlight2.put(FIELD_POSITION, 3);
-        highlightsArray.add(JsonParser.parseString(gson.toJson(highlight2)));
+        ModelTensors tensors = new ModelTensors(List.of(tensor));
+        mockOutput.add(tensors.toBytes());
 
-        // Create model tensor with highlights
-        ModelTensor highlightsTensor = new ModelTensor(FIELD_HIGHLIGHTS, highlightsArray.toString());
-        ModelTensors modelTensors = new ModelTensors(List.of(highlightsTensor));
+        // Set up the mock predictor
+        when(mockPredictor.batchPredict(any())).thenReturn(List.of(mockOutput));
 
-        // Create output with the model tensors
-        Output output = new Output();
-        output.add(modelTensors.toBytes());
+        // Use reflection to set the mock predictor
+        java.lang.reflect.Field predictorsField = DLModel.class.getDeclaredField("predictors");
+        predictorsField.setAccessible(true);
+        predictorsField.set(questionAnsweringModel, new Predictor[] { mockPredictor });
 
-        when(predictor.predict(any(Input.class))).thenReturn(output);
+        // Get prediction
+        ModelTensorOutput output = questionAnsweringModel.predict("test_model_id", mlInput);
+        assertNotNull(output);
+        assertFalse(output.getMlModelOutputs().isEmpty());
 
-        // Use reflection to set the predictor in the model
-        try {
-            java.lang.reflect.Field predictorsField = questionAnsweringModel.getClass().getSuperclass().getDeclaredField("predictors");
-            predictorsField.setAccessible(true);
-            Predictor<Input, Output>[] predictorsArray = new Predictor[1];
-            predictorsArray[0] = predictor;
-            predictorsField.set(questionAnsweringModel, predictorsArray);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to set predictor field", e);
-        }
+        // Get the first tensor output
+        ModelTensors resultTensors = output.getMlModelOutputs().get(0);
+        assertNotNull(resultTensors);
+        assertFalse(resultTensors.getMlModelTensors().isEmpty());
 
-        // Process input
-        ModelTensorOutput modelOutput = (ModelTensorOutput) questionAnsweringModel.predict(mlInput);
-
-        // Verify output
-        assertNotNull(modelOutput);
-        List<ModelTensors> tensorsList = modelOutput.getMlModelOutputs();
-
-        assertEquals(1, tensorsList.size());
-        ModelTensors outputTensors = tensorsList.get(0);
-        List<ModelTensor> modelTensorsList = outputTensors.getMlModelTensors();
-
-        assertEquals(1, modelTensorsList.size());
-        ModelTensor resultTensor = modelTensorsList.get(0);
+        // Get the highlights tensor
+        ModelTensor resultTensor = resultTensors.getMlModelTensors().get(0);
+        assertNotNull(resultTensor);
         assertEquals(FIELD_HIGHLIGHTS, resultTensor.getName());
 
-        // Parse and verify highlights
-        String highlightsJson = resultTensor.getResult();
-        JsonArray highlights = JsonParser.parseString(highlightsJson).getAsJsonArray();
+        // Get the highlights from the dataAsMap
+        @SuppressWarnings("unchecked")
+        Map<String, Object> dataMap = (Map<String, Object>) resultTensor.getDataAsMap();
+        assertNotNull("DataAsMap should not be null", dataMap);
 
-        assertEquals(2, highlights.size());
+        // Should have no error
+        assertFalse("Should not have error", dataMap.containsKey(FIELD_ERROR));
+
+        // Should have highlights
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> highlights = (List<Map<String, Object>>) dataMap.get(FIELD_HIGHLIGHTS);
+        assertNotNull("Highlights should not be null", highlights);
+        // After deduplication, we expect only unique highlights based on position
+        assertEquals("Should have unique highlights after deduplication", 2, highlights.size());
 
         // Verify first highlight
-        JsonElement firstHighlight = highlights.get(0);
-        assertEquals(0, firstHighlight.getAsJsonObject().get(FIELD_POSITION).getAsInt());
-        assertEquals(
-            "Many coastal cities face increased flooding during storms.",
-            firstHighlight.getAsJsonObject().get(FIELD_TEXT).getAsString()
-        );
+        Map<String, Object> firstHighlight = highlights.get(0);
+        assertEquals(0.0, firstHighlight.get(FIELD_POSITION));
+        assertEquals("Many coastal cities face increased flooding during storms.", firstHighlight.get(FIELD_TEXT));
+        assertEquals(0.0, firstHighlight.get(FIELD_START));
+        assertEquals(58.0, firstHighlight.get(FIELD_END));
 
         // Verify second highlight
-        JsonElement secondHighlight = highlights.get(1);
-        assertEquals(3, secondHighlight.getAsJsonObject().get(FIELD_POSITION).getAsInt());
-        assertEquals(
-            "Global temperatures have risen significantly over the past century.",
-            secondHighlight.getAsJsonObject().get(FIELD_TEXT).getAsString()
-        );
+        Map<String, Object> secondHighlight = highlights.get(1);
+        assertEquals(3.0, secondHighlight.get(FIELD_POSITION));
+        assertEquals("Global temperatures have risen significantly over the past century.", secondHighlight.get(FIELD_TEXT));
+        assertEquals(208.0, secondHighlight.get(FIELD_START));
+        assertEquals(275.0, secondHighlight.get(FIELD_END));
 
         // Clean up
         questionAnsweringModel.close();
@@ -225,39 +256,57 @@ public class SentenceHighlightingQAModelTest {
         // Initialize the model
         questionAnsweringModel.initModel(model, params, encryptor);
 
-        // Create MLInput for prediction
-        MLInput mlInput = MLInput.builder().algorithm(FunctionName.QUESTION_ANSWERING).inputDataset(inputDataSet).build();
-
         // Verify that the model is set up for sentence highlighting
-        // This is an indirect test since we can't directly access the private field
-        try {
-            // Mock the predictor to avoid actual prediction
-            @SuppressWarnings("unchecked")
-            Predictor<Input, Output> predictor = mock(Predictor.class);
-            Output mockOutput = mock(Output.class);
-            when(predictor.predict(any(Input.class))).thenReturn(mockOutput);
+        assertEquals(SENTENCE_HIGHLIGHTING_TYPE, modelConfig.getModelType());
+        assertEquals(SentenceHighlightingQATranslator.class, questionAnsweringModel.getTranslator("pytorch", modelConfig).getClass());
+    }
 
-            // Use reflection to set the predictor in the model
-            java.lang.reflect.Field predictorsField = questionAnsweringModel.getClass().getSuperclass().getDeclaredField("predictors");
-            predictorsField.setAccessible(true);
-            Predictor<Input, Output>[] predictorsArray = new Predictor[1];
-            predictorsArray[0] = predictor;
-            predictorsField.set(questionAnsweringModel, predictorsArray);
+    @Test
+    public void testReadModelConfigs() {
+        // Test case 1: Basic values
+        MLModelConfig config1 = QuestionAnsweringModelConfig
+            .builder()
+            .modelType(SENTENCE_HIGHLIGHTING_TYPE)
+            .frameworkType(QuestionAnsweringModelConfig.FrameworkType.HUGGINGFACE_TRANSFORMERS)
+            .allConfig("{\"string_value\":\"test\",\"int_value\":42,\"bool_value\":true}")
+            .build();
+        SentenceHighlightingQATranslator translator1 = SentenceHighlightingQATranslator.create(config1);
+        assertEquals("test", translator1.readFromModelAllConfig("string_value", "default", String.class));
+        assertEquals(Integer.valueOf(42), translator1.readFromModelAllConfig("int_value", 0, Integer.class));
+        assertTrue(translator1.readFromModelAllConfig("bool_value", false, Boolean.class));
 
-            // This should not throw a ClassCastException if the model is properly configured for sentence highlighting
-            questionAnsweringModel.predict(mlInput);
-        } catch (Exception e) {
-            // We expect a NullPointerException or MLException because we haven't fully mocked the prediction path
-            // But we should not get a ClassCastException which would indicate incorrect setup
-            assertTrue(
-                "Expected NullPointerException or MLException but got: " + e.getClass().getName(),
-                e instanceof NullPointerException
-                    || e instanceof IllegalArgumentException
-                    || e.getClass().getName().equals("org.opensearch.ml.common.exception.MLException")
-            );
-        } finally {
-            // Clean up
-            questionAnsweringModel.close();
-        }
+        // Test case 2: String representations
+        MLModelConfig config2 = QuestionAnsweringModelConfig
+            .builder()
+            .modelType(SENTENCE_HIGHLIGHTING_TYPE)
+            .frameworkType(QuestionAnsweringModelConfig.FrameworkType.HUGGINGFACE_TRANSFORMERS)
+            .allConfig("{\"int_value\":\"42\",\"bool_value\":\"true\"}")
+            .build();
+        SentenceHighlightingQATranslator translator2 = SentenceHighlightingQATranslator.create(config2);
+        assertEquals(Integer.valueOf(42), translator2.readFromModelAllConfig("int_value", 0, Integer.class));
+        assertTrue(translator2.readFromModelAllConfig("bool_value", false, Boolean.class));
+
+        // Test case 3: Default values
+        MLModelConfig config3 = QuestionAnsweringModelConfig
+            .builder()
+            .modelType(SENTENCE_HIGHLIGHTING_TYPE)
+            .frameworkType(QuestionAnsweringModelConfig.FrameworkType.HUGGINGFACE_TRANSFORMERS)
+            .allConfig("{\"invalid_int\":\"not_a_number\",\"invalid_bool\":\"invalid\"}")
+            .build();
+        SentenceHighlightingQATranslator translator3 = SentenceHighlightingQATranslator.create(config3);
+        assertEquals(Integer.valueOf(0), translator3.readFromModelAllConfig("invalid_int", 0, Integer.class));
+        assertFalse(translator3.readFromModelAllConfig("invalid_bool", false, Boolean.class));
+        assertEquals("default", translator3.readFromModelAllConfig("non_existent", "default", String.class));
+
+        // Test case 4: Use default config
+        MLModelConfig config4 = QuestionAnsweringModelConfig
+            .builder()
+            .modelType(SENTENCE_HIGHLIGHTING_TYPE)
+            .frameworkType(QuestionAnsweringModelConfig.FrameworkType.HUGGINGFACE_TRANSFORMERS)
+            .build();
+        SentenceHighlightingQATranslator translator4 = SentenceHighlightingQATranslator.create(config4);
+        assertEquals("default", translator4.readFromModelAllConfig("any_key", "default", String.class));
+        assertEquals(Integer.valueOf(0), translator4.readFromModelAllConfig("any_key", 0, Integer.class));
+        assertFalse(translator4.readFromModelAllConfig("any_key", false, Boolean.class));
     }
 }
