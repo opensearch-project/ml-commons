@@ -112,7 +112,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
     public static final String FINAL_ANSWER = "final_answer";
     public static final String THOUGHT_RESPONSE = "thought_response";
     public static final String INTERACTIONS = "_interactions";
-    public static final String DEFAULT_NO_ESCAPE_PARAMS = "_chat_history,_tools,_interactions";
+    public static final String DEFAULT_NO_ESCAPE_PARAMS = "_chat_history,_tools,_interactions,tool_configs";
     public static final String INTERACTION_TEMPLATE_TOOL_RESPONSE = "interaction_template.tool_response";
     public static final String CHAT_HISTORY_QUESTION_TEMPLATE = "chat_history_template.user_question";
     public static final String CHAT_HISTORY_RESPONSE_TEMPLATE = "chat_history_template.ai_response";
@@ -176,6 +176,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
             params.put(TOOL_CALLS_TOOL_NAME, "function.name");
             params.put(TOOL_CALLS_TOOL_INPUT, "function.arguments");
             params.put(TOOL_CALL_ID_PATH, "id");
+            params.put("tool_configs", ", \"tools\": [${parameters._tools:-}], \"parallel_tool_calls\": false");
 
             params.put("tool_choice", "auto");
             params.put("parallel_tool_calls", "false");
@@ -194,7 +195,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
             params.put(LLM_FINISH_REASON_TOOL_USE, "tool_calls");
         } else if ("bedrock/converse/claude".equalsIgnoreCase(llmInterface)) {
             if (!params.containsKey(NO_ESCAPE_PARAMS)) {
-                params.put(NO_ESCAPE_PARAMS, DEFAULT_NO_ESCAPE_PARAMS + ",tool_configs");
+                params.put(NO_ESCAPE_PARAMS, DEFAULT_NO_ESCAPE_PARAMS);
             }
             params.put(LLM_RESPONSE_FILTER, "$.output.message.content[0].text");
 
@@ -231,7 +232,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
             params.put(LLM_FINISH_REASON_TOOL_USE, "tool_use");
         } else if ("bedrock/converse/deepseek_r1".equalsIgnoreCase(llmInterface)) {
             if (!params.containsKey(NO_ESCAPE_PARAMS)) {
-                params.put(NO_ESCAPE_PARAMS, "_chat_history,_interactions");
+                params.put(NO_ESCAPE_PARAMS, DEFAULT_NO_ESCAPE_PARAMS);
             }
             params.put(LLM_RESPONSE_FILTER, "$.output.message.content[0].text");
             params.put("llm_final_response_post_filter", "$.message.content[0].text");
