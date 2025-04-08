@@ -30,7 +30,6 @@ import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -44,8 +43,6 @@ import java.util.regex.Pattern;
 
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.core.common.Strings;
-import org.opensearch.ml.common.MLAgentType;
-import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.output.model.ModelTensor;
