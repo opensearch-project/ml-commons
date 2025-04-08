@@ -23,7 +23,7 @@ public class PromptTemplate {
     public static final String CHAT_HISTORY_PREFIX =
         "Human:CONVERSATION HISTORY WITH AI ASSISTANT\n----------------------------\nBelow is Chat History between Human and AI which sorted by time with asc order:\n";
 
-    public static final String DEEP_RESEARCH_PLANNER_PROMPT_TEMPLATE = "${parameters."
+    public static final String PLANNER_PROMPT_TEMPLATE = "${parameters."
         + PLANNER_PROMPT_FIELD
         + "} \n"
         + "Objective: ${parameters."
@@ -33,7 +33,7 @@ public class PromptTemplate {
         + DEEP_RESEARCH_RESPONSE_FORMAT_FIELD
         + "}";
 
-    public static final String DEEP_RESEARCH_REVAL_PROMPT_TEMPLATE = "${parameters."
+    public static final String REFLECT_PROMPT_TEMPLATE = "${parameters."
         + PLANNER_PROMPT_FIELD
         + "} \n\n"
         + "Objective: ${parameters."
@@ -52,7 +52,7 @@ public class PromptTemplate {
         + DEEP_RESEARCH_RESPONSE_FORMAT_FIELD
         + "}";
 
-    public static final String DEEP_RESEARCH_PLANNER_WITH_HISTORY_PROMPT_TEMPLATE = "${parameters."
+    public static final String PLANNER_WITH_HISTORY_PROMPT_TEMPLATE = "${parameters."
         + PLANNER_PROMPT_FIELD
         + "} \n"
         + "Objective: ${parameters."
@@ -65,13 +65,13 @@ public class PromptTemplate {
         + DEEP_RESEARCH_RESPONSE_FORMAT_FIELD
         + "}";
 
-    public static final String DEEP_RESEARCH_PLANNER_PROMPT =
+    public static final String PLANNER_PROMPT =
         "For the given objective, come up with a simple step by step plan. This plan should involve individual tasks, that if executed correctly will yield the correct answer. Do not add any superfluous steps. The result of the final step should be the final answer. Make sure that each step has all the information needed - do not skip steps. At all costs, do not execute the steps. You will be told when to execute the steps.";
 
-    public static final String DEEP_RESEARCH_REVALUATION_PROMPT =
+    public static final String REFLECT_PROMPT =
         "Update your plan accordingly. If no more steps are needed and you can return to the user, then respond with that. Otherwise, fill out the plan. Only add steps to the plan that still NEED to be done. Do not return previously done steps as part of the plan. Please follow the below response format.";
 
-    public static final String DEEP_RESEARCH_RESPONSE_FORMAT = "${parameters."
+    public static final String PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT = "${parameters."
         + DEFAULT_PROMPT_TOOLS_FIELD
         + ":-} \n"
         + "Response Instructions: \n"

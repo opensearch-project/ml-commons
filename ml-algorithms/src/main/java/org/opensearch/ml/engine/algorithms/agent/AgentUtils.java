@@ -22,6 +22,7 @@ import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.THOUGH
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.THOUGHT_RESPONSE;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.TOOL_DESCRIPTIONS;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.TOOL_NAMES;
+import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.RESPONSE_FIELD;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.LAST_N_INTERACTIONS;
 
 import java.lang.reflect.Type;
@@ -81,6 +82,8 @@ public class AgentUtils {
     public static final String TOOL_CALLS_TOOL_NAME = "tool_calls.tool_name";
     public static final String TOOL_CALLS_TOOL_INPUT = "tool_calls.tool_input";
     public static final String TOOL_CALL_ID_PATH = "tool_calls.id_path";
+    private static final String NAME = "name";
+    private static final String DESCRIPTION = "description";
 
     public static final String NO_ESCAPE_PARAMS = "no_escape_params";
     public static final String TOOLS = "_tools";
@@ -145,7 +148,7 @@ public class AgentUtils {
         List<String> inputTools,
         String prompt
     ) {
-        String toolTemplate = parameters.get("tool_template");
+        String toolTemplate = parameters.get(TOOL_TEMPLATE);
         List<String> toolInfos = new ArrayList<>();
         for (String toolName : inputTools) {
             if (!tools.containsKey(toolName)) {
@@ -153,8 +156,8 @@ public class AgentUtils {
             }
             Tool tool = tools.get(toolName);
             Map<String, Object> toolParams = new HashMap<>();
-            toolParams.put("name", tool.getName());
-            toolParams.put("description", tool.getDescription());
+            toolParams.put(NAME, tool.getName());
+            toolParams.put(DESCRIPTION, tool.getDescription());
             Map<String, ?> attributes = tool.getAttributes();
             if (attributes != null) {
                 for (String key : attributes.keySet()) {
@@ -272,8 +275,8 @@ public class AgentUtils {
         if (llmResponseExcludePath != null) {
             dataAsMap = removeJsonPath(dataAsMap, llmResponseExcludePath, true);
         }
-        if (dataAsMap.size() == 1 && dataAsMap.containsKey("response")) {
-            String llmReasoningResponse = (String) dataAsMap.get("response");
+        if (dataAsMap.size() == 1 && dataAsMap.containsKey(RESPONSE_FIELD)) {
+            String llmReasoningResponse = (String) dataAsMap.get(RESPONSE_FIELD);
             String thoughtResponse = null;
             try {
                 thoughtResponse = extractModelResponseJson(llmReasoningResponse, llmResponsePatterns);
@@ -283,14 +286,14 @@ public class AgentUtils {
                 thoughtResponse = llmReasoningResponse;
             }
             parseThoughtResponse(modelOutput, thoughtResponse);
-        } else if (parameters.containsKey("tool_calls_path")) {
+        } else if (parameters.containsKey(TOOL_CALLS_PATH)) {
             modelOutput.put(THOUGHT_RESPONSE, StringUtils.toJson(dataAsMap));
             Object response = JsonPath.read(dataAsMap, parameters.get(LLM_RESPONSE_FILTER));
 
             String llmFinishReasonPath = parameters.get(LLM_FINISH_REASON_PATH);
             String llmFinishReason = "";
             if (llmFinishReasonPath.startsWith("_llm_response.")) {// TODO: support _llm_response for all other places
-                Map<String, Object> llmResponse = StringUtils.fromJson(response.toString(), "response");
+                Map<String, Object> llmResponse = StringUtils.fromJson(response.toString(), RESPONSE_FIELD);
                 llmFinishReason = JsonPath.read(llmResponse, llmFinishReasonPath.substring("_llm_response.".length()));
             } else {
                 llmFinishReason = JsonPath.read(dataAsMap, llmFinishReasonPath);
@@ -300,7 +303,7 @@ public class AgentUtils {
                 try {
                     String toolCallsPath = parameters.get(TOOL_CALLS_PATH);
                     if (toolCallsPath.startsWith("_llm_response.")) {
-                        Map<String, Object> llmResponse = StringUtils.fromJson(response.toString(), "response");
+                        Map<String, Object> llmResponse = StringUtils.fromJson(response.toString(), RESPONSE_FIELD);
                         toolCalls = JsonPath.read(llmResponse, toolCallsPath.substring("_llm_response.".length()));
                     } else {
                         toolCalls = JsonPath.read(dataAsMap, toolCallsPath);
@@ -334,10 +337,10 @@ public class AgentUtils {
                     modelOutput.put(THOUGHT, "");
                     modelOutput.put(ACTION, toolName);
                     modelOutput.put(ACTION_INPUT, toolInput);
-                    modelOutput.put("tool_call_id", toolCallId);
+                    modelOutput.put(TOOL_CALL_ID, toolCallId);
                 } catch (PathNotFoundException e) {
                     if (StringUtils.isJson(response.toString())) {
-                        Map<String, Object> llmResponse = StringUtils.fromJson(response.toString(), "response");
+                        Map<String, Object> llmResponse = StringUtils.fromJson(response.toString(), RESPONSE_FIELD);
                         modelOutput.put(FINAL_ANSWER, StringUtils.toJson(postFilterFinalAnswer(parameters, llmResponse)));
                     } else {
                         modelOutput.put(FINAL_ANSWER, StringUtils.toJson(response));
@@ -345,7 +348,7 @@ public class AgentUtils {
                 }
             } else {
                 if (StringUtils.isJson(response.toString())) {
-                    Map<String, Object> llmResponse = StringUtils.fromJson(response.toString(), "response");
+                    Map<String, Object> llmResponse = StringUtils.fromJson(response.toString(), RESPONSE_FIELD);
                     modelOutput.put(FINAL_ANSWER, StringUtils.toJson(postFilterFinalAnswer(parameters, llmResponse)));
                 } else {
                     modelOutput.put(FINAL_ANSWER, StringUtils.toJson(response));
@@ -409,7 +412,7 @@ public class AgentUtils {
             }
             return json;
         } else {
-            Map<String, Object> copy = StringUtils.fromJson(gson.toJson(json), "response");
+            Map<String, Object> copy = StringUtils.fromJson(gson.toJson(json), RESPONSE_FIELD);
             DocumentContext context = JsonPath.parse(copy);
             for (String path : excludePaths) {
                 try {

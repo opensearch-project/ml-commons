@@ -11,13 +11,21 @@ import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.common.utils.StringUtils.processTextDoc;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DISABLE_TRACE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.INTERACTIONS_PREFIX;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_PATH;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_TOOL_USE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_FILTER;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.NO_ESCAPE_PARAMS;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.PROMPT_CHAT_HISTORY_PREFIX;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.PROMPT_PREFIX;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.PROMPT_SUFFIX;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.RESPONSE_FORMAT_INSTRUCTION;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALLS_PATH;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALLS_TOOL_INPUT;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALLS_TOOL_NAME;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALL_ID;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALL_ID_PATH;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_RESPONSE;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_TEMPLATE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.VERBOSE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.constructToolParams;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTools;
@@ -152,16 +160,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
         String llmInterface = params.get(LLM_INTERFACE);
         // todo: introduce function calling
-        // try {
-        // FunctionCalling functionCalling = FunctionCallingFactory.create(llmInterface);
-        // if (functionCalling != null) {
-        // functionCalling.configure(params);
-        // }
-        // } catch (MLException e) {
-        // log.error("Unsupported llm interface: {}", llmInterface, e);
-        // throw e;
-        // }
-
         // handle parameters based on llmInterface
         if ("openai/v1/chat/completions".equalsIgnoreCase(llmInterface)) {
             if (!params.containsKey(NO_ESCAPE_PARAMS)) {
@@ -171,13 +169,13 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
             params
                 .put(
-                    "tool_template",
+                    TOOL_TEMPLATE,
                     "{\"type\": \"function\", \"function\": { \"name\": \"${tool.name}\", \"description\": \"${tool.description}\", \"parameters\": ${tool.attributes.input_schema}, \"strict\": ${tool.attributes.strict} } }"
                 );
-            params.put("tool_calls_path", "$.choices[0].message.tool_calls");
-            params.put("tool_calls.tool_name", "function.name");
-            params.put("tool_calls.tool_input", "function.arguments");
-            params.put("tool_calls.id_path", "id");
+            params.put(TOOL_CALLS_PATH, "$.choices[0].message.tool_calls");
+            params.put(TOOL_CALLS_TOOL_NAME, "function.name");
+            params.put(TOOL_CALLS_TOOL_INPUT, "function.arguments");
+            params.put(TOOL_CALL_ID_PATH, "id");
 
             params.put("tool_choice", "auto");
             params.put("parallel_tool_calls", "false");
@@ -192,9 +190,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
             params.put("chat_history_template.user_question", "{\"role\": \"user\",\"content\": \"${_chat_history.message.question}\"}");
             params.put("chat_history_template.ai_response", "{\"role\": \"assistant\",\"content\": \"${_chat_history.message.response}\"}");
 
-            params.put("llm_finish_reason_path", "$.choices[0].finish_reason");
-            params.put("llm_finish_reason_tool_use", "tool_calls");
-            params.put("llm_response_filter", "$.choices[0].message.content");
+            params.put(LLM_FINISH_REASON_PATH, "$.choices[0].finish_reason");
+            params.put(LLM_FINISH_REASON_TOOL_USE, "tool_calls");
         } else if ("bedrock/converse/claude".equalsIgnoreCase(llmInterface)) {
             if (!params.containsKey(NO_ESCAPE_PARAMS)) {
                 params.put(NO_ESCAPE_PARAMS, DEFAULT_NO_ESCAPE_PARAMS + ",tool_configs");
@@ -203,13 +200,13 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
             params
                 .put(
-                    "tool_template",
+                    TOOL_TEMPLATE,
                     "{\"toolSpec\":{\"name\":\"${tool.name}\",\"description\":\"${tool.description}\",\"inputSchema\": {\"json\": ${tool.attributes.input_schema} } }}"
                 );
-            params.put("tool_calls_path", "$.output.message.content[*].toolUse");
-            params.put("tool_calls.tool_name", "name");
-            params.put("tool_calls.tool_input", "input");
-            params.put("tool_calls.id_path", "toolUseId");
+            params.put(TOOL_CALLS_PATH, "$.output.message.content[*].toolUse");
+            params.put(TOOL_CALLS_TOOL_NAME, "name");
+            params.put(TOOL_CALLS_TOOL_INPUT, "input");
+            params.put(TOOL_CALL_ID_PATH, "toolUseId");
             params.put("tool_configs", ", \"toolConfig\": {\"tools\": [${parameters._tools:-}]}");
 
             params.put("interaction_template.assistant_tool_calls_path", "$.output.message");
@@ -230,8 +227,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     "{\"role\":\"assistant\",\"content\":[{\"text\":\"${_chat_history.message.response}\"}]}"
                 );
 
-            params.put("llm_finish_reason_path", "$.stopReason");
-            params.put("llm_finish_reason_tool_use", "tool_use");
+            params.put(LLM_FINISH_REASON_PATH, "$.stopReason");
+            params.put(LLM_FINISH_REASON_TOOL_USE, "tool_use");
         } else if ("bedrock/converse/deepseek_r1".equalsIgnoreCase(llmInterface)) {
             if (!params.containsKey(NO_ESCAPE_PARAMS)) {
                 params.put(NO_ESCAPE_PARAMS, "_chat_history,_interactions");
@@ -241,13 +238,13 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
             params
                 .put(
-                    "tool_template",
+                        TOOL_TEMPLATE,
                     "{\"toolSpec\":{\"name\":\"${tool.name}\",\"description\":\"${tool.description}\",\"inputSchema\": {\"json\": ${tool.attributes.input_schema} } }}"
                 );
-            params.put("tool_calls_path", "_llm_response.tool_calls");
-            params.put("tool_calls.tool_name", "tool_name");
-            params.put("tool_calls.tool_input", "input");
-            params.put("tool_calls.id_path", "id");
+            params.put(TOOL_CALLS_PATH, "_llm_response.tool_calls");
+            params.put(TOOL_CALLS_TOOL_NAME, "tool_name");
+            params.put(TOOL_CALLS_TOOL_INPUT, "input");
+            params.put(TOOL_CALL_ID_PATH, "id");
 
             params.put("interaction_template.assistant_tool_calls_path", "$.output.message");
             params.put("interaction_template.assistant_tool_calls_exclude_path", "[ \"$.output.message.content[?(@.reasoningContent)]\" ]");
@@ -268,8 +265,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     "{\"role\":\"assistant\",\"content\":[{\"text\":\"${_chat_history.message.response}\"}]}"
                 );
 
-            params.put("llm_finish_reason_path", "_llm_response.stop_reason");
-            params.put("llm_finish_reason_tool_use", "tool_use");
+            params.put(LLM_FINISH_REASON_PATH, "_llm_response.stop_reason");
+            params.put(LLM_FINISH_REASON_TOOL_USE, "tool_use");
         }
         String memoryType = mlAgent.getMemory().getType();
         String memoryId = params.get(MLAgentExecutor.MEMORY_ID);
@@ -657,7 +654,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         .add(
                             substitute(
                                 tmpParameters.get(INTERACTION_TEMPLATE_TOOL_RESPONSE),
-                                Map.of("tool_call_id", toolCallId, "tool_response", processTextDoc(StringUtils.toJson(r))),
+                                Map.of(TOOL_CALL_ID, toolCallId, "tool_response", processTextDoc(StringUtils.toJson(r))),
                                 INTERACTIONS_PREFIX
                             )
                         );
@@ -667,7 +664,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         .add(
                             substitute(
                                 tmpParameters.get(INTERACTION_TEMPLATE_TOOL_RESPONSE),
-                                Map.of("tool_call_id", toolCallId, "tool_response", "Tool " + action + " failed: " + e.getMessage()),
+                                Map.of(TOOL_CALL_ID, toolCallId, "tool_response", "Tool " + action + " failed: " + e.getMessage()),
                                 INTERACTIONS_PREFIX
                             )
                         );

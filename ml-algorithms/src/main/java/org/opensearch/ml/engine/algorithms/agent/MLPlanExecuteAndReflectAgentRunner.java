@@ -16,12 +16,12 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTools;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.saveTraceData;
-import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.DEEP_RESEARCH_PLANNER_PROMPT;
-import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.DEEP_RESEARCH_PLANNER_PROMPT_TEMPLATE;
-import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.DEEP_RESEARCH_PLANNER_WITH_HISTORY_PROMPT_TEMPLATE;
-import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.DEEP_RESEARCH_RESPONSE_FORMAT;
-import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.DEEP_RESEARCH_REVALUATION_PROMPT;
-import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.DEEP_RESEARCH_REVAL_PROMPT_TEMPLATE;
+import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.PLANNER_PROMPT;
+import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.PLANNER_PROMPT_TEMPLATE;
+import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.PLANNER_WITH_HISTORY_PROMPT_TEMPLATE;
+import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT;
+import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.REFLECT_PROMPT;
+import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.REFLECT_PROMPT_TEMPLATE;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -131,9 +131,9 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         String userSystemPrompt = params.getOrDefault(SYSTEM_PROMPT_FIELD, "");
         params.put(SYSTEM_PROMPT_FIELD, userSystemPrompt + DEFAULT_DEEP_RESEARCH_SYSTEM_PROMPT);
 
-        params.put(PLANNER_PROMPT_FIELD, DEEP_RESEARCH_PLANNER_PROMPT);
-        params.put(REVAL_PROMPT_FIELD, DEEP_RESEARCH_REVALUATION_PROMPT);
-        params.put(DEEP_RESEARCH_RESPONSE_FORMAT_FIELD, DEEP_RESEARCH_RESPONSE_FORMAT);
+        params.put(PLANNER_PROMPT_FIELD, PLANNER_PROMPT);
+        params.put(REVAL_PROMPT_FIELD, REFLECT_PROMPT);
+        params.put(DEEP_RESEARCH_RESPONSE_FORMAT_FIELD, PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT);
 
         params.put(NO_ESCAPE_PARAMS_FIELD, DEFAULT_NO_ESCAPE_PARAMS);
 
@@ -152,17 +152,17 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     }
 
     private void usePlannerPromptTemplate(Map<String, String> params) {
-        params.put(PROMPT_TEMPLATE_FIELD, DEEP_RESEARCH_PLANNER_PROMPT_TEMPLATE);
+        params.put(PROMPT_TEMPLATE_FIELD, PLANNER_PROMPT_TEMPLATE);
         populatePrompt(params);
     }
 
     private void useRevalPromptTemplate(Map<String, String> params) {
-        params.put(PROMPT_TEMPLATE_FIELD, DEEP_RESEARCH_REVAL_PROMPT_TEMPLATE);
+        params.put(PROMPT_TEMPLATE_FIELD, REFLECT_PROMPT_TEMPLATE);
         populatePrompt(params);
     }
 
     private void usePlannerWithHistoryPromptTemplate(Map<String, String> params) {
-        params.put(PROMPT_TEMPLATE_FIELD, DEEP_RESEARCH_PLANNER_WITH_HISTORY_PROMPT_TEMPLATE);
+        params.put(PROMPT_TEMPLATE_FIELD, PLANNER_WITH_HISTORY_PROMPT_TEMPLATE);
         populatePrompt(params);
     }
 
@@ -501,7 +501,6 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         }));
     }
 
-    // Add helper method from MLChatAgentRunner
     private static List<ModelTensors> createModelTensors(String sessionId, String parentInteractionId) {
         List<ModelTensors> modelTensors = new ArrayList<>();
         modelTensors
