@@ -395,19 +395,17 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         Map<String, ?> dataAsMap = modelTensorOutput.getMlModelOutputs().getFirst().getMlModelTensors().getFirst().getDataAsMap();
         String llmResponse;
         if (dataAsMap.size() == 1 && dataAsMap.containsKey(RESPONSE_FIELD)) {
-            llmResponse = (String) dataAsMap.get(RESPONSE_FIELD);
+            llmResponse = ((String) dataAsMap.get(RESPONSE_FIELD)).trim();
         } else {
             if (!allParams.containsKey(LLM_RESPONSE_FILTER) || allParams.get(LLM_RESPONSE_FILTER).isEmpty()) {
                 throw new IllegalArgumentException("llm_response_filter not found. Please provide the path to the model output.");
             }
 
-            llmResponse = JsonPath.read(dataAsMap, allParams.get(LLM_RESPONSE_FILTER));
+            llmResponse = ((String) JsonPath.read(dataAsMap, allParams.get(LLM_RESPONSE_FILTER))).trim();
         }
 
-        String json = extractJsonFromModelResponse(llmResponse);
-        if (!StringUtils.isJson(json)) {
-            json = extractJsonFromMarkdown(llmResponse);
-        }
+        // if response is not a pure json, check if it is returned as markdown and fetch that
+        String json = StringUtils.isJson(llmResponse) ? llmResponse : extractJsonFromMarkdown(llmResponse);
 
         Map<String, Object> parsedJson = StringUtils.fromJson(json, RESPONSE_FIELD);
 
@@ -430,15 +428,8 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         return modelOutput;
     }
 
-    private String extractJsonFromModelResponse(String response) {
-        response = response.trim();
-        if (!isJson(response)) {
-            throw new IllegalStateException("Failed to parse LLM output due to invalid JSON");
-        }
-        return response;
-    }
-
     private String extractJsonFromMarkdown(String response) {
+        response = response.trim();
         if (response.contains("```json")) {
             response = response.substring(response.indexOf("```json") + "```json".length());
             if (response.contains("```")) {
