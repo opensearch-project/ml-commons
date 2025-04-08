@@ -9,6 +9,7 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_1;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_0_0;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 import java.io.IOException;
@@ -115,7 +116,7 @@ public class MLToolSpec implements ToXContentObject {
         if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
             out.writeOptionalString(tenantId);
         }
-        if (streamOutputVersion.after(VERSION_2_19_1)) {
+        if (streamOutputVersion.onOrAfter(VERSION_3_0_0)) {
             if (attributes != null && !attributes.isEmpty()) {
                 out.writeBoolean(true);
                 out.writeMap(attributes, StreamOutput::writeString, StreamOutput::writeOptionalString);
