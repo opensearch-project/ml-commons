@@ -24,11 +24,9 @@ import org.opensearch.ml.engine.algorithms.question_answering.sentence.DefaultSe
 import org.opensearch.ml.engine.algorithms.question_answering.sentence.Sentence;
 import org.opensearch.ml.engine.algorithms.question_answering.sentence.SentenceSegmenter;
 
-import ai.djl.modality.Input;
 import ai.djl.modality.Output;
 import ai.djl.ndarray.NDArray;
 import ai.djl.ndarray.NDList;
-import ai.djl.ndarray.NDManager;
 import ai.djl.ndarray.types.Shape;
 import ai.djl.translate.TranslatorContext;
 import lombok.extern.log4j.Log4j2;
@@ -39,12 +37,11 @@ public class SentenceHighlightingQATranslatorTest {
     private SentenceHighlightingQATranslator translator;
     private TranslatorContext translatorContext;
     private List<Sentence> sentences;
-    private String question;
 
     @Before
     public void setUp() {
         // Create test data
-        question = "What are the impacts of climate change?";
+        String question = "What are the impacts of climate change?";
         String textContext = "Many coastal cities face increased flooding during storms. "
             + "Farmers are experiencing unpredictable growing seasons and crop failures. "
             + "Scientists predict these environmental shifts will continue to accelerate. "
@@ -58,8 +55,6 @@ public class SentenceHighlightingQATranslatorTest {
         // Create mocks
         translator = SentenceHighlightingQATranslator.builder().build();
         translatorContext = mock(TranslatorContext.class);
-        NDManager manager = mock(NDManager.class);
-        Input input = mock(Input.class);
     }
 
     @Test

@@ -210,22 +210,22 @@ public class SentenceHighlightingQAModelTest {
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> highlights = (List<Map<String, Object>>) dataMap.get(FIELD_HIGHLIGHTS);
         assertNotNull("Highlights should not be null", highlights);
-        // expect 4 highlights since chunk
-        assertEquals("Should have four highlights", 4, highlights.size());
+        // After deduplication, we expect only unique highlights based on position
+        assertEquals("Should have unique highlights after deduplication", 2, highlights.size());
 
         // Verify first highlight
         Map<String, Object> firstHighlight = highlights.get(0);
-        assertEquals(3.0, firstHighlight.get(FIELD_POSITION));
-        assertEquals("Global temperatures have risen significantly over the past century.", firstHighlight.get(FIELD_TEXT));
-        assertEquals(208.0, firstHighlight.get(FIELD_START));
-        assertEquals(275.0, firstHighlight.get(FIELD_END));
+        assertEquals(0.0, firstHighlight.get(FIELD_POSITION));
+        assertEquals("Many coastal cities face increased flooding during storms.", firstHighlight.get(FIELD_TEXT));
+        assertEquals(0.0, firstHighlight.get(FIELD_START));
+        assertEquals(58.0, firstHighlight.get(FIELD_END));
 
         // Verify second highlight
         Map<String, Object> secondHighlight = highlights.get(1);
-        assertEquals(0.0, secondHighlight.get(FIELD_POSITION));
-        assertEquals("Many coastal cities face increased flooding during storms.", secondHighlight.get(FIELD_TEXT));
-        assertEquals(0.0, secondHighlight.get(FIELD_START));
-        assertEquals(58.0, secondHighlight.get(FIELD_END));
+        assertEquals(3.0, secondHighlight.get(FIELD_POSITION));
+        assertEquals("Global temperatures have risen significantly over the past century.", secondHighlight.get(FIELD_TEXT));
+        assertEquals(208.0, secondHighlight.get(FIELD_START));
+        assertEquals(275.0, secondHighlight.get(FIELD_END));
 
         // Clean up
         questionAnsweringModel.close();

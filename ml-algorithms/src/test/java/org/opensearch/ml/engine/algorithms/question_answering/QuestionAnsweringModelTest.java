@@ -890,6 +890,160 @@ public class QuestionAnsweringModelTest {
         assertEquals(1, resultHighlight2.get(FIELD_POSITION));
     }
 
+    @Test
+    public void testPredictStandardQA_Error() throws Exception {
+        // Create QuestionAnsweringModel with mocked predictor
+        QuestionAnsweringModel model = new QuestionAnsweringModel();
+
+        // Create input data
+        QuestionAnsweringInputDataSet inputDataSet = new QuestionAnsweringInputDataSet("Test question", "Test context");
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.QUESTION_ANSWERING).inputDataset(inputDataSet).build();
+
+        // We don't need to mock the exception - the model is not initialized
+        // so it will throw a NullPointerException naturally
+
+        // Verify the exception is wrapped in TranslateException with the correct message
+        TranslateException exception = assertThrows(TranslateException.class, () -> model.predict("test_model_id", mlInput));
+        assertEquals("Failed to process standard QA model prediction", exception.getMessage());
+        // The actual error is "Cannot read the array length because "this.devices" is null"
+        // due to using an uninitialized model, but we only care about our wrapping exception
+        assertNotNull(exception.getCause());
+        assertTrue(exception.getCause() instanceof NullPointerException);
+    }
+
+    @Test
+    public void testPredictSentenceHighlightingQA_Error() throws Exception {
+        // Create model with sentence highlighting config
+        MLModelConfig modelConfig = QuestionAnsweringModelConfig
+            .builder()
+            .modelType(SENTENCE_HIGHLIGHTING_TYPE)
+            .frameworkType(QuestionAnsweringModelConfig.FrameworkType.HUGGINGFACE_TRANSFORMERS)
+            .build();
+
+        // Create a model with the mock translator that throws an exception
+        QuestionAnsweringModel model = new QuestionAnsweringModel();
+
+        // Use reflection to set model config
+        java.lang.reflect.Field modelConfigField = QuestionAnsweringModel.class.getDeclaredField("modelConfig");
+        modelConfigField.setAccessible(true);
+        modelConfigField.set(model, modelConfig);
+
+        // We don't need to mock the translator - the model is not properly initialized,
+        // so it will throw a NullPointerException when trying to use the tokenizer
+
+        // Create input data
+        QuestionAnsweringInputDataSet inputDataSet = new QuestionAnsweringInputDataSet("Test question", "Test context");
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.QUESTION_ANSWERING).inputDataset(inputDataSet).build();
+
+        // Verify the exception is wrapped in TranslateException with the correct message
+        TranslateException exception = assertThrows(TranslateException.class, () -> model.predict("test_model_id", mlInput));
+        assertEquals("Failed to process chunks for sentence highlighting", exception.getMessage());
+        assertNotNull(exception.getCause());
+        assertTrue(exception.getCause() instanceof NullPointerException);
+    }
+
+    @Test
+    public void testExtractHighlights_ClassCastException() throws Exception {
+        // Create model
+        QuestionAnsweringModel model = new QuestionAnsweringModel();
+
+        // Create a tensor with invalid highlights data (not a list of maps)
+        Map<String, Object> invalidDataMap = new HashMap<>();
+        invalidDataMap.put(FIELD_HIGHLIGHTS, "invalid data, not a list of maps");
+        ModelTensor invalidTensor = ModelTensor.builder().name(FIELD_HIGHLIGHTS).dataAsMap(invalidDataMap).build();
+
+        // Create ModelTensors with the invalid tensor
+        ModelTensors tensors = new ModelTensors(List.of(invalidTensor));
+
+        // Call extractHighlights method using reflection
+        java.lang.reflect.Method extractHighlightsMethod = QuestionAnsweringModel.class
+            .getDeclaredMethod("extractHighlights", ModelTensors.class);
+        extractHighlightsMethod.setAccessible(true);
+
+        // Instead of using assertThrows which expects a specific exception type directly,
+        // we'll capture the thrown exception manually to properly test for the TranslateException
+        // inside the InvocationTargetException
+        try {
+            extractHighlightsMethod.invoke(model, tensors);
+            fail("Expected an exception to be thrown");
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            // Verify that the cause is a TranslateException
+            assertTrue(
+                "Expected TranslateException but got " + e.getCause().getClass().getName(),
+                e.getCause() instanceof TranslateException
+            );
+
+            // Verify the message
+            TranslateException translateException = (TranslateException) e.getCause();
+            assertEquals("Failed to cast highlights data to expected format", translateException.getMessage());
+
+            // Verify that the root cause is a ClassCastException
+            assertTrue(translateException.getCause() instanceof ClassCastException);
+        }
+    }
+
+    /**
+     * Test the removeDuplicatesAndSort method with mixed Integer and Double positions
+     */
+    @Test
+    public void testRemoveDuplicatesAndSort() throws Exception {
+        // Create sample highlight data with mixed types for positions
+        Map<String, Object> highlight1 = new HashMap<>();
+        highlight1.put(FIELD_TEXT, "First sentence with Double position.");
+        highlight1.put(FIELD_POSITION, 1.0); // Double position
+        highlight1.put(FIELD_START, 0);
+        highlight1.put(FIELD_END, 35);
+
+        Map<String, Object> highlight2 = new HashMap<>();
+        highlight2.put(FIELD_TEXT, "Second sentence with Integer position.");
+        highlight2.put(FIELD_POSITION, 0); // Integer position
+        highlight2.put(FIELD_START, 36);
+        highlight2.put(FIELD_END, 72);
+
+        Map<String, Object> highlight3 = new HashMap<>();
+        highlight3.put(FIELD_TEXT, "Duplicate of first sentence.");
+        highlight3.put(FIELD_POSITION, 1.0); // Duplicate position
+        highlight3.put(FIELD_START, 73);
+        highlight3.put(FIELD_END, 100);
+
+        Map<String, Object> highlight4 = new HashMap<>();
+        highlight4.put(FIELD_TEXT, "Third sentence with higher position.");
+        highlight4.put(FIELD_POSITION, 2); // Integer position
+        highlight4.put(FIELD_START, 101);
+        highlight4.put(FIELD_END, 138);
+
+        // Create a list with highlights in unsorted order with duplicates
+        List<Map<String, Object>> highlights = new ArrayList<>();
+        highlights.add(highlight1);
+        highlights.add(highlight2);
+        highlights.add(highlight3); // Duplicate
+        highlights.add(highlight4);
+
+        // Get an instance of QuestionAnsweringModel
+        QuestionAnsweringModel model = new QuestionAnsweringModel();
+
+        // Call the removeDuplicatesAndSort method using reflection
+        java.lang.reflect.Method removeDuplicatesAndSortMethod = QuestionAnsweringModel.class
+            .getDeclaredMethod("removeDuplicatesAndSort", List.class);
+        removeDuplicatesAndSortMethod.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> result = (List<Map<String, Object>>) removeDuplicatesAndSortMethod.invoke(model, highlights);
+
+        // Verify results
+        assertNotNull(result);
+        assertEquals("Should have 3 unique highlights after removing duplicates", 3, result.size());
+
+        // Verify the order is correct (sorted by position)
+        assertEquals("First highlight should have position 0", 0, ((Number) result.get(0).get(FIELD_POSITION)).intValue());
+        assertEquals("Second highlight should have position 1.0", 1.0, ((Number) result.get(1).get(FIELD_POSITION)).doubleValue(), 0.0001);
+        assertEquals("Third highlight should have position 2", 2, ((Number) result.get(2).get(FIELD_POSITION)).intValue());
+
+        // Verify the text is preserved
+        assertEquals("Second sentence with Integer position.", result.get(0).get(FIELD_TEXT));
+        assertEquals("First sentence with Double position.", result.get(1).get(FIELD_TEXT));
+        assertEquals("Third sentence with higher position.", result.get(2).get(FIELD_TEXT));
+    }
+
     @After
     public void tearDown() {
         FileUtils.deleteFileQuietly(mlCachePath);

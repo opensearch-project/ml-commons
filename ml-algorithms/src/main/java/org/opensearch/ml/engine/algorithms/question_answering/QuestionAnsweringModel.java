@@ -9,6 +9,7 @@ import static org.opensearch.ml.engine.ModelHelper.PYTORCH_ENGINE;
 import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.DEFAULT_WARMUP_CONTEXT;
 import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.DEFAULT_WARMUP_QUESTION;
 import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.FIELD_HIGHLIGHTS;
+import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.FIELD_POSITION;
 import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.HIGHLIGHTING_MODEL_CHUNK_NUMBER_KEY;
 import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.HIGHLIGHTING_MODEL_INITIAL_CHUNK_NUMBER_STRING;
 import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.SENTENCE_HIGHLIGHTING_TYPE;
@@ -124,11 +125,18 @@ public class QuestionAnsweringModel extends DLModel {
         try {
             List<Map<String, Object>> allHighlights = new ArrayList<>();
 
-            // Process initial chunk
-            processInitialChunk(question, context, allHighlights);
+            // We need to process initial chunk first to get the overflow encodings
+            processChunk(question, context, HIGHLIGHTING_MODEL_INITIAL_CHUNK_NUMBER_STRING, allHighlights);
 
-            // Process overflow chunks if any
-            processOverflowChunks(question, context, translator, allHighlights);
+            Encoding encodings = translator.getTokenizer().encode(question, context);
+            Encoding[] overflowEncodings = encodings.getOverflowing();
+
+            // Process overflow chunks if overflow encodings are present
+            if (overflowEncodings != null && overflowEncodings.length > 0) {
+                for (int i = 0; i < overflowEncodings.length; i++) {
+                    processChunk(question, context, String.valueOf(i + 1), allHighlights);
+                }
+            }
 
             return createHighlightOutput(allHighlights);
         } catch (Exception e) {
@@ -137,103 +145,24 @@ public class QuestionAnsweringModel extends DLModel {
         }
     }
 
-    private void processInitialChunk(String question, String context, List<Map<String, Object>> allHighlights) throws TranslateException {
-        Input initialInput = new Input();
-        initialInput.add(MLInput.QUESTION_FIELD, question);
-        initialInput.add(MLInput.CONTEXT_FIELD, context);
-        initialInput.add(HIGHLIGHTING_MODEL_CHUNK_NUMBER_KEY, HIGHLIGHTING_MODEL_INITIAL_CHUNK_NUMBER_STRING);
+    private void processChunk(String question, String context, String chunkNumber, List<Map<String, Object>> allHighlights)
+        throws TranslateException {
+        Input chunkInput = new Input();
+        chunkInput.add(MLInput.QUESTION_FIELD, question);
+        chunkInput.add(MLInput.CONTEXT_FIELD, context);
+        chunkInput.add(HIGHLIGHTING_MODEL_CHUNK_NUMBER_KEY, chunkNumber);
 
-        List<Output> initialOutputs = getPredictor().batchPredict(List.of(initialInput));
-        for (Output output : initialOutputs) {
-            ModelTensors tensors = parseModelTensorOutput(output, null);
-            allHighlights.addAll(extractHighlights(tensors));
-        }
-    }
+        // Use batchPredict to process the chunk for complete results, predict only return the first result which can cause loss of relevant
+        // results
+        List<Output> outputs = getPredictor().batchPredict(List.of(chunkInput));
 
-    private void processOverflowChunks(
-        String question,
-        String context,
-        SentenceHighlightingQATranslator translator,
-        List<Map<String, Object>> allHighlights
-    ) throws TranslateException {
-        Encoding encodings = translator.getTokenizer().encode(question, context);
-        Encoding[] overflowEncodings = encodings.getOverflowing();
-
-        if (overflowEncodings == null || overflowEncodings.length == 0) {
+        if (outputs.isEmpty()) {
             return;
         }
 
-        List<Input> overflowInputs = createOverflowInputs(question, context, overflowEncodings.length);
-        processOverflowInputs(overflowInputs, allHighlights);
-    }
-
-    private List<Input> createOverflowInputs(String question, String context, int numOverflowChunks) {
-        List<Input> overflowInputs = new ArrayList<>();
-        for (int i = 0; i < numOverflowChunks; i++) {
-            Input chunkInput = new Input();
-            chunkInput.add(MLInput.QUESTION_FIELD, question);
-            chunkInput.add(MLInput.CONTEXT_FIELD, context);
-            chunkInput.add(HIGHLIGHTING_MODEL_CHUNK_NUMBER_KEY, String.valueOf(i + 1));
-
-            overflowInputs.add(chunkInput);
-        }
-        return overflowInputs;
-    }
-
-    private void processOverflowInputs(List<Input> overflowInputs, List<Map<String, Object>> allHighlights) throws TranslateException {
-        try {
-            processOverflowInputsBatch(overflowInputs, allHighlights);
-        } catch (IllegalArgumentException e) {
-            log.info("Batch processing of chunks failed. Processing chunks individually: {}", e.getMessage());
-            processOverflowInputsIndividually(overflowInputs, allHighlights);
-        }
-    }
-
-    private void processOverflowInputsBatch(List<Input> overflowInputs, List<Map<String, Object>> allHighlights) throws TranslateException {
-        List<Output> overflowOutputs = getPredictor().batchPredict(overflowInputs);
-        for (Output output : overflowOutputs) {
-            try {
-                ModelTensors tensors = parseModelTensorOutput(output, null);
-                allHighlights.addAll(extractHighlights(tensors));
-            } catch (Exception e) {
-                log.warn("Error processing output from chunk", e);
-            }
-        }
-    }
-
-    private void processOverflowInputsIndividually(List<Input> overflowInputs, List<Map<String, Object>> allHighlights)
-        throws TranslateException {
-        for (int i = 0; i < overflowInputs.size(); i++) {
-            processOverflowChunkWithBatch(i + 1, overflowInputs.get(i), allHighlights);
-        }
-    }
-
-    /**
-     * Process a single overflow chunk using batchPredict and add any extracted highlights
-     * 
-     * @param chunkIndex The index of the overflow chunk (1-based)
-     * @param chunkInput The prepared input for this chunk
-     * @param highlights Collection to add extracted highlights to
-     */
-    private void processOverflowChunkWithBatch(int chunkIndex, Input chunkInput, List<Map<String, Object>> highlights)
-        throws TranslateException {
-        try {
-            // Use batchPredict instead of predict to avoid the bug
-            List<Output> outputs = getPredictor().batchPredict(List.of(chunkInput));
-            if (outputs.isEmpty()) {
-                log.warn("No output returned for chunk {}", chunkIndex);
-                return;
-            }
-
-            // Process all outputs from this chunk
-            for (Output output : outputs) {
-                ModelTensors tensors = parseModelTensorOutput(output, null);
-                List<Map<String, Object>> chunkHighlights = extractHighlights(tensors);
-                highlights.addAll(chunkHighlights);
-            }
-        } catch (Exception e) {
-            log.error("Error processing overflow chunk {}", chunkIndex, e);
-            throw new TranslateException("Failed to process overflow chunk " + chunkIndex, e);
+        for (Output output : outputs) {
+            ModelTensors tensors = parseModelTensorOutput(output, null);
+            allHighlights.addAll(extractHighlights(tensors));
         }
     }
 
@@ -270,11 +199,46 @@ public class QuestionAnsweringModel extends DLModel {
      */
     private ModelTensorOutput createHighlightOutput(List<Map<String, Object>> highlights) {
         Map<String, Object> combinedData = new HashMap<>();
-        combinedData.put(FIELD_HIGHLIGHTS, highlights);
+
+        // Remove duplicates and sort by position
+        List<Map<String, Object>> uniqueSortedHighlights = removeDuplicatesAndSort(highlights);
+
+        combinedData.put(FIELD_HIGHLIGHTS, uniqueSortedHighlights);
 
         ModelTensor combinedTensor = ModelTensor.builder().name(FIELD_HIGHLIGHTS).dataAsMap(combinedData).build();
 
         return new ModelTensorOutput(List.of(new ModelTensors(List.of(combinedTensor))));
+    }
+
+    /**
+     * Removes duplicate sentences and sorts them by position
+     * 
+     * @param highlights The list of highlights to process
+     * @return List of unique highlights sorted by position
+     */
+    private List<Map<String, Object>> removeDuplicatesAndSort(List<Map<String, Object>> highlights) {
+        // Use a map to detect duplicates by position
+        Map<Number, Map<String, Object>> uniqueMap = new HashMap<>();
+
+        // Add each highlight to the map, using position as the key
+        for (Map<String, Object> highlight : highlights) {
+            Number position = (Number) highlight.get(FIELD_POSITION);
+            if (!uniqueMap.containsKey(position)) {
+                uniqueMap.put(position, highlight);
+            }
+        }
+
+        // Convert back to list
+        List<Map<String, Object>> uniqueHighlights = new ArrayList<>(uniqueMap.values());
+
+        // Sort by position
+        uniqueHighlights.sort((a, b) -> {
+            Number posA = (Number) a.get(FIELD_POSITION);
+            Number posB = (Number) b.get(FIELD_POSITION);
+            return Double.compare(posA.doubleValue(), posB.doubleValue());
+        });
+
+        return uniqueHighlights;
     }
 
     @Override

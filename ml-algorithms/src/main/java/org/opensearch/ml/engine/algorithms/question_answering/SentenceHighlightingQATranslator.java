@@ -65,7 +65,20 @@ import lombok.extern.log4j.Log4j2;
 
 /**
  * Translator for sentence highlighting question answering model.
- *
+ * 
+ * This translator processes input for semantic sentence highlighting models that identify
+ * relevant sentences within a context document based on a user query or question.
+ * 
+ * The translator performs the following key functions:
+ * 1. Tokenizes the question and context using Hugging Face tokenizer
+ * 2. Segments the context into sentences 
+ * 3. Maps tokens to their corresponding sentence IDs
+ * 4. Handles chunking for long contexts that exceed the model's maximum token length
+ * 5. Processes model outputs to identify and highlight sentences that answer the question
+ * 
+ * The highlighted sentences are returned with their text and position information within
+ * the original context, which allows for easy visualization and extraction of relevant
+ * information from the document.
  */
 @Log4j2
 @Getter
@@ -166,6 +179,17 @@ public class SentenceHighlightingQATranslator implements ServingTranslator {
         // No arguments needed for this translator
     }
 
+    /**
+     * Prepares the translator by initializing the tokenizer with the appropriate configuration.
+     *
+     * The tokenizer is configured to handle chunking for long contexts that exceed the model's
+     * maximum token length. Even when processing individual chunks, the full context is always 
+     * passed to the model in the input stage, ensuring that sentence segmentation and token-to-sentence
+     * mapping is consistent across all chunks.
+     *
+     * @param ctx The translator context which provides access to the model path
+     * @throws IOException If there is an error loading the tokenizer
+     */
     @Override
     public NDList processInput(TranslatorContext ctx, Input input) {
         try {
@@ -301,6 +325,13 @@ public class SentenceHighlightingQATranslator implements ServingTranslator {
         return wordSentenceIds;
     }
 
+    /**
+     * Processes the model's output to extract highlighted sentences. 
+     *
+     * @param ctx The translator context containing sentence information
+     * @param list The model's output predictions
+     * @return Formatted output with highlighted sentence details or error information
+     */
     @Override
     public Output processOutput(TranslatorContext ctx, NDList list) {
         try {
