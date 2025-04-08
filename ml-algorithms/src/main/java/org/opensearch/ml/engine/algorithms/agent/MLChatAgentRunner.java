@@ -238,7 +238,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
             params
                 .put(
-                        TOOL_TEMPLATE,
+                    TOOL_TEMPLATE,
                     "{\"toolSpec\":{\"name\":\"${tool.name}\",\"description\":\"${tool.description}\",\"inputSchema\": {\"json\": ${tool.attributes.input_schema} } }}"
                 );
             params.put(TOOL_CALLS_PATH, "_llm_response.tool_calls");
