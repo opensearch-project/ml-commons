@@ -85,6 +85,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     // fields
     public static final String PROMPT_FIELD = "prompt";
     public static final String USER_PROMPT_FIELD = "user_prompt";
+    public static final String REACT_SYSTEM_PROMPT_FIELD = "react_system_prompt";
     public static final String STEPS_FIELD = "steps";
     public static final String COMPLETED_STEPS_FIELD = "completed_steps";
     public static final String PLANNER_PROMPT_FIELD = "planner_prompt";
@@ -308,7 +309,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     reactParams.put(MEMORY_ID_FIELD, allParams.get(REACT_AGENT_MEMORY_ID_FIELD));
                 }
 
-                reactParams.put(SYSTEM_PROMPT_FIELD, DEFAULT_REACT_SYSTEM_PROMPT);
+                reactParams.put(SYSTEM_PROMPT_FIELD, allParams.getOrDefault(REACT_SYSTEM_PROMPT_FIELD, DEFAULT_REACT_SYSTEM_PROMPT));
                 reactParams.put(LLM_RESPONSE_FILTER, allParams.get(LLM_RESPONSE_FILTER));
 
                 AgentMLInput agentInput = AgentMLInput

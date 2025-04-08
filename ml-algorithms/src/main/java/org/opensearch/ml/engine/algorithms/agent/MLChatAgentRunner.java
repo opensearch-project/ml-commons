@@ -232,7 +232,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
             params.put(LLM_FINISH_REASON_TOOL_USE, "tool_use");
         } else if ("bedrock/converse/deepseek_r1".equalsIgnoreCase(llmInterface)) {
             if (!params.containsKey(NO_ESCAPE_PARAMS)) {
-                params.put(NO_ESCAPE_PARAMS, DEFAULT_NO_ESCAPE_PARAMS);
+                params.put(NO_ESCAPE_PARAMS, "_chat_history,_interactions");
             }
             params.put(LLM_RESPONSE_FILTER, "$.output.message.content[0].text");
             params.put("llm_final_response_post_filter", "$.message.content[0].text");
