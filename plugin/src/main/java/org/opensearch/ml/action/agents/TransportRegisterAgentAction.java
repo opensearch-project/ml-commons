@@ -87,18 +87,18 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         // If the agent is a PLAN_EXECUTE_AND_REFLECT agent and does not have a reAct agent id, create a reAct agent
         if (MLAgentType.from(mlAgent.getType()) == MLAgentType.PLAN_EXECUTE_AND_REFLECT
             && !mlAgent.getParameters().containsKey(MLPlanExecuteAndReflectAgentRunner.REACT_AGENT_ID_FIELD)) {
-            createConversationAgent(mlAgent, ActionListener.wrap(conversationAgentId -> {
+            createConversationAgent(mlAgent, tenantId, ActionListener.wrap(conversationAgentId -> {
                 Map<String, String> parameters = new HashMap<>(mlAgent.getParameters());
                 parameters.put(MLPlanExecuteAndReflectAgentRunner.REACT_AGENT_ID_FIELD, conversationAgentId);
                 MLAgent updatedAgent = mlAgent.toBuilder().parameters(parameters).build();
-                registerAgentToIndex(updatedAgent, listener);
+                registerAgentToIndex(updatedAgent, tenantId, listener);
             }, listener::onFailure));
         } else {
-            registerAgentToIndex(mlAgent, listener);
+            registerAgentToIndex(mlAgent, tenantId, listener);
         }
     }
 
-    private void createConversationAgent(MLAgent planExecuteReflectAgent, ActionListener<String> listener) {
+    private void createConversationAgent(MLAgent planExecuteReflectAgent, String tenantId, ActionListener<String> listener) {
         Instant now = Instant.now();
         boolean isHiddenAgent = RestActionUtils.isSuperAdminUser(clusterService, client);
 
@@ -115,17 +115,18 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
 
         registerAgentToIndex(
             conversationAgent,
+            tenantId,
             ActionListener.wrap(response -> { listener.onResponse(response.getAgentId()); }, listener::onFailure)
         );
     }
 
-    private void registerAgentToIndex(MLAgent mlAgent, ActionListener<MLRegisterAgentResponse> listener) {
+    private void registerAgentToIndex(MLAgent mlAgent, String tenantId, ActionListener<MLRegisterAgentResponse> listener) {
         mlIndicesHandler.initMLAgentIndex(ActionListener.wrap(result -> {
             if (result) {
                 try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                     sdkClient
                         .putDataObjectAsync(
-                            PutDataObjectRequest.builder().index(ML_AGENT_INDEX).tenantId(mlAgent.getTenantId()).dataObject(mlAgent).build()
+                            PutDataObjectRequest.builder().index(ML_AGENT_INDEX).tenantId(tenantId).dataObject(mlAgent).build()
                         )
                         .whenComplete((r, throwable) -> {
                             context.restore();

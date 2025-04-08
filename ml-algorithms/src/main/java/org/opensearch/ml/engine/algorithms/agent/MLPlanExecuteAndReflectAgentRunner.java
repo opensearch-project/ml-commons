@@ -189,6 +189,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         String appType = mlAgent.getAppType();
         int messageHistoryLimit = DEFAULT_MESSAGE_HISTORY_LIMIT;
 
+        // todo: use chat history instead of completed steps
         ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap.get(memoryType);
         conversationIndexMemoryFactory
             .create(apiParams.get(USER_PROMPT_FIELD), memoryId, appType, ActionListener.<ConversationIndexMemory>wrap(memory -> {
