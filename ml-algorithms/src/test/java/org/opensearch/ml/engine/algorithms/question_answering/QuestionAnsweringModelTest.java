@@ -89,6 +89,7 @@ public class QuestionAnsweringModelTest {
         mlCachePath = Path.of("/tmp/ml_cache" + UUID.randomUUID());
         encryptor = new EncryptorImpl(null, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
         mlEngine = new MLEngine(mlCachePath, encryptor);
+        // Standard QA model
         mlModel = MLModel
             .builder()
             .algorithm(FunctionName.QUESTION_ANSWERING)

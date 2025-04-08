@@ -49,4 +49,5 @@ public final class QAConstants {
     public static final String TOKENIZER_FILE_NAME = "tokenizer.json";
     // Special token value used to ignore tokens in sentence ID mapping
     public static final int IGNORE_TOKEN_ID = -100;
+    public static final int CONTEXT_START_DEFAULT_INDEX = 0;
 }

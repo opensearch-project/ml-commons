@@ -7,6 +7,7 @@ package org.opensearch.ml.engine.algorithms.question_answering;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -258,5 +259,54 @@ public class SentenceHighlightingQAModelTest {
         // Verify that the model is set up for sentence highlighting
         assertEquals(SENTENCE_HIGHLIGHTING_TYPE, modelConfig.getModelType());
         assertEquals(SentenceHighlightingQATranslator.class, questionAnsweringModel.getTranslator("pytorch", modelConfig).getClass());
+    }
+
+    @Test
+    public void testReadModelConfigs() {
+        // Test case 1: Basic values
+        MLModelConfig config1 = QuestionAnsweringModelConfig
+            .builder()
+            .modelType(SENTENCE_HIGHLIGHTING_TYPE)
+            .frameworkType(QuestionAnsweringModelConfig.FrameworkType.HUGGINGFACE_TRANSFORMERS)
+            .allConfig("{\"string_value\":\"test\",\"int_value\":42,\"bool_value\":true}")
+            .build();
+        SentenceHighlightingQATranslator translator1 = SentenceHighlightingQATranslator.create(config1);
+        assertEquals("test", translator1.readFromModelAllConfig("string_value", "default", String.class));
+        assertEquals(Integer.valueOf(42), translator1.readFromModelAllConfig("int_value", 0, Integer.class));
+        assertTrue(translator1.readFromModelAllConfig("bool_value", false, Boolean.class));
+
+        // Test case 2: String representations
+        MLModelConfig config2 = QuestionAnsweringModelConfig
+            .builder()
+            .modelType(SENTENCE_HIGHLIGHTING_TYPE)
+            .frameworkType(QuestionAnsweringModelConfig.FrameworkType.HUGGINGFACE_TRANSFORMERS)
+            .allConfig("{\"int_value\":\"42\",\"bool_value\":\"true\"}")
+            .build();
+        SentenceHighlightingQATranslator translator2 = SentenceHighlightingQATranslator.create(config2);
+        assertEquals(Integer.valueOf(42), translator2.readFromModelAllConfig("int_value", 0, Integer.class));
+        assertTrue(translator2.readFromModelAllConfig("bool_value", false, Boolean.class));
+
+        // Test case 3: Default values
+        MLModelConfig config3 = QuestionAnsweringModelConfig
+            .builder()
+            .modelType(SENTENCE_HIGHLIGHTING_TYPE)
+            .frameworkType(QuestionAnsweringModelConfig.FrameworkType.HUGGINGFACE_TRANSFORMERS)
+            .allConfig("{\"invalid_int\":\"not_a_number\",\"invalid_bool\":\"invalid\"}")
+            .build();
+        SentenceHighlightingQATranslator translator3 = SentenceHighlightingQATranslator.create(config3);
+        assertEquals(Integer.valueOf(0), translator3.readFromModelAllConfig("invalid_int", 0, Integer.class));
+        assertFalse(translator3.readFromModelAllConfig("invalid_bool", false, Boolean.class));
+        assertEquals("default", translator3.readFromModelAllConfig("non_existent", "default", String.class));
+
+        // Test case 4: Use default config
+        MLModelConfig config4 = QuestionAnsweringModelConfig
+            .builder()
+            .modelType(SENTENCE_HIGHLIGHTING_TYPE)
+            .frameworkType(QuestionAnsweringModelConfig.FrameworkType.HUGGINGFACE_TRANSFORMERS)
+            .build();
+        SentenceHighlightingQATranslator translator4 = SentenceHighlightingQATranslator.create(config4);
+        assertEquals("default", translator4.readFromModelAllConfig("any_key", "default", String.class));
+        assertEquals(Integer.valueOf(0), translator4.readFromModelAllConfig("any_key", 0, Integer.class));
+        assertFalse(translator4.readFromModelAllConfig("any_key", false, Boolean.class));
     }
 }

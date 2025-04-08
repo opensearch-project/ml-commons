@@ -64,7 +64,7 @@ public class QuestionAnsweringModel extends DLModel {
             throw new IllegalArgumentException("model id is null");
         }
 
-        // Initialize model type from config if not set
+        // Initialize model config from model if it exists, the model config field is required for sentence highlighting model.
         if (modelConfig != null) {
             this.modelConfig = modelConfig;
         }

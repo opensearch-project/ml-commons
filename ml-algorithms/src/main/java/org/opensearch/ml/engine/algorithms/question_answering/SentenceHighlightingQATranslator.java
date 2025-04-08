@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.algorithms.question_answering;
 
 import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.ATTENTION_MASK;
+import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.CONTEXT_START_DEFAULT_INDEX;
 import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.DEFAULT_PADDING;
 import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.DEFAULT_TOKEN_MAX_LENGTH;
 import static org.opensearch.ml.engine.algorithms.question_answering.QAConstants.DEFAULT_TOKEN_OVERLAP_STRIDE_LENGTH;
@@ -104,7 +105,7 @@ public class SentenceHighlightingQATranslator implements ServingTranslator {
      * @param valueType The class of the value type for type safety
      * @return The value from config or default if not found
      */
-    private <T> T readFromModelAllConfig(String key, T defaultValue, Class<T> valueType) {
+    <T> T readFromModelAllConfig(String key, T defaultValue, Class<T> valueType) {
         if (modelConfig == null || modelConfig.getAllConfig() == null) {
             return defaultValue;
         }
@@ -117,22 +118,18 @@ public class SentenceHighlightingQATranslator implements ServingTranslator {
                 return defaultValue;
             }
 
-            // Handle different types
-            if (valueType == String.class) {
-                return valueType.cast(value.toString());
-            } else if (valueType == Integer.class) {
-                return valueType.cast(((Number) value).intValue());
-            } else if (valueType == Boolean.class) {
-                if (value instanceof Boolean) {
-                    return valueType.cast(value);
-                } else {
+            try {
+                if (valueType == Boolean.class) {
                     return valueType.cast(Boolean.valueOf(value.toString()));
+                } else if (valueType == Integer.class) {
+                    return valueType.cast(Integer.valueOf(value.toString()));
+                } else {
+                    return valueType.cast(value.toString());
                 }
+            } catch (Exception e) {
+                log.warn("Failed to parse value for key {}: {}", key, value);
+                return defaultValue;
             }
-
-            // Unsupported type
-            log.warn("Unsupported type {} for config key {}", valueType, key);
-            return defaultValue;
         } catch (Exception e) {
             log.warn("Failed to read {} from config, using default value", key, e);
             return defaultValue;
@@ -274,7 +271,7 @@ public class SentenceHighlightingQATranslator implements ServingTranslator {
                 return i;
             }
         }
-        return 0;  // Default to 0 if not found
+        return CONTEXT_START_DEFAULT_INDEX;  // Default to 0 if not found
     }
 
     /**
