@@ -165,7 +165,10 @@ public class GetModelGroupTransportAction extends HandledTransportAction<ActionR
                                 wrappedListener
                                     .onFailure(
                                         new OpenSearchStatusException(
-                                            "User " + user.getName() + " is not authorized to get ml-model-group: " + mlModelGroup.getName(),
+                                            "User "
+                                                + user.getName()
+                                                + " is not authorized to get ml-model-group: "
+                                                + mlModelGroup.getName(),
                                             RestStatus.FORBIDDEN
                                         )
                                     );

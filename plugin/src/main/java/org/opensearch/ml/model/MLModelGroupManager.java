@@ -117,12 +117,13 @@ public class MLModelGroupManager {
                         if (modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(user)) {
                             validateRequestForAccessControl(input, user);
                             builder = builder.access(input.getModelAccessMode().getValue());
+
+                            // share with current user's backend-roles
+                            // TODO: check if resource should be shared with user's backend roles by default
+                            recipientMap.set(Map.of(Recipient.BACKEND_ROLES, Set.copyOf(user.getBackendRoles())));
+
                             if (Boolean.TRUE.equals(input.getIsAddAllBackendRoles())) {
                                 input.setBackendRoles(user.getBackendRoles());
-
-                                // share with current user's backend-roles
-                                // TODO: check if resource should be shared with user's backend roles by default
-                                recipientMap.set(Map.of(Recipient.BACKEND_ROLES, Set.copyOf(user.getBackendRoles())));
                             }
                             mlModelGroup = builder
                                 .name(modelName)
