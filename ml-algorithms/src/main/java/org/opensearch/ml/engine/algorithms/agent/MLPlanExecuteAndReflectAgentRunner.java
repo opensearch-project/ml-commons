@@ -359,7 +359,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         false,
                         parentInteractionId,
                         traceNumber,
-                        "DeepResearch LLM"
+                        "PlanExecuteReflect Agent"
                     );
 
                     addSteps(completedSteps, allParams, COMPLETED_STEPS_FIELD);

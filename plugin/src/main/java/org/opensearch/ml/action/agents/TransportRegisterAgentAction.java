@@ -98,16 +98,16 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         }
     }
 
-    private void createConversationAgent(MLAgent deepResearchAgent, ActionListener<String> listener) {
+    private void createConversationAgent(MLAgent planExecuteReflectAgent, ActionListener<String> listener) {
         Instant now = Instant.now();
         boolean isHiddenAgent = RestActionUtils.isSuperAdminUser(clusterService, client);
 
         // Create CONVERSATION agent with same configuration but different type and name
-        MLAgent conversationAgent = deepResearchAgent
+        MLAgent conversationAgent = planExecuteReflectAgent
             .toBuilder()
-            .name(deepResearchAgent.getName() + " (ReAct)")
+            .name(planExecuteReflectAgent.getName() + " (ReAct)")
             .type(MLAgentType.CONVERSATIONAL.name())
-            .description("Execution Agent for Deep Research Agent - " + deepResearchAgent.getName())
+            .description("Execution Agent for Plan Execute Reflect - " + planExecuteReflectAgent.getName())
             .createdTime(now)
             .lastUpdateTime(now)
             .isHidden(isHiddenAgent)
