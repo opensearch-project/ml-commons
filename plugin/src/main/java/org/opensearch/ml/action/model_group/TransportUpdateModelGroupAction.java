@@ -9,6 +9,8 @@ import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
+import static org.opensearch.security.spi.resources.FeatureConfigConstants.OPENSEARCH_RESOURCE_SHARING_ENABLED;
+import static org.opensearch.security.spi.resources.FeatureConfigConstants.OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT;
 
 import java.time.Instant;
 import java.util.HashSet;
@@ -23,6 +25,7 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.commons.authuser.User;
@@ -68,6 +71,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
     private final ActionFilters actionFilters;
     private Client client;
     final SdkClient sdkClient;
+    final Settings settings;
     private NamedXContentRegistry xContentRegistry;
     ClusterService clusterService;
 
@@ -80,6 +84,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
+        Settings settings,
         SdkClient sdkClient,
         NamedXContentRegistry xContentRegistry,
         ClusterService clusterService,
@@ -91,6 +96,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         this.actionFilters = actionFilters;
         this.transportService = transportService;
         this.client = client;
+        this.settings = settings;
         this.sdkClient = sdkClient;
         this.xContentRegistry = xContentRegistry;
         this.clusterService = clusterService;
@@ -109,6 +115,8 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
             return;
         }
         User user = RestActionUtils.getUserContext(client);
+        boolean isResourceSharingFeatureEnabled = this.settings
+            .getAsBoolean(OPENSEARCH_RESOURCE_SHARING_ENABLED, OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT);
         FetchSourceContext fetchSourceContext = new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);
         GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
             .builder()
@@ -148,43 +156,39 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
                                         mlModelGroup.getTenantId(),
                                         wrappedListener
                                     )) {
-                                    ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor.getResourceSharingClient();
-                                    resourceSharingClient
-                                        .verifyResourceAccess(modelGroupId, ML_MODEL_GROUP_INDEX, ActionListener.wrap(isAuthorized -> {
-                                            if (!isAuthorized) {
-                                                listener
-                                                    .onFailure(
-                                                        new OpenSearchStatusException(
-                                                            "User "
-                                                                + user.getName()
-                                                                + " is not authorized to update ml-model-group: "
-                                                                + mlModelGroup.getName(),
-                                                            RestStatus.FORBIDDEN
-                                                        )
-                                                    );
-                                                return;
-                                            }
-                                            // call new overloaded method that doesn't store user info in model group
-                                            updateModelGroup(modelGroupId, r.source(), updateModelGroupInput, wrappedListener);
-                                        }, failure -> {
-                                            // if resource-sharing feature is not available, proceed with old flow of evaluating by-backend
-                                            // role with in-house authz.
-                                            if (failure instanceof OpenSearchStatusException
-                                                && ((OpenSearchStatusException) failure).status().equals(RestStatus.NOT_IMPLEMENTED)) {
-
-                                                if (modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(user)) {
-                                                    validateRequestForAccessControl(updateModelGroupInput, user, mlModelGroup);
-                                                } else {
-                                                    validateSecurityDisabledOrModelAccessControlDisabled(updateModelGroupInput);
+                                    // TODO: Remove this feature flag check once feature is GA, as it will be enabled by default
+                                    if (isResourceSharingFeatureEnabled) {
+                                        ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor
+                                            .getResourceSharingClient();
+                                        resourceSharingClient
+                                            .verifyResourceAccess(modelGroupId, ML_MODEL_GROUP_INDEX, ActionListener.wrap(isAuthorized -> {
+                                                if (!isAuthorized) {
+                                                    listener
+                                                        .onFailure(
+                                                            new OpenSearchStatusException(
+                                                                "User "
+                                                                    + user.getName()
+                                                                    + " is not authorized to update ml-model-group: "
+                                                                    + mlModelGroup.getName(),
+                                                                RestStatus.FORBIDDEN
+                                                            )
+                                                        );
+                                                    return;
                                                 }
+                                                // call new overloaded method that doesn't store user info in model group
+                                                updateModelGroup(modelGroupId, r.source(), updateModelGroupInput, wrappedListener);
+                                            }, listener::onFailure));
+                                    } else {
+                                        // TODO: At some point, this call must be replaced by the one above, (i.e. no user info to
+                                        // be stored in model-group index)
+                                        if (modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(user)) {
+                                            validateRequestForAccessControl(updateModelGroupInput, user, mlModelGroup);
+                                        } else {
+                                            validateSecurityDisabledOrModelAccessControlDisabled(updateModelGroupInput);
+                                        }
 
-                                                // TODO: At some point, this call must be replaced by the one above, (i.e. no user info to
-                                                // be stored in model-group index)
-                                                updateModelGroup(modelGroupId, r.source(), updateModelGroupInput, wrappedListener, user);
-                                            } else {
-                                                listener.onFailure(failure);
-                                            }
-                                        }));
+                                        updateModelGroup(modelGroupId, r.source(), updateModelGroupInput, wrappedListener, user);
+                                    }
 
                                 }
                             } catch (Exception e) {

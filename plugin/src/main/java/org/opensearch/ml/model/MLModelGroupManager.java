@@ -7,6 +7,8 @@ package org.opensearch.ml.model;
 
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+import static org.opensearch.security.spi.resources.FeatureConfigConstants.OPENSEARCH_RESOURCE_SHARING_ENABLED;
+import static org.opensearch.security.spi.resources.FeatureConfigConstants.OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -23,6 +25,7 @@ import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.commons.authuser.User;
@@ -64,6 +67,7 @@ import lombok.extern.log4j.Log4j2;
 public class MLModelGroupManager {
     private final MLIndicesHandler mlIndicesHandler;
     private final Client client;
+    private final Settings settings;
     private final SdkClient sdkClient;
     ClusterService clusterService;
 
@@ -74,6 +78,7 @@ public class MLModelGroupManager {
     public MLModelGroupManager(
         MLIndicesHandler mlIndicesHandler,
         Client client,
+        Settings settings,
         SdkClient sdkClient,
         ClusterService clusterService,
         ModelAccessControlHelper modelAccessControlHelper,
@@ -81,6 +86,7 @@ public class MLModelGroupManager {
     ) {
         this.mlIndicesHandler = mlIndicesHandler;
         this.client = client;
+        this.settings = settings;
         this.sdkClient = sdkClient;
         this.clusterService = clusterService;
         this.modelAccessControlHelper = modelAccessControlHelper;
@@ -93,6 +99,8 @@ public class MLModelGroupManager {
             User user = RestActionUtils.getUserContext(client);
             // Create a recipient sharing list
             AtomicReference<Map<Recipient, Set<String>>> recipientMap = new AtomicReference<>();
+            boolean isResourceSharingFeatureEnabled = this.settings
+                .getAsBoolean(OPENSEARCH_RESOURCE_SHARING_ENABLED, OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT);
 
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 ActionListener<String> wrappedListener = ActionListener.runBefore(listener, context::restore);
@@ -173,50 +181,42 @@ public class MLModelGroupManager {
                                         try {
                                             IndexResponse indexResponse = IndexResponse.fromXContent(r.parser());
 
-                                            // Create an entry in resource-sharing index
-                                            String modelGroupId = indexResponse.getId();
-                                            String modelGroupIndex = indexResponse.getIndex();
-                                            SharedWithActionGroup.ActionGroupRecipients recipients =
-                                                new SharedWithActionGroup.ActionGroupRecipients(recipientMap.get());
-
-                                            ResourceSharingClient client = ResourceSharingClientAccessor.getResourceSharingClient();
-
-                                            client
-                                                .shareResource(
-                                                    modelGroupId,
-                                                    modelGroupIndex,
-                                                    recipients,
-                                                    ActionListener.wrap(resourceSharing -> {
-                                                        log
-                                                            .debug(
-                                                                "Successfully shared ml-model-group: {} with entities: {}",
-                                                                modelName,
-                                                                recipientMap
-                                                            );
-                                                        log
-                                                            .info(
-                                                                "Model group creation result: {}, model group id: {}",
-                                                                indexResponse.getResult(),
-                                                                indexResponse.getId()
-                                                            );
-                                                        wrappedListener.onResponse(r.id());
-                                                    }, failure -> {
-                                                        if (failure instanceof OpenSearchStatusException
-                                                            && ((OpenSearchStatusException) failure)
-                                                                .status()
-                                                                .equals(RestStatus.NOT_IMPLEMENTED)) {
-                                                            log
-                                                                .info(
-                                                                    "Model group creation result: {}, model group id: {}",
-                                                                    indexResponse.getResult(),
-                                                                    indexResponse.getId()
-                                                                );
-                                                            wrappedListener.onResponse(r.id());
-                                                        } else {
-                                                            listener.onFailure(failure);
-                                                        }
-                                                    })
+                                            log
+                                                .info(
+                                                    "Model group creation result: {}, model group id: {}",
+                                                    indexResponse.getResult(),
+                                                    indexResponse.getId()
                                                 );
+
+                                            // TODO: Remove this feature flag check once feature is GA, as it will be enabled by default
+                                            if (isResourceSharingFeatureEnabled) {
+                                                // Create an entry in resource-sharing index
+                                                String modelGroupId = indexResponse.getId();
+                                                String modelGroupIndex = indexResponse.getIndex();
+                                                SharedWithActionGroup.ActionGroupRecipients recipients =
+                                                    new SharedWithActionGroup.ActionGroupRecipients(recipientMap.get());
+
+                                                ResourceSharingClient client = ResourceSharingClientAccessor.getResourceSharingClient();
+
+                                                client
+                                                    .shareResource(
+                                                        modelGroupId,
+                                                        modelGroupIndex,
+                                                        recipients,
+                                                        ActionListener.wrap(resourceSharing -> {
+                                                            log
+                                                                .debug(
+                                                                    "Successfully shared ml-model-group: {} with entities: {}",
+                                                                    modelName,
+                                                                    recipientMap
+                                                                );
+
+                                                            wrappedListener.onResponse(r.id());
+                                                        }, listener::onFailure)
+                                                    );
+                                            } else {
+                                                wrappedListener.onResponse(r.id());
+                                            }
 
                                         } catch (Exception e) {
                                             wrappedListener.onFailure(e);

@@ -8,6 +8,8 @@ package org.opensearch.ml.action.model_group;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_GROUP_ID;
+import static org.opensearch.security.spi.resources.FeatureConfigConstants.OPENSEARCH_RESOURCE_SHARING_ENABLED;
+import static org.opensearch.security.spi.resources.FeatureConfigConstants.OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT;
 
 import java.io.IOException;
 
@@ -21,6 +23,7 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
@@ -61,6 +64,7 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
     final SdkClient sdkClient;
     final NamedXContentRegistry xContentRegistry;
     final ClusterService clusterService;
+    final Settings settings;
 
     final ModelAccessControlHelper modelAccessControlHelper;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
@@ -70,6 +74,7 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
+        Settings settings,
         SdkClient sdkClient,
         NamedXContentRegistry xContentRegistry,
         ClusterService clusterService,
@@ -78,6 +83,7 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
     ) {
         super(MLModelGroupDeleteAction.NAME, transportService, actionFilters, MLModelGroupDeleteRequest::new);
         this.client = client;
+        this.settings = settings;
         this.sdkClient = sdkClient;
         this.xContentRegistry = xContentRegistry;
         this.clusterService = clusterService;
@@ -90,6 +96,8 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
         MLModelGroupDeleteRequest deleteRequest = MLModelGroupDeleteRequest.fromActionRequest(request);
         String modelGroupId = deleteRequest.getModelGroupId();
         String tenantId = deleteRequest.getTenantId();
+        boolean isResourceSharingFeatureEnabled = this.settings
+            .getAsBoolean(OPENSEARCH_RESOURCE_SHARING_ENABLED, OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT);
 
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
             return;
@@ -99,30 +107,26 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
             ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
             ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor.getResourceSharingClient();
             User user = RestActionUtils.getUserContext(client);
-            resourceSharingClient.verifyResourceAccess(modelGroupId, ML_MODEL_GROUP_INDEX, ActionListener.wrap(isAuthorized -> {
-                if (!isAuthorized) {
-                    actionListener
-                        .onFailure(
-                            new OpenSearchStatusException(
-                                "User " + user.getName() + " is not authorized to delete ml-model-group id: " + modelGroupId,
-                                RestStatus.FORBIDDEN
-                            )
-                        );
-                    return;
-                }
+            // TODO: Remove this feature flag check once feature is GA, as it will be enabled by default
+            if (isResourceSharingFeatureEnabled) {
+                resourceSharingClient.verifyResourceAccess(modelGroupId, ML_MODEL_GROUP_INDEX, ActionListener.wrap(isAuthorized -> {
+                    if (!isAuthorized) {
+                        actionListener
+                            .onFailure(
+                                new OpenSearchStatusException(
+                                    "User " + user.getName() + " is not authorized to delete ml-model-group id: " + modelGroupId,
+                                    RestStatus.FORBIDDEN
+                                )
+                            );
+                        return;
+                    }
 
-                handleAccessValidation(true, modelGroupId, tenantId, actionListener);
-            }, failure -> {
-                // if resource-sharing feature is not available, proceed with old flow of evaluating by-backend role with in-house authz.
-                if (failure instanceof OpenSearchStatusException
-                    && ((OpenSearchStatusException) failure).status().equals(RestStatus.NOT_IMPLEMENTED)) {
+                    handleAccessValidation(true, modelGroupId, tenantId, actionListener);
+                }, failure -> { handleValidationError(failure, modelGroupId, actionListener); }));
+            } else {
+                validateAndDeleteModelGroup(modelGroupId, tenantId, wrappedListener);
+            }
 
-                    // TODO: At some point, this call must be removed to delete the resource directly
-                    validateAndDeleteModelGroup(modelGroupId, tenantId, wrappedListener);
-                } else {
-                    handleValidationError(failure, modelGroupId, actionListener);
-                }
-            }));
         }
     }
 
