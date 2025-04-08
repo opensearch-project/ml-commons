@@ -36,7 +36,16 @@ public class MLAgentTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
-    MLToolSpec mlToolSpec = new MLToolSpec("test", "test", "test", Collections.emptyMap(), Collections.emptyMap(), false, Collections.emptyMap(), null);
+    MLToolSpec mlToolSpec = new MLToolSpec(
+        "test",
+        "test",
+        "test",
+        Collections.emptyMap(),
+        Collections.emptyMap(),
+        false,
+        Collections.emptyMap(),
+        null
+    );
 
     @Test
     public void constructor_NullName() {
@@ -249,7 +258,19 @@ public class MLAgentTest {
             "CONVERSATIONAL",
             "test",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
-            List.of(new MLToolSpec("test", "test", "test", Map.of("test", "test"), Collections.emptyMap(), false, Collections.emptyMap(), null)),
+            List
+                .of(
+                    new MLToolSpec(
+                        "test",
+                        "test",
+                        "test",
+                        Map.of("test", "test"),
+                        Collections.emptyMap(),
+                        false,
+                        Collections.emptyMap(),
+                        null
+                    )
+                ),
             Map.of("test", "test"),
             new MLMemorySpec("test", "123", 0),
             Instant.EPOCH,

@@ -494,7 +494,8 @@ public class AgentUtilsTest {
                         )
                 )
                 .build();
-            Map<String, String> output = AgentUtils.parseLLMOutput(Collections.emptyMap(), modelTensoOutput, null, tools, Collections.emptyList());
+            Map<String, String> output = AgentUtils
+                .parseLLMOutput(Collections.emptyMap(), modelTensoOutput, null, tools, Collections.emptyList());
             for (String key : entry.getValue().keySet()) {
                 Assert.assertEquals(entry.getValue().get(key), output.get(key));
             }
@@ -523,7 +524,8 @@ public class AgentUtilsTest {
                     )
             )
             .build();
-        Map<String, String> output = AgentUtils.parseLLMOutput(Collections.emptyMap(), modelTensoOutput, null, tools, Collections.emptyList());
+        Map<String, String> output = AgentUtils
+            .parseLLMOutput(Collections.emptyMap(), modelTensoOutput, null, tools, Collections.emptyList());
         Assert.assertEquals(3, output.size());
         Assert.assertEquals(thought, output.get(THOUGHT));
         Assert.assertEquals("VectorDBTool", output.get(ACTION));
@@ -556,7 +558,8 @@ public class AgentUtilsTest {
                     )
             )
             .build();
-        Map<String, String> output = AgentUtils.parseLLMOutput(Collections.emptyMap(), modelTensoOutput, null, tools, Collections.emptyList());
+        Map<String, String> output = AgentUtils
+            .parseLLMOutput(Collections.emptyMap(), modelTensoOutput, null, tools, Collections.emptyList());
         Assert.assertEquals(2, output.size());
         Assert.assertFalse(output.containsKey(THOUGHT));
         Assert.assertFalse(output.containsKey(ACTION));
@@ -585,7 +588,8 @@ public class AgentUtilsTest {
                     )
             )
             .build();
-        Map<String, String> output = AgentUtils.parseLLMOutput(Collections.emptyMap(), modelTensoOutput, null, tools, Collections.emptyList());
+        Map<String, String> output = AgentUtils
+            .parseLLMOutput(Collections.emptyMap(), modelTensoOutput, null, tools, Collections.emptyList());
         Assert.assertEquals(3, output.size());
         Assert.assertEquals(thought, output.get(THOUGHT));
         Assert.assertFalse(output.containsKey(ACTION));

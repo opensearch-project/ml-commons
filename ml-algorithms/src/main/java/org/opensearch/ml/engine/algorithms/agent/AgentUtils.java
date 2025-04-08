@@ -17,7 +17,6 @@ import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_H
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CONTEXT;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.EXAMPLES;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.FINAL_ANSWER;
-import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.OS_INDICES;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.THOUGHT;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.THOUGHT_RESPONSE;
@@ -41,10 +40,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import com.google.gson.reflect.TypeToken;
-import com.jayway.jsonpath.DocumentContext;
-import com.jayway.jsonpath.JsonPath;
-import com.jayway.jsonpath.PathNotFoundException;
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.core.common.Strings;
 import org.opensearch.ml.common.agent.MLAgent;
@@ -53,6 +48,11 @@ import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.utils.StringUtils;
+
+import com.google.gson.reflect.TypeToken;
+import com.jayway.jsonpath.DocumentContext;
+import com.jayway.jsonpath.JsonPath;
+import com.jayway.jsonpath.PathNotFoundException;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -87,7 +87,8 @@ public class AgentUtils {
     public static final String TOOL_TEMPLATE = "tool_template";
     public static final String INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS = "interaction_template.assistant_tool_calls";
     public static final String INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS_PATH = "interaction_template.assistant_tool_calls_path";
-    public static final String INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS_EXCLUDE_PATH = "interaction_template.assistant_tool_calls_exclude_path";
+    public static final String INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS_EXCLUDE_PATH =
+        "interaction_template.assistant_tool_calls_exclude_path";
     public static final String INTERACTIONS_PREFIX = "${_interactions.";
     public static final String LLM_FINAL_RESPONSE_POST_FILTER = "llm_final_response_post_filter";
     public static final String LLM_FINISH_REASON_PATH = "llm_finish_reason_path";
@@ -138,7 +139,12 @@ public class AgentUtils {
         }
     }
 
-    public static String addToolsToFunctionCalling(Map<String, Tool> tools, Map<String, String> parameters, List<String> inputTools, String prompt) {
+    public static String addToolsToFunctionCalling(
+        Map<String, Tool> tools,
+        Map<String, String> parameters,
+        List<String> inputTools,
+        String prompt
+    ) {
         String toolTemplate = parameters.get("tool_template");
         List<String> toolInfos = new ArrayList<>();
         for (String toolName : inputTools) {
@@ -159,11 +165,16 @@ public class AgentUtils {
             String chatQuestionMessage = substitutor.replace(toolTemplate);
             toolInfos.add(chatQuestionMessage);
         }
-        parameters.put(TOOLS, String.join(", ", toolInfos) );
+        parameters.put(TOOLS, String.join(", ", toolInfos));
         return prompt;
     }
 
-    public static String addToolsToPromptString(Map<String, Tool> tools, Map<String, String> parameters, List<String> inputTools, String prompt) {
+    public static String addToolsToPromptString(
+        Map<String, Tool> tools,
+        Map<String, String> parameters,
+        List<String> inputTools,
+        String prompt
+    ) {
         StringBuilder toolsBuilder = new StringBuilder();
         StringBuilder toolNamesBuilder = new StringBuilder();
 
@@ -278,7 +289,7 @@ public class AgentUtils {
 
             String llmFinishReasonPath = parameters.get(LLM_FINISH_REASON_PATH);
             String llmFinishReason = "";
-            if (llmFinishReasonPath.startsWith("_llm_response.")) {//TODO: support _llm_response for all other places
+            if (llmFinishReasonPath.startsWith("_llm_response.")) {// TODO: support _llm_response for all other places
                 Map<String, Object> llmResponse = StringUtils.fromJson(response.toString(), "response");
                 llmFinishReason = JsonPath.read(llmResponse, llmFinishReasonPath.substring("_llm_response.".length()));
             } else {
@@ -308,7 +319,14 @@ public class AgentUtils {
                         }
 
                     } else {
-                        interactions.add(substitute(parameters.get(INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS), Map.of("tool_calls", StringUtils.toJson(toolCalls)), INTERACTIONS_PREFIX));
+                        interactions
+                            .add(
+                                substitute(
+                                    parameters.get(INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS),
+                                    Map.of("tool_calls", StringUtils.toJson(toolCalls)),
+                                    INTERACTIONS_PREFIX
+                                )
+                            );
                     }
                     String toolName = JsonPath.read(toolCalls.get(0), parameters.get(TOOL_CALLS_TOOL_NAME));
                     String toolInput = StringUtils.toJson(JsonPath.read(toolCalls.get(0), parameters.get(TOOL_CALLS_TOOL_INPUT)));
@@ -369,7 +387,8 @@ public class AgentUtils {
     }
 
     public static Map<String, ?> removeJsonPath(Map<String, ?> json, String excludePaths, boolean inPlace) {
-        Type listType = new TypeToken<List<String>>(){}.getType();
+        Type listType = new TypeToken<List<String>>() {
+        }.getType();
         List<String> excludedPath = gson.fromJson(excludePaths, listType);
         return removeJsonPath(json, excludedPath, inPlace);
     }

@@ -77,7 +77,6 @@ public class DummyWrongTool implements Tool {
         return this.attributes;
     }
 
-
     public static class Factory implements Tool.Factory<DummyWrongTool> {
 
         private static Factory INSTANCE;
