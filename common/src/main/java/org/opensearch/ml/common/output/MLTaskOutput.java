@@ -25,20 +25,18 @@ public class MLTaskOutput extends MLOutput {
     private static final MLOutputType OUTPUT_TYPE = MLOutputType.ML_TASK_OUTPUT;
     public static final String TASK_ID_FIELD = "task_id";
     public static final String STATUS_FIELD = "status";
-
-    // This field will be created for offline batch prediction tasks containing details of the batch job as outputted by the remote server.
-    public static final String EXECUTE_RESPONSE_FIELD = "execute_response";
+    public static final String RESPONSE_FIELD = "response";
 
     String taskId;
     String status;
-    Map<String, Object> executeResponse;
+    Map<String, Object> response;
 
     @Builder
-    public MLTaskOutput(String taskId, String status, Map<String, Object> executeResponse) {
+    public MLTaskOutput(String taskId, String status, Map<String, Object> response) {
         super(OUTPUT_TYPE);
         this.taskId = taskId;
         this.status = status;
-        this.executeResponse = executeResponse;
+        this.response = response;
     }
 
     public MLTaskOutput(StreamInput in) throws IOException {
@@ -46,7 +44,7 @@ public class MLTaskOutput extends MLOutput {
         this.taskId = in.readOptionalString();
         this.status = in.readOptionalString();
         if (in.readBoolean()) {
-            this.executeResponse = in.readMap(s -> s.readString(), s -> s.readGenericValue());
+            this.response = in.readMap(s -> s.readString(), s -> s.readGenericValue());
         }
     }
 
@@ -55,9 +53,9 @@ public class MLTaskOutput extends MLOutput {
         super.writeTo(out);
         out.writeOptionalString(taskId);
         out.writeOptionalString(status);
-        if (executeResponse != null) {
+        if (response != null) {
             out.writeBoolean(true);
-            out.writeMap(executeResponse, StreamOutput::writeString, StreamOutput::writeGenericValue);
+            out.writeMap(response, StreamOutput::writeString, StreamOutput::writeGenericValue);
         } else {
             out.writeBoolean(false);
         }
@@ -73,8 +71,8 @@ public class MLTaskOutput extends MLOutput {
             builder.field(STATUS_FIELD, status);
         }
 
-        if (executeResponse != null) {
-            builder.field(EXECUTE_RESPONSE_FIELD, executeResponse);
+        if (response != null) {
+            builder.field(RESPONSE_FIELD, response);
         }
 
         builder.endObject();

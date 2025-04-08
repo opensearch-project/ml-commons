@@ -397,7 +397,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 MLTaskOutput outputBuilder = MLTaskOutput.builder().taskId(taskId).status(MLTaskState.RUNNING.toString()).build();
 
                 if (memoryId != null && !memoryId.isEmpty()) {
-                    outputBuilder.setExecuteResponse(agentResponse);
+                    outputBuilder.setResponse(agentResponse);
                 }
                 listener.onResponse(outputBuilder);
                 ActionListener<Object> agentActionListener = createAsyncTaskUpdater(mlTask, outputs, modelTensors);

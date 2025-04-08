@@ -24,8 +24,6 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.dataframe.ColumnMeta;
 import org.opensearch.ml.common.dataframe.ColumnType;
 import org.opensearch.ml.common.dataframe.ColumnValue;
-import org.opensearch.ml.common.dataframe.DataFrame;
-import org.opensearch.ml.common.dataframe.DefaultDataFrame;
 import org.opensearch.ml.common.dataframe.IntValue;
 import org.opensearch.ml.common.dataframe.Row;
 
@@ -39,10 +37,9 @@ public class MLTaskOutputTest {
         List<Row> rows = new ArrayList<>();
         rows.add(new Row(new ColumnValue[] { new IntValue(1) }));
         rows.add(new Row(new ColumnValue[] { new IntValue(2) }));
-        DataFrame dataFrame = new DefaultDataFrame(columnMetas, rows);
-        Map<String, Object> executeResponse = new HashMap<>();
-        executeResponse.put("memory_id", "test-memory-id");
-        output = MLTaskOutput.builder().taskId("test_task_id").status("test_status").executeResponse(executeResponse).build();
+        Map<String, Object> response = new HashMap<>();
+        response.put("memory_id", "test-memory-id");
+        output = MLTaskOutput.builder().taskId("test_task_id").status("test_status").response(response).build();
     }
 
     @Test
@@ -51,16 +48,10 @@ public class MLTaskOutputTest {
         XContentBuilder builderWithExecuteResponse = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         output.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = builder.toString();
-        assertEquals(
-            "{\"task_id\":\"test_task_id\",\"status\":\"test_status\",\"execute_response\":{\"memory_id\":\"test-memory-id\"}}",
-            jsonStr
-        );
+        assertEquals("{\"task_id\":\"test_task_id\",\"status\":\"test_status\",\"response\":{\"memory_id\":\"test-memory-id\"}}", jsonStr);
         output.toXContent(builderWithExecuteResponse, ToXContent.EMPTY_PARAMS);
         String jsonStr2 = builderWithExecuteResponse.toString();
-        assertEquals(
-            "{\"task_id\":\"test_task_id\",\"status\":\"test_status\",\"execute_response\":{\"memory_id\":\"test-memory-id\"}}",
-            jsonStr2
-        );
+        assertEquals("{\"task_id\":\"test_task_id\",\"status\":\"test_status\",\"response\":{\"memory_id\":\"test-memory-id\"}}", jsonStr2);
     }
 
     @Test

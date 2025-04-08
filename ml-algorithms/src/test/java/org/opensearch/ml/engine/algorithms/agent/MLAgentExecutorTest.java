@@ -6,9 +6,11 @@
 package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
+import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.MEMORY_ID;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.QUESTION;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.REGENERATE_INTERACTION_ID;
@@ -26,7 +28,6 @@ import javax.naming.Context;
 
 import org.junit.Assert;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
@@ -49,6 +50,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.transport.TransportAddress;
+import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -102,6 +104,8 @@ public class MLAgentExecutorTest {
     private Map<String, Tool.Factory> toolFactories;
     @Mock
     private Map<String, Memory.Factory> memoryMap;
+    @Mock
+    private IndexResponse indexResponse;
     @Mock
     private ThreadPool threadPool;
     private ThreadContext threadContext;
@@ -705,7 +709,6 @@ public class MLAgentExecutorTest {
         Assert.assertNotNull(exceptionCaptor.getValue());
     }
 
-    @Ignore
     @Test
     public void test_AsyncMode_ReturnsTaskId() throws IOException {
         ModelTensor modelTensor = ModelTensor.builder().name("response").result("test").build();
@@ -718,25 +721,52 @@ public class MLAgentExecutorTest {
             return null;
         }).when(client).get(Mockito.any(), Mockito.any());
 
-        Mockito.doAnswer(invocation -> {
+        indexResponse = new IndexResponse(new ShardId(ML_TASK_INDEX, "_na_", 0), "task_id", 1, 0, 2, true);
+        doAnswer(invocation -> {
             ActionListener<IndexResponse> listener = invocation.getArgument(1);
-            IndexResponse mockResponse = Mockito.mock(IndexResponse.class);
-            listener.onResponse(mockResponse);
+            listener.onResponse(indexResponse);
             return null;
         }).when(client).index(any(), any());
 
-        ArgumentCaptor<Output> asyncResponseCaptor = ArgumentCaptor.forClass(Output.class);
         Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
         AgentMLInput input = getAgentMLInput();
         input.setIsAsync(true);
 
         mlAgentExecutor.execute(input, agentActionListener);
 
-        Mockito.verify(agentActionListener).onResponse(asyncResponseCaptor.capture());
-        MLTaskOutput result = (MLTaskOutput) asyncResponseCaptor.getValue();
+        Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
+        MLTaskOutput result = (MLTaskOutput) objectCaptor.getValue();
 
         Assert.assertEquals("task_id", result.getTaskId());
         Assert.assertEquals("RUNNING", result.getStatus());
+    }
+
+    @Test
+    public void test_AsyncMode_IndexTask_failure() throws IOException {
+        ModelTensor modelTensor = ModelTensor.builder().name("response").result("test").build();
+        GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
+        sdkClient = SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap());
+
+        Mockito.doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(agentGetResponse);
+            return null;
+        }).when(client).get(Mockito.any(), Mockito.any());
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> actionListener = invocation.getArgument(1);
+            actionListener.onFailure(new Exception("Index Not Found"));
+            return null;
+        }).when(client).index(any(), any());
+
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        AgentMLInput input = getAgentMLInput();
+        input.setIsAsync(true);
+
+        mlAgentExecutor.execute(input, agentActionListener);
+
+        Mockito.verify(agentActionListener).onFailure(exceptionCaptor.capture());
+        Assert.assertNotNull(exceptionCaptor.getValue());
     }
 
     private AgentMLInput getAgentMLInput() {
