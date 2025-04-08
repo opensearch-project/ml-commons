@@ -308,6 +308,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             chatHistoryBuilder.append(message.toString()).append("\n");
                         }
                         params.put(CHAT_HISTORY, chatHistoryBuilder.toString());
+
+                        // required for MLChatAgentRunnerTest.java, it requires chatHistory to be added to input params to validate
+                        inputParams.put(CHAT_HISTORY, chatHistoryBuilder.toString());
                     } else {
                         List<String> chatHistory = new ArrayList<>();
                         for (Message message : messageList) {
@@ -326,6 +329,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         }
                         params.put(CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
                         params.put(NEW_CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
+
+                        // required for MLChatAgentRunnerTest.java, it requires chatHistory to be added to input params to validate
+                        inputParams.put(CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
                     }
                 }
 

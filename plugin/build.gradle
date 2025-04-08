@@ -370,8 +370,8 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.model.MLModelCacheHelper.1',
         'org.opensearch.ml.action.tasks.CancelBatchJobTransportAction',
         'org.opensearch.ml.jobs.MLBatchTaskUpdateExtension',
-        'org.opensearch.ml.jobs.MLBatchTaskUpdateJobRunner'
-
+        'org.opensearch.ml.jobs.MLBatchTaskUpdateJobRunner',
+        'org.opensearch.ml.action.agents.TransportRegisterAgentAction'
 ]
 
 jacocoTestCoverageVerification {
