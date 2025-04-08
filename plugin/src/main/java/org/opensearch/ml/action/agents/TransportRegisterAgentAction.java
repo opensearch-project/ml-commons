@@ -26,7 +26,7 @@ import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentAction;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentRequest;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
-import org.opensearch.ml.engine.algorithms.agent.MLDeepResearchAgentRunner;
+import org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
@@ -85,11 +85,11 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         }
 
         // If the agent is a deep research agent and does not have a reAct agent id, create a reAct agent
-        if (MLAgentType.from(mlAgent.getType()) == MLAgentType.DEEP_RESEARCH
-            && !mlAgent.getParameters().containsKey(MLDeepResearchAgentRunner.REACT_AGENT_ID_FIELD)) {
+        if (MLAgentType.from(mlAgent.getType()) == MLAgentType.PLAN_EXECUTE_AND_REFLECT
+            && !mlAgent.getParameters().containsKey(MLPlanExecuteAndReflectAgentRunner.REACT_AGENT_ID_FIELD)) {
             createConversationAgent(mlAgent, ActionListener.wrap(conversationAgentId -> {
                 Map<String, String> parameters = new HashMap<>(mlAgent.getParameters());
-                parameters.put(MLDeepResearchAgentRunner.REACT_AGENT_ID_FIELD, conversationAgentId);
+                parameters.put(MLPlanExecuteAndReflectAgentRunner.REACT_AGENT_ID_FIELD, conversationAgentId);
                 MLAgent updatedAgent = mlAgent.toBuilder().parameters(parameters).build();
                 registerAgentToIndex(updatedAgent, listener);
             }, listener::onFailure));

@@ -17,6 +17,7 @@ import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_H
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CONTEXT;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.EXAMPLES;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.FINAL_ANSWER;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.OS_INDICES;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.THOUGHT;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.THOUGHT_RESPONSE;

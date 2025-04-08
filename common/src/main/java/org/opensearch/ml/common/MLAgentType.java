@@ -11,7 +11,7 @@ public enum MLAgentType {
     FLOW,
     CONVERSATIONAL,
     CONVERSATIONAL_FLOW,
-    DEEP_RESEARCH;
+    PLAN_EXECUTE_AND_REFLECT;
 
     public static MLAgentType from(String value) {
         if (value == null) {

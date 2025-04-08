@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD;
@@ -61,7 +66,7 @@ import joptsimple.internal.Strings;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
-public class MLDeepResearchAgentRunner implements MLAgentRunner {
+public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
     private final Client client;
     private final Settings settings;
@@ -75,6 +80,7 @@ public class MLDeepResearchAgentRunner implements MLAgentRunner {
     private static final String DEFAULT_REACT_SYSTEM_PROMPT = "You are a helpful assistant.";
     private static final String DEFAULT_NO_ESCAPE_PARAMS = "tool_configs,_tools";
     private static final String DEFAULT_MAX_STEPS_EXECUTED = "20";
+    private static final int DEFAULT_MESSAGE_HISTORY_LIMIT = 10;
 
     // fields
     public static final String PROMPT_FIELD = "prompt";
@@ -98,7 +104,7 @@ public class MLDeepResearchAgentRunner implements MLAgentRunner {
     public static final String DEFAULT_PROMPT_TOOLS_FIELD = "tools_prompt";
     public static final String MAX_STEPS_EXECUTED_FIELD = "max_steps";
 
-    public MLDeepResearchAgentRunner(
+    public MLPlanExecuteAndReflectAgentRunner(
             Client client,
             Settings settings,
             ClusterService clusterService,
@@ -182,8 +188,7 @@ public class MLDeepResearchAgentRunner implements MLAgentRunner {
         String memoryId = allParams.get(MEMORY_ID_FIELD);
         String memoryType = mlAgent.getMemory().getType();
         String appType = mlAgent.getAppType();
-        // toDo: get limit from somewhere
-        int messageHistoryLimit = 10;
+        int messageHistoryLimit = DEFAULT_MESSAGE_HISTORY_LIMIT;
 
         ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap.get(memoryType);
         conversationIndexMemoryFactory
@@ -304,6 +309,7 @@ public class MLDeepResearchAgentRunner implements MLAgentRunner {
                 }
 
                 reactParams.put(SYSTEM_PROMPT_FIELD, DEFAULT_REACT_SYSTEM_PROMPT);
+                reactParams.put(LLM_RESPONSE_FILTER, allParams.get(LLM_RESPONSE_FILTER));
 
                 AgentMLInput agentInput = AgentMLInput
                         .AgentMLInputBuilder()
@@ -392,6 +398,10 @@ public class MLDeepResearchAgentRunner implements MLAgentRunner {
         if (dataAsMap.size() == 1 && dataAsMap.containsKey(RESPONSE_FIELD)) {
             llmResponse = (String) dataAsMap.get(RESPONSE_FIELD);
         } else {
+            if (!allParams.containsKey(LLM_RESPONSE_FILTER) || allParams.get(LLM_RESPONSE_FILTER).isEmpty()) {
+                throw new IllegalArgumentException("llm_response_filter not found. Please provide the path to the model output.");
+            }
+
             llmResponse = JsonPath.read(dataAsMap, allParams.get(LLM_RESPONSE_FILTER));
         }
 

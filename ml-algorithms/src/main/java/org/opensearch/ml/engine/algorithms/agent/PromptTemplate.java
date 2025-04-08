@@ -1,12 +1,12 @@
 package org.opensearch.ml.engine.algorithms.agent;
 
-import static org.opensearch.ml.engine.algorithms.agent.MLDeepResearchAgentRunner.COMPLETED_STEPS_FIELD;
-import static org.opensearch.ml.engine.algorithms.agent.MLDeepResearchAgentRunner.DEEP_RESEARCH_RESPONSE_FORMAT_FIELD;
-import static org.opensearch.ml.engine.algorithms.agent.MLDeepResearchAgentRunner.DEFAULT_PROMPT_TOOLS_FIELD;
-import static org.opensearch.ml.engine.algorithms.agent.MLDeepResearchAgentRunner.PLANNER_PROMPT_FIELD;
-import static org.opensearch.ml.engine.algorithms.agent.MLDeepResearchAgentRunner.REVAL_PROMPT_FIELD;
-import static org.opensearch.ml.engine.algorithms.agent.MLDeepResearchAgentRunner.STEPS_FIELD;
-import static org.opensearch.ml.engine.algorithms.agent.MLDeepResearchAgentRunner.USER_PROMPT_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.COMPLETED_STEPS_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.DEEP_RESEARCH_RESPONSE_FORMAT_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.DEFAULT_PROMPT_TOOLS_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.PLANNER_PROMPT_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.REVAL_PROMPT_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.STEPS_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.USER_PROMPT_FIELD;
 
 public class PromptTemplate {
 

@@ -56,6 +56,7 @@ import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.remote.RemoteInferenceMLInput;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
@@ -149,6 +150,18 @@ public class MLChatAgentRunner implements MLAgentRunner {
         params.putAll(inputParams);
 
         String llmInterface = params.get(LLM_INTERFACE);
+        // todo: introduce function calling
+//        try {
+//            FunctionCalling functionCalling = FunctionCallingFactory.create(llmInterface);
+//            if (functionCalling != null) {
+//                functionCalling.configure(params);
+//            }
+//        } catch (MLException e) {
+//            log.error("Unsupported llm interface: {}", llmInterface, e);
+//            throw e;
+//        }
+
+        // handle parameters based on llmInterface
         if ("openai/v1/chat/completions".equalsIgnoreCase(llmInterface)) {
             if (!params.containsKey(NO_ESCAPE_PARAMS)) {
                 params.put(NO_ESCAPE_PARAMS, DEFAULT_NO_ESCAPE_PARAMS);
