@@ -84,7 +84,7 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
             return;
         }
 
-        // If the agent is a deep research agent and does not have a reAct agent id, create a reAct agent
+        // If the agent is a PLAN_EXECUTE_AND_REFLECT agent and does not have a reAct agent id, create a reAct agent
         if (MLAgentType.from(mlAgent.getType()) == MLAgentType.PLAN_EXECUTE_AND_REFLECT
             && !mlAgent.getParameters().containsKey(MLPlanExecuteAndReflectAgentRunner.REACT_AGENT_ID_FIELD)) {
             createConversationAgent(mlAgent, ActionListener.wrap(conversationAgentId -> {

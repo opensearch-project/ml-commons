@@ -171,7 +171,6 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         StringSubstitutor promptSubstitutor = new StringSubstitutor(allParams, "${parameters.", "}");
         String prompt = promptSubstitutor.replace(promptTemplate);
         allParams.put(PROMPT_FIELD, prompt);
-        log.info("Prompt used: {}", prompt);
     }
 
     @Override
@@ -363,7 +362,6 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                             "DeepResearch LLM"
                     );
 
-                    // 2. Then add completed steps to params
                     addSteps(completedSteps, allParams, COMPLETED_STEPS_FIELD);
 
                     useRevalPromptTemplate(allParams);

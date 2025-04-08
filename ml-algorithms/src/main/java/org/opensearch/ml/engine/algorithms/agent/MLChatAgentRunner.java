@@ -112,6 +112,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
     public static final String CHAT_HISTORY_MESSAGE_PREFIX = "${_chat_history.message.";
     public static final String LLM_INTERFACE = "_llm_interface";
 
+    private static final String DEFAULT_MAX_ITERATIONS = "10";
+
     private Client client;
     private Settings settings;
     private ClusterService clusterService;
@@ -353,7 +355,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         tmpParameters.put(PROMPT, newPrompt.get());
 
         List<ModelTensors> traceTensors = createModelTensors(sessionId, parentInteractionId);
-        int maxIterations = Integer.parseInt(tmpParameters.getOrDefault(MAX_ITERATION, "3")) * 5;
+        int maxIterations = Integer.parseInt(tmpParameters.getOrDefault(MAX_ITERATION, DEFAULT_MAX_ITERATIONS));
         for (int i = 0; i < maxIterations; i++) {
             int finalI = i;
             StepListener<?> nextStepListener = new StepListener<>();
