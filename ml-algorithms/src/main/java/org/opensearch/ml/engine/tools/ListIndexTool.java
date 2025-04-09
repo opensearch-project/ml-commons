@@ -116,7 +116,7 @@ public class ListIndexTool implements Tool {
         attributes
             .put(
                 "input_schema",
-                "{\"type\":\"object\",\"properties\":{\"indices\":{\"type\":\"array\",\"items\": {\"type\": \"string\"},\"description\":\"OpenSearch index name list, separated by comma. for example: [\\\"index1\\\", \\\"index2\\\"]\"}},\"additionalProperties\":false}"
+                "{\"type\":\"object\",\"properties\":{\"indices\":{\"type\":\"array\",\"items\": {\"type\": \"string\"},\"description\":\"OpenSearch index name list, separated by comma. for example: [\\\"index1\\\", \\\"index2\\\"], use empty array [] to list all indices in the cluster\"}},\"additionalProperties\":false}"
             );
         attributes.put("strict", false);
     }

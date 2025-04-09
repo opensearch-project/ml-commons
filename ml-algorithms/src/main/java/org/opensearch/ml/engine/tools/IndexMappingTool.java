@@ -8,12 +8,14 @@ package org.opensearch.ml.engine.tools;
 import static org.opensearch.action.support.clustermanager.ClusterManagerNodeRequest.DEFAULT_CLUSTER_MANAGER_NODE_TIMEOUT;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.util.Strings;
 import org.opensearch.action.admin.indices.get.GetIndexRequest;
 import org.opensearch.action.admin.indices.get.GetIndexResponse;
@@ -70,7 +72,7 @@ public class IndexMappingTool implements Tool {
         attributes
             .put(
                 "input_schema",
-                "{\"type\":\"object\",\"properties\":{\"index\":{\"type\":\"string\",\"description\":\"OpenSearch index name\"}},\"required\":[\"index\"],\"additionalProperties\":false}"
+                "{\"type\":\"object\",\"properties\":{\"index\":{\"type\":\"array\",\"description\":\"OpenSearch index name list, separated by comma. for example: [\\\"index1\\\", \\\"index2\\\"]\",\"items\":{\"type\":\"string\"}}},\"required\":[\"index\"],\"additionalProperties\":false}"
             );
         attributes.put("strict", true);
 
@@ -86,75 +88,82 @@ public class IndexMappingTool implements Tool {
 
     @Override
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
-        @SuppressWarnings("unchecked")
-        List<String> indexList = parameters.containsKey("index")
-            ? gson.fromJson(parameters.get("index"), List.class)
-            : Collections.emptyList();
-        if (indexList.isEmpty()) {
-            @SuppressWarnings("unchecked")
-            T empty = (T) ("There were no results searching the index parameter [" + parameters.get("index") + "].");
-            listener.onResponse(empty);
-            return;
-        }
+        try {
+            List<String> indexList = new ArrayList<>();
+            if (StringUtils.isNotBlank(parameters.get("index"))) {
+                indexList = parameters.containsKey("index")
+                        ? gson.fromJson(parameters.get("index"), List.class)
+                        : Collections.emptyList();
+            }
 
-        final String[] indices = indexList.toArray(Strings.EMPTY_ARRAY);
+            if (indexList.isEmpty()) {
+                @SuppressWarnings("unchecked")
+                T empty = (T) ("There were no results searching the index parameter [" + parameters.get("index") + "].");
+                listener.onResponse(empty);
+                return;
+            }
 
-        final IndicesOptions indicesOptions = IndicesOptions.strictExpand();
-        final boolean local = Boolean.parseBoolean(parameters.get("local"));
-        final TimeValue clusterManagerNodeTimeout = DEFAULT_CLUSTER_MANAGER_NODE_TIMEOUT;
+            final String[] indices = indexList.toArray(Strings.EMPTY_ARRAY);
 
-        ActionListener<GetIndexResponse> internalListener = new ActionListener<GetIndexResponse>() {
+            final IndicesOptions indicesOptions = IndicesOptions.strictExpand();
+            final boolean local = Boolean.parseBoolean(parameters.get("local"));
+            final TimeValue clusterManagerNodeTimeout = DEFAULT_CLUSTER_MANAGER_NODE_TIMEOUT;
 
-            @Override
-            public void onResponse(GetIndexResponse getIndexResponse) {
-                try {
-                    // Handle empty response
-                    if (getIndexResponse.indices().length == 0) {
-                        @SuppressWarnings("unchecked")
-                        T empty = (T) ("There were no results searching the index parameter [" + parameters.get("index") + "].");
-                        listener.onResponse(empty);
-                        return;
-                    }
-                    StringBuilder sb = new StringBuilder();
-                    for (String index : getIndexResponse.indices()) {
-                        sb.append("index: ").append(index).append("\n\n");
+            ActionListener<GetIndexResponse> internalListener = new ActionListener<GetIndexResponse>() {
 
-                        MappingMetadata mapping = getIndexResponse.mappings().get(index);
-                        if (mapping != null) {
-                            sb.append("mappings:\n");
-                            for (Entry<String, Object> entry : mapping.sourceAsMap().entrySet()) {
-                                sb.append(entry.getKey()).append("=").append(entry.getValue()).append('\n');
+                @Override
+                public void onResponse(GetIndexResponse getIndexResponse) {
+                    try {
+                        // Handle empty response
+                        if (getIndexResponse.indices().length == 0) {
+                            @SuppressWarnings("unchecked")
+                            T empty = (T) ("There were no results searching the index parameter [" + parameters.get("index") + "].");
+                            listener.onResponse(empty);
+                            return;
+                        }
+                        StringBuilder sb = new StringBuilder();
+                        for (String index : getIndexResponse.indices()) {
+                            sb.append("index: ").append(index).append("\n\n");
+
+                            MappingMetadata mapping = getIndexResponse.mappings().get(index);
+                            if (mapping != null) {
+                                sb.append("mappings:\n");
+                                for (Entry<String, Object> entry : mapping.sourceAsMap().entrySet()) {
+                                    sb.append(entry.getKey()).append("=").append(entry.getValue()).append('\n');
+                                }
+                                sb.append("\n\n");
                             }
-                            sb.append("\n\n");
+
+                            Settings settings = getIndexResponse.settings().get(index);
+                            if (settings != null) {
+                                sb.append("settings:\n").append(settings.toDelimitedString('\n')).append("\n\n");
+                            }
                         }
 
-                        Settings settings = getIndexResponse.settings().get(index);
-                        if (settings != null) {
-                            sb.append("settings:\n").append(settings.toDelimitedString('\n')).append("\n\n");
-                        }
+                        @SuppressWarnings("unchecked")
+                        T response = (T) sb.toString();
+                        listener.onResponse(response);
+                    } catch (Exception e) {
+                        onFailure(e);
                     }
-
-                    @SuppressWarnings("unchecked")
-                    T response = (T) sb.toString();
-                    listener.onResponse(response);
-                } catch (Exception e) {
-                    onFailure(e);
                 }
-            }
 
-            @Override
-            public void onFailure(final Exception e) {
-                listener.onFailure(e);
-            }
+                @Override
+                public void onFailure(final Exception e) {
+                    listener.onFailure(e);
+                }
 
-        };
-        final GetIndexRequest getIndexRequest = new GetIndexRequest()
-            .indices(indices)
-            .indicesOptions(indicesOptions)
-            .local(local)
-            .clusterManagerNodeTimeout(clusterManagerNodeTimeout);
+            };
+            final GetIndexRequest getIndexRequest = new GetIndexRequest()
+                    .indices(indices)
+                    .indicesOptions(indicesOptions)
+                    .local(local)
+                    .clusterManagerNodeTimeout(clusterManagerNodeTimeout);
 
-        client.admin().indices().getIndex(getIndexRequest, internalListener);
+            client.admin().indices().getIndex(getIndexRequest, internalListener);
+        } catch (Exception e) {
+            listener.onFailure(e);
+        }
     }
 
     @Override
