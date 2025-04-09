@@ -382,6 +382,15 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 );
             case CONVERSATIONAL:
                 return new MLChatAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryFactoryMap);
+            case PLAN_EXECUTE_AND_REFLECT:
+                return new MLPlanExecuteAndReflectAgentRunner(
+                    client,
+                    settings,
+                    clusterService,
+                    xContentRegistry,
+                    toolFactories,
+                    memoryFactoryMap
+                );
             default:
                 throw new IllegalArgumentException("Unsupported agent type: " + mlAgent.getType());
         }

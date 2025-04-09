@@ -1,5 +1,13 @@
 package org.opensearch.ml.engine.algorithms.agent;
 
+import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.COMPLETED_STEPS_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.DEEP_RESEARCH_RESPONSE_FORMAT_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.DEFAULT_PROMPT_TOOLS_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.PLANNER_PROMPT_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.REVAL_PROMPT_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.STEPS_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.USER_PROMPT_FIELD;
+
 public class PromptTemplate {
 
     public static final String PROMPT_TEMPLATE_PREFIX =
@@ -14,4 +22,81 @@ public class PromptTemplate {
         "Assistant:\n---------------------\n${parameters.llm_tool_selection_response}\n\nHuman: TOOL RESPONSE of ${parameters.tool_name}: \n---------------------\nTool input:\n${parameters.tool_input}\n\nTool output:\n${parameters.observation}\n\n";
     public static final String CHAT_HISTORY_PREFIX =
         "Human:CONVERSATION HISTORY WITH AI ASSISTANT\n----------------------------\nBelow is Chat History between Human and AI which sorted by time with asc order:\n";
+
+    public static final String PLANNER_PROMPT_TEMPLATE = "${parameters."
+        + PLANNER_PROMPT_FIELD
+        + "} \n"
+        + "Objective: ${parameters."
+        + USER_PROMPT_FIELD
+        + "} \n\n"
+        + "${parameters."
+        + DEEP_RESEARCH_RESPONSE_FORMAT_FIELD
+        + "}";
+
+    public static final String REFLECT_PROMPT_TEMPLATE = "${parameters."
+        + PLANNER_PROMPT_FIELD
+        + "} \n\n"
+        + "Objective: ${parameters."
+        + USER_PROMPT_FIELD
+        + "} \n\n"
+        + "Original plan:\n[${parameters."
+        + STEPS_FIELD
+        + "}] \n\n"
+        + "You have currently executed the following steps: \n[${parameters."
+        + COMPLETED_STEPS_FIELD
+        + "}] \n\n"
+        + "${parameters."
+        + REVAL_PROMPT_FIELD
+        + "} \n\n"
+        + "${parameters."
+        + DEEP_RESEARCH_RESPONSE_FORMAT_FIELD
+        + "}";
+
+    public static final String PLANNER_WITH_HISTORY_PROMPT_TEMPLATE = "${parameters."
+        + PLANNER_PROMPT_FIELD
+        + "} \n"
+        + "Objective: ${parameters."
+        + USER_PROMPT_FIELD
+        + "} \n\n"
+        + "You have currently executed the following steps: \n[${parameters."
+        + COMPLETED_STEPS_FIELD
+        + "}] \n\n"
+        + "${parameters."
+        + DEEP_RESEARCH_RESPONSE_FORMAT_FIELD
+        + "}";
+
+    public static final String PLANNER_PROMPT =
+        "For the given objective, come up with a simple step by step plan. This plan should involve individual tasks, that if executed correctly will yield the correct answer. Do not add any superfluous steps. The result of the final step should be the final answer. Make sure that each step has all the information needed - do not skip steps. At all costs, do not execute the steps. You will be told when to execute the steps.";
+
+    public static final String REFLECT_PROMPT =
+        "Update your plan accordingly. If no more steps are needed and you can return to the user, then respond with that. Otherwise, fill out the plan. Only add steps to the plan that still NEED to be done. Do not return previously done steps as part of the plan. Please follow the below response format.";
+
+    public static final String PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT = "${parameters."
+        + DEFAULT_PROMPT_TOOLS_FIELD
+        + ":-} \n"
+        + "Response Instructions: \n"
+        + "ALWAYS follow the given response instructions. Do not return any content that does not follow the response instructions. Do not add anything before or after the expected JSON \n"
+        + "Always respond with a valid JSON object that strictly follows the below schema:\n"
+        + "{\n"
+        + "\t\"steps\": array[string], \n"
+        + "\t\"result\": string \n"
+        + "}\n"
+        + "Use \"steps\" to return an array of strings where each string is a step to complete the objective, leave it empty if you know the final result. Please wrap each step in quotes and escape any special characters within the string. \n"
+        + "Use \"result\" return the final response when you have enough information, leave it empty if you want to execute more steps \n"
+        + "Here are examples of valid responses:\n\n"
+        + "Example 1 - When you need to execute steps:\n"
+        + "{\n"
+        + "\t\"steps\": [\"Search for logs containing error messages in the last hour\", \"Analyze the frequency of each error type\", \"Check system metrics during error spikes\"],\n"
+        + "\t\"result\": \"\"\n"
+        + "}\n\n"
+        + "Example 2 - When you have the final result:\n"
+        + "{\n"
+        + "\t\"steps\": [],\n"
+        + "\t\"result\": \"Based on the analysis, the root cause of the system slowdown was a memory leak in the authentication service, which started at 14:30 UTC.\"\n"
+        + "}\n"
+        + "IMPORTANT RULES:\n"
+        + "1. DO NOT use commas within individual steps \n"
+        + "2. DO NOT add any content before or after the JSON \n"
+        + "3. ONLY respond with a pure JSON object \n"
+        + "4. DO NOT USE ANY TOOLS. TOOLS ARE PROVIDED ONLY FOR YOU TO MAKE A PLAN.";
 }
