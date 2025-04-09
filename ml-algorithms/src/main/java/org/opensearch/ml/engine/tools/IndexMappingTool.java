@@ -91,9 +91,7 @@ public class IndexMappingTool implements Tool {
         try {
             List<String> indexList = new ArrayList<>();
             if (StringUtils.isNotBlank(parameters.get("index"))) {
-                indexList = parameters.containsKey("index")
-                        ? gson.fromJson(parameters.get("index"), List.class)
-                        : Collections.emptyList();
+                indexList = parameters.containsKey("index") ? gson.fromJson(parameters.get("index"), List.class) : Collections.emptyList();
             }
 
             if (indexList.isEmpty()) {
@@ -155,10 +153,10 @@ public class IndexMappingTool implements Tool {
 
             };
             final GetIndexRequest getIndexRequest = new GetIndexRequest()
-                    .indices(indices)
-                    .indicesOptions(indicesOptions)
-                    .local(local)
-                    .clusterManagerNodeTimeout(clusterManagerNodeTimeout);
+                .indices(indices)
+                .indicesOptions(indicesOptions)
+                .local(local)
+                .clusterManagerNodeTimeout(clusterManagerNodeTimeout);
 
             client.admin().indices().getIndex(getIndexRequest, internalListener);
         } catch (Exception e) {

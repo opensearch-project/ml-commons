@@ -129,8 +129,8 @@ public class ListIndexTool implements Tool {
             List<String> indexList = new ArrayList<>();
             if (StringUtils.isNotBlank(parameters.get("indices"))) {
                 indexList = parameters.containsKey("indices")
-                        ? gson.fromJson(parameters.get("indices"), List.class)
-                        : Collections.emptyList();
+                    ? gson.fromJson(parameters.get("indices"), List.class)
+                    : Collections.emptyList();
             }
             final String[] indices = indexList.toArray(Strings.EMPTY_ARRAY);
 
@@ -138,8 +138,8 @@ public class ListIndexTool implements Tool {
             final boolean local = parameters.containsKey("local") && Boolean.parseBoolean(parameters.get("local"));
             final boolean includeUnloadedSegments = Boolean.parseBoolean(parameters.get("include_unloaded_segments"));
             final int pageSize = parameters.containsKey("page_size")
-                    ? NumberUtils.toInt(parameters.get("page_size"), DEFAULT_PAGE_SIZE)
-                    : DEFAULT_PAGE_SIZE;
+                ? NumberUtils.toInt(parameters.get("page_size"), DEFAULT_PAGE_SIZE)
+                : DEFAULT_PAGE_SIZE;
             final PageParams pageParams = new PageParams(null, PageParams.PARAM_ASC_SORT_VALUE, pageSize);
 
             final ActionListener<Table> internalListener = ActionListener.notifyOnce(ActionListener.wrap(table -> {
@@ -151,12 +151,15 @@ public class ListIndexTool implements Tool {
                     return;
                 }
                 StringBuilder sb = new StringBuilder(
-                        // Currently using c.value which is short header matching _cat/indices
-                        // May prefer to use c.attr.get("desc") for full description
-                        table.getHeaders().stream().map(c -> c.value.toString()).collect(Collectors.joining(",", "", "\n"))
+                    // Currently using c.value which is short header matching _cat/indices
+                    // May prefer to use c.attr.get("desc") for full description
+                    table.getHeaders().stream().map(c -> c.value.toString()).collect(Collectors.joining(",", "", "\n"))
                 );
                 for (List<Cell> row : table.getRows()) {
-                    sb.append(row.stream().map(c -> c.value == null ? null : c.value.toString()).collect(Collectors.joining(",", "", "\n")));
+                    sb
+                        .append(
+                            row.stream().map(c -> c.value == null ? null : c.value.toString()).collect(Collectors.joining(",", "", "\n"))
+                        );
                 }
                 @SuppressWarnings("unchecked")
                 T response = (T) sb.toString();
@@ -164,13 +167,13 @@ public class ListIndexTool implements Tool {
             }, listener::onFailure));
 
             fetchClusterInfoAndPages(
-                    indices,
-                    local,
-                    includeUnloadedSegments,
-                    pageParams,
-                    indicesOptions,
-                    new ConcurrentLinkedQueue<>(),
-                    internalListener
+                indices,
+                local,
+                includeUnloadedSegments,
+                pageParams,
+                indicesOptions,
+                new ConcurrentLinkedQueue<>(),
+                internalListener
             );
         } catch (Exception e) {
             listener.onFailure(e);
