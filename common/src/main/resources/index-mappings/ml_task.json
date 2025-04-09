@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "schema_version": 4
+    "schema_version": 5
   },
   "properties": {
     "model_id": {
@@ -47,6 +47,9 @@
     "remote_job": {
       "type": "flat_object"
     },
-    "user": USER_MAPPING_PLACEHOLDER
+    "user": USER_MAPPING_PLACEHOLDER,
+    "response": {
+      "type": "flat_object"
+    }
   }
 }
