@@ -8,6 +8,7 @@ package org.opensearch.ml.engine.tools;
 import static org.opensearch.action.support.clustermanager.ClusterManagerNodeRequest.DEFAULT_CLUSTER_MANAGER_NODE_TIMEOUT;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -23,6 +24,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
 import org.apache.logging.log4j.util.Strings;
 import org.opensearch.action.admin.cluster.health.ClusterHealthRequest;
@@ -114,7 +116,7 @@ public class ListIndexTool implements Tool {
         attributes
             .put(
                 "input_schema",
-                "{\"type\":\"object\",\"properties\":{\"indices\":{\"type\":\"string\",\"description\":\"OpenSearch index name list, separated by comma. for example: index1, index2\"}},\"additionalProperties\":false}"
+                "{\"type\":\"object\",\"properties\":{\"indices\":{\"type\":\"array\",\"items\": {\"type\": \"string\"},\"description\":\"OpenSearch index name list, separated by comma. for example: [\\\"index1\\\", \\\"index2\\\"]\"}},\"additionalProperties\":false}"
             );
         attributes.put("strict", false);
     }
@@ -123,50 +125,56 @@ public class ListIndexTool implements Tool {
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
         // TODO: This logic exactly matches the OpenSearch _list/indices REST action. If code at
         // o.o.rest/action/list/RestIndicesListAction.java changes those changes need to be reflected here
-        @SuppressWarnings("unchecked")
-        List<String> indexList = parameters.containsKey("indices")
-            ? gson.fromJson(parameters.get("indices"), List.class)
-            : Collections.emptyList();
-        final String[] indices = indexList.toArray(Strings.EMPTY_ARRAY);
+        try {
+            List<String> indexList = new ArrayList<>();
+            if (StringUtils.isNotBlank(parameters.get("indices"))) {
+                indexList = parameters.containsKey("indices")
+                        ? gson.fromJson(parameters.get("indices"), List.class)
+                        : Collections.emptyList();
+            }
+            final String[] indices = indexList.toArray(Strings.EMPTY_ARRAY);
 
-        final IndicesOptions indicesOptions = IndicesOptions.strictExpand();
-        final boolean local = parameters.containsKey("local") && Boolean.parseBoolean(parameters.get("local"));
-        final boolean includeUnloadedSegments = Boolean.parseBoolean(parameters.get("include_unloaded_segments"));
-        final int pageSize = parameters.containsKey("page_size")
-            ? NumberUtils.toInt(parameters.get("page_size"), DEFAULT_PAGE_SIZE)
-            : DEFAULT_PAGE_SIZE;
-        final PageParams pageParams = new PageParams(null, PageParams.PARAM_ASC_SORT_VALUE, pageSize);
+            final IndicesOptions indicesOptions = IndicesOptions.strictExpand();
+            final boolean local = parameters.containsKey("local") && Boolean.parseBoolean(parameters.get("local"));
+            final boolean includeUnloadedSegments = Boolean.parseBoolean(parameters.get("include_unloaded_segments"));
+            final int pageSize = parameters.containsKey("page_size")
+                    ? NumberUtils.toInt(parameters.get("page_size"), DEFAULT_PAGE_SIZE)
+                    : DEFAULT_PAGE_SIZE;
+            final PageParams pageParams = new PageParams(null, PageParams.PARAM_ASC_SORT_VALUE, pageSize);
 
-        final ActionListener<Table> internalListener = ActionListener.notifyOnce(ActionListener.wrap(table -> {
-            // Handle empty table
-            if (table == null || table.getRows().isEmpty()) {
+            final ActionListener<Table> internalListener = ActionListener.notifyOnce(ActionListener.wrap(table -> {
+                // Handle empty table
+                if (table == null || table.getRows().isEmpty()) {
+                    @SuppressWarnings("unchecked")
+                    T empty = (T) ("There were no results searching the indices parameter [" + parameters.get("indices") + "].");
+                    listener.onResponse(empty);
+                    return;
+                }
+                StringBuilder sb = new StringBuilder(
+                        // Currently using c.value which is short header matching _cat/indices
+                        // May prefer to use c.attr.get("desc") for full description
+                        table.getHeaders().stream().map(c -> c.value.toString()).collect(Collectors.joining(",", "", "\n"))
+                );
+                for (List<Cell> row : table.getRows()) {
+                    sb.append(row.stream().map(c -> c.value == null ? null : c.value.toString()).collect(Collectors.joining(",", "", "\n")));
+                }
                 @SuppressWarnings("unchecked")
-                T empty = (T) ("There were no results searching the indices parameter [" + parameters.get("indices") + "].");
-                listener.onResponse(empty);
-                return;
-            }
-            StringBuilder sb = new StringBuilder(
-                // Currently using c.value which is short header matching _cat/indices
-                // May prefer to use c.attr.get("desc") for full description
-                table.getHeaders().stream().map(c -> c.value.toString()).collect(Collectors.joining(",", "", "\n"))
-            );
-            for (List<Cell> row : table.getRows()) {
-                sb.append(row.stream().map(c -> c.value == null ? null : c.value.toString()).collect(Collectors.joining(",", "", "\n")));
-            }
-            @SuppressWarnings("unchecked")
-            T response = (T) sb.toString();
-            listener.onResponse(response);
-        }, listener::onFailure));
+                T response = (T) sb.toString();
+                listener.onResponse(response);
+            }, listener::onFailure));
 
-        fetchClusterInfoAndPages(
-            indices,
-            local,
-            includeUnloadedSegments,
-            pageParams,
-            indicesOptions,
-            new ConcurrentLinkedQueue<>(),
-            internalListener
-        );
+            fetchClusterInfoAndPages(
+                    indices,
+                    local,
+                    includeUnloadedSegments,
+                    pageParams,
+                    indicesOptions,
+                    new ConcurrentLinkedQueue<>(),
+                    internalListener
+            );
+        } catch (Exception e) {
+            listener.onFailure(e);
+        }
     }
 
     private void fetchClusterInfoAndPages(
