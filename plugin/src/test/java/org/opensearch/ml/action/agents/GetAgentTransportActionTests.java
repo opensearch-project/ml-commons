@@ -294,14 +294,26 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
 
     public GetResponse prepareMLAgent(String agentId, boolean isHidden, String tenantId) throws IOException {
 
-        new MLToolSpec("test", "test", "test", Collections.emptyMap(), false, Collections.emptyMap(), null);
+        new MLToolSpec("test", "test", "test", Collections.emptyMap(), Collections.emptyMap(), false, Collections.emptyMap(), null);
 
         mlAgent = new MLAgent(
             "test",
             MLAgentType.CONVERSATIONAL.name(),
             "test",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
-            List.of(new MLToolSpec("test", "test", "test", Collections.emptyMap(), false, Collections.emptyMap(), null)),
+            List
+                .of(
+                    new MLToolSpec(
+                        "test",
+                        "test",
+                        "test",
+                        Collections.emptyMap(),
+                        Collections.emptyMap(),
+                        false,
+                        Collections.emptyMap(),
+                        null
+                    )
+                ),
             Map.of("test", "test"),
             new MLMemorySpec("test", "123", 0),
             Instant.EPOCH,

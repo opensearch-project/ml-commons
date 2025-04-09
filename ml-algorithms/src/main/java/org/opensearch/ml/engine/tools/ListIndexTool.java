@@ -84,6 +84,9 @@ public class ListIndexTool implements Tool {
     @Setter
     private String description = DEFAULT_DESCRIPTION;
     @Getter
+    @Setter
+    private Map<String, Object> attributes;
+    @Getter
     private String version;
 
     private Client client;
@@ -106,6 +109,14 @@ public class ListIndexTool implements Tool {
                 return mlModelOutputs.get(0).getMlModelTensors().get(0).getDataAsMap().get("response");
             }
         };
+
+        this.attributes = new HashMap<>();
+        attributes
+            .put(
+                "input_schema",
+                "{\"type\":\"object\",\"properties\":{\"indices\":{\"type\":\"string\",\"description\":\"OpenSearch index name list, separated by comma. for example: index1, index2\"}},\"additionalProperties\":false}"
+            );
+        attributes.put("strict", false);
     }
 
     @Override

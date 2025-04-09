@@ -20,7 +20,16 @@ import org.opensearch.search.SearchModule;
 
 public class MLToolSpecTest {
 
-    MLToolSpec spec = new MLToolSpec("test", "test", "test", Map.of("test", "test"), false, Map.of("test", "test"), null);
+    MLToolSpec spec = new MLToolSpec(
+        "test",
+        "test",
+        "test",
+        Map.of("test", "test"),
+        Collections.emptyMap(),
+        false,
+        Map.of("test", "test"),
+        null
+    );
 
     @Test
     public void writeTo() throws IOException {
@@ -53,7 +62,16 @@ public class MLToolSpecTest {
 
     @Test
     public void writeToNullConfigMap() throws IOException {
-        MLToolSpec spec = new MLToolSpec("test_type", "test_name", "test_desc", Map.of("test_key", "test_value"), false, null, null);
+        MLToolSpec spec = new MLToolSpec(
+            "test_type",
+            "test_name",
+            "test_desc",
+            Map.of("test_key", "test_value"),
+            Collections.emptyMap(),
+            false,
+            null,
+            null
+        );
         BytesStreamOutput output = new BytesStreamOutput();
         spec.writeTo(output);
         MLToolSpec spec1 = new MLToolSpec(output.bytes().streamInput());
@@ -170,6 +188,7 @@ public class MLToolSpecTest {
             "test_name",
             "test_desc",
             Map.of("test_key", "test_value"),
+            Collections.emptyMap(),
             false,
             Collections.emptyMap(),
             null
@@ -188,7 +207,16 @@ public class MLToolSpecTest {
 
     @Test
     public void fromStreamNullConfigMap() throws IOException {
-        MLToolSpec spec = new MLToolSpec("test_type", "test_name", "test_desc", Map.of("test_key", "test_value"), false, null, null);
+        MLToolSpec spec = new MLToolSpec(
+            "test_type",
+            "test_name",
+            "test_desc",
+            Map.of("test_key", "test_value"),
+            Collections.emptyMap(),
+            false,
+            null,
+            null
+        );
         BytesStreamOutput output = new BytesStreamOutput();
         spec.writeTo(output);
         MLToolSpec spec1 = MLToolSpec.fromStream(output.bytes().streamInput());
