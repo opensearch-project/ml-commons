@@ -39,6 +39,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
+import org.apache.lucene.analysis.Analyzer;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.cluster.metadata.IndexNameExpressionResolver;
 import org.opensearch.cluster.node.DiscoveryNodes;
@@ -54,7 +55,13 @@ import org.opensearch.core.common.io.stream.NamedWriteableRegistry;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.env.Environment;
 import org.opensearch.env.NodeEnvironment;
+import org.opensearch.index.analysis.AnalyzerProvider;
+import org.opensearch.index.analysis.PreBuiltAnalyzerProviderFactory;
+import org.opensearch.index.analysis.PreConfiguredTokenizer;
+import org.opensearch.index.analysis.TokenizerFactory;
 import org.opensearch.indices.SystemIndexDescriptor;
+import org.opensearch.indices.analysis.AnalysisModule;
+import org.opensearch.indices.analysis.PreBuiltCacheFactory;
 import org.opensearch.ml.action.agents.DeleteAgentTransportAction;
 import org.opensearch.ml.action.agents.GetAgentTransportAction;
 import org.opensearch.ml.action.agents.TransportRegisterAgentAction;
@@ -183,6 +190,11 @@ import org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor;
 import org.opensearch.ml.engine.algorithms.anomalylocalization.AnomalyLocalizerImpl;
 import org.opensearch.ml.engine.algorithms.metrics_correlation.MetricsCorrelation;
 import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
+import org.opensearch.ml.engine.analysis.DJLUtils;
+import org.opensearch.ml.engine.analysis.HFModelAnalyzer;
+import org.opensearch.ml.engine.analysis.HFModelAnalyzerProvider;
+import org.opensearch.ml.engine.analysis.HFModelTokenizer;
+import org.opensearch.ml.engine.analysis.HFModelTokenizerFactory;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
@@ -306,6 +318,7 @@ import org.opensearch.ml.utils.IndexUtils;
 import org.opensearch.monitor.jvm.JvmService;
 import org.opensearch.monitor.os.OsService;
 import org.opensearch.plugins.ActionPlugin;
+import org.opensearch.plugins.AnalysisPlugin;
 import org.opensearch.plugins.ExtensiblePlugin;
 import org.opensearch.plugins.IngestPlugin;
 import org.opensearch.plugins.Plugin;
@@ -338,6 +351,7 @@ import lombok.SneakyThrows;
 public class MachineLearningPlugin extends Plugin
     implements
         ActionPlugin,
+        AnalysisPlugin,
         SearchPlugin,
         SearchPipelinePlugin,
         ExtensiblePlugin,
@@ -526,6 +540,7 @@ public class MachineLearningPlugin extends Plugin
         nodeHelper = new DiscoveryNodeHelper(clusterService, settings);
         modelCacheHelper = new MLModelCacheHelper(clusterService, settings);
         cmHandler = new OpenSearchConversationalMemoryHandler(client, clusterService);
+        DJLUtils.setMLEngine(mlEngine);
 
         JvmService jvmService = new JvmService(environment.settings());
         OsService osService = new OsService(environment.settings());
@@ -1170,5 +1185,53 @@ public class MachineLearningPlugin extends Plugin
         systemIndexDescriptors.add(new SystemIndexDescriptor(ML_MEMORY_MESSAGE_INDEX, "ML Commons Memory Message Index"));
         systemIndexDescriptors.add(new SystemIndexDescriptor(ML_STOP_WORDS_INDEX, "ML Commons Stop Words Index"));
         return systemIndexDescriptors;
+    }
+
+    @Override
+    public Map<String, AnalysisModule.AnalysisProvider<TokenizerFactory>> getTokenizers() {
+        return Map.of(HFModelTokenizer.NAME, HFModelTokenizerFactory::new);
+    }
+
+    @Override
+    public List<PreConfiguredTokenizer> getPreConfiguredTokenizers() {
+        List<PreConfiguredTokenizer> tokenizers = new ArrayList<>();
+        tokenizers
+            .add(PreConfiguredTokenizer.singleton(HFModelTokenizerFactory.DEFAULT_TOKENIZER_NAME, HFModelTokenizerFactory::createDefault));
+        tokenizers
+            .add(
+                PreConfiguredTokenizer
+                    .singleton(
+                        HFModelTokenizerFactory.DEFAULT_MULTILINGUAL_TOKENIZER_NAME,
+                        HFModelTokenizerFactory::createDefaultMultilingual
+                    )
+            );
+        return tokenizers;
+    }
+
+    @Override
+    public Map<String, AnalysisModule.AnalysisProvider<AnalyzerProvider<? extends Analyzer>>> getAnalyzers() {
+        return Map.of(HFModelTokenizer.NAME, HFModelAnalyzerProvider::new);
+    }
+
+    @Override
+    public List<PreBuiltAnalyzerProviderFactory> getPreBuiltAnalyzerProviderFactories() {
+        List<PreBuiltAnalyzerProviderFactory> factories = new ArrayList<>();
+        factories
+            .add(
+                new PreBuiltAnalyzerProviderFactory(
+                    HFModelTokenizerFactory.DEFAULT_TOKENIZER_NAME,
+                    PreBuiltCacheFactory.CachingStrategy.ONE,
+                    () -> new HFModelAnalyzer(HFModelTokenizerFactory::createDefault)
+                )
+            );
+        factories
+            .add(
+                new PreBuiltAnalyzerProviderFactory(
+                    HFModelTokenizerFactory.DEFAULT_MULTILINGUAL_TOKENIZER_NAME,
+                    PreBuiltCacheFactory.CachingStrategy.ONE,
+                    () -> new HFModelAnalyzer(HFModelTokenizerFactory::createDefaultMultilingual)
+                )
+            );
+        return factories;
     }
 }
