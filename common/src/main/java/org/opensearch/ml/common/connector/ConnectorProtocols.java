@@ -12,8 +12,9 @@ public class ConnectorProtocols {
 
     public static final String HTTP = "http";
     public static final String AWS_SIGV4 = "aws_sigv4";
+    public static final String MCP_SSE = "mcp_sse";
 
-    public static final List<String> VALID_PROTOCOLS = Arrays.asList(AWS_SIGV4, HTTP);
+    public static final List<String> VALID_PROTOCOLS = Arrays.asList(AWS_SIGV4, HTTP, MCP_SSE);
 
     public static void validateProtocol(String protocol) {
         if (protocol == null) {
