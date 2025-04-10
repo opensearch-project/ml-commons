@@ -12,6 +12,7 @@ import static org.opensearch.ml.common.CommonValue.VERSION_3_0_0;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Map;
 
 import org.opensearch.Version;
@@ -49,6 +50,7 @@ public class MLToolSpec implements ToXContentObject {
     private Map<String, String> configMap;
     @Setter
     private String tenantId;
+    private Map<String, Object> runtimeResources;
 
     @Builder(toBuilder = true)
     public MLToolSpec(
@@ -72,6 +74,7 @@ public class MLToolSpec implements ToXContentObject {
         this.includeOutputInAgentResponse = includeOutputInAgentResponse;
         this.configMap = configMap;
         this.tenantId = tenantId;
+        this.runtimeResources = new HashMap<>();
     }
 
     public MLToolSpec(StreamInput input) throws IOException {
@@ -214,5 +217,13 @@ public class MLToolSpec implements ToXContentObject {
 
     public static MLToolSpec fromStream(StreamInput in) throws IOException {
         return new MLToolSpec(in);
+    }
+
+    public void addRuntimeResource(String key, Object value) {
+        this.runtimeResources.put(key, value);
+    }
+
+    public Object getRuntimeResource(String key) {
+        return this.runtimeResources.get(key);
     }
 }

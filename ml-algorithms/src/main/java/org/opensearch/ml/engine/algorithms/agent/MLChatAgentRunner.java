@@ -78,6 +78,7 @@ import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.engine.tools.MLModelTool;
+import org.opensearch.ml.engine.tools.McpSseTool;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.ml.repackage.com.google.common.collect.Lists;
 import org.opensearch.transport.client.Client;
@@ -170,7 +171,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
             params
                 .put(
                     TOOL_TEMPLATE,
-                    "{\"type\": \"function\", \"function\": { \"name\": \"${tool.name}\", \"description\": \"${tool.description}\", \"parameters\": ${tool.attributes.input_schema}, \"strict\": ${tool.attributes.strict} } }"
+                    "{\"type\": \"function\", \"function\": { \"name\": \"${tool.name}\", \"description\": \"${tool.description}\", \"parameters\": ${tool.attributes.input_schema}, \"strict\": ${tool.attributes.strict:-false} } }"
                 );
             params.put(TOOL_CALLS_PATH, "$.choices[0].message.tool_calls");
             params.put(TOOL_CALLS_TOOL_NAME, "function.name");
@@ -345,7 +346,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
     }
 
     private void runAgent(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener, Memory memory, String sessionId) {
-        List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, params);
+        List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, params, client);
         Map<String, Tool> tools = new HashMap<>();
         Map<String, MLToolSpec> toolSpecMap = new HashMap<>();
         createTools(toolFactories, params, toolSpecs, tools, toolSpecMap, mlAgent);
@@ -439,6 +440,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             additionalInfo,
                             finalAnswer
                         );
+                        cleanUpResource(tools);
                         return;
                     }
 
@@ -588,6 +590,17 @@ public class MLChatAgentRunner implements MLAgentRunner {
             tenantId
         );
         client.execute(MLPredictionTaskAction.INSTANCE, request, firstListener);
+    }
+
+    private void cleanUpResource(Map<String, Tool> tools) {
+        // TODO: Add cleanup for other agents
+        for (Map.Entry<String, Tool> entry : tools.entrySet()) {
+            Tool tool = entry.getValue();
+            if (tool instanceof McpSseTool) {
+                // TODO: make this more general, avoid checking specific tool type
+                ((McpSseTool) tool).getMcpSyncClient().closeGracefully();
+            }
+        }
     }
 
     private static List<ModelTensors> createFinalAnswerTensors(List<ModelTensors> sessionId, List<ModelTensor> lastThought) {

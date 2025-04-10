@@ -36,4 +36,11 @@ grant {
 
     // for accessing Unix domain socket on windows
     permission java.net.NetPermission "accessUnixDomainSocket";
+
+    permission java.lang.RuntimePermission "modifyThread";
+    permission java.lang.RuntimePermission "modifyThreadGroup";
+    permission org.opensearch.secure_sm.ThreadPermission "modifyArbitraryThread";
+    permission java.net.SocketPermission "localhost:8090", "connect,accept,resolve";
+    permission java.net.URLPermission "http://localhost:8090/*", "*:*";
+    permission java.net.URLPermission "http://localhost:8090/messages/*", "*:*";
 };
