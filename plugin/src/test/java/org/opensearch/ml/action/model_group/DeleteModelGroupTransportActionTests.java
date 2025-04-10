@@ -106,6 +106,7 @@ public class DeleteModelGroupTransportActionTests extends OpenSearchTestCase {
                 transportService,
                 actionFilters,
                 client,
+                settings,
                 sdkClient,
                 xContentRegistry,
                 clusterService,

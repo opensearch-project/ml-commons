@@ -94,6 +94,7 @@ public class GetModelGroupTransportActionTests extends OpenSearchTestCase {
                 transportService,
                 actionFilters,
                 client,
+                settings,
                 sdkClient,
                 xContentRegistry,
                 clusterService,
