@@ -12,7 +12,6 @@ import static org.opensearch.ml.common.CommonValue.VERSION_3_0_0;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 import java.io.IOException;
-import java.util.HashMap;
 import java.util.Map;
 
 import org.opensearch.Version;
@@ -40,6 +39,7 @@ public class MLToolSpec implements ToXContentObject {
     public static final String ATTRIBUTES_FIELD = "attributes";
     public static final String INCLUDE_OUTPUT_IN_AGENT_RESPONSE = "include_output_in_agent_response";
     public static final String CONFIG_FIELD = "config";
+    public static final String RUN_TIME_RESOURCES_FIELD = "runtime_resources";
 
     private String type;
     private String name;
@@ -61,7 +61,8 @@ public class MLToolSpec implements ToXContentObject {
         Map<String, String> attributes,
         boolean includeOutputInAgentResponse,
         Map<String, String> configMap,
-        String tenantId
+        String tenantId,
+        Map<String, Object> runtimeResources
     ) {
         if (type == null) {
             throw new IllegalArgumentException("tool type is null");
@@ -74,7 +75,7 @@ public class MLToolSpec implements ToXContentObject {
         this.includeOutputInAgentResponse = includeOutputInAgentResponse;
         this.configMap = configMap;
         this.tenantId = tenantId;
-        this.runtimeResources = new HashMap<>();
+        this.runtimeResources = runtimeResources;
     }
 
     public MLToolSpec(StreamInput input) throws IOException {
@@ -92,6 +93,11 @@ public class MLToolSpec implements ToXContentObject {
         this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
         if (input.getVersion().onOrAfter(VERSION_3_0_0) && input.available() > 0 && input.readBoolean()) {
             attributes = input.readMap(StreamInput::readString, StreamInput::readOptionalString);
+        }
+        if (streamInputVersion.onOrAfter(VERSION_3_0_0)) {
+            if (input.readBoolean()) {
+                runtimeResources = input.readMap(StreamInput::readString, StreamInput::readGenericValue);
+            }
         }
     }
 
@@ -126,6 +132,14 @@ public class MLToolSpec implements ToXContentObject {
                 out.writeBoolean(false);
             }
         }
+        if (streamOutputVersion.onOrAfter(VERSION_3_0_0)) {
+            if (runtimeResources != null) {
+                out.writeBoolean(true);
+                out.writeMap(runtimeResources, StreamOutput::writeString, StreamOutput::writeGenericValue);
+            } else {
+                out.writeBoolean(false);
+            }
+        }
     }
 
     @Override
@@ -153,6 +167,9 @@ public class MLToolSpec implements ToXContentObject {
         if (tenantId != null) {
             builder.field(TENANT_ID_FIELD, tenantId);
         }
+        if (runtimeResources != null && !runtimeResources.isEmpty()) {
+            builder.field(RUN_TIME_RESOURCES_FIELD, runtimeResources);
+        }
         builder.endObject();
         return builder;
     }
@@ -166,6 +183,7 @@ public class MLToolSpec implements ToXContentObject {
         boolean includeOutputInAgentResponse = false;
         Map<String, String> configMap = null;
         String tenantId = null;
+        Map<String, Object> runtimeResources = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -197,6 +215,8 @@ public class MLToolSpec implements ToXContentObject {
                 case TENANT_ID_FIELD:
                     tenantId = parser.textOrNull();
                     break;
+                case RUN_TIME_RESOURCES_FIELD:
+                    runtimeResources = parser.map();
                 default:
                     parser.skipChildren();
                     break;
@@ -212,6 +232,7 @@ public class MLToolSpec implements ToXContentObject {
             .includeOutputInAgentResponse(includeOutputInAgentResponse)
             .configMap(configMap)
             .tenantId(tenantId)
+            .runtimeResources(runtimeResources)
             .build();
     }
 

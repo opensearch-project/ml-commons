@@ -750,7 +750,10 @@ public class AgentUtils {
         }
         Map<String, Object> toolParams = new HashMap<>();
         toolParams.putAll(executeParams);
-        toolParams.putAll(toolSpec.getRuntimeResources());
+        Map<String, Object> runtimeResources = toolSpec.getRuntimeResources();
+        if (runtimeResources != null) {
+            toolParams.putAll(runtimeResources);
+        }
         Tool tool = toolFactories.get(toolSpec.getType()).create(toolParams);
         String toolName = getToolName(toolSpec);
         tool.setName(toolName);
