@@ -72,14 +72,10 @@ public class CommonValue {
     public static final Version VERSION_3_0_0 = Version.fromString("3.0.0");
 
     // Connector Constants
-    public static final String ACCESS_KEY_FIELD = "access_key";
-    public static final String SECRET_KEY_FIELD = "secret_key";
-    public static final String SESSION_TOKEN_FIELD = "session_token";
     public static final String NAME_FIELD = "name";
     public static final String VERSION_FIELD = "version";
     public static final String DESCRIPTION_FIELD = "description";
     public static final String PROTOCOL_FIELD = "protocol";
-    public static final String ACTIONS_FIELD = "actions";
     public static final String CREDENTIAL_FIELD = "credential";
     public static final String PARAMETERS_FIELD = "parameters";
     public static final String CREATED_TIME_FIELD = "created_time";

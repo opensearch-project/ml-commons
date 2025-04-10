@@ -12,6 +12,7 @@ import static org.opensearch.ml.common.CommonValue.VERSION_3_0_0;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Map;
 
 import org.opensearch.Version;
@@ -241,6 +242,9 @@ public class MLToolSpec implements ToXContentObject {
     }
 
     public void addRuntimeResource(String key, Object value) {
+        if (this.runtimeResources == null) {
+            this.runtimeResources = new HashMap<>();
+        }
         this.runtimeResources.put(key, value);
     }
 
