@@ -150,9 +150,6 @@ public class MLToolSpec implements ToXContentObject {
         if (tenantId != null) {
             builder.field(TENANT_ID_FIELD, tenantId);
         }
-        if (attributes != null && !attributes.isEmpty()) {
-            builder.field(ATTRIBUTES_FIELD, attributes);
-        }
         builder.endObject();
         return builder;
     }
