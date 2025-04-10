@@ -28,6 +28,7 @@ public class MLToolSpecTest {
         Collections.emptyMap(),
         false,
         Map.of("test", "test"),
+        null,
         null
     );
 
@@ -69,6 +70,7 @@ public class MLToolSpecTest {
             Map.of("test_key", "test_value"),
             Collections.emptyMap(),
             false,
+            null,
             null,
             null
         );
@@ -191,6 +193,7 @@ public class MLToolSpecTest {
             Collections.emptyMap(),
             false,
             Collections.emptyMap(),
+            null,
             null
         );
         BytesStreamOutput output = new BytesStreamOutput();
@@ -214,6 +217,7 @@ public class MLToolSpecTest {
             Map.of("test_key", "test_value"),
             Collections.emptyMap(),
             false,
+            null,
             null,
             null
         );

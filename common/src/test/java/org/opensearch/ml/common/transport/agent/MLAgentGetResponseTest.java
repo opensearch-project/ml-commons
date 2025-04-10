@@ -86,6 +86,7 @@ public class MLAgentGetResponseTest {
                         Collections.emptyMap(),
                         false,
                         Collections.emptyMap(),
+                        null,
                         null
                     )
                 ),
