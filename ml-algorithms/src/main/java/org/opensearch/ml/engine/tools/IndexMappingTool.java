@@ -9,7 +9,6 @@ import static org.opensearch.action.support.clustermanager.ClusterManagerNodeReq
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -91,7 +90,7 @@ public class IndexMappingTool implements Tool {
         try {
             List<String> indexList = new ArrayList<>();
             if (StringUtils.isNotBlank(parameters.get("index"))) {
-                indexList = parameters.containsKey("index") ? gson.fromJson(parameters.get("index"), List.class) : Collections.emptyList();
+                indexList = gson.fromJson(parameters.get("index"), List.class);
             }
 
             if (indexList.isEmpty()) {
@@ -104,7 +103,7 @@ public class IndexMappingTool implements Tool {
             final String[] indices = indexList.toArray(Strings.EMPTY_ARRAY);
 
             final IndicesOptions indicesOptions = IndicesOptions.strictExpand();
-            final boolean local = Boolean.parseBoolean(parameters.get("local"));
+            final boolean local = Boolean.parseBoolean(parameters.getOrDefault("local", "false"));
             final TimeValue clusterManagerNodeTimeout = DEFAULT_CLUSTER_MANAGER_NODE_TIMEOUT;
 
             ActionListener<GetIndexResponse> internalListener = new ActionListener<GetIndexResponse>() {

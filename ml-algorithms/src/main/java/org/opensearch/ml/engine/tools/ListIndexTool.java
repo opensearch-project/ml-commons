@@ -70,7 +70,7 @@ public class ListIndexTool implements Tool {
     // This needs to be changed once it's changed in opensearch core in RestIndicesListAction.
     private static final int MAX_SUPPORTED_LIST_INDICES_PAGE_SIZE = 5000;
     public static final int DEFAULT_PAGE_SIZE = 100;
-    private static final String DEFAULT_DESCRIPTION = String
+    public static final String DEFAULT_DESCRIPTION = String
         .join(
             " ",
             "This tool gets index information from the OpenSearch cluster.",
