@@ -87,7 +87,7 @@ public class MLToolSpec implements ToXContentObject {
             configMap = input.readMap(StreamInput::readString, StreamInput::readOptionalString);
         }
         this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
-        if (input.available() > 0 && input.readBoolean()) {
+        if (input.getVersion().onOrAfter(VERSION_3_0_0) && input.available() > 0 && input.readBoolean()) {
             attributes = input.readMap(StreamInput::readString, StreamInput::readOptionalString);
         }
     }
@@ -149,6 +149,9 @@ public class MLToolSpec implements ToXContentObject {
         }
         if (tenantId != null) {
             builder.field(TENANT_ID_FIELD, tenantId);
+        }
+        if (attributes != null && !attributes.isEmpty()) {
+            builder.field(ATTRIBUTES_FIELD, attributes);
         }
         builder.endObject();
         return builder;
