@@ -88,7 +88,7 @@ public class MLToolSpec implements ToXContentObject {
         }
         this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
         if (input.available() > 0 && input.readBoolean()) {
-            parameters = input.readMap(StreamInput::readString, StreamInput::readOptionalString);
+            attributes = input.readMap(StreamInput::readString, StreamInput::readOptionalString);
         }
     }
 
