@@ -117,35 +117,26 @@ public class MLStatsInput implements ToXContentObject, Writeable {
     }
 
     public MLStatsInput(StreamInput input) throws IOException {
-        targetStatLevels = input.readBoolean() ? input.readEnumSet(MLStatLevel.class) : EnumSet.noneOf(MLStatLevel.class);
-        clusterLevelStats = input.readBoolean() ? input.readEnumSet(MLClusterLevelStat.class) : EnumSet.noneOf(MLClusterLevelStat.class);
-        nodeLevelStats = input.readBoolean() ? input.readEnumSet(MLNodeLevelStat.class) : EnumSet.noneOf(MLNodeLevelStat.class);
-        actionLevelStats = input.readBoolean() ? input.readEnumSet(MLActionLevelStat.class) : EnumSet.noneOf(MLActionLevelStat.class);
+        targetStatLevels = input.readOptionalEnumSet(MLStatLevel.class);
+        clusterLevelStats = input.readOptionalEnumSet(MLClusterLevelStat.class);
+        nodeLevelStats = input.readOptionalEnumSet(MLNodeLevelStat.class);
+        actionLevelStats = input.readOptionalEnumSet(MLActionLevelStat.class);
         nodeIds = input.readBoolean() ? new HashSet<>(input.readStringList()) : new HashSet<>();
         models = input.readBoolean() ? new HashSet<>(input.readStringList()) : new HashSet<>();
-        algorithms = input.readBoolean() ? input.readEnumSet(FunctionName.class) : EnumSet.noneOf(FunctionName.class);
-        actions = input.readBoolean() ? input.readEnumSet(ActionName.class) : EnumSet.noneOf(ActionName.class);
+        algorithms = input.readOptionalEnumSet(FunctionName.class);
+        actions = input.readOptionalEnumSet(ActionName.class);
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        writeEnumSet(out, targetStatLevels);
-        writeEnumSet(out, clusterLevelStats);
-        writeEnumSet(out, nodeLevelStats);
-        writeEnumSet(out, actionLevelStats);
+        out.writeOptionalEnumSet(targetStatLevels);
+        out.writeOptionalEnumSet(clusterLevelStats);
+        out.writeOptionalEnumSet(nodeLevelStats);
+        out.writeOptionalEnumSet(actionLevelStats);
         out.writeOptionalStringCollection(nodeIds);
         out.writeOptionalStringCollection(models);
-        writeEnumSet(out, algorithms);
-        writeEnumSet(out, actions);
-    }
-
-    private void writeEnumSet(StreamOutput out, EnumSet<?> set) throws IOException {
-        if (set != null && set.size() > 0) {
-            out.writeBoolean(true);
-            out.writeEnumSet(set);
-        } else {
-            out.writeBoolean(false);
-        }
+        out.writeOptionalEnumSet(algorithms);
+        out.writeOptionalEnumSet(actions);
     }
 
     public static MLStatsInput parse(XContentParser parser) throws IOException {
