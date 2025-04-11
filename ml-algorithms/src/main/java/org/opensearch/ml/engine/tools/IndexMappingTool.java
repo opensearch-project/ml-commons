@@ -8,12 +8,13 @@ package org.opensearch.ml.engine.tools;
 import static org.opensearch.action.support.clustermanager.ClusterManagerNodeRequest.DEFAULT_CLUSTER_MANAGER_NODE_TIMEOUT;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
-import java.util.Collections;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.util.Strings;
 import org.opensearch.action.admin.indices.get.GetIndexRequest;
 import org.opensearch.action.admin.indices.get.GetIndexResponse;
@@ -34,6 +35,8 @@ import lombok.Setter;
 @ToolAnnotation(IndexMappingTool.TYPE)
 public class IndexMappingTool implements Tool {
     public static final String TYPE = "IndexMappingTool";
+    public static final String INPUT_SCHEMA_FIELD = "input_schema";
+    public static final String STRICT_FIELD = "strict";
     private static final String DEFAULT_DESCRIPTION = String
         .join(
             " ",
@@ -44,6 +47,12 @@ public class IndexMappingTool implements Tool {
             "The mappings are in JSON format under the key 'properties' which includes the field name as a key and a JSON object with field type under the key 'type'.",
             "The settings are in flattened map with 'index' as the top element and key-value pairs for each setting."
         );
+    public static final String DEFAULT_INPUT_SCHEMA = "{\"type\":\"object\",\""
+        + "properties\":{\"index\":{\"type\":\"array\",\"description\":\"OpenSearch index name list, separated by comma. "
+        + "for example: [\\\"index1\\\", \\\"index2\\\"]\","
+        + "\"items\":{\"type\":\"string\"}}},"
+        + "\"required\":[\"index\"],"
+        + "\"additionalProperties\":false}";
 
     @Setter
     @Getter
@@ -67,12 +76,8 @@ public class IndexMappingTool implements Tool {
         this.client = client;
 
         this.attributes = new HashMap<>();
-        attributes
-            .put(
-                "input_schema",
-                "{\"type\":\"object\",\"properties\":{\"index\":{\"type\":\"string\",\"description\":\"OpenSearch index name\"}},\"required\":[\"index\"],\"additionalProperties\":false}"
-            );
-        attributes.put("strict", true);
+        attributes.put(INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA);
+        attributes.put(STRICT_FIELD, true);
 
         outputParser = new Parser<>() {
             @Override
@@ -86,75 +91,80 @@ public class IndexMappingTool implements Tool {
 
     @Override
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
-        @SuppressWarnings("unchecked")
-        List<String> indexList = parameters.containsKey("index")
-            ? gson.fromJson(parameters.get("index"), List.class)
-            : Collections.emptyList();
-        if (indexList.isEmpty()) {
-            @SuppressWarnings("unchecked")
-            T empty = (T) ("There were no results searching the index parameter [" + parameters.get("index") + "].");
-            listener.onResponse(empty);
-            return;
-        }
+        try {
+            List<String> indexList = new ArrayList<>();
+            if (StringUtils.isNotBlank(parameters.get("index"))) {
+                indexList = gson.fromJson(parameters.get("index"), List.class);
+            }
 
-        final String[] indices = indexList.toArray(Strings.EMPTY_ARRAY);
+            if (indexList.isEmpty()) {
+                @SuppressWarnings("unchecked")
+                T empty = (T) ("There were no results searching the index parameter [" + parameters.get("index") + "].");
+                listener.onResponse(empty);
+                return;
+            }
 
-        final IndicesOptions indicesOptions = IndicesOptions.strictExpand();
-        final boolean local = Boolean.parseBoolean(parameters.get("local"));
-        final TimeValue clusterManagerNodeTimeout = DEFAULT_CLUSTER_MANAGER_NODE_TIMEOUT;
+            final String[] indices = indexList.toArray(Strings.EMPTY_ARRAY);
 
-        ActionListener<GetIndexResponse> internalListener = new ActionListener<GetIndexResponse>() {
+            final IndicesOptions indicesOptions = IndicesOptions.strictExpand();
+            final boolean local = Boolean.parseBoolean(parameters.getOrDefault("local", "false"));
+            final TimeValue clusterManagerNodeTimeout = DEFAULT_CLUSTER_MANAGER_NODE_TIMEOUT;
 
-            @Override
-            public void onResponse(GetIndexResponse getIndexResponse) {
-                try {
-                    // Handle empty response
-                    if (getIndexResponse.indices().length == 0) {
-                        @SuppressWarnings("unchecked")
-                        T empty = (T) ("There were no results searching the index parameter [" + parameters.get("index") + "].");
-                        listener.onResponse(empty);
-                        return;
-                    }
-                    StringBuilder sb = new StringBuilder();
-                    for (String index : getIndexResponse.indices()) {
-                        sb.append("index: ").append(index).append("\n\n");
+            ActionListener<GetIndexResponse> internalListener = new ActionListener<GetIndexResponse>() {
 
-                        MappingMetadata mapping = getIndexResponse.mappings().get(index);
-                        if (mapping != null) {
-                            sb.append("mappings:\n");
-                            for (Entry<String, Object> entry : mapping.sourceAsMap().entrySet()) {
-                                sb.append(entry.getKey()).append("=").append(entry.getValue()).append('\n');
+                @Override
+                public void onResponse(GetIndexResponse getIndexResponse) {
+                    try {
+                        // Handle empty response
+                        if (getIndexResponse.indices().length == 0) {
+                            @SuppressWarnings("unchecked")
+                            T empty = (T) ("There were no results searching the index parameter [" + parameters.get("index") + "].");
+                            listener.onResponse(empty);
+                            return;
+                        }
+                        StringBuilder sb = new StringBuilder();
+                        for (String index : getIndexResponse.indices()) {
+                            sb.append("index: ").append(index).append("\n\n");
+
+                            MappingMetadata mapping = getIndexResponse.mappings().get(index);
+                            if (mapping != null) {
+                                sb.append("mappings:\n");
+                                for (Entry<String, Object> entry : mapping.sourceAsMap().entrySet()) {
+                                    sb.append(entry.getKey()).append("=").append(entry.getValue()).append('\n');
+                                }
+                                sb.append("\n\n");
                             }
-                            sb.append("\n\n");
+
+                            Settings settings = getIndexResponse.settings().get(index);
+                            if (settings != null) {
+                                sb.append("settings:\n").append(settings.toDelimitedString('\n')).append("\n\n");
+                            }
                         }
 
-                        Settings settings = getIndexResponse.settings().get(index);
-                        if (settings != null) {
-                            sb.append("settings:\n").append(settings.toDelimitedString('\n')).append("\n\n");
-                        }
+                        @SuppressWarnings("unchecked")
+                        T response = (T) sb.toString();
+                        listener.onResponse(response);
+                    } catch (Exception e) {
+                        onFailure(e);
                     }
-
-                    @SuppressWarnings("unchecked")
-                    T response = (T) sb.toString();
-                    listener.onResponse(response);
-                } catch (Exception e) {
-                    onFailure(e);
                 }
-            }
 
-            @Override
-            public void onFailure(final Exception e) {
-                listener.onFailure(e);
-            }
+                @Override
+                public void onFailure(final Exception e) {
+                    listener.onFailure(e);
+                }
 
-        };
-        final GetIndexRequest getIndexRequest = new GetIndexRequest()
-            .indices(indices)
-            .indicesOptions(indicesOptions)
-            .local(local)
-            .clusterManagerNodeTimeout(clusterManagerNodeTimeout);
+            };
+            final GetIndexRequest getIndexRequest = new GetIndexRequest()
+                .indices(indices)
+                .indicesOptions(indicesOptions)
+                .local(local)
+                .clusterManagerNodeTimeout(clusterManagerNodeTimeout);
 
-        client.admin().indices().getIndex(getIndexRequest, internalListener);
+            client.admin().indices().getIndex(getIndexRequest, internalListener);
+        } catch (Exception e) {
+            listener.onFailure(e);
+        }
     }
 
     @Override

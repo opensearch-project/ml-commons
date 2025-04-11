@@ -693,6 +693,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     tools.get(action).run(parameters, toolListener); // run tool
                 }
             } catch (Exception e) {
+                log.error("Failed to run tool {}", action, e);
                 nextStepListener
                     .onResponse(String.format(Locale.ROOT, "Failed to run the tool %s with the error message %s.", action, e.getMessage()));
             }
