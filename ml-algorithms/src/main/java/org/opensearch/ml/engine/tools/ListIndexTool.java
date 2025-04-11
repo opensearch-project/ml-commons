@@ -67,6 +67,8 @@ import lombok.extern.log4j.Log4j2;
 @ToolAnnotation(ListIndexTool.TYPE)
 public class ListIndexTool implements Tool {
     public static final String TYPE = "ListIndexTool";
+    public static final String INPUT_SCHEMA_FIELD = "input_schema";
+    public static final String STRICT_FIELD = "strict";
     // This needs to be changed once it's changed in opensearch core in RestIndicesListAction.
     private static final int MAX_SUPPORTED_LIST_INDICES_PAGE_SIZE = 5000;
     public static final int DEFAULT_PAGE_SIZE = 100;
@@ -78,6 +80,11 @@ public class ListIndexTool implements Tool {
             "and `local` which means whether to return information from the local node only instead of the cluster manager node (default is false).",
             "The tool returns the indices information, including `health`, `status`, `index`, `uuid`, `pri`, `rep`, `docs.count`, `docs.deleted`, `store.size`, `pri.store. size `, `pri.store.size`, `pri.store`."
         );
+    public static final String DEFAULT_INPUT_SCHEMA = "{\"type\":\"object\"," +
+            "\"properties\":{\"indices\":{\"type\":\"array\",\"items\": {\"type\": \"string\"}," +
+            "\"description\":\"OpenSearch index name list, separated by comma. " +
+            "for example: [\\\"index1\\\", \\\"index2\\\"], use empty array [] to list all indices in the cluster\"}}," +
+            "\"additionalProperties\":false}";
 
     @Setter
     @Getter
@@ -114,11 +121,8 @@ public class ListIndexTool implements Tool {
 
         this.attributes = new HashMap<>();
         attributes
-            .put(
-                "input_schema",
-                "{\"type\":\"object\",\"properties\":{\"indices\":{\"type\":\"array\",\"items\": {\"type\": \"string\"},\"description\":\"OpenSearch index name list, separated by comma. for example: [\\\"index1\\\", \\\"index2\\\"], use empty array [] to list all indices in the cluster\"}},\"additionalProperties\":false}"
-            );
-        attributes.put("strict", false);
+            .put(INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA);
+        attributes.put(STRICT_FIELD, false);
     }
 
     @Override
