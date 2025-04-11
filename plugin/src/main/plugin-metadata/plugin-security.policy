@@ -12,6 +12,9 @@ grant {
     // Register model
     permission java.net.SocketPermission "*", "connect,resolve";
 
+    // for accessing Unix domain socket on windows
+    permission java.net.NetPermission "accessUnixDomainSocket";
+
     // Deploy model
     permission java.lang.RuntimePermission "createClassLoader";
     permission java.lang.RuntimePermission "loadLibrary.*";

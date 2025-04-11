@@ -83,7 +83,16 @@ allprojects {
     }
 
     project.getExtensions().getExtraProperties().set("versions", VersionProperties.getVersions());
+}
 
+configurations {
+    agent
+}
+
+dependencies {
+    agent "org.opensearch:opensearch-agent-bootstrap:${opensearch_version}"
+    agent "org.opensearch:opensearch-agent:${opensearch_version}"
+    agent "net.bytebuddy:byte-buddy:1.17.5"
 }
 
 subprojects {
@@ -114,4 +123,14 @@ task updateVersion {
         // Include the required files that needs to be updated with new Version
         ant.replaceregexp(file:'build.gradle', match: '"opensearch.version", "\\d.*"', replace: '"opensearch.version", "' + newVersion.tokenize('-')[0] + '-SNAPSHOT"', flags:'g', byline:true)
     }
+}
+
+task prepareAgent(type: Copy) {
+    from(configurations.agent)
+    into "$buildDir/agent"
+}
+
+tasks.withType(Test) {
+    dependsOn prepareAgent
+    jvmArgs += ["-javaagent:" + project.layout.buildDirectory.file("agent/opensearch-agent-${opensearch_version}.jar").get()]
 }

@@ -23,6 +23,10 @@ plugins {
     id 'com.diffplug.spotless' version '6.25.0'
 }
 
+configurations {
+    agent
+}
+
 dependencies {
     implementation project(path: ":${rootProject.name}-common", configuration: 'shadow')
     implementation group: 'org.opensearch', name: 'opensearch', version: "${opensearch_version}"
@@ -47,6 +51,10 @@ dependencies {
         exclude group: 'net.minidev', module: 'json-smart'
     }
     testImplementation('net.minidev:json-smart:2.5.2')
+
+    agent "org.opensearch:opensearch-agent-bootstrap:${opensearch_version}"
+    agent "org.opensearch:opensearch-agent:${opensearch_version}"
+    agent "net.bytebuddy:byte-buddy:1.17.5"
 }
 
 test {
@@ -89,4 +97,14 @@ spotless {
 
         eclipse().withP2Mirrors(Map.of("https://download.eclipse.org/", "https://mirror.umd.edu/eclipse/")).configFile rootProject.file('.eclipseformat.xml')
     }
+}
+
+task prepareAgent(type: Copy) {
+    from(configurations.agent)
+    into "$buildDir/agent"
+}
+
+tasks.withType(Test) {
+    dependsOn prepareAgent
+    jvmArgs += ["-javaagent:" + project.layout.buildDirectory.file("agent/opensearch-agent-${opensearch_version}.jar").get()]
 }
