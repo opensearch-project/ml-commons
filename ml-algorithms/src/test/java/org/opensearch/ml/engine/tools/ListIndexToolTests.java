@@ -16,7 +16,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
 
-import lombok.SneakyThrows;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -108,11 +107,14 @@ public class ListIndexToolTests {
     @Test
     public void test_getDefaultAttributes() {
         Map<String, Object> attributes = ListIndexTool.Factory.getInstance().create(Collections.emptyMap()).getAttributes();
-        assertEquals("{\"type\":\"object\",\"properties\":" +
-                "{\"indices\":{\"type\":\"array\",\"items\": {\"type\": \"string\"}," +
-                "\"description\":\"OpenSearch index name list, separated by comma. " +
-                "for example: [\\\"index1\\\", \\\"index2\\\"], use empty array [] to list all indices in the cluster\"}}," +
-                "\"additionalProperties\":false}", attributes.get(INPUT_SCHEMA_FIELD));
+        assertEquals(
+            "{\"type\":\"object\",\"properties\":"
+                + "{\"indices\":{\"type\":\"array\",\"items\": {\"type\": \"string\"},"
+                + "\"description\":\"OpenSearch index name list, separated by comma. "
+                + "for example: [\\\"index1\\\", \\\"index2\\\"], use empty array [] to list all indices in the cluster\"}},"
+                + "\"additionalProperties\":false}",
+            attributes.get(INPUT_SCHEMA_FIELD)
+        );
         assertEquals(false, attributes.get(STRICT_FIELD));
     }
 

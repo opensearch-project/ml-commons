@@ -47,12 +47,12 @@ public class IndexMappingTool implements Tool {
             "The mappings are in JSON format under the key 'properties' which includes the field name as a key and a JSON object with field type under the key 'type'.",
             "The settings are in flattened map with 'index' as the top element and key-value pairs for each setting."
         );
-    public static final String DEFAULT_INPUT_SCHEMA = "{\"type\":\"object\",\"" +
-            "properties\":{\"index\":{\"type\":\"array\",\"description\":\"OpenSearch index name list, separated by comma. " +
-            "for example: [\\\"index1\\\", \\\"index2\\\"]\"," +
-            "\"items\":{\"type\":\"string\"}}}," +
-            "\"required\":[\"index\"]," +
-            "\"additionalProperties\":false}";
+    public static final String DEFAULT_INPUT_SCHEMA = "{\"type\":\"object\",\""
+        + "properties\":{\"index\":{\"type\":\"array\",\"description\":\"OpenSearch index name list, separated by comma. "
+        + "for example: [\\\"index1\\\", \\\"index2\\\"]\","
+        + "\"items\":{\"type\":\"string\"}}},"
+        + "\"required\":[\"index\"],"
+        + "\"additionalProperties\":false}";
 
     @Setter
     @Getter
@@ -76,8 +76,7 @@ public class IndexMappingTool implements Tool {
         this.client = client;
 
         this.attributes = new HashMap<>();
-        attributes
-                .put(INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA);
+        attributes.put(INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA);
         attributes.put(STRICT_FIELD, true);
 
         outputParser = new Parser<>() {

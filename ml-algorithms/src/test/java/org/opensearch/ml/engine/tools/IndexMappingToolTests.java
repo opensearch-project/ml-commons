@@ -193,10 +193,13 @@ public class IndexMappingToolTests {
     @Test
     public void test_getDefaultAttributes() {
         Map<String, Object> attributes = IndexMappingTool.Factory.getInstance().create(Collections.emptyMap()).getAttributes();
-        assertEquals("{\"type\":\"object\",\"properties\":{\"index\":{\"type\":\"array\"," +
-                "\"description\":\"OpenSearch index name list, separated by comma. " +
-                "for example: [\\\"index1\\\", \\\"index2\\\"]\",\"items\":{\"type\":\"string\"}}},\"required\":[\"index\"]," +
-                "\"additionalProperties\":false}", attributes.get(INPUT_SCHEMA_FIELD));
+        assertEquals(
+            "{\"type\":\"object\",\"properties\":{\"index\":{\"type\":\"array\","
+                + "\"description\":\"OpenSearch index name list, separated by comma. "
+                + "for example: [\\\"index1\\\", \\\"index2\\\"]\",\"items\":{\"type\":\"string\"}}},\"required\":[\"index\"],"
+                + "\"additionalProperties\":false}",
+            attributes.get(INPUT_SCHEMA_FIELD)
+        );
         assertEquals(true, attributes.get(STRICT_FIELD));
     }
 }

@@ -80,11 +80,11 @@ public class ListIndexTool implements Tool {
             "and `local` which means whether to return information from the local node only instead of the cluster manager node (default is false).",
             "The tool returns the indices information, including `health`, `status`, `index`, `uuid`, `pri`, `rep`, `docs.count`, `docs.deleted`, `store.size`, `pri.store. size `, `pri.store.size`, `pri.store`."
         );
-    public static final String DEFAULT_INPUT_SCHEMA = "{\"type\":\"object\"," +
-            "\"properties\":{\"indices\":{\"type\":\"array\",\"items\": {\"type\": \"string\"}," +
-            "\"description\":\"OpenSearch index name list, separated by comma. " +
-            "for example: [\\\"index1\\\", \\\"index2\\\"], use empty array [] to list all indices in the cluster\"}}," +
-            "\"additionalProperties\":false}";
+    public static final String DEFAULT_INPUT_SCHEMA = "{\"type\":\"object\","
+        + "\"properties\":{\"indices\":{\"type\":\"array\",\"items\": {\"type\": \"string\"},"
+        + "\"description\":\"OpenSearch index name list, separated by comma. "
+        + "for example: [\\\"index1\\\", \\\"index2\\\"], use empty array [] to list all indices in the cluster\"}},"
+        + "\"additionalProperties\":false}";
 
     @Setter
     @Getter
@@ -120,8 +120,7 @@ public class ListIndexTool implements Tool {
         };
 
         this.attributes = new HashMap<>();
-        attributes
-            .put(INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA);
+        attributes.put(INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA);
         attributes.put(STRICT_FIELD, false);
     }
 
