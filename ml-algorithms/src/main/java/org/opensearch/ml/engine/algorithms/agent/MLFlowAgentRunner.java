@@ -77,7 +77,7 @@ public class MLFlowAgentRunner implements MLAgentRunner {
     @SuppressWarnings("removal")
     @Override
     public void run(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener) {
-        List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, params, client);
+        List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, params);
         StepListener<Object> firstStepListener = null;
         Tool firstTool = null;
         List<ModelTensor> flowAgentOutput = new ArrayList<>();

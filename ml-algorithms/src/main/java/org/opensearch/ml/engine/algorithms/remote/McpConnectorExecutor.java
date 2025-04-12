@@ -5,18 +5,27 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
+import static org.opensearch.ml.common.CommonValue.MCP_EXECUTOR_SERVICE;
+import static org.opensearch.ml.common.CommonValue.MCP_SYNC_CLIENT;
+import static org.opensearch.ml.common.CommonValue.MCP_TOOLS_FIELD;
+import static org.opensearch.ml.common.CommonValue.MCP_TOOL_DESCRIPTION_FIELD;
+import static org.opensearch.ml.common.CommonValue.MCP_TOOL_INPUT_SCHEMA_FIELD;
+import static org.opensearch.ml.common.CommonValue.MCP_TOOL_NAME_FIELD;
+import static org.opensearch.ml.common.CommonValue.TOOL_INPUT_SCHEMA_FIELD;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_SSE;
 
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.logging.log4j.Logger;
 import org.opensearch.common.collect.Tuple;
@@ -25,11 +34,13 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.McpConnector;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.annotation.ConnectorExecutor;
+import org.opensearch.ml.engine.tools.McpSseTool;
 import org.opensearch.script.ScriptService;
 import org.opensearch.transport.client.Client;
 
@@ -69,18 +80,21 @@ public class McpConnectorExecutor extends AbstractConnectorExecutor {
 
     public List<MLToolSpec> getMcpToolSpecs() {
         String mcpServerUrl = connector.getUrl();
+        if (mcpServerUrl == null) {
+            return Collections.emptyList();
+        }
         List<MLToolSpec> mcpToolSpecs = new ArrayList<>();
         try {
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
 
+                // TODO: USE DEFAULT EXECUTOR AFTER JSM SHUTDOWN
                 // Create a privileged executor service
-                ExecutorService executor = Executors.newCachedThreadPool(r -> {
+                ExecutorService executor = new ThreadPoolExecutor(2, 10, 60L, TimeUnit.SECONDS, new SynchronousQueue<>(), r -> {
                     Thread thread = new Thread(r);
                     thread.setDaemon(true);
                     return thread;
                 });
 
-                Map<String, String> credentials = connector.getDecryptedCredential();
                 Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());
                 Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
 
@@ -102,31 +116,27 @@ public class McpConnectorExecutor extends AbstractConnectorExecutor {
                 // Process the results
                 Gson gson = new Gson();
                 String json = gson.toJson(tools, McpSchema.ListToolsResult.class);
-                Map<?, ?> map = gson.fromJson(json, Map.class);
+                Map<String, Object> map = gson.fromJson(json, Map.class);
 
-                List<?> mcpTools = (List<?>) map.get("tools");
-                Set<String> basicMetaFields = Set.of("name", "description");
+                List<Object> mcpTools = (List<Object>) map.get(MCP_TOOLS_FIELD);
 
                 for (Object tool : mcpTools) {
+                    Map<String, Object> toolMap = (Map<String, Object>) tool;
                     Map<String, String> attributes = new HashMap<>();
-                    Map<?, ?> toolMap = (Map<?, ?>) tool;
+                    attributes.put(TOOL_INPUT_SCHEMA_FIELD, StringUtils.toJson(toolMap.get(MCP_TOOL_INPUT_SCHEMA_FIELD)));
 
-                    for (Object key : toolMap.keySet()) {
-                        String keyStr = (String) key;
-                        if (!basicMetaFields.contains(keyStr)) {
-                            // TODO: change to more flexible way
-                            attributes.put("input_schema", StringUtils.toJson(toolMap.get(keyStr)));
-                        }
-                    }
-
+                    String description = (toolMap.containsKey(MCP_TOOL_DESCRIPTION_FIELD))
+                        ? StringUtils.processTextDoc(toolMap.get(MCP_TOOL_DESCRIPTION_FIELD).toString())
+                        : McpSseTool.DEFAULT_DESCRIPTION;
                     MLToolSpec mlToolSpec = MLToolSpec
                         .builder()
-                        .type("McpSseTool")
-                        .name(toolMap.get("name").toString())
-                        .description(StringUtils.processTextDoc(toolMap.get("description").toString()))
+                        .type(McpSseTool.TYPE)
+                        .name(toolMap.get(MCP_TOOL_NAME_FIELD).toString())
+                        .description(description)
                         .attributes(attributes)
                         .build();
-                    mlToolSpec.addRuntimeResource("mcp_client", client);
+                    mlToolSpec.addRuntimeResource(MCP_SYNC_CLIENT, client);
+                    mlToolSpec.addRuntimeResource(MCP_EXECUTOR_SERVICE, executor);
                     mcpToolSpecs.add(mlToolSpec);
                 }
                 return null;
@@ -134,8 +144,7 @@ public class McpConnectorExecutor extends AbstractConnectorExecutor {
 
             return mcpToolSpecs;
         } catch (Exception e) {
-            log.error("Failed to get MCP tools", e);
-            return mcpToolSpecs;
+            throw new MLException("Unexpected error while getting MCP tools", e);
         }
     }
 

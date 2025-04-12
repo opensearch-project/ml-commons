@@ -159,7 +159,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         Map<String, String> firstToolExecuteParams = null;
         StepListener<Object> previousStepListener = null;
         Map<String, Object> additionalInfo = new ConcurrentHashMap<>();
-        List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, params, client);
+        List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, params);
 
         if (toolSpecs == null || toolSpecs.isEmpty()) {
             listener.onFailure(new IllegalArgumentException("no tool configured"));

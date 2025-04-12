@@ -5,8 +5,12 @@
 
 package org.opensearch.ml.engine.tools;
 
+import static org.opensearch.ml.common.CommonValue.MCP_EXECUTOR_SERVICE;
+import static org.opensearch.ml.common.CommonValue.MCP_SYNC_CLIENT;
+
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
 
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.spi.tools.Parser;
@@ -36,7 +40,7 @@ public class McpSseTool implements WithModelTool {
     @Setter
     private Map<String, Object> attributes;
     @VisibleForTesting
-    static String DEFAULT_DESCRIPTION = "Use this tool to run any model.";
+    public static String DEFAULT_DESCRIPTION = "A tool from MCP Server";
     @Getter
     @Setter
     private String description = DEFAULT_DESCRIPTION;
@@ -48,9 +52,13 @@ public class McpSseTool implements WithModelTool {
     @Getter
     @VisibleForTesting
     private Parser outputParser;
+    // TODO: USE DEFAULT EXECUTOR AFTER JSM SHUTDOWN
+    @Getter
+    private ExecutorService executorService;
 
-    public McpSseTool(McpSyncClient mcpSyncClient) {
+    public McpSseTool(McpSyncClient mcpSyncClient, ExecutorService executorService) {
         this.mcpSyncClient = mcpSyncClient;
+        this.executorService = executorService;
     }
 
     @Override
@@ -115,7 +123,7 @@ public class McpSseTool implements WithModelTool {
 
         @Override
         public McpSseTool create(Map<String, Object> map) {
-            return new McpSseTool((McpSyncClient) map.get("mcp_client"));
+            return new McpSseTool((McpSyncClient) map.get(MCP_SYNC_CLIENT), (ExecutorService) map.get(MCP_EXECUTOR_SERVICE));
         }
 
         @Override

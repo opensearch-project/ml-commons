@@ -264,7 +264,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         String conversationId,
         ActionListener<Object> finalListener
     ) {
-        List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, allParams, client);
+        List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, allParams);
 
         Map<String, Tool> tools = new HashMap<>();
         Map<String, MLToolSpec> toolSpecMap = new HashMap<>();

@@ -29,6 +29,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_TEMPLATE
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.VERBOSE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.constructToolParams;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTools;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMcpToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMessageHistoryLimit;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getToolName;
@@ -49,6 +50,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.action.ActionRequest;
@@ -346,12 +348,24 @@ public class MLChatAgentRunner implements MLAgentRunner {
     }
 
     private void runAgent(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener, Memory memory, String sessionId) {
-        List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, params, client);
-        Map<String, Tool> tools = new HashMap<>();
-        Map<String, MLToolSpec> toolSpecMap = new HashMap<>();
-        createTools(toolFactories, params, toolSpecs, tools, toolSpecMap, mlAgent);
+        List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, params);
 
-        runReAct(mlAgent.getLlm(), tools, toolSpecMap, params, memory, sessionId, mlAgent.getTenantId(), listener);
+        // Create a common method to handle both success and failure cases
+        Consumer<List<MLToolSpec>> processTools = (allToolSpecs) -> {
+            Map<String, Tool> tools = new HashMap<>();
+            Map<String, MLToolSpec> toolSpecMap = new HashMap<>();
+            createTools(toolFactories, params, allToolSpecs, tools, toolSpecMap, mlAgent);
+            runReAct(mlAgent.getLlm(), tools, toolSpecMap, params, memory, sessionId, mlAgent.getTenantId(), listener);
+        };
+
+        // Fetch MCP tools and handle both success and failure cases
+        getMcpToolSpecs(mlAgent, client, ActionListener.wrap(mcpTools -> {
+            toolSpecs.addAll(mcpTools);
+            processTools.accept(toolSpecs);
+        }, e -> {
+            log.warn("Failed to get MCP tools, continuing with base tools only", e);
+            processTools.accept(toolSpecs);
+        }));
     }
 
     private void runReAct(
@@ -599,6 +613,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
             if (tool instanceof McpSseTool) {
                 // TODO: make this more general, avoid checking specific tool type
                 ((McpSseTool) tool).getMcpSyncClient().closeGracefully();
+                ((McpSseTool) tool).getExecutorService().shutdown();
             }
         }
     }

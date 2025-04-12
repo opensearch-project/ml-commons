@@ -86,4 +86,15 @@ public class CommonValue {
     public static final String CLIENT_CONFIG_FIELD = "client_config";
     public static final String URL_FIELD = "url";
     public static final String HEADERS_FIELD = "headers";
+
+    // MCP Constants
+    public static final String MCP_TOOL_NAME_FIELD = "name";
+    public static final String MCP_TOOL_DESCRIPTION_FIELD = "description";
+    public static final String MCP_TOOL_INPUT_SCHEMA_FIELD = "inputSchema";
+    public static final String MCP_SYNC_CLIENT = "mcp_sync_client";
+    public static final String MCP_EXECUTOR_SERVICE = "mcp_executor_service";
+    public static final String MCP_TOOLS_FIELD = "tools";
+
+    // TOOL Constants
+    public static final String TOOL_INPUT_SCHEMA_FIELD = "input_schema";
 }

@@ -261,9 +261,9 @@ public class McpConnector implements Connector {
 
     @Override
     public void removeCredential() {
-        // this.credential = null;
-        // this.decryptedCredential = null;
-        // this.decryptedHeaders = null;
+        this.credential = null;
+        this.decryptedCredential = null;
+        this.decryptedHeaders = null;
     }
 
     @Override
@@ -404,7 +404,7 @@ public class McpConnector implements Connector {
 
     @Override
     public void validateConnectorURL(List<String> urlRegexes) {
-        Boolean hasMatchedUrl = false;
+        boolean hasMatchedUrl = false;
         for (String urlRegex : urlRegexes) {
             Pattern pattern = Pattern.compile(urlRegex);
             Matcher matcher = pattern.matcher(url);

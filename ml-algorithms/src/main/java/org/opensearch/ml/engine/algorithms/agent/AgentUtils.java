@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
+import static org.opensearch.core.action.ActionListener.*;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
@@ -31,13 +32,14 @@ import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -55,7 +57,6 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetRequest;
-import org.opensearch.ml.common.transport.connector.MLConnectorGetResponse;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.algorithms.remote.McpConnectorExecutor;
@@ -601,7 +602,7 @@ public class AgentUtils {
         return toolSpec.getName() != null ? toolSpec.getName() : toolSpec.getType();
     }
 
-    public static List<MLToolSpec> getMlToolSpecs(MLAgent mlAgent, Map<String, String> params, Client client) {
+    public static List<MLToolSpec> getMlToolSpecs(MLAgent mlAgent, Map<String, String> params) {
         String selectedToolsStr = params.get(SELECTED_TOOLS);
         List<MLToolSpec> toolSpecs = mlAgent.getTools();
         if (!Strings.isEmpty(selectedToolsStr)) {
@@ -618,17 +619,10 @@ public class AgentUtils {
             }
             toolSpecs = selectedToolSpecs;
         }
-        List<MLToolSpec> mcpToolSpecs = getMcpToolSpec(mlAgent, client);
-        if (toolSpecs == null) {
-            toolSpecs = new ArrayList<>();
-        }
-        toolSpecs.addAll(mcpToolSpecs);
         return toolSpecs;
     }
 
-    private static List<MLToolSpec> getMcpToolSpec(MLAgent mlAgent, Client client) {
-
-        List<MLToolSpec> mcpToolSpec = new ArrayList<>();
+    public static void getMcpToolSpecs(MLAgent mlAgent, Client client, ActionListener<List<MLToolSpec>> finalListener) {
         String tenantId = mlAgent.getTenantId();
 
         String mcpConnectorConfigJSON = null;
@@ -636,72 +630,87 @@ public class AgentUtils {
             mcpConnectorConfigJSON = mlAgent.getParameters().get(MCP_CONNECTORS_FIELD);
         }
 
-        // If mcpConnectorConfigJSON is null, return an empty list
+        // If mcpConnectorConfigJSON is null i.e no config for MCP Connectors, return an empty list
         if (mcpConnectorConfigJSON == null) {
-            return mcpToolSpec; // No config found, so return an empty list.
+            finalListener.onResponse(Collections.emptyList());
         }
 
         Type listType = new TypeToken<List<Map<String, Object>>>() {
         }.getType();
         List<Map<String, Object>> mcpConnectorConfigs = gson.fromJson(mcpConnectorConfigJSON, listType);
 
+        // Use AtomicInteger to track completion of all async operations
+        AtomicInteger remainingConnectors = new AtomicInteger(mcpConnectorConfigs.size());
+        List<MLToolSpec> finalToolSpecs = Collections.synchronizedList(new ArrayList<>());
+
+        // We make multiple Async calls in for loop, which happen in parallel
         for (Map<String, Object> mcpConnectorConfig : mcpConnectorConfigs) {
             String connectorId = (String) mcpConnectorConfig.get(MCP_CONNECTOR_ID_FIELD);
             List<String> toolFilters = (List<String>) mcpConnectorConfig.get(TOOL_FILTERS_FIELD);
-            List<MLToolSpec> mcpTools = getMCPToolsFromConnector(connectorId, tenantId, client);
 
-            if (toolFilters == null || toolFilters.isEmpty()) {
-                mcpToolSpec.addAll(mcpTools);
-            } else {
-                List<Pattern> compiledPatterns = toolFilters.stream().map(Pattern::compile).collect(Collectors.toList());
-                for (MLToolSpec toolSpec : mcpTools) {
-                    for (Pattern pattern : compiledPatterns) {
-                        if (pattern.matcher(toolSpec.getName()).matches()) {
-                            mcpToolSpec.add(toolSpec);
-                            break;
+            getMCPToolSpecsFromConnector(connectorId, tenantId, client, ActionListener.wrap(mcpToolspecs -> {
+                List<MLToolSpec> filteredTools;
+                if (toolFilters == null || toolFilters.isEmpty()) {
+                    filteredTools = mcpToolspecs;
+                } else {
+                    filteredTools = new ArrayList<>();
+                    List<Pattern> compiledPatterns = toolFilters.stream().map(Pattern::compile).collect(Collectors.toList());
+
+                    for (MLToolSpec toolSpec : mcpToolspecs) {
+                        for (Pattern pattern : compiledPatterns) {
+                            if (pattern.matcher(toolSpec.getName()).matches()) {
+                                filteredTools.add(toolSpec);
+                                break;
+                            }
                         }
                     }
                 }
-            }
-        }
 
-        return mcpToolSpec;
+                finalToolSpecs.addAll(filteredTools);
+
+                // If this is the last connector, send the final response
+                if (remainingConnectors.decrementAndGet() == 0) {
+                    finalListener.onResponse(finalToolSpecs);
+                }
+            }, e -> {
+                log.error("Error processing connector: " + connectorId, e);
+                // Even on error, we need to check if this is the last connector
+                if (remainingConnectors.decrementAndGet() == 0) {
+                    finalListener.onResponse(finalToolSpecs);
+                }
+            }));
+        }
     }
 
-    private static List<MLToolSpec> getMCPToolsFromConnector(String connectorId, String tenantId, Client client) {
-        // Create a request to get the connector
+    private static void getMCPToolSpecsFromConnector(
+        String connectorId,
+        String tenantId,
+        Client client,
+        ActionListener<List<MLToolSpec>> toolListener
+    ) {
         MLConnectorGetRequest request = new MLConnectorGetRequest(connectorId, tenantId, true);
 
-        // Use CompletableFuture to block until the connector is fetched
-        CompletableFuture<MLConnectorGetResponse> connectorFuture = new CompletableFuture<>();
-        client
-            .execute(
-                MLConnectorGetAction.INSTANCE,
-                request,
-                ActionListener
-                    .wrap(
-                        r -> connectorFuture.complete(MLConnectorGetResponse.fromActionResponse(r)),
-                        e -> connectorFuture.completeExceptionally(e)
-                    )
-            );
+        client.execute(MLConnectorGetAction.INSTANCE, request, ActionListener.wrap(r -> {
+            try {
+                Connector connector = r.getMlConnector();
+                if (!(connector instanceof McpConnector)) {
+                    log.error("Connector is not of type McpConnector");
+                    toolListener.onResponse(Collections.emptyList());
+                    return;
+                }
 
-        MLConnectorGetResponse response = null;
-        try {
-            response = connectorFuture.get();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-        Connector connector = response.getMlConnector();
-
-        if (!(connector instanceof McpConnector)) {
-            throw new IllegalArgumentException("Connector is not of type McpConnector");
-        }
-
-        McpConnectorExecutor connectorExecutor = MLEngineClassLoader.initInstance(connector.getProtocol(), connector, Connector.class);
-
-        List<MLToolSpec> mcpToolSpecs = connectorExecutor.getMcpToolSpecs();
-
-        return mcpToolSpecs;
+                McpConnectorExecutor connectorExecutor = MLEngineClassLoader
+                    .initInstance(connector.getProtocol(), connector, Connector.class);
+                List<MLToolSpec> mcpToolSpecs = connectorExecutor.getMcpToolSpecs();
+                toolListener.onResponse(mcpToolSpecs);
+            } catch (Exception e) {
+                log.error("Failed to get tools from connector: " + connectorId, e);
+                toolListener.onResponse(Collections.emptyList());
+            }
+        }, e -> {
+            log.error("Failed to get the MCP Connector: " + connectorId, e);
+            toolListener.onResponse(Collections.emptyList());
+        }));
     }
 
     public static void createTools(

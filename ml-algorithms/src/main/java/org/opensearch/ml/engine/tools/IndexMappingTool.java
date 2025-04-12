@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.tools;
 
 import static org.opensearch.action.support.clustermanager.ClusterManagerNodeRequest.DEFAULT_CLUSTER_MANAGER_NODE_TIMEOUT;
+import static org.opensearch.ml.common.CommonValue.TOOL_INPUT_SCHEMA_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.util.ArrayList;
@@ -35,7 +36,6 @@ import lombok.Setter;
 @ToolAnnotation(IndexMappingTool.TYPE)
 public class IndexMappingTool implements Tool {
     public static final String TYPE = "IndexMappingTool";
-    public static final String INPUT_SCHEMA_FIELD = "input_schema";
     public static final String STRICT_FIELD = "strict";
     private static final String DEFAULT_DESCRIPTION = String
         .join(
@@ -76,7 +76,7 @@ public class IndexMappingTool implements Tool {
         this.client = client;
 
         this.attributes = new HashMap<>();
-        attributes.put(INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA);
+        attributes.put(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA);
         attributes.put(STRICT_FIELD, true);
 
         outputParser = new Parser<>() {
