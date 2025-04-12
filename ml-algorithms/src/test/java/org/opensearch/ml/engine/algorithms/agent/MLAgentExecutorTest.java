@@ -170,7 +170,7 @@ public class MLAgentExecutorTest {
 
         settings = Settings.builder().build();
         mlAgentExecutor = Mockito
-            .spy(new MLAgentExecutor(client, sdkClient, settings, clusterService, xContentRegistry, toolFactories, memoryMap, false));
+            .spy(new MLAgentExecutor(client, sdkClient, settings, clusterService, xContentRegistry, toolFactories, memoryMap, false, null));
 
     }
 

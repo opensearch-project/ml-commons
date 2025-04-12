@@ -63,6 +63,7 @@ import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.Executable;
 import org.opensearch.ml.engine.annotation.Function;
+import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
@@ -107,6 +108,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     private Map<String, Tool.Factory> toolFactories;
     private Map<String, Memory.Factory> memoryFactoryMap;
     private volatile Boolean isMultiTenancyEnabled;
+    private Encryptor encryptor;
 
     public MLAgentExecutor(
         Client client,
@@ -116,7 +118,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         NamedXContentRegistry xContentRegistry,
         Map<String, Tool.Factory> toolFactories,
         Map<String, Memory.Factory> memoryFactoryMap,
-        Boolean isMultiTenancyEnabled
+        Boolean isMultiTenancyEnabled,
+        Encryptor encryptor
     ) {
         this.client = client;
         this.sdkClient = sdkClient;
@@ -126,6 +129,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         this.toolFactories = toolFactories;
         this.memoryFactoryMap = memoryFactoryMap;
         this.isMultiTenancyEnabled = isMultiTenancyEnabled;
+        this.encryptor = encryptor;
     }
 
     @Override
@@ -481,7 +485,16 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         final MLAgentType agentType = MLAgentType.from(mlAgent.getType().toUpperCase(Locale.ROOT));
         switch (agentType) {
             case FLOW:
-                return new MLFlowAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryFactoryMap);
+                return new MLFlowAgentRunner(
+                    client,
+                    settings,
+                    clusterService,
+                    xContentRegistry,
+                    toolFactories,
+                    memoryFactoryMap,
+                    sdkClient,
+                    encryptor
+                );
             case CONVERSATIONAL_FLOW:
                 return new MLConversationalFlowAgentRunner(
                     client,
@@ -489,10 +502,21 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     clusterService,
                     xContentRegistry,
                     toolFactories,
-                    memoryFactoryMap
+                    memoryFactoryMap,
+                    sdkClient,
+                    encryptor
                 );
             case CONVERSATIONAL:
-                return new MLChatAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryFactoryMap);
+                return new MLChatAgentRunner(
+                    client,
+                    settings,
+                    clusterService,
+                    xContentRegistry,
+                    toolFactories,
+                    memoryFactoryMap,
+                    sdkClient,
+                    encryptor
+                );
             case PLAN_EXECUTE_AND_REFLECT:
                 return new MLPlanExecuteAndReflectAgentRunner(
                     client,
@@ -500,7 +524,9 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     clusterService,
                     xContentRegistry,
                     toolFactories,
-                    memoryFactoryMap
+                    memoryFactoryMap,
+                    sdkClient,
+                    encryptor
                 );
             default:
                 throw new IllegalArgumentException("Unsupported agent type: " + mlAgent.getType());

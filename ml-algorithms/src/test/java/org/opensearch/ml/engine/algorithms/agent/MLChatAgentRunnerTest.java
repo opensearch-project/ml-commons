@@ -158,7 +158,7 @@ public class MLChatAgentRunnerTest {
             return null;
         }).when(mlMemoryManager).updateInteraction(any(), any(), mlMemoryManagerCapture.capture());
 
-        mlChatAgentRunner = new MLChatAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryMap);
+        mlChatAgentRunner = new MLChatAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryMap, null, null);
         when(firstToolFactory.create(Mockito.anyMap())).thenReturn(firstTool);
         when(secondToolFactory.create(Mockito.anyMap())).thenReturn(secondTool);
         when(firstTool.getName()).thenReturn(FIRST_TOOL);
