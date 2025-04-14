@@ -12,7 +12,7 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.engine.tools.IndexMappingTool.INPUT_SCHEMA_FIELD;
+import static org.opensearch.ml.common.CommonValue.TOOL_INPUT_SCHEMA_FIELD;
 import static org.opensearch.ml.engine.tools.IndexMappingTool.STRICT_FIELD;
 
 import java.util.Arrays;
@@ -198,7 +198,7 @@ public class IndexMappingToolTests {
                 + "\"description\":\"OpenSearch index name list, separated by comma. "
                 + "for example: [\\\"index1\\\", \\\"index2\\\"]\",\"items\":{\"type\":\"string\"}}},\"required\":[\"index\"],"
                 + "\"additionalProperties\":false}",
-            attributes.get(INPUT_SCHEMA_FIELD)
+            attributes.get(TOOL_INPUT_SCHEMA_FIELD)
         );
         assertEquals(true, attributes.get(STRICT_FIELD));
     }
