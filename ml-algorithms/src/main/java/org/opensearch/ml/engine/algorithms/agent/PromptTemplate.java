@@ -68,7 +68,7 @@ public class PromptTemplate {
     public static final String DEFAULT_PLANNER_PROMPT =
         "For the given objective, come up with a simple step by step plan. This plan should involve individual tasks, that if executed correctly will yield the correct answer. Do not add any superfluous steps. The result of the final step should be the final answer. Make sure that each step has all the information needed - do not skip steps. At all costs, do not execute the steps. You will be told when to execute the steps.";
 
-    public static final String REFLECT_PROMPT =
+    public static final String DEFAULT_REFLECT_PROMPT =
         "Update your plan accordingly. If no more steps are needed and you can return to the user, then respond with that. Otherwise, fill out the plan. Only add steps to the plan that still NEED to be done. Do not return previously done steps as part of the plan. Please follow the below response format.";
 
     public static final String PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT = "${parameters."
