@@ -33,7 +33,7 @@ public class HFModelTokenizerFactoryTests extends HFModelAnalyzerTestCase {
         assertTrue(tokenizer.incrementToken());
         assertEquals("test", charTermAttribute.toString());
         // byte ref for the token weight of test
-        assertEquals("[40 86 84 b6]", payloadAttribute.getPayload().toString());
+        assertEquals("[40 86 84 c7]", payloadAttribute.getPayload().toString());
         assertFalse(tokenizer.incrementToken());
     }
 
@@ -51,7 +51,7 @@ public class HFModelTokenizerFactoryTests extends HFModelAnalyzerTestCase {
         assertTrue(tokenizer.incrementToken());
         assertEquals("测", charTermAttribute.toString());
         // byte ref for the token weight of test
-        assertEquals("[3f dc 69 2f]", payloadAttribute.getPayload().toString());
+        assertEquals("[3f dc 69 7b]", payloadAttribute.getPayload().toString());
         assertFalse(tokenizer.incrementToken());
     }
 }

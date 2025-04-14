@@ -30,7 +30,7 @@ public class HFModelTokenizerTests extends HFModelAnalyzerTestCase {
     @Before
     public void setUp() throws Exception {
         super.setUp();
-        huggingFaceTokenizer = DJLUtils.buildHuggingFaceTokenizer("/analysis/tokenizer_en.json");
+        huggingFaceTokenizer = DJLUtils.buildHuggingFaceTokenizer(mlEngine.getAnalysisRootPath().resolve("test").resolve("tokenizer.json"));
         tokenWeights = new HashMap<>();
         tokenWeights.put("hello", 0.5f);
         tokenWeights.put("world", 0.3f);

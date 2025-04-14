@@ -7,6 +7,7 @@ package org.opensearch.ml.engine.analysis;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 import java.util.Map;
 
@@ -18,13 +19,23 @@ import ai.djl.huggingface.tokenizers.HuggingFaceTokenizer;
 public class DJLUtilsTests extends HFModelAnalyzerTestCase {
     @Test
     public void testBuildHuggingFaceTokenizer_InvalidTokenizerId() {
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> DJLUtils.buildHuggingFaceTokenizer("invalid-tokenizer"));
-        assertEquals("Invalid resource path invalid-tokenizer", exception.getMessage());
+        Exception exception = assertThrows(
+            RuntimeException.class,
+            () -> DJLUtils.buildHuggingFaceTokenizer(mlEngine.getAnalysisRootPath().resolve("test2").resolve("tokenizer.json"))
+        );
+        assertTrue(
+            exception
+                .getMessage()
+                .contains(
+                    "Failed to initialize Hugging Face tokenizer. java.security.PrivilegedActionException: java.nio.file.NoSuchFileException:"
+                )
+        );
     }
 
     @Test
     public void testBuildHuggingFaceTokenizer_thenSuccess() {
-        HuggingFaceTokenizer tokenizer = DJLUtils.buildHuggingFaceTokenizer("/analysis/tokenizer_en.json");
+        HuggingFaceTokenizer tokenizer = DJLUtils
+            .buildHuggingFaceTokenizer(mlEngine.getAnalysisRootPath().resolve("test").resolve("tokenizer.json"));
         assertNotNull(tokenizer);
         assertEquals(512, tokenizer.getMaxLength());
         Encoding result = tokenizer.encode("hello world");
@@ -34,13 +45,16 @@ public class DJLUtilsTests extends HFModelAnalyzerTestCase {
 
     @Test
     public void testFetchTokenWeights_InvalidParams() {
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> DJLUtils.fetchTokenWeights("invalid-file"));
-        assertEquals("Invalid resource path invalid-file", exception.getMessage());
+        Exception exception = assertThrows(
+            RuntimeException.class,
+            () -> DJLUtils.fetchTokenWeights(mlEngine.getAnalysisRootPath().resolve("test2").resolve("idf.json"))
+        );
+        assertTrue(exception.getMessage().contains("Failed to parse token weights file. java.nio.file.NoSuchFileException:"));
     }
 
     @Test
     public void testFetchTokenWeights_thenSuccess() {
-        Map<String, Float> tokenWeights = DJLUtils.fetchTokenWeights("/analysis/token_weights_en.txt");
+        Map<String, Float> tokenWeights = DJLUtils.fetchTokenWeights(mlEngine.getAnalysisRootPath().resolve("test").resolve("idf.json"));
         assertNotNull(tokenWeights);
         assertEquals(6.93775f, tokenWeights.get("hello"), 0.0001f);
     }

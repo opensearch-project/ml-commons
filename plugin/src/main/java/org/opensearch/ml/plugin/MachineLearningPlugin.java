@@ -540,7 +540,7 @@ public class MachineLearningPlugin extends Plugin
         nodeHelper = new DiscoveryNodeHelper(clusterService, settings);
         modelCacheHelper = new MLModelCacheHelper(clusterService, settings);
         cmHandler = new OpenSearchConversationalMemoryHandler(client, clusterService);
-        DJLUtils.setMLEngine(mlEngine);
+        DJLUtils.setMlEngine(mlEngine);
 
         JvmService jvmService = new JvmService(environment.settings());
         OsService osService = new OsService(environment.settings());
