@@ -1036,6 +1036,126 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
             @Override
             public void onResponse(SearchResponse newSearchResponse) {
                 assertEquals(newSearchResponse.getHits().getHits().length, 5);
+                MLInferenceSearchResponse mLInferenceSearchResponse = (MLInferenceSearchResponse) newSearchResponse;
+                String resultsInResponse = (String) mLInferenceSearchResponse.getParams().get("llm_response");
+                assertEquals("there is 1 value", resultsInResponse);
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                throw new RuntimeException(e);
+            }
+
+        };
+        responseProcessor.processResponseAsync(request, response, responseContext, listener);
+        verify(client, times(1)).execute(any(), any(), any());
+    }
+
+    /**
+     * Tests the successful processing of a response with a single pair of input and output mappings.
+     * read the query text into model config with query extensions
+     * read the prediction outcome as array and store in search extension
+     * @throws Exception if an error occurs during the test
+     */
+    @Test
+    public void testProcessResponseSuccessArrayWriteToExt() throws Exception {
+        String documentField = "text";
+        String modelInputField = "context";
+        List<Map<String, String>> inputMap = new ArrayList<>();
+        Map<String, String> input = new HashMap<>();
+        input.put(modelInputField, documentField);
+        inputMap.add(input);
+
+        String newDocumentField = "ext.ml_inference.results";
+        String modelOutputField = "results[*].document.text";
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put(newDocumentField, modelOutputField);
+        outputMap.add(output);
+        Map<String, String> modelConfig = new HashMap<>();
+        modelConfig.put("query", "positive review");
+        MLInferenceSearchResponseProcessor responseProcessor = new MLInferenceSearchResponseProcessor(
+            "model1",
+            inputMap,
+            outputMap,
+            optionalInputMaps,
+            optionalOutputMaps,
+            modelConfig,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            false,
+            false,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY,
+            false
+        );
+
+        SearchRequest request = getSearchRequest();
+        String fieldName = "text";
+        SearchResponse response = getSearchResponse(5, true, fieldName);
+
+        Map<String, Object> inferenceResultMap = new HashMap<>();
+
+        Map<String, Object> doc1 = new HashMap<>();
+        Map<String, Object> doc1Text = new HashMap<>();
+        doc1Text.put("text", "value1");
+        doc1.put("document", doc1Text);
+        doc1.put("index", 0.0);
+        doc1.put("relevance_score", 2.6480842E-5);
+
+        Map<String, Object> doc2 = new HashMap<>();
+        Map<String, Object> doc2Text = new HashMap<>();
+        doc2Text.put("text", "value5");
+        doc2.put("document", doc2Text);
+        doc2.put("index", 4.0);
+        doc2.put("relevance_score", 2.5071593E-5);
+
+        Map<String, Object> doc3 = new HashMap<>();
+        Map<String, Object> doc3Text = new HashMap<>();
+        doc3Text.put("text", "value4");
+        doc3.put("document", doc3Text);
+        doc3.put("index", 3.0);
+        doc3.put("relevance_score", 2.373734E-5);
+
+        Map<String, Object> doc4 = new HashMap<>();
+        Map<String, Object> doc4Text = new HashMap<>();
+        doc4Text.put("text", "value2");
+        doc4.put("document", doc4Text);
+        doc4.put("index", 1.0);
+        doc4.put("relevance_score", 2.1112483E-5);
+
+        Map<String, Object> doc5 = new HashMap<>();
+        Map<String, Object> doc5Text = new HashMap<>();
+        doc5Text.put("text", "value3");
+        doc5.put("document", doc5Text);
+        doc5.put("index", 2.0);
+        doc5.put("relevance_score", 1.6187581E-5);
+
+        inferenceResultMap.put("results", Arrays.asList(doc1, doc2, doc3, doc4, doc5));
+
+        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(inferenceResultMap).build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            actionListener.onResponse(MLTaskResponse.builder().output(mlModelTensorOutput).build());
+            return null;
+        }).when(client).execute(any(), any(), any());
+
+        ActionListener<SearchResponse> listener = new ActionListener<>() {
+            @Override
+            public void onResponse(SearchResponse newSearchResponse) {
+                assertEquals(newSearchResponse.getHits().getHits().length, 5);
+                MLInferenceSearchResponse mLInferenceSearchResponse = (MLInferenceSearchResponse) newSearchResponse;
+                List<Map<String, Object>> results = (List<Map<String, Object>>) inferenceResultMap.get("results");
+                List<String> resultsInResponse = (List<String>) mLInferenceSearchResponse.getParams().get("results");
+                assertEquals(results.size(), resultsInResponse.size());
             }
 
             @Override
@@ -5173,10 +5293,144 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
     }
 
     /**
-         * Tests the creation of the MLInferenceSearchResponseProcessor with optional fields.
-         *
-         * @throws Exception if an error occurs during the test
-         */
+     * Tests the case where only the input maps are provided in the configuration.
+     *
+     * @throws Exception if an error occurs during the test
+     */
+    public void testOnlyInputMapsProvided() throws Exception {
+        Map<String, Object> config = new HashMap<>();
+        config.put(MODEL_ID, "model2");
+        List<Map<String, String>> inputMap = new ArrayList<>();
+        Map<String, String> input0 = new HashMap<>();
+        input0.put("inputs", "text");
+        inputMap.add(input0);
+        Map<String, String> input1 = new HashMap<>();
+        input1.put("inputs", "hashtag");
+        inputMap.add(input1);
+        config.put(INPUT_MAP, inputMap);
+        config.put(MAX_PREDICTION_TASKS, 2);
+        String processorTag = randomAlphaOfLength(10);
+
+        factory.create(Collections.emptyMap(), processorTag, null, false, config, null);
+    }
+
+    /**
+     * Tests the case where the input maps and empty output map are provided in the configuration.
+     *
+     * @throws Exception if an error occurs during the test
+     */
+    public void testInputMapsEmptyOutputMapProvided() throws Exception {
+        Map<String, Object> config = new HashMap<>();
+        config.put(MODEL_ID, "model2");
+        List<Map<String, String>> inputMap = new ArrayList<>();
+        Map<String, String> input0 = new HashMap<>();
+        input0.put("inputs", "text");
+        inputMap.add(input0);
+        Map<String, String> input1 = new HashMap<>();
+        input1.put("inputs", "hashtag");
+        inputMap.add(input1);
+        config.put(INPUT_MAP, inputMap);
+        config.put(MAX_PREDICTION_TASKS, 2);
+        String processorTag = randomAlphaOfLength(10);
+
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        config.put(OUTPUT_MAP, outputMap);
+
+        factory.create(Collections.emptyMap(), processorTag, null, false, config, null);
+    }
+
+    /**
+     * Tests the case where only the Optional input maps are provided in the configuration.
+     *
+     * @throws Exception if an error occurs during the test
+     */
+    public void testOnlyOptionalInputMapsProvided() throws Exception {
+        Map<String, Object> config = new HashMap<>();
+        config.put(MODEL_ID, "model2");
+        List<Map<String, String>> inputMap = new ArrayList<>();
+        Map<String, String> input0 = new HashMap<>();
+        input0.put("inputs", "text");
+        inputMap.add(input0);
+        Map<String, String> input1 = new HashMap<>();
+        input1.put("inputs", "hashtag");
+        inputMap.add(input1);
+        config.put(OPTIONAL_INPUT_MAP, inputMap);
+        config.put(MAX_PREDICTION_TASKS, 2);
+        String processorTag = randomAlphaOfLength(10);
+
+        factory.create(Collections.emptyMap(), processorTag, null, false, config, null);
+
+    }
+
+    /**
+     * Tests the case where only the Optional input maps are provided in the configuration.
+     *
+     * @throws Exception if an error occurs during the test
+     */
+    public void testOnlyOptionalInputMapsEmptyOptionalOutputProvided() throws Exception {
+        Map<String, Object> config = new HashMap<>();
+        config.put(MODEL_ID, "model2");
+        List<Map<String, String>> inputMap = new ArrayList<>();
+        Map<String, String> input0 = new HashMap<>();
+        input0.put("inputs", "text");
+        inputMap.add(input0);
+        Map<String, String> input1 = new HashMap<>();
+        input1.put("inputs", "hashtag");
+        inputMap.add(input1);
+        config.put(OPTIONAL_INPUT_MAP, inputMap);
+        config.put(MAX_PREDICTION_TASKS, 2);
+        String processorTag = randomAlphaOfLength(10);
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        config.put(OPTIONAL_OUTPUT_MAP, outputMap);
+        factory.create(Collections.emptyMap(), processorTag, null, false, config, null);
+
+    }
+
+    /**
+     * Tests the case where only the output maps are provided in the configuration.
+     *
+     * @throws Exception if an error occurs during the test
+     */
+    public void testOnlyOutputMapsProvided() throws Exception {
+        Map<String, Object> config = new HashMap<>();
+        config.put(MODEL_ID, "model2");
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put("text_embedding", "$.inference_results[0].output[0].data");
+        outputMap.add(output);
+        config.put(OUTPUT_MAP, outputMap);
+        config.put(MAX_PREDICTION_TASKS, 2);
+        String processorTag = randomAlphaOfLength(10);
+
+        factory.create(Collections.emptyMap(), processorTag, null, false, config, null);
+    }
+
+    /**
+     * Tests the case where only the output maps are provided in the configuration.
+     *
+     * @throws Exception if an error occurs during the test
+     */
+    public void testOnlyOutputMapsEmptyInputProvided() throws Exception {
+        Map<String, Object> config = new HashMap<>();
+        config.put(MODEL_ID, "model2");
+        List<Map<String, String>> inputMap = new ArrayList<>();
+        List<Map<String, String>> outputMap = new ArrayList<>();
+        Map<String, String> output = new HashMap<>();
+        output.put("text_embedding", "$.inference_results[0].output[0].data");
+        outputMap.add(output);
+        config.put(INPUT_MAP, inputMap);
+        config.put(OUTPUT_MAP, outputMap);
+        config.put(MAX_PREDICTION_TASKS, 2);
+        String processorTag = randomAlphaOfLength(10);
+
+        factory.create(Collections.emptyMap(), processorTag, null, false, config, null);
+    }
+
+    /**
+     * Tests the creation of the MLInferenceSearchResponseProcessor with optional fields.
+     *
+     * @throws Exception if an error occurs during the test
+     */
     public void testCreateOptionalFields() throws Exception {
         Map<String, Object> config = new HashMap<>();
         config.put(MODEL_ID, "model2");
