@@ -13,6 +13,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_FILTER;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTools;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMcpToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.saveTraceData;
@@ -30,6 +31,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.action.StepListener;
@@ -274,14 +276,26 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     ) {
         List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, allParams);
 
-        Map<String, Tool> tools = new HashMap<>();
-        Map<String, MLToolSpec> toolSpecMap = new HashMap<>();
-        createTools(toolFactories, allParams, toolSpecs, tools, toolSpecMap, mlAgent);
-        addToolsToPrompt(tools, allParams);
+        // Create a common method to handle both success and failure cases
+        Consumer<List<MLToolSpec>> processTools = (allToolSpecs) -> {
+            Map<String, Tool> tools = new HashMap<>();
+            Map<String, MLToolSpec> toolSpecMap = new HashMap<>();
+            createTools(toolFactories, allParams, toolSpecs, tools, toolSpecMap, mlAgent);
+            addToolsToPrompt(tools, allParams);
 
-        AtomicInteger traceNumber = new AtomicInteger(0);
+            AtomicInteger traceNumber = new AtomicInteger(0);
 
-        executePlanningLoop(mlAgent.getLlm(), allParams, completedSteps, memory, conversationId, 0, traceNumber, finalListener);
+            executePlanningLoop(mlAgent.getLlm(), allParams, completedSteps, memory, conversationId, 0, traceNumber, finalListener);
+        };
+
+        // Fetch MCP tools and handle both success and failure cases
+        getMcpToolSpecs(mlAgent, client, sdkClient, encryptor, ActionListener.wrap(mcpTools -> {
+            toolSpecs.addAll(mcpTools);
+            processTools.accept(toolSpecs);
+        }, e -> {
+            log.warn("Failed to get MCP tools, continuing with base tools only", e);
+            processTools.accept(toolSpecs);
+        }));
     }
 
     private void executePlanningLoop(
