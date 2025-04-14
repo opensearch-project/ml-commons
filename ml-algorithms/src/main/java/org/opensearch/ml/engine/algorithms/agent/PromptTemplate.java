@@ -1,10 +1,10 @@
 package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.COMPLETED_STEPS_FIELD;
-import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.DEEP_RESEARCH_RESPONSE_FORMAT_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.DEFAULT_PROMPT_TOOLS_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.PLANNER_PROMPT_FIELD;
-import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.REVAL_PROMPT_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.REFLECT_PROMPT_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.STEPS_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.USER_PROMPT_FIELD;
 
@@ -23,17 +23,17 @@ public class PromptTemplate {
     public static final String CHAT_HISTORY_PREFIX =
         "Human:CONVERSATION HISTORY WITH AI ASSISTANT\n----------------------------\nBelow is Chat History between Human and AI which sorted by time with asc order:\n";
 
-    public static final String PLANNER_PROMPT_TEMPLATE = "${parameters."
+    public static final String DEFAULT_PLANNER_PROMPT_TEMPLATE = "${parameters."
         + PLANNER_PROMPT_FIELD
         + "} \n"
         + "Objective: ${parameters."
         + USER_PROMPT_FIELD
         + "} \n\n"
         + "${parameters."
-        + DEEP_RESEARCH_RESPONSE_FORMAT_FIELD
+        + PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT_FIELD
         + "}";
 
-    public static final String REFLECT_PROMPT_TEMPLATE = "${parameters."
+    public static final String DEFAULT_REFLECT_PROMPT_TEMPLATE = "${parameters."
         + PLANNER_PROMPT_FIELD
         + "} \n\n"
         + "Objective: ${parameters."
@@ -46,13 +46,13 @@ public class PromptTemplate {
         + COMPLETED_STEPS_FIELD
         + "}] \n\n"
         + "${parameters."
-        + REVAL_PROMPT_FIELD
+        + REFLECT_PROMPT_FIELD
         + "} \n\n"
         + "${parameters."
-        + DEEP_RESEARCH_RESPONSE_FORMAT_FIELD
+        + PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT_FIELD
         + "}";
 
-    public static final String PLANNER_WITH_HISTORY_PROMPT_TEMPLATE = "${parameters."
+    public static final String DEFAULT_PLANNER_WITH_HISTORY_PROMPT_TEMPLATE = "${parameters."
         + PLANNER_PROMPT_FIELD
         + "} \n"
         + "Objective: ${parameters."
@@ -62,10 +62,10 @@ public class PromptTemplate {
         + COMPLETED_STEPS_FIELD
         + "}] \n\n"
         + "${parameters."
-        + DEEP_RESEARCH_RESPONSE_FORMAT_FIELD
+        + PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT_FIELD
         + "}";
 
-    public static final String PLANNER_PROMPT =
+    public static final String DEFAULT_PLANNER_PROMPT =
         "For the given objective, come up with a simple step by step plan. This plan should involve individual tasks, that if executed correctly will yield the correct answer. Do not add any superfluous steps. The result of the final step should be the final answer. Make sure that each step has all the information needed - do not skip steps. At all costs, do not execute the steps. You will be told when to execute the steps.";
 
     public static final String REFLECT_PROMPT =

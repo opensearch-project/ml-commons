@@ -16,12 +16,12 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTools;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.saveTraceData;
-import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.PLANNER_PROMPT;
-import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.PLANNER_PROMPT_TEMPLATE;
-import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.PLANNER_WITH_HISTORY_PROMPT_TEMPLATE;
+import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.DEFAULT_PLANNER_PROMPT;
+import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.DEFAULT_PLANNER_PROMPT_TEMPLATE;
+import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.DEFAULT_PLANNER_WITH_HISTORY_PROMPT_TEMPLATE;
+import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.DEFAULT_REFLECT_PROMPT;
+import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.DEFAULT_REFLECT_PROMPT_TEMPLATE;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT;
-import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.REFLECT_PROMPT;
-import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.REFLECT_PROMPT_TEMPLATE;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -75,8 +75,15 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     private final Map<String, Tool.Factory> toolFactories;
     private final Map<String, Memory.Factory> memoryFactoryMap;
 
+    // prompts
+    private String plannerPrompt;
+    private String plannerPromptTemplate;
+    private String reflectPrompt;
+    private String reflectPromptTemplate;
+    private String plannerWithHistoryPromptTemplate;
+
     // defaults
-    private static final String DEFAULT_DEEP_RESEARCH_SYSTEM_PROMPT = "Always respond in JSON format.";
+    private static final String DEFAULT_SYSTEM_PROMPT = "Always respond in JSON format.";
     private static final String DEFAULT_REACT_SYSTEM_PROMPT = "You are a helpful assistant.";
     private static final String DEFAULT_NO_ESCAPE_PARAMS = "tool_configs,_tools";
     private static final String DEFAULT_MAX_STEPS_EXECUTED = "20";
@@ -89,8 +96,8 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     public static final String STEPS_FIELD = "steps";
     public static final String COMPLETED_STEPS_FIELD = "completed_steps";
     public static final String PLANNER_PROMPT_FIELD = "planner_prompt";
-    public static final String REVAL_PROMPT_FIELD = "reval_prompt";
-    public static final String DEEP_RESEARCH_RESPONSE_FORMAT_FIELD = "deep_research_response_format";
+    public static final String REFLECT_PROMPT_FIELD = "reflect_prompt";
+    public static final String PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT_FIELD = "plan_execute_reflect_response_format";
     public static final String PROMPT_TEMPLATE_FIELD = "prompt_template";
     public static final String SYSTEM_PROMPT_FIELD = "system_prompt";
     public static final String QUESTION_FIELD = "question";
@@ -104,6 +111,9 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     public static final String NO_ESCAPE_PARAMS_FIELD = "no_escape_params";
     public static final String DEFAULT_PROMPT_TOOLS_FIELD = "tools_prompt";
     public static final String MAX_STEPS_EXECUTED_FIELD = "max_steps";
+    public static final String PLANNER_PROMPT_TEMPLATE_FIELD = "planner_prompt_template";
+    public static final String REFLECT_PROMPT_TEMPLATE_FIELD = "reflect_prompt_template";
+    public static final String PLANNER_WITH_HISTORY_TEMPLATE_FIELD = "planner_with_history_template";
 
     public MLPlanExecuteAndReflectAgentRunner(
         Client client,
@@ -119,6 +129,11 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         this.xContentRegistry = registry;
         this.toolFactories = toolFactories;
         this.memoryFactoryMap = memoryFactoryMap;
+        this.plannerPrompt = DEFAULT_PLANNER_PROMPT;
+        this.plannerPromptTemplate = DEFAULT_PLANNER_PROMPT_TEMPLATE;
+        this.reflectPrompt = DEFAULT_REFLECT_PROMPT;
+        this.reflectPromptTemplate = DEFAULT_REFLECT_PROMPT_TEMPLATE;
+        this.plannerWithHistoryPromptTemplate = DEFAULT_PLANNER_WITH_HISTORY_PROMPT_TEMPLATE;
     }
 
     private void setupPromptParameters(Map<String, String> params) {
@@ -130,11 +145,31 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         params.put(USER_PROMPT_FIELD, userPrompt);
 
         String userSystemPrompt = params.getOrDefault(SYSTEM_PROMPT_FIELD, "");
-        params.put(SYSTEM_PROMPT_FIELD, userSystemPrompt + DEFAULT_DEEP_RESEARCH_SYSTEM_PROMPT);
+        params.put(SYSTEM_PROMPT_FIELD, userSystemPrompt + DEFAULT_SYSTEM_PROMPT);
 
-        params.put(PLANNER_PROMPT_FIELD, PLANNER_PROMPT);
-        params.put(REVAL_PROMPT_FIELD, REFLECT_PROMPT);
-        params.put(DEEP_RESEARCH_RESPONSE_FORMAT_FIELD, PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT);
+        if (params.get(PLANNER_PROMPT_FIELD) != null) {
+            this.plannerPrompt = params.get(PLANNER_PROMPT_FIELD);
+        }
+        params.put(PLANNER_PROMPT_FIELD, this.plannerPrompt);
+
+        if (params.get(PLANNER_PROMPT_TEMPLATE_FIELD) != null) {
+            this.plannerPromptTemplate = params.get(PLANNER_PROMPT_TEMPLATE_FIELD);
+        }
+
+        if (params.get(REFLECT_PROMPT_FIELD) != null) {
+            this.reflectPrompt = params.get(REFLECT_PROMPT_FIELD);
+        }
+        params.put(REFLECT_PROMPT_FIELD, this.reflectPrompt);
+
+        if (params.get(REFLECT_PROMPT_TEMPLATE_FIELD) != null) {
+            this.reflectPromptTemplate = params.get(REFLECT_PROMPT_TEMPLATE_FIELD);
+        }
+
+        if (params.get(PLANNER_WITH_HISTORY_TEMPLATE_FIELD) != null) {
+            this.plannerWithHistoryPromptTemplate = params.get(PLANNER_WITH_HISTORY_TEMPLATE_FIELD);
+        }
+
+        params.put(PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT_FIELD, PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT);
 
         params.put(NO_ESCAPE_PARAMS_FIELD, DEFAULT_NO_ESCAPE_PARAMS);
 
@@ -153,17 +188,17 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     }
 
     private void usePlannerPromptTemplate(Map<String, String> params) {
-        params.put(PROMPT_TEMPLATE_FIELD, PLANNER_PROMPT_TEMPLATE);
+        params.put(PROMPT_TEMPLATE_FIELD, this.plannerPromptTemplate);
         populatePrompt(params);
     }
 
-    private void useRevalPromptTemplate(Map<String, String> params) {
-        params.put(PROMPT_TEMPLATE_FIELD, REFLECT_PROMPT_TEMPLATE);
+    private void useReflectPromptTemplate(Map<String, String> params) {
+        params.put(PROMPT_TEMPLATE_FIELD, this.reflectPromptTemplate);
         populatePrompt(params);
     }
 
     private void usePlannerWithHistoryPromptTemplate(Map<String, String> params) {
-        params.put(PROMPT_TEMPLATE_FIELD, PLANNER_WITH_HISTORY_PROMPT_TEMPLATE);
+        params.put(PROMPT_TEMPLATE_FIELD, this.plannerWithHistoryPromptTemplate);
         populatePrompt(params);
     }
 
@@ -366,7 +401,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
                     addSteps(completedSteps, allParams, COMPLETED_STEPS_FIELD);
 
-                    useRevalPromptTemplate(allParams);
+                    useReflectPromptTemplate(allParams);
 
                     executePlanningLoop(
                         llm,
