@@ -5166,7 +5166,7 @@ public class MLInferenceSearchResponseProcessorTests extends AbstractBuilderTest
         } catch (IllegalArgumentException e) {
             assertEquals(
                 e.getMessage(),
-                "when output_maps/optional_output_maps and input_maps/optional_input_maps are provided, their length needs to match. The input is in length of 2, while output_maps is in the length of 2. Please adjust mappings."
+                "when output_maps/optional_output_maps and input_maps/optional_input_maps are provided, their length needs to match. The input is in length of 2, while output_maps is in the length of 3. Please adjust mappings."
             );
 
         }
