@@ -12,6 +12,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE_DEEPSEEK_R1;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_FILTER;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.cleanUpResource;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTools;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMcpToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
@@ -280,7 +281,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         Consumer<List<MLToolSpec>> processTools = (allToolSpecs) -> {
             Map<String, Tool> tools = new HashMap<>();
             Map<String, MLToolSpec> toolSpecMap = new HashMap<>();
-            createTools(toolFactories, allParams, toolSpecs, tools, toolSpecMap, mlAgent);
+            createTools(toolFactories, allParams, allToolSpecs, tools, toolSpecMap, mlAgent);
             addToolsToPrompt(tools, allParams);
 
             AtomicInteger traceNumber = new AtomicInteger(0);
@@ -513,6 +514,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
         allParams.put(DEFAULT_PROMPT_TOOLS_FIELD, toolsPrompt.toString());
         populatePrompt(allParams);
+        cleanUpResource(tools);
     }
 
     private void addSteps(List<String> steps, Map<String, String> allParams, String field) {

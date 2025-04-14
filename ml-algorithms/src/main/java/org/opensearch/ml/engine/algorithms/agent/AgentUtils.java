@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
-import static org.opensearch.core.action.ActionListener.*;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
@@ -70,11 +69,11 @@ import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.spi.tools.Tool;
-import org.opensearch.ml.common.transport.connector.MLConnectorGetRequest;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.algorithms.remote.McpConnectorExecutor;
 import org.opensearch.ml.engine.encryptor.Encryptor;
+import org.opensearch.ml.engine.tools.McpSseTool;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
@@ -653,14 +652,11 @@ public class AgentUtils {
     ) {
         String tenantId = mlAgent.getTenantId();
 
-        String mcpConnectorConfigJSON = null;
-        if (mlAgent.getParameters() != null) {
-            mcpConnectorConfigJSON = mlAgent.getParameters().get(MCP_CONNECTORS_FIELD);
-        }
-
+        String mcpConnectorConfigJSON = (mlAgent.getParameters() != null) ? mlAgent.getParameters().get(MCP_CONNECTORS_FIELD) : null;
         // If mcpConnectorConfigJSON is null i.e no config for MCP Connectors, return an empty list
         if (mcpConnectorConfigJSON == null) {
             finalListener.onResponse(Collections.emptyList());
+            return;
         }
 
         Type listType = new TypeToken<List<Map<String, Object>>>() {
@@ -718,16 +714,14 @@ public class AgentUtils {
         Encryptor encryptor,
         ActionListener<List<MLToolSpec>> toolListener
     ) {
-        MLConnectorGetRequest request = new MLConnectorGetRequest(connectorId, tenantId, true);
-
         getConnector(connectorId, tenantId, sdkClient, client, ActionListener.wrap(connector -> {
             try {
                 if (!(connector instanceof McpConnector)) {
-                    log.error("Connector is not of type McpConnector");
+                    log.error("Connector with ID " + connectorId + " is not of type McpConnector");
                     toolListener.onResponse(Collections.emptyList());
                     return;
                 }
-                connector.decrypt("any", (credential, tid) -> encryptor.decrypt(credential, tenantId), tenantId);
+                connector.decrypt("", (credential, tid) -> encryptor.decrypt(credential, tenantId), tenantId);
                 McpConnectorExecutor connectorExecutor = MLEngineClassLoader
                     .initInstance(connector.getProtocol(), connector, Connector.class);
                 List<MLToolSpec> mcpToolSpecs = connectorExecutor.getMcpToolSpecs();
@@ -918,5 +912,17 @@ public class AgentUtils {
             toolParams.put("input", actionInput);
         }
         return toolParams;
+    }
+
+    public static void cleanUpResource(Map<String, Tool> tools) {
+        // TODO: Add cleanup for other agents
+        for (Map.Entry<String, Tool> entry : tools.entrySet()) {
+            Tool tool = entry.getValue();
+            if (tool instanceof McpSseTool) {
+                // TODO: make this more general, avoid checking specific tool type
+                ((McpSseTool) tool).getMcpSyncClient().closeGracefully();
+                ((McpSseTool) tool).getExecutorService().shutdown();
+            }
+        }
     }
 }

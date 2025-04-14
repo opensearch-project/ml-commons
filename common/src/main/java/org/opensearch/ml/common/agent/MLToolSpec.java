@@ -132,7 +132,7 @@ public class MLToolSpec implements ToXContentObject {
             } else {
                 out.writeBoolean(false);
             }
-            if (runtimeResources != null) {
+            if (runtimeResources != null && !runtimeResources.isEmpty()) {
                 out.writeBoolean(true);
                 out.writeMap(runtimeResources, StreamOutput::writeString, StreamOutput::writeGenericValue);
             } else {

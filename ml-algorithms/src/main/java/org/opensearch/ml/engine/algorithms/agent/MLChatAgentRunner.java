@@ -27,6 +27,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALL_ID_
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_RESPONSE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_TEMPLATE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.VERBOSE;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.cleanUpResource;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.constructToolParams;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTools;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMcpToolSpecs;
@@ -81,7 +82,6 @@ import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.engine.tools.MLModelTool;
-import org.opensearch.ml.engine.tools.McpSseTool;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.ml.repackage.com.google.common.collect.Lists;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -371,7 +371,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
             toolSpecs.addAll(mcpTools);
             processTools.accept(toolSpecs);
         }, e -> {
-            log.warn("Failed to get MCP tools, continuing with base tools only", e);
+            log.error("Failed to get MCP tools, continuing with base tools only", e);
             processTools.accept(toolSpecs);
         }));
     }
@@ -612,18 +612,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
             tenantId
         );
         client.execute(MLPredictionTaskAction.INSTANCE, request, firstListener);
-    }
-
-    private void cleanUpResource(Map<String, Tool> tools) {
-        // TODO: Add cleanup for other agents
-        for (Map.Entry<String, Tool> entry : tools.entrySet()) {
-            Tool tool = entry.getValue();
-            if (tool instanceof McpSseTool) {
-                // TODO: make this more general, avoid checking specific tool type
-                ((McpSseTool) tool).getMcpSyncClient().closeGracefully();
-                ((McpSseTool) tool).getExecutorService().shutdown();
-            }
-        }
     }
 
     private static List<ModelTensors> createFinalAnswerTensors(List<ModelTensors> sessionId, List<ModelTensor> lastThought) {
