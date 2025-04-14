@@ -238,6 +238,11 @@ public class MLModelGroup implements ShareableResource, ToXContentObject {
     }
 
     @Override
+    public String getShareableResourceName() {
+        return "ml_model_group";
+    }
+
+    @Override
     public String getWriteableName() {
         return "ml_model_group";
     }
