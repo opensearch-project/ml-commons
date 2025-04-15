@@ -6,6 +6,8 @@
 package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
+import static org.opensearch.ml.common.CommonValue.MCP_CONNECTOR_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
@@ -125,8 +127,6 @@ public class AgentUtils {
     public static final String LLM_FINAL_RESPONSE_POST_FILTER = "llm_final_response_post_filter";
     public static final String LLM_FINISH_REASON_PATH = "llm_finish_reason_path";
     public static final String LLM_FINISH_REASON_TOOL_USE = "llm_finish_reason_tool_use";
-    public static final String MCP_CONNECTORS_FIELD = "mcp_connectors";
-    public static final String MCP_CONNECTOR_ID_FIELD = "mcp_connector_id";
     public static final String TOOL_FILTERS_FIELD = "tool_filters";
 
     public static String addExamplesToPrompt(Map<String, String> parameters, String prompt) {
