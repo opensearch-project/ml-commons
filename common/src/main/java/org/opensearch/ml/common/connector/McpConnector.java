@@ -230,7 +230,6 @@ public class McpConnector implements Connector {
     }
 
     private void parseFromStream(StreamInput input) throws IOException {
-        Version streamInputVersion = input.getVersion();
         this.name = input.readOptionalString();
         this.version = input.readOptionalString();
         this.description = input.readOptionalString();
@@ -266,7 +265,6 @@ public class McpConnector implements Connector {
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        Version streamOutputVersion = out.getVersion();
         out.writeString(protocol);
         out.writeOptionalString(name);
         out.writeOptionalString(version);

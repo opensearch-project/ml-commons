@@ -76,8 +76,6 @@ public class McpConnectorExecutor extends AbstractConnectorExecutor {
     public McpConnectorExecutor(Connector connector) {
         super.initialize(connector);
         this.connector = (McpConnector) connector;
-
-        Integer maxConnection = super.getConnectorClientConfig().getMaxConnections();
     }
 
     public List<MLToolSpec> getMcpToolSpecs() {
@@ -91,6 +89,7 @@ public class McpConnectorExecutor extends AbstractConnectorExecutor {
 
                 // TODO: USE DEFAULT EXECUTOR AFTER JSM SHUTDOWN
                 // Create a privileged executor service
+                // TODO: Make these hardcoded numbers configurable
                 ExecutorService executor = new ThreadPoolExecutor(2, 10, 60L, TimeUnit.SECONDS, new SynchronousQueue<>(), r -> {
                     Thread thread = new Thread(r);
                     thread.setDaemon(true);

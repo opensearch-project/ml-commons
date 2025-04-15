@@ -45,7 +45,7 @@ public class McpSseTool implements WithModelTool {
     @Setter
     private String description = DEFAULT_DESCRIPTION;
     @Getter
-    private McpSyncClient mcpSyncClient; // TODO:// close client when agent run finish
+    private McpSyncClient mcpSyncClient;
     @Setter
     private Parser inputParser;
     @Setter
