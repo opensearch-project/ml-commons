@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.tools;
 
 import static org.opensearch.action.support.clustermanager.ClusterManagerNodeRequest.DEFAULT_CLUSTER_MANAGER_NODE_TIMEOUT;
+import static org.opensearch.ml.common.CommonValue.TOOL_INPUT_SCHEMA_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.util.ArrayList;
@@ -67,7 +68,6 @@ import lombok.extern.log4j.Log4j2;
 @ToolAnnotation(ListIndexTool.TYPE)
 public class ListIndexTool implements Tool {
     public static final String TYPE = "ListIndexTool";
-    public static final String INPUT_SCHEMA_FIELD = "input_schema";
     public static final String STRICT_FIELD = "strict";
     // This needs to be changed once it's changed in opensearch core in RestIndicesListAction.
     private static final int MAX_SUPPORTED_LIST_INDICES_PAGE_SIZE = 5000;
@@ -120,7 +120,7 @@ public class ListIndexTool implements Tool {
         };
 
         this.attributes = new HashMap<>();
-        attributes.put(INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA);
+        attributes.put(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA);
         attributes.put(STRICT_FIELD, false);
     }
 

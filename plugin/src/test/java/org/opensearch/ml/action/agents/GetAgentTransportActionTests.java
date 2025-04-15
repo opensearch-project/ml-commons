@@ -294,7 +294,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
 
     public GetResponse prepareMLAgent(String agentId, boolean isHidden, String tenantId) throws IOException {
 
-        new MLToolSpec("test", "test", "test", Collections.emptyMap(), Collections.emptyMap(), false, Collections.emptyMap(), null);
+        new MLToolSpec("test", "test", "test", Collections.emptyMap(), Collections.emptyMap(), false, Collections.emptyMap(), null, null);
 
         mlAgent = new MLAgent(
             "test",
@@ -311,6 +311,7 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
                         Collections.emptyMap(),
                         false,
                         Collections.emptyMap(),
+                        null,
                         null
                     )
                 ),
