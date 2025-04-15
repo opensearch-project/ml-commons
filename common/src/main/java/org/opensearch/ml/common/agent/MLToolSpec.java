@@ -12,6 +12,7 @@ import static org.opensearch.ml.common.CommonValue.VERSION_3_0_0;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.Map;
 
 import org.opensearch.Version;
@@ -39,6 +40,7 @@ public class MLToolSpec implements ToXContentObject {
     public static final String ATTRIBUTES_FIELD = "attributes";
     public static final String INCLUDE_OUTPUT_IN_AGENT_RESPONSE = "include_output_in_agent_response";
     public static final String CONFIG_FIELD = "config";
+    public static final String RUN_TIME_RESOURCES_FIELD = "runtime_resources";
 
     private String type;
     private String name;
@@ -49,6 +51,7 @@ public class MLToolSpec implements ToXContentObject {
     private Map<String, String> configMap;
     @Setter
     private String tenantId;
+    private Map<String, Object> runtimeResources;
 
     @Builder(toBuilder = true)
     public MLToolSpec(
@@ -59,7 +62,8 @@ public class MLToolSpec implements ToXContentObject {
         Map<String, String> attributes,
         boolean includeOutputInAgentResponse,
         Map<String, String> configMap,
-        String tenantId
+        String tenantId,
+        Map<String, Object> runtimeResources
     ) {
         if (type == null) {
             throw new IllegalArgumentException("tool type is null");
@@ -72,6 +76,7 @@ public class MLToolSpec implements ToXContentObject {
         this.includeOutputInAgentResponse = includeOutputInAgentResponse;
         this.configMap = configMap;
         this.tenantId = tenantId;
+        this.runtimeResources = runtimeResources;
     }
 
     public MLToolSpec(StreamInput input) throws IOException {
@@ -87,8 +92,13 @@ public class MLToolSpec implements ToXContentObject {
             configMap = input.readMap(StreamInput::readString, StreamInput::readOptionalString);
         }
         this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
-        if (input.getVersion().onOrAfter(VERSION_3_0_0) && input.available() > 0 && input.readBoolean()) {
-            attributes = input.readMap(StreamInput::readString, StreamInput::readOptionalString);
+        if (input.getVersion().onOrAfter(VERSION_3_0_0)) {
+            if (input.available() > 0 && input.readBoolean()) {
+                attributes = input.readMap(StreamInput::readString, StreamInput::readOptionalString);
+            }
+            if (input.available() > 0 && input.readBoolean()) {
+                runtimeResources = input.readMap(StreamInput::readString, StreamInput::readGenericValue);
+            }
         }
     }
 
@@ -122,6 +132,12 @@ public class MLToolSpec implements ToXContentObject {
             } else {
                 out.writeBoolean(false);
             }
+            if (runtimeResources != null && !runtimeResources.isEmpty()) {
+                out.writeBoolean(true);
+                out.writeMap(runtimeResources, StreamOutput::writeString, StreamOutput::writeGenericValue);
+            } else {
+                out.writeBoolean(false);
+            }
         }
     }
 
@@ -150,6 +166,9 @@ public class MLToolSpec implements ToXContentObject {
         if (tenantId != null) {
             builder.field(TENANT_ID_FIELD, tenantId);
         }
+        if (runtimeResources != null && !runtimeResources.isEmpty()) {
+            builder.field(RUN_TIME_RESOURCES_FIELD, runtimeResources);
+        }
         builder.endObject();
         return builder;
     }
@@ -163,6 +182,7 @@ public class MLToolSpec implements ToXContentObject {
         boolean includeOutputInAgentResponse = false;
         Map<String, String> configMap = null;
         String tenantId = null;
+        Map<String, Object> runtimeResources = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -194,6 +214,8 @@ public class MLToolSpec implements ToXContentObject {
                 case TENANT_ID_FIELD:
                     tenantId = parser.textOrNull();
                     break;
+                case RUN_TIME_RESOURCES_FIELD:
+                    runtimeResources = parser.map();
                 default:
                     parser.skipChildren();
                     break;
@@ -209,10 +231,22 @@ public class MLToolSpec implements ToXContentObject {
             .includeOutputInAgentResponse(includeOutputInAgentResponse)
             .configMap(configMap)
             .tenantId(tenantId)
+            .runtimeResources(runtimeResources)
             .build();
     }
 
     public static MLToolSpec fromStream(StreamInput in) throws IOException {
         return new MLToolSpec(in);
+    }
+
+    public void addRuntimeResource(String key, Object value) {
+        if (this.runtimeResources == null) {
+            this.runtimeResources = new HashMap<>();
+        }
+        this.runtimeResources.put(key, value);
+    }
+
+    public Object getRuntimeResource(String key) {
+        return this.runtimeResources.get(key);
     }
 }

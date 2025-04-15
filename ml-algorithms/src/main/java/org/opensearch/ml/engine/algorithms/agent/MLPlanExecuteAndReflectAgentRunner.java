@@ -12,7 +12,9 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE_DEEPSEEK_R1;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_FILTER;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.cleanUpResource;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTools;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMcpToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.saveTraceData;
@@ -30,6 +32,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.action.StepListener;
@@ -57,7 +60,9 @@ import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
+import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.transport.client.Client;
 
 import com.jayway.jsonpath.JsonPath;
@@ -74,6 +79,8 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     private final NamedXContentRegistry xContentRegistry;
     private final Map<String, Tool.Factory> toolFactories;
     private final Map<String, Memory.Factory> memoryFactoryMap;
+    private SdkClient sdkClient;
+    private Encryptor encryptor;
 
     // prompts
     private String plannerPrompt;
@@ -121,7 +128,9 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         ClusterService clusterService,
         NamedXContentRegistry registry,
         Map<String, Tool.Factory> toolFactories,
-        Map<String, Memory.Factory> memoryFactoryMap
+        Map<String, Memory.Factory> memoryFactoryMap,
+        SdkClient sdkClient,
+        Encryptor encryptor
     ) {
         this.client = client;
         this.settings = settings;
@@ -129,6 +138,8 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         this.xContentRegistry = registry;
         this.toolFactories = toolFactories;
         this.memoryFactoryMap = memoryFactoryMap;
+        this.sdkClient = sdkClient;
+        this.encryptor = encryptor;
         this.plannerPrompt = DEFAULT_PLANNER_PROMPT;
         this.plannerPromptTemplate = DEFAULT_PLANNER_PROMPT_TEMPLATE;
         this.reflectPrompt = DEFAULT_REFLECT_PROMPT;
@@ -266,14 +277,26 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     ) {
         List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, allParams);
 
-        Map<String, Tool> tools = new HashMap<>();
-        Map<String, MLToolSpec> toolSpecMap = new HashMap<>();
-        createTools(toolFactories, allParams, toolSpecs, tools, toolSpecMap, mlAgent);
-        addToolsToPrompt(tools, allParams);
+        // Create a common method to handle both success and failure cases
+        Consumer<List<MLToolSpec>> processTools = (allToolSpecs) -> {
+            Map<String, Tool> tools = new HashMap<>();
+            Map<String, MLToolSpec> toolSpecMap = new HashMap<>();
+            createTools(toolFactories, allParams, allToolSpecs, tools, toolSpecMap, mlAgent);
+            addToolsToPrompt(tools, allParams);
 
-        AtomicInteger traceNumber = new AtomicInteger(0);
+            AtomicInteger traceNumber = new AtomicInteger(0);
 
-        executePlanningLoop(mlAgent.getLlm(), allParams, completedSteps, memory, conversationId, 0, traceNumber, finalListener);
+            executePlanningLoop(mlAgent.getLlm(), allParams, completedSteps, memory, conversationId, 0, traceNumber, finalListener);
+        };
+
+        // Fetch MCP tools and handle both success and failure cases
+        getMcpToolSpecs(mlAgent, client, sdkClient, encryptor, ActionListener.wrap(mcpTools -> {
+            toolSpecs.addAll(mcpTools);
+            processTools.accept(toolSpecs);
+        }, e -> {
+            log.warn("Failed to get MCP tools, continuing with base tools only", e);
+            processTools.accept(toolSpecs);
+        }));
     }
 
     private void executePlanningLoop(
@@ -491,6 +514,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
         allParams.put(DEFAULT_PROMPT_TOOLS_FIELD, toolsPrompt.toString());
         populatePrompt(allParams);
+        cleanUpResource(tools);
     }
 
     private void addSteps(List<String> steps, Map<String, String> allParams, String field) {

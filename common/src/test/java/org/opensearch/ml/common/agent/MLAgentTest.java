@@ -44,6 +44,7 @@ public class MLAgentTest {
         Collections.emptyMap(),
         false,
         Collections.emptyMap(),
+        null,
         null
     );
 
@@ -268,6 +269,7 @@ public class MLAgentTest {
                         Collections.emptyMap(),
                         false,
                         Collections.emptyMap(),
+                        null,
                         null
                     )
                 ),
