@@ -196,10 +196,11 @@ public class MLModelGroupManager {
                                                 SharedWithActionGroup.ActionGroupRecipients recipients =
                                                     new SharedWithActionGroup.ActionGroupRecipients(recipientMap.get());
 
-                                                ResourceSharingClient client = ResourceSharingClientAccessor.getResourceSharingClient();
+                                                ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor
+                                                    .getResourceSharingClient();
 
-                                                client
-                                                    .shareResource(
+                                                resourceSharingClient
+                                                    .share(
                                                         modelGroupId,
                                                         modelGroupIndex,
                                                         recipients,
