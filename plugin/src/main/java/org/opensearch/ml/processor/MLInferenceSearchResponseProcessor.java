@@ -641,11 +641,19 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
                                             }
                                         } else {
                                             Object modelOutputValuePerDoc;
-                                            if (modelOutputValue instanceof List
-                                                && ((List) modelOutputValue).size() == hitCountInPredictions.get(mappingIndex)) {
-                                                Object valuePerDoc = ((List) modelOutputValue)
-                                                    .get(MapUtils.getCounter(writeOutputMapDocCounter, mappingIndex, modelOutputFieldName));
-                                                modelOutputValuePerDoc = valuePerDoc;
+                                            if (hitCountInPredictions.containsKey(mappingIndex)) {
+                                                if (modelOutputValue instanceof List
+                                                    && ((List) modelOutputValue).size() == hitCountInPredictions.get(mappingIndex)
+                                                    && !oneToOne) {
+                                                    Object valuePerDoc = ((List) modelOutputValue)
+                                                        .get(
+                                                            MapUtils
+                                                                .getCounter(writeOutputMapDocCounter, mappingIndex, modelOutputFieldName)
+                                                        );
+                                                    modelOutputValuePerDoc = valuePerDoc;
+                                                } else {
+                                                    modelOutputValuePerDoc = modelOutputValue;
+                                                }
                                             } else {
                                                 modelOutputValuePerDoc = modelOutputValue;
                                             }
