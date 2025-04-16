@@ -41,6 +41,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
@@ -141,11 +142,13 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         ClusterSettings clusterSettings = clusterSetting(
             settings,
             ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX,
-            ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED
+            ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED,
+            CommonValue.ML_COMMONS_MCP_FEATURE_ENABLED
         );
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
 
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
+        when(this.clusterService.getSettings()).thenReturn(settings);
 
         action = new TransportCreateConnectorAction(
             transportService,
