@@ -67,8 +67,6 @@ public class ConversationalIndexConstants {
     /** Mappings for the interactions index */
     public final static String INTERACTIONS_MAPPINGS = MLIndex.MEMORY_MESSAGE.getMapping();
 
-    /** Feature Flag setting for conversational memory */
-
     public static final String ML_COMMONS_MEMORY_FEATURE_DISABLED_MESSAGE =
         "The Conversation Memory feature is not enabled. To enable, please update the setting "
             + ML_COMMONS_MEMORY_FEATURE_ENABLED.getKey();

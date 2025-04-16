@@ -213,6 +213,7 @@ public final class MLCommonsSettings {
             Setting.Property.Dynamic
         );
 
+    /** Feature Flag setting for conversational memory */
     public static final Setting<Boolean> ML_COMMONS_MEMORY_FEATURE_ENABLED = Setting
         .boolSetting("plugins.ml_commons.memory_feature_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);;
 
