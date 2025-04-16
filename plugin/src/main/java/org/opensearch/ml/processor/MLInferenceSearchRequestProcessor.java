@@ -707,7 +707,7 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
                     "when output_maps/optional_output_maps and input_maps/optional_input_maps are provided, their length needs to match. The input is in length of "
                         + combinedInputMaps.size()
                         + ", while output_maps is in the length of "
-                        + combinedInputMaps.size()
+                        + combinedOutputMaps.size()
                         + ". Please adjust mappings."
                 );
             }
