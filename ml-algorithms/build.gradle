@@ -12,9 +12,16 @@ plugins {
     id "io.freefair.lombok"
     id 'com.diffplug.spotless' version '6.25.0'
 }
+ext {
+    onnxruntime_version = "1.16.3"
+}
 
 repositories {
     mavenCentral()
+}
+
+configurations {
+    onnxruntime
 }
 
 dependencies {
@@ -59,11 +66,11 @@ dependencies {
     //arm/macos doesn't support GPU
     if (os.macOsX || System.getProperty("os.arch") == "aarch64") {
         dependencies {
-            implementation "com.microsoft.onnxruntime:onnxruntime:1.16.3!!"
+            onnxruntime "com.microsoft.onnxruntime:onnxruntime:${onnxruntime_version}!!"
         }
     } else {
         dependencies {
-            implementation "com.microsoft.onnxruntime:onnxruntime_gpu:1.16.3!!"
+            onnxruntime "com.microsoft.onnxruntime:onnxruntime_gpu:${onnxruntime_version}!!"
         }
     }
 
@@ -90,6 +97,51 @@ dependencies {
     testImplementation("com.fasterxml.jackson.core:jackson-databind:${versions.jackson_databind}")
     testImplementation group: 'com.networknt' , name: 'json-schema-validator', version: '1.4.0'
 }
+
+tasks.register('repackageJar', Jar) {
+    // Determine which files to exclude based on the current OS
+    def os = DefaultNativePlatform.currentOperatingSystem
+    def excludePatterns = []
+    if (os.windows) {
+        excludePatterns = ['**/native/linux-*/**', '**/native/osx-*/**']
+    } else if (os.linux) {
+        excludePatterns = ['**/native/osx-*/**', '**/native/win-*/**']
+    } else if (os.macOsX) {
+        excludePatterns = ['**/native/win-*/**', '**/native/linux-*/**']
+    }
+
+    archiveVersion = onnxruntime_version
+    archiveBaseName = "onnxruntime-" + os.toFamilyName()
+
+    doFirst {
+        // Get the original JAR file
+        def originalJarFile = configurations.onnxruntime.singleFile
+        // Create a temporary directory for extraction
+        def extractDir = new File(buildDir, "extract-onnxruntime")
+        extractDir.mkdirs()
+
+        // Extract the original JAR
+        copy {
+            from zipTree(originalJarFile)
+            into extractDir
+            exclude excludePatterns
+        }
+
+        // Set up the repackaged JAR contents
+        from extractDir
+    }
+}
+
+// Add the repackaged JAR to the implementation configuration
+dependencies {
+    implementation files(repackageJar.archiveFile)
+}
+
+// Make sure the repackageJar task runs before the implementation configuration is resolved
+compileJava.dependsOn repackageJar
+// Make the default build depend on our repackage task
+build.dependsOn repackageJar
+
 
 lombok {
     version = "1.18.30"
