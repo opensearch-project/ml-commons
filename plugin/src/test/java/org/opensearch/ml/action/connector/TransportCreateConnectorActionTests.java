@@ -10,6 +10,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.ML_COMMONS_MCP_FEATURE_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
@@ -27,6 +28,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
@@ -597,6 +599,47 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         MLCreateConnectorRequest request = new MLCreateConnectorRequest(mlCreateConnectorInput);
         action.doExecute(task, request, actionListener);
         verify(actionListener).onResponse(any(MLCreateConnectorResponse.class));
+    }
+
+    public void test_mcp_connector_creation_fail_default() {
+        TransportCreateConnectorAction action = new TransportCreateConnectorAction(
+            transportService,
+            actionFilters,
+            mlIndicesHandler,
+            client,
+            sdkClient,
+            mlEngine,
+            connectorAccessControlHelper,
+            settings,
+            clusterService,
+            mlModelManager,
+            mlFeatureEnabledSetting
+        );
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConnectorIndex(isA(ActionListener.class));
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(IndexRequest.class), isA(ActionListener.class));
+
+        Map<String, String> credential = ImmutableMap.of("access_key", "mockKey", "secret_key", "mockSecret");
+        MLCreateConnectorInput mlCreateConnectorInput = MLCreateConnectorInput
+            .builder()
+            .name(randomAlphaOfLength(5))
+            .description(randomAlphaOfLength(10))
+            .version("1")
+            .protocol(ConnectorProtocols.MCP_SSE)
+            .credential(credential)
+            .build();
+        MLCreateConnectorRequest request = new MLCreateConnectorRequest(mlCreateConnectorInput);
+        action.doExecute(task, request, actionListener);
+        ArgumentCaptor<OpenSearchException> argCaptor = ArgumentCaptor.forClass(OpenSearchException.class);
+        verify(actionListener).onFailure(argCaptor.capture());
+        assertEquals(argCaptor.getValue().getMessage(), ML_COMMONS_MCP_FEATURE_DISABLED_MESSAGE);
     }
 
     public void test_connector_creation_success_rekognition() {
