@@ -6,8 +6,8 @@
 package org.opensearch.ml.action;
 
 import static org.opensearch.ml.common.input.parameter.regression.LogisticRegressionParams.ObjectiveType.LOGMULTICLASS;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_NATIVE_MEM_THRESHOLD;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ONLY_RUN_ON_ML_NODE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_NATIVE_MEM_THRESHOLD;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ONLY_RUN_ON_ML_NODE;
 import static org.opensearch.ml.utils.RestActionUtils.getAllNodes;
 import static org.opensearch.ml.utils.TestData.TARGET_FIELD;
 import static org.opensearch.ml.utils.TestData.TIME_FIELD;
