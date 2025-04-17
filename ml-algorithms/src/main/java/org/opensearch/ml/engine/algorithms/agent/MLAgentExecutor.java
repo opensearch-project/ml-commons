@@ -7,7 +7,9 @@ package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_COMMONS_MCP_FEATURE_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.common.MLTask.LAST_UPDATE_TIME_FIELD;
 import static org.opensearch.ml.common.MLTask.RESPONSE_FIELD;
@@ -26,6 +28,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import org.opensearch.ExceptionsHelper;
+import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.get.GetResponse;
@@ -43,6 +46,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.MLTask;
@@ -109,6 +113,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     private Map<String, Memory.Factory> memoryFactoryMap;
     private volatile Boolean isMultiTenancyEnabled;
     private Encryptor encryptor;
+    private static volatile boolean mcpFeatureIsEnabled;
 
     public MLAgentExecutor(
         Client client,
@@ -130,6 +135,10 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         this.memoryFactoryMap = memoryFactoryMap;
         this.isMultiTenancyEnabled = isMultiTenancyEnabled;
         this.encryptor = encryptor;
+        this.mcpFeatureIsEnabled = CommonValue.ML_COMMONS_MCP_FEATURE_ENABLED.get(clusterService.getSettings());
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(CommonValue.ML_COMMONS_MCP_FEATURE_ENABLED, it -> mcpFeatureIsEnabled = it);
     }
 
     @Override
@@ -386,6 +395,12 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         List<ModelTensor> modelTensors,
         ActionListener<Output> listener
     ) {
+        String mcpConnectorConfigJSON = (mlAgent.getParameters() != null) ? mlAgent.getParameters().get(MCP_CONNECTORS_FIELD) : null;
+        if (mcpConnectorConfigJSON != null && !mcpFeatureIsEnabled) {
+            // MCP connector provided as tools but MCP feature is disabled, so abort.
+            listener.onFailure(new OpenSearchException(ML_COMMONS_MCP_FEATURE_DISABLED_MESSAGE));
+            return;
+        }
         MLAgentRunner mlAgentRunner = getAgentRunner(mlAgent);
         // If async is true, index ML task and return the taskID. Also add memoryID to the task if it exists
         if (isAsync) {

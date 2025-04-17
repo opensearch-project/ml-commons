@@ -5,7 +5,9 @@
 
 package org.opensearch.ml.action.agents;
 
+import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_COMMONS_MCP_FEATURE_DISABLED_MESSAGE;
 
 import java.time.Instant;
 import java.util.HashMap;
@@ -21,6 +23,7 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentAction;
@@ -48,6 +51,7 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
     ClusterService clusterService;
 
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private volatile boolean mcpFeatureIsEnabled;
 
     @Inject
     public TransportRegisterAgentAction(
@@ -65,6 +69,10 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         this.mlIndicesHandler = mlIndicesHandler;
         this.clusterService = clusterService;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+        this.mcpFeatureIsEnabled = CommonValue.ML_COMMONS_MCP_FEATURE_ENABLED.get(clusterService.getSettings());
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(CommonValue.ML_COMMONS_MCP_FEATURE_ENABLED, it -> mcpFeatureIsEnabled = it);
     }
 
     @Override
@@ -76,6 +84,12 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
     }
 
     private void registerAgent(MLAgent agent, ActionListener<MLRegisterAgentResponse> listener) {
+        String mcpConnectorConfigJSON = (agent.getParameters() != null) ? agent.getParameters().get(MCP_CONNECTORS_FIELD) : null;
+        if (mcpConnectorConfigJSON != null && !mcpFeatureIsEnabled) {
+            // MCP connector provided as tools but MCP feature is disabled, so abort.
+            listener.onFailure(new OpenSearchException(ML_COMMONS_MCP_FEATURE_DISABLED_MESSAGE));
+            return;
+        }
         Instant now = Instant.now();
         boolean isHiddenAgent = RestActionUtils.isSuperAdminUser(clusterService, client);
         MLAgent mlAgent = agent.toBuilder().createdTime(now).lastUpdateTime(now).isHidden(isHiddenAgent).build();
