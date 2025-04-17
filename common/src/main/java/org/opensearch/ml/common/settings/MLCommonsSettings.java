@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.settings;
+package org.opensearch.ml.common.settings;
 
 import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_ENDPOINT_KEY;
 import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_REGION_KEY;
@@ -16,8 +16,6 @@ import java.util.function.Function;
 import org.opensearch.common.settings.Setting;
 import org.opensearch.core.common.unit.ByteSizeUnit;
 import org.opensearch.core.common.unit.ByteSizeValue;
-import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
-import org.opensearch.searchpipelines.questionanswering.generative.GenerativeQAProcessorConstants;
 
 import com.google.common.collect.ImmutableList;
 
@@ -214,11 +212,13 @@ public final class MLCommonsSettings {
             Setting.Property.Dynamic
         );
 
-    public static final Setting<Boolean> ML_COMMONS_MEMORY_FEATURE_ENABLED = ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED;
+    /** Feature Flag setting for conversational memory */
+    public static final Setting<Boolean> ML_COMMONS_MEMORY_FEATURE_ENABLED = Setting
+        .boolSetting("plugins.ml_commons.memory_feature_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
     // Feature flag for enabling search processors for Retrieval Augmented Generation using OpenSearch and Remote Inference.
-    public static final Setting<Boolean> ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED =
-        GenerativeQAProcessorConstants.RAG_PIPELINE_FEATURE_ENABLED;
+    public static final Setting<Boolean> ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED = Setting
+        .boolSetting("plugins.ml_commons.rag_pipeline_feature_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
     // This setting is to enable/disable agent related API register/execute/delete/get/search agent.
     public static final Setting<Boolean> ML_COMMONS_AGENT_FRAMEWORK_ENABLED = Setting
