@@ -8,6 +8,8 @@ package org.opensearch.ml.action.model_group;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+import static org.opensearch.security.spi.resources.FeatureConfigConstants.OPENSEARCH_RESOURCE_SHARING_ENABLED;
+import static org.opensearch.security.spi.resources.FeatureConfigConstants.OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT;
 
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
@@ -17,6 +19,7 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.commons.authuser.User;
@@ -27,6 +30,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.MLModelGroup;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetRequest;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetResponse;
@@ -39,6 +43,7 @@ import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -52,6 +57,7 @@ import lombok.extern.log4j.Log4j2;
 public class GetModelGroupTransportAction extends HandledTransportAction<ActionRequest, MLModelGroupGetResponse> {
 
     final Client client;
+    final Settings settings;
     final SdkClient sdkClient;
     final NamedXContentRegistry xContentRegistry;
     final ClusterService clusterService;
@@ -63,6 +69,7 @@ public class GetModelGroupTransportAction extends HandledTransportAction<ActionR
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
+        Settings settings,
         SdkClient sdkClient,
         NamedXContentRegistry xContentRegistry,
         ClusterService clusterService,
@@ -71,6 +78,7 @@ public class GetModelGroupTransportAction extends HandledTransportAction<ActionR
     ) {
         super(MLModelGroupGetAction.NAME, transportService, actionFilters, MLModelGroupGetRequest::new);
         this.client = client;
+        this.settings = settings;
         this.sdkClient = sdkClient;
         this.xContentRegistry = xContentRegistry;
         this.clusterService = clusterService;
@@ -146,6 +154,8 @@ public class GetModelGroupTransportAction extends HandledTransportAction<ActionR
         ActionListener<MLModelGroupGetResponse> wrappedListener
     ) {
         try {
+            boolean isResourceSharingFeatureEnabled = this.settings
+                .getAsBoolean(OPENSEARCH_RESOURCE_SHARING_ENABLED, OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT);
             GetResponse gr = getDataObjectResponse.parser() == null ? null : GetResponse.fromXContent(getDataObjectResponse.parser());
             if (gr != null && gr.isExists()) {
                 try (
@@ -157,7 +167,31 @@ public class GetModelGroupTransportAction extends HandledTransportAction<ActionR
 
                     if (TenantAwareHelper
                         .validateTenantResource(mlFeatureEnabledSetting, tenantId, mlModelGroup.getTenantId(), wrappedListener)) {
-                        validateModelGroupAccess(user, modelGroupId, mlModelGroup, wrappedListener);
+                        // TODO: Remove this feature flag check once feature is GA, as it will be enabled by default
+                        if (isResourceSharingFeatureEnabled) {
+                            ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor.getResourceSharingClient();
+                            resourceSharingClient
+                                .verifyResourceAccess(modelGroupId, ML_MODEL_GROUP_INDEX, ActionListener.wrap(isAuthorized -> {
+                                    if (!isAuthorized) {
+                                        wrappedListener
+                                            .onFailure(
+                                                new OpenSearchStatusException(
+                                                    "User "
+                                                        + user.getName()
+                                                        + " is not authorized to get ml-model-group: "
+                                                        + mlModelGroup.getName(),
+                                                    RestStatus.FORBIDDEN
+                                                )
+                                            );
+                                        return;
+                                    }
+                                    wrappedListener.onResponse(MLModelGroupGetResponse.builder().mlModelGroup(mlModelGroup).build());
+                                }, wrappedListener::onFailure));
+                        } else {
+                            // TODO: At some point, this call must be removed to return the resource directly
+                            validateModelGroupAccess(user, modelGroupId, mlModelGroup, wrappedListener);
+                        }
+
                     }
                 } catch (Exception e) {
                     log.error("Failed to parse ml connector {}", getDataObjectResponse.id(), e);
