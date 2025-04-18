@@ -35,21 +35,21 @@ public class HFModelTokenizerFactory extends AbstractTokenizerFactory {
      * Atomically loads the HF tokenizer in a lazy fashion once the outer class accesses the static final set the first time.;
      */
     private static abstract class BaseTokenizerHolder {
-        private static final String ZIP_PREFIX = ".zip";
+        private static final String ZIP_SUFFIX = ".zip";
         private static final String TOKENIZER_FILE_NAME = "tokenizer.json";
         private static final String TOKEN_WEIGHTS_FILE_NAME = "idf.json";
 
-        final HuggingFaceTokenizer TOKENIZER;
-        final Map<String, Float> TOKEN_WEIGHTS;
-        final String NAME;
+        final HuggingFaceTokenizer tokenizer;
+        final Map<String, Float> tokenWeights;
+        final String name;
 
         BaseTokenizerHolder(String resourcePath, String name) {
             try (InputStream is = HFModelTokenizerFactory.class.getResourceAsStream(resourcePath)) {
                 if (Objects.isNull(is)) {
-                    throw new IllegalArgumentException("Invalid resource path " + resourcePath);
+                    throw new RuntimeException("Invalid resource path " + resourcePath);
                 }
                 Files.createDirectories(DJLUtils.getMlEngine().getAnalysisRootPath());
-                File tempZipFile = File.createTempFile(name, ZIP_PREFIX, DJLUtils.getMlEngine().getAnalysisRootPath().toFile());
+                File tempZipFile = File.createTempFile(name, ZIP_SUFFIX, DJLUtils.getMlEngine().getAnalysisRootPath().toFile());
                 Files.copy(is, tempZipFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
                 ZipUtils.unzip(tempZipFile, DJLUtils.getMlEngine().getAnalysisRootPath().resolve(name));
             } catch (IOException e) {
@@ -57,11 +57,11 @@ public class HFModelTokenizerFactory extends AbstractTokenizerFactory {
             }
 
             try {
-                this.TOKENIZER = DJLUtils
+                this.tokenizer = DJLUtils
                     .buildHuggingFaceTokenizer(DJLUtils.getMlEngine().getAnalysisRootPath().resolve(name).resolve(TOKENIZER_FILE_NAME));
-                this.TOKEN_WEIGHTS = DJLUtils
+                this.tokenWeights = DJLUtils
                     .fetchTokenWeights(DJLUtils.getMlEngine().getAnalysisRootPath().resolve(name).resolve(TOKEN_WEIGHTS_FILE_NAME));
-                this.NAME = name;
+                this.name = name;
             } catch (Exception e) {
                 throw new RuntimeException("Failed to initialize tokenizer: " + name, e);
             }
@@ -93,7 +93,7 @@ public class HFModelTokenizerFactory extends AbstractTokenizerFactory {
      * @return A new HFModelTokenizer instance with default HuggingFaceTokenizer.
      */
     public static Tokenizer createDefault() {
-        return new HFModelTokenizer(() -> DefaultTokenizerHolder.INSTANCE.TOKENIZER, () -> DefaultTokenizerHolder.INSTANCE.TOKEN_WEIGHTS);
+        return new HFModelTokenizer(() -> DefaultTokenizerHolder.INSTANCE.tokenizer, () -> DefaultTokenizerHolder.INSTANCE.tokenWeights);
     }
 
     /**
@@ -102,8 +102,8 @@ public class HFModelTokenizerFactory extends AbstractTokenizerFactory {
      */
     public static Tokenizer createDefaultMultilingual() {
         return new HFModelTokenizer(
-            () -> DefaultMultilingualTokenizerHolder.INSTANCE.TOKENIZER,
-            () -> DefaultMultilingualTokenizerHolder.INSTANCE.TOKEN_WEIGHTS
+            () -> DefaultMultilingualTokenizerHolder.INSTANCE.tokenizer,
+            () -> DefaultMultilingualTokenizerHolder.INSTANCE.tokenWeights
         );
     }
 
