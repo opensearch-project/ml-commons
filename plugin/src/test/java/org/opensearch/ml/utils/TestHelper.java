@@ -207,6 +207,17 @@ public class TestHelper {
         return sb.toString();
     }
 
+    public static String httpEntityToString(HttpEntity entity, String charsetName) throws IOException {
+        InputStream inputStream = entity.getContent();
+        BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, charsetName));
+        StringBuilder sb = new StringBuilder();
+        String line = null;
+        while ((line = reader.readLine()) != null) {
+            sb.append(line + "\n");
+        }
+        return sb.toString();
+    }
+
     public static RestRequest getKMeansRestRequest() {
         Map<String, String> params = new HashMap<>();
         params.put(PARAMETER_ALGORITHM, FunctionName.KMEANS.name());

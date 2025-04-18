@@ -411,6 +411,9 @@ public class MLEngineTest extends MLStaticMockBase {
         assertEquals(expectedMdelCacheRootPath.toString(), mlEngine.getModelCacheRootPath().toString());
         Path expectedMdelCachePath = expectedMdelCacheRootPath.resolve(modelId);
         assertEquals(expectedMdelCachePath.toString(), mlEngine.getModelCachePath(modelId).toString());
+
+        Path expectedAnalysisRootPath = modelsCachePath.resolve("analysis");
+        assertEquals(expectedAnalysisRootPath.toString(), mlEngine.getAnalysisRootPath().toString());
     }
 
     @Test
