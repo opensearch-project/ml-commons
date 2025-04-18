@@ -70,21 +70,49 @@ public class HFModelTokenizerFactory extends AbstractTokenizerFactory {
 
     private static class DefaultTokenizerHolder extends BaseTokenizerHolder {
         private static final String RESOURCE_PATH = "/analysis/bert-uncased.zip";
-
-        private static final DefaultTokenizerHolder INSTANCE = new DefaultTokenizerHolder();
+        private static volatile DefaultTokenizerHolder INSTANCE;
 
         private DefaultTokenizerHolder() {
             super(RESOURCE_PATH, DEFAULT_TOKENIZER_NAME);
+        }
+
+        public static DefaultTokenizerHolder getInstance() {
+            if (Objects.isNull(INSTANCE) || Objects.isNull(INSTANCE.tokenizer) || Objects.isNull(INSTANCE.tokenWeights)) {
+                synchronized (DefaultTokenizerHolder.class) {
+                    if (Objects.isNull(INSTANCE) || Objects.isNull(INSTANCE.tokenizer) || Objects.isNull(INSTANCE.tokenWeights)) {
+                        try {
+                            INSTANCE = new DefaultTokenizerHolder();
+                        } catch (RuntimeException e) {
+                            log.error(e.getMessage());
+                        }
+                    }
+                }
+            }
+            return INSTANCE;
         }
     }
 
     private static class DefaultMultilingualTokenizerHolder extends BaseTokenizerHolder {
         private static final String RESOURCE_PATH = "/analysis/mbert-uncased.zip";
-
-        private static final DefaultMultilingualTokenizerHolder INSTANCE = new DefaultMultilingualTokenizerHolder();
+        private static volatile DefaultMultilingualTokenizerHolder INSTANCE;
 
         private DefaultMultilingualTokenizerHolder() {
             super(RESOURCE_PATH, DEFAULT_MULTILINGUAL_TOKENIZER_NAME);
+        }
+
+        public static DefaultMultilingualTokenizerHolder getInstance() {
+            if (Objects.isNull(INSTANCE) || Objects.isNull(INSTANCE.tokenizer) || Objects.isNull(INSTANCE.tokenWeights)) {
+                synchronized (DefaultMultilingualTokenizerHolder.class) {
+                    if (Objects.isNull(INSTANCE) || Objects.isNull(INSTANCE.tokenizer) || Objects.isNull(INSTANCE.tokenWeights)) {
+                        try {
+                            INSTANCE = new DefaultMultilingualTokenizerHolder();
+                        } catch (RuntimeException e) {
+                            log.error(e.getMessage());
+                        }
+                    }
+                }
+            }
+            return INSTANCE;
         }
     }
 
@@ -93,7 +121,10 @@ public class HFModelTokenizerFactory extends AbstractTokenizerFactory {
      * @return A new HFModelTokenizer instance with default HuggingFaceTokenizer.
      */
     public static Tokenizer createDefault() {
-        return new HFModelTokenizer(() -> DefaultTokenizerHolder.INSTANCE.tokenizer, () -> DefaultTokenizerHolder.INSTANCE.tokenWeights);
+        return new HFModelTokenizer(
+            () -> DefaultTokenizerHolder.getInstance().tokenizer,
+            () -> DefaultTokenizerHolder.getInstance().tokenWeights
+        );
     }
 
     /**
@@ -102,8 +133,8 @@ public class HFModelTokenizerFactory extends AbstractTokenizerFactory {
      */
     public static Tokenizer createDefaultMultilingual() {
         return new HFModelTokenizer(
-            () -> DefaultMultilingualTokenizerHolder.INSTANCE.tokenizer,
-            () -> DefaultMultilingualTokenizerHolder.INSTANCE.tokenWeights
+            () -> DefaultMultilingualTokenizerHolder.getInstance().tokenizer,
+            () -> DefaultMultilingualTokenizerHolder.getInstance().tokenWeights
         );
     }
 
