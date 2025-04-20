@@ -52,7 +52,7 @@ POST /_plugins/_ml/connectors/_create
 ```
 
 > [!NOTE]
-> If you need to the input type to be a string instead of array of strings, you can modify the request body to:
+> If you need the input type to be a string instead of array of strings, you can modify the request body to:
 > ```json
 > "request_body": "{ \"input\": \"${parameters.input}\" }"
 > ```
