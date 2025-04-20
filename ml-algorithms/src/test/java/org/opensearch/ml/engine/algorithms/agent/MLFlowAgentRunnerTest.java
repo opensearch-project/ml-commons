@@ -129,7 +129,7 @@ public class MLFlowAgentRunnerTest {
         settings = Settings.builder().build();
         toolFactories = ImmutableMap.of(FIRST_TOOL, firstToolFactory, SECOND_TOOL, secondToolFactory);
         memoryMap = ImmutableMap.of("memoryType", mockMemoryFactory);
-        mlFlowAgentRunner = new MLFlowAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryMap);
+        mlFlowAgentRunner = new MLFlowAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryMap, null, null);
         when(firstToolFactory.create(anyMap())).thenReturn(firstTool);
         when(secondToolFactory.create(anyMap())).thenReturn(secondTool);
         when(secondTool.getDescription()).thenReturn(SECOND_TOOL_DESC);

@@ -23,6 +23,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import javax.naming.Context;
 
@@ -43,6 +44,7 @@ import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.metadata.Metadata;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
@@ -55,6 +57,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.get.GetResult;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.LLMSpec;
@@ -167,10 +170,13 @@ public class MLAgentExecutorTest {
         Mockito.when(memory.getMemoryManager()).thenReturn(memoryManager);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
+        when(this.clusterService.getSettings()).thenReturn(settings);
+        when(this.clusterService.getClusterSettings())
+            .thenReturn(new ClusterSettings(settings, Set.of(CommonValue.ML_COMMONS_MCP_FEATURE_ENABLED)));
 
         settings = Settings.builder().build();
         mlAgentExecutor = Mockito
-            .spy(new MLAgentExecutor(client, sdkClient, settings, clusterService, xContentRegistry, toolFactories, memoryMap, false));
+            .spy(new MLAgentExecutor(client, sdkClient, settings, clusterService, xContentRegistry, toolFactories, memoryMap, false, null));
 
     }
 
@@ -794,6 +800,7 @@ public class MLAgentExecutorTest {
                         Collections.emptyMap(),
                         false,
                         Collections.emptyMap(),
+                        null,
                         null
                     )
                 ),

@@ -7,7 +7,9 @@ package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_COMMONS_MCP_FEATURE_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.common.MLTask.LAST_UPDATE_TIME_FIELD;
 import static org.opensearch.ml.common.MLTask.RESPONSE_FIELD;
@@ -26,6 +28,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import org.opensearch.ExceptionsHelper;
+import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.get.GetResponse;
@@ -43,6 +46,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.MLTask;
@@ -63,6 +67,7 @@ import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.Executable;
 import org.opensearch.ml.engine.annotation.Function;
+import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
@@ -107,6 +112,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     private Map<String, Tool.Factory> toolFactories;
     private Map<String, Memory.Factory> memoryFactoryMap;
     private volatile Boolean isMultiTenancyEnabled;
+    private Encryptor encryptor;
+    private static volatile boolean mcpFeatureIsEnabled;
 
     public MLAgentExecutor(
         Client client,
@@ -116,7 +123,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         NamedXContentRegistry xContentRegistry,
         Map<String, Tool.Factory> toolFactories,
         Map<String, Memory.Factory> memoryFactoryMap,
-        Boolean isMultiTenancyEnabled
+        Boolean isMultiTenancyEnabled,
+        Encryptor encryptor
     ) {
         this.client = client;
         this.sdkClient = sdkClient;
@@ -126,6 +134,11 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         this.toolFactories = toolFactories;
         this.memoryFactoryMap = memoryFactoryMap;
         this.isMultiTenancyEnabled = isMultiTenancyEnabled;
+        this.encryptor = encryptor;
+        this.mcpFeatureIsEnabled = CommonValue.ML_COMMONS_MCP_FEATURE_ENABLED.get(clusterService.getSettings());
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(CommonValue.ML_COMMONS_MCP_FEATURE_ENABLED, it -> mcpFeatureIsEnabled = it);
     }
 
     @Override
@@ -382,6 +395,12 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         List<ModelTensor> modelTensors,
         ActionListener<Output> listener
     ) {
+        String mcpConnectorConfigJSON = (mlAgent.getParameters() != null) ? mlAgent.getParameters().get(MCP_CONNECTORS_FIELD) : null;
+        if (mcpConnectorConfigJSON != null && !mcpFeatureIsEnabled) {
+            // MCP connector provided as tools but MCP feature is disabled, so abort.
+            listener.onFailure(new OpenSearchException(ML_COMMONS_MCP_FEATURE_DISABLED_MESSAGE));
+            return;
+        }
         MLAgentRunner mlAgentRunner = getAgentRunner(mlAgent);
         // If async is true, index ML task and return the taskID. Also add memoryID to the task if it exists
         if (isAsync) {
@@ -481,7 +500,16 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         final MLAgentType agentType = MLAgentType.from(mlAgent.getType().toUpperCase(Locale.ROOT));
         switch (agentType) {
             case FLOW:
-                return new MLFlowAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryFactoryMap);
+                return new MLFlowAgentRunner(
+                    client,
+                    settings,
+                    clusterService,
+                    xContentRegistry,
+                    toolFactories,
+                    memoryFactoryMap,
+                    sdkClient,
+                    encryptor
+                );
             case CONVERSATIONAL_FLOW:
                 return new MLConversationalFlowAgentRunner(
                     client,
@@ -489,10 +517,21 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     clusterService,
                     xContentRegistry,
                     toolFactories,
-                    memoryFactoryMap
+                    memoryFactoryMap,
+                    sdkClient,
+                    encryptor
                 );
             case CONVERSATIONAL:
-                return new MLChatAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryFactoryMap);
+                return new MLChatAgentRunner(
+                    client,
+                    settings,
+                    clusterService,
+                    xContentRegistry,
+                    toolFactories,
+                    memoryFactoryMap,
+                    sdkClient,
+                    encryptor
+                );
             case PLAN_EXECUTE_AND_REFLECT:
                 return new MLPlanExecuteAndReflectAgentRunner(
                     client,
@@ -500,7 +539,9 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     clusterService,
                     xContentRegistry,
                     toolFactories,
-                    memoryFactoryMap
+                    memoryFactoryMap,
+                    sdkClient,
+                    encryptor
                 );
             default:
                 throw new IllegalArgumentException("Unsupported agent type: " + mlAgent.getType());

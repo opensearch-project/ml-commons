@@ -16,6 +16,7 @@ import java.util.function.Function;
 import org.opensearch.common.settings.Setting;
 import org.opensearch.core.common.unit.ByteSizeUnit;
 import org.opensearch.core.common.unit.ByteSizeValue;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
 import org.opensearch.searchpipelines.questionanswering.generative.GenerativeQAProcessorConstants;
 
@@ -215,6 +216,8 @@ public final class MLCommonsSettings {
         );
 
     public static final Setting<Boolean> ML_COMMONS_MEMORY_FEATURE_ENABLED = ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED;
+
+    public static final Setting<Boolean> ML_COMMONS_MCP_FEATURE_ENABLED = CommonValue.ML_COMMONS_MCP_FEATURE_ENABLED;
 
     // Feature flag for enabling search processors for Retrieval Augmented Generation using OpenSearch and Remote Inference.
     public static final Setting<Boolean> ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED =
