@@ -169,7 +169,9 @@ public class GetModelGroupTransportAction extends HandledTransportAction<ActionR
                         .validateTenantResource(mlFeatureEnabledSetting, tenantId, mlModelGroup.getTenantId(), wrappedListener)) {
                         // TODO: Remove this feature flag check once feature is GA, as it will be enabled by default
                         if (isResourceSharingFeatureEnabled) {
-                            ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor.getResourceSharingClient();
+                            ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor
+                                .getInstance()
+                                .getResourceSharingClient();
                             resourceSharingClient
                                 .verifyResourceAccess(modelGroupId, ML_MODEL_GROUP_INDEX, ActionListener.wrap(isAuthorized -> {
                                     if (!isAuthorized) {

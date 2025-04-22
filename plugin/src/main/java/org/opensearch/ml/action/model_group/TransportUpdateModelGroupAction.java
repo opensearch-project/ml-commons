@@ -159,6 +159,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
                                     // TODO: Remove this feature flag check once feature is GA, as it will be enabled by default
                                     if (isResourceSharingFeatureEnabled) {
                                         ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor
+                                            .getInstance()
                                             .getResourceSharingClient();
                                         resourceSharingClient
                                             .verifyResourceAccess(modelGroupId, ML_MODEL_GROUP_INDEX, ActionListener.wrap(isAuthorized -> {

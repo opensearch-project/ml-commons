@@ -5,33 +5,38 @@
 
 package org.opensearch.ml.common;
 
-import org.opensearch.security.spi.resources.client.NoopResourceSharingClient;
 import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 
 /**
  * Accessor for resource sharing client
  */
 public class ResourceSharingClientAccessor {
-    private static ResourceSharingClient CLIENT;
+    private ResourceSharingClient CLIENT;
+
+    private static ResourceSharingClientAccessor resourceSharingClientAccessor;
 
     private ResourceSharingClientAccessor() {}
 
-    /**
-     * Get resource sharing client
-     *
-     * @return resource sharing client, NoopResourceSharingClient when security is disabled
-     */
-    public static ResourceSharingClient getResourceSharingClient() {
-        return CLIENT == null ? new NoopResourceSharingClient() : CLIENT;
+    public static ResourceSharingClientAccessor getInstance() {
+        if (resourceSharingClientAccessor == null) {
+            resourceSharingClientAccessor = new ResourceSharingClientAccessor();
+        }
+
+        return resourceSharingClientAccessor;
     }
 
     /**
-     * Set resource sharing client
-     *
-     * @param client resource sharing client
+     * Set the resource sharing client
      */
-    public static void setResourceSharingClient(ResourceSharingClient client) {
-        CLIENT = client;
+    public void setResourceSharingClient(ResourceSharingClient client) {
+        resourceSharingClientAccessor.CLIENT = client;
+    }
+
+    /**
+     * Get the resource sharing client
+     */
+    public ResourceSharingClient getResourceSharingClient() {
+        return resourceSharingClientAccessor.CLIENT;
     }
 
 }

@@ -23,6 +23,6 @@ public class MLResourceSharingExtension implements ResourceSharingExtension {
 
     @Override
     public void assignResourceSharingClient(ResourceSharingClient resourceSharingClient) {
-        ResourceSharingClientAccessor.setResourceSharingClient(resourceSharingClient);
+        ResourceSharingClientAccessor.getInstance().setResourceSharingClient(resourceSharingClient);
     }
 }

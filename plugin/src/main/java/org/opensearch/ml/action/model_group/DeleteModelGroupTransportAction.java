@@ -105,10 +105,10 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
-            ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor.getResourceSharingClient();
             User user = RestActionUtils.getUserContext(client);
             // TODO: Remove this feature flag check once feature is GA, as it will be enabled by default
             if (isResourceSharingFeatureEnabled) {
+                ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
                 resourceSharingClient.verifyResourceAccess(modelGroupId, ML_MODEL_GROUP_INDEX, ActionListener.wrap(isAuthorized -> {
                     if (!isAuthorized) {
                         actionListener
