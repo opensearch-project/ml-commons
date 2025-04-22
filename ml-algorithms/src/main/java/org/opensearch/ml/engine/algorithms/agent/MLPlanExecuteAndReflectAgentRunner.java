@@ -17,6 +17,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTools;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMcpToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.MAX_ITERATION;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.saveTraceData;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.DEFAULT_PLANNER_PROMPT;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.DEFAULT_PLANNER_PROMPT_TEMPLATE;
@@ -95,6 +96,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     private static final String DEFAULT_NO_ESCAPE_PARAMS = "tool_configs,_tools";
     private static final String DEFAULT_MAX_STEPS_EXECUTED = "20";
     private static final int DEFAULT_MESSAGE_HISTORY_LIMIT = 10;
+    private static final String DEFAULT_REACT_MAX_ITERATIONS = "20";
 
     // fields
     public static final String PROMPT_FIELD = "prompt";
@@ -121,6 +123,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     public static final String PLANNER_PROMPT_TEMPLATE_FIELD = "planner_prompt_template";
     public static final String REFLECT_PROMPT_TEMPLATE_FIELD = "reflect_prompt_template";
     public static final String PLANNER_WITH_HISTORY_TEMPLATE_FIELD = "planner_with_history_template";
+    public static final String REACT_MAX_ITERATIONS_FIELD = "react_max_iterations";
 
     public MLPlanExecuteAndReflectAgentRunner(
         Client client,
@@ -369,6 +372,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
                 reactParams.put(SYSTEM_PROMPT_FIELD, allParams.getOrDefault(REACT_SYSTEM_PROMPT_FIELD, DEFAULT_REACT_SYSTEM_PROMPT));
                 reactParams.put(LLM_RESPONSE_FILTER, allParams.get(LLM_RESPONSE_FILTER));
+                reactParams.put(MAX_ITERATION, allParams.getOrDefault(REACT_MAX_ITERATIONS_FIELD, DEFAULT_REACT_MAX_ITERATIONS));
 
                 AgentMLInput agentInput = AgentMLInput
                     .AgentMLInputBuilder()
