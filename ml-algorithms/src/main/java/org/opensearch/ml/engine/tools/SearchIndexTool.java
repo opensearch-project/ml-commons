@@ -15,6 +15,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
@@ -27,7 +29,6 @@ import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
-import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.transport.client.Client;
@@ -114,7 +115,8 @@ public class SearchIndexTool implements Tool {
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
         try {
             String input = parameters.get(INPUT_FIELD);
-            JsonObject jsonObject = StringUtils.gson.fromJson(input, JsonObject.class);
+            Gson gson = new GsonBuilder().serializeSpecialFloatingPointValues().create();
+            JsonObject jsonObject = gson.fromJson(input, JsonObject.class);
             String index = Optional.ofNullable(jsonObject).map(x -> x.get(INDEX_FIELD)).map(JsonElement::getAsString).orElse(null);
             String query = Optional.ofNullable(jsonObject).map(x -> x.get(QUERY_FIELD)).map(JsonElement::toString).orElse(null);
             if (index == null || query == null) {
@@ -131,7 +133,7 @@ public class SearchIndexTool implements Tool {
                     for (SearchHit hit : hits) {
                         String doc = AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> {
                             Map<String, Object> docContent = processResponse(hit);
-                            return StringUtils.gson.toJson(docContent);
+                            return gson.toJson(docContent);
                         });
                         contextBuilder.append(doc).append("\n");
                     }
