@@ -140,20 +140,9 @@ public class MLSearchHandler {
                     .searchSourceBuilder(request.source())
                     .tenantId(tenantId)
                     .build();
-                sdkClient.searchDataObjectAsync(searchDataObjectRequest).whenComplete((r, throwable) -> {
-                    if (throwable == null) {
-                        try {
-                            SearchResponse searchResponse = SearchResponse.fromXContent(r.parser());
-                            log.info("Model search complete: {}", searchResponse.getHits().getTotalHits());
-                            doubleWrapperListener.onResponse(searchResponse);
-                        } catch (Exception e) {
-                            doubleWrapperListener.onFailure(e);
-                        }
-                    } else {
-                        Exception e = SdkClientUtils.unwrapAndConvertToException(throwable, OpenSearchStatusException.class);
-                        doubleWrapperListener.onFailure(e);
-                    }
-                });
+                sdkClient
+                    .searchDataObjectAsync(searchDataObjectRequest)
+                    .whenComplete(SdkClientUtils.wrapSearchCompletion(doubleWrapperListener));
             } else {
                 SearchSourceBuilder sourceBuilder = modelAccessControlHelper.createSearchSourceBuilder(user);
                 SearchRequest modelGroupSearchRequest = new SearchRequest();
@@ -182,20 +171,9 @@ public class MLSearchHandler {
                         .searchSourceBuilder(request.source())
                         .tenantId(tenantId)
                         .build();
-                    sdkClient.searchDataObjectAsync(searchDataObjectRequest).whenComplete((sr, throwable) -> {
-                        if (throwable == null) {
-                            try {
-                                SearchResponse searchResponse = SearchResponse.fromXContent(sr.parser());
-                                log.info("Model search complete: {}", searchResponse.getHits().getTotalHits());
-                                doubleWrapperListener.onResponse(searchResponse);
-                            } catch (Exception e) {
-                                doubleWrapperListener.onFailure(e);
-                            }
-                        } else {
-                            Exception e = SdkClientUtils.unwrapAndConvertToException(throwable, OpenSearchStatusException.class);
-                            doubleWrapperListener.onFailure(e);
-                        }
-                    });
+                    sdkClient
+                        .searchDataObjectAsync(searchDataObjectRequest)
+                        .whenComplete(SdkClientUtils.wrapSearchCompletion(doubleWrapperListener));
                 }, e -> {
                     log.error("Fail to search model groups!", e);
                     wrappedListener.onFailure(e);
@@ -206,20 +184,9 @@ public class MLSearchHandler {
                     .searchSourceBuilder(modelGroupSearchRequest.source())
                     .tenantId(tenantId)
                     .build();
-                sdkClient.searchDataObjectAsync(searchDataObjectRequest).whenComplete((r, throwable) -> {
-                    if (throwable == null) {
-                        try {
-                            SearchResponse searchResponse = SearchResponse.fromXContent(r.parser());
-                            log.info("Model search complete: {}", searchResponse.getHits().getTotalHits());
-                            modelGroupSearchActionListener.onResponse(searchResponse);
-                        } catch (Exception e) {
-                            modelGroupSearchActionListener.onFailure(e);
-                        }
-                    } else {
-                        Exception e = SdkClientUtils.unwrapAndConvertToException(throwable, OpenSearchStatusException.class);
-                        modelGroupSearchActionListener.onFailure(e);
-                    }
-                });
+                sdkClient
+                    .searchDataObjectAsync(searchDataObjectRequest)
+                    .whenComplete(SdkClientUtils.wrapSearchCompletion(modelGroupSearchActionListener));
             }
         } catch (Exception e) {
             log.error(e.getMessage(), e);

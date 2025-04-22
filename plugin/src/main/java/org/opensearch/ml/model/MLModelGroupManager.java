@@ -246,10 +246,11 @@ public class MLModelGroupManager {
                     }
                 } else {
                     try {
-                        SearchResponse searchResponse = SearchResponse.fromXContent(r.parser());
+                        SearchResponse searchResponse = r.searchResponse();
+                        // Parsing failure would cause NPE on next line
                         log.info("Model group search complete: {}", searchResponse.getHits().getTotalHits());
                         listener.onResponse(searchResponse);
-                    } catch (IOException e) {
+                    } catch (Exception e) {
                         log.error("Failed to parse search response", e);
                         listener
                             .onFailure(new OpenSearchStatusException("Failed to parse search response", RestStatus.INTERNAL_SERVER_ERROR));

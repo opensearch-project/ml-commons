@@ -154,7 +154,8 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
         }
 
         try {
-            SearchResponse response = SearchResponse.fromXContent(searchResponse.parser());
+            SearchResponse response = searchResponse.searchResponse();
+            // Parsing failure would produce NPE on next line
             SearchHit[] searchHits = response.getHits().getHits();
 
             if (searchHits.length == 0) {

@@ -156,7 +156,8 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
         }
 
         try {
-            SearchResponse response = SearchResponse.fromXContent(searchResponse.parser());
+            SearchResponse response = searchResponse.searchResponse();
+            // Parsing failure would cause NPE on next line
             if (response.getHits().getHits().length == 0) {
                 DeleteRequest deleteRequest = new DeleteRequest(ML_MODEL_GROUP_INDEX, modelGroupId);
                 deleteModelGroup(deleteRequest, tenantId, listener);

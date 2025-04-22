@@ -177,7 +177,8 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
         sdkClient.searchDataObjectAsync(searchDataObjectRequest).whenComplete((sr, st) -> {
             if (sr != null) {
                 try {
-                    SearchResponse searchResponse = SearchResponse.fromXContent(sr.parser());
+                    SearchResponse searchResponse = sr.searchResponse();
+                    // Parsing failure would cause NPE on next line
                     SearchHit[] searchHits = searchResponse.getHits().getHits();
                     if (searchHits.length == 0) {
                         sdkClient.updateDataObjectAsync(updateDataObjectRequest).whenComplete((r, throwable) -> {
