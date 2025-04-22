@@ -320,7 +320,15 @@ public class AgentUtils {
             parseThoughtResponse(modelOutput, thoughtResponse);
         } else if (parameters.containsKey(TOOL_CALLS_PATH)) {
             modelOutput.put(THOUGHT_RESPONSE, StringUtils.toJson(dataAsMap));
-            Object response = JsonPath.read(dataAsMap, parameters.get(LLM_RESPONSE_FILTER));
+            Object response;
+            boolean isToolUseResponse = false;
+            try {
+                response = JsonPath.read(dataAsMap, parameters.get(LLM_RESPONSE_FILTER));
+            } catch (PathNotFoundException e) {
+                // If the regular response path fails, try the tool calls path
+                response = JsonPath.read(dataAsMap, parameters.get(TOOL_CALLS_PATH));
+                isToolUseResponse = true;
+            }
 
             String llmFinishReasonPath = parameters.get(LLM_FINISH_REASON_PATH);
             String llmFinishReason = "";
@@ -330,7 +338,7 @@ public class AgentUtils {
             } else {
                 llmFinishReason = JsonPath.read(dataAsMap, llmFinishReasonPath);
             }
-            if (parameters.get(LLM_FINISH_REASON_TOOL_USE).equalsIgnoreCase(llmFinishReason)) {
+            if (parameters.get(LLM_FINISH_REASON_TOOL_USE).equalsIgnoreCase(llmFinishReason) || isToolUseResponse) {
                 List toolCalls = null;
                 try {
                     String toolCallsPath = parameters.get(TOOL_CALLS_PATH);
