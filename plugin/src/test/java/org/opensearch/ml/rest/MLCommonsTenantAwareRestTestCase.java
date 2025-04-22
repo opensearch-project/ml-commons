@@ -10,7 +10,7 @@ import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonList;
 import static org.opensearch.common.xcontent.XContentType.JSON;
 import static org.opensearch.ml.common.input.Constants.TENANT_ID_HEADER;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -57,6 +57,18 @@ public abstract class MLCommonsTenantAwareRestTestCase extends MLCommonsRestTest
 
     // REST body
     protected static final String MATCH_ALL_QUERY = "{\"query\":{\"match_all\":{}}}";
+    protected static final String AGGREGATION_QUERY = "{\n"
+        + "  \"size\": 0,\n"
+        + "  \"aggs\": {\n"
+        + "    \"unique_model_names\": {\n"
+        + "      \"terms\": {\n"
+        + "        \"field\": \"name.keyword\",\n"
+        + "        \"size\": 10000\n"
+        + "      }\n"
+        + "    }\n"
+        + "  }\n"
+        + "}";
+
     protected static final String EMPTY_CONTENT = "{}";
 
     // REST Response error reasons
@@ -84,6 +96,7 @@ public abstract class MLCommonsTenantAwareRestTestCase extends MLCommonsRestTest
     protected final RestRequest tenantMatchAllRequest = getRestRequestWithHeadersAndContent(tenantId, MATCH_ALL_QUERY);
     protected final RestRequest otherTenantMatchAllRequest = getRestRequestWithHeadersAndContent(otherTenantId, MATCH_ALL_QUERY);
     protected final RestRequest nullTenantMatchAllRequest = getRestRequestWithHeadersAndContent(null, MATCH_ALL_QUERY);
+    protected final RestRequest tenantAggregationRequest = getRestRequestWithHeadersAndContent(tenantId, AGGREGATION_QUERY);
 
     protected static boolean isMultiTenancyEnabled() throws IOException {
         // pass -Dtests.rest.tenantaware=true on gradle command line to enable

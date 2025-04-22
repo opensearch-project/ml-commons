@@ -16,6 +16,7 @@ import org.opensearch.action.search.SearchResponse;
 import org.opensearch.client.Response;
 import org.opensearch.client.ResponseException;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.rest.RestRequest;
 
 public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
@@ -275,6 +276,25 @@ public class RestMLModelTenantAwareIT extends MLCommonsTenantAwareRestTestCase {
             assertEquals(3, searchResponse.getHits().getTotalHits().value());
             assertNull(searchResponse.getHits().getHits()[0].getSourceAsMap().get(TENANT_ID_FIELD));
             assertNull(searchResponse.getHits().getHits()[1].getSourceAsMap().get(TENANT_ID_FIELD));
+        }
+
+        // Test search with aggregations to verify no error is thrown
+        Response restResponse = makeRequest(tenantAggregationRequest, GET, MODELS_PATH + "_search");
+        assertOK(restResponse);
+        // We can't (easily) parse the JSON from this response into a SearchResponse for the same reason as the bug we're testing
+        // So we test the string values instead
+        String responseJson = TestHelper.httpEntityToString(restResponse.getEntity());
+        assertTrue(responseJson.contains("\"aggregations\":{\"unique_model_names\""));
+        if (multiTenancyEnabled) {
+            assertTrue(responseJson.contains("\"value\":1,\"relation\":\"eq\""));
+            assertTrue(responseJson.contains("\"key\":\"remote model for connector_id "));
+            assertTrue(responseJson.contains("\"doc_count\":1"));
+        } else {
+            assertTrue(responseJson.contains("\"value\":3,\"relation\":\"eq\""));
+            // one connector will have two doc_count, other will have one
+            assertTrue(responseJson.contains("\"key\":\"remote model for connector_id "));
+            assertTrue(responseJson.contains("\"doc_count\":2"));
+            assertTrue(responseJson.contains("\"doc_count\":1"));
         }
 
         /*
