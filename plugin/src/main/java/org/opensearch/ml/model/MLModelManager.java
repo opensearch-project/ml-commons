@@ -408,7 +408,7 @@ public class MLModelManager {
             sdkClient.getDataObjectAsync(getModelGroupRequest).whenComplete((r, throwable) -> {
                 if (throwable == null) {
                     try {
-                        GetResponse getModelGroupResponse = GetResponse.fromXContent(r.parser());
+                        GetResponse getModelGroupResponse = r.getResponse();
                         if (getModelGroupResponse.isExists()) {
                             Map<String, Object> modelGroupSourceMap = getModelGroupResponse.getSourceAsMap();
                             int updatedVersion = incrementLatestVersion(modelGroupSourceMap);
@@ -1938,7 +1938,7 @@ public class MLModelManager {
         sdkClient.getDataObjectAsync(getRequest).whenComplete((r, throwable) -> {
             if (throwable == null) {
                 try {
-                    GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
+                    GetResponse gr = r.getResponse();
                     if (gr != null && gr.isExists()) {
                         try (
                             XContentParser parser = jsonXContent
@@ -2006,7 +2006,7 @@ public class MLModelManager {
 
     private void processGetResponse(GetDataObjectResponse response, String modelId, ActionListener<MLModel> listener) {
         try {
-            GetResponse getResponse = parseGetResponse(response);
+            GetResponse getResponse = response.getResponse();
             if (getResponse == null || !getResponse.isExists()) {
                 listener.onFailure(new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND));
                 return;
@@ -2016,10 +2016,6 @@ public class MLModelManager {
         } catch (Exception e) {
             listener.onFailure(e);
         }
-    }
-
-    private GetResponse parseGetResponse(GetDataObjectResponse response) throws IOException {
-        return response.parser() == null ? null : GetResponse.fromXContent(response.parser());
     }
 
     private void parseAndReturnModel(GetResponse getResponse, String algorithmName, String modelId, ActionListener<MLModel> listener) {
@@ -2092,7 +2088,7 @@ public class MLModelManager {
                     }
                 } else {
                     try {
-                        GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
+                        GetResponse gr = r.getResponse();
                         if (gr != null && gr.isExists()) {
                             try (
                                 XContentParser parser = MLNodeUtils

@@ -109,7 +109,7 @@ public class DeleteAgentTransportAction extends HandledTransportAction<ActionReq
                     }
                 } else {
                     try {
-                        GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
+                        GetResponse gr = r.getResponse();
                         assert gr != null;
                         if (gr.isExists()) {
                             try (
