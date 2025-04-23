@@ -10,6 +10,9 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_PRIMARY_TERM;
+import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_SEQ_NO;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -167,10 +170,21 @@ public class GetModelGroupTransportActionTests extends OpenSearchTestCase {
         assertEquals("Failed to validate access", argumentCaptor.getValue().getMessage());
     }
 
-    public void testGetModel_NullResponse() {
+    public void testGetModel_NotExistsResponse() {
+        GetResult getResult = new GetResult(
+            ML_MODEL_GROUP_INDEX,
+            "fake_id",
+            UNASSIGNED_SEQ_NO,
+            UNASSIGNED_PRIMARY_TERM,
+            -1L,
+            false,
+            null,
+            null,
+            null
+        );
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(null);
+            listener.onResponse(new GetResponse(getResult));
             return null;
         }).when(client).get(any(), any());
         getModelGroupTransportAction.doExecute(null, mlModelGroupGetRequest, actionListener);
