@@ -30,7 +30,7 @@ import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.tools.MLListToolsAction;
 import org.opensearch.ml.common.transport.tools.MLToolsListRequest;
 import org.opensearch.ml.common.transport.tools.MLToolsListResponse;
-import org.opensearch.ml.engine.tools.CatIndexTool;
+import org.opensearch.ml.engine.tools.ListIndexTool;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
@@ -59,7 +59,7 @@ public class RestMLListToolsActionTests extends OpenSearchTestCase {
         Mockito.when(mockFactory.getDefaultType()).thenReturn("Mocked type");
         Mockito.when(mockFactory.getDefaultVersion()).thenReturn("Mocked version");
 
-        Tool tool = CatIndexTool.Factory.getInstance().create(Collections.emptyMap());
+        Tool tool = ListIndexTool.Factory.getInstance().create(Collections.emptyMap());
         Mockito.when(mockFactory.create(Mockito.any())).thenReturn(tool);
         toolFactories.put("mockTool", mockFactory);
         restMLListToolsAction = new RestMLListToolsAction(toolFactories);

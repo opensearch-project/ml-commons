@@ -6,10 +6,8 @@
 package org.opensearch.ml.action.tasks;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -116,19 +114,21 @@ public class SearchTaskTransportActionTests extends OpenSearchTestCase {
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
         SearchRequest request = new SearchRequest("my_index").source(sourceBuilder);
         MLSearchActionRequest mlSearchActionRequest = new MLSearchActionRequest(request, null);
+
+        // Mock the response
         doAnswer(invocation -> {
             ActionListener<SearchResponse> listener = invocation.getArgument(1);
             listener.onResponse(searchResponse);
             return null;
-        }).when(client).search(eq(mlSearchActionRequest), any());
+        }).when(client).search(any(SearchRequest.class), any(ActionListener.class));
 
+        // Execute the action
         searchTaskTransportAction.doExecute(null, mlSearchActionRequest, actionListener);
-        verify(client, times(1)).search(eq(mlSearchActionRequest), any());
-        // Use ArgumentCaptor to capture the SearchResponse
+
+        // Verify the response
         ArgumentCaptor<SearchResponse> responseCaptor = ArgumentCaptor.forClass(SearchResponse.class);
-        // Capture the response passed to actionListener.onResponse
-        verify(actionListener, times(1)).onResponse(responseCaptor.capture());
-        // Assert that the captured response matches the expected values
+        verify(actionListener).onResponse(responseCaptor.capture());
+
         SearchResponse capturedResponse = responseCaptor.getValue();
         assertEquals(searchResponse.getHits().getTotalHits(), capturedResponse.getHits().getTotalHits());
         assertEquals(searchResponse.getHits().getHits().length, capturedResponse.getHits().getHits().length);

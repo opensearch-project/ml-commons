@@ -41,7 +41,7 @@ public class MLAgentGetResponseTest {
             .name("test_agent")
             .appType("test_app")
             .type(MLAgentType.FLOW.name())
-            .tools(Arrays.asList(MLToolSpec.builder().type("CatIndexTool").build()))
+            .tools(Arrays.asList(MLToolSpec.builder().type("ListIndexTool").build()))
             .build();
     }
 
@@ -76,7 +76,20 @@ public class MLAgentGetResponseTest {
             MLAgentType.CONVERSATIONAL.name(),
             "test",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
-            List.of(new MLToolSpec("test", "test", "test", Collections.emptyMap(), false, Collections.emptyMap(), null)),
+            List
+                .of(
+                    new MLToolSpec(
+                        "test",
+                        "test",
+                        "test",
+                        Collections.emptyMap(),
+                        Collections.emptyMap(),
+                        false,
+                        Collections.emptyMap(),
+                        null,
+                        null
+                    )
+                ),
             Map.of("test", "test"),
             new MLMemorySpec("test", "123", 0),
             Instant.EPOCH,

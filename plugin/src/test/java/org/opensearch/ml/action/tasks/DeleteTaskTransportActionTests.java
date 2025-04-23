@@ -11,6 +11,8 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.action.DocWriteResponse.Result.DELETED;
+import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_PRIMARY_TERM;
+import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_SEQ_NO;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 
 import java.io.IOException;
@@ -34,6 +36,7 @@ import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
@@ -144,10 +147,35 @@ public class DeleteTaskTransportActionTests extends OpenSearchTestCase {
         assertEquals("Failed to get data object from index .plugins-ml-task", argumentCaptor.getValue().getMessage());
     }
 
-    public void testDeleteTask_GetResponseNullException() {
+    public void testDeleteTask_IndexNotFoundException() {
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(null);
+            actionListener.onFailure(new IndexNotFoundException(ML_TASK_INDEX));
+            return null;
+        }).when(client).get(any(), any());
+
+        deleteTaskTransportAction.doExecute(null, mlTaskDeleteRequest, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Failed to find task", argumentCaptor.getValue().getMessage());
+    }
+
+    public void testDeleteTask_GetResponseNotExistsException() {
+        GetResult getResult = new GetResult(
+            ML_TASK_INDEX,
+            "fake_id",
+            UNASSIGNED_SEQ_NO,
+            UNASSIGNED_PRIMARY_TERM,
+            -1L,
+            false,
+            null,
+            null,
+            null
+        );
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(new GetResponse(getResult));
             return null;
         }).when(client).get(any(), any());
 
@@ -183,6 +211,51 @@ public class DeleteTaskTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("thread context error", argumentCaptor.getValue().getMessage());
+    }
+
+    public void testDeleteTask_NullTenantValidation() {
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
+        MLTaskDeleteRequest request = MLTaskDeleteRequest.builder()
+            .taskId("test_id")
+            .tenantId(null)
+            .build();
+        
+        deleteTaskTransportAction.doExecute(null, request, actionListener);
+        
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("You don't have permission to access this resource", argumentCaptor.getValue().getMessage());
+    }
+
+    public void testDeleteTask_TenantMismatch() throws IOException {
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
+        MLTaskDeleteRequest request = MLTaskDeleteRequest.builder()
+            .taskId("test_id")
+            .tenantId("tenant1")
+            .build();
+        
+        MLTask mlTask = MLTask.builder()
+            .taskId("taskID")
+            .state(MLTaskState.COMPLETED)
+            .tenantId("tenant2")
+            .build();
+        
+        XContentBuilder content = mlTask.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
+        BytesReference bytesReference = BytesReference.bytes(content);
+        GetResult getResult = new GetResult("indexName", "111", 111L, 111L, 111L, true, bytesReference, null, null);
+        GetResponse getResponse = new GetResponse(getResult);
+        
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+        
+        deleteTaskTransportAction.doExecute(null, request, actionListener);
+        
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("You don't have permission to access this resource", argumentCaptor.getValue().getMessage());
     }
 
     public GetResponse prepareMLTask(MLTaskState mlTaskState) throws IOException {

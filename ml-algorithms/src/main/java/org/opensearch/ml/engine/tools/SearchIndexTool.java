@@ -48,13 +48,22 @@ public class SearchIndexTool implements Tool {
     public static final String INPUT_FIELD = "input";
     public static final String INDEX_FIELD = "index";
     public static final String QUERY_FIELD = "query";
+    public static final String INPUT_SCHEMA_FIELD = "input_schema";
+    public static final String STRICT_FIELD = "strict";
 
     public static final String TYPE = "SearchIndexTool";
     private static final String DEFAULT_DESCRIPTION =
         "Use this tool to search an index by providing two parameters: 'index' for the index name, and 'query' for the OpenSearch DSL formatted query. Only use this tool when both index name and DSL query is available.";
 
-    private String name = TYPE;
+    public static final String DEFAULT_INPUT_SCHEMA = "{\"type\":\"object\","
+        + "\"properties\":{\"index\":{\"type\":\"string\",\"description\":\"OpenSearch index name. for example: index1\"},"
+        + "\"query\":{\"type\":\"object\",\"description\":\"OpenSearch search index query. You need to get index mapping to write correct search query. It must be a valid OpenSearch query."
+        + " Valid value:\\n{\\\"query\\\":{\\\"match\\\":{\\\"population_description\\\":\\\"seattle 2023 population\\\"}},\\\"size\\\":2,\\\"_source\\\":\\\"population_description\\\"}\\n"
+        + "Invalid value: \\n{\\\"match\\\":{\\\"population_description\\\":\\\"seattle 2023 population\\\"}}\\nThe value is invalid because the match not wrapped by \\\"query\\\".\","
+        + "\"additionalProperties\":false}},\"required\":[\"index\",\"query\"],\"additionalProperties\":false}";
 
+    private String name = TYPE;
+    private Map<String, Object> attributes;
     private String description = DEFAULT_DESCRIPTION;
 
     private Client client;
@@ -64,6 +73,10 @@ public class SearchIndexTool implements Tool {
     public SearchIndexTool(Client client, NamedXContentRegistry xContentRegistry) {
         this.client = client;
         this.xContentRegistry = xContentRegistry;
+
+        this.attributes = new HashMap<>();
+        attributes.put(INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA);
+        attributes.put(STRICT_FIELD, false);
     }
 
     @Override

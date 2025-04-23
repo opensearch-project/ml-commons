@@ -158,7 +158,7 @@ public class MLChatAgentRunnerTest {
             return null;
         }).when(mlMemoryManager).updateInteraction(any(), any(), mlMemoryManagerCapture.capture());
 
-        mlChatAgentRunner = new MLChatAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryMap);
+        mlChatAgentRunner = new MLChatAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryMap, null, null);
         when(firstToolFactory.create(Mockito.anyMap())).thenReturn(firstTool);
         when(secondToolFactory.create(Mockito.anyMap())).thenReturn(secondTool);
         when(firstTool.getName()).thenReturn(FIRST_TOOL);
@@ -437,9 +437,10 @@ public class MLChatAgentRunnerTest {
         assertEquals("Second tool response", additionalInfos.get(String.format("%s.output", SECOND_TOOL)).get(0));
     }
 
+    // todo: chat_history is no longer added to inputParams in the runner, modify chat history test cases
     @Test
     public void testChatHistoryExcludeOngoingQuestion() {
-        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").parameters(Map.of("max_iteration", "1")).build();
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").parameters(Map.of("max_iteration", "2")).build();
         MLToolSpec firstToolSpec = MLToolSpec
             .builder()
             .name(FIRST_TOOL)
@@ -829,7 +830,7 @@ public class MLChatAgentRunnerTest {
 
     @Test
     public void testToolExecutionWithChatHistoryParameter() {
-        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").parameters(Map.of("max_iteration", "1")).build();
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").parameters(Map.of("max_iteration", "2")).build();
         MLToolSpec firstToolSpec = MLToolSpec
             .builder()
             .name(FIRST_TOOL)

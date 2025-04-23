@@ -38,6 +38,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorRequest;
@@ -276,6 +277,16 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                                             registerModelInput.getConnectorId(),
                                             registerModelInput.getTenantId(),
                                             ActionListener.wrap(connector -> {
+                                                if (connector instanceof McpConnector) {
+                                                    listener
+                                                        .onFailure(
+                                                            new IllegalArgumentException(
+                                                                "Cannot Create a Model from MCP Connector: "
+                                                                    + registerModelInput.getConnectorId()
+                                                            )
+                                                        );
+                                                    return;
+                                                }
                                                 updateRegisterModelInputModelInterfaceFieldsByConnector(registerModelInput, connector);
                                                 createModelGroup(registerModelInput, listener);
                                             }, listener::onFailure)

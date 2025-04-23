@@ -88,9 +88,6 @@ import org.opensearch.ml.common.transport.trainpredict.MLTrainAndPredictionTaskA
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsRequest;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsResponse;
-import org.opensearch.ml.memory.action.conversation.CreateConversationAction;
-import org.opensearch.ml.memory.action.conversation.CreateConversationRequest;
-import org.opensearch.ml.memory.action.conversation.CreateConversationResponse;
 import org.opensearch.transport.client.Client;
 
 import lombok.AccessLevel;
@@ -321,11 +318,6 @@ public class MachineLearningNodeClient implements MachineLearningClient {
         client.execute(MLConfigGetAction.INSTANCE, mlConfigGetRequest, getMlGetConfigResponseActionListener(listener));
     }
 
-    public void createConversation(String name, ActionListener<CreateConversationResponse> listener) {
-        CreateConversationRequest createConversationRequest = new CreateConversationRequest(name);
-        client.execute(CreateConversationAction.INSTANCE, createConversationRequest, getCreateConversationResponseActionListener(listener));
-    }
-
     private ActionListener<MLToolsListResponse> getMlListToolsResponseActionListener(ActionListener<List<ToolMetadata>> listener) {
         ActionListener<MLToolsListResponse> internalListener = ActionListener.wrap(mlModelListResponse -> {
             listener.onResponse(mlModelListResponse.getToolMetadataList());
@@ -392,16 +384,6 @@ public class MachineLearningNodeClient implements MachineLearningClient {
         ActionListener<MLRegisterModelResponse> listener
     ) {
         return wrapActionListener(listener, MLRegisterModelResponse::fromActionResponse);
-    }
-
-    private ActionListener<CreateConversationResponse> getCreateConversationResponseActionListener(
-        ActionListener<CreateConversationResponse> listener
-    ) {
-        ActionListener<CreateConversationResponse> actionListener = wrapActionListener(listener, response -> {
-            CreateConversationResponse conversationResponse = CreateConversationResponse.fromActionResponse(response);
-            return conversationResponse;
-        });
-        return actionListener;
     }
 
     private <T extends ActionResponse> ActionListener<T> wrapActionListener(

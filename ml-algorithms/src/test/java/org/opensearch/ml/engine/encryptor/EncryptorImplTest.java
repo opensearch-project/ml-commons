@@ -5,6 +5,8 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_PRIMARY_TERM;
+import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_SEQ_NO;
 import static org.opensearch.ml.common.CommonValue.CREATE_TIME_FIELD;
 import static org.opensearch.ml.common.CommonValue.MASTER_KEY;
 import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
@@ -76,6 +78,7 @@ public class EncryptorImplTest {
     ThreadContext threadContext;
     final String USER_STRING = "myuser|role1,role2|myTenant";
     final String TENANT_ID = "myTenant";
+    final String GENERATED_MASTER_KEY = "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=";
 
     Encryptor encryptor;
 
@@ -83,7 +86,7 @@ public class EncryptorImplTest {
     public void setUp() {
         MockitoAnnotations.openMocks(this);
         masterKey = new ConcurrentHashMap<>();
-        masterKey.put(DEFAULT_TENANT_ID, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
+        masterKey.put(DEFAULT_TENANT_ID, GENERATED_MASTER_KEY);
         sdkClient = SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap());
 
         doAnswer(invocation -> {
@@ -159,9 +162,10 @@ public class EncryptorImplTest {
         }).when(mlIndicesHandler).initMLConfigIndex(any());
         IndexResponse indexResponse = prepareIndexResponse();
 
+        GetResponse getResponse = prepareNotExistsGetResponse();
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = (ActionListener) invocation.getArgument(1);
-            actionListener.onResponse(null);
+            actionListener.onResponse(getResponse);
             return null;
         }).when(client).get(any(), any());
 
@@ -190,7 +194,8 @@ public class EncryptorImplTest {
         }).when(mlIndicesHandler).initMLConfigIndex(any());
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = (ActionListener) invocation.getArgument(1);
-            actionListener.onResponse(null);
+            GetResponse getResponse = prepareNotExistsGetResponse();
+            actionListener.onResponse(getResponse);
             return null;
         }).when(client).get(any(), any());
         doAnswer(invocation -> {
@@ -215,7 +220,8 @@ public class EncryptorImplTest {
         }).when(mlIndicesHandler).initMLConfigIndex(any());
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = (ActionListener) invocation.getArgument(1);
-            actionListener.onResponse(null);
+            GetResponse getResponse = prepareNotExistsGetResponse();
+            actionListener.onResponse(getResponse);
             return null;
         }).when(client).get(any(), any());
         doAnswer(invocation -> {
@@ -244,7 +250,8 @@ public class EncryptorImplTest {
         }).when(mlIndicesHandler).initMLConfigIndex(any());
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = (ActionListener) invocation.getArgument(1);
-            actionListener.onResponse(null);
+            GetResponse getResponse = prepareNotExistsGetResponse();
+            actionListener.onResponse(getResponse);
             return null;
         }).doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = (ActionListener) invocation.getArgument(1);
@@ -483,8 +490,7 @@ public class EncryptorImplTest {
         Assert.assertNotNull(tenantMasterKey);
 
         // Ensure that the master key for this tenant matches the expected value
-        String expectedMasterKeyId = MASTER_KEY + "_" + hashString(TENANT_ID);
-        Assert.assertEquals("m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=", encryptor.getMasterKey(TENANT_ID));
+        Assert.assertEquals(GENERATED_MASTER_KEY, encryptor.getMasterKey(TENANT_ID));
     }
 
     @Test
@@ -500,7 +506,8 @@ public class EncryptorImplTest {
 
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(null);
+            GetResponse getResponse = prepareNotExistsGetResponse();
+            listener.onResponse(getResponse);
             return null;
         }).when(client).get(any(), any());
 
@@ -514,24 +521,6 @@ public class EncryptorImplTest {
         encryptor.encrypt("test", null);
     }
 
-    @Test
-    public void handleVersionConflictResponse_ShouldThrowException_WhenRetryFails() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<Boolean> actionListener = (ActionListener) invocation.getArgument(0);
-            actionListener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLConfigIndex(any());
-
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onFailure(new IOException("Failed to get master key"));
-            return null;
-        }).when(client).get(any(), any());
-
-        exceptionRule.expect(MLException.class);
-        encryptor.encrypt("test", "someTenant");
-    }
-
     // Helper method to prepare a valid GetResponse
     private GetResponse prepareMLConfigResponse(String tenantId) throws IOException {
         // Compute the masterKeyId based on tenantId
@@ -543,8 +532,8 @@ public class EncryptorImplTest {
         // Create the source map with the expected fields
         Map<String, Object> sourceMap = Map
             .of(
-                masterKeyId,
-                "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=", // Valid MASTER_KEY for this tenant
+                MASTER_KEY,
+                GENERATED_MASTER_KEY, // Valid MASTER_KEY for this tenant
                 CREATE_TIME_FIELD,
                 Instant.now().toEpochMilli()
             );
@@ -565,9 +554,250 @@ public class EncryptorImplTest {
         return new GetResponse(getResult);
     }
 
+    @Test
+    public void encrypt_MasterKeyFieldMismatch_ShouldFallbackToProperKeyField() throws IOException {
+        // This test simulates the case where the document ID is `master_key_<hash>`
+        // but the actual `_source` only contains `master_key` (as expected in real DDB).
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> actionListener = (ActionListener) invocation.getArgument(0);
+            actionListener.onResponse(true); // init index success
+            return null;
+        }).when(mlIndicesHandler).initMLConfigIndex(any());
+
+        // Prepare a GetResponse where the _source has ONLY "master_key"
+        Map<String, Object> sourceMap = Map.of(MASTER_KEY, GENERATED_MASTER_KEY, CREATE_TIME_FIELD, Instant.now().toEpochMilli());
+
+        XContentBuilder builder = XContentFactory.jsonBuilder();
+        builder.startObject();
+        for (Map.Entry<String, Object> entry : sourceMap.entrySet()) {
+            builder.field(entry.getKey(), entry.getValue());
+        }
+        builder.endObject();
+
+        BytesReference sourceBytes = BytesReference.bytes(builder);
+        String masterKeyId = MASTER_KEY + "_" + hashString(TENANT_ID); // Simulate full hashed ID
+        GetResult getResult = new GetResult(ML_CONFIG_INDEX, masterKeyId, 1L, 1L, 1L, true, sourceBytes, null, null);
+        GetResponse getResponse = new GetResponse(getResult);
+
+        // Simulate Get API call returning a GetResponse with only "master_key" field
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
+
+        // Old buggy code would try to access response.source().get(masterKeyId) and get null
+        // This test ensures the new fix works — we access MASTER_KEY properly
+        String encrypted = encryptor.encrypt("test", TENANT_ID);
+        Assert.assertNotNull(encrypted);
+        Assert.assertEquals("test", encryptor.decrypt(encrypted, TENANT_ID));
+    }
+
+    @Test
+    public void encrypt_MasterKeyFieldExistsButNotString_ShouldThrowError() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> actionListener = invocation.getArgument(0);
+            actionListener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConfigIndex(any());
+
+        // Prepare _source with a non-string master key
+        Map<String, Object> sourceMap = Map
+            .of(
+                MASTER_KEY,
+                12345, // wrong type
+                CREATE_TIME_FIELD,
+                Instant.now().toEpochMilli()
+            );
+
+        XContentBuilder builder = XContentFactory.jsonBuilder().startObject();
+        for (Map.Entry<String, Object> entry : sourceMap.entrySet()) {
+            builder.field(entry.getKey(), entry.getValue());
+        }
+        builder.endObject();
+
+        BytesReference sourceBytes = BytesReference.bytes(builder);
+        String masterKeyId = MASTER_KEY + "_" + hashString(TENANT_ID);
+        GetResult getResult = new GetResult(ML_CONFIG_INDEX, masterKeyId, 1L, 1L, 1L, true, sourceBytes, null, null);
+        GetResponse getResponse = new GetResponse(getResult);
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
+
+        exceptionRule.expect(ResourceNotFoundException.class);
+        exceptionRule.expectMessage(MASTER_KEY_NOT_READY_ERROR);
+
+        encryptor.encrypt("test", TENANT_ID);
+    }
+
+    @Test
+    public void encrypt_MasterKeyFieldMissing_ShouldThrowError() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> actionListener = invocation.getArgument(0);
+            actionListener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConfigIndex(any());
+
+        // _source does not include the "master_key" field
+        Map<String, Object> sourceMap = Map.of(CREATE_TIME_FIELD, Instant.now().toEpochMilli());
+
+        XContentBuilder builder = XContentFactory.jsonBuilder().startObject();
+        for (Map.Entry<String, Object> entry : sourceMap.entrySet()) {
+            builder.field(entry.getKey(), entry.getValue());
+        }
+        builder.endObject();
+
+        BytesReference sourceBytes = BytesReference.bytes(builder);
+        String masterKeyId = MASTER_KEY + "_" + hashString(TENANT_ID);
+        GetResult getResult = new GetResult(ML_CONFIG_INDEX, masterKeyId, 1L, 1L, 1L, true, sourceBytes, null, null);
+        GetResponse getResponse = new GetResponse(getResult);
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
+
+        exceptionRule.expect(ResourceNotFoundException.class);
+        exceptionRule.expectMessage(MASTER_KEY_NOT_READY_ERROR);
+
+        encryptor.encrypt("test", TENANT_ID);
+    }
+
+    @Test
+    public void handleVersionConflictResponse_RetrySucceeds() throws IOException {
+        // Simulate successful ML Config Index initialization
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConfigIndex(any());
+
+        // First, simulate a version conflict on the initial PUT
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            // Version conflict error is thrown
+            listener.onFailure(new VersionConflictEngineException(new ShardId(ML_CONFIG_INDEX, "index_uuid", 1), "test_id", "failed"));
+            return null;
+        }).when(client).index(any(), any());
+
+        // Simulate that after the version conflict, the GET call returns a valid master key document.
+        GetResponse validResponse = prepareMLConfigResponse(TENANT_ID);
+        // This GET call will be triggered twice (once for the version conflict GET and again in the normal flow),
+        // so we set up our stub to return a valid response each time.
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(validResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        // Now run encryption; it should handle the version conflict by fetching the key, and then succeed.
+        Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
+        // This will go through the PUT failure, then version conflict handling, and use the returned key.
+        String encrypted = encryptor.encrypt("test", TENANT_ID);
+        Assert.assertNotNull(encrypted);
+        Assert.assertEquals("test", encryptor.decrypt(encrypted, TENANT_ID));
+    }
+
+    @Test
+    public void handleVersionConflictResponse_RetryFails() throws IOException {
+        // Simulate successful ML Config Index initialization
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConfigIndex(any());
+
+        // Simulate a version conflict on the initial PUT
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new VersionConflictEngineException(new ShardId(ML_CONFIG_INDEX, "index_uuid", 1), "test_id", "failed"));
+            return null;
+        }).when(client).index(any(), any());
+
+        // Simulate that the GET call in version conflict handling fails, e.g., by throwing an IOException.
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new IOException("Failed to get master key on retry"));
+            return null;
+        }).when(client).get(any(), any());
+
+        Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
+
+        // We expect an MLException (or a ResourceNotFoundException) to be thrown due to the failure in getting the key.
+        exceptionRule.expect(MLException.class);
+        exceptionRule.expectMessage("Failed to get master key"); // Or adjust based on your exact message.
+
+        encryptor.encrypt("test", TENANT_ID);
+    }
+
+    @Test
+    public void encrypt_GetSourceAsMapIsNull_ShouldThrowResourceNotFound() throws Exception {
+        exceptionRule.expect(ResourceNotFoundException.class);
+        exceptionRule.expectMessage(MASTER_KEY_NOT_READY_ERROR);
+
+        // Simulate ML config index init success
+        doAnswer(invocation -> {
+            ActionListener<Boolean> actionListener = (ActionListener) invocation.getArgument(0);
+            actionListener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConfigIndex(any());
+
+        // Create a GetResult with null sourceBytes
+        String masterKeyId = MASTER_KEY + "_" + hashString(TENANT_ID);
+        GetResult getResult = new GetResult(
+            ML_CONFIG_INDEX,
+            masterKeyId,
+            1L,
+            1L,
+            1L,
+            true,  // exists = true
+            null,  // sourceBytes = null => getSourceAsMap() will return null
+            null,
+            null
+        );
+        GetResponse getResponse = new GetResponse(getResult);
+
+        // Mock the get response
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        // Now run it
+        encryptor.encrypt("test", TENANT_ID);
+    }
+
     // Helper method to prepare a valid IndexResponse
     private IndexResponse prepareIndexResponse() {
         ShardId shardId = new ShardId(ML_CONFIG_INDEX, "index_uuid", 0);
         return new IndexResponse(shardId, MASTER_KEY, 1L, 1L, 1L, true);
+    }
+
+    // Helper method to prepare a valid GetResponse
+    private GetResponse prepareNotExistsGetResponse() {
+        GetResult getResult = new GetResult(
+            ML_CONFIG_INDEX,
+            "fake_id",
+            UNASSIGNED_SEQ_NO,
+            UNASSIGNED_PRIMARY_TERM,
+            -1L,
+            false,
+            null,
+            null,
+            null
+        );
+        return new GetResponse(getResult);
     }
 }

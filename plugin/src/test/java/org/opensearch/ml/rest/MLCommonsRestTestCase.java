@@ -804,19 +804,19 @@ public abstract class MLCommonsRestTestCase extends OpenSearchRestTestCase {
         verifyResponse(function, response);
     }
 
-    public MLAgent createCatIndexToolMLAgent() {
-        MLToolSpec catIndexTool = MLToolSpec
+    public MLAgent createListIndexToolMLAgent() {
+        MLToolSpec listIndexTool = MLToolSpec
             .builder()
-            .type("CatIndexTool")
-            .name("DemoCatIndexTool")
+            .type("ListIndexTool")
+            .name("DemoListIndexTool")
             .parameters(Map.of("input", "${parameters.question}"))
             .build();
         return MLAgent
             .builder()
             .name("Test_Agent_For_CatIndex_tool")
             .type("flow")
-            .description("this is a test agent for the CatIndexTool")
-            .tools(List.of(catIndexTool))
+            .description("this is a test agent for the ListIndexTool")
+            .tools(List.of(listIndexTool))
             .build();
     }
 

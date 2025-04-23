@@ -42,6 +42,9 @@ public class ConnectorTool implements Tool {
     private String name = ConnectorTool.TYPE;
     @Getter
     @Setter
+    private Map<String, Object> attributes;
+    @Getter
+    @Setter
     private String description = Factory.DEFAULT_DESCRIPTION;
     @Getter
     private String version;

@@ -5,9 +5,13 @@
 
 package org.opensearch.ml.action.agents;
 
+import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_COMMONS_MCP_FEATURE_DISABLED_MESSAGE;
 
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.opensearch.OpenSearchException;
 import org.opensearch.action.ActionRequest;
@@ -19,10 +23,13 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ml.common.CommonValue;
+import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentAction;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentRequest;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
+import org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
@@ -44,6 +51,7 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
     ClusterService clusterService;
 
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private volatile boolean mcpFeatureIsEnabled;
 
     @Inject
     public TransportRegisterAgentAction(
@@ -61,6 +69,10 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         this.mlIndicesHandler = mlIndicesHandler;
         this.clusterService = clusterService;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+        this.mcpFeatureIsEnabled = CommonValue.ML_COMMONS_MCP_FEATURE_ENABLED.get(clusterService.getSettings());
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(CommonValue.ML_COMMONS_MCP_FEATURE_ENABLED, it -> mcpFeatureIsEnabled = it);
     }
 
     @Override
@@ -72,6 +84,12 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
     }
 
     private void registerAgent(MLAgent agent, ActionListener<MLRegisterAgentResponse> listener) {
+        String mcpConnectorConfigJSON = (agent.getParameters() != null) ? agent.getParameters().get(MCP_CONNECTORS_FIELD) : null;
+        if (mcpConnectorConfigJSON != null && !mcpFeatureIsEnabled) {
+            // MCP connector provided as tools but MCP feature is disabled, so abort.
+            listener.onFailure(new OpenSearchException(ML_COMMONS_MCP_FEATURE_DISABLED_MESSAGE));
+            return;
+        }
         Instant now = Instant.now();
         boolean isHiddenAgent = RestActionUtils.isSuperAdminUser(clusterService, client);
         MLAgent mlAgent = agent.toBuilder().createdTime(now).lastUpdateTime(now).isHidden(isHiddenAgent).build();
@@ -79,10 +97,47 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, listener)) {
             return;
         }
+
+        // If the agent is a PLAN_EXECUTE_AND_REFLECT agent and does not have a reAct agent id, create a reAct agent
+        if (MLAgentType.from(mlAgent.getType()) == MLAgentType.PLAN_EXECUTE_AND_REFLECT
+            && !mlAgent.getParameters().containsKey(MLPlanExecuteAndReflectAgentRunner.REACT_AGENT_ID_FIELD)) {
+            createConversationAgent(mlAgent, tenantId, ActionListener.wrap(conversationAgentId -> {
+                Map<String, String> parameters = new HashMap<>(mlAgent.getParameters());
+                parameters.put(MLPlanExecuteAndReflectAgentRunner.REACT_AGENT_ID_FIELD, conversationAgentId);
+                MLAgent updatedAgent = mlAgent.toBuilder().parameters(parameters).build();
+                registerAgentToIndex(updatedAgent, tenantId, listener);
+            }, listener::onFailure));
+        } else {
+            registerAgentToIndex(mlAgent, tenantId, listener);
+        }
+    }
+
+    private void createConversationAgent(MLAgent planExecuteReflectAgent, String tenantId, ActionListener<String> listener) {
+        Instant now = Instant.now();
+        boolean isHiddenAgent = RestActionUtils.isSuperAdminUser(clusterService, client);
+
+        // Create CONVERSATION agent with same configuration but different type and name
+        MLAgent conversationAgent = planExecuteReflectAgent
+            .toBuilder()
+            .name(planExecuteReflectAgent.getName() + " (ReAct)")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .description("Execution Agent for Plan Execute Reflect - " + planExecuteReflectAgent.getName())
+            .createdTime(now)
+            .lastUpdateTime(now)
+            .isHidden(isHiddenAgent)
+            .build();
+
+        registerAgentToIndex(
+            conversationAgent,
+            tenantId,
+            ActionListener.wrap(response -> { listener.onResponse(response.getAgentId()); }, listener::onFailure)
+        );
+    }
+
+    private void registerAgentToIndex(MLAgent mlAgent, String tenantId, ActionListener<MLRegisterAgentResponse> listener) {
         mlIndicesHandler.initMLAgentIndex(ActionListener.wrap(result -> {
             if (result) {
                 try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-
                     sdkClient
                         .putDataObjectAsync(
                             PutDataObjectRequest.builder().index(ML_AGENT_INDEX).tenantId(tenantId).dataObject(mlAgent).build()

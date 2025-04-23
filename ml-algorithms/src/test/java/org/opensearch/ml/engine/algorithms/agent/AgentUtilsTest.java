@@ -22,6 +22,7 @@ import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.THOUGH
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.THOUGHT_RESPONSE;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -397,9 +398,9 @@ public class AgentUtilsTest {
     @Test
     public void testExtractModelResponseJsonWithValidModelOutput() {
         String text =
-            "This is the model response\n```json\n{\"thought\":\"use CatIndexTool to get index first\",\"action\":\"CatIndexTool\"} \n``` other content";
+            "This is the model response\n```json\n{\"thought\":\"use ListIndexTool to get index first\",\"action\":\"ListIndexTool\"} \n``` other content";
         String responseJson = AgentUtils.extractModelResponseJson(text);
-        assertEquals("{\"thought\":\"use CatIndexTool to get index first\",\"action\":\"CatIndexTool\"}", responseJson);
+        assertEquals("{\"thought\":\"use ListIndexTool to get index first\",\"action\":\"ListIndexTool\"}", responseJson);
     }
 
     @Test
@@ -477,7 +478,7 @@ public class AgentUtilsTest {
 
     @Test
     public void testParseLLMOutput() {
-        Set<String> tools = Set.of("VectorDBTool", "CatIndexTool");
+        Set<String> tools = Set.of("VectorDBTool", "ListIndexTool");
         for (Map.Entry<String, Map<String, String>> entry : llmResponseExpectedParseResults.entrySet()) {
             ModelTensorOutput modelTensoOutput = ModelTensorOutput
                 .builder()
@@ -493,7 +494,8 @@ public class AgentUtilsTest {
                         )
                 )
                 .build();
-            Map<String, String> output = AgentUtils.parseLLMOutput(modelTensoOutput, null, tools);
+            Map<String, String> output = AgentUtils
+                .parseLLMOutput(Collections.emptyMap(), modelTensoOutput, null, tools, Collections.emptyList());
             for (String key : entry.getValue().keySet()) {
                 Assert.assertEquals(entry.getValue().get(key), output.get(key));
             }
@@ -502,7 +504,7 @@ public class AgentUtilsTest {
 
     @Test
     public void testParseLLMOutput_MultipleFields() {
-        Set<String> tools = Set.of("VectorDBTool", "CatIndexTool");
+        Set<String> tools = Set.of("VectorDBTool", "ListIndexTool");
         String thought = "Let me run VectorDBTool to get more information";
         String toolName = "vectordbtool";
         ModelTensorOutput modelTensoOutput = ModelTensorOutput
@@ -522,7 +524,8 @@ public class AgentUtilsTest {
                     )
             )
             .build();
-        Map<String, String> output = AgentUtils.parseLLMOutput(modelTensoOutput, null, tools);
+        Map<String, String> output = AgentUtils
+            .parseLLMOutput(Collections.emptyMap(), modelTensoOutput, null, tools, Collections.emptyList());
         Assert.assertEquals(3, output.size());
         Assert.assertEquals(thought, output.get(THOUGHT));
         Assert.assertEquals("VectorDBTool", output.get(ACTION));
@@ -536,7 +539,7 @@ public class AgentUtilsTest {
 
     @Test
     public void testParseLLMOutput_MultipleFields_NoActionAndFinalAnswer() {
-        Set<String> tools = Set.of("VectorDBTool", "CatIndexTool");
+        Set<String> tools = Set.of("VectorDBTool", "ListIndexTool");
         String key1 = "dummy key1";
         String value1 = "dummy value1";
         String key2 = "dummy key2";
@@ -555,7 +558,8 @@ public class AgentUtilsTest {
                     )
             )
             .build();
-        Map<String, String> output = AgentUtils.parseLLMOutput(modelTensoOutput, null, tools);
+        Map<String, String> output = AgentUtils
+            .parseLLMOutput(Collections.emptyMap(), modelTensoOutput, null, tools, Collections.emptyList());
         Assert.assertEquals(2, output.size());
         Assert.assertFalse(output.containsKey(THOUGHT));
         Assert.assertFalse(output.containsKey(ACTION));
@@ -570,7 +574,7 @@ public class AgentUtilsTest {
 
     @Test
     public void testParseLLMOutput_OneFields_NoActionAndFinalAnswer() {
-        Set<String> tools = Set.of("VectorDBTool", "CatIndexTool");
+        Set<String> tools = Set.of("VectorDBTool", "ListIndexTool");
         String thought = "Let me run VectorDBTool to get more information";
         ModelTensorOutput modelTensoOutput = ModelTensorOutput
             .builder()
@@ -584,7 +588,8 @@ public class AgentUtilsTest {
                     )
             )
             .build();
-        Map<String, String> output = AgentUtils.parseLLMOutput(modelTensoOutput, null, tools);
+        Map<String, String> output = AgentUtils
+            .parseLLMOutput(Collections.emptyMap(), modelTensoOutput, null, tools, Collections.emptyList());
         Assert.assertEquals(3, output.size());
         Assert.assertEquals(thought, output.get(THOUGHT));
         Assert.assertFalse(output.containsKey(ACTION));

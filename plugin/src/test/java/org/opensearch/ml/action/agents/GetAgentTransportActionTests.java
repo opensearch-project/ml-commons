@@ -7,6 +7,9 @@ package org.opensearch.ml.action.agents;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.verify;
+import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_PRIMARY_TERM;
+import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_SEQ_NO;
+import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -205,14 +208,25 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testGetTask_NullResponse() {
+    public void testGetTask_NotFoundResponse() {
         String agentId = "test-agent-id-NullResponse";
         Task task = mock(Task.class);
         ActionListener<MLAgentGetResponse> actionListener = mock(ActionListener.class);
         MLAgentGetRequest getRequest = new MLAgentGetRequest(agentId, true, null);
+        GetResult getResult = new GetResult(
+            ML_AGENT_INDEX,
+            "fake_id",
+            UNASSIGNED_SEQ_NO,
+            UNASSIGNED_PRIMARY_TERM,
+            -1L,
+            false,
+            null,
+            null,
+            null
+        );
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(null);
+            listener.onResponse(new GetResponse(getResult));
             return null;
         }).when(client).get(any(), any());
         getAgentTransportAction.doExecute(task, getRequest, actionListener);
@@ -294,14 +308,27 @@ public class GetAgentTransportActionTests extends OpenSearchTestCase {
 
     public GetResponse prepareMLAgent(String agentId, boolean isHidden, String tenantId) throws IOException {
 
-        new MLToolSpec("test", "test", "test", Collections.emptyMap(), false, Collections.emptyMap(), null);
+        new MLToolSpec("test", "test", "test", Collections.emptyMap(), Collections.emptyMap(), false, Collections.emptyMap(), null, null);
 
         mlAgent = new MLAgent(
             "test",
             MLAgentType.CONVERSATIONAL.name(),
             "test",
             new LLMSpec("test_model", Map.of("test_key", "test_value")),
-            List.of(new MLToolSpec("test", "test", "test", Collections.emptyMap(), false, Collections.emptyMap(), null)),
+            List
+                .of(
+                    new MLToolSpec(
+                        "test",
+                        "test",
+                        "test",
+                        Collections.emptyMap(),
+                        Collections.emptyMap(),
+                        false,
+                        Collections.emptyMap(),
+                        null,
+                        null
+                    )
+                ),
             Map.of("test", "test"),
             new MLMemorySpec("test", "123", 0),
             Instant.EPOCH,

@@ -5,6 +5,7 @@
 package org.opensearch.ml.engine.algorithms.question_answering;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.engine.algorithms.DLModel.*;
@@ -160,6 +161,16 @@ public class SentenceHighlightingQAModelIT {
             assertNotNull(firstHighlight.get(FIELD_POSITION));
             assertNotNull(firstHighlight.get(FIELD_START));
             assertNotNull(firstHighlight.get(FIELD_END));
+
+            // Verify the values are within expected ranges
+            int position = ((Number) firstHighlight.get(FIELD_POSITION)).intValue();
+            int start = ((Number) firstHighlight.get(FIELD_START)).intValue();
+            int end = ((Number) firstHighlight.get(FIELD_END)).intValue();
+
+            assertTrue("Position should be non-negative", position >= 0);
+            assertTrue("Start index should be non-negative", start >= 0);
+            assertTrue("End index should be greater than start", end > start);
+            assertTrue("End index should not exceed context length", end <= inputDataSet.getContext().length());
         }
     }
 
@@ -204,21 +215,24 @@ public class SentenceHighlightingQAModelIT {
         assertNotNull(highlights);
 
         // We expect at least one highlighted sentence
-        assertTrue("Should have at least one highlighted sentence", highlights.size() > 0);
+        assertFalse("Should have at least one highlighted sentence", highlights.isEmpty());
 
-        // Log the highlighted sentences for inspection
-        log.info("Highlighted sentences for agriculture question:");
-        for (Map<String, Object> highlight : highlights) {
-            log.info("  - {}", highlight.get(FIELD_TEXT));
+        // Verify structure of first highlight
+        Map<String, Object> firstHighlight = highlights.getFirst();
+        assertNotNull(firstHighlight.get(FIELD_TEXT));
+        assertNotNull(firstHighlight.get(FIELD_POSITION));
+        assertNotNull(firstHighlight.get(FIELD_START));
+        assertNotNull(firstHighlight.get(FIELD_END));
 
-            // For this question, we expect the sentence about farmers to be highlighted
-            if (highlight.get(FIELD_TEXT).equals("Farmers are experiencing unpredictable growing seasons and crop failures.")) {
-                assertEquals(
-                    "Farmers are experiencing unpredictable growing seasons and crop failures.",
-                    highlight.get(FIELD_TEXT).toString()
-                );
-            }
-        }
+        // Verify the values are within expected ranges
+        int position = ((Number) firstHighlight.get(FIELD_POSITION)).intValue();
+        int start = ((Number) firstHighlight.get(FIELD_START)).intValue();
+        int end = ((Number) firstHighlight.get(FIELD_END)).intValue();
+
+        assertTrue("Position should be non-negative", position >= 0);
+        assertTrue("Start index should be non-negative", start >= 0);
+        assertTrue("End index should be greater than start", end > start);
+        assertTrue("End index should not exceed context length", end <= differentInputDataSet.getContext().length());
     }
 
     @Test
@@ -278,6 +292,25 @@ public class SentenceHighlightingQAModelIT {
         log.info("Highlighted sentences for longer context:");
         for (Map<String, Object> highlight : highlights) {
             log.info("  - {}", highlight.get(FIELD_TEXT));
+        }
+
+        // Verify structure of first highlight
+        if (!highlights.isEmpty()) {
+            Map<String, Object> firstHighlight = highlights.get(0);
+            assertNotNull(firstHighlight.get(FIELD_TEXT));
+            assertNotNull(firstHighlight.get(FIELD_POSITION));
+            assertNotNull(firstHighlight.get(FIELD_START));
+            assertNotNull(firstHighlight.get(FIELD_END));
+
+            // Verify the values are within expected ranges
+            int position = ((Number) firstHighlight.get(FIELD_POSITION)).intValue();
+            int start = ((Number) firstHighlight.get(FIELD_START)).intValue();
+            int end = ((Number) firstHighlight.get(FIELD_END)).intValue();
+
+            assertTrue("Position should be non-negative", position >= 0);
+            assertTrue("Start index should be non-negative", start >= 0);
+            assertTrue("End index should be greater than start", end > start);
+            assertTrue("End index should not exceed context length", end <= longerContext.length());
         }
     }
 }

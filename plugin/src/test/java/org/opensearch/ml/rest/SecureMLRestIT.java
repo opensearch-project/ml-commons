@@ -159,7 +159,7 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
         });
         mlRegisterModelInput = createRegisterModelInput(modelGroupId);
 
-        mlAgent = createCatIndexToolMLAgent();
+        mlAgent = createListIndexToolMLAgent();
     }
 
     @After
@@ -409,10 +409,31 @@ public class SecureMLRestIT extends MLCommonsRestTestCase {
     }
 
     public void testPredictWithReadOnlyMLAccess() throws IOException {
-        exceptionRule.expect(ResponseException.class);
-        exceptionRule.expectMessage("no permissions for [cluster:admin/opensearch/ml/predict]");
         KMeansParams kMeansParams = KMeansParams.builder().build();
-        predict(mlReadOnlyClient, FunctionName.KMEANS, "modelId", irisIndex, kMeansParams, searchSourceBuilder, null);
+        train(mlFullAccessClient, FunctionName.KMEANS, irisIndex, kMeansParams, searchSourceBuilder, trainResult -> {
+            String modelId = (String) trainResult.get("model_id");
+            assertNotNull(modelId);
+            String status = (String) trainResult.get("status");
+            assertEquals(MLTaskState.COMPLETED.name(), status);
+            try {
+                // Verify the model exists
+                getModel(mlFullAccessClient, modelId, model -> {
+                    String algorithm = (String) model.get("algorithm");
+                    assertEquals(FunctionName.KMEANS.name(), algorithm);
+                });
+
+                // Attempt prediction with read-only client and expect a permission error
+                ResponseException exception = assertThrows(ResponseException.class, () -> {
+                    predict(mlReadOnlyClient, FunctionName.KMEANS, modelId, irisIndex, kMeansParams, searchSourceBuilder, null);
+                });
+
+                // Verify the exception message
+                assertTrue(exception.getMessage().contains("no permissions for [cluster:admin/opensearch/ml/predict]"));
+
+            } catch (IOException e) {
+                fail("Unexpected IOException: " + e.getMessage());
+            }
+        }, false);
     }
 
     public void testTrainAndPredictWithFullAccess() throws IOException {

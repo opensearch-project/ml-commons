@@ -40,7 +40,6 @@ import static org.opensearch.ml.utils.MockHelper.mock_MLIndicesHandler_initModel
 import static org.opensearch.ml.utils.MockHelper.mock_client_ThreadContext;
 import static org.opensearch.ml.utils.MockHelper.mock_client_ThreadContext_Exception;
 import static org.opensearch.ml.utils.MockHelper.mock_client_get_NotExist;
-import static org.opensearch.ml.utils.MockHelper.mock_client_get_NullResponse;
 import static org.opensearch.ml.utils.MockHelper.mock_client_get_failure;
 import static org.opensearch.ml.utils.MockHelper.mock_client_index;
 import static org.opensearch.ml.utils.MockHelper.mock_client_index_failure;
@@ -717,47 +716,6 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
         assertEquals("Failed to get data object from index .plugins-ml-model", exception.getValue().getMessage());
-        verify(mlStats)
-            .createCounterStatIfAbsent(
-                eq(FunctionName.TEXT_EMBEDDING),
-                eq(ActionName.DEPLOY),
-                eq(MLActionLevelStat.ML_ACTION_FAILURE_COUNT)
-            );
-    }
-
-    public void testDeployModel_NullGetModelResponse() {
-        MLModelConfig modelConfig = TextEmbeddingModelConfig
-            .builder()
-            .modelType("bert")
-            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
-            .embeddingDimension(384)
-            .build();
-        model = MLModel
-            .builder()
-            .modelId(modelId)
-            .modelState(MLModelState.DEPLOYING)
-            .algorithm(FunctionName.TEXT_EMBEDDING)
-            .name(modelName)
-            .version(version)
-            .totalChunks(2)
-            .modelFormat(MLModelFormat.TORCH_SCRIPT)
-            .modelConfig(modelConfig)
-            .modelContentHash(modelContentHashValue)
-            .modelContentSizeInBytes(modelContentSize)
-            .build();
-        String[] nodes = new String[] { "node1", "node2" };
-        mlTask.setWorkerNodes(List.of(nodes));
-        ActionListener<String> listener = mock(ActionListener.class);
-        when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
-        when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
-        when(modelCacheHelper.getLocalDeployedModels()).thenReturn(new String[] {});
-        mock_threadpool(threadPool, taskExecutorService);
-        mock_client_get_NullResponse(client);
-        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, false, mlTask, listener);
-        assertFalse(modelManager.isModelRunningOnNode(modelId));
-        ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
-        verify(listener).onFailure(exception.capture());
-        assertEquals("Failed to find model", exception.getValue().getMessage());
         verify(mlStats)
             .createCounterStatIfAbsent(
                 eq(FunctionName.TEXT_EMBEDDING),
