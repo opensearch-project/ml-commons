@@ -11,6 +11,8 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.action.DocWriteResponse.Result.DELETED;
+import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_PRIMARY_TERM;
+import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_SEQ_NO;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 
 import java.io.IOException;
@@ -144,10 +146,21 @@ public class DeleteTaskTransportActionTests extends OpenSearchTestCase {
         assertEquals("Failed to get data object from index .plugins-ml-task", argumentCaptor.getValue().getMessage());
     }
 
-    public void testDeleteTask_GetResponseNullException() {
+    public void testDeleteTask_GetResponseNotExistsException() {
+        GetResult getResult = new GetResult(
+            ML_TASK_INDEX,
+            "fake_id",
+            UNASSIGNED_SEQ_NO,
+            UNASSIGNED_PRIMARY_TERM,
+            -1L,
+            false,
+            null,
+            null,
+            null
+        );
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(null);
+            actionListener.onResponse(new GetResponse(getResult));
             return null;
         }).when(client).get(any(), any());
 
