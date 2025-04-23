@@ -9,8 +9,6 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_GROUP_ID;
 
-import java.io.IOException;
-
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
@@ -211,10 +209,10 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
             actionListener.onFailure(cause);
         } else {
             try {
-                DeleteResponse deleteResponse = DeleteResponse.fromXContent(response.parser());
+                DeleteResponse deleteResponse = response.deleteResponse();
                 log.debug("Completed Delete Model Group Request, model group id:{} deleted", response.id());
                 actionListener.onResponse(deleteResponse);
-            } catch (IOException e) {
+            } catch (Exception e) {
                 actionListener.onFailure(e);
             }
         }

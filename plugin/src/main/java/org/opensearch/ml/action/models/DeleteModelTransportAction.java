@@ -332,7 +332,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         sdkClient.deleteDataObjectAsync(deleteDataObjectRequest).whenComplete((r, throwable) -> {
             if (throwable == null) {
                 try {
-                    DeleteResponse deleteResponse = DeleteResponse.fromXContent(r.parser());
+                    DeleteResponse deleteResponse = r.deleteResponse();
                     deleteModelChunksAndController(actionListener, modelId, functionName, isHidden, deleteResponse);
                 } catch (Exception e) {
                     actionListener.onFailure(e);
