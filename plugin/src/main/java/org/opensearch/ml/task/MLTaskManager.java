@@ -304,7 +304,7 @@ public class MLTaskManager {
                             listener.onFailure(cause);
                         } else {
                             try {
-                                IndexResponse indexResponse = IndexResponse.fromXContent(r.parser());
+                                IndexResponse indexResponse = r.indexResponse();
                                 log.info("Task creation result: {}, Task id: {}", indexResponse.getResult(), indexResponse.getId());
                                 listener.onResponse(indexResponse);
                             } catch (Exception e) {

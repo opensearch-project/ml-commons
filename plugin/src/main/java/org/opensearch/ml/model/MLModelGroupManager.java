@@ -145,7 +145,7 @@ public class MLModelGroupManager {
                                         wrappedListener.onFailure(cause);
                                     } else {
                                         try {
-                                            IndexResponse indexResponse = IndexResponse.fromXContent(r.parser());
+                                            IndexResponse indexResponse = r.indexResponse();
                                             log
                                                 .info(
                                                     "Model group creation result: {}, model group id: {}",

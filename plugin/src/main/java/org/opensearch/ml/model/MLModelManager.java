@@ -661,19 +661,7 @@ public class MLModelManager {
                 });
 
                 ThreadedActionListener<IndexResponse> putListener = threadedActionListener(REGISTER_THREAD_POOL, indexListener);
-                sdkClient.putDataObjectAsync(putModelMetaRequest).whenComplete((r, throwable) -> {
-                    if (throwable == null) {
-                        try {
-                            IndexResponse ir = IndexResponse.fromXContent(r.parser());
-                            putListener.onResponse(ir);
-                        } catch (Exception e) {
-                            putListener.onFailure(e);
-                        }
-                    } else {
-                        Exception e = SdkClientUtils.unwrapAndConvertToException(throwable);
-                        putListener.onFailure(e);
-                    }
-                });
+                sdkClient.putDataObjectAsync(putModelMetaRequest).whenComplete(SdkClientUtils.wrapPutCompletion(putListener));
             }, error -> {
                 // failed to initialize the model index
                 log.error("Failed to init model index", error);
@@ -764,19 +752,7 @@ public class MLModelManager {
                 });
 
                 ThreadedActionListener<IndexResponse> putListener = threadedActionListener(REGISTER_THREAD_POOL, indexListener);
-                sdkClient.putDataObjectAsync(putModelMetaRequest).whenComplete((r, throwable) -> {
-                    if (throwable == null) {
-                        try {
-                            IndexResponse ir = IndexResponse.fromXContent(r.parser());
-                            putListener.onResponse(ir);
-                        } catch (Exception e) {
-                            putListener.onFailure(e);
-                        }
-                    } else {
-                        Exception e = SdkClientUtils.unwrapAndConvertToException(throwable);
-                        putListener.onFailure(e);
-                    }
-                });
+                sdkClient.putDataObjectAsync(putModelMetaRequest).whenComplete(SdkClientUtils.wrapPutCompletion(putListener));
 
             }, e -> {
                 log.error("Failed to init model index", e);
