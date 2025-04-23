@@ -5,6 +5,8 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_PRIMARY_TERM;
+import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_SEQ_NO;
 import static org.opensearch.ml.common.CommonValue.CREATE_TIME_FIELD;
 import static org.opensearch.ml.common.CommonValue.MASTER_KEY;
 import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
@@ -160,9 +162,10 @@ public class EncryptorImplTest {
         }).when(mlIndicesHandler).initMLConfigIndex(any());
         IndexResponse indexResponse = prepareIndexResponse();
 
+        GetResponse getResponse = prepareNotExistsGetResponse();
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = (ActionListener) invocation.getArgument(1);
-            actionListener.onResponse(null);
+            actionListener.onResponse(getResponse);
             return null;
         }).when(client).get(any(), any());
 
@@ -191,7 +194,8 @@ public class EncryptorImplTest {
         }).when(mlIndicesHandler).initMLConfigIndex(any());
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = (ActionListener) invocation.getArgument(1);
-            actionListener.onResponse(null);
+            GetResponse getResponse = prepareNotExistsGetResponse();
+            actionListener.onResponse(getResponse);
             return null;
         }).when(client).get(any(), any());
         doAnswer(invocation -> {
@@ -216,7 +220,8 @@ public class EncryptorImplTest {
         }).when(mlIndicesHandler).initMLConfigIndex(any());
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = (ActionListener) invocation.getArgument(1);
-            actionListener.onResponse(null);
+            GetResponse getResponse = prepareNotExistsGetResponse();
+            actionListener.onResponse(getResponse);
             return null;
         }).when(client).get(any(), any());
         doAnswer(invocation -> {
@@ -245,7 +250,8 @@ public class EncryptorImplTest {
         }).when(mlIndicesHandler).initMLConfigIndex(any());
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = (ActionListener) invocation.getArgument(1);
-            actionListener.onResponse(null);
+            GetResponse getResponse = prepareNotExistsGetResponse();
+            actionListener.onResponse(getResponse);
             return null;
         }).doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = (ActionListener) invocation.getArgument(1);
@@ -500,7 +506,8 @@ public class EncryptorImplTest {
 
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(null);
+            GetResponse getResponse = prepareNotExistsGetResponse();
+            listener.onResponse(getResponse);
             return null;
         }).when(client).get(any(), any());
 
@@ -776,5 +783,21 @@ public class EncryptorImplTest {
     private IndexResponse prepareIndexResponse() {
         ShardId shardId = new ShardId(ML_CONFIG_INDEX, "index_uuid", 0);
         return new IndexResponse(shardId, MASTER_KEY, 1L, 1L, 1L, true);
+    }
+
+    // Helper method to prepare a valid GetResponse
+    private GetResponse prepareNotExistsGetResponse() {
+        GetResult getResult = new GetResult(
+            ML_CONFIG_INDEX,
+            "fake_id",
+            UNASSIGNED_SEQ_NO,
+            UNASSIGNED_PRIMARY_TERM,
+            -1L,
+            false,
+            null,
+            null,
+            null
+        );
+        return new GetResponse(getResult);
     }
 }
