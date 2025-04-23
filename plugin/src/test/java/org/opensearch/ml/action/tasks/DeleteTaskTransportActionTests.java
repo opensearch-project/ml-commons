@@ -198,6 +198,51 @@ public class DeleteTaskTransportActionTests extends OpenSearchTestCase {
         assertEquals("thread context error", argumentCaptor.getValue().getMessage());
     }
 
+    public void testDeleteTask_NullTenantValidation() {
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
+        MLTaskDeleteRequest request = MLTaskDeleteRequest.builder()
+            .taskId("test_id")
+            .tenantId(null)
+            .build();
+        
+        deleteTaskTransportAction.doExecute(null, request, actionListener);
+        
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("You don't have permission to access this resource", argumentCaptor.getValue().getMessage());
+    }
+
+    public void testDeleteTask_TenantMismatch() throws IOException {
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
+        MLTaskDeleteRequest request = MLTaskDeleteRequest.builder()
+            .taskId("test_id")
+            .tenantId("tenant1")
+            .build();
+        
+        MLTask mlTask = MLTask.builder()
+            .taskId("taskID")
+            .state(MLTaskState.COMPLETED)
+            .tenantId("tenant2")
+            .build();
+        
+        XContentBuilder content = mlTask.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
+        BytesReference bytesReference = BytesReference.bytes(content);
+        GetResult getResult = new GetResult("indexName", "111", 111L, 111L, 111L, true, bytesReference, null, null);
+        GetResponse getResponse = new GetResponse(getResult);
+        
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+        
+        deleteTaskTransportAction.doExecute(null, request, actionListener);
+        
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("You don't have permission to access this resource", argumentCaptor.getValue().getMessage());
+    }
+
     public GetResponse prepareMLTask(MLTaskState mlTaskState) throws IOException {
         MLTask mlTask = MLTask.builder().taskId("taskID").state(mlTaskState).build();
         XContentBuilder content = mlTask.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
