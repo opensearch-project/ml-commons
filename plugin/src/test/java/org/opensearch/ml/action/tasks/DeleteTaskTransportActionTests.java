@@ -36,6 +36,7 @@ import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
@@ -144,6 +145,20 @@ public class DeleteTaskTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to get data object from index .plugins-ml-task", argumentCaptor.getValue().getMessage());
+    }
+
+    public void testDeleteTask_IndexNotFoundException() {
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onFailure(new IndexNotFoundException(ML_TASK_INDEX));
+            return null;
+        }).when(client).get(any(), any());
+
+        deleteTaskTransportAction.doExecute(null, mlTaskDeleteRequest, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Failed to find task", argumentCaptor.getValue().getMessage());
     }
 
     public void testDeleteTask_GetResponseNotExistsException() {
