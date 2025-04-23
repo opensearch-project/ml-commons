@@ -262,7 +262,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
             try {
                 String InputString = mlInput.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS).toString();
                 // Process the parameters field in the input dataset to convert it back to its original datatype, instead of a string
-                String processedInputString = MLNodeUtils.processRemoteInferenceInputDataSetParametersValue(InputString);
+                String processedInputString = MLNodeUtils.processRemoteInferenceInputDataSetParametersValue(InputString, inputSchemaString);
                 MLNodeUtils.validateSchema(inputSchemaString, processedInputString);
             } catch (Exception e) {
                 throw new OpenSearchStatusException(
