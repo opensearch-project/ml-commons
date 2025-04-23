@@ -125,11 +125,9 @@ public class DeleteTaskTransportAction extends HandledTransportAction<ActionRequ
         ActionListener<DeleteResponse> actionListener
     ) {
         try {
-            GetResponse getResponse = getDataObjectResponse.parser() == null
-                ? null
-                : GetResponse.fromXContent(getDataObjectResponse.parser());
+            GetResponse getResponse = getDataObjectResponse.getResponse();
 
-            if (getResponse == null || !getResponse.isExists()) {
+            if (!getResponse.isExists()) {
                 actionListener.onFailure(new OpenSearchStatusException("Failed to find task", RestStatus.NOT_FOUND));
                 return;
             }
