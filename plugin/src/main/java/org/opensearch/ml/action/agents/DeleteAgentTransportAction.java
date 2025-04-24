@@ -109,7 +109,7 @@ public class DeleteAgentTransportAction extends HandledTransportAction<ActionReq
                     }
                 } else {
                     try {
-                        GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
+                        GetResponse gr = r.getResponse();
                         assert gr != null;
                         if (gr.isExists()) {
                             try (
@@ -186,7 +186,7 @@ public class DeleteAgentTransportAction extends HandledTransportAction<ActionReq
             actionListener.onFailure(cause);
         } else {
             try {
-                DeleteResponse deleteResponse = DeleteResponse.fromXContent(response.parser());
+                DeleteResponse deleteResponse = response.deleteResponse();
                 log.info("Agent deletion result: {}, agent id: {}", deleteResponse.getResult(), response.id());
                 actionListener.onResponse(deleteResponse);
             } catch (Exception e) {
