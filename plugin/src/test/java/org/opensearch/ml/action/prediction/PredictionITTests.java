@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.action.prediction;
 
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_SYNC_UP_JOB_INTERVAL_IN_SECONDS;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_SYNC_UP_JOB_INTERVAL_IN_SECONDS;
 import static org.opensearch.ml.utils.TestData.IRIS_DATA_SIZE;
 import static org.opensearch.ml.utils.TestData.TIME_FIELD;
 
