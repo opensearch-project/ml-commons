@@ -362,7 +362,15 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
             if (parseLLMOutput.get(RESULT_FIELD) != null) {
                 String finalResult = parseLLMOutput.get(RESULT_FIELD);
-                saveAndReturnFinalResult((ConversationIndexMemory) memory, parentInteractionId, allParams.get(REACT_AGENT_MEMORY_ID_FIELD),  allParams.get(REACT_AGENT_PARENT_INTERACTION_ID_FIELD), finalResult, null, finalListener);
+                saveAndReturnFinalResult(
+                    (ConversationIndexMemory) memory,
+                    parentInteractionId,
+                    allParams.get(REACT_AGENT_MEMORY_ID_FIELD),
+                    allParams.get(REACT_AGENT_PARENT_INTERACTION_ID_FIELD),
+                    finalResult,
+                    null,
+                    finalListener
+                );
             } else {
                 // todo: optimize double conversion of steps (string to list to string)
                 List<String> steps = Arrays.stream(parseLLMOutput.get(STEPS_FIELD).split(", ")).toList();
@@ -558,7 +566,12 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         }
 
         memory.getMemoryManager().updateInteraction(parentInteractionId, updateContent, ActionListener.wrap(res -> {
-            List<ModelTensors> finalModelTensors = createModelTensors(memory.getConversationId(), parentInteractionId, reactAgentMemoryId, reactParentInteractionId);
+            List<ModelTensors> finalModelTensors = createModelTensors(
+                memory.getConversationId(),
+                parentInteractionId,
+                reactAgentMemoryId,
+                reactParentInteractionId
+            );
             finalModelTensors
                 .add(
                     ModelTensors
@@ -575,7 +588,12 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         }));
     }
 
-    private static List<ModelTensors> createModelTensors(String sessionId, String parentInteractionId, String reactAgentMemoryId, String reactParentInteractionId) {
+    private static List<ModelTensors> createModelTensors(
+        String sessionId,
+        String parentInteractionId,
+        String reactAgentMemoryId,
+        String reactParentInteractionId
+    ) {
         List<ModelTensors> modelTensors = new ArrayList<>();
         modelTensors
             .add(
