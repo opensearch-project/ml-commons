@@ -6,8 +6,8 @@
 package org.opensearch.ml.rest;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
 import static org.opensearch.ml.utils.RestActionUtils.getAllNodes;
 import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
@@ -21,10 +21,10 @@ import org.opensearch.client.node.NodeClient;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelInput;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsRequest;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;

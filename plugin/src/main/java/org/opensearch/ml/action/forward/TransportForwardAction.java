@@ -5,8 +5,8 @@
 
 package org.opensearch.ml.action.forward;
 
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_SUCCESS_RATIO;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_SUCCESS_RATIO;
 import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 import static org.opensearch.ml.utils.MLExceptionUtils.toJsonString;
@@ -39,6 +39,7 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.forward.MLForwardAction;
 import org.opensearch.ml.common.transport.forward.MLForwardInput;
 import org.opensearch.ml.common.transport.forward.MLForwardRequest;
@@ -49,7 +50,6 @@ import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpInput;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodesRequest;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.task.MLTaskCache;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.TenantAwareHelper;

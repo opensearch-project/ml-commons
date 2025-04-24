@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.action.models;
 
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
 
 import org.junit.Before;
 import org.junit.Rule;

@@ -11,8 +11,8 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.breaker.MemoryCircuitBreaker.DEFAULT_JVM_HEAP_USAGE_THRESHOLD;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ONLY_RUN_ON_ML_NODE;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_ROLE_NAME;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ONLY_RUN_ON_ML_NODE;
 import static org.opensearch.ml.utils.TestHelper.ML_ROLE;
 
 import java.util.ArrayList;

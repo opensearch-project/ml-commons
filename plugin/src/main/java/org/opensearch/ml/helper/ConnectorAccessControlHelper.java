@@ -10,7 +10,7 @@ package org.opensearch.ml.helper;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
 import static org.opensearch.ml.utils.RestActionUtils.getFetchSourceContext;
 
 import org.apache.lucene.search.join.ScoreMode;
@@ -39,7 +39,7 @@ import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.connector.AbstractConnector;
 import org.opensearch.ml.common.connector.Connector;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;

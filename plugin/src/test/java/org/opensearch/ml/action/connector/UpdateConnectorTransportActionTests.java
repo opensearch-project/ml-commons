@@ -7,8 +7,8 @@ package org.opensearch.ml.action.connector;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.io.IOException;
@@ -48,6 +48,7 @@ import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.HttpConnector;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorRequest;
 import org.opensearch.ml.engine.MLEngine;
@@ -55,7 +56,6 @@ import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;

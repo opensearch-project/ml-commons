@@ -20,7 +20,7 @@ import static org.opensearch.ml.action.models.DeleteModelTransportAction.OS_STAT
 import static org.opensearch.ml.action.models.DeleteModelTransportAction.SEARCH_FAILURE_MSG;
 import static org.opensearch.ml.action.models.DeleteModelTransportAction.TIMEOUT_MSG;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.*;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.*;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.io.IOException;
@@ -76,12 +76,12 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.utils.AgentModelsSearcher;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.search.SearchHit;

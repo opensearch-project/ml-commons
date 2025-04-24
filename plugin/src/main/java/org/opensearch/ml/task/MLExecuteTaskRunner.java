@@ -5,8 +5,8 @@
 
 package org.opensearch.ml.task;
 
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ENABLE_INHOUSE_PYTHON_MODEL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.EXECUTE_THREAD_POOL;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ENABLE_INHOUSE_PYTHON_MODEL;
 
 import org.opensearch.action.ActionListenerResponseHandler;
 import org.opensearch.client.Client;

@@ -10,7 +10,7 @@ package org.opensearch.ml.helper;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED;
 
 import java.util.Collections;
 import java.util.HashSet;
@@ -48,7 +48,7 @@ import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.exception.MLValidationException;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;

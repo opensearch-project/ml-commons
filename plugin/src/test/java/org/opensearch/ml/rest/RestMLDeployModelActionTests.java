@@ -8,7 +8,7 @@ package org.opensearch.ml.rest;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 
 import java.util.*;
 
@@ -26,10 +26,10 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
 import org.opensearch.ml.common.transport.model.MLModelGetResponse;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;

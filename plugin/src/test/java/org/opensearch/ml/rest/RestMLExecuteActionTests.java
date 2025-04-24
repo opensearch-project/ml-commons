@@ -43,10 +43,10 @@ import org.opensearch.ml.common.output.execute.anomalylocalization.AnomalyLocali
 import org.opensearch.ml.common.output.execute.anomalylocalization.AnomalyLocalizationOutput.Bucket;
 import org.opensearch.ml.common.output.execute.anomalylocalization.AnomalyLocalizationOutput.Result;
 import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalculatorOutput;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;

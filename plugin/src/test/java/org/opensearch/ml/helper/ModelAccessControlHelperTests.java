@@ -9,7 +9,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.io.IOException;
@@ -45,7 +45,7 @@ import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.MLModelGroup.MLModelGroupBuilder;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.search.builder.SearchSourceBuilder;

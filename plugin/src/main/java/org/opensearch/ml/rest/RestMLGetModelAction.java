@@ -16,9 +16,9 @@ import java.util.List;
 import java.util.Locale;
 
 import org.opensearch.client.node.NodeClient;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model.MLModelGetAction;
 import org.opensearch.ml.common.transport.model.MLModelGetRequest;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;

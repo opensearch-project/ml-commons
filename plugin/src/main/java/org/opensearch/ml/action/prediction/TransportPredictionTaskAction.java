@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.action.prediction;
 
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE;
 import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
 
 import org.opensearch.OpenSearchStatusException;
@@ -28,13 +28,13 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.task.MLPredictTaskRunner;
 import org.opensearch.ml.task.MLTaskRunner;
 import org.opensearch.ml.utils.MLNodeUtils;

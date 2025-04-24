@@ -13,9 +13,9 @@ import java.io.IOException;
 
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.agent.MLSearchAgentAction;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.RestRequest;
 
 /**

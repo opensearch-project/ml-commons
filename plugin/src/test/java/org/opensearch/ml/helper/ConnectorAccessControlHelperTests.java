@@ -12,7 +12,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
 import static org.opensearch.ml.task.MLPredictTaskRunnerTests.USER_STRING;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
@@ -51,7 +51,7 @@ import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.HttpConnector;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;

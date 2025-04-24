@@ -20,8 +20,8 @@ package org.opensearch.ml.rest;
 import org.opensearch.ml.common.conversation.ActionConstants;
 import org.opensearch.ml.common.conversation.ConversationMeta;
 import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.memory.action.conversation.SearchConversationsAction;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 
 import com.google.common.collect.ImmutableList;
 

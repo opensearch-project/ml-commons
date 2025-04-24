@@ -5,8 +5,8 @@
 
 package org.opensearch.ml.task;
 
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_ML_TASK_PER_NODE;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TASK_DISPATCH_POLICY;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_ML_TASK_PER_NODE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TASK_DISPATCH_POLICY;
 
 import java.util.List;
 import java.util.Optional;

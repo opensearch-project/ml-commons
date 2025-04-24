@@ -9,7 +9,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.times;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_TASK_ID;
 
 import java.util.HashMap;
@@ -28,8 +28,8 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.task.*;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;

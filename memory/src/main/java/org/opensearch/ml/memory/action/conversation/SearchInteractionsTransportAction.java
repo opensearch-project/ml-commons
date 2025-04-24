@@ -28,7 +28,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
+import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.memory.ConversationalMemoryHandler;
 import org.opensearch.ml.memory.index.OpenSearchConversationalMemoryHandler;
 import org.opensearch.tasks.Task;
@@ -63,10 +63,10 @@ public class SearchInteractionsTransportAction extends HandledTransportAction<Se
         super(SearchInteractionsAction.NAME, transportService, actionFilters, SearchInteractionsRequest::new);
         this.cmHandler = cmHandler;
         this.client = client;
-        this.featureIsEnabled = ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED.get(clusterService.getSettings());
+        this.featureIsEnabled = MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED.get(clusterService.getSettings());
         clusterService
             .getClusterSettings()
-            .addSettingsUpdateConsumer(ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED, it -> featureIsEnabled = it);
+            .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED, it -> featureIsEnabled = it);
     }
 
     @Override

@@ -17,7 +17,8 @@
  */
 package org.opensearch.ml.common.conversation;
 
-import org.opensearch.common.settings.Setting;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED;
+
 import org.opensearch.ml.common.MLIndex;
 
 /**
@@ -65,10 +66,6 @@ public class ConversationalIndexConstants {
     public final static String INTERACTIONS_TRACE_NUMBER_FIELD = "trace_number";
     /** Mappings for the interactions index */
     public final static String INTERACTIONS_MAPPINGS = MLIndex.MEMORY_MESSAGE.getMapping();
-
-    /** Feature Flag setting for conversational memory */
-    public static final Setting<Boolean> ML_COMMONS_MEMORY_FEATURE_ENABLED = Setting
-        .boolSetting("plugins.ml_commons.memory_feature_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
     public static final String ML_COMMONS_MEMORY_FEATURE_DISABLED_MESSAGE =
         "The Conversation Memory feature is not enabled. To enable, please update the setting "

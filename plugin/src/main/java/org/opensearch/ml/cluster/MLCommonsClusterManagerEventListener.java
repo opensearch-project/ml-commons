@@ -5,8 +5,8 @@
 
 package org.opensearch.ml.cluster;
 
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_SYNC_UP_JOB_INTERVAL_IN_SECONDS;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_SYNC_UP_JOB_INTERVAL_IN_SECONDS;
 
 import java.util.List;
 
@@ -18,9 +18,9 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.autoredeploy.MLModelAutoReDeployer;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.threadpool.Scheduler;
 import org.opensearch.threadpool.ThreadPool;
