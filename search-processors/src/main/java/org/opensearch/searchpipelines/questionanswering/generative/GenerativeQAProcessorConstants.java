@@ -17,7 +17,7 @@
  */
 package org.opensearch.searchpipelines.questionanswering.generative;
 
-import org.opensearch.common.settings.Setting;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED;
 
 public class GenerativeQAProcessorConstants {
 
@@ -39,10 +39,7 @@ public class GenerativeQAProcessorConstants {
     public static final String CONFIG_NAME_SYSTEM_PROMPT = "system_prompt";
     public static final String CONFIG_NAME_USER_INSTRUCTIONS = "user_instructions";
 
-    public static final Setting<Boolean> RAG_PIPELINE_FEATURE_ENABLED = Setting
-        .boolSetting("plugins.ml_commons.rag_pipeline_feature_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
-
-    public static final String FEATURE_NOT_ENABLED_ERROR_MSG = RAG_PIPELINE_FEATURE_ENABLED.getKey() + " is not enabled.";
+    public static final String FEATURE_NOT_ENABLED_ERROR_MSG = ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED.getKey() + " is not enabled.";
 
     public static final String RAG_NULL_GEN_QA_PARAMS_ERROR_MSG = "generative_qa_parameters not found."
         + " Please provide ext.generative_qa_parameters to proceed."

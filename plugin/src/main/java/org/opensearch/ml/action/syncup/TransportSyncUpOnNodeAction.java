@@ -5,8 +5,8 @@
 
 package org.opensearch.ml.action.syncup;
 
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ML_TASK_TIMEOUT_IN_SECONDS;
 import static org.opensearch.ml.engine.utils.FileUtils.deleteFileQuietly;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ML_TASK_TIMEOUT_IN_SECONDS;
 
 import java.io.IOException;
 import java.nio.file.Path;

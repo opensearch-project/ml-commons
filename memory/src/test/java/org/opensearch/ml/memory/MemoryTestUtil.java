@@ -25,16 +25,16 @@ import java.util.Set;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
-import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
+import org.opensearch.ml.common.settings.MLCommonsSettings;
 
 public class MemoryTestUtil {
 
     public static ClusterService clusterServiceWithMemoryFeatureDisabled() {
         ClusterService mockClusterService = mock(ClusterService.class);
-        Settings settings = Settings.builder().put(ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED.getKey(), false).build();
+        Settings settings = Settings.builder().put(MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED.getKey(), false).build();
         when(mockClusterService.getSettings()).thenReturn(settings);
         when(mockClusterService.getClusterSettings())
-            .thenReturn(new ClusterSettings(settings, Set.of(ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED)));
+            .thenReturn(new ClusterSettings(settings, Set.of(MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED)));
         return mockClusterService;
     }
 

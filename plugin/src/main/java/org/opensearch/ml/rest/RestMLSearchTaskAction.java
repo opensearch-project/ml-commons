@@ -9,8 +9,8 @@ import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 
 import org.opensearch.ml.common.MLTask;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.task.MLTaskSearchAction;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 
 import com.google.common.collect.ImmutableList;
 
