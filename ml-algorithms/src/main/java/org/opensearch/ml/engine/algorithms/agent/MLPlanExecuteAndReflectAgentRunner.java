@@ -113,12 +113,14 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     public static final String SYSTEM_PROMPT_FIELD = "system_prompt";
     public static final String QUESTION_FIELD = "question";
     public static final String MEMORY_ID_FIELD = "memory_id";
+    public static final String PARENT_INTERACTION_ID_FIELD = "parent_interaction_id";
     public static final String TENANT_ID_FIELD = "tenant_id";
     public static final String RESULT_FIELD = "result";
     public static final String RESPONSE_FIELD = "response";
     public static final String STEP_RESULT_FIELD = "step_result";
-    public static final String REACT_AGENT_ID_FIELD = "reAct_agent_id";
-    public static final String REACT_AGENT_MEMORY_ID_FIELD = "reAct_agent_memory_id";
+    public static final String REACT_AGENT_ID_FIELD = "react_agent_id";
+    public static final String REACT_AGENT_MEMORY_ID_FIELD = "react_agent_memory_id";
+    public static final String REACT_AGENT_PARENT_INTERACTION_ID_FIELD = "reAct_agent_parent_interaction_id";
     public static final String NO_ESCAPE_PARAMS_FIELD = "no_escape_params";
     public static final String DEFAULT_PROMPT_TOOLS_FIELD = "tools_prompt";
     public static final String MAX_STEPS_EXECUTED_FIELD = "max_steps";
@@ -334,6 +336,8 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                 parentInteractionId,
                 finalResult,
                 completedSteps.get(completedSteps.size() - 2),
+                allParams.get(REACT_AGENT_MEMORY_ID_FIELD),
+                allParams.get(REACT_AGENT_PARENT_INTERACTION_ID_FIELD),
                 finalListener
             );
             return;
@@ -358,7 +362,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
             if (parseLLMOutput.get(RESULT_FIELD) != null) {
                 String finalResult = parseLLMOutput.get(RESULT_FIELD);
-                saveAndReturnFinalResult((ConversationIndexMemory) memory, parentInteractionId, finalResult, null, finalListener);
+                saveAndReturnFinalResult((ConversationIndexMemory) memory, parentInteractionId, allParams.get(REACT_AGENT_MEMORY_ID_FIELD),  allParams.get(REACT_AGENT_PARENT_INTERACTION_ID_FIELD), finalResult, null, finalListener);
             } else {
                 // todo: optimize double conversion of steps (string to list to string)
                 List<String> steps = Arrays.stream(parseLLMOutput.get(STEPS_FIELD).split(", ")).toList();
@@ -393,13 +397,18 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
                     // Process tensors in a single stream
                     reactResult.getMlModelOutputs().stream().flatMap(output -> output.getMlModelTensors().stream()).forEach(tensor -> {
-                        if (MEMORY_ID_FIELD.equals(tensor.getName())) {
-                            results.put(MEMORY_ID_FIELD, tensor.getResult());
-                        } else {
-                            Map<String, ?> dataMap = tensor.getDataAsMap();
-                            if (dataMap != null && dataMap.containsKey(RESPONSE_FIELD)) {
-                                results.put(STEP_RESULT_FIELD, (String) dataMap.get(RESPONSE_FIELD));
-                            }
+                        switch (tensor.getName()) {
+                            case MEMORY_ID_FIELD:
+                                results.put(MEMORY_ID_FIELD, tensor.getResult());
+                                break;
+                            case PARENT_INTERACTION_ID_FIELD:
+                                results.put(PARENT_INTERACTION_ID_FIELD, tensor.getResult());
+                                break;
+                            default:
+                                Map<String, ?> dataMap = tensor.getDataAsMap();
+                                if (dataMap != null && dataMap.containsKey(RESPONSE_FIELD)) {
+                                    results.put(STEP_RESULT_FIELD, (String) dataMap.get(RESPONSE_FIELD));
+                                }
                         }
                     });
 
@@ -411,6 +420,11 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     String reActMemoryId = results.get(MEMORY_ID_FIELD);
                     if (reActMemoryId != null && !reActMemoryId.isEmpty()) {
                         allParams.put(REACT_AGENT_MEMORY_ID_FIELD, reActMemoryId);
+                    }
+
+                    String reActParentInteractionId = results.get(PARENT_INTERACTION_ID_FIELD);
+                    if (reActParentInteractionId != null && !reActParentInteractionId.isEmpty()) {
+                        allParams.put(REACT_AGENT_PARENT_INTERACTION_ID_FIELD, reActParentInteractionId);
                     }
 
                     completedSteps.add(String.format("\nStep: %s\n", stepToExecute));
@@ -530,6 +544,8 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     private void saveAndReturnFinalResult(
         ConversationIndexMemory memory,
         String parentInteractionId,
+        String reactAgentMemoryId,
+        String reactParentInteractionId,
         String finalResult,
         String input,
         ActionListener<Object> finalListener
@@ -542,7 +558,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         }
 
         memory.getMemoryManager().updateInteraction(parentInteractionId, updateContent, ActionListener.wrap(res -> {
-            List<ModelTensors> finalModelTensors = createModelTensors(memory.getConversationId(), parentInteractionId);
+            List<ModelTensors> finalModelTensors = createModelTensors(memory.getConversationId(), parentInteractionId, reactAgentMemoryId, reactParentInteractionId);
             finalModelTensors
                 .add(
                     ModelTensors
@@ -559,7 +575,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         }));
     }
 
-    private static List<ModelTensors> createModelTensors(String sessionId, String parentInteractionId) {
+    private static List<ModelTensors> createModelTensors(String sessionId, String parentInteractionId, String reactAgentMemoryId, String reactParentInteractionId) {
         List<ModelTensors> modelTensors = new ArrayList<>();
         modelTensors
             .add(
@@ -569,7 +585,9 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         List
                             .of(
                                 ModelTensor.builder().name(MLAgentExecutor.MEMORY_ID).result(sessionId).build(),
-                                ModelTensor.builder().name(MLAgentExecutor.PARENT_INTERACTION_ID).result(parentInteractionId).build()
+                                ModelTensor.builder().name(MLAgentExecutor.PARENT_INTERACTION_ID).result(parentInteractionId).build(),
+                                ModelTensor.builder().name(REACT_AGENT_MEMORY_ID_FIELD).result(reactAgentMemoryId).build(),
+                                ModelTensor.builder().name(REACT_AGENT_PARENT_INTERACTION_ID_FIELD).result(reactParentInteractionId).build()
                             )
                     )
                     .build()
