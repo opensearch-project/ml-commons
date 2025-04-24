@@ -55,7 +55,6 @@ import static org.opensearch.ml.utils.MLNodeUtils.checkOpenCircuitBreaker;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
 import java.io.File;
-import java.io.IOException;
 import java.nio.file.Path;
 import java.security.PrivilegedActionException;
 import java.time.Instant;
@@ -408,7 +407,7 @@ public class MLModelManager {
             sdkClient.getDataObjectAsync(getModelGroupRequest).whenComplete((r, throwable) -> {
                 if (throwable == null) {
                     try {
-                        GetResponse getModelGroupResponse = GetResponse.fromXContent(r.parser());
+                        GetResponse getModelGroupResponse = r.getResponse();
                         if (getModelGroupResponse.isExists()) {
                             Map<String, Object> modelGroupSourceMap = getModelGroupResponse.getSourceAsMap();
                             int updatedVersion = incrementLatestVersion(modelGroupSourceMap);
@@ -661,19 +660,7 @@ public class MLModelManager {
                 });
 
                 ThreadedActionListener<IndexResponse> putListener = threadedActionListener(REGISTER_THREAD_POOL, indexListener);
-                sdkClient.putDataObjectAsync(putModelMetaRequest).whenComplete((r, throwable) -> {
-                    if (throwable == null) {
-                        try {
-                            IndexResponse ir = IndexResponse.fromXContent(r.parser());
-                            putListener.onResponse(ir);
-                        } catch (Exception e) {
-                            putListener.onFailure(e);
-                        }
-                    } else {
-                        Exception e = SdkClientUtils.unwrapAndConvertToException(throwable);
-                        putListener.onFailure(e);
-                    }
-                });
+                sdkClient.putDataObjectAsync(putModelMetaRequest).whenComplete(SdkClientUtils.wrapPutCompletion(putListener));
             }, error -> {
                 // failed to initialize the model index
                 log.error("Failed to init model index", error);
@@ -764,19 +751,7 @@ public class MLModelManager {
                 });
 
                 ThreadedActionListener<IndexResponse> putListener = threadedActionListener(REGISTER_THREAD_POOL, indexListener);
-                sdkClient.putDataObjectAsync(putModelMetaRequest).whenComplete((r, throwable) -> {
-                    if (throwable == null) {
-                        try {
-                            IndexResponse ir = IndexResponse.fromXContent(r.parser());
-                            putListener.onResponse(ir);
-                        } catch (Exception e) {
-                            putListener.onFailure(e);
-                        }
-                    } else {
-                        Exception e = SdkClientUtils.unwrapAndConvertToException(throwable);
-                        putListener.onFailure(e);
-                    }
-                });
+                sdkClient.putDataObjectAsync(putModelMetaRequest).whenComplete(SdkClientUtils.wrapPutCompletion(putListener));
 
             }, e -> {
                 log.error("Failed to init model index", e);
@@ -1938,7 +1913,7 @@ public class MLModelManager {
         sdkClient.getDataObjectAsync(getRequest).whenComplete((r, throwable) -> {
             if (throwable == null) {
                 try {
-                    GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
+                    GetResponse gr = r.getResponse();
                     if (gr != null && gr.isExists()) {
                         try (
                             XContentParser parser = jsonXContent
@@ -2006,7 +1981,7 @@ public class MLModelManager {
 
     private void processGetResponse(GetDataObjectResponse response, String modelId, ActionListener<MLModel> listener) {
         try {
-            GetResponse getResponse = parseGetResponse(response);
+            GetResponse getResponse = response.getResponse();
             if (getResponse == null || !getResponse.isExists()) {
                 listener.onFailure(new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND));
                 return;
@@ -2016,10 +1991,6 @@ public class MLModelManager {
         } catch (Exception e) {
             listener.onFailure(e);
         }
-    }
-
-    private GetResponse parseGetResponse(GetDataObjectResponse response) throws IOException {
-        return response.parser() == null ? null : GetResponse.fromXContent(response.parser());
     }
 
     private void parseAndReturnModel(GetResponse getResponse, String algorithmName, String modelId, ActionListener<MLModel> listener) {
@@ -2092,7 +2063,7 @@ public class MLModelManager {
                     }
                 } else {
                     try {
-                        GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
+                        GetResponse gr = r.getResponse();
                         if (gr != null && gr.isExists()) {
                             try (
                                 XContentParser parser = MLNodeUtils
@@ -2299,9 +2270,8 @@ public class MLModelManager {
             updateListener.onFailure(cause);
         } else {
             try {
-                UpdateResponse updateResponse = r.parser() == null ? null : UpdateResponse.fromXContent(r.parser());
-                updateListener.onResponse(updateResponse);
-            } catch (IOException e) {
+                updateListener.onResponse(r.updateResponse());
+            } catch (Exception e) {
                 updateListener.onFailure(e);
             }
         }
