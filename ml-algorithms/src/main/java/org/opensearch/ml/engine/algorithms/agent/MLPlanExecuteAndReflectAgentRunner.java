@@ -161,9 +161,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
         String userPrompt = params.get(QUESTION_FIELD);
         params.put(USER_PROMPT_FIELD, userPrompt);
-
-        String userSystemPrompt = params.getOrDefault(SYSTEM_PROMPT_FIELD, "");
-        params.put(SYSTEM_PROMPT_FIELD, userSystemPrompt + DEFAULT_PLANNER_SYSTEM_PROMPT);
+        params.put(SYSTEM_PROMPT_FIELD, params.getOrDefault(SYSTEM_PROMPT_FIELD, DEFAULT_PLANNER_SYSTEM_PROMPT));
 
         if (params.get(PLANNER_PROMPT_FIELD) != null) {
             this.plannerPrompt = params.get(PLANNER_PROMPT_FIELD);
