@@ -389,8 +389,9 @@ public class ModelAccessControlHelper {
                 searchSourceBuilder.query(QueryBuilders.boolQuery().mustNot(QueryBuilders.matchAllQuery()));
             } else {
                 // Restrict search strictly to these _ids
-                // TODO check if this should be replaced with model_group_ids
-                searchSourceBuilder.query(QueryBuilders.idsQuery().addIds(modelGroupIds.toArray(new String[0])));
+                // TODO check if this should be replaced with model_group_ids: MLModelGroup.MODEL_GROUP_ID_FIELD
+
+                searchSourceBuilder.query(QueryBuilders.termsQuery(MLModelGroup.MODEL_GROUP_ID_FIELD + ".keyword", modelGroupIds));
             }
         }, failure -> {
             // do nothing to the source or return empty set?
