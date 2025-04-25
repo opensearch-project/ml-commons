@@ -93,7 +93,6 @@ public class CommonValue {
     public static final String MCP_TOOL_DESCRIPTION_FIELD = "description";
     public static final String MCP_TOOL_INPUT_SCHEMA_FIELD = "inputSchema";
     public static final String MCP_SYNC_CLIENT = "mcp_sync_client";
-    public static final String MCP_EXECUTOR_SERVICE = "mcp_executor_service";
     public static final String MCP_TOOLS_FIELD = "tools";
     public static final String MCP_CONNECTORS_FIELD = "mcp_connectors";
     public static final String MCP_CONNECTOR_ID_FIELD = "mcp_connector_id";
