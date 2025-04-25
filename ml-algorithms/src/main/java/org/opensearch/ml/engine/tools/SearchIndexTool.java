@@ -63,6 +63,8 @@ public class SearchIndexTool implements Tool {
         + "Invalid value: \\n{\\\"match\\\":{\\\"population_description\\\":\\\"seattle 2023 population\\\"}}\\nThe value is invalid because the match not wrapped by \\\"query\\\".\","
         + "\"additionalProperties\":false}},\"required\":[\"index\",\"query\"],\"additionalProperties\":false}";
 
+    private static final Gson GSON = new GsonBuilder().serializeSpecialFloatingPointValues().create();
+
     private String name = TYPE;
     private Map<String, Object> attributes;
     private String description = DEFAULT_DESCRIPTION;
@@ -115,8 +117,7 @@ public class SearchIndexTool implements Tool {
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
         try {
             String input = parameters.get(INPUT_FIELD);
-            Gson gson = new GsonBuilder().serializeSpecialFloatingPointValues().create();
-            JsonObject jsonObject = gson.fromJson(input, JsonObject.class);
+            JsonObject jsonObject = GSON.fromJson(input, JsonObject.class);
             String index = Optional.ofNullable(jsonObject).map(x -> x.get(INDEX_FIELD)).map(JsonElement::getAsString).orElse(null);
             String query = Optional.ofNullable(jsonObject).map(x -> x.get(QUERY_FIELD)).map(JsonElement::toString).orElse(null);
             if (index == null || query == null) {
@@ -133,7 +134,7 @@ public class SearchIndexTool implements Tool {
                     for (SearchHit hit : hits) {
                         String doc = AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> {
                             Map<String, Object> docContent = processResponse(hit);
-                            return gson.toJson(docContent);
+                            return GSON.toJson(docContent);
                         });
                         contextBuilder.append(doc).append("\n");
                     }
