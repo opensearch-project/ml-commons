@@ -11,6 +11,8 @@ import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED;
+import static org.opensearch.security.spi.resources.FeatureConfigConstants.OPENSEARCH_RESOURCE_SHARING_ENABLED;
+import static org.opensearch.security.spi.resources.FeatureConfigConstants.OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT;
 
 import java.util.Collections;
 import java.util.HashSet;
@@ -19,6 +21,7 @@ import java.util.Optional;
 
 import org.apache.lucene.search.join.ScoreMode;
 import org.opensearch.ExceptionsHelper;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.cluster.service.ClusterService;
@@ -28,6 +31,7 @@ import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.util.CollectionUtils;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
@@ -45,6 +49,7 @@ import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLModelGroup;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
@@ -54,6 +59,7 @@ import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableList;
@@ -85,8 +91,37 @@ public class ModelAccessControlHelper {
         );
 
     // TODO Eventually remove this when all usages of it have been migrated to the SdkClient version
-    public void validateModelGroupAccess(User user, String modelGroupId, Client client, ActionListener<Boolean> listener) {
-        if (modelGroupId == null || isAdmin(user) || !isSecurityEnabledAndModelAccessControlEnabled(user)) {
+    public void validateModelGroupAccess(
+        User user,
+        String modelGroupId,
+        Client client,
+        Settings settings,
+        ActionListener<Boolean> listener
+    ) {
+        if (modelGroupId == null) {
+            listener.onResponse(true);
+            return;
+        }
+        boolean isResourceSharingFeatureEnabled = settings
+            .getAsBoolean(OPENSEARCH_RESOURCE_SHARING_ENABLED, OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT);
+        if (isResourceSharingFeatureEnabled) {
+            ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
+            resourceSharingClient.verifyResourceAccess(modelGroupId, ML_MODEL_GROUP_INDEX, ActionListener.wrap(isAuthorized -> {
+                if (!isAuthorized) {
+                    listener
+                        .onFailure(
+                            new OpenSearchStatusException(
+                                "User " + user.getName() + " is not authorized to delete ml-model-group id: " + modelGroupId,
+                                RestStatus.FORBIDDEN
+                            )
+                        );
+                    return;
+                }
+                listener.onResponse(true);
+            }, listener::onFailure));
+            return;
+        }
+        if (isAdmin(user) || !isSecurityEnabledAndModelAccessControlEnabled(user)) {
             listener.onResponse(true);
             return;
         }
@@ -132,11 +167,33 @@ public class ModelAccessControlHelper {
         String modelGroupId,
         Client client,
         SdkClient sdkClient,
+        Settings settings,
         ActionListener<Boolean> listener
     ) {
-        if (modelGroupId == null
-            || (!mlFeatureEnabledSetting.isMultiTenancyEnabled()
-                && (isAdmin(user) || !isSecurityEnabledAndModelAccessControlEnabled(user)))) {
+        if (modelGroupId == null || (!mlFeatureEnabledSetting.isMultiTenancyEnabled())) {
+            listener.onResponse(true);
+            return;
+        }
+        boolean isResourceSharingFeatureEnabled = settings
+            .getAsBoolean(OPENSEARCH_RESOURCE_SHARING_ENABLED, OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT);
+        if (isResourceSharingFeatureEnabled) {
+            ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
+            resourceSharingClient.verifyResourceAccess(modelGroupId, ML_MODEL_GROUP_INDEX, ActionListener.wrap(isAuthorized -> {
+                if (!isAuthorized) {
+                    listener
+                        .onFailure(
+                            new OpenSearchStatusException(
+                                "User " + user.getName() + " is not authorized to delete ml-model-group id: " + modelGroupId,
+                                RestStatus.FORBIDDEN
+                            )
+                        );
+                    return;
+                }
+                listener.onResponse(true);
+            }, listener::onFailure));
+            return;
+        }
+        if (isAdmin(user) || !isSecurityEnabledAndModelAccessControlEnabled(user)) {
             listener.onResponse(true);
             return;
         }
@@ -313,7 +370,32 @@ public class ModelAccessControlHelper {
         return searchSourceBuilder;
     }
 
-    public SearchSourceBuilder createSearchSourceBuilder(User user) {
+    public SearchSourceBuilder createSearchSourceBuilder(User user, Settings settings) {
+        boolean isResourceSharingFeatureEnabled = settings
+            .getAsBoolean(OPENSEARCH_RESOURCE_SHARING_ENABLED, OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT);
+        // TODO: Remove this feature flag check once feature is GA, as it will be enabled by default
+        if (isResourceSharingFeatureEnabled) {
+            return addAccessibleModelGroupsFilter(new SearchSourceBuilder());
+        }
         return addUserBackendRolesFilter(user, new SearchSourceBuilder());
+    }
+
+    public SearchSourceBuilder addAccessibleModelGroupsFilter(SearchSourceBuilder searchSourceBuilder) {
+        ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
+
+        resourceSharingClient.getAccessibleResourceIds(ML_MODEL_GROUP_INDEX, ActionListener.wrap(modelGroupIds -> {
+            if (modelGroupIds.isEmpty()) {
+                // User has no access → return nothing
+                searchSourceBuilder.query(QueryBuilders.boolQuery().mustNot(QueryBuilders.matchAllQuery()));
+            } else {
+                // Restrict search strictly to these _ids
+                // TODO check if this should be replaced with model_group_ids
+                searchSourceBuilder.query(QueryBuilders.idsQuery().addIds(modelGroupIds.toArray(new String[0])));
+            }
+        }, failure -> {
+            // do nothing to the source or return empty set?
+            searchSourceBuilder.query(QueryBuilders.boolQuery().mustNot(QueryBuilders.matchAllQuery()));
+        }));
+        return searchSourceBuilder;
     }
 }

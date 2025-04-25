@@ -8,8 +8,6 @@ package org.opensearch.ml.action.model_group;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_GROUP_ID;
-import static org.opensearch.security.spi.resources.FeatureConfigConstants.OPENSEARCH_RESOURCE_SHARING_ENABLED;
-import static org.opensearch.security.spi.resources.FeatureConfigConstants.OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT;
 
 import java.io.IOException;
 
@@ -32,7 +30,6 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
-import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteRequest;
@@ -47,7 +44,6 @@ import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
 import org.opensearch.remote.metadata.client.SearchDataObjectResponse;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.builder.SearchSourceBuilder;
-import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -96,8 +92,6 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
         MLModelGroupDeleteRequest deleteRequest = MLModelGroupDeleteRequest.fromActionRequest(request);
         String modelGroupId = deleteRequest.getModelGroupId();
         String tenantId = deleteRequest.getTenantId();
-        boolean isResourceSharingFeatureEnabled = this.settings
-            .getAsBoolean(OPENSEARCH_RESOURCE_SHARING_ENABLED, OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT);
 
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
             return;
@@ -105,28 +99,8 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
-            User user = RestActionUtils.getUserContext(client);
             // TODO: Remove this feature flag check once feature is GA, as it will be enabled by default
-            if (isResourceSharingFeatureEnabled) {
-                ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
-                resourceSharingClient.verifyResourceAccess(modelGroupId, ML_MODEL_GROUP_INDEX, ActionListener.wrap(isAuthorized -> {
-                    if (!isAuthorized) {
-                        actionListener
-                            .onFailure(
-                                new OpenSearchStatusException(
-                                    "User " + user.getName() + " is not authorized to delete ml-model-group id: " + modelGroupId,
-                                    RestStatus.FORBIDDEN
-                                )
-                            );
-                        return;
-                    }
-
-                    handleAccessValidation(true, modelGroupId, tenantId, actionListener);
-                }, failure -> { handleValidationError(failure, modelGroupId, actionListener); }));
-            } else {
-                validateAndDeleteModelGroup(modelGroupId, tenantId, wrappedListener);
-            }
-
+            validateAndDeleteModelGroup(modelGroupId, tenantId, wrappedListener);
         }
     }
 
@@ -140,6 +114,7 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
                 modelGroupId,
                 client,
                 sdkClient,
+                settings,
                 ActionListener
                     .wrap(
                         hasAccess -> handleAccessValidation(hasAccess, modelGroupId, tenantId, listener),

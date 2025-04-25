@@ -106,11 +106,10 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     Boolean isSafeDelete;
 
     final Client client;
+    final Settings settings;
     final SdkClient sdkClient;
     final NamedXContentRegistry xContentRegistry;
     final ClusterService clusterService;
-
-    Settings settings;
 
     final ModelAccessControlHelper modelAccessControlHelper;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
@@ -215,42 +214,55 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                     }
                                 } else {
                                     modelAccessControlHelper
-                                        .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
-                                            if (!access) {
-                                                wrappedListener
-                                                    .onFailure(
-                                                        new OpenSearchStatusException(
-                                                            "User doesn't have privilege to perform this operation on this model",
-                                                            RestStatus.FORBIDDEN
-                                                        )
-                                                    );
-                                            } else if (isModelNotDeployed(mlModelState)) {
-                                                if (isSafeDelete) {
-                                                    // We only check downstream task when it's not hidden and cluster setting is true.
-                                                    checkDownstreamTaskBeforeDeleteModel(
-                                                        modelId,
-                                                        tenantId,
-                                                        mlModel.getAlgorithm().name(),
-                                                        isHidden,
-                                                        actionListener
-                                                    );
+                                        .validateModelGroupAccess(
+                                            user,
+                                            mlModel.getModelGroupId(),
+                                            client,
+                                            settings,
+                                            ActionListener.wrap(access -> {
+                                                if (!access) {
+                                                    wrappedListener
+                                                        .onFailure(
+                                                            new OpenSearchStatusException(
+                                                                "User doesn't have privilege to perform this operation on this model",
+                                                                RestStatus.FORBIDDEN
+                                                            )
+                                                        );
+                                                } else if (isModelNotDeployed(mlModelState)) {
+                                                    if (isSafeDelete) {
+                                                        // We only check downstream task when it's not hidden and cluster setting is true.
+                                                        checkDownstreamTaskBeforeDeleteModel(
+                                                            modelId,
+                                                            tenantId,
+                                                            mlModel.getAlgorithm().name(),
+                                                            isHidden,
+                                                            actionListener
+                                                        );
+                                                    } else {
+                                                        deleteModel(
+                                                            modelId,
+                                                            tenantId,
+                                                            mlModel.getAlgorithm().name(),
+                                                            isHidden,
+                                                            actionListener
+                                                        );
+                                                    }
+                                                    // deleteModel(modelId, tenantId, mlModel.getAlgorithm().name(), isHidden,
+                                                    // actionListener);
                                                 } else {
-                                                    deleteModel(modelId, tenantId, mlModel.getAlgorithm().name(), isHidden, actionListener);
+                                                    wrappedListener
+                                                        .onFailure(
+                                                            new OpenSearchStatusException(
+                                                                "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete",
+                                                                RestStatus.BAD_REQUEST
+                                                            )
+                                                        );
                                                 }
-                                                // deleteModel(modelId, tenantId, mlModel.getAlgorithm().name(), isHidden, actionListener);
-                                            } else {
-                                                wrappedListener
-                                                    .onFailure(
-                                                        new OpenSearchStatusException(
-                                                            "Model cannot be deleted in deploying or deployed state. Try undeploy model first then delete",
-                                                            RestStatus.BAD_REQUEST
-                                                        )
-                                                    );
-                                            }
-                                        }, e -> {
-                                            log.error(getErrorMessage("Failed to validate Access", modelId, isHidden), e);
-                                            wrappedListener.onFailure(e);
-                                        }));
+                                            }, e -> {
+                                                log.error(getErrorMessage("Failed to validate Access", modelId, isHidden), e);
+                                                wrappedListener.onFailure(e);
+                                            })
+                                        );
                                 }
                             } catch (Exception e) {
                                 log.error("Failed to parse ml model {}", r.id(), e);

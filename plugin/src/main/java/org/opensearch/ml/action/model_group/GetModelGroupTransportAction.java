@@ -30,7 +30,6 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.MLModelGroup;
-import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetRequest;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetResponse;
@@ -43,7 +42,6 @@ import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
-import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -167,33 +165,7 @@ public class GetModelGroupTransportAction extends HandledTransportAction<ActionR
 
                     if (TenantAwareHelper
                         .validateTenantResource(mlFeatureEnabledSetting, tenantId, mlModelGroup.getTenantId(), wrappedListener)) {
-                        // TODO: Remove this feature flag check once feature is GA, as it will be enabled by default
-                        if (isResourceSharingFeatureEnabled) {
-                            ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor
-                                .getInstance()
-                                .getResourceSharingClient();
-                            resourceSharingClient
-                                .verifyResourceAccess(modelGroupId, ML_MODEL_GROUP_INDEX, ActionListener.wrap(isAuthorized -> {
-                                    if (!isAuthorized) {
-                                        wrappedListener
-                                            .onFailure(
-                                                new OpenSearchStatusException(
-                                                    "User "
-                                                        + user.getName()
-                                                        + " is not authorized to get ml-model-group: "
-                                                        + mlModelGroup.getName(),
-                                                    RestStatus.FORBIDDEN
-                                                )
-                                            );
-                                        return;
-                                    }
-                                    wrappedListener.onResponse(MLModelGroupGetResponse.builder().mlModelGroup(mlModelGroup).build());
-                                }, wrappedListener::onFailure));
-                        } else {
-                            // TODO: At some point, this call must be removed to return the resource directly
-                            validateModelGroupAccess(user, modelGroupId, mlModelGroup, wrappedListener);
-                        }
-
+                        validateModelGroupAccess(user, modelGroupId, mlModelGroup, wrappedListener);
                     }
                 } catch (Exception e) {
                     log.error("Failed to parse ml connector {}", getDataObjectResponse.id(), e);
@@ -219,7 +191,7 @@ public class GetModelGroupTransportAction extends HandledTransportAction<ActionR
         MLModelGroup mlModelGroup,
         ActionListener<MLModelGroupGetResponse> wrappedListener
     ) {
-        modelAccessControlHelper.validateModelGroupAccess(user, modelGroupId, client, ActionListener.wrap(access -> {
+        modelAccessControlHelper.validateModelGroupAccess(user, modelGroupId, client, settings, ActionListener.wrap(access -> {
             if (!access) {
                 wrappedListener
                     .onFailure(

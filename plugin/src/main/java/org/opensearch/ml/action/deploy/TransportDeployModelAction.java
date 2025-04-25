@@ -176,7 +176,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                     }
                 } else {
                     modelAccessControlHelper
-                        .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
+                        .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, settings, ActionListener.wrap(access -> {
                             if (!access) {
                                 wrappedListener
                                     .onFailure(

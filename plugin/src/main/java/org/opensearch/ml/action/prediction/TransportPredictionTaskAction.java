@@ -57,6 +57,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
 
     Client client;
     SdkClient sdkClient;
+    Settings settings;
 
     ClusterService clusterService;
 
@@ -92,6 +93,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         this.clusterService = clusterService;
         this.client = client;
         this.sdkClient = sdkClient;
+        this.settings = settings;
         this.xContentRegistry = xContentRegistry;
         this.mlModelManager = mlModelManager;
         this.modelAccessControlHelper = modelAccessControlHelper;
@@ -138,6 +140,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                             mlModel.getModelGroupId(),
                             client,
                             sdkClient,
+                            settings,
                             ActionListener.wrap(access -> {
                                 if (!access) {
                                     wrappedListener

@@ -29,6 +29,7 @@ import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.commons.authuser.User;
@@ -60,6 +61,7 @@ import lombok.extern.log4j.Log4j2;
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 public class UpdateControllerTransportAction extends HandledTransportAction<ActionRequest, UpdateResponse> {
     Client client;
+    Settings settings;
     MLModelManager mlModelManager;
     MLModelCacheHelper mlModelCacheHelper;
     ClusterService clusterService;
@@ -71,6 +73,7 @@ public class UpdateControllerTransportAction extends HandledTransportAction<Acti
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
+        Settings settings,
         ClusterService clusterService,
         ModelAccessControlHelper modelAccessControlHelper,
         MLModelCacheHelper mlModelCacheHelper,
@@ -104,7 +107,7 @@ public class UpdateControllerTransportAction extends HandledTransportAction<Acti
                 Boolean isHidden = mlModel.getIsHidden();
                 if (functionName == TEXT_EMBEDDING || functionName == REMOTE) {
                     modelAccessControlHelper
-                        .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {
+                        .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, settings, ActionListener.wrap(hasPermission -> {
                             if (hasPermission) {
                                 mlModelManager.getController(modelId, ActionListener.wrap(controller -> {
                                     boolean isDeployRequiredAfterUpdate = controller.isDeployRequiredAfterUpdate(updateControllerInput);

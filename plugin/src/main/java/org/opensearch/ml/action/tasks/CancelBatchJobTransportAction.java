@@ -26,6 +26,7 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
@@ -72,6 +73,7 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
 
     Client client;
     NamedXContentRegistry xContentRegistry;
+    Settings settings;
 
     ClusterService clusterService;
     ScriptService scriptService;
@@ -89,6 +91,7 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
+        Settings settings,
         NamedXContentRegistry xContentRegistry,
         ClusterService clusterService,
         ScriptService scriptService,
@@ -110,6 +113,7 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
         this.mlTaskManager = mlTaskManager;
         this.mlModelManager = mlModelManager;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+        this.settings = settings;
     }
 
     @Override
@@ -192,35 +196,36 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<MLModel> getModelListener = ActionListener.wrap(model -> {
-                modelAccessControlHelper.validateModelGroupAccess(user, model.getModelGroupId(), client, ActionListener.wrap(access -> {
-                    if (!access) {
-                        actionListener.onFailure(new MLValidationException("You don't have permission to cancel this batch job"));
-                    } else {
-                        if (model.getConnector() != null) {
-                            Connector connector = model.getConnector();
-                            executeConnector(connector, mlInput, actionListener);
-                        } else if (clusterService.state().metadata().hasIndex(ML_CONNECTOR_INDEX)) {
-                            ActionListener<Connector> listener = ActionListener
-                                .wrap(connector -> { executeConnector(connector, mlInput, actionListener); }, e -> {
-                                    log.error("Failed to get connector {}", model.getConnectorId(), e);
-                                    actionListener.onFailure(e);
-                                });
-                            try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
-                                connectorAccessControlHelper
-                                    .getConnector(
-                                        client,
-                                        model.getConnectorId(),
-                                        ActionListener.runBefore(listener, threadContext::restore)
-                                    );
-                            }
+                modelAccessControlHelper
+                    .validateModelGroupAccess(user, model.getModelGroupId(), client, settings, ActionListener.wrap(access -> {
+                        if (!access) {
+                            actionListener.onFailure(new MLValidationException("You don't have permission to cancel this batch job"));
                         } else {
-                            actionListener.onFailure(new ResourceNotFoundException("Can't find connector " + model.getConnectorId()));
+                            if (model.getConnector() != null) {
+                                Connector connector = model.getConnector();
+                                executeConnector(connector, mlInput, actionListener);
+                            } else if (clusterService.state().metadata().hasIndex(ML_CONNECTOR_INDEX)) {
+                                ActionListener<Connector> listener = ActionListener
+                                    .wrap(connector -> { executeConnector(connector, mlInput, actionListener); }, e -> {
+                                        log.error("Failed to get connector {}", model.getConnectorId(), e);
+                                        actionListener.onFailure(e);
+                                    });
+                                try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
+                                    connectorAccessControlHelper
+                                        .getConnector(
+                                            client,
+                                            model.getConnectorId(),
+                                            ActionListener.runBefore(listener, threadContext::restore)
+                                        );
+                                }
+                            } else {
+                                actionListener.onFailure(new ResourceNotFoundException("Can't find connector " + model.getConnectorId()));
+                            }
                         }
-                    }
-                }, e -> {
-                    log.error("Failed to validate Access for Model Group " + model.getModelGroupId(), e);
-                    actionListener.onFailure(e);
-                }));
+                    }, e -> {
+                        log.error("Failed to validate Access for Model Group " + model.getModelGroupId(), e);
+                        actionListener.onFailure(e);
+                    }));
             }, e -> {
                 log.error("Failed to retrieve the ML model with the given ID", e);
                 actionListener

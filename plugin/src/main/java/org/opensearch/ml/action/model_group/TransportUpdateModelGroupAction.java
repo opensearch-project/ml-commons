@@ -176,8 +176,9 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
                                                         );
                                                     return;
                                                 }
-                                                // call new overloaded method that doesn't store user info in model group
-                                                updateModelGroup(modelGroupId, r.source(), updateModelGroupInput, wrappedListener);
+                                                // For backwards compatibility we still allow storing backend_roles data in ml_model_group
+                                                // index
+                                                updateModelGroup(modelGroupId, r.source(), updateModelGroupInput, wrappedListener, user);
                                             }, listener::onFailure));
                                     } else {
                                         // TODO: At some point, this call must be replaced by the one above, (i.e. no user info to
@@ -213,52 +214,6 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         } catch (Exception e) {
             logException("Failed to Update model group", e, log);
             listener.onFailure(e);
-        }
-    }
-
-    private void updateModelGroup(
-        String modelGroupId,
-        Map<String, Object> source,
-        MLUpdateModelGroupInput updateModelGroupInput,
-        ActionListener<MLUpdateModelGroupResponse> listener
-    ) {
-        source.put(MLModelGroup.LAST_UPDATED_TIME_FIELD, Instant.now().toEpochMilli());
-        String modelGroupName = (String) source.get(MLModelGroup.MODEL_GROUP_NAME_FIELD);
-
-        if (StringUtils.isNotBlank(updateModelGroupInput.getDescription())) {
-            source.put(MLModelGroup.DESCRIPTION_FIELD, updateModelGroupInput.getDescription());
-        }
-        if (StringUtils.isNotBlank(updateModelGroupInput.getName()) && !updateModelGroupInput.getName().equals(modelGroupName)) {
-            mlModelGroupManager
-                .validateUniqueModelGroupName(
-                    updateModelGroupInput.getName(),
-                    updateModelGroupInput.getTenantId(),
-                    ActionListener.wrap(modelGroups -> {
-                        if (modelGroups != null
-                            && modelGroups.getHits().getTotalHits() != null
-                            && modelGroups.getHits().getTotalHits().value() != 0) {
-                            for (SearchHit documentFields : modelGroups.getHits()) {
-                                String id = documentFields.getId();
-                                listener
-                                    .onFailure(
-                                        new IllegalArgumentException(
-                                            "The name you provided is already being used by another model with ID: "
-                                                + id
-                                                + ". Please provide a different name"
-                                        )
-                                    );
-                            }
-                        } else {
-                            source.put(MLModelGroup.MODEL_GROUP_NAME_FIELD, updateModelGroupInput.getName());
-                            updateModelGroup(modelGroupId, updateModelGroupInput.getTenantId(), source, listener);
-                        }
-                    }, e -> {
-                        log.error("Failed to search model group index", e);
-                        listener.onFailure(e);
-                    })
-                );
-        } else {
-            updateModelGroup(modelGroupId, updateModelGroupInput.getTenantId(), source, listener);
         }
     }
 

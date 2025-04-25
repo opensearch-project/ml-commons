@@ -210,6 +210,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                 registerModelInput.getModelGroupId(),
                 client,
                 sdkClient,
+                settings,
                 ActionListener.wrap(access -> {
                     if (access) {
                         doRegister(registerModelInput, listener);
