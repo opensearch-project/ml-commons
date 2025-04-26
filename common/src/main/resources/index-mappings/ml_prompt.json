@@ -1,0 +1,36 @@
+{
+  "_meta": {
+    "schema_version": 1
+  },
+  "properties": {
+    "name": {
+      "type": "text",
+      "fields": {
+        "keyword": {
+          "type": "keyword",
+          "ignore_above": 256
+        }
+      }
+    },
+    "description": {
+      "type": "text"
+    },
+    "prompt": {
+      "type": "flat_object"
+    },
+    "tag": {
+      "type": "keyword"
+    },
+    "create_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "last_update_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "tenant_id": {
+      "type": "keyword"
+    }
+  }
+}

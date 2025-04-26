@@ -24,6 +24,8 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX_MAPPING_PATH;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX_MAPPING_PATH;
+import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX_MAPPING_PATH;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -35,6 +37,7 @@ public enum MLIndex {
     MODEL(ML_MODEL_INDEX, false, ML_MODEL_INDEX_MAPPING_PATH),
     TASK(ML_TASK_INDEX, false, ML_TASK_INDEX_MAPPING_PATH),
     CONNECTOR(ML_CONNECTOR_INDEX, false, ML_CONNECTOR_INDEX_MAPPING_PATH),
+    PROMPT(ML_PROMPT_INDEX, false, ML_PROMPT_INDEX_MAPPING_PATH),
     CONFIG(ML_CONFIG_INDEX, false, ML_CONFIG_INDEX_MAPPING_PATH),
     CONTROLLER(ML_CONTROLLER_INDEX, false, ML_CONTROLLER_INDEX_MAPPING_PATH),
     AGENT(ML_AGENT_INDEX, false, ML_AGENT_INDEX_MAPPING_PATH),
