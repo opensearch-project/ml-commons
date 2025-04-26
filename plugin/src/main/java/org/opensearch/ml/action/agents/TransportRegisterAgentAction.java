@@ -98,12 +98,12 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
             return;
         }
 
-        // If the agent is a PLAN_EXECUTE_AND_REFLECT agent and does not have a reAct agent id, create a reAct agent
+        // If the agent is a PLAN_EXECUTE_AND_REFLECT agent and does not have an executor agent id, create an executor (reAct) agent
         if (MLAgentType.from(mlAgent.getType()) == MLAgentType.PLAN_EXECUTE_AND_REFLECT
-            && !mlAgent.getParameters().containsKey(MLPlanExecuteAndReflectAgentRunner.REACT_AGENT_ID_FIELD)) {
+            && !mlAgent.getParameters().containsKey(MLPlanExecuteAndReflectAgentRunner.EXECUTOR_AGENT_ID_FIELD)) {
             createConversationAgent(mlAgent, tenantId, ActionListener.wrap(conversationAgentId -> {
                 Map<String, String> parameters = new HashMap<>(mlAgent.getParameters());
-                parameters.put(MLPlanExecuteAndReflectAgentRunner.REACT_AGENT_ID_FIELD, conversationAgentId);
+                parameters.put(MLPlanExecuteAndReflectAgentRunner.EXECUTOR_AGENT_ID_FIELD, conversationAgentId);
                 MLAgent updatedAgent = mlAgent.toBuilder().parameters(parameters).build();
                 registerAgentToIndex(updatedAgent, tenantId, listener);
             }, listener::onFailure));
