@@ -79,8 +79,7 @@ public class SearchIndexToolTests {
     @Test
     @SneakyThrows
     public void testDefaultAttributes() {
-        Map<String, Object> attributes = mockedSearchIndexTool.getAttributes();
-        assertEquals(
+        String expected =
             """
                 {
                   "input": {
@@ -95,9 +94,9 @@ public class SearchIndexToolTests {
                     }
                   }
                 }
-                """,
-            attributes.get(INPUT_SCHEMA_FIELD)
-        );
+                """;
+        Map<String, Object> attributes = mockedSearchIndexTool.getAttributes();
+        assertEquals(expected, attributes.get(INPUT_SCHEMA_FIELD));
         assertEquals(false, attributes.get(STRICT_FIELD));
     }
 
