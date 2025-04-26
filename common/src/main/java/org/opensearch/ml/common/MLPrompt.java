@@ -1,9 +1,13 @@
 package org.opensearch.ml.common;
 
-import lombok.Builder;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
-import lombok.Setter;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
+
+import java.io.IOException;
+import java.time.Instant;
+import java.util.Map;
+
 import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -11,15 +15,11 @@ import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.transport.prompt.MLCreatePromptInput;
 
-import java.io.IOException;
-import java.time.Instant;
-import java.util.Map;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
-import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.Setter;
 
 @Getter
 @EqualsAndHashCode
@@ -48,14 +48,14 @@ public class MLPrompt implements ToXContentObject, Writeable {
 
     @Builder(toBuilder = true)
     public MLPrompt(
-            String promptId,
-            String name,
-            String description,
-            Map<String, String> prompt,
-            String tag,
-            String tenantId,
-            Instant createTime,
-            Instant lastUpdateTime
+        String promptId,
+        String name,
+        String description,
+        Map<String, String> prompt,
+        String tag,
+        String tenantId,
+        Instant createTime,
+        Instant lastUpdateTime
     ) {
         this.promptId = promptId;
         this.name = name;
@@ -117,6 +117,9 @@ public class MLPrompt implements ToXContentObject, Writeable {
         if (tag != null) {
             builder.field(TAG_FIELD, tag);
         }
+        if (tenantId != null) {
+            builder.field(TENANT_ID_FIELD, tenantId);
+        }
         if (createTime != null) {
             builder.field(CREATE_TIME_FIELD, createTime);
         }
@@ -170,15 +173,16 @@ public class MLPrompt implements ToXContentObject, Writeable {
                     break;
             }
         }
-        return MLPrompt.builder()
-                .name(name)
-                .description(description)
-                .prompt(prompt)
-                .tag(tag)
-                .tenantId(tenantId)
-                .createTime(createTime)
-                .lastUpdateTime(lastUpdateTime)
-                .build();
+        return MLPrompt
+            .builder()
+            .name(name)
+            .description(description)
+            .prompt(prompt)
+            .tag(tag)
+            .tenantId(tenantId)
+            .createTime(createTime)
+            .lastUpdateTime(lastUpdateTime)
+            .build();
     }
 
     /*public void update(MLCreatePromptInput updateContent) {

@@ -5,12 +5,31 @@
 
 package org.opensearch.ml.common;
 
+import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX_MAPPING_PATH;
+import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX_MAPPING_PATH;
+import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX_MAPPING_PATH;
+import static org.opensearch.ml.common.CommonValue.ML_CONTROLLER_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_CONTROLLER_INDEX_MAPPING_PATH;
+import static org.opensearch.ml.common.CommonValue.ML_MEMORY_MESSAGE_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MEMORY_MESSAGE_INDEX_MAPPING_PATH;
+import static org.opensearch.ml.common.CommonValue.ML_MEMORY_META_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MEMORY_META_INDEX_MAPPING_PATH;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX_MAPPING_PATH;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX_MAPPING_PATH;
+import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX_MAPPING_PATH;
+import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX_MAPPING_PATH;
+
 import java.io.IOException;
 import java.io.UncheckedIOException;
 
 import org.opensearch.ml.common.utils.IndexUtils;
-
-import static org.opensearch.ml.common.CommonValue.*;
 
 public enum MLIndex {
     MODEL_GROUP(ML_MODEL_GROUP_INDEX, false, ML_MODEL_GROUP_INDEX_MAPPING_PATH),
