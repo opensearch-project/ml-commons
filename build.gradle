@@ -11,7 +11,7 @@ buildscript {
     ext {
         opensearch_group = "org.opensearch"
         isSnapshot = "true" == System.getProperty("build.snapshot", "true")
-        opensearch_version = System.getProperty("opensearch.version", "3.0.0-beta1-SNAPSHOT")
+        opensearch_version = System.getProperty("opensearch.version", "3.0.0-SNAPSHOT")
         buildVersionQualifier = System.getProperty("build.version_qualifier", "beta1")
         asm_version = "9.7"
 

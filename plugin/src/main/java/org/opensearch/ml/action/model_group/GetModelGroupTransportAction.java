@@ -30,11 +30,11 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.MLModelGroup;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetRequest;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
@@ -152,9 +152,7 @@ public class GetModelGroupTransportAction extends HandledTransportAction<ActionR
         ActionListener<MLModelGroupGetResponse> wrappedListener
     ) {
         try {
-            boolean isResourceSharingFeatureEnabled = this.settings
-                .getAsBoolean(OPENSEARCH_RESOURCE_SHARING_ENABLED, OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT);
-            GetResponse gr = getDataObjectResponse.parser() == null ? null : GetResponse.fromXContent(getDataObjectResponse.parser());
+            GetResponse gr = getDataObjectResponse.getResponse();
             if (gr != null && gr.isExists()) {
                 try (
                     XContentParser parser = jsonXContent

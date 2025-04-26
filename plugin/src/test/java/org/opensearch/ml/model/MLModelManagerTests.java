@@ -22,25 +22,24 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.MLTask.FUNCTION_NAME_FIELD;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_BATCH_INGESTION_BULK_SIZE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_BATCH_INFERENCE_TASKS;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_BATCH_INGESTION_TASKS;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_MODELS_PER_NODE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MONITORING_REQUEST_COUNT;
 import static org.opensearch.ml.engine.ModelHelper.CHUNK_FILES;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_FILE_HASH;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_SIZE_IN_BYTES;
 import static org.opensearch.ml.model.MLModelManager.TIMEOUT_IN_MILLIS;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.DEPLOY_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.REGISTER_THREAD_POOL;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_BATCH_INGESTION_BULK_SIZE;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_BATCH_INFERENCE_TASKS;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_BATCH_INGESTION_TASKS;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_MODELS_PER_NODE;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MONITORING_REQUEST_COUNT;
 import static org.opensearch.ml.utils.MockHelper.mock_MLIndicesHandler_initModelIndex;
 import static org.opensearch.ml.utils.MockHelper.mock_MLIndicesHandler_initModelIndex_failure;
 import static org.opensearch.ml.utils.MockHelper.mock_client_ThreadContext;
 import static org.opensearch.ml.utils.MockHelper.mock_client_ThreadContext_Exception;
 import static org.opensearch.ml.utils.MockHelper.mock_client_get_NotExist;
-import static org.opensearch.ml.utils.MockHelper.mock_client_get_NullResponse;
 import static org.opensearch.ml.utils.MockHelper.mock_client_get_failure;
 import static org.opensearch.ml.utils.MockHelper.mock_client_index;
 import static org.opensearch.ml.utils.MockHelper.mock_client_index_failure;
@@ -114,6 +113,7 @@ import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
@@ -123,7 +123,6 @@ import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
@@ -717,47 +716,6 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
         assertEquals("Failed to get data object from index .plugins-ml-model", exception.getValue().getMessage());
-        verify(mlStats)
-            .createCounterStatIfAbsent(
-                eq(FunctionName.TEXT_EMBEDDING),
-                eq(ActionName.DEPLOY),
-                eq(MLActionLevelStat.ML_ACTION_FAILURE_COUNT)
-            );
-    }
-
-    public void testDeployModel_NullGetModelResponse() {
-        MLModelConfig modelConfig = TextEmbeddingModelConfig
-            .builder()
-            .modelType("bert")
-            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
-            .embeddingDimension(384)
-            .build();
-        model = MLModel
-            .builder()
-            .modelId(modelId)
-            .modelState(MLModelState.DEPLOYING)
-            .algorithm(FunctionName.TEXT_EMBEDDING)
-            .name(modelName)
-            .version(version)
-            .totalChunks(2)
-            .modelFormat(MLModelFormat.TORCH_SCRIPT)
-            .modelConfig(modelConfig)
-            .modelContentHash(modelContentHashValue)
-            .modelContentSizeInBytes(modelContentSize)
-            .build();
-        String[] nodes = new String[] { "node1", "node2" };
-        mlTask.setWorkerNodes(List.of(nodes));
-        ActionListener<String> listener = mock(ActionListener.class);
-        when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
-        when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
-        when(modelCacheHelper.getLocalDeployedModels()).thenReturn(new String[] {});
-        mock_threadpool(threadPool, taskExecutorService);
-        mock_client_get_NullResponse(client);
-        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, false, mlTask, listener);
-        assertFalse(modelManager.isModelRunningOnNode(modelId));
-        ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
-        verify(listener).onFailure(exception.capture());
-        assertEquals("Failed to find model", exception.getValue().getMessage());
         verify(mlStats)
             .createCounterStatIfAbsent(
                 eq(FunctionName.TEXT_EMBEDDING),

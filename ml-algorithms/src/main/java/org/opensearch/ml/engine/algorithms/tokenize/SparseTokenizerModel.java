@@ -6,11 +6,8 @@
 package org.opensearch.ml.engine.algorithms.tokenize;
 
 import static org.opensearch.ml.common.CommonValue.ML_MAP_RESPONSE_KEY;
-import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.lang.reflect.Type;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -31,9 +28,8 @@ import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.algorithms.DLModel;
+import org.opensearch.ml.engine.analysis.DJLUtils;
 import org.opensearch.ml.engine.annotation.Function;
-
-import com.google.gson.reflect.TypeToken;
 
 import ai.djl.MalformedModelException;
 import ai.djl.huggingface.tokenizers.Encoding;
@@ -110,9 +106,7 @@ public class SparseTokenizerModel extends DLModel {
         tokenizer = HuggingFaceTokenizer.builder().optPadding(true).optTokenizerPath(modelPath.resolve("tokenizer.json")).build();
         idf = new HashMap<>();
         if (Files.exists(modelPath.resolve(IDF_FILE_NAME))) {
-            Type mapType = new TypeToken<Map<String, Float>>() {
-            }.getType();
-            idf = gson.fromJson(new InputStreamReader(Files.newInputStream(modelPath.resolve(IDF_FILE_NAME))), mapType);
+            idf = DJLUtils.fetchTokenWeights(modelPath.resolve(IDF_FILE_NAME));
         }
         log.info("sparse tokenize Model {} is successfully deployed", modelId);
     }

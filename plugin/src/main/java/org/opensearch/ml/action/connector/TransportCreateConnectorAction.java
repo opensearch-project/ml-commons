@@ -5,14 +5,15 @@
 
 package org.opensearch.ml.action.connector;
 
+import static org.opensearch.ml.common.CommonValue.ML_COMMONS_MCP_FEATURE_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 
-import java.io.IOException;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.List;
 
+import org.opensearch.OpenSearchException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -28,7 +29,10 @@ import org.opensearch.core.common.util.CollectionUtils;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.ConnectorProtocols;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorRequest;
@@ -38,7 +42,6 @@ import org.opensearch.ml.engine.exceptions.MetaDataException;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.PutDataObjectRequest;
@@ -62,6 +65,8 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
     private final ConnectorAccessControlHelper connectorAccessControlHelper;
 
     private volatile List<String> trustedConnectorEndpointsRegex;
+
+    private volatile boolean mcpFeatureIsEnabled;
 
     @Inject
     public TransportCreateConnectorAction(
@@ -89,12 +94,23 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX, it -> trustedConnectorEndpointsRegex = it);
+        this.mcpFeatureIsEnabled = CommonValue.ML_COMMONS_MCP_FEATURE_ENABLED.get(clusterService.getSettings());
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(CommonValue.ML_COMMONS_MCP_FEATURE_ENABLED, it -> mcpFeatureIsEnabled = it);
     }
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLCreateConnectorResponse> listener) {
         MLCreateConnectorRequest mlCreateConnectorRequest = MLCreateConnectorRequest.fromActionRequest(request);
         MLCreateConnectorInput mlCreateConnectorInput = mlCreateConnectorRequest.getMlCreateConnectorInput();
+        if (mlCreateConnectorInput.getProtocol() != null
+            && mlCreateConnectorInput.getProtocol().equals(ConnectorProtocols.MCP_SSE)
+            && !this.mcpFeatureIsEnabled) {
+            // MCP connector provided but MCP feature is disabled, so abort.
+            listener.onFailure(new OpenSearchException(ML_COMMONS_MCP_FEATURE_DISABLED_MESSAGE));
+            return;
+        }
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, mlCreateConnectorInput.getTenantId(), listener)) {
             return;
         }
@@ -162,7 +178,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                             listener.onFailure(cause);
                         } else {
                             try {
-                                IndexResponse indexResponse = IndexResponse.fromXContent(r.parser());
+                                IndexResponse indexResponse = r.indexResponse();
                                 log
                                     .info(
                                         "Connector creation result: {}, connector id: {}",
@@ -170,7 +186,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                                         indexResponse.getId()
                                     );
                                 listener.onResponse(new MLCreateConnectorResponse(indexResponse.getId()));
-                            } catch (IOException e) {
+                            } catch (Exception e) {
                                 listener.onFailure(e);
                             }
                         }

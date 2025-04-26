@@ -25,6 +25,7 @@ apply plugin: 'opensearch.opensearchplugin'
 apply plugin: 'opensearch.testclusters'
 apply plugin: 'opensearch.pluginzip'
 apply plugin: 'opensearch.yaml-rest-test'
+apply plugin: 'opensearch.java-agent'
 ext {
     projectSubstitutions = [:]
     licenseFile = rootProject.file('LICENSE.txt')
@@ -372,8 +373,8 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.model.MLModelCacheHelper.1',
         'org.opensearch.ml.action.tasks.CancelBatchJobTransportAction',
         'org.opensearch.ml.jobs.MLBatchTaskUpdateExtension',
-        'org.opensearch.ml.jobs.MLBatchTaskUpdateJobRunner'
-
+        'org.opensearch.ml.jobs.MLBatchTaskUpdateJobRunner',
+        'org.opensearch.ml.action.agents.TransportRegisterAgentAction'
 ]
 
 jacocoTestCoverageVerification {

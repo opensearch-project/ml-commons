@@ -27,11 +27,12 @@ import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
-import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.transport.client.Client;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
@@ -48,13 +49,24 @@ public class SearchIndexTool implements Tool {
     public static final String INPUT_FIELD = "input";
     public static final String INDEX_FIELD = "index";
     public static final String QUERY_FIELD = "query";
+    public static final String INPUT_SCHEMA_FIELD = "input_schema";
+    public static final String STRICT_FIELD = "strict";
 
     public static final String TYPE = "SearchIndexTool";
     private static final String DEFAULT_DESCRIPTION =
         "Use this tool to search an index by providing two parameters: 'index' for the index name, and 'query' for the OpenSearch DSL formatted query. Only use this tool when both index name and DSL query is available.";
 
-    private String name = TYPE;
+    public static final String DEFAULT_INPUT_SCHEMA = "{\"type\":\"object\","
+        + "\"properties\":{\"index\":{\"type\":\"string\",\"description\":\"OpenSearch index name. for example: index1\"},"
+        + "\"query\":{\"type\":\"object\",\"description\":\"OpenSearch search index query. You need to get index mapping to write correct search query. It must be a valid OpenSearch query."
+        + " Valid value:\\n{\\\"query\\\":{\\\"match\\\":{\\\"population_description\\\":\\\"seattle 2023 population\\\"}},\\\"size\\\":2,\\\"_source\\\":\\\"population_description\\\"}\\n"
+        + "Invalid value: \\n{\\\"match\\\":{\\\"population_description\\\":\\\"seattle 2023 population\\\"}}\\nThe value is invalid because the match not wrapped by \\\"query\\\".\","
+        + "\"additionalProperties\":false}},\"required\":[\"index\",\"query\"],\"additionalProperties\":false}";
 
+    private static final Gson GSON = new GsonBuilder().serializeSpecialFloatingPointValues().create();
+
+    private String name = TYPE;
+    private Map<String, Object> attributes;
     private String description = DEFAULT_DESCRIPTION;
 
     private Client client;
@@ -64,6 +76,10 @@ public class SearchIndexTool implements Tool {
     public SearchIndexTool(Client client, NamedXContentRegistry xContentRegistry) {
         this.client = client;
         this.xContentRegistry = xContentRegistry;
+
+        this.attributes = new HashMap<>();
+        attributes.put(INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA);
+        attributes.put(STRICT_FIELD, false);
     }
 
     @Override
@@ -101,7 +117,7 @@ public class SearchIndexTool implements Tool {
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
         try {
             String input = parameters.get(INPUT_FIELD);
-            JsonObject jsonObject = StringUtils.gson.fromJson(input, JsonObject.class);
+            JsonObject jsonObject = GSON.fromJson(input, JsonObject.class);
             String index = Optional.ofNullable(jsonObject).map(x -> x.get(INDEX_FIELD)).map(JsonElement::getAsString).orElse(null);
             String query = Optional.ofNullable(jsonObject).map(x -> x.get(QUERY_FIELD)).map(JsonElement::toString).orElse(null);
             if (index == null || query == null) {
@@ -118,7 +134,7 @@ public class SearchIndexTool implements Tool {
                     for (SearchHit hit : hits) {
                         String doc = AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> {
                             Map<String, Object> docContent = processResponse(hit);
-                            return StringUtils.gson.toJson(docContent);
+                            return GSON.toJson(docContent);
                         });
                         contextBuilder.append(doc).append("\n");
                     }

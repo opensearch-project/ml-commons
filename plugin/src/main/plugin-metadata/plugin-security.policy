@@ -33,4 +33,17 @@ grant {
 
     // AWS credentials needed for clients
     permission java.io.FilePermission "${user.home}/.aws/-", "read";
+
+    // for accessing Unix domain socket on windows
+    permission java.net.NetPermission "accessUnixDomainSocket";
+
+    permission java.lang.RuntimePermission "modifyThread";
+    permission java.lang.RuntimePermission "modifyThreadGroup";
+    permission org.opensearch.secure_sm.ThreadPermission "modifyArbitraryThread";
+
+    permission java.net.SocketPermission "*:*", "accept,connect,listen,resolve";
+    permission java.net.URLPermission "http://*:*/*", "*:*";
+    permission java.net.URLPermission "https://*:*/*", "*:*";
+    permission java.net.URLPermission "http://*:*/messages/*", "*:*";
+    permission java.net.URLPermission "https://*:*/messages/*", "*:*";
 };

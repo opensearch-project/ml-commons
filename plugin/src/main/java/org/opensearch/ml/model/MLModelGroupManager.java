@@ -10,7 +10,6 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.security.spi.resources.FeatureConfigConstants.OPENSEARCH_RESOURCE_SHARING_ENABLED;
 import static org.opensearch.security.spi.resources.FeatureConfigConstants.OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT;
 
-import java.io.IOException;
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.Map;
@@ -43,10 +42,10 @@ import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.GetDataObjectResponse;
@@ -179,8 +178,7 @@ public class MLModelGroupManager {
                                         wrappedListener.onFailure(cause);
                                     } else {
                                         try {
-                                            IndexResponse indexResponse = IndexResponse.fromXContent(r.parser());
-
+                                            IndexResponse indexResponse = r.indexResponse();
                                             log
                                                 .info(
                                                     "Model group creation result: {}, model group id: {}",
@@ -312,10 +310,11 @@ public class MLModelGroupManager {
                     }
                 } else {
                     try {
-                        SearchResponse searchResponse = SearchResponse.fromXContent(r.parser());
+                        SearchResponse searchResponse = r.searchResponse();
+                        // Parsing failure would cause NPE on next line
                         log.info("Model group search complete: {}", searchResponse.getHits().getTotalHits());
                         listener.onResponse(searchResponse);
-                    } catch (IOException e) {
+                    } catch (Exception e) {
                         log.error("Failed to parse search response", e);
                         listener
                             .onFailure(new OpenSearchStatusException("Failed to parse search response", RestStatus.INTERNAL_SERVER_ERROR));
@@ -359,7 +358,7 @@ public class MLModelGroupManager {
 
     private void processModelGroupResponse(GetDataObjectResponse response, String modelGroupId, ActionListener<GetResponse> listener) {
         try {
-            GetResponse getResponse = parseGetResponse(response);
+            GetResponse getResponse = response.getResponse();
             if (getResponse == null || !getResponse.isExists()) {
                 listener.onFailure(new MLResourceNotFoundException("Failed to find model group with ID: " + modelGroupId));
                 return;
@@ -369,10 +368,6 @@ public class MLModelGroupManager {
         } catch (Exception e) {
             listener.onFailure(e);
         }
-    }
-
-    private GetResponse parseGetResponse(GetDataObjectResponse response) throws IOException {
-        return response.parser() == null ? null : GetResponse.fromXContent(response.parser());
     }
 
     private void parseAndRespond(GetResponse getResponse, ActionListener<GetResponse> listener) {

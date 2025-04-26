@@ -38,6 +38,7 @@ import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpInput;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodeResponse;
@@ -47,7 +48,6 @@ import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsRequest;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.remote.metadata.client.BulkDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
@@ -324,7 +324,8 @@ public class MLSyncUpCron implements Runnable {
             sdkClient.searchDataObjectAsync(searchRequest).whenComplete((r, throwable) -> {
                 if (throwable == null) {
                     try {
-                        SearchResponse res = SearchResponse.fromXContent(r.parser());
+                        SearchResponse res = r.searchResponse();
+                        // Parsing failure would cause NPE on next line
                         SearchHit[] hits = res.getHits().getHits();
                         Map<String, String> tenantIds = new HashMap<>();
                         Map<String, MLModelState> newModelStates = new HashMap<>();

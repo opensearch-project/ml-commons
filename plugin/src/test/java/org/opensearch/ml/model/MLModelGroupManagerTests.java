@@ -10,6 +10,8 @@ import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_PRIMARY_TERM;
+import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_SEQ_NO;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 
 import java.io.IOException;
@@ -46,10 +48,10 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLModelGroup;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
@@ -399,9 +401,20 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
     }
 
     public void test_NotFoundGetModelGroup() throws IOException {
+        GetResult getResult = new GetResult(
+            ML_MODEL_GROUP_INDEX,
+            "fake_id",
+            UNASSIGNED_SEQ_NO,
+            UNASSIGNED_PRIMARY_TERM,
+            -1L,
+            false,
+            null,
+            null,
+            null
+        );
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(null);
+            listener.onResponse(new GetResponse(getResult));
             return null;
         }).when(client).get(any(GetRequest.class), isA(ActionListener.class));
 

@@ -62,7 +62,7 @@ public class HttpConnectorTest {
     @Test
     public void constructor_InvalidProtocol() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Unsupported connector protocol. Please use one of [aws_sigv4, http]");
+        exceptionRule.expectMessage("Unsupported connector protocol. Please use one of [aws_sigv4, http, mcp_sse]");
 
         HttpConnector.builder().protocol("wrong protocol").build();
     }

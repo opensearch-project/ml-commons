@@ -34,6 +34,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.controller.MLControllerDeleteAction;
 import org.opensearch.ml.common.transport.controller.MLControllerDeleteRequest;
 import org.opensearch.ml.common.transport.controller.MLUndeployControllerAction;
@@ -42,7 +43,6 @@ import org.opensearch.ml.common.transport.controller.MLUndeployControllerNodesRe
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;

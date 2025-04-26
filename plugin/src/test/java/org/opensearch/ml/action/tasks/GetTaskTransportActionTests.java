@@ -15,13 +15,16 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_PRIMARY_TERM;
+import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_SEQ_NO;
+import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.common.connector.AbstractConnector.*;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_CANCELLED_REGEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_CANCELLING_REGEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_COMPLETED_REGEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_EXPIRED_REGEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_FAILED_REGEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_FIELD;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_CANCELLED_REGEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_CANCELLING_REGEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_COMPLETED_REGEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_EXPIRED_REGEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_FAILED_REGEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_FIELD;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -67,6 +70,7 @@ import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.task.MLTaskGetRequest;
 import org.opensearch.ml.common.transport.task.MLTaskGetResponse;
@@ -75,7 +79,6 @@ import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
@@ -255,9 +258,20 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testGetTask_NullResponse() {
+        GetResult getResult = new GetResult(
+            ML_TASK_INDEX,
+            "fake_id",
+            UNASSIGNED_SEQ_NO,
+            UNASSIGNED_PRIMARY_TERM,
+            -1L,
+            false,
+            null,
+            null,
+            null
+        );
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(null);
+            listener.onResponse(new GetResponse(getResult));
             return null;
         }).when(client).get(any(), any());
         getTaskTransportAction.doExecute(null, mlTaskGetRequest, actionListener);
