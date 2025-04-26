@@ -6,7 +6,7 @@
 package org.opensearch.ml.common.transport.mcpserver.action;
 
 import org.opensearch.action.ActionType;
-import org.opensearch.ml.rest.mcpserver.responses.MLMcpRegisterNodesResponse;
+import org.opensearch.ml.common.transport.mcpserver.responses.register.MLMcpRegisterNodesResponse;
 
 public class MLMcpToolsRegisterOnNodesAction extends ActionType<MLMcpRegisterNodesResponse> {
     public static MLMcpToolsRegisterOnNodesAction INSTANCE = new MLMcpToolsRegisterOnNodesAction();

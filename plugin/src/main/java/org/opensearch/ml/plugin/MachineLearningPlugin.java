@@ -861,7 +861,7 @@ public class MachineLearningPlugin extends Plugin
         RestMLGetConfigAction restMLGetConfigAction = new RestMLGetConfigAction(mlFeatureEnabledSetting);
         RestMLCancelBatchJobAction restMLCancelBatchJobAction = new RestMLCancelBatchJobAction();
         RestMcpConnectionMessageStreamingAction restWebFluxReactorStreamingAction = new RestMcpConnectionMessageStreamingAction();
-        RestMLRegisterMcpToolsAction restMLRegisterMcpToolsAction = new RestMLRegisterMcpToolsAction(clusterService, toolFactories);
+        RestMLRegisterMcpToolsAction restMLRegisterMcpToolsAction = new RestMLRegisterMcpToolsAction(toolFactories, clusterService);
         RestMLRemoveMcpToolsAction restMLRemoveMcpToolsAction = new RestMLRemoveMcpToolsAction(clusterService);
         return ImmutableList
             .of(

@@ -38,15 +38,15 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class RestMLRegisterMcpToolsAction extends BaseRestHandler {
     private static final String ML_REGISTER_MCP_TOOLS_ACTION = "ml_register_mcp_tools_action";
-    private final ClusterService clusterService;
     private final Map<String, Tool.Factory> toolFactories;
+    private ClusterService clusterService;
 
     /**
      * Constructor
      */
-    public RestMLRegisterMcpToolsAction(ClusterService clusterService, Map<String, Tool.Factory> toolFactories) {
-        this.clusterService = clusterService;
+    public RestMLRegisterMcpToolsAction(Map<String, Tool.Factory> toolFactories, ClusterService clusterService) {
         this.toolFactories = toolFactories;
+        this.clusterService = clusterService;
     }
 
     @Override
@@ -87,9 +87,6 @@ public class RestMLRegisterMcpToolsAction extends BaseRestHandler {
     MLMcpToolsRegisterNodesRequest getRequest(RestRequest request) throws IOException {
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-        return new MLMcpToolsRegisterNodesRequest(
-            clusterService.state().nodes().getNodes().keySet().toArray(new String[0]),
-            McpTools.parse(parser)
-        );
+        return new MLMcpToolsRegisterNodesRequest(clusterService.state().nodes().getNodes().keySet().toArray(new String[0]), McpTools.parse(parser));
     }
 }

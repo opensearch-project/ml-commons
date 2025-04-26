@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.rest.mcpserver.responses;
+package org.opensearch.ml.common.transport.mcpserver.responses.register;
 
 import java.io.IOException;
 import java.util.List;
@@ -17,7 +17,6 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 
 import lombok.extern.log4j.Log4j2;
-import org.opensearch.ml.common.transport.mcpserver.responses.register.MLMcpRegisterNodeResponse;
 
 @Log4j2
 public class MLMcpRegisterNodesResponse extends BaseNodesResponse<MLMcpRegisterNodeResponse> implements ToXContentObject {
@@ -52,6 +51,12 @@ public class MLMcpRegisterNodesResponse extends BaseNodesResponse<MLMcpRegisterN
             builder.startObject(created.getNode().getId());
             builder.field("created");
             builder.value(created.getCreated());
+            builder.endObject();
+        }
+        for (FailedNodeException failedNodeException : failures()) {
+            builder.startObject(failedNodeException.nodeId());
+            builder.field("error");
+            builder.value(failedNodeException.getMessage());
             builder.endObject();
         }
         builder.endObject();

@@ -11,7 +11,7 @@ import org.opensearch.action.support.nodes.BaseNodeResponse;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.core.xcontent.ToXContentFragment;
+import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 
 import lombok.Getter;
@@ -19,7 +19,7 @@ import lombok.extern.log4j.Log4j2;
 
 @Getter
 @Log4j2
-public class MLMcpRegisterNodeResponse extends BaseNodeResponse implements ToXContentFragment {
+public class MLMcpRegisterNodeResponse extends BaseNodeResponse implements ToXContentObject {
 
     private final Boolean created;
 
@@ -44,7 +44,7 @@ public class MLMcpRegisterNodeResponse extends BaseNodeResponse implements ToXCo
     }
 
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-        builder.startObject("created");
+        builder.startObject(getNode().getId());
         builder.value(created);
         builder.endObject();
         return builder;

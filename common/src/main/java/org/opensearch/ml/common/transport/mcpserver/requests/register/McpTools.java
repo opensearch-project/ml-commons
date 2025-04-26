@@ -79,9 +79,7 @@ public class McpTools implements ToXContentObject, Writeable {
     public void writeTo(StreamOutput streamOutput) throws IOException {
         if (tools != null) {
             streamOutput.writeBoolean(true);
-            for (McpTool tool : tools) {
-                tool.writeTo(streamOutput);
-            }
+            streamOutput.writeList(tools);
         } else {
             streamOutput.writeBoolean(false);
         }

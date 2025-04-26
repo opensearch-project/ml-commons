@@ -11,8 +11,8 @@ import org.opensearch.action.support.nodes.BaseNodesRequest;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.util.CollectionUtils;
-import org.opensearch.ml.common.transport.agent.MLRegisterAgentRequest;
 
 import lombok.Data;
 
@@ -30,6 +30,11 @@ public class MLMcpToolsRegisterNodesRequest extends BaseNodesRequest<MLMcpToolsR
         this.mcpTools = mcpTools;
     }
 
+    public void writeTo(StreamOutput out) throws IOException {
+        super.writeTo(out);
+        mcpTools.writeTo(out);
+    }
+
     @Override
     public ActionRequestValidationException validate() {
         if (CollectionUtils.isEmpty(mcpTools.getTools())) {
@@ -41,7 +46,7 @@ public class MLMcpToolsRegisterNodesRequest extends BaseNodesRequest<MLMcpToolsR
     }
 
     public static MLMcpToolsRegisterNodesRequest fromActionRequest(ActionRequest actionRequest) {
-        if (actionRequest instanceof MLRegisterAgentRequest) {
+        if (actionRequest instanceof MLMcpToolsRegisterNodesRequest) {
             return (MLMcpToolsRegisterNodesRequest) actionRequest;
         }
 
