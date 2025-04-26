@@ -16,7 +16,6 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 
 import lombok.extern.log4j.Log4j2;
-import org.opensearch.ml.common.transport.mcpserver.responses.remove.MLMcpRemoveNodeResponse;
 
 @Log4j2
 public class MLMcpRemoveNodesResponse extends BaseNodesResponse<MLMcpRemoveNodeResponse> implements ToXContentObject {

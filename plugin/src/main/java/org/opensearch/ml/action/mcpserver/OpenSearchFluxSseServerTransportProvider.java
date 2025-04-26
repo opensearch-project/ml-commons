@@ -93,8 +93,7 @@ public class OpenSearchFluxSseServerTransportProvider implements McpServerTransp
      */
     public Mono<HttpChunk> handleSseConnection(StreamingRestChannel channel) {
         return Mono.defer(() -> {
-            OpenSearchFluxSseServerTransportProvider.WebFluxMcpSessionTransport sessionTransport =
-                new OpenSearchFluxSseServerTransportProvider.WebFluxMcpSessionTransport(channel);
+            OpenSearchMcpSessionTransport sessionTransport = new OpenSearchMcpSessionTransport(channel);
 
             McpServerSession session = sessionFactory.create(sessionTransport);
             String sessionId = session.getId();
@@ -149,7 +148,7 @@ public class OpenSearchFluxSseServerTransportProvider implements McpServerTransp
         };
     }
 
-    public class WebFluxMcpSessionTransport implements McpServerTransport {
+    public class OpenSearchMcpSessionTransport implements McpServerTransport {
 
         /**
          * Event type for JSON-RPC messages sent through the SSE connection.
@@ -158,7 +157,7 @@ public class OpenSearchFluxSseServerTransportProvider implements McpServerTransp
 
         private final StreamingRestChannel streamingRestChannel;
 
-        public WebFluxMcpSessionTransport(StreamingRestChannel streamingRestChannel) {
+        public OpenSearchMcpSessionTransport(StreamingRestChannel streamingRestChannel) {
             this.streamingRestChannel = streamingRestChannel;
         }
 

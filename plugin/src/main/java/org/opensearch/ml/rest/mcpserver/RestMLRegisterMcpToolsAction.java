@@ -87,6 +87,9 @@ public class RestMLRegisterMcpToolsAction extends BaseRestHandler {
     MLMcpToolsRegisterNodesRequest getRequest(RestRequest request) throws IOException {
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-        return new MLMcpToolsRegisterNodesRequest(clusterService.state().nodes().getNodes().keySet().toArray(new String[0]), McpTools.parse(parser));
+        return new MLMcpToolsRegisterNodesRequest(
+            clusterService.state().nodes().getNodes().keySet().toArray(new String[0]),
+            McpTools.parse(parser)
+        );
     }
 }

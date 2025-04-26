@@ -19,14 +19,14 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.spi.tools.Tool;
-import org.opensearch.ml.common.transport.mcpserver.responses.register.MLMcpRegisterNodeResponse;
-import org.opensearch.ml.common.transport.mcpserver.responses.register.MLMcpRegisterNodesResponse;
-import org.opensearch.ml.common.utils.StringUtils;
-import org.opensearch.ml.rest.mcpserver.ToolFactoryWrapper;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRegisterOnNodesAction;
 import org.opensearch.ml.common.transport.mcpserver.requests.register.MLMcpToolsRegisterNodeRequest;
 import org.opensearch.ml.common.transport.mcpserver.requests.register.MLMcpToolsRegisterNodesRequest;
 import org.opensearch.ml.common.transport.mcpserver.requests.register.McpTools;
+import org.opensearch.ml.common.transport.mcpserver.responses.register.MLMcpRegisterNodeResponse;
+import org.opensearch.ml.common.transport.mcpserver.responses.register.MLMcpRegisterNodesResponse;
+import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.rest.mcpserver.ToolFactoryWrapper;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -104,10 +104,10 @@ public class TransportMcpToolsRegisterOnNodesAction extends
 
     @Override
     protected MLMcpRegisterNodeResponse nodeOperation(MLMcpToolsRegisterNodeRequest request) {
-        return storeConnectionInMemory(request.getMcpTools());
+        return registerToolsOnNode(request.getMcpTools());
     }
 
-    private MLMcpRegisterNodeResponse storeConnectionInMemory(McpTools mcpTools) {
+    private MLMcpRegisterNodeResponse registerToolsOnNode(McpTools mcpTools) {
         Flux.fromStream(mcpTools.getTools().stream()).flatMap(tool -> {
             // check if user request contains tools that not in our system.
             String toolName = tool.getName();
