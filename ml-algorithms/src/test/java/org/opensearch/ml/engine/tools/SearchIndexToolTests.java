@@ -80,7 +80,8 @@ public class SearchIndexToolTests {
     @SneakyThrows
     public void testDefaultAttributes() {
         Map<String, Object> attributes = mockedSearchIndexTool.getAttributes();
-        assertEquals("""
+        assertEquals(
+            """
                 {
                   "input": {
                     "index": {
