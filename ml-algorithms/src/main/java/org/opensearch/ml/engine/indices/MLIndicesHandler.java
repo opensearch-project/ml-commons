@@ -68,6 +68,10 @@ public class MLIndicesHandler {
         initMLIndexIfAbsent(MLIndex.CONNECTOR, listener);
     }
 
+    public void initMLPromptIndex(ActionListener<Boolean> listener) {
+        initMLIndexIfAbsent(MLIndex.PROMPT, listener);
+    }
+
     public void initMemoryMetaIndex(ActionListener<Boolean> listener) {
         initMLIndexIfAbsent(MLIndex.MEMORY_META, listener);
     }
@@ -119,6 +123,7 @@ public class MLIndicesHandler {
                 log.debug("index:{} is already created", indexName);
                 if (indexMappingUpdated.containsKey(indexName) && !indexMappingUpdated.get(indexName).get()) {
                     shouldUpdateIndex(indexName, index.getVersion(), ActionListener.wrap(r -> {
+                        log.info("r is " + r);
                         if (r) {
                             // return true if should update index
                             client
