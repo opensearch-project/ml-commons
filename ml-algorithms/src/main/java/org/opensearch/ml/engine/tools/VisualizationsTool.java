@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.tools;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -38,6 +39,8 @@ public class VisualizationsTool implements Tool {
     public static final String VERSION = "v1.0";
 
     public static final String SAVED_OBJECT_TYPE = "visualization";
+
+    public static final Map<String, Object> DEFAULT_ATTRIBUTES = Collections.emptyMap();
 
     /**
      * default number of visualizations returned
@@ -177,6 +180,11 @@ public class VisualizationsTool implements Tool {
         @Override
         public String getDefaultVersion() {
             return null;
+        }
+
+        @Override
+        public Map<String, Object> getDefaultAttributes() {
+            return DEFAULT_ATTRIBUTES;
         }
     }
 }

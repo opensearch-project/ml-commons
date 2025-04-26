@@ -8,6 +8,7 @@ package org.opensearch.ml.engine.tools;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -36,6 +37,7 @@ import lombok.extern.log4j.Log4j2;
 public class AgentTool implements Tool {
     public static final String TYPE = "AgentTool";
     private final Client client;
+    public static final Map<String, Object> DEFAULT_ATTRIBUTES = Collections.emptyMap();
 
     private String agentId;
     @Setter
@@ -144,6 +146,11 @@ public class AgentTool implements Tool {
         @Override
         public String getDefaultVersion() {
             return null;
+        }
+
+        @Override
+        public Map<String, Object> getDefaultAttributes() {
+            return DEFAULT_ATTRIBUTES;
         }
     }
 

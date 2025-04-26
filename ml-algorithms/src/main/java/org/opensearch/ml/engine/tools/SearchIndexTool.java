@@ -63,7 +63,11 @@ public class SearchIndexTool implements Tool {
         + "Invalid value: \\n{\\\"match\\\":{\\\"population_description\\\":\\\"seattle 2023 population\\\"}}\\nThe value is invalid because the match not wrapped by \\\"query\\\".\","
         + "\"additionalProperties\":false}},\"required\":[\"index\",\"query\"],\"additionalProperties\":false}";
 
+
     private static final Gson GSON = new GsonBuilder().serializeSpecialFloatingPointValues().create();
+
+    public static final Map<String, Object> DEFAULT_ATTRIBUTES = Map.of(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA, STRICT_FIELD, false);
+
 
     private String name = TYPE;
     private Map<String, Object> attributes;
@@ -210,6 +214,11 @@ public class SearchIndexTool implements Tool {
         @Override
         public String getDefaultVersion() {
             return null;
+        }
+
+        @Override
+        public Map<String, Object> getDefaultAttributes() {
+            return DEFAULT_ATTRIBUTES;
         }
     }
 }
