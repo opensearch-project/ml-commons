@@ -106,6 +106,11 @@ public class RestMcpConnectionMessageStreamingAction extends BaseRestHandler {
                         .doOnSuccess(
                             x -> McpAsyncServerHolder.mcpServerTransportProvider
                                 .handleMessage(sessionId, x.utf8ToString())
+                                .doOnSuccess(y -> {
+                                    if (Boolean.TRUE.equals(y)) {
+                                        channel.sendResponse(new BytesRestResponse(RestStatus.OK, "OK"));
+                                    }
+                                })
                                 .onErrorResume(e -> Mono.fromRunnable(() -> {
                                     try {
                                         channel.sendResponse(new BytesRestResponse(channel, new Exception(e)));

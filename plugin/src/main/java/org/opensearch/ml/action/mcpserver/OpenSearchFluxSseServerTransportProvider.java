@@ -26,6 +26,7 @@ import io.modelcontextprotocol.spec.McpServerSession;
 import io.modelcontextprotocol.spec.McpServerTransport;
 import io.modelcontextprotocol.spec.McpServerTransportProvider;
 import io.modelcontextprotocol.util.Assert;
+import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
 import reactor.core.Exceptions;
 import reactor.core.publisher.Flux;
@@ -50,6 +51,7 @@ public class OpenSearchFluxSseServerTransportProvider implements McpServerTransp
     /**
      * Map of active client sessions, keyed by session ID.
      */
+    @Getter
     private final ConcurrentHashMap<String, McpServerSession> sessions = new ConcurrentHashMap<>();
 
     public OpenSearchFluxSseServerTransportProvider(ObjectMapper objectMapper) {
@@ -113,7 +115,7 @@ public class OpenSearchFluxSseServerTransportProvider implements McpServerTransp
         });
     }
 
-    public Mono<Void> handleMessage(String sessionId, String requestBody) {
+    public Mono<Boolean> handleMessage(String sessionId, String requestBody) {
         McpServerSession session = sessions.get(sessionId);
         if (session == null) {
             log.error("Session not found: {}", sessionId);
@@ -122,7 +124,11 @@ public class OpenSearchFluxSseServerTransportProvider implements McpServerTransp
         return Mono.just(requestBody).flatMap(body -> {
             try {
                 McpSchema.JSONRPCMessage message = McpSchema.deserializeJsonRpcMessage(objectMapper, body);
-                return session.handle(message);
+                if (message instanceof McpSchema.JSONRPCNotification) {
+                    return session.handle(message).thenReturn(true).defaultIfEmpty(true);
+                } else {
+                    return session.handle(message).thenReturn(false).defaultIfEmpty(false);
+                }
             } catch (IllegalArgumentException | IOException e) {
                 log.error("Failed to deserialize message: {}", e.getMessage());
                 return Mono.error(new McpError("Invalid message format"));
