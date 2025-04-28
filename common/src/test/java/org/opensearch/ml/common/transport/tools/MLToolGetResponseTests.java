@@ -33,6 +33,7 @@ public class MLToolGetResponseTests {
             .description("Use this tool to calculate any math problem.")
             .type("MathTool")
             .version(null)
+            .attributes(null)
             .build();
 
         mlToolGetResponse = MLToolGetResponse.builder().toolMetadata(toolMetadata).build();
@@ -55,7 +56,7 @@ public class MLToolGetResponseTests {
         assertNotNull(builder);
         String jsonStr = builder.toString();
         assertEquals(
-            "{\"name\":\"MathTool\",\"description\":\"Use this tool to calculate any math problem.\",\"type\":\"MathTool\",\"version\":\"undefined\"}",
+            "{\"name\":\"MathTool\",\"description\":\"Use this tool to calculate any math problem.\",\"type\":\"MathTool\",\"version\":\"undefined\",\"attributes\":{}}",
             jsonStr
         );
     }

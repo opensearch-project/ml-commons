@@ -7,6 +7,7 @@ package org.opensearch.ml.common;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.Map;
 
 import org.opensearch.Version;
@@ -55,7 +56,7 @@ public class ToolMetadata implements ToXContentObject, Writeable {
         description = input.readString();
         type = input.readString();
         version = input.readOptionalString();
-        if (byteStreamVersion.onOrAfter(Version.V_3_0_0)) {
+        if (byteStreamVersion.onOrAfter(Version.V_3_0_0) && input.readBoolean()) {
             attributes = input.readMap(StreamInput::readString, StreamInput::readGenericValue);
         }
     }
@@ -66,8 +67,11 @@ public class ToolMetadata implements ToXContentObject, Writeable {
         output.writeString(description);
         output.writeString(type);
         output.writeOptionalString(version);
-        if (byteStreamVersion.onOrAfter(Version.V_3_0_0)) {
+        if (attributes != null && byteStreamVersion.onOrAfter(Version.V_3_0_0)) {
+            output.writeBoolean(true);
             output.writeMap(attributes, StreamOutput::writeString, StreamOutput::writeGenericValue);
+        } else {
+            output.writeBoolean(false);
         }
     }
 
@@ -84,9 +88,7 @@ public class ToolMetadata implements ToXContentObject, Writeable {
             builder.field(TOOL_TYPE_FIELD, type);
         }
         builder.field(TOOL_VERSION_FIELD, version != null ? version : "undefined");
-        if (attributes != null) {
-            builder.field(TOOL_ATTRIBUTES_FIELD, attributes);
-        }
+        builder.field(TOOL_ATTRIBUTES_FIELD, attributes != null ? attributes : Collections.emptyMap());
         builder.endObject();
         return builder;
     }

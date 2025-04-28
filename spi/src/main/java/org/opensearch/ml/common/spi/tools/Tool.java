@@ -137,6 +137,8 @@ public interface Tool {
          * Get the default attributes of this tool
          * @return the default attributes
          */
-        Map<String, Object> getDefaultAttributes();
+        default Map<String, Object> getDefaultAttributes() {
+            return Collections.emptyMap();
+        }
     }
 }

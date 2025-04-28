@@ -37,6 +37,7 @@ public class MLToolsListResponseTests {
             .description("Useful when you need to use this tool to search general knowledge on wikipedia.")
             .type("SearchWikipediaTool")
             .version(null)
+            .attributes(null)
             .build();
         ToolMetadata toolMetadata = ToolMetadata
             .builder()
@@ -44,6 +45,7 @@ public class MLToolsListResponseTests {
             .description("Use this tool to calculate any math problem.")
             .type("MathTool")
             .version("test")
+            .attributes(null)
             .build();
 
         toolMetadataList.add(searchWikipediaTool);
@@ -69,7 +71,7 @@ public class MLToolsListResponseTests {
         assertNotNull(builder);
         String jsonStr = builder.toString();
         assertEquals(
-            "[{\"name\":\"SearchWikipediaTool\",\"description\":\"Useful when you need to use this tool to search general knowledge on wikipedia.\",\"type\":\"SearchWikipediaTool\",\"version\":\"undefined\"},{\"name\":\"MathTool\",\"description\":\"Use this tool to calculate any math problem.\",\"type\":\"MathTool\",\"version\":\"test\"}]",
+            "[{\"name\":\"SearchWikipediaTool\",\"description\":\"Useful when you need to use this tool to search general knowledge on wikipedia.\",\"type\":\"SearchWikipediaTool\",\"version\":\"undefined\",\"attributes\":{}},{\"name\":\"MathTool\",\"description\":\"Use this tool to calculate any math problem.\",\"type\":\"MathTool\",\"version\":\"test\",\"attributes\":{}}]",
             jsonStr
         );
     }
