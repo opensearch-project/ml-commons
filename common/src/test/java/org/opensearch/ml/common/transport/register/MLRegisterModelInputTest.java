@@ -9,6 +9,8 @@ import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 
 import java.io.IOException;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.function.Consumer;
 
 import org.junit.Before;
@@ -31,6 +33,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.connector.HttpConnectorTest;
+import org.opensearch.ml.common.model.GeneralModelConfig;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
@@ -72,11 +75,18 @@ public class MLRegisterModelInputTest {
 
     @Before
     public void setUp() throws Exception {
-        config = TextEmbeddingModelConfig
+        // config = TextEmbeddingModelConfig
+        // .builder()
+        // .modelType("testModelType")
+        // .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
+        // .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+        // .embeddingDimension(100)
+        // .build();
+        config = GeneralModelConfig
             .builder()
             .modelType("testModelType")
             .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
-            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .frameworkType(GeneralModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
             .embeddingDimension(100)
             .build();
         HttpConnector connector = HttpConnectorTest.createHttpConnector();
@@ -383,6 +393,146 @@ public class MLRegisterModelInputTest {
             assertEquals(parsedInput.getModelConfig().getAllConfig(), mcorrConfig.getAllConfig());
             assertEquals(parsedInput.getFunctionName(), FunctionName.METRICS_CORRELATION);
             assertEquals(parsedInput.getModelName(), FunctionName.METRICS_CORRELATION.name());
+            assertEquals(parsedInput.getModelGroupId(), modelGroupId);
+        });
+    }
+
+    @Test
+    public void testEmbeddingInput() throws IOException {
+        String testString =
+            "{\"function_name\":\"TEXT_EMBEDDING\",\"name\":\"TEXT_EMBEDDING\",\"version\":\"1.0.0\",\"model_group_id\":\"modelGroupId\",\"url\":\"url\",\"model_format\":\"TORCH_SCRIPT\",\"model_config\":{\"model_type\":\"testModelType\",\"embedding_dimension\":768,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\",\"normalize_result\":true},\"deploy_model\":true,\"model_node_ids\":[\"modelNodeIds\"]}";
+
+        TextEmbeddingModelConfig embeddingConfig = TextEmbeddingModelConfig
+            .builder()
+            .modelType("testModelType")
+            .embeddingDimension(768)
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
+            .normalizeResult(true)
+            .build();
+
+        MLRegisterModelInput embeddingInput = MLRegisterModelInput
+            .builder()
+            .functionName(FunctionName.TEXT_EMBEDDING)
+            .modelName(FunctionName.TEXT_EMBEDDING.name())
+            .version("1.0.0")
+            .modelGroupId(modelGroupId)
+            .url(url)
+            .modelFormat(MLModelFormat.TORCH_SCRIPT)
+            .modelConfig(embeddingConfig)
+            .deployModel(true)
+            .modelNodeIds(new String[] { "modelNodeIds" })
+            .build();
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        embeddingInput.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String jsonStr = builder.toString();
+        assertEquals(testString, jsonStr);
+    }
+
+    @Test
+    public void readInputStream_Embedding() throws IOException {
+        TextEmbeddingModelConfig embeddingConfig = TextEmbeddingModelConfig
+            .builder()
+            .modelType("testModelType")
+            .embeddingDimension(768)
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
+            .normalizeResult(true)
+            .build();
+
+        MLRegisterModelInput embeddingInput = MLRegisterModelInput
+            .builder()
+            .functionName(FunctionName.TEXT_EMBEDDING)
+            .modelName(FunctionName.TEXT_EMBEDDING.name())
+            .version("1.0.0")
+            .modelGroupId(modelGroupId)
+            .url(url)
+            .modelFormat(MLModelFormat.TORCH_SCRIPT)
+            .modelConfig(embeddingConfig)
+            .deployModel(true)
+            .modelNodeIds(new String[] { "modelNodeIds" })
+            .build();
+        readInputStream(embeddingInput, parsedInput -> {
+            assertTrue(parsedInput.getModelConfig() instanceof TextEmbeddingModelConfig);
+            TextEmbeddingModelConfig parsedConfig = (TextEmbeddingModelConfig) parsedInput.getModelConfig();
+
+            assertEquals(parsedConfig.getModelType(), embeddingConfig.getModelType());
+            assertEquals(parsedConfig.getAllConfig(), embeddingConfig.getAllConfig());
+            assertEquals(parsedConfig.getEmbeddingDimension(), embeddingConfig.getEmbeddingDimension());
+            assertEquals(parsedConfig.getFrameworkType(), embeddingConfig.getFrameworkType());
+            assertEquals(parsedConfig.isNormalizeResult(), embeddingConfig.isNormalizeResult());
+
+            assertEquals(parsedInput.getFunctionName(), FunctionName.TEXT_EMBEDDING);
+            assertEquals(parsedInput.getModelName(), FunctionName.TEXT_EMBEDDING.name());
+            assertEquals(parsedInput.getModelGroupId(), modelGroupId);
+        });
+    }
+
+    @Test
+    public void testGeneralModelInput() throws IOException {
+        String testString =
+            "{\"function_name\":\"SPARSE_ENCODING\",\"name\":\"SPARSE_ENCODING\",\"version\":\"1.0.0\",\"model_group_id\":\"modelGroupId\",\"url\":\"url\",\"model_format\":\"TORCH_SCRIPT\",\"model_config\":{\"model_type\":\"testModelType\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\",\"additional_config\":{\"space_type\":\"l2\"}},\"deploy_model\":true,\"model_node_ids\":[\"modelNodeIds\"]}";
+
+        Map<String, Object> additionalConfig = new HashMap<>();
+        additionalConfig.put("space_type", "l2");
+
+        GeneralModelConfig generalConfig = GeneralModelConfig
+            .builder()
+            .modelType("testModelType")
+            .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
+            .additionalConfig(additionalConfig)
+            .build();
+
+        MLRegisterModelInput generalInput = MLRegisterModelInput
+            .builder()
+            .functionName(FunctionName.SPARSE_ENCODING)
+            .modelName("SPARSE_ENCODING")
+            .version("1.0.0")
+            .modelGroupId(modelGroupId)
+            .url(url)
+            .modelFormat(MLModelFormat.TORCH_SCRIPT)
+            .modelConfig(generalConfig)
+            .deployModel(true)
+            .modelNodeIds(new String[] { "modelNodeIds" })
+            .build();
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        generalInput.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String jsonStr = builder.toString();
+        assertEquals(testString, jsonStr);
+    }
+
+    @Test
+    public void readInputStream_general() throws IOException {
+        Map<String, Object> additionalConfig = new HashMap<>();
+        additionalConfig.put("space_type", "l2");
+
+        GeneralModelConfig generalConfig = GeneralModelConfig
+            .builder()
+            .modelType("testModelType")
+            .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
+            .frameworkType(GeneralModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .embeddingDimension(100)
+            .additionalConfig(additionalConfig)
+            .build();
+
+        MLRegisterModelInput generalInput = MLRegisterModelInput
+            .builder()
+            .functionName(FunctionName.SPARSE_ENCODING)
+            .modelName("SPARSE_ENCODING")
+            .version("1.0.0")
+            .modelGroupId(modelGroupId)
+            .url(url)
+            .modelFormat(MLModelFormat.TORCH_SCRIPT)
+            .modelConfig(generalConfig)
+            .deployModel(true)
+            .modelNodeIds(new String[] { "modelNodeIds" })
+            .build();
+        readInputStream(generalInput, parsedInput -> {
+            assertEquals(parsedInput.getModelConfig().getModelType(), generalConfig.getModelType());
+            assertEquals(parsedInput.getModelConfig().getAllConfig(), generalConfig.getAllConfig());
+            assertEquals(((GeneralModelConfig) parsedInput.getModelConfig()).getAdditionalConfig(), additionalConfig);
+            assertEquals(parsedInput.getFunctionName(), FunctionName.SPARSE_ENCODING);
+            assertEquals(parsedInput.getModelName(), "SPARSE_ENCODING");
             assertEquals(parsedInput.getModelGroupId(), modelGroupId);
         });
     }

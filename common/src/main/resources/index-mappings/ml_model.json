@@ -88,6 +88,9 @@
         },
         "all_config": {
           "type": "text"
+        },
+        "additional_config": {
+          "type": "flat_object"
         }
       }
     },
