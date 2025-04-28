@@ -27,6 +27,7 @@ import java.util.zip.ZipFile;
 
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.model.GeneralModelConfig;
 import org.opensearch.ml.common.model.MLDeploySetting;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
@@ -138,7 +139,7 @@ public class ModelHelper {
                                     }
                                 }
                                 builder.modelConfig(configBuilder.build());
-                            } else {
+                            } else if (FunctionName.TEXT_EMBEDDING.equals(algorithm)) {
                                 TextEmbeddingModelConfig.TextEmbeddingModelConfigBuilder configBuilder = TextEmbeddingModelConfig.builder();
                                 Map<?, ?> configMap = (Map<?, ?>) entry.getValue();
                                 for (Map.Entry<?, ?> configEntry : configMap.entrySet()) {
@@ -176,6 +177,48 @@ public class ModelHelper {
                                             break;
                                         case TextEmbeddingModelConfig.PASSAGE_PREFIX:
                                             configBuilder.passagePrefix(configEntry.getValue().toString());
+                                            break;
+                                        default:
+                                            break;
+                                    }
+                                }
+                                builder.modelConfig(configBuilder.build());
+                            } else {
+                                GeneralModelConfig.GeneralModelConfigBuilder configBuilder = GeneralModelConfig.builder();
+                                Map<?, ?> configMap = (Map<?, ?>) entry.getValue();
+                                for (Map.Entry<?, ?> configEntry : configMap.entrySet()) {
+                                    switch (configEntry.getKey().toString()) {
+                                        case MLModelConfig.MODEL_TYPE_FIELD:
+                                            configBuilder.modelType(configEntry.getValue().toString());
+                                            break;
+                                        case MLModelConfig.ALL_CONFIG_FIELD:
+                                            configBuilder.allConfig(configEntry.getValue().toString());
+                                            break;
+                                        case MLModelConfig.ADDITIONAL_CONFIG_FIELD:
+                                            if (configEntry.getValue() instanceof Map) {
+                                                Map<String, Object> additionalConfig = (Map<String, Object>) configEntry.getValue();
+                                                configBuilder.additionalConfig(additionalConfig);
+                                            }
+                                            break;
+                                        case GeneralModelConfig.EMBEDDING_DIMENSION_FIELD:
+                                            configBuilder.embeddingDimension(((Double) configEntry.getValue()).intValue());
+                                            break;
+                                        case GeneralModelConfig.FRAMEWORK_TYPE_FIELD:
+                                            configBuilder
+                                                .frameworkType(GeneralModelConfig.FrameworkType.from(configEntry.getValue().toString()));
+                                            break;
+                                        case GeneralModelConfig.POOLING_MODE_FIELD:
+                                            configBuilder
+                                                .poolingMode(
+                                                    GeneralModelConfig.PoolingMode
+                                                        .from(configEntry.getValue().toString().toUpperCase(Locale.ROOT))
+                                                );
+                                            break;
+                                        case GeneralModelConfig.NORMALIZE_RESULT_FIELD:
+                                            configBuilder.normalizeResult(Boolean.parseBoolean(configEntry.getValue().toString()));
+                                            break;
+                                        case GeneralModelConfig.MODEL_MAX_LENGTH_FIELD:
+                                            configBuilder.modelMaxLength(((Double) configEntry.getValue()).intValue());
                                             break;
                                         default:
                                             break;
