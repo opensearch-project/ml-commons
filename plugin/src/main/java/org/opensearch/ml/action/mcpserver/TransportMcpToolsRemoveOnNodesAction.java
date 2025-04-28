@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.opensearch.OpenSearchException;
 import org.opensearch.action.FailedNodeException;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.nodes.TransportNodesAction;
@@ -27,9 +28,9 @@ import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
 
-import io.modelcontextprotocol.spec.McpError;
 import lombok.extern.log4j.Log4j2;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 /**
  * This class is responsible for removing MCP tools on nodes in the cluster.
@@ -100,12 +101,13 @@ public class TransportMcpToolsRemoveOnNodesAction extends
         errors.set(new ArrayList<>());
         Flux.fromStream(tools.stream()).flatMap(toolName -> McpAsyncServerHolder.asyncServer.removeTool(toolName).doOnError(e -> {
             errors.get().add(toolName);
-        })).doOnError(e -> { log.error(e.getMessage(), e); }).doOnComplete(() -> {
+        }).onErrorResume(e -> Mono.empty())).doOnError(e -> { log.error(e.getMessage(), e); }).doOnComplete(() -> {
             log.debug("Successfully removed tools on node: {}", clusterService.localNode().getId());
         }).subscribe();
         if (!errors.get().isEmpty()) {
             String errMsg = String.format(Locale.ROOT, "Tools: %s not found", errors.get());
-            throw new FailedNodeException(clusterService.localNode().getId(), errMsg, new McpError(errMsg));
+            OpenSearchException openSearchException = new OpenSearchException(errMsg);
+            throw new FailedNodeException(clusterService.localNode().getId(), openSearchException.getMessage(), openSearchException);
         } else {
             return new MLMcpRemoveNodeResponse(clusterService.localNode(), true);
         }

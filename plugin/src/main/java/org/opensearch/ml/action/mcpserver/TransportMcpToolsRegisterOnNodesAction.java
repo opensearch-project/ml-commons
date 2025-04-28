@@ -134,8 +134,10 @@ public class TransportMcpToolsRegisterOnNodesAction extends
                     actualTool.run(StringUtils.getParameterMap(arguments), actionListener);
                 })
             );
-            McpAsyncServerHolder.asyncServer.removeTool(toolName).subscribe();// ignore failure
-            return McpAsyncServerHolder.asyncServer.addTool(toolSpecification);
+            return McpAsyncServerHolder.asyncServer
+                .removeTool(toolName)
+                .onErrorResume(e -> Mono.empty())
+                .then(McpAsyncServerHolder.asyncServer.addTool(toolSpecification));
         })
             .doOnComplete(() -> { log.debug("Successfully register tools on node: {}", clusterService.localNode().getId()); })
             .doOnError(e -> {

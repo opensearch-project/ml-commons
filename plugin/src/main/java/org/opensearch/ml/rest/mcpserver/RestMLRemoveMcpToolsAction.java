@@ -54,12 +54,12 @@ public class RestMLRemoveMcpToolsAction extends BaseRestHandler {
     @Override
     public RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
         List<String> tools = getRequest(request);
-
+        ActionRequestValidationException exception = new ActionRequestValidationException();
+        if (CollectionUtils.isEmpty(tools)) {
+            exception.addValidationError("tools list can not be null");
+            throw exception;
+        }
         return channel -> {
-            ActionRequestValidationException exception = new ActionRequestValidationException();
-            if (CollectionUtils.isEmpty(tools)) {
-                exception.addValidationError("tools list can not be null");
-            }
             MLMcpToolsRemoveNodesRequest removeNodesRequest = new MLMcpToolsRemoveNodesRequest(
                 clusterService.state().nodes().getNodes().keySet().toArray(new String[0]),
                 tools

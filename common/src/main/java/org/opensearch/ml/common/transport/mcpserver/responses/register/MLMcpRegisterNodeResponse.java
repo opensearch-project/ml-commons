@@ -44,7 +44,8 @@ public class MLMcpRegisterNodeResponse extends BaseNodeResponse implements ToXCo
     }
 
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-        builder.startObject(getNode().getId());
+        builder.startObject();
+        builder.field(getNode().getId());
         builder.value(created);
         builder.endObject();
         return builder;
