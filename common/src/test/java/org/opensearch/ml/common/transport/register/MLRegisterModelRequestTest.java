@@ -13,9 +13,9 @@ import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.model.GeneralModelConfig;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
-import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 
 public class MLRegisterModelRequestTest {
 
@@ -24,11 +24,11 @@ public class MLRegisterModelRequestTest {
     @Before
     public void setUp() {
 
-        TextEmbeddingModelConfig config = TextEmbeddingModelConfig
+        GeneralModelConfig config = GeneralModelConfig
             .builder()
             .modelType("testModelType")
             .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
-            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .frameworkType(GeneralModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
             .embeddingDimension(100)
             .build();
 
@@ -64,7 +64,7 @@ public class MLRegisterModelRequestTest {
         assertTrue(request.getRegisterModelInput().isDeployModel());
         String[] modelNodeIds = request.getRegisterModelInput().getModelNodeIds();
         assertEquals("modelNodeIds", modelNodeIds[0]);
-        assertEquals("TEXT_EMBEDDING", config1.getWriteableName());
+        assertEquals("general", config1.getWriteableName());
     }
 
     @Test
