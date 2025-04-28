@@ -26,7 +26,6 @@ import io.modelcontextprotocol.spec.McpServerSession;
 import io.modelcontextprotocol.spec.McpServerTransport;
 import io.modelcontextprotocol.spec.McpServerTransportProvider;
 import io.modelcontextprotocol.util.Assert;
-import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
 import reactor.core.Exceptions;
 import reactor.core.publisher.Flux;
@@ -38,7 +37,7 @@ import reactor.core.publisher.Mono;
  * When message request comes, the session will be retrieved from the local memory to handle the request.
  */
 @Log4j2
-public class OpenSearchFluxSseServerTransportProvider implements McpServerTransportProvider {
+public class OpenSearchMcpServerTransportProvider implements McpServerTransportProvider {
     /**
      * Event type for sending the message endpoint URI to clients.
      */
@@ -51,10 +50,9 @@ public class OpenSearchFluxSseServerTransportProvider implements McpServerTransp
     /**
      * Map of active client sessions, keyed by session ID.
      */
-    @Getter
     private final ConcurrentHashMap<String, McpServerSession> sessions = new ConcurrentHashMap<>();
 
-    public OpenSearchFluxSseServerTransportProvider(ObjectMapper objectMapper) {
+    public OpenSearchMcpServerTransportProvider(ObjectMapper objectMapper) {
         Assert.notNull(objectMapper, "ObjectMapper must not be null");
 
         this.objectMapper = objectMapper;

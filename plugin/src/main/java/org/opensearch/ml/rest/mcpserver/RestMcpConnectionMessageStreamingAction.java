@@ -26,7 +26,8 @@ import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.StreamingRestChannel;
 import org.opensearch.transport.client.node.NodeClient;
 
-import io.modelcontextprotocol.spec.McpError;
+import com.google.common.annotations.VisibleForTesting;
+
 import lombok.extern.log4j.Log4j2;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -36,8 +37,8 @@ import reactor.core.publisher.Mono;
 public class RestMcpConnectionMessageStreamingAction extends BaseRestHandler {
 
     private static final String MCP_ACTION = "mcp_action";
-    private static final String MESSAGE_ENDPOINT = "/_plugins/_ml/sse/message";
-    private static final String SSE_ENDPOINT = "/_plugins/_ml/sse";
+    public static final String MESSAGE_ENDPOINT = "/_plugins/_ml/sse/message";
+    public static final String SSE_ENDPOINT = "/_plugins/_ml/sse";
 
     @Override
     public List<Route> routes() {
@@ -53,84 +54,7 @@ public class RestMcpConnectionMessageStreamingAction extends BaseRestHandler {
     public RestChannelConsumer prepareRequest(final RestRequest request, final NodeClient client) {
         String path = request.path();
         final String sessionId = request.param("sessionId");
-        final StreamingRestChannelConsumer consumer = (channel) -> {
-
-            channel
-                .prepareResponse(
-                    RestStatus.OK,
-                    Map
-                        .of(
-                            "Content-Type",
-                            List.of("text/event-stream"),
-                            "Cache-Control",
-                            List.of("no-cache"),
-                            "Connection",
-                            List.of("keep-alive"),
-                            "Transfer-Encoding",
-                            List.of("chunked")
-                        )
-                );
-
-            if (path.equals("/_plugins/_ml/sse")) {
-                // The connection request doesn't have request body, but we're still reading the request body content,
-                // The reason is that the response producer is created when http channel is been read, so here
-                // we subscribe to channel to trigger the channel read, but ignoring the content.
-                Mono
-                    .from(channel)
-                    .ofType(HttpChunk.class)
-                    .map(HttpChunk::content)
-                    .flatMap(x -> McpAsyncServerHolder.mcpServerTransportProvider.handleSseConnection(channel))
-                    .flatMap(y -> Mono.fromRunnable(() -> {
-                        log.debug("starting to send sse connection chunk result");
-                        channel.sendChunk(y);
-                    }))
-                    .onErrorResume(e -> Mono.fromRunnable(() -> {
-                        try {
-                            channel.sendResponse(new BytesRestResponse(channel, new Exception(e)));
-                        } catch (IOException ex) {
-                            log.error("Failed to send exception response to client during connection due to IOException");
-                            throw new RuntimeException(ex);
-                        }
-                    }))
-                    .subscribe();
-            } else if (path.equals("/_plugins/_ml/sse/message")) {
-                if (sessionId == null) {
-                    Mono.defer(() -> Mono.error(new McpError("Session ID missing in message endpoint")));
-                } else {
-                    Flux
-                        .from(channel)
-                        .ofType(HttpChunk.class)
-                        .takeUntil(HttpChunk::isLast)
-                        .map(HttpChunk::content)
-                        .reduce(CompositeBytesReference::of)
-                        .doOnSuccess(
-                            x -> McpAsyncServerHolder.mcpServerTransportProvider
-                                .handleMessage(sessionId, x.utf8ToString())
-                                .doOnSuccess(y -> {
-                                    if (Boolean.TRUE.equals(y)) {
-                                        channel.sendResponse(new BytesRestResponse(RestStatus.OK, "OK"));
-                                    }
-                                })
-                                .onErrorResume(e -> Mono.fromRunnable(() -> {
-                                    try {
-                                        channel.sendResponse(new BytesRestResponse(channel, new Exception(e)));
-                                    } catch (IOException ex) {
-                                        log.error("Failed to send exception response to client during message handling due to IOException");
-                                    }
-                                }))
-                                .subscribe()
-                        )
-                        .doOnError(e -> Mono.fromRunnable(() -> {
-                            try {
-                                channel.sendResponse(new BytesRestResponse(channel, new Exception(e)));
-                            } catch (IOException ex) {
-                                log.error("Failed to send exception response to client during messaging due to IOException");
-                            }
-                        }))
-                        .subscribe();
-                }
-            }
-        };
+        final StreamingRestChannelConsumer consumer = (channel) -> prepareRequestInternal(path, sessionId, channel);
         return channel -> {
             if (channel instanceof StreamingRestChannel) {
                 consumer.accept((StreamingRestChannel) channel);
@@ -141,6 +65,86 @@ public class RestMcpConnectionMessageStreamingAction extends BaseRestHandler {
             }
         };
 
+    }
+
+    @VisibleForTesting
+    protected void prepareRequestInternal(final String path, final String sessionId, final StreamingRestChannel channel) {
+        channel
+            .prepareResponse(
+                RestStatus.OK,
+                Map
+                    .of(
+                        "Content-Type",
+                        List.of("text/event-stream"),
+                        "Cache-Control",
+                        List.of("no-cache"),
+                        "Connection",
+                        List.of("keep-alive")
+                    )
+            );
+
+        if (path.equals(SSE_ENDPOINT)) {
+            // The connection request doesn't have request body, but we're still reading the request body content,
+            // The reason is that the response producer is created when http channel is been read, so here
+            // we subscribe to channel to trigger the channel read, but ignoring the content.
+            Mono
+                .from(channel)
+                .ofType(HttpChunk.class)
+                .map(HttpChunk::content)
+                .flatMap(x -> McpAsyncServerHolder.mcpServerTransportProvider.handleSseConnection(channel))
+                .flatMap(y -> Mono.fromRunnable(() -> {
+                    log.debug("starting to send sse connection chunk result");
+                    channel.sendChunk(y);
+                }))
+                .onErrorResume(e -> Mono.fromRunnable(() -> {
+                    try {
+                        channel.sendResponse(new BytesRestResponse(channel, new Exception(e)));
+                    } catch (IOException ex) {
+                        log.error("Failed to send exception response to client during connection due to IOException");
+                        throw new RuntimeException(ex);
+                    }
+                }))
+                .subscribe();
+        } else if (path.equals(MESSAGE_ENDPOINT)) {
+            if (sessionId == null) {
+                try {
+                    channel
+                        .sendResponse(
+                            new BytesRestResponse(channel, new IllegalArgumentException("Session ID missing in message endpoint"))
+                        );
+                } catch (IOException ex) {
+                    log.error("Failed to send exception response to client when sessionId is null");
+                }
+            } else {
+                Flux
+                    .from(channel)
+                    .ofType(HttpChunk.class)
+                    .takeUntil(HttpChunk::isLast)
+                    .map(HttpChunk::content)
+                    .reduce(CompositeBytesReference::of)
+                    .doOnSuccess(
+                        x -> McpAsyncServerHolder.mcpServerTransportProvider.handleMessage(sessionId, x.utf8ToString()).doOnSuccess(y -> {
+                            if (Boolean.TRUE.equals(y)) {
+                                channel.sendResponse(new BytesRestResponse(RestStatus.OK, "OK"));
+                            }
+                        }).onErrorResume(e -> Mono.fromRunnable(() -> {
+                            try {
+                                channel.sendResponse(new BytesRestResponse(channel, new Exception(e)));
+                            } catch (IOException ex) {
+                                log.error("Failed to send exception response to client during message handling due to IOException");
+                            }
+                        })).subscribe()
+                    )
+                    .doOnError(e -> Mono.fromRunnable(() -> {
+                        try {
+                            channel.sendResponse(new BytesRestResponse(channel, new Exception(e)));
+                        } catch (IOException ex) {
+                            log.error("Failed to send exception response to client during messaging due to IOException");
+                        }
+                    }))
+                    .subscribe();
+            }
+        }
     }
 
     @Override

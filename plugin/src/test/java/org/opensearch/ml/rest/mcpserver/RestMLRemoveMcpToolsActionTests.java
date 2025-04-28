@@ -12,6 +12,8 @@ import static org.mockito.Mockito.when;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -74,6 +76,22 @@ public class RestMLRemoveMcpToolsActionTests extends OpenSearchTestCase {
             .withContent(bytesReference, MediaType.fromMediaType(XContentType.JSON.mediaType()))
             .build();
         restMLRemoveMcpToolsAction.prepareRequest(restRequest, mock(NodeClient.class));
+    }
+
+    @Test
+    public void test_getName() {
+        assertEquals("ml_remove_mcp_tools_action", restMLRemoveMcpToolsAction.getName());
+    }
+
+    @Test
+    public void test_routes() {
+        Set<String> expectedRoutes = Set.of("POST /_plugins/_ml/mcp_tools/_remove");
+        Set<String> routes = restMLRemoveMcpToolsAction
+            .routes()
+            .stream()
+            .map(r -> r.getMethod().name() + " " + r.getPath())
+            .collect(Collectors.toSet());
+        assertEquals(expectedRoutes, routes);
     }
 
 }

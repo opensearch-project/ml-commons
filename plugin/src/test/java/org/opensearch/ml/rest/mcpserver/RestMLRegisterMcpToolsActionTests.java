@@ -14,6 +14,8 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -152,5 +154,21 @@ public class RestMLRegisterMcpToolsActionTests extends OpenSearchTestCase {
             .withContent(bytesReference, MediaType.fromMediaType(XContentType.JSON.mediaType()))
             .build();
         restMLRegisterMcpToolsAction.prepareRequest(restRequest, mock(NodeClient.class));
+    }
+
+    @Test
+    public void test_getName() {
+        assertEquals("ml_register_mcp_tools_action", restMLRegisterMcpToolsAction.getName());
+    }
+
+    @Test
+    public void test_routes() {
+        Set<String> expectedRoutes = Set.of("POST /_plugins/_ml/mcp_tools/_register");
+        Set<String> routes = restMLRegisterMcpToolsAction
+            .routes()
+            .stream()
+            .map(r -> r.getMethod().name() + " " + r.getPath())
+            .collect(Collectors.toSet());
+        assertEquals(expectedRoutes, routes);
     }
 }

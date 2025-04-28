@@ -1,3 +1,10 @@
+/*
+ *
+ *  * Copyright OpenSearch Contributors
+ *  * SPDX-License-Identifier: Apache-2.0
+ *
+ */
+
 package org.opensearch.ml.common.transport.mcpserver.requests.remove;
 
 import java.io.ByteArrayInputStream;
@@ -12,8 +19,8 @@ import org.opensearch.action.support.nodes.BaseNodesRequest;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.util.CollectionUtils;
-import org.opensearch.ml.common.transport.agent.MLRegisterAgentRequest;
 
 import lombok.Data;
 
@@ -41,8 +48,13 @@ public class MLMcpToolsRemoveNodesRequest extends BaseNodesRequest<MLMcpToolsRem
         return null;
     }
 
+    public void writeTo(StreamOutput out) throws IOException {
+        super.writeTo(out);
+        out.writeStringArray(tools.toArray(new String[0]));
+    }
+
     public static MLMcpToolsRemoveNodesRequest fromActionRequest(ActionRequest actionRequest) {
-        if (actionRequest instanceof MLRegisterAgentRequest) {
+        if (actionRequest instanceof MLMcpToolsRemoveNodesRequest) {
             return (MLMcpToolsRemoveNodesRequest) actionRequest;
         }
 

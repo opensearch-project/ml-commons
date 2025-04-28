@@ -17,7 +17,7 @@ import io.modelcontextprotocol.spec.McpSchema;
  */
 public class McpAsyncServerHolder {
 
-    public static OpenSearchFluxSseServerTransportProvider mcpServerTransportProvider = new OpenSearchFluxSseServerTransportProvider(
+    public static OpenSearchMcpServerTransportProvider mcpServerTransportProvider = new OpenSearchMcpServerTransportProvider(
         new ObjectMapper()
     );
 

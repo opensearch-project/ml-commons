@@ -44,7 +44,8 @@ public class MLMcpRemoveNodeResponse extends BaseNodeResponse implements ToXCont
     }
 
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-        builder.startObject("deleted");
+        builder.startObject();
+        builder.field("deleted");
         builder.value(deleted);
         builder.endObject();
         return builder;

@@ -32,7 +32,6 @@ import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.spi.tools.Tool;
-import org.opensearch.ml.common.transport.mcpserver.requests.register.McpTools;
 import org.opensearch.ml.common.transport.mcpserver.requests.remove.MLMcpToolsRemoveNodeRequest;
 import org.opensearch.ml.common.transport.mcpserver.requests.remove.MLMcpToolsRemoveNodesRequest;
 import org.opensearch.ml.common.transport.mcpserver.responses.remove.MLMcpRemoveNodeResponse;
@@ -109,7 +108,6 @@ public class TransportMcpToolsRemoveOnNodesActionTests extends OpenSearchTestCas
 
     @Test
     public void testNewNodeRequest() {
-        McpTools mcpTools = mock(McpTools.class);
         MLMcpToolsRemoveNodesRequest nodesRequest = new MLMcpToolsRemoveNodesRequest(new String[] { "node1", "node2" }, toRemoveTools);
         MLMcpToolsRemoveNodeRequest nodeRequest = action.newNodeRequest(nodesRequest);
         assertEquals(nodesRequest.getTools(), nodeRequest.getTools());

@@ -1,3 +1,10 @@
+/*
+ *
+ *  * Copyright OpenSearch Contributors
+ *  * SPDX-License-Identifier: Apache-2.0
+ *
+ */
+
 package org.opensearch.ml.common.transport.mcpserver.requests.register;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
@@ -31,9 +38,13 @@ public class McpTool implements ToXContentObject, Writeable {
     private final String description;
     private Map<String, Object> params;
     private Map<String, Object> schema;
+    private static final String nameNotShownExceptionMessage = "name field required";
 
     public McpTool(StreamInput streamInput) throws IOException {
         name = streamInput.readString();
+        if (name == null) {
+            throw new IllegalArgumentException(nameNotShownExceptionMessage);
+        }
         description = streamInput.readOptionalString();
         if (streamInput.readBoolean()) {
             params = streamInput.readMap(StreamInput::readString, StreamInput::readGenericValue);
@@ -44,6 +55,9 @@ public class McpTool implements ToXContentObject, Writeable {
     }
 
     public McpTool(String name, String description, Map<String, Object> params, Map<String, Object> schema) {
+        if (name == null) {
+            throw new IllegalArgumentException(nameNotShownExceptionMessage);
+        }
         this.name = name;
         this.description = description;
         this.params = params;
@@ -77,6 +91,9 @@ public class McpTool implements ToXContentObject, Writeable {
                     parser.skipChildren();
                     break;
             }
+        }
+        if (name == null) {
+            throw new IllegalArgumentException(nameNotShownExceptionMessage);
         }
         return new McpTool(name, description, params, schema);
     }
