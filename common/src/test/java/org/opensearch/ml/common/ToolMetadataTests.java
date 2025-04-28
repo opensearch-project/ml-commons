@@ -52,7 +52,7 @@ public class ToolMetadataTests {
         toolMetadata.toXContent(builder, EMPTY_PARAMS);
         String toolMetadataString = TestHelper.xContentBuilderToString(builder);
         assertEquals(
-            "{\"name\":\"MathTool\",\"description\":\"Use this tool to calculate any math problem.\",\"type\":\"MathTool\",\"version\":\"test\",\"attributes\":{}}",
+            "{\"name\":\"MathTool\",\"description\":\"Use this tool to calculate any math problem.\",\"type\":\"MathTool\",\"version\":\"test\"}",
             toolMetadataString
         );
     }
@@ -63,7 +63,7 @@ public class ToolMetadataTests {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         emptyToolMetadata.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String toolMetadataString = TestHelper.xContentBuilderToString(builder);
-        assertEquals("{\"version\":\"undefined\",\"attributes\":{}}", toolMetadataString);
+        assertEquals("{\"version\":\"undefined\"}", toolMetadataString);
     }
 
     @Test

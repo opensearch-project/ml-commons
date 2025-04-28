@@ -8,7 +8,6 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.util.Collections;
 import java.util.List;
 
 import org.opensearch.core.action.ActionResponse;
@@ -56,11 +55,9 @@ public class MLToolsListResponse extends ActionResponse implements ToXContentObj
             xContentBuilder.field(ToolMetadata.TOOL_TYPE_FIELD, toolMetadata.getType());
             xContentBuilder
                 .field(ToolMetadata.TOOL_VERSION_FIELD, toolMetadata.getVersion() != null ? toolMetadata.getVersion() : "undefined");
-            xContentBuilder
-                .field(
-                    ToolMetadata.TOOL_ATTRIBUTES_FIELD,
-                    toolMetadata.getAttributes() != null ? toolMetadata.getAttributes() : Collections.emptyMap()
-                );
+            if (toolMetadata.getAttributes() != null) {
+                xContentBuilder.field(ToolMetadata.TOOL_ATTRIBUTES_FIELD, toolMetadata.getAttributes());
+            }
             xContentBuilder.endObject();
         }
         xContentBuilder.endArray();

@@ -56,7 +56,7 @@ public class MLToolGetResponseTests {
         assertNotNull(builder);
         String jsonStr = builder.toString();
         assertEquals(
-            "{\"name\":\"MathTool\",\"description\":\"Use this tool to calculate any math problem.\",\"type\":\"MathTool\",\"version\":\"undefined\",\"attributes\":{}}",
+            "{\"name\":\"MathTool\",\"description\":\"Use this tool to calculate any math problem.\",\"type\":\"MathTool\",\"version\":\"undefined\"}",
             jsonStr
         );
     }
