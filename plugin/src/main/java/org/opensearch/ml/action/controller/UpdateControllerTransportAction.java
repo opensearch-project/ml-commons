@@ -82,6 +82,7 @@ public class UpdateControllerTransportAction extends HandledTransportAction<Acti
     ) {
         super(MLUpdateControllerAction.NAME, transportService, actionFilters, MLUpdateControllerRequest::new);
         this.client = client;
+        this.settings = settings;
         this.mlModelManager = mlModelManager;
         this.clusterService = clusterService;
         this.mlModelCacheHelper = mlModelCacheHelper;
