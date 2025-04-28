@@ -30,6 +30,8 @@ public class ToolMetadata implements ToXContentObject, Writeable {
     public static final String TOOL_VERSION_FIELD = "version";
     public static final String TOOL_ATTRIBUTES_FIELD = "attributes";
 
+    private static final Version MINIMUM_VERSION_FOR_TOOL_ATTRIBUTES = Version.V_3_0_0;
+
     @Getter
     private String name;
     @Getter
@@ -56,7 +58,7 @@ public class ToolMetadata implements ToXContentObject, Writeable {
         description = input.readString();
         type = input.readString();
         version = input.readOptionalString();
-        if (byteStreamVersion.onOrAfter(Version.V_3_0_0) && input.readBoolean()) {
+        if (byteStreamVersion.onOrAfter(MINIMUM_VERSION_FOR_TOOL_ATTRIBUTES) && input.readBoolean()) {
             attributes = input.readMap(StreamInput::readString, StreamInput::readGenericValue);
         }
     }
@@ -67,11 +69,13 @@ public class ToolMetadata implements ToXContentObject, Writeable {
         output.writeString(description);
         output.writeString(type);
         output.writeOptionalString(version);
-        if (attributes != null && byteStreamVersion.onOrAfter(Version.V_3_0_0)) {
-            output.writeBoolean(true);
-            output.writeMap(attributes, StreamOutput::writeString, StreamOutput::writeGenericValue);
-        } else {
-            output.writeBoolean(false);
+        if (byteStreamVersion.onOrAfter(MINIMUM_VERSION_FOR_TOOL_ATTRIBUTES)) {
+            if (attributes != null) {
+                output.writeBoolean(true);
+                output.writeMap(attributes, StreamOutput::writeString, StreamOutput::writeGenericValue);
+            } else {
+                output.writeBoolean(false);
+            }
         }
     }
 
