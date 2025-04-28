@@ -7,7 +7,6 @@ package org.opensearch.ml.engine.tools;
 
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -41,7 +40,6 @@ public class MLModelTool implements WithModelTool {
     public static final String RESPONSE_FIELD = "response_field";
     public static final String MODEL_ID_FIELD = "model_id";
     public static final String DEFAULT_RESPONSE_FIELD = "response";
-    public static final Map<String, Object> DEFAULT_ATTRIBUTES = Collections.emptyMap();
 
     @Setter
     @Getter
@@ -185,11 +183,6 @@ public class MLModelTool implements WithModelTool {
         @Override
         public String getDefaultVersion() {
             return null;
-        }
-
-        @Override
-        public Map<String, Object> getDefaultAttributes() {
-            return DEFAULT_ATTRIBUTES;
         }
 
         @Override

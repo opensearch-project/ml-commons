@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.engine.tools;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -37,7 +36,6 @@ public class ConnectorTool implements Tool {
     public static final String TYPE = "ConnectorTool";
     public static final String CONNECTOR_ID = "connector_id";
     public static final String CONNECTOR_ACTION = "connector_action";
-    public static final Map<String, Object> DEFAULT_ATTRIBUTES = Collections.emptyMap();
 
     @Setter
     @Getter
@@ -148,11 +146,6 @@ public class ConnectorTool implements Tool {
         @Override
         public String getDefaultVersion() {
             return null;
-        }
-
-        @Override
-        public Map<String, Object> getDefaultAttributes() {
-            return DEFAULT_ATTRIBUTES;
         }
     }
 }

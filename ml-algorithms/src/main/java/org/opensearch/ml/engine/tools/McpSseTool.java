@@ -7,7 +7,6 @@ package org.opensearch.ml.engine.tools;
 
 import static org.opensearch.ml.common.CommonValue.MCP_SYNC_CLIENT;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -31,7 +30,6 @@ import lombok.extern.log4j.Log4j2;
 @ToolAnnotation(McpSseTool.TYPE)
 public class McpSseTool implements WithModelTool {
     public static final String TYPE = "McpSseTool";
-    public static final Map<String, Object> DEFAULT_ATTRIBUTES = Collections.emptyMap();
 
     @Setter
     @Getter
@@ -135,11 +133,6 @@ public class McpSseTool implements WithModelTool {
         @Override
         public String getDefaultVersion() {
             return null;
-        }
-
-        @Override
-        public Map<String, Object> getDefaultAttributes() {
-            return DEFAULT_ATTRIBUTES;
         }
 
         @Override
