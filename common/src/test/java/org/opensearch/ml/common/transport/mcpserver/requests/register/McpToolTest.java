@@ -1,0 +1,179 @@
+/*
+ *
+ *  * Copyright OpenSearch Contributors
+ *  * SPDX-License-Identifier: Apache-2.0
+ *
+ */
+
+package org.opensearch.ml.common.transport.mcpserver.requests.register;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+
+import java.io.IOException;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.ExpectedException;
+import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
+import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.core.xcontent.MediaTypeRegistry;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.ToXContent;
+import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.search.SearchModule;
+
+public class McpToolTest {
+
+    @Rule
+    public ExpectedException exceptionRule = ExpectedException.none();
+
+    private McpTool mcptool;
+    private final String toolName = "weather_tool";
+    private final String description = "Fetch weather data";
+    private final Map<String, Object> params = Collections.singletonMap("unit", "celsius");
+    private final Map<String, Object> schema = Collections.singletonMap("type", "object");
+
+    @Before
+    public void setUp() {
+        mcptool = new McpTool(toolName, description, params, schema);
+    }
+
+    @Test
+    public void testConstructor_Success() {
+        assertEquals(toolName, mcptool.getName());
+        assertEquals(description, mcptool.getDescription());
+        assertEquals(params, mcptool.getParams());
+        assertEquals(schema, mcptool.getSchema());
+    }
+
+    @Test
+    public void testParse_AllFields() throws Exception {
+        String jsonStr = "{\"name\":\"stock_tool\",\"description\":\"Stock data tool\","
+            + "\"params\":{\"exchange\":\"NYSE\"},\"schema\":{\"properties\":{\"symbol\":{\"type\":\"string\"}}}}";
+
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                LoggingDeprecationHandler.INSTANCE,
+                jsonStr
+            );
+        parser.nextToken();
+
+        McpTool parsed = McpTool.parse(parser);
+        assertEquals("stock_tool", parsed.getName());
+        assertEquals("Stock data tool", parsed.getDescription());
+        assertEquals(Collections.singletonMap("exchange", "NYSE"), parsed.getParams());
+        assertTrue(parsed.getSchema().containsKey("properties"));
+    }
+
+    @Test
+    public void testParse_MissingNameField() throws Exception {
+        String invalidJson = "{\"description\":\"Invalid tool\"}";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                LoggingDeprecationHandler.INSTANCE,
+                invalidJson
+            );
+        parser.nextToken();
+
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("name field required");
+        McpTool.parse(parser);
+    }
+
+    @Test
+    public void testToXContent_AllFields() throws Exception {
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        mcptool.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String jsonStr = builder.toString();
+
+        assertTrue(jsonStr.contains("\"name\":\"weather_tool\""));
+        assertTrue(jsonStr.contains("\"description\":\"Fetch weather data\""));
+        assertTrue(jsonStr.contains("\"params\":{\"unit\":\"celsius\"}"));
+        assertTrue(jsonStr.contains("\"schema\":{\"type\":\"object\"}"));
+    }
+
+    @Test
+    public void testToXContent_MinimalFields() throws Exception {
+        McpTool minimalTool = new McpTool("minimal_tool", null, null, null);
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        minimalTool.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String jsonStr = builder.toString();
+
+        assertTrue(jsonStr.contains("\"name\":\"minimal_tool\""));
+        assertFalse(jsonStr.contains("description"));
+        assertFalse(jsonStr.contains("params"));
+        assertFalse(jsonStr.contains("schema"));
+    }
+
+    @Test
+    public void testStreamInputOutput_Success() throws IOException {
+        BytesStreamOutput output = new BytesStreamOutput();
+        mcptool.writeTo(output);
+
+        StreamInput input = output.bytes().streamInput();
+        McpTool parsed = new McpTool(input);
+
+        assertEquals(toolName, parsed.getName());
+        assertEquals(description, parsed.getDescription());
+        assertEquals(params, parsed.getParams());
+        assertEquals(schema, parsed.getSchema());
+    }
+
+    @Test
+    public void testStreamInputOutput_WithNullFields() throws IOException {
+        McpTool toolWithNulls = new McpTool("null_tool", null, null, null);
+        BytesStreamOutput output = new BytesStreamOutput();
+        toolWithNulls.writeTo(output);
+
+        StreamInput input = output.bytes().streamInput();
+        McpTool parsed = new McpTool(input);
+
+        assertEquals("null_tool", parsed.getName());
+        assertNull(parsed.getDescription());
+        assertNull(parsed.getParams());
+        assertNull(parsed.getSchema());
+    }
+
+    @Test
+    public void testComplexParameters() throws Exception {
+        // 测试嵌套参数结构
+        Map<String, Object> complexParams = new HashMap<>();
+        complexParams.put("config", Collections.singletonMap("timeout", 30));
+
+        Map<String, Object> complexSchema = new HashMap<>();
+        complexSchema.put("type", "object");
+        complexSchema.put("properties", Collections.singletonMap("location", Collections.singletonMap("type", "string")));
+
+        McpTool complexTool = new McpTool("complex_tool", null, complexParams, complexSchema);
+
+        // 序列化测试
+        BytesStreamOutput output = new BytesStreamOutput();
+        complexTool.writeTo(output);
+        McpTool parsed = new McpTool(output.bytes().streamInput());
+
+        assertEquals(complexParams, parsed.getParams());
+        assertEquals(complexSchema, parsed.getSchema());
+
+        // XContent测试
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        complexTool.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String jsonStr = builder.toString();
+        assertTrue(jsonStr.contains("\"config\":{\"timeout\":30}"));
+        assertTrue(jsonStr.contains("\"properties\":{\"location\":{\"type\":\"string\"}}"));
+    }
+}
