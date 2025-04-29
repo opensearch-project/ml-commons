@@ -5,20 +5,30 @@
 
 package org.opensearch.ml.action.mcpserver;
 
+import static org.opensearch.ml.common.CommonValue.MCP_SESSION_MANAGEMENT_INDEX;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.opensearch.action.index.IndexRequest;
+import org.opensearch.action.index.IndexResponse;
 import org.opensearch.common.lease.Releasable;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.http.HttpChunk;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.StreamingRestChannel;
+import org.opensearch.transport.client.node.NodeClient;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.collect.ImmutableMap;
 
 import io.modelcontextprotocol.spec.McpError;
 import io.modelcontextprotocol.spec.McpSchema;
@@ -50,7 +60,7 @@ public class OpenSearchMcpServerTransportProvider implements McpServerTransportP
     /**
      * Map of active client sessions, keyed by session ID.
      */
-    private final ConcurrentHashMap<String, McpServerSession> sessions = new ConcurrentHashMap<>();
+    private final Map<String, McpServerSession> sessions = new ConcurrentHashMap<>();
 
     public OpenSearchMcpServerTransportProvider(ObjectMapper objectMapper) {
         Assert.notNull(objectMapper, "ObjectMapper must not be null");
@@ -96,24 +106,33 @@ public class OpenSearchMcpServerTransportProvider implements McpServerTransportP
      * Handles new SSE connection requests from clients. Creates a new session for each
      * connection and sets up the SSE event stream.
      */
-    public Mono<HttpChunk> handleSseConnection(StreamingRestChannel channel) {
-        return Mono.defer(() -> {
+    public Mono<HttpChunk> handleSseConnection(StreamingRestChannel channel, String nodeId, NodeClient client) {
+        return Mono.create(sink -> {
             OpenSearchMcpSessionTransport sessionTransport = new OpenSearchMcpSessionTransport(channel);
-
             McpServerSession session = sessionFactory.create(sessionTransport);
             String sessionId = session.getId();
+            ActionListener<IndexResponse> actionListener = ActionListener.wrap(r -> {
+                if (r != null && r.status() == RestStatus.CREATED) {
+                    log.debug("Created new SSE connection for session: {}", sessionId);
+                    sessions.put(sessionId, session);
 
-            log.debug("Created new SSE connection for session: {}", sessionId);
-            sessions.put(sessionId, session);
-
-            // Send initial endpoint event
-            log.debug("Sending initial endpoint event to session: {}", sessionId);
-            String result = String.format("/sse/message?sessionId=%s", sessionId);
-            return Mono.just(createHttpChunk(ENDPOINT_EVENT_TYPE, result));
+                    // Send initial endpoint event
+                    log.debug("Sending initial endpoint event to session: {}", sessionId);
+                    String result = String.format("/sse/message?sessionId=%s", sessionId);
+                    McpAsyncServerHolder.CHANNELS.put(sessionId, channel);
+                    sink.success(createHttpChunk(ENDPOINT_EVENT_TYPE, result));
+                }
+            }, e -> {
+                log.error("Failed to write sessionId into MCP session management index", e);
+                sink.error(e);
+            });
+            Map<String, Object> source = ImmutableMap.of("node_id", nodeId, "status", "active", "create_time", Instant.now());
+            IndexRequest indexRequest = new IndexRequest(MCP_SESSION_MANAGEMENT_INDEX).id(sessionId).source(source);
+            client.index(indexRequest, actionListener);
         });
     }
 
-    public Mono<Boolean> handleMessage(String sessionId, String requestBody) {
+    public Mono<Void> handleMessage(String sessionId, String requestBody) {
         McpServerSession session = sessions.get(sessionId);
         if (session == null) {
             log.error("Session not found: {}", sessionId);
@@ -122,11 +141,7 @@ public class OpenSearchMcpServerTransportProvider implements McpServerTransportP
         return Mono.just(requestBody).flatMap(body -> {
             try {
                 McpSchema.JSONRPCMessage message = McpSchema.deserializeJsonRpcMessage(objectMapper, body);
-                if (message instanceof McpSchema.JSONRPCNotification) {
-                    return session.handle(message).thenReturn(true).defaultIfEmpty(true);
-                } else {
-                    return session.handle(message).thenReturn(false).defaultIfEmpty(false);
-                }
+                return session.handle(message);
             } catch (IllegalArgumentException | IOException e) {
                 log.error("Failed to deserialize message: {}", e.getMessage());
                 return Mono.error(new McpError("Invalid message format"));

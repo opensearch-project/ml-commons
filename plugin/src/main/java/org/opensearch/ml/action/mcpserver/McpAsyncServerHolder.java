@@ -5,6 +5,11 @@
 
 package org.opensearch.ml.action.mcpserver;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+import org.opensearch.rest.StreamingRestChannel;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.modelcontextprotocol.server.McpAsyncServer;
@@ -20,6 +25,8 @@ public class McpAsyncServerHolder {
     public static OpenSearchMcpServerTransportProvider mcpServerTransportProvider = new OpenSearchMcpServerTransportProvider(
         new ObjectMapper()
     );
+
+    public static Map<String, StreamingRestChannel> CHANNELS = new ConcurrentHashMap<>();
 
     public static final McpAsyncServer asyncServer = McpServer
         .async(mcpServerTransportProvider)

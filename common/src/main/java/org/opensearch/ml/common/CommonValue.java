@@ -46,6 +46,7 @@ public class CommonValue {
     public static final String ML_MEMORY_MESSAGE_INDEX = ".plugins-ml-memory-message";
     public static final String ML_STOP_WORDS_INDEX = ".plugins-ml-stop-words";
     public static final String TASK_POLLING_JOB_INDEX = ".ml_commons_task_polling_job";
+    public static final String MCP_SESSION_MANAGEMENT_INDEX = ".plugins-ml-mcp-session-management";
     public static final Set<String> stopWordsIndices = ImmutableSet.of(".plugins-ml-stop-words");
     public static final String TOOL_PARAMETERS_PREFIX = "tools.parameters.";
 
@@ -59,6 +60,7 @@ public class CommonValue {
     public static final String ML_AGENT_INDEX_MAPPING_PATH = "index-mappings/ml_agent.json";
     public static final String ML_MEMORY_META_INDEX_MAPPING_PATH = "index-mappings/ml_memory_meta.json";
     public static final String ML_MEMORY_MESSAGE_INDEX_MAPPING_PATH = "index-mappings/ml_memory_message.json";
+    public static final String ML_MCP_SESSION_MANAGEMENT_INDEX_MAPPING_PATH = "index-mappings/ml_mcp_session_management.json";
 
     // Calculate Versions independently of OpenSearch core version
     public static final Version VERSION_2_11_0 = Version.fromString("2.11.0");

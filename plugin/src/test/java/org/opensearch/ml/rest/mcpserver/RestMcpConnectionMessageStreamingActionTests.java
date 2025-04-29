@@ -6,23 +6,40 @@
 package org.opensearch.ml.rest.mcpserver;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
 
+import java.net.InetAddress;
+import java.util.Collections;
 import java.util.UUID;
 
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.mockito.Answers;
+import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.Version;
+import org.opensearch.action.index.IndexResponse;
+import org.opensearch.cluster.node.DiscoveryNode;
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.transport.TransportAddress;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.StreamingRestChannel;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
 import org.opensearch.transport.client.node.NodeClient;
+
+import com.google.common.collect.ImmutableMap;
 
 public class RestMcpConnectionMessageStreamingActionTests extends OpenSearchTestCase {
 
@@ -33,11 +50,35 @@ public class RestMcpConnectionMessageStreamingActionTests extends OpenSearchTest
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
+    @Mock
+    private NodeClient client;
+
+    @Mock(answer = Answers.RETURNS_DEEP_STUBS)
+    private ClusterService clusterService;
+
     @Before
     public void setUp() throws Exception {
         super.setUp();
         MockitoAnnotations.openMocks(this);
-        restMcpConnectionMessageStreamingAction = new RestMcpConnectionMessageStreamingAction();
+        DiscoveryNode localNode = new DiscoveryNode(
+            "foo0",
+            "foo0",
+            new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
+            Collections.emptyMap(),
+            Collections.singleton(CLUSTER_MANAGER_ROLE),
+            Version.CURRENT
+        );
+        when(clusterService.state().nodes().getNodes()).thenReturn(ImmutableMap.of("foo0", localNode));
+        when(clusterService.localNode()).thenReturn(localNode);
+        restMcpConnectionMessageStreamingAction = new RestMcpConnectionMessageStreamingAction(clusterService);
+        doAnswer(invocationOnMock -> {
+            ActionListener<IndexResponse> listener = invocationOnMock.getArgument(1);
+            IndexResponse response = mock(IndexResponse.class);
+            when(response.getId()).thenReturn("foo0");
+            when(response.status()).thenReturn(RestStatus.CREATED);
+            listener.onResponse(response);
+            return null;
+        }).when(client).index(any(), isA(ActionListener.class));
     }
 
     @Test
@@ -51,14 +92,20 @@ public class RestMcpConnectionMessageStreamingActionTests extends OpenSearchTest
 
     @Test
     public void test_prepareConnectionRequest_successful() {
-        restMcpConnectionMessageStreamingAction.prepareRequestInternal(RestMcpConnectionMessageStreamingAction.SSE_ENDPOINT, null, channel);
+        restMcpConnectionMessageStreamingAction
+            .prepareRequestInternal(RestMcpConnectionMessageStreamingAction.SSE_ENDPOINT, null, channel, client);
         verify(channel, times(1)).prepareResponse(any(), any());
     }
 
     @Test
     public void test_prepareMessageRequest_successful() {
         restMcpConnectionMessageStreamingAction
-            .prepareRequestInternal(RestMcpConnectionMessageStreamingAction.MESSAGE_ENDPOINT, UUID.randomUUID().toString(), channel);
+            .prepareRequestInternal(
+                RestMcpConnectionMessageStreamingAction.MESSAGE_ENDPOINT,
+                UUID.randomUUID().toString(),
+                channel,
+                client
+            );
         verify(channel, times(1)).prepareResponse(any(), any());
     }
 
@@ -66,7 +113,7 @@ public class RestMcpConnectionMessageStreamingActionTests extends OpenSearchTest
     public void test_prepareMessageRequest_sessionIdIsNull() {
         try {
             restMcpConnectionMessageStreamingAction
-                .prepareRequestInternal(RestMcpConnectionMessageStreamingAction.MESSAGE_ENDPOINT, null, channel);
+                .prepareRequestInternal(RestMcpConnectionMessageStreamingAction.MESSAGE_ENDPOINT, null, channel, client);
         } catch (Exception e) {
             // The NPE is caused by not mocking the request, ignore it.
         }

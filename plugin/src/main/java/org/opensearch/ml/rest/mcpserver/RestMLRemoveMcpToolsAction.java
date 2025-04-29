@@ -35,7 +35,7 @@ import lombok.extern.log4j.Log4j2;
 public class RestMLRemoveMcpToolsAction extends BaseRestHandler {
     private static final String ML_REGISTER_MCP_TOOLS_ACTION = "ml_remove_mcp_tools_action";
     private final ClusterService clusterService;
-    private final String REMOVE_PATH = String.format(Locale.ROOT, "%s/mcp_tools/_remove", ML_BASE_URI);
+    private final String REMOVE_PATH = String.format(Locale.ROOT, "%s/mcp/tools/_remove", ML_BASE_URI);
 
     public RestMLRemoveMcpToolsAction(ClusterService clusterService) {
         this.clusterService = clusterService;

@@ -56,7 +56,7 @@ public class RestMLRegisterMcpToolsAction extends BaseRestHandler {
 
     @Override
     public List<Route> routes() {
-        return ImmutableList.of(new Route(RestRequest.Method.POST, String.format(Locale.ROOT, "%s/mcp_tools/_register", ML_BASE_URI)));
+        return ImmutableList.of(new Route(RestRequest.Method.POST, String.format(Locale.ROOT, "%s/mcp/tools/_register", ML_BASE_URI)));
     }
 
     @Override
