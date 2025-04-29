@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.transport.model_group;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
+import static org.opensearch.ml.common.utils.StringUtils.isSafeText;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -45,8 +46,25 @@ public class MLRegisterModelGroupRequest extends ActionRequest {
     @Override
     public ActionRequestValidationException validate() {
         ActionRequestValidationException exception = null;
+
         if (registerModelGroupInput == null) {
-            exception = addValidationError("Model meta input can't be null", exception);
+            return addValidationError("Model group input can't be null", exception);
+        }
+
+        String modelName = registerModelGroupInput.getName();
+        String description = registerModelGroupInput.getDescription();
+
+        if (modelName != null && !isSafeText(modelName)) {
+            exception = addValidationError(
+                "Model group name can only contain letters, digits, spaces, underscores (_), hyphens (-), and dots (.)",
+                exception
+            );
+        }
+        if (description != null && !isSafeText(description)) {
+            exception = addValidationError(
+                "Model group description can only contain letters, digits, spaces, underscores (_), hyphens (-), and dots (.)",
+                exception
+            );
         }
 
         return exception;

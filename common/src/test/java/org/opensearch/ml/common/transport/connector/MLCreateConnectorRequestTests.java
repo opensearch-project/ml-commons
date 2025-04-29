@@ -147,4 +147,53 @@ public class MLCreateConnectorRequestTests {
         };
         MLCreateConnectorRequest.fromActionRequest(actionRequest);
     }
+
+    @Test
+    public void validateWithUnsafeModelConnectorName() {
+        MLCreateConnectorInput unsafeInput = MLCreateConnectorInput
+            .builder()
+            .name("<script>bad</script>")  // Unsafe name
+            .description("safe description")
+            .version("1")
+            .protocol("http")
+            .parameters(Map.of("input", "test"))
+            .credential(Map.of("key", "value"))
+            .actions(List.of())
+            .access(AccessMode.PUBLIC)
+            .backendRoles(Arrays.asList("role1"))
+            .addAllBackendRoles(false)
+            .build();
+
+        MLCreateConnectorRequest request = MLCreateConnectorRequest.builder().mlCreateConnectorInput(unsafeInput).build();
+        ActionRequestValidationException exception = request.validate();
+        assertEquals(
+            "Validation Failed: 1: Model connector name can only contain letters, digits, spaces, underscores (_), hyphens (-), and dots (.);",
+            exception.getMessage()
+        );
+    }
+
+    @Test
+    public void validateWithUnsafeModelConnectorDescription() {
+        MLCreateConnectorInput unsafeInput = MLCreateConnectorInput
+            .builder()
+            .name("safeName")
+            .description("<script>bad</script>")  // Unsafe description
+            .version("1")
+            .protocol("http")
+            .parameters(Map.of("input", "test"))
+            .credential(Map.of("key", "value"))
+            .actions(List.of())
+            .access(AccessMode.PUBLIC)
+            .backendRoles(Arrays.asList("role1"))
+            .addAllBackendRoles(false)
+            .build();
+
+        MLCreateConnectorRequest request = MLCreateConnectorRequest.builder().mlCreateConnectorInput(unsafeInput).build();
+        ActionRequestValidationException exception = request.validate();
+        assertEquals(
+            "Validation Failed: 1: Model connector description can only contain letters, digits, spaces, underscores (_), hyphens (-), and dots (.);",
+            exception.getMessage()
+        );
+    }
+
 }

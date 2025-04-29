@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.transport.connector;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
+import static org.opensearch.ml.common.utils.StringUtils.isSafeText;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -57,6 +58,22 @@ public class MLUpdateConnectorRequest extends ActionRequest {
 
         if (updateContent == null) {
             exception = addValidationError("Update connector content can't be null", exception);
+        } else {
+            String modelName = updateContent.getName();
+            String description = updateContent.getDescription();
+
+            if (modelName != null && !isSafeText(modelName)) {
+                exception = addValidationError(
+                    "Model connector name can only contain letters, digits, spaces, underscores (_), hyphens (-), and dots (.). Max length: 1000 characters.",
+                    exception
+                );
+            }
+            if (description != null && !isSafeText(description)) {
+                exception = addValidationError(
+                    "Model connector description can only contain letters, digits, spaces, underscores (_), hyphens (-), and dots (.). Max length: 1000 characters.",
+                    exception
+                );
+            }
         }
 
         return exception;

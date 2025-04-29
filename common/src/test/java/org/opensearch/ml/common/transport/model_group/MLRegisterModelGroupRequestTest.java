@@ -68,7 +68,7 @@ public class MLRegisterModelGroupRequestTest {
     public void validateNullMLRegisterModelGroupInputException() {
         MLRegisterModelGroupRequest request = MLRegisterModelGroupRequest.builder().build();
         ActionRequestValidationException exception = request.validate();
-        assertEquals("Validation Failed: 1: Model meta input can't be null;", exception.getMessage());
+        assertEquals("Validation Failed: 1: Model group input can't be null;", exception.getMessage());
     }
 
     @Test
@@ -122,4 +122,45 @@ public class MLRegisterModelGroupRequestTest {
         };
         MLRegisterModelGroupRequest.fromActionRequest(actionRequest);
     }
+
+    @Test
+    public void validate_Exception_UnsafeModelGroupName() {
+        MLRegisterModelGroupInput unsafeInput = MLRegisterModelGroupInput
+            .builder()
+            .name("<script>bad</script>")  // unsafe input
+            .description("safe description")
+            .backendRoles(List.of("IT"))
+            .modelAccessMode(AccessMode.RESTRICTED)
+            .isAddAllBackendRoles(true)
+            .build();
+
+        MLRegisterModelGroupRequest request = MLRegisterModelGroupRequest.builder().registerModelGroupInput(unsafeInput).build();
+
+        ActionRequestValidationException exception = request.validate();
+        assertEquals(
+            "Validation Failed: 1: Model group name can only contain letters, digits, spaces, underscores (_), hyphens (-), and dots (.);",
+            exception.getMessage()
+        );
+    }
+
+    @Test
+    public void validate_Exception_UnsafeModelGroupDescription() {
+        MLRegisterModelGroupInput unsafeInput = MLRegisterModelGroupInput
+            .builder()
+            .name("safeName")
+            .description("<script>bad</script>")  // unsafe input
+            .backendRoles(List.of("IT"))
+            .modelAccessMode(AccessMode.RESTRICTED)
+            .isAddAllBackendRoles(true)
+            .build();
+
+        MLRegisterModelGroupRequest request = MLRegisterModelGroupRequest.builder().registerModelGroupInput(unsafeInput).build();
+
+        ActionRequestValidationException exception = request.validate();
+        assertEquals(
+            "Validation Failed: 1: Model group description can only contain letters, digits, spaces, underscores (_), hyphens (-), and dots (.);",
+            exception.getMessage()
+        );
+    }
+
 }

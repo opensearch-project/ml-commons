@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.transport.register;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
+import static org.opensearch.ml.common.utils.StringUtils.isSafeText;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -45,8 +46,25 @@ public class MLRegisterModelRequest extends ActionRequest {
     @Override
     public ActionRequestValidationException validate() {
         ActionRequestValidationException exception = null;
+
         if (registerModelInput == null) {
-            exception = addValidationError("ML input can't be null", exception);
+            return addValidationError("ML input can't be null", exception);
+        }
+
+        String modelName = registerModelInput.getModelName();
+        String description = registerModelInput.getDescription();
+
+        if (modelName != null && !isSafeText(modelName)) {
+            exception = addValidationError(
+                "Model name can only contain letters, digits, spaces, underscores (_), hyphens (-), and dots (.)",
+                exception
+            );
+        }
+        if (description != null && !isSafeText(description)) {
+            exception = addValidationError(
+                "Model description can only contain letters, digits, spaces, underscores (_), hyphens (-), and dots (.)",
+                exception
+            );
         }
 
         return exception;

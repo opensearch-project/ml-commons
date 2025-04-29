@@ -184,4 +184,40 @@ public class MLUpdateConnectorRequestTests {
         assertEquals(connectorId, parsedRequest.getConnectorId());
     }
 
+    @Test
+    public void validate_Exception_UnsafeConnectorName() {
+        MLCreateConnectorInput unsafeInput = MLCreateConnectorInput
+            .builder()
+            .name("<script>bad</script>")  // Unsafe name
+            .description("safe description")
+            .updateConnector(true)
+            .build();
+
+        MLUpdateConnectorRequest request = MLUpdateConnectorRequest.builder().connectorId("connectorId").updateContent(unsafeInput).build();
+
+        ActionRequestValidationException exception = request.validate();
+        assertEquals(
+            "Validation Failed: 1: Model connector name can only contain letters, digits, spaces, underscores (_), hyphens (-), and dots (.). Max length: 1000 characters.;",
+            exception.getMessage()
+        );
+    }
+
+    @Test
+    public void validate_Exception_UnsafeConnectorDescription() {
+        MLCreateConnectorInput unsafeInput = MLCreateConnectorInput
+            .builder()
+            .name("safeName")
+            .description("<script>bad</script>")  // Unsafe description
+            .updateConnector(true)
+            .build();
+
+        MLUpdateConnectorRequest request = MLUpdateConnectorRequest.builder().connectorId("connectorId").updateContent(unsafeInput).build();
+
+        ActionRequestValidationException exception = request.validate();
+        assertEquals(
+            "Validation Failed: 1: Model connector description can only contain letters, digits, spaces, underscores (_), hyphens (-), and dots (.). Max length: 1000 characters.;",
+            exception.getMessage()
+        );
+    }
+
 }
