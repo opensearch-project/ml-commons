@@ -365,4 +365,109 @@ public class MLPlanExecuteAndReflectAgentRunnerTest {
             Interaction.builder().id("interaction-2").input("input-2").response("response-2").build()
         );
     }
-} 
+
+    /**
+     * Test the run method with an unsupported LLM interface.
+     * This test verifies that the method throws an MLException when an unsupported LLM interface is provided.
+     */
+    @Test(expected = org.opensearch.ml.common.exception.MLException.class)
+    public void testRunWithUnsupportedLLMInterface() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("llm_interface", "unsupported_interface");
+        MLAgent mlAgent = createMLAgentWithTools(parameters);
+
+        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, new HashMap<>(), agentActionListener);
+    }
+
+    /**
+     * Testcase 1 for @Override public void run(MLAgent mlAgent, Map<String, String> apiParams, ActionListener<Object> listener)
+     * Path constraints: (Strings.isNullOrEmpty(response)), (!completedSteps.isEmpty())
+     */
+    @Test
+    public void test_run_1() {
+        // Create MLAgent with necessary parameters
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("memory_id", "test_memory_id");
+        parameters.put("question", "test_question");
+        MLAgent mlAgent = createMLAgentWithTools(parameters);
+
+        // Mock the behavior to satisfy the path constraints
+        when(conversationIndexMemory.getMessages(any(), anyInt())).thenAnswer(invocation -> {
+            ActionListener<List<Interaction>> listener = invocation.getArgument(0);
+            List<Interaction> interactions = Arrays.asList(
+                Interaction.builder().id("interaction-1").input("input-1").response("").build(),
+                Interaction.builder().id("interaction-2").input("input-2").response("response-2").build()
+            );
+            listener.onResponse(interactions);
+            return null;
+        });
+
+        // Execute the method under test
+        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, parameters, agentActionListener);
+
+        // Verify that the memory factory was called with the correct parameters
+        verify(memoryFactory).create(eq("test_question"), eq("test_memory_id"), any(), any());
+
+        // Verify that the conversation index memory's getMessages method was called
+        verify(conversationIndexMemory).getMessages(any(), eq(10));
+
+        // Additional verifications can be added here based on the expected behavior
+        // For example, you might want to verify that certain methods were called on the client
+        // or that the agentActionListener was invoked with the expected result
+    }
+
+    /**
+     * Testcase 2 for @Override public void run(MLAgent mlAgent, Map<String, String> apiParams, ActionListener<Object> listener)
+     * Path constraints: !((Strings.isNullOrEmpty(response))), (!completedSteps.isEmpty())
+     */
+    @Test
+    public void test_run_2() {
+        // Setup
+        MLAgent mlAgent = createMLAgentWithTools(new HashMap<>());
+        Map<String, String> apiParams = new HashMap<>();
+        apiParams.put("question", "Test question");
+
+        // Mock behavior to satisfy path constraints
+        when(conversationIndexMemory.getMessages(any(), anyInt())).thenAnswer(invocation -> {
+            ActionListener<List<Interaction>> listener = invocation.getArgument(0);
+            listener.onResponse(Arrays.asList(
+                Interaction.builder().id("interaction-1").input("input-1").response("response-1").build(),
+                Interaction.builder().id("interaction-2").input("input-2").response("response-2").build()
+            ));
+            return null;
+        });
+
+        // Execute
+        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, apiParams, agentActionListener);
+
+        // Verify
+        verify(conversationIndexMemory).getMessages(any(), eq(10));
+        // Add more verifications as needed to ensure the correct path is taken
+    }
+
+    /**
+    * Testcase 3 for @Override public void run(MLAgent mlAgent, Map<String, String> apiParams, ActionListener<Object> listener)
+    * Path constraints: (Strings.isNullOrEmpty(response)), !((!completedSteps.isEmpty()))
+    */
+    @Test
+    public void test_run_3() {
+        // Setup
+        MLAgent mlAgent = createMLAgentWithTools(new HashMap<>());
+        Map<String, String> apiParams = new HashMap<>();
+        apiParams.put("QUESTION_FIELD", "Test question");
+
+        // Mock conversation index memory to return empty interactions
+        doAnswer(invocation -> {
+            ActionListener<List<Interaction>> listener = invocation.getArgument(0);
+            listener.onResponse(Arrays.asList());
+            return null;
+        }).when(conversationIndexMemory).getMessages(any(), anyInt());
+
+        // Execute
+        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, apiParams, agentActionListener);
+
+        // Verify
+        verify(memoryFactory).create(any(), any(), any(), any());
+        verify(conversationIndexMemory).getMessages(any(), eq(10));
+    }
+}
