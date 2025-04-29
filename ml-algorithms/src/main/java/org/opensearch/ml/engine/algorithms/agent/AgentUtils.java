@@ -923,13 +923,11 @@ public class AgentUtils {
     }
 
     public static void cleanUpResource(Map<String, Tool> tools) {
-        // TODO: Add cleanup for other agents
         for (Map.Entry<String, Tool> entry : tools.entrySet()) {
             Tool tool = entry.getValue();
             if (tool instanceof McpSseTool) {
                 // TODO: make this more general, avoid checking specific tool type
                 ((McpSseTool) tool).getMcpSyncClient().closeGracefully();
-                ((McpSseTool) tool).getExecutorService().shutdown();
             }
         }
     }
