@@ -60,6 +60,9 @@ public class StringUtils {
         + "      return input;"
         + "\n    }\n";
 
+    // Regex allows letters, digits, spaces, hyphens, underscores, and dots.
+    private static final String SAFE_INPUT_REGEX = "^[a-zA-Z0-9 _\\-\\.:]+$";
+
     public static final Gson gson;
 
     static {
@@ -495,6 +498,22 @@ public class StringUtils {
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException("Error: Unable to compute hash", e);
         }
+    }
+
+    /**
+     * Checks if the input is safe (non-null, non-blank, matches safe character set, max 1000 chars).
+     *
+     * @param value The input string to validate
+     * @return true if input is safe, false otherwise
+     */
+    public static boolean isSafeText(String value) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+        if (value.length() > 1000) {
+            return false;
+        }
+        return value.matches(SAFE_INPUT_REGEX);
     }
 
 }

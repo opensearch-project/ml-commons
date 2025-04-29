@@ -113,4 +113,56 @@ public class MLUpdateModelRequestTest {
         MLUpdateModelRequest.fromActionRequest(actionRequest);
     }
 
+    @Test
+    public void validate_Exception_InvalidName() {
+        MLModelConfig config = TextEmbeddingModelConfig
+            .builder()
+            .modelType("testModelType")
+            .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .embeddingDimension(100)
+            .build();
+
+        MLUpdateModelInput input = MLUpdateModelInput
+            .builder()
+            .modelId("test-model_id")
+            .name("<script>alert(1)</script>") // unsafe input
+            .description("safe description")
+            .modelConfig(config)
+            .build();
+
+        MLUpdateModelRequest request = MLUpdateModelRequest.builder().updateModelInput(input).build();
+        ActionRequestValidationException exception = request.validate();
+        assertEquals(
+            "Validation Failed: 1: Model name can only contain letters, digits, spaces, underscores (_), hyphens (-), and dots (.);",
+            exception.getMessage()
+        );
+    }
+
+    @Test
+    public void validate_Exception_InvalidDescription() {
+        MLModelConfig config = TextEmbeddingModelConfig
+            .builder()
+            .modelType("testModelType")
+            .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .embeddingDimension(100)
+            .build();
+
+        MLUpdateModelInput input = MLUpdateModelInput
+            .builder()
+            .modelId("test-model_id")
+            .name("safeName")
+            .description("<script>bad</script>") // unsafe input
+            .modelConfig(config)
+            .build();
+
+        MLUpdateModelRequest request = MLUpdateModelRequest.builder().updateModelInput(input).build();
+        ActionRequestValidationException exception = request.validate();
+        assertEquals(
+            "Validation Failed: 1: Model description can only contain letters, digits, spaces, underscores (_), hyphens (-), and dots (.);",
+            exception.getMessage()
+        );
+    }
+
 }

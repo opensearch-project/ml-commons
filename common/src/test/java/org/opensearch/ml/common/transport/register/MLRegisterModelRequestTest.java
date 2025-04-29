@@ -134,4 +134,66 @@ public class MLRegisterModelRequestTest {
         };
         MLRegisterModelRequest.fromActionRequest(actionRequest);
     }
+
+    @Test
+    public void validate_Exception_UnsafeModelName() {
+        TextEmbeddingModelConfig config = TextEmbeddingModelConfig
+            .builder()
+            .modelType("testModelType")
+            .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .embeddingDimension(100)
+            .build();
+
+        MLRegisterModelInput unsafeInput = MLRegisterModelInput
+            .builder()
+            .functionName(FunctionName.KMEANS)
+            .modelName("<script>bad</script>")  // unsafe
+            .version("version")
+            .url("url")
+            .modelGroupId("modelGroupId")
+            .modelFormat(MLModelFormat.ONNX)
+            .modelConfig(config)
+            .deployModel(true)
+            .build();
+
+        MLRegisterModelRequest request = MLRegisterModelRequest.builder().registerModelInput(unsafeInput).build();
+        ActionRequestValidationException exception = request.validate();
+        assertEquals(
+            "Validation Failed: 1: Model name can only contain letters, digits, spaces, underscores (_), hyphens (-), and dots (.);",
+            exception.getMessage()
+        );
+    }
+
+    @Test
+    public void validate_Exception_UnsafeDescription() {
+        TextEmbeddingModelConfig config = TextEmbeddingModelConfig
+            .builder()
+            .modelType("testModelType")
+            .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .embeddingDimension(100)
+            .build();
+
+        MLRegisterModelInput unsafeInput = MLRegisterModelInput
+            .builder()
+            .functionName(FunctionName.KMEANS)
+            .modelName("SafeModel")
+            .description("<script>bad</script>")  // unsafe
+            .version("version")
+            .url("url")
+            .modelGroupId("modelGroupId")
+            .modelFormat(MLModelFormat.ONNX)
+            .modelConfig(config)
+            .deployModel(true)
+            .build();
+
+        MLRegisterModelRequest request = MLRegisterModelRequest.builder().registerModelInput(unsafeInput).build();
+        ActionRequestValidationException exception = request.validate();
+        assertEquals(
+            "Validation Failed: 1: Model description can only contain letters, digits, spaces, underscores (_), hyphens (-), and dots (.);",
+            exception.getMessage()
+        );
+    }
+
 }

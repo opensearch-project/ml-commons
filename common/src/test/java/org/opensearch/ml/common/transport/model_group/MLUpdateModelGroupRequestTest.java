@@ -114,4 +114,44 @@ public class MLUpdateModelGroupRequestTest {
         };
         MLUpdateModelGroupRequest.fromActionRequest(actionRequest);
     }
+
+    @Test
+    public void validateWithUnsafeModelGroupName() {
+        MLUpdateModelGroupInput unsafeInput = MLUpdateModelGroupInput
+            .builder()
+            .modelGroupID("modelGroupId")
+            .name("<script>bad</script>")  // unsafe input
+            .description("safe description")
+            .backendRoles(Arrays.asList("IT"))
+            .modelAccessMode(AccessMode.RESTRICTED)
+            .isAddAllBackendRoles(true)
+            .build();
+
+        MLUpdateModelGroupRequest request = MLUpdateModelGroupRequest.builder().updateModelGroupInput(unsafeInput).build();
+        ActionRequestValidationException exception = request.validate();
+        assertEquals(
+            "Validation Failed: 1: Model group name can only contain letters, digits, spaces, underscores (_), hyphens (-), and dots (.);",
+            exception.getMessage()
+        );
+    }
+
+    @Test
+    public void validateWithUnsafeModelGroupDescription() {
+        MLUpdateModelGroupInput unsafeInput = MLUpdateModelGroupInput
+            .builder()
+            .modelGroupID("modelGroupId")
+            .name("safeName")
+            .description("<script>bad</script>")  // unsafe input
+            .backendRoles(Arrays.asList("IT"))
+            .modelAccessMode(AccessMode.RESTRICTED)
+            .isAddAllBackendRoles(true)
+            .build();
+
+        MLUpdateModelGroupRequest request = MLUpdateModelGroupRequest.builder().updateModelGroupInput(unsafeInput).build();
+        ActionRequestValidationException exception = request.validate();
+        assertEquals(
+            "Validation Failed: 1: Model group description can only contain letters, digits, spaces, underscores (_), hyphens (-), and dots (.);",
+            exception.getMessage()
+        );
+    }
 }
