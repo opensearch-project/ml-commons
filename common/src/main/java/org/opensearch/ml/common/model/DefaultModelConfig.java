@@ -29,10 +29,10 @@ import lombok.Setter;
 
 @Setter
 @Getter
-public class GeneralModelConfig extends MLModelConfig {
-    public static final String PARSE_FIELD_NAME = "general";
+public class DefaultModelConfig extends MLModelConfig {
+    public static final String PARSE_FIELD_NAME = "default";
     public static final NamedXContentRegistry.Entry XCONTENT_REGISTRY = new NamedXContentRegistry.Entry(
-        GeneralModelConfig.class,
+        DefaultModelConfig.class,
         new ParseField(PARSE_FIELD_NAME),
         it -> parse(it)
     );
@@ -50,7 +50,7 @@ public class GeneralModelConfig extends MLModelConfig {
     private final Integer modelMaxLength;
 
     @Builder(toBuilder = true)
-    public GeneralModelConfig(
+    public DefaultModelConfig(
         String modelType,
         Integer embeddingDimension,
         FrameworkType frameworkType,
@@ -70,7 +70,7 @@ public class GeneralModelConfig extends MLModelConfig {
         validateNoDuplicateKeys(allConfig, additionalConfig);
     }
 
-    public static GeneralModelConfig parse(XContentParser parser) throws IOException {
+    public static DefaultModelConfig parse(XContentParser parser) throws IOException {
         String modelType = null;
         Integer embeddingDimension = null;
         FrameworkType frameworkType = null;
@@ -115,7 +115,7 @@ public class GeneralModelConfig extends MLModelConfig {
                     break;
             }
         }
-        return new GeneralModelConfig(
+        return new DefaultModelConfig(
             modelType,
             embeddingDimension,
             frameworkType,
@@ -132,7 +132,7 @@ public class GeneralModelConfig extends MLModelConfig {
         return PARSE_FIELD_NAME;
     }
 
-    public GeneralModelConfig(StreamInput in) throws IOException {
+    public DefaultModelConfig(StreamInput in) throws IOException {
         super(in);
         embeddingDimension = in.readInt();
         frameworkType = in.readEnum(FrameworkType.class);

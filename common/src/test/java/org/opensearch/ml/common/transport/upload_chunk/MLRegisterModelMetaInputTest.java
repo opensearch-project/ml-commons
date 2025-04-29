@@ -22,7 +22,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.TestHelper;
-import org.opensearch.ml.common.model.GeneralModelConfig;
+import org.opensearch.ml.common.model.DefaultModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
 
@@ -35,7 +35,7 @@ public class MLRegisterModelMetaInputTest {
             throw new RuntimeException("Failed to parse MLRegisterModelMetaInput", e);
         }
     };
-    GeneralModelConfig config;
+    DefaultModelConfig config;
     MLRegisterModelMetaInput mLRegisterModelMetaInput;
 
     @Before
@@ -43,12 +43,12 @@ public class MLRegisterModelMetaInputTest {
         Map<String, Object> additionalConfig = new HashMap<>();
         additionalConfig.put("test_key", "test_value");
 
-        config = new GeneralModelConfig(
+        config = new DefaultModelConfig(
             "Model Type",
             123,
-            GeneralModelConfig.FrameworkType.SENTENCE_TRANSFORMERS,
+            DefaultModelConfig.FrameworkType.SENTENCE_TRANSFORMERS,
             "\"test_key1\":\"test_value1\"",
-            GeneralModelConfig.PoolingMode.MEAN,
+            DefaultModelConfig.PoolingMode.MEAN,
             true,
             512,
             additionalConfig

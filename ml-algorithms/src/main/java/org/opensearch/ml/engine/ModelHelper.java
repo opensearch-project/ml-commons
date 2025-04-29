@@ -27,7 +27,7 @@ import java.util.zip.ZipFile;
 
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.model.GeneralModelConfig;
+import org.opensearch.ml.common.model.DefaultModelConfig;
 import org.opensearch.ml.common.model.MLDeploySetting;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
@@ -184,7 +184,7 @@ public class ModelHelper {
                                 }
                                 builder.modelConfig(configBuilder.build());
                             } else {
-                                GeneralModelConfig.GeneralModelConfigBuilder configBuilder = GeneralModelConfig.builder();
+                                DefaultModelConfig.DefaultModelConfigBuilder configBuilder = DefaultModelConfig.builder();
                                 Map<?, ?> configMap = (Map<?, ?>) entry.getValue();
                                 for (Map.Entry<?, ?> configEntry : configMap.entrySet()) {
                                     switch (configEntry.getKey().toString()) {
@@ -200,24 +200,24 @@ public class ModelHelper {
                                                 configBuilder.additionalConfig(additionalConfig);
                                             }
                                             break;
-                                        case GeneralModelConfig.EMBEDDING_DIMENSION_FIELD:
+                                        case DefaultModelConfig.EMBEDDING_DIMENSION_FIELD:
                                             configBuilder.embeddingDimension(((Double) configEntry.getValue()).intValue());
                                             break;
-                                        case GeneralModelConfig.FRAMEWORK_TYPE_FIELD:
+                                        case DefaultModelConfig.FRAMEWORK_TYPE_FIELD:
                                             configBuilder
-                                                .frameworkType(GeneralModelConfig.FrameworkType.from(configEntry.getValue().toString()));
+                                                .frameworkType(DefaultModelConfig.FrameworkType.from(configEntry.getValue().toString()));
                                             break;
-                                        case GeneralModelConfig.POOLING_MODE_FIELD:
+                                        case DefaultModelConfig.POOLING_MODE_FIELD:
                                             configBuilder
                                                 .poolingMode(
-                                                    GeneralModelConfig.PoolingMode
+                                                    DefaultModelConfig.PoolingMode
                                                         .from(configEntry.getValue().toString().toUpperCase(Locale.ROOT))
                                                 );
                                             break;
-                                        case GeneralModelConfig.NORMALIZE_RESULT_FIELD:
+                                        case DefaultModelConfig.NORMALIZE_RESULT_FIELD:
                                             configBuilder.normalizeResult(Boolean.parseBoolean(configEntry.getValue().toString()));
                                             break;
-                                        case GeneralModelConfig.MODEL_MAX_LENGTH_FIELD:
+                                        case DefaultModelConfig.MODEL_MAX_LENGTH_FIELD:
                                             configBuilder.modelMaxLength(((Double) configEntry.getValue()).intValue());
                                             break;
                                         default:

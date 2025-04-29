@@ -24,10 +24,10 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.TestHelper;
 
-public class GeneralModelConfigTests {
+public class DefaultModelConfigTests {
 
-    GeneralModelConfig config;
-    Function<XContentParser, GeneralModelConfig> function;
+    DefaultModelConfig config;
+    Function<XContentParser, DefaultModelConfig> function;
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
@@ -36,13 +36,13 @@ public class GeneralModelConfigTests {
         Map<String, Object> additionalConfig = new HashMap<>();
         additionalConfig.put("test_key1", "test_value1");
 
-        config = GeneralModelConfig
+        config = DefaultModelConfig
             .builder()
             .modelType("testModelType")
             .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
-            .frameworkType(GeneralModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .frameworkType(DefaultModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
             .embeddingDimension(100)
-            .poolingMode(GeneralModelConfig.PoolingMode.MEAN)
+            .poolingMode(DefaultModelConfig.PoolingMode.MEAN)
             .normalizeResult(true)
             .modelMaxLength(512)
             .additionalConfig(additionalConfig)
@@ -50,9 +50,9 @@ public class GeneralModelConfigTests {
 
         function = parser -> {
             try {
-                return GeneralModelConfig.parse(parser);
+                return DefaultModelConfig.parse(parser);
             } catch (IOException e) {
-                throw new RuntimeException("Failed to parse GeneralModelConfig", e);
+                throw new RuntimeException("Failed to parse DefaultModelConfig", e);
             }
         };
     }
@@ -72,7 +72,7 @@ public class GeneralModelConfigTests {
     public void nullFields_ModelType() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model type is null");
-        config = GeneralModelConfig.builder().build();
+        config = DefaultModelConfig.builder().build();
     }
 
     @Test
@@ -86,7 +86,7 @@ public class GeneralModelConfigTests {
     public void frameworkType_wrongValue() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Wrong framework type");
-        GeneralModelConfig.FrameworkType.from("test_wrong_value");
+        DefaultModelConfig.FrameworkType.from("test_wrong_value");
     }
 
     @Test
@@ -94,12 +94,12 @@ public class GeneralModelConfigTests {
         readInputStream(config);
     }
 
-    public void readInputStream(GeneralModelConfig config) throws IOException {
+    public void readInputStream(DefaultModelConfig config) throws IOException {
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         config.writeTo(bytesStreamOutput);
 
         StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
-        GeneralModelConfig parsedConfig = new GeneralModelConfig(streamInput);
+        DefaultModelConfig parsedConfig = new DefaultModelConfig(streamInput);
         assertEquals(config.getModelType(), parsedConfig.getModelType());
         assertEquals(config.getAllConfig(), parsedConfig.getAllConfig());
         assertEquals(config.getFrameworkType(), parsedConfig.getFrameworkType());
@@ -115,6 +115,6 @@ public class GeneralModelConfigTests {
         String allConfig = "{\"key1\":\"value1\",\"key2\":\"value2\"}";
         Map<String, Object> additionalConfig = Map.of("key1", "value3");
 
-        GeneralModelConfig.builder().allConfig(allConfig).modelType("testModelType").additionalConfig(additionalConfig).build();
+        DefaultModelConfig.builder().allConfig(allConfig).modelType("testModelType").additionalConfig(additionalConfig).build();
     }
 }
