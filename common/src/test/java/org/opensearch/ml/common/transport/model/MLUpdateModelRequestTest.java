@@ -134,7 +134,7 @@ public class MLUpdateModelRequestTest {
         MLUpdateModelRequest request = MLUpdateModelRequest.builder().updateModelInput(input).build();
         ActionRequestValidationException exception = request.validate();
         assertEquals(
-            "Validation Failed: 1: Model name can only contain letters, digits, spaces, underscores (_), hyphens (-), and dots (.);",
+            "Validation Failed: 1: Model Name can only contain letters, digits, spaces, underscores (_), hyphens (-), dots (.), and colons (:);",
             exception.getMessage()
         );
     }
@@ -160,7 +160,7 @@ public class MLUpdateModelRequestTest {
         MLUpdateModelRequest request = MLUpdateModelRequest.builder().updateModelInput(input).build();
         ActionRequestValidationException exception = request.validate();
         assertEquals(
-            "Validation Failed: 1: Model description can only contain letters, digits, spaces, underscores (_), hyphens (-), and dots (.);",
+            "Validation Failed: 1: Model Description can only contain letters, digits, spaces, underscores (_), hyphens (-), dots (.), and colons (:);",
             exception.getMessage()
         );
     }
