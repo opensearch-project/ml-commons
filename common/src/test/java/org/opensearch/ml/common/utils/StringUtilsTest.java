@@ -32,6 +32,7 @@ import org.apache.commons.text.StringSubstitutor;
 import org.junit.Assert;
 import org.junit.Test;
 import org.opensearch.OpenSearchParseException;
+import org.opensearch.action.ActionRequestValidationException;
 
 import com.jayway.jsonpath.JsonPath;
 
@@ -749,4 +750,51 @@ public class StringUtilsTest {
         String json2 = "{\"key1\": \"foo\"}";
         assertThrows(OpenSearchParseException.class, () -> StringUtils.validateSchema(schema, json2));
     }
+
+    @Test
+    public void testIsSafeText_ValidInputs() {
+        assertTrue(StringUtils.isSafeText("Model-Name_1.0"));
+        assertTrue(StringUtils.isSafeText("This is a description:"));
+        assertTrue(StringUtils.isSafeText("Name_with-dots.and:colons"));
+    }
+
+    @Test
+    public void testIsSafeText_InvalidInputs() {
+        assertFalse(StringUtils.isSafeText(null));
+        assertFalse(StringUtils.isSafeText(""));
+        assertFalse(StringUtils.isSafeText("Invalid@Character#Here"));
+        assertFalse(StringUtils.isSafeText("This text has a newline\n"));
+    }
+
+    @Test
+    public void testIsSafeText_TooLong() {
+        String longString = "a".repeat(1001); // 1001 characters
+        assertFalse(StringUtils.isSafeText(longString));
+    }
+
+    @Test
+    public void testValidateFields_AllValid() {
+        Map<String, String> fields = Map.of("Field1", "Valid Name 1", "Field2", "Another_Valid-Field.Name:Here");
+        assertNull(StringUtils.validateFields(fields));
+    }
+
+    @Test
+    public void testValidateFields_OneInvalid() {
+        Map<String, String> fields = Map.of("Field1", "Valid Name", "Field2", "Invalid@Field!");
+        ActionRequestValidationException exception = StringUtils.validateFields(fields);
+        assertTrue(
+            exception
+                .getMessage()
+                .contains("Field2 can only contain letters, digits, spaces, underscores (_), hyphens (-), dots (.), and colons (:)")
+        );
+    }
+
+    @Test
+    public void testValidateFields_MultipleInvalid() {
+        Map<String, String> fields = Map.of("Field1", "Invalid@Name", "Field2", "AnotherInvalid#Field");
+        ActionRequestValidationException exception = StringUtils.validateFields(fields);
+        assertTrue(exception.getMessage().contains("Field1"));
+        assertTrue(exception.getMessage().contains("Field2"));
+    }
+
 }

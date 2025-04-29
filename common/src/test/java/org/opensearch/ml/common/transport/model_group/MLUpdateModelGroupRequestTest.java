@@ -130,7 +130,7 @@ public class MLUpdateModelGroupRequestTest {
         MLUpdateModelGroupRequest request = MLUpdateModelGroupRequest.builder().updateModelGroupInput(unsafeInput).build();
         ActionRequestValidationException exception = request.validate();
         assertEquals(
-            "Validation Failed: 1: Model group name can only contain letters, digits, spaces, underscores (_), hyphens (-), and dots (.);",
+            "Validation Failed: 1: Model group name can only contain letters, digits, spaces, underscores (_), hyphens (-), dots (.), and colons (:);",
             exception.getMessage()
         );
     }
@@ -150,7 +150,7 @@ public class MLUpdateModelGroupRequestTest {
         MLUpdateModelGroupRequest request = MLUpdateModelGroupRequest.builder().updateModelGroupInput(unsafeInput).build();
         ActionRequestValidationException exception = request.validate();
         assertEquals(
-            "Validation Failed: 1: Model group description can only contain letters, digits, spaces, underscores (_), hyphens (-), and dots (.);",
+            "Validation Failed: 1: Model group description can only contain letters, digits, spaces, underscores (_), hyphens (-), dots (.), and colons (:);",
             exception.getMessage()
         );
     }

@@ -197,7 +197,7 @@ public class MLUpdateConnectorRequestTests {
 
         ActionRequestValidationException exception = request.validate();
         assertEquals(
-            "Validation Failed: 1: Model connector name can only contain letters, digits, spaces, underscores (_), hyphens (-), and dots (.). Max length: 1000 characters.;",
+            "Validation Failed: 1: Model connector name can only contain letters, digits, spaces, underscores (_), hyphens (-), dots (.), and colons (:);",
             exception.getMessage()
         );
     }
@@ -215,7 +215,7 @@ public class MLUpdateConnectorRequestTests {
 
         ActionRequestValidationException exception = request.validate();
         assertEquals(
-            "Validation Failed: 1: Model connector description can only contain letters, digits, spaces, underscores (_), hyphens (-), and dots (.). Max length: 1000 characters.;",
+            "Validation Failed: 1: Model connector description can only contain letters, digits, spaces, underscores (_), hyphens (-), dots (.), and colons (:);",
             exception.getMessage()
         );
     }

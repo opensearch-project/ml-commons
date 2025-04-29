@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.common.utils;
 
+import static org.opensearch.action.ValidateActions.addValidationError;
+
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.AccessController;
@@ -28,6 +30,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.opensearch.OpenSearchParseException;
+import org.opensearch.action.ActionRequestValidationException;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -514,6 +517,33 @@ public class StringUtils {
             return false;
         }
         return value.matches(SAFE_INPUT_REGEX);
+    }
+
+    /**
+     * Validates a map of fields to ensure that their values only contain allowed characters.
+     * <p>
+     * Allowed characters are: letters, digits, spaces, underscores (_), hyphens (-), dots (.), and colons (:).
+     * If a value does not comply, a validation error is added.
+     *
+     * @param fields A map where the key is the field name (used for error messages) and the value is the text to validate.
+     * @return An {@link ActionRequestValidationException} containing all validation errors, or {@code null} if all fields are valid.
+     */
+    public static ActionRequestValidationException validateFields(Map<String, String> fields) {
+        ActionRequestValidationException exception = null;
+
+        for (Map.Entry<String, String> entry : fields.entrySet()) {
+            String key = entry.getKey();
+            String value = entry.getValue();
+
+            if (value != null && !isSafeText(value)) {
+                exception = addValidationError(
+                    key + " can only contain letters, digits, spaces, underscores (_), hyphens (-), dots (.), and colons (:)",
+                    exception
+                );
+            }
+        }
+
+        return exception;
     }
 
 }

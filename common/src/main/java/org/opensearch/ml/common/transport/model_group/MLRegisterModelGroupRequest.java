@@ -6,12 +6,14 @@
 package org.opensearch.ml.common.transport.model_group;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
-import static org.opensearch.ml.common.utils.StringUtils.isSafeText;
+import static org.opensearch.ml.common.utils.StringUtils.validateFields;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
@@ -45,29 +47,15 @@ public class MLRegisterModelGroupRequest extends ActionRequest {
 
     @Override
     public ActionRequestValidationException validate() {
-        ActionRequestValidationException exception = null;
-
         if (registerModelGroupInput == null) {
-            return addValidationError("Model group input can't be null", exception);
+            return addValidationError("Model group input can't be null", null);
         }
 
-        String modelName = registerModelGroupInput.getName();
-        String description = registerModelGroupInput.getDescription();
+        Map<String, String> fieldsToValidate = new HashMap<>();
+        fieldsToValidate.put("Model group name", registerModelGroupInput.getName());
+        fieldsToValidate.put("Model group description", registerModelGroupInput.getDescription());
 
-        if (modelName != null && !isSafeText(modelName)) {
-            exception = addValidationError(
-                "Model group name can only contain letters, digits, spaces, underscores (_), hyphens (-), and dots (.)",
-                exception
-            );
-        }
-        if (description != null && !isSafeText(description)) {
-            exception = addValidationError(
-                "Model group description can only contain letters, digits, spaces, underscores (_), hyphens (-), and dots (.)",
-                exception
-            );
-        }
-
-        return exception;
+        return validateFields(fieldsToValidate);
     }
 
     @Override
