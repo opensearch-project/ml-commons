@@ -151,6 +151,7 @@ public class UpdateControllerTransportActionTests extends OpenSearchTestCase {
                 transportService,
                 actionFilters,
                 client,
+                Settings.EMPTY,
                 clusterService,
                 modelAccessControlHelper,
                 mlModelCacheHelper,

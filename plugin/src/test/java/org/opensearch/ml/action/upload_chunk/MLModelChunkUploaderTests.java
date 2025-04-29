@@ -117,7 +117,7 @@ public class MLModelChunkUploaderTests extends OpenSearchTestCase {
 
         threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "alex|IT,HR|engineering,operations");
 
-        mlModelChunkUploader = new MLModelChunkUploader(mlIndicesHandler, client, xContentRegistry, modelAccessControlHelper);
+        mlModelChunkUploader = new MLModelChunkUploader(mlIndicesHandler, client, settings, xContentRegistry, modelAccessControlHelper);
 
         MLModel mlModel = MLModel
             .builder()

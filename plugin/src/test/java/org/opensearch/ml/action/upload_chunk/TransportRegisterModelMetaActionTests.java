@@ -86,6 +86,7 @@ public class TransportRegisterModelMetaActionTests extends OpenSearchTestCase {
             actionFilters,
             mlModelManager,
             client,
+            settings,
             modelAccessControlHelper,
             mlModelGroupManager
         );

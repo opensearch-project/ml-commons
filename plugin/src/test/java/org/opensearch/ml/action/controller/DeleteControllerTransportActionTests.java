@@ -147,6 +147,7 @@ public class DeleteControllerTransportActionTests extends OpenSearchTestCase {
                 transportService,
                 actionFilters,
                 client,
+                Settings.EMPTY,
                 xContentRegistry,
                 clusterService,
                 mlModelManager,

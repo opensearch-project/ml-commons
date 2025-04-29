@@ -346,7 +346,16 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<Boolean> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
         modelAccessControlHelper
-            .validateModelGroupAccess(user, mlFeatureEnabledSetting, null, "testGroupID", client, sdkClient, latchedActionListener);
+            .validateModelGroupAccess(
+                user,
+                mlFeatureEnabledSetting,
+                null,
+                "testGroupID",
+                client,
+                sdkClient,
+                Settings.EMPTY,
+                latchedActionListener
+            );
         latch.await(500, TimeUnit.MILLISECONDS);
 
         ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
@@ -461,7 +470,7 @@ public class ModelAccessControlHelperTests extends OpenSearchTestCase {
 
     public void test_CreateSearchSourceBuilder() {
         User user = User.parse("owner|IT,HR|myTenant");
-        assertNotNull(modelAccessControlHelper.createSearchSourceBuilder(user));
+        assertNotNull(modelAccessControlHelper.createSearchSourceBuilder(user, Settings.EMPTY));
     }
 
     private GetResponse modelGroupBuilder(List<String> backendRoles, String access, String owner) throws IOException {

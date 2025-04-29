@@ -103,6 +103,7 @@ public class GetControllerTransportActionTests extends OpenSearchTestCase {
                 transportService,
                 actionFilters,
                 client,
+                settings,
                 xContentRegistry,
                 clusterService,
                 mlModelManager,

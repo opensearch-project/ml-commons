@@ -140,6 +140,7 @@ public class CancelBatchJobTransportActionTests extends OpenSearchTestCase {
                 transportService,
                 actionFilters,
                 client,
+                settings,
                 xContentRegistry,
                 clusterService,
                 scriptService,
