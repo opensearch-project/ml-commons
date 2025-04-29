@@ -32,7 +32,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.controller.MLRateLimiter;
-import org.opensearch.ml.common.model.GeneralModelConfig;
+import org.opensearch.ml.common.model.DefaultModelConfig;
 import org.opensearch.ml.common.model.Guardrails;
 import org.opensearch.ml.common.model.MLDeploySetting;
 import org.opensearch.ml.common.model.MLModelConfig;
@@ -282,7 +282,7 @@ public class MLModel implements ToXContentObject {
                 } else if (algorithm.equals(FunctionName.TEXT_EMBEDDING)) {
                     modelConfig = new TextEmbeddingModelConfig(input);
                 } else {
-                    modelConfig = new GeneralModelConfig(input);
+                    modelConfig = new DefaultModelConfig(input);
                 }
             }
             if (input.readBoolean()) {
@@ -629,7 +629,7 @@ public class MLModel implements ToXContentObject {
                     } else if (FunctionName.TEXT_EMBEDDING.name().equals(algorithmName)) {
                         modelConfig = TextEmbeddingModelConfig.parse(parser);
                     } else {
-                        modelConfig = GeneralModelConfig.parse(parser);
+                        modelConfig = DefaultModelConfig.parse(parser);
                     }
                     break;
                 case DEPLOY_SETTING_FIELD:

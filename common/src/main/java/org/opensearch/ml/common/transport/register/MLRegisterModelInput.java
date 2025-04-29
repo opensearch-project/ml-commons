@@ -32,7 +32,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.controller.MLRateLimiter;
-import org.opensearch.ml.common.model.GeneralModelConfig;
+import org.opensearch.ml.common.model.DefaultModelConfig;
 import org.opensearch.ml.common.model.Guardrails;
 import org.opensearch.ml.common.model.MLDeploySetting;
 import org.opensearch.ml.common.model.MLModelConfig;
@@ -197,7 +197,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
             } else if (this.functionName.equals(FunctionName.TEXT_EMBEDDING)) {
                 this.modelConfig = new TextEmbeddingModelConfig(in);
             } else {
-                this.modelConfig = new GeneralModelConfig(in);
+                this.modelConfig = new DefaultModelConfig(in);
             }
         }
         this.deployModel = in.readBoolean();
@@ -455,7 +455,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     } else if (FunctionName.TEXT_EMBEDDING.equals(functionName)) {
                         modelConfig = TextEmbeddingModelConfig.parse(parser);
                     } else {
-                        modelConfig = GeneralModelConfig.parse(parser);
+                        modelConfig = DefaultModelConfig.parse(parser);
                     }
                     break;
                 case DEPLOY_SETTING_FIELD:
@@ -606,7 +606,7 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                     } else if (FunctionName.TEXT_EMBEDDING.equals(functionName)) {
                         modelConfig = TextEmbeddingModelConfig.parse(parser);
                     } else {
-                        modelConfig = GeneralModelConfig.parse(parser);
+                        modelConfig = DefaultModelConfig.parse(parser);
                     }
                     break;
                 case DEPLOY_SETTING_FIELD:

@@ -33,7 +33,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.connector.HttpConnectorTest;
-import org.opensearch.ml.common.model.GeneralModelConfig;
+import org.opensearch.ml.common.model.DefaultModelConfig;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
@@ -75,18 +75,11 @@ public class MLRegisterModelInputTest {
 
     @Before
     public void setUp() throws Exception {
-        // config = TextEmbeddingModelConfig
-        // .builder()
-        // .modelType("testModelType")
-        // .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
-        // .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
-        // .embeddingDimension(100)
-        // .build();
-        config = GeneralModelConfig
+        config = DefaultModelConfig
             .builder()
             .modelType("testModelType")
             .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
-            .frameworkType(GeneralModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .frameworkType(DefaultModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
             .embeddingDimension(100)
             .build();
         HttpConnector connector = HttpConnectorTest.createHttpConnector();
@@ -476,7 +469,7 @@ public class MLRegisterModelInputTest {
         Map<String, Object> additionalConfig = new HashMap<>();
         additionalConfig.put("space_type", "l2");
 
-        GeneralModelConfig generalConfig = GeneralModelConfig
+        DefaultModelConfig defaultConfig = DefaultModelConfig
             .builder()
             .modelType("testModelType")
             .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
@@ -491,7 +484,7 @@ public class MLRegisterModelInputTest {
             .modelGroupId(modelGroupId)
             .url(url)
             .modelFormat(MLModelFormat.TORCH_SCRIPT)
-            .modelConfig(generalConfig)
+            .modelConfig(defaultConfig)
             .deployModel(true)
             .modelNodeIds(new String[] { "modelNodeIds" })
             .build();
@@ -506,11 +499,11 @@ public class MLRegisterModelInputTest {
         Map<String, Object> additionalConfig = new HashMap<>();
         additionalConfig.put("space_type", "l2");
 
-        GeneralModelConfig generalConfig = GeneralModelConfig
+        DefaultModelConfig defaultConfig = DefaultModelConfig
             .builder()
             .modelType("testModelType")
             .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
-            .frameworkType(GeneralModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .frameworkType(DefaultModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
             .embeddingDimension(100)
             .additionalConfig(additionalConfig)
             .build();
@@ -523,14 +516,14 @@ public class MLRegisterModelInputTest {
             .modelGroupId(modelGroupId)
             .url(url)
             .modelFormat(MLModelFormat.TORCH_SCRIPT)
-            .modelConfig(generalConfig)
+            .modelConfig(defaultConfig)
             .deployModel(true)
             .modelNodeIds(new String[] { "modelNodeIds" })
             .build();
         readInputStream(generalInput, parsedInput -> {
-            assertEquals(parsedInput.getModelConfig().getModelType(), generalConfig.getModelType());
-            assertEquals(parsedInput.getModelConfig().getAllConfig(), generalConfig.getAllConfig());
-            assertEquals(((GeneralModelConfig) parsedInput.getModelConfig()).getAdditionalConfig(), additionalConfig);
+            assertEquals(parsedInput.getModelConfig().getModelType(), defaultConfig.getModelType());
+            assertEquals(parsedInput.getModelConfig().getAllConfig(), defaultConfig.getAllConfig());
+            assertEquals(((DefaultModelConfig) parsedInput.getModelConfig()).getAdditionalConfig(), additionalConfig);
             assertEquals(parsedInput.getFunctionName(), FunctionName.SPARSE_ENCODING);
             assertEquals(parsedInput.getModelName(), "SPARSE_ENCODING");
             assertEquals(parsedInput.getModelGroupId(), modelGroupId);
