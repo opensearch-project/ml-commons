@@ -64,7 +64,7 @@ public class StringUtils {
         + "\n    }\n";
 
     // Regex allows letters, digits, spaces, hyphens, underscores, and dots.
-    private static final String SAFE_INPUT_REGEX = "^[a-zA-Z0-9 _\\-\\.:]+$";
+    private static final String SAFE_INPUT_REGEX = "^[a-zA-Z0-9 _\\-\\.:,'()]+$";
 
     public static final Gson gson;
 
