@@ -7,7 +7,7 @@ Compatible with OpenSearch 3.0.0.0
 * Deprecate the restful API of batch ingestion ([#3688](https://github.com/opensearch-project/ml-commons/pull/3688))
 
 ### Features
-* Onboard MCP ([#3721](https://github.com/opensearch-project/ml-commons/pull/3721]
+* Onboard MCP ([#3721](https://github.com/opensearch-project/ml-commons/pull/3721))
 * Plan, Execute and Reflect Agent Type ([#3716](https://github.com/opensearch-project/ml-commons/pull/3716))
 * Support custom prompts from user ([#3731](https://github.com/opensearch-project/ml-commons/pull/3731))
 * Support MCP server in OpenSearch ([#3781](https://github.com/opensearch-project/ml-commons/pull/3781))
@@ -27,7 +27,7 @@ Compatible with OpenSearch 3.0.0.0
 * Fix config index masterkey pull up for multi-tenancy ([#3700](vhttps://github.com/opensearch-project/ml-commons/pull/3700))
 * Fix error message when input map and output map length not match ([#3730](https://github.com/opensearch-project/ml-commons/pull/3730))
 * Agent Framework: Handle model response when toolUse is not accompanied by text ([#3755](https://github.com/opensearch-project/ml-commons/pull/3755))
-* Allow user to control react agent max_interations value to prevent empty response ([(#3756](https://github.com/opensearch-project/ml-commons/pull/3756))
+* Allow user to control react agent max_interations value to prevent empty response ([#3756](https://github.com/opensearch-project/ml-commons/pull/3756))
 * Agent framework: Fix SearchIndexTool to parse special floating point values and NaN ([#3754](https://github.com/opensearch-project/ml-commons/pull/3754))
 * Directly return Response objects from metadata client responses ([#3768](https://github.com/opensearch-project/ml-commons/pull/3768))
 * Remove opensearch-ml-2.4.0.0.zip file that was added by random mistake ([#3763](https://github.com/opensearch-project/ml-commons/pull/3763))
@@ -41,7 +41,7 @@ Compatible with OpenSearch 3.0.0.0
 * Use model type to check local or remote model ([#3597](https://github.com/opensearch-project/ml-commons/pull/3597))
 * Fixing security integ test ([#3646](https://github.com/opensearch-project/ml-commons/pull/3646))
 * Remove forcing log4j version to 2.24.2 ([#3647](https://github.com/opensearch-project/ml-commons/pull/3647))
-* Improve test coverage for MLHttpClientFactory.java ([#3644vhttps://github.com/opensearch-project/ml-commons/pull/3644))
+* Improve test coverage for MLHttpClientFactory.java ([#3644](https://github.com/opensearch-project/ml-commons/pull/3644))
 * Improve test coverage for MLEngineClassLoader class ([#3679](https://github.com/opensearch-project/ml-commons/pull/3679))
 * Typo: MLTaskDispatcher _cluster/settings api ([#3694](https://github.com/opensearch-project/ml-commons/pull/3694))
 * Add more logs to troubleshoot flaky test ([#3543](https://github.com/opensearch-project/ml-commons/pull/3543))
