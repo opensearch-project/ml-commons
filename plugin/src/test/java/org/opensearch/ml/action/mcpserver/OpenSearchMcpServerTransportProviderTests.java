@@ -6,6 +6,8 @@
 package org.opensearch.ml.action.mcpserver;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -13,8 +15,12 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.action.index.IndexResponse;
+import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.rest.StreamingRestChannel;
 import org.opensearch.test.OpenSearchTestCase;
+import org.opensearch.transport.client.node.NodeClient;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -39,6 +45,11 @@ public class OpenSearchMcpServerTransportProviderTests extends OpenSearchTestCas
     @Mock
     private McpServerSession mcpServerSession;
 
+    @Mock
+    private NodeClient client;
+
+    private final String nodeId = "nodeId";
+
     @Before
     public void setUp() throws Exception {
         super.setUp();
@@ -48,11 +59,19 @@ public class OpenSearchMcpServerTransportProviderTests extends OpenSearchTestCas
         when(mcpServerSession.getId()).thenReturn("mockId");
         when(mcpServerSession.handle(any())).thenReturn(Mono.empty());
         when(mcpServerSession.sendNotification(any(), any())).thenReturn(Mono.empty());
+        doAnswer(invocationOnMock -> {
+            ActionListener<IndexResponse> listener = invocationOnMock.getArgument(1);
+            IndexResponse response = mock(IndexResponse.class);
+            when(response.getId()).thenReturn(nodeId);
+            when(response.status()).thenReturn(RestStatus.CREATED);
+            listener.onResponse(response);
+            return null;
+        }).when(client).index(any(), isA(ActionListener.class));
     }
 
     @Test
     public void test_handleSseConnection_successful() {
-        StepVerifier.create(provider.handleSseConnection(channel)).expectNextMatches(chunk -> {
+        StepVerifier.create(provider.handleSseConnection(channel, nodeId, client)).expectNextMatches(chunk -> {
             String data = chunk.content().utf8ToString();
             return data.contains("endpoint");
         }).verifyComplete();
@@ -67,7 +86,7 @@ public class OpenSearchMcpServerTransportProviderTests extends OpenSearchTestCas
               "method": "notifications/initialized"
             }
             """;
-        StepVerifier.create(provider.handleMessage("mockId", requestBody)).expectNext(true).verifyComplete();
+        StepVerifier.create(provider.handleMessage("mockId", requestBody)).verifyComplete();
     }
 
     @Test
@@ -80,7 +99,7 @@ public class OpenSearchMcpServerTransportProviderTests extends OpenSearchTestCas
               "method": "tools/list"
             }
             """;
-        StepVerifier.create(provider.handleMessage("mockId", requestBody)).expectNext(false).verifyComplete();
+        StepVerifier.create(provider.handleMessage("mockId", requestBody)).verifyComplete();
     }
 
     @Test

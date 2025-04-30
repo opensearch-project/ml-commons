@@ -68,7 +68,7 @@ public class McpToolsTest {
     public void testParse_FullData() throws Exception {
         String jsonStr = "{"
             + "\"tools\":[{"
-            + "\"name\":\"weather_tool\","
+            + "\"type\":\"weather_tool\","
             + "\"description\":\"Fetch weather data\","
             + "\"params\":{\"unit\":\"celsius\"},"
             + "\"schema\":{\"type\":\"object\"}"
@@ -130,7 +130,7 @@ public class McpToolsTest {
 
     @Test
     public void testPartialData() throws Exception {
-        String jsonStr = "{" + "\"tools\":[{" + "\"name\":\"minimal_tool\"" + "}]," + "\"create_time\":1745836800000" + "}";
+        String jsonStr = "{" + "\"tools\":[{" + "\"type\":\"minimal_tool\"" + "}]," + "\"create_time\":1745836800000" + "}";
 
         XContentParser parser = XContentType.JSON
             .xContent()
