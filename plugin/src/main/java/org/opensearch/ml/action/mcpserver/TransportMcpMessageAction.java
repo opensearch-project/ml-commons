@@ -5,10 +5,13 @@
 
 package org.opensearch.ml.action.mcpserver;
 
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED;
 import static org.opensearch.threadpool.ThreadPool.Names.SAME;
 
 import java.io.IOException;
 
+import org.opensearch.OpenSearchException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
@@ -42,6 +45,7 @@ public class TransportMcpMessageAction extends HandledTransportAction<ActionRequ
 
     NamedXContentRegistry xContentRegistry;
     DiscoveryNodeHelper nodeFilter;
+    private volatile boolean mcpServerEnabled;
 
     @Inject
     public TransportMcpMessageAction(
@@ -60,12 +64,17 @@ public class TransportMcpMessageAction extends HandledTransportAction<ActionRequ
         this.client = client;
         this.xContentRegistry = xContentRegistry;
         this.nodeFilter = nodeFilter;
+        mcpServerEnabled = ML_COMMONS_MCP_SERVER_ENABLED.get(clusterService.getSettings());
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MCP_SERVER_ENABLED, it -> mcpServerEnabled = it);
     }
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<AcknowledgedResponse> listener) {
+        if (!mcpServerEnabled) {
+            listener.onFailure(new OpenSearchException(ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE));
+            return;
+        }
         MLMcpMessageRequest mlMcpMessageRequest = MLMcpMessageRequest.fromActionRequest(request);
-
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             transportService
                 .sendRequest(

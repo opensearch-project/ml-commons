@@ -8,6 +8,8 @@
 package org.opensearch.ml.rest.mcpserver;
 
 import static org.opensearch.ml.common.CommonValue.MCP_SESSION_MANAGEMENT_INDEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED;
 import static org.opensearch.rest.RestRequest.Method.GET;
 import static org.opensearch.rest.RestRequest.Method.POST;
 
@@ -17,6 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
+import org.opensearch.OpenSearchException;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
@@ -54,8 +57,12 @@ public class RestMcpConnectionMessageStreamingAction extends BaseRestHandler {
 
     private final ClusterService clusterService;
 
+    private volatile boolean mcpServerEnabled;
+
     public RestMcpConnectionMessageStreamingAction(ClusterService clusterService) {
         this.clusterService = clusterService;
+        mcpServerEnabled = ML_COMMONS_MCP_SERVER_ENABLED.get(clusterService.getSettings());
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MCP_SERVER_ENABLED, it -> mcpServerEnabled = it);
     }
 
     @Override
@@ -70,6 +77,9 @@ public class RestMcpConnectionMessageStreamingAction extends BaseRestHandler {
 
     @Override
     public RestChannelConsumer prepareRequest(final RestRequest request, final NodeClient client) {
+        if (!mcpServerEnabled) {
+            throw new OpenSearchException(ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE);
+        }
         String path = request.path();
         final String sessionId = request.param("sessionId");
         final StreamingRestChannelConsumer consumer = (channel) -> prepareRequestInternal(path, sessionId, channel, client);

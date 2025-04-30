@@ -5,8 +5,12 @@
 
 package org.opensearch.ml.action.mcpserver;
 
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED;
+
 import java.io.IOException;
 
+import org.opensearch.OpenSearchException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
@@ -38,6 +42,7 @@ public class TransportMcpMessageDispatchedAction extends HandledTransportAction<
 
     NamedXContentRegistry xContentRegistry;
     DiscoveryNodeHelper nodeFilter;
+    private volatile boolean mcpServerEnabled;
 
     @Inject
     public TransportMcpMessageDispatchedAction(
@@ -56,10 +61,16 @@ public class TransportMcpMessageDispatchedAction extends HandledTransportAction<
         this.client = client;
         this.xContentRegistry = xContentRegistry;
         this.nodeFilter = nodeFilter;
+        mcpServerEnabled = ML_COMMONS_MCP_SERVER_ENABLED.get(clusterService.getSettings());
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MCP_SERVER_ENABLED, it -> mcpServerEnabled = it);
     }
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<AcknowledgedResponse> listener) {
+        if (!mcpServerEnabled) {
+            listener.onFailure(new OpenSearchException(ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE));
+            return;
+        }
         MLMcpMessageRequest mlMcpMessageRequest = MLMcpMessageRequest.fromActionRequest(request);
         final StreamingRestChannel channel = McpAsyncServerHolder.CHANNELS.get(mlMcpMessageRequest.getSessionId());
         Mono

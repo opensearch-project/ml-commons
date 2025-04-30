@@ -8,7 +8,6 @@ package org.opensearch.ml.common;
 import java.util.Set;
 
 import org.opensearch.Version;
-import org.opensearch.common.settings.Setting;
 
 import com.google.common.collect.ImmutableSet;
 
@@ -98,11 +97,6 @@ public class CommonValue {
     public static final String MCP_TOOLS_FIELD = "tools";
     public static final String MCP_CONNECTORS_FIELD = "mcp_connectors";
     public static final String MCP_CONNECTOR_ID_FIELD = "mcp_connector_id";
-
-    public static final Setting<Boolean> ML_COMMONS_MCP_FEATURE_ENABLED = Setting
-        .boolSetting("plugins.ml_commons.mcp_feature_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
-    public static final String ML_COMMONS_MCP_FEATURE_DISABLED_MESSAGE =
-        "The MCP feature is not enabled. To enable, please update the setting " + ML_COMMONS_MCP_FEATURE_ENABLED.getKey();
 
     // TOOL Constants
     public static final String TOOL_INPUT_SCHEMA_FIELD = "input_schema";
