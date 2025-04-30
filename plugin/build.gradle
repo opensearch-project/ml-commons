@@ -418,9 +418,9 @@ configurations.all {
     resolutionStrategy.force 'org.codehaus.plexus:plexus-utils:3.3.0'
     resolutionStrategy.force 'org.eclipse.platform:org.eclipse.core.runtime:3.29.0'
     resolutionStrategy.force "org.opensearch.client:opensearch-rest-client:${opensearch_version}"
-    resolutionStrategy.force "org.apache.httpcomponents.core5:httpcore5:5.3.1"
+    resolutionStrategy.force "org.apache.httpcomponents.core5:httpcore5:${versions.httpcore5}"
     resolutionStrategy.force "org.apache.httpcomponents.core5:httpcore5-h2:5.3.1"
-    resolutionStrategy.force "org.apache.httpcomponents.client5:httpclient5:5.4.1"
+    resolutionStrategy.force "org.apache.httpcomponents.client5:httpclient5:${versions.httpclient5}"
     resolutionStrategy.force "com.fasterxml.jackson.core:jackson-databind:${versions.jackson_databind}"
     resolutionStrategy.force "com.fasterxml.jackson.core:jackson-core:${versions.jackson_databind}"
     resolutionStrategy.force "jakarta.json:jakarta.json-api:2.1.3"
