@@ -33,6 +33,7 @@ Compatible with OpenSearch 3.0.0.0
 * Remove opensearch-ml-2.4.0.0.zip file that was added by random mistake ([#3763](https://github.com/opensearch-project/ml-commons/pull/3763))
 * Replace null GetResponse with valid response and not exists ([#3759](https://github.com/opensearch-project/ml-commons/pull/3759))
 * Fix ListIndexTool and SearchIndexTool ([#3720](https://github.com/opensearch-project/ml-commons/pull/3720))
+* Support MCP session management ([#3803](https://github.com/opensearch-project/ml-commons/pull/3803))
 * Support customized message endpoint and addressing comments ([#3810](https://github.com/opensearch-project/ml-commons/pull/3810))
 * Excluding circuit breaker for Agent ([#3814](https://github.com/opensearch-project/ml-commons/pull/3814))
 
