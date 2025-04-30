@@ -71,7 +71,7 @@ public class McpTool implements ToXContentObject, Writeable {
         String name = null;
         String description = null;
         Map<String, Object> params = null;
-        Map<String, Object> schema = null;
+        Map<String, Object> attrubutes = null;
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
             String fieldName = parser.currentName();
@@ -90,8 +90,8 @@ public class McpTool implements ToXContentObject, Writeable {
                 case PARAMS_FIELD:
                     params = parser.map();
                     break;
-                case SCHEMA_FIELD:
-                    schema = parser.map();
+                case ATTRIBUTES_FIELD:
+                    attrubutes = parser.map();
                     break;
                 default:
                     parser.skipChildren();
@@ -101,7 +101,7 @@ public class McpTool implements ToXContentObject, Writeable {
         if (type == null) {
             throw new IllegalArgumentException(TYPE_NOT_SHOWN_EXCEPTION_MESSAGE);
         }
-        return new McpTool(name, type, description, params, schema);
+        return new McpTool(name, type, description, params, attrubutes);
     }
 
     @Override

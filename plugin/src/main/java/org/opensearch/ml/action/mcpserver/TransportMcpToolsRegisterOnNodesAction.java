@@ -117,7 +117,7 @@ public class TransportMcpToolsRegisterOnNodesAction extends
             // check if user request contains tools that not in our system.
             String toolName = Optional.ofNullable(tool.getName()).orElse(tool.getType());
             Tool.Factory factory = toolFactoryWrapper.getToolsFactories().get(tool.getType());
-            Tool actualTool = factory.create(tool.getParameters());
+            Tool actualTool = factory.create(Optional.ofNullable(tool.getParameters()).orElse(ImmutableMap.of()));
             Map<String, Object> mSchema = Optional
                 .ofNullable(tool.getAttributes())
                 .map(x -> (Map<String, Object>) x.get(SCHEMA_FIELD))
