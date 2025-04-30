@@ -46,7 +46,7 @@ public class McpToolTest {
 
     @Before
     public void setUp() {
-        mcptool = new McpTool(toolName, description, params, schema);
+        mcptool = new McpTool(toolName, toolName, description, params, schema);
     }
 
     @Test
@@ -109,7 +109,7 @@ public class McpToolTest {
 
     @Test
     public void testToXContent_MinimalFields() throws Exception {
-        McpTool minimalTool = new McpTool("minimal_tool", null, null, null);
+        McpTool minimalTool = new McpTool(null, "minimal_tool", null, null, null);
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         minimalTool.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = builder.toString();
@@ -136,7 +136,7 @@ public class McpToolTest {
 
     @Test
     public void testStreamInputOutput_WithNullFields() throws IOException {
-        McpTool toolWithNulls = new McpTool("null_tool", null, null, null);
+        McpTool toolWithNulls = new McpTool(null, "null_tool", null, null, null);
         BytesStreamOutput output = new BytesStreamOutput();
         toolWithNulls.writeTo(output);
 
@@ -151,7 +151,6 @@ public class McpToolTest {
 
     @Test
     public void testComplexParameters() throws Exception {
-        // 测试嵌套参数结构
         Map<String, Object> complexParams = new HashMap<>();
         complexParams.put("config", Collections.singletonMap("timeout", 30));
 
@@ -159,9 +158,8 @@ public class McpToolTest {
         complexSchema.put("type", "object");
         complexSchema.put("properties", Collections.singletonMap("location", Collections.singletonMap("type", "string")));
 
-        McpTool complexTool = new McpTool("complex_tool", null, complexParams, complexSchema);
+        McpTool complexTool = new McpTool(null, "complex_tool", null, complexParams, complexSchema);
 
-        // 序列化测试
         BytesStreamOutput output = new BytesStreamOutput();
         complexTool.writeTo(output);
         McpTool parsed = new McpTool(output.bytes().streamInput());
@@ -169,7 +167,6 @@ public class McpToolTest {
         assertEquals(complexParams, parsed.getParameters());
         assertEquals(complexSchema, parsed.getAttributes());
 
-        // XContent测试
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         complexTool.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = builder.toString();

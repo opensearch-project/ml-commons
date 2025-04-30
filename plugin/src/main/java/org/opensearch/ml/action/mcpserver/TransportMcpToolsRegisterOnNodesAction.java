@@ -112,7 +112,7 @@ public class TransportMcpToolsRegisterOnNodesAction extends
     private MLMcpRegisterNodeResponse registerToolsOnNode(McpTools mcpTools) {
         Flux.fromStream(mcpTools.getTools().stream()).flatMap(tool -> {
             // check if user request contains tools that not in our system.
-            String toolName = tool.getType();
+            String toolName = Optional.ofNullable(tool.getName()).orElse(tool.getType());
             Tool.Factory factory = toolFactoryWrapper.getToolsFactories().get(toolName);
             Tool actualTool = factory.create(tool.getParameters());
             Map<String, Object> mSchema = Optional
