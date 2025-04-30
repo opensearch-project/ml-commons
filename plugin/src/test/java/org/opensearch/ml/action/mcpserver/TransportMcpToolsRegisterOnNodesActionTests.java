@@ -134,6 +134,7 @@ public class TransportMcpToolsRegisterOnNodesActionTests extends OpenSearchTestC
             List
                 .of(
                     new McpTool(
+                        null,
                         "ListIndexTool",
                         "OpenSearch index name list, separated by comma. for example: [\\\"index1\\\", \\\"index2\\\"], use empty array [] to list all indices in the cluster",
                         Map.of(),

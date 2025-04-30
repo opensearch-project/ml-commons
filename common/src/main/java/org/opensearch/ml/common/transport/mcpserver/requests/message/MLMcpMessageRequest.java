@@ -10,6 +10,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 
+import org.apache.commons.lang3.StringUtils;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
@@ -35,11 +36,17 @@ public class MLMcpMessageRequest extends ActionRequest {
         this.nodeId = in.readString();
         this.sessionId = in.readString();
         this.requestBody = in.readString();
+        if (StringUtils.isEmpty(nodeId) || StringUtils.isEmpty(sessionId) || StringUtils.isEmpty(requestBody)) {
+            throw new IllegalStateException("nodeId, sessionId and requestBody must not be null");
+        }
     }
 
     @Builder
     public MLMcpMessageRequest(String nodeId, String sessionId, String requestBody) {
         super();
+        if (StringUtils.isEmpty(nodeId) || StringUtils.isEmpty(sessionId) || StringUtils.isEmpty(requestBody)) {
+            throw new IllegalStateException("nodeId, sessionId and requestBody must not be null");
+        }
         this.nodeId = nodeId;
         this.sessionId = sessionId;
         this.requestBody = requestBody;

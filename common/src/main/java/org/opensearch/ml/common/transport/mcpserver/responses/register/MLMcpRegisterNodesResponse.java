@@ -56,7 +56,7 @@ public class MLMcpRegisterNodesResponse extends BaseNodesResponse<MLMcpRegisterN
         for (FailedNodeException failedNodeException : failures()) {
             builder.startObject(failedNodeException.nodeId());
             builder.field("error");
-            builder.value(failedNodeException.getMessage());
+            builder.value(failedNodeException.getRootCause().getMessage());
             builder.endObject();
         }
         builder.endObject();

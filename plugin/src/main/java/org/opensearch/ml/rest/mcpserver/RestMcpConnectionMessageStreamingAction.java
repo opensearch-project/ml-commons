@@ -18,6 +18,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import org.opensearch.OpenSearchException;
 import org.opensearch.action.ActionRequestValidationException;
@@ -82,7 +83,9 @@ public class RestMcpConnectionMessageStreamingAction extends BaseRestHandler {
         }
         String path = request.path();
         final String sessionId = request.param("sessionId");
-        final StreamingRestChannelConsumer consumer = (channel) -> prepareRequestInternal(path, sessionId, channel, client);
+        final String ssePrefixStr = request.param("sse_prefix");
+        boolean ssePrefix = Optional.ofNullable(ssePrefixStr).map(x -> Boolean.parseBoolean(ssePrefixStr)).orElse(true);
+        final StreamingRestChannelConsumer consumer = (channel) -> prepareRequestInternal(path, ssePrefix, sessionId, channel, client);
         return channel -> {
             if (channel instanceof StreamingRestChannel) {
                 consumer.accept((StreamingRestChannel) channel);
@@ -98,6 +101,7 @@ public class RestMcpConnectionMessageStreamingAction extends BaseRestHandler {
     @VisibleForTesting
     protected void prepareRequestInternal(
         final String path,
+        final boolean ssePrefix,
         final String sessionId,
         final StreamingRestChannel channel,
         final NodeClient client
@@ -125,7 +129,7 @@ public class RestMcpConnectionMessageStreamingAction extends BaseRestHandler {
                 .map(HttpChunk::content)
                 .flatMap(
                     x -> McpAsyncServerHolder.mcpServerTransportProvider
-                        .handleSseConnection(channel, clusterService.localNode().getId(), client)
+                        .handleSseConnection(channel, ssePrefix, clusterService.localNode().getId(), client)
                 )
                 .flatMap(y -> Mono.fromRunnable(() -> {
                     log.debug("starting to send sse connection chunk result");

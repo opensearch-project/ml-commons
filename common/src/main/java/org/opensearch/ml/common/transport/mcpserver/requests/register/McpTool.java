@@ -31,11 +31,13 @@ import lombok.extern.log4j.Log4j2;
 @Data
 public class McpTool implements ToXContentObject, Writeable {
     private static final String TYPE_FIELD = "type";
+    private static final String NAME_FIELD = "name";
     private static final String DESCRIPTION_FIELD = "description";
     private static final String PARAMS_FIELD = "parameters";
     private static final String ATTRIBUTES_FIELD = "attributes";
     public static final String SCHEMA_FIELD = "input_schema";
     private final String type;
+    private String name;
     private final String description;
     private Map<String, Object> parameters;
     private Map<String, Object> attributes;
@@ -46,6 +48,7 @@ public class McpTool implements ToXContentObject, Writeable {
         if (type == null) {
             throw new IllegalArgumentException(TYPE_NOT_SHOWN_EXCEPTION_MESSAGE);
         }
+        name = streamInput.readOptionalString();
         description = streamInput.readOptionalString();
         if (streamInput.readBoolean()) {
             parameters = streamInput.readMap(StreamInput::readString, StreamInput::readGenericValue);
@@ -55,10 +58,8 @@ public class McpTool implements ToXContentObject, Writeable {
         }
     }
 
-    public McpTool(String type, String description, Map<String, Object> parameters, Map<String, Object> attributes) {
-        if (type == null) {
-            throw new IllegalArgumentException(TYPE_NOT_SHOWN_EXCEPTION_MESSAGE);
-        }
+    public McpTool(String name, String type, String description, Map<String, Object> parameters, Map<String, Object> attributes) {
+        this.name = name;
         this.type = type;
         this.description = description;
         this.parameters = parameters;
@@ -67,9 +68,10 @@ public class McpTool implements ToXContentObject, Writeable {
 
     public static McpTool parse(XContentParser parser) throws IOException {
         String type = null;
+        String name = null;
         String description = null;
         Map<String, Object> params = null;
-        Map<String, Object> schema = null;
+        Map<String, Object> attrubutes = null;
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
             String fieldName = parser.currentName();
@@ -79,14 +81,17 @@ public class McpTool implements ToXContentObject, Writeable {
                 case TYPE_FIELD:
                     type = parser.text();
                     break;
+                case NAME_FIELD:
+                    name = parser.text();
+                    break;
                 case DESCRIPTION_FIELD:
                     description = parser.text();
                     break;
                 case PARAMS_FIELD:
                     params = parser.map();
                     break;
-                case SCHEMA_FIELD:
-                    schema = parser.map();
+                case ATTRIBUTES_FIELD:
+                    attrubutes = parser.map();
                     break;
                 default:
                     parser.skipChildren();
@@ -96,12 +101,13 @@ public class McpTool implements ToXContentObject, Writeable {
         if (type == null) {
             throw new IllegalArgumentException(TYPE_NOT_SHOWN_EXCEPTION_MESSAGE);
         }
-        return new McpTool(type, description, params, schema);
+        return new McpTool(name, type, description, params, attrubutes);
     }
 
     @Override
     public void writeTo(StreamOutput streamOutput) throws IOException {
         streamOutput.writeString(type);
+        streamOutput.writeOptionalString(name);
         streamOutput.writeOptionalString(description);
         if (parameters != null) {
             streamOutput.writeBoolean(true);
@@ -122,6 +128,9 @@ public class McpTool implements ToXContentObject, Writeable {
     public XContentBuilder toXContent(XContentBuilder builder, ToXContent.Params xcontentParams) throws IOException {
         builder.startObject();
         builder.field(TYPE_FIELD, type);
+        if (name != null) {
+            builder.field(NAME_FIELD, name);
+        }
         if (description != null) {
             builder.field(DESCRIPTION_FIELD, description);
         }
