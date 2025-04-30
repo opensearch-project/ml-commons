@@ -42,6 +42,8 @@ import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
 
+import com.google.common.annotations.VisibleForTesting;
+
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
@@ -83,7 +85,7 @@ public class UpdateAgentTransportAction extends HandledTransportAction<ActionReq
             return;
         }
 
-        boolean isSuperAdmin = RestActionUtils.isSuperAdminUser(clusterService, client);
+        boolean isSuperAdmin = isSuperAdminUserWrapper(clusterService, client);
 
         FetchSourceContext fetchSourceContext = new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);
         GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
@@ -104,10 +106,10 @@ public class UpdateAgentTransportAction extends HandledTransportAction<ActionReq
                     wrappedListener.onFailure(cause);
                 } else {
                     try {
-                        GetResponse gr = r.getResponse();
-                        assert gr != null : "Failed to get Agent";
+                        GetResponse getResponse = r.getResponse();
+                        assert getResponse != null : "Failed to get Agent";
                         XContentParser parser = JsonXContent.jsonXContent
-                            .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, gr.getSourceAsString());
+                            .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, getResponse.getSourceAsString());
                         XContentParserUtils.ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                         MLAgent retrievedAgent = MLAgent.parse(parser);
 
@@ -167,5 +169,10 @@ public class UpdateAgentTransportAction extends HandledTransportAction<ActionReq
                 }
             }
         });
+    }
+
+    @VisibleForTesting
+    boolean isSuperAdminUserWrapper(ClusterService clusterService, Client client) {
+        return RestActionUtils.isSuperAdminUser(clusterService, client);
     }
 }

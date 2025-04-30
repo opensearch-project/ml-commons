@@ -25,6 +25,7 @@ import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
 import org.opensearch.transport.client.node.NodeClient;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 
 public class RestMLUpdateAgentAction extends BaseRestHandler {
@@ -62,7 +63,8 @@ public class RestMLUpdateAgentAction extends BaseRestHandler {
      * @param request RestRequest
      * @return MLAgentUpdateRequest
      */
-    private MLAgentUpdateRequest getRequest(RestRequest request) throws IOException {
+    @VisibleForTesting
+    MLAgentUpdateRequest getRequest(RestRequest request) throws IOException {
         if (!mlFeatureEnabledSetting.isAgentFrameworkEnabled()) {
             throw new IllegalStateException(AGENT_FRAMEWORK_DISABLED_ERR_MSG);
         }

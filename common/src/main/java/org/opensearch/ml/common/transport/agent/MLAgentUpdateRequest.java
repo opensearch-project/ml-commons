@@ -49,16 +49,16 @@ public class MLAgentUpdateRequest extends ActionRequest {
     @Override
     public ActionRequestValidationException validate() {
         ActionRequestValidationException exception = null;
-        if (mlAgent == null) {
-            exception = addValidationError("ML agent can't be null", exception);
+        if (agentId == null || mlAgent == null) {
+            exception = addValidationError("Agent ID and ML Agent cannot be null", exception);
         }
-
         return exception;
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
+        out.writeString(this.agentId);
         this.mlAgent.writeTo(out);
     }
 
@@ -73,7 +73,7 @@ public class MLAgentUpdateRequest extends ActionRequest {
                 return new MLAgentUpdateRequest(input);
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("failed to parse ActionRequest into MLAgentUpdateRequest", e);
+            throw new UncheckedIOException("Failed to parse ActionRequest into MLAgentUpdateRequest", e);
         }
     }
 }
