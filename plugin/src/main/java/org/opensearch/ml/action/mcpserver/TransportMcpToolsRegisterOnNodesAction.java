@@ -11,7 +11,9 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
+import org.opensearch.OpenSearchException;
 import org.opensearch.action.FailedNodeException;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.nodes.TransportNodesAction;
@@ -110,10 +112,11 @@ public class TransportMcpToolsRegisterOnNodesAction extends
     }
 
     private MLMcpRegisterNodeResponse registerToolsOnNode(McpTools mcpTools) {
+        AtomicReference<Throwable> exception = new AtomicReference<>();
         Flux.fromStream(mcpTools.getTools().stream()).flatMap(tool -> {
             // check if user request contains tools that not in our system.
             String toolName = Optional.ofNullable(tool.getName()).orElse(tool.getType());
-            Tool.Factory factory = toolFactoryWrapper.getToolsFactories().get(toolName);
+            Tool.Factory factory = toolFactoryWrapper.getToolsFactories().get(tool.getType());
             Tool actualTool = factory.create(tool.getParameters());
             Map<String, Object> mSchema = Optional
                 .ofNullable(tool.getAttributes())
@@ -137,16 +140,18 @@ public class TransportMcpToolsRegisterOnNodesAction extends
                     actualTool.run(StringUtils.getParameterMap(arguments), actionListener);
                 })
             );
-            return McpAsyncServerHolder.asyncServer
-                .removeTool(toolName)
-                .onErrorResume(e -> Mono.empty())
-                .then(McpAsyncServerHolder.asyncServer.addTool(toolSpecification));
+            return McpAsyncServerHolder.asyncServer.addTool(toolSpecification);
         })
             .doOnComplete(() -> { log.debug("Successfully register tools on node: {}", clusterService.localNode().getId()); })
             .doOnError(e -> {
+                exception.set(e);
                 log.error("Failed to register tools on node: {}", clusterService.localNode().getId(), e);
             })
             .subscribe();
+        if (exception.get() != null) {
+            String errorMsg = exception.get().getMessage();
+            throw new FailedNodeException(clusterService.localNode().getId(), errorMsg, new OpenSearchException(errorMsg));
+        }
         return new MLMcpRegisterNodeResponse(clusterService.localNode(), true);
     }
 
