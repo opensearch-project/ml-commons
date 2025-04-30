@@ -30,42 +30,43 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 @Data
 public class McpTool implements ToXContentObject, Writeable {
-    private static final String NAME_FIELD = "name";
+    private static final String TYPE_FIELD = "type";
     private static final String DESCRIPTION_FIELD = "description";
-    private static final String PARAMS_FIELD = "params";
-    private static final String SCHEMA_FIELD = "schema";
-    private final String name;
+    private static final String PARAMS_FIELD = "parameters";
+    private static final String ATTRIBUTES_FIELD = "attributes";
+    public static final String SCHEMA_FIELD = "input_schema";
+    private final String type;
     private final String description;
-    private Map<String, Object> params;
-    private Map<String, Object> schema;
-    private static final String nameNotShownExceptionMessage = "name field required";
+    private Map<String, Object> parameters;
+    private Map<String, Object> attributes;
+    private static final String TYPE_NOT_SHOWN_EXCEPTION_MESSAGE = "type field required";
 
     public McpTool(StreamInput streamInput) throws IOException {
-        name = streamInput.readString();
-        if (name == null) {
-            throw new IllegalArgumentException(nameNotShownExceptionMessage);
+        type = streamInput.readString();
+        if (type == null) {
+            throw new IllegalArgumentException(TYPE_NOT_SHOWN_EXCEPTION_MESSAGE);
         }
         description = streamInput.readOptionalString();
         if (streamInput.readBoolean()) {
-            params = streamInput.readMap(StreamInput::readString, StreamInput::readGenericValue);
+            parameters = streamInput.readMap(StreamInput::readString, StreamInput::readGenericValue);
         }
         if (streamInput.readBoolean()) {
-            schema = streamInput.readMap(StreamInput::readString, StreamInput::readGenericValue);
+            attributes = streamInput.readMap(StreamInput::readString, StreamInput::readGenericValue);
         }
     }
 
-    public McpTool(String name, String description, Map<String, Object> params, Map<String, Object> schema) {
-        if (name == null) {
-            throw new IllegalArgumentException(nameNotShownExceptionMessage);
+    public McpTool(String type, String description, Map<String, Object> parameters, Map<String, Object> attributes) {
+        if (type == null) {
+            throw new IllegalArgumentException(TYPE_NOT_SHOWN_EXCEPTION_MESSAGE);
         }
-        this.name = name;
+        this.type = type;
         this.description = description;
-        this.params = params;
-        this.schema = schema;
+        this.parameters = parameters;
+        this.attributes = attributes;
     }
 
     public static McpTool parse(XContentParser parser) throws IOException {
-        String name = null;
+        String type = null;
         String description = null;
         Map<String, Object> params = null;
         Map<String, Object> schema = null;
@@ -75,8 +76,8 @@ public class McpTool implements ToXContentObject, Writeable {
             parser.nextToken();
 
             switch (fieldName) {
-                case NAME_FIELD:
-                    name = parser.text();
+                case TYPE_FIELD:
+                    type = parser.text();
                     break;
                 case DESCRIPTION_FIELD:
                     description = parser.text();
@@ -92,26 +93,26 @@ public class McpTool implements ToXContentObject, Writeable {
                     break;
             }
         }
-        if (name == null) {
-            throw new IllegalArgumentException(nameNotShownExceptionMessage);
+        if (type == null) {
+            throw new IllegalArgumentException(TYPE_NOT_SHOWN_EXCEPTION_MESSAGE);
         }
-        return new McpTool(name, description, params, schema);
+        return new McpTool(type, description, params, schema);
     }
 
     @Override
     public void writeTo(StreamOutput streamOutput) throws IOException {
-        streamOutput.writeString(name);
+        streamOutput.writeString(type);
         streamOutput.writeOptionalString(description);
-        if (params != null) {
+        if (parameters != null) {
             streamOutput.writeBoolean(true);
-            streamOutput.writeMap(params, StreamOutput::writeString, StreamOutput::writeGenericValue);
+            streamOutput.writeMap(parameters, StreamOutput::writeString, StreamOutput::writeGenericValue);
         } else {
             streamOutput.writeBoolean(false);
         }
 
-        if (schema != null) {
+        if (attributes != null) {
             streamOutput.writeBoolean(true);
-            streamOutput.writeMap(schema, StreamOutput::writeString, StreamOutput::writeGenericValue);
+            streamOutput.writeMap(attributes, StreamOutput::writeString, StreamOutput::writeGenericValue);
         } else {
             streamOutput.writeBoolean(false);
         }
@@ -120,15 +121,15 @@ public class McpTool implements ToXContentObject, Writeable {
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, ToXContent.Params xcontentParams) throws IOException {
         builder.startObject();
-        builder.field(NAME_FIELD, name);
+        builder.field(TYPE_FIELD, type);
         if (description != null) {
             builder.field(DESCRIPTION_FIELD, description);
         }
-        if (params != null && !params.isEmpty()) {
-            builder.field(PARAMS_FIELD, params);
+        if (parameters != null && !parameters.isEmpty()) {
+            builder.field(PARAMS_FIELD, parameters);
         }
-        if (schema != null && !schema.isEmpty()) {
-            builder.field(SCHEMA_FIELD, schema);
+        if (attributes != null && !attributes.isEmpty()) {
+            builder.field(SCHEMA_FIELD, attributes);
         }
         builder.endObject();
         return builder;

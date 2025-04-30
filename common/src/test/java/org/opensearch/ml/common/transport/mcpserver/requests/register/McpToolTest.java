@@ -51,16 +51,16 @@ public class McpToolTest {
 
     @Test
     public void testConstructor_Success() {
-        assertEquals(toolName, mcptool.getName());
+        assertEquals(toolName, mcptool.getType());
         assertEquals(description, mcptool.getDescription());
-        assertEquals(params, mcptool.getParams());
-        assertEquals(schema, mcptool.getSchema());
+        assertEquals(params, mcptool.getParameters());
+        assertEquals(schema, mcptool.getAttributes());
     }
 
     @Test
     public void testParse_AllFields() throws Exception {
-        String jsonStr = "{\"name\":\"stock_tool\",\"description\":\"Stock data tool\","
-            + "\"params\":{\"exchange\":\"NYSE\"},\"schema\":{\"properties\":{\"symbol\":{\"type\":\"string\"}}}}";
+        String jsonStr = "{\"type\":\"stock_tool\",\"description\":\"Stock data tool\","
+            + "\"parameters\":{\"exchange\":\"NYSE\"},\"input_schema\":{\"properties\":{\"symbol\":{\"type\":\"string\"}}}}";
 
         XContentParser parser = XContentType.JSON
             .xContent()
@@ -72,10 +72,10 @@ public class McpToolTest {
         parser.nextToken();
 
         McpTool parsed = McpTool.parse(parser);
-        assertEquals("stock_tool", parsed.getName());
+        assertEquals("stock_tool", parsed.getType());
         assertEquals("Stock data tool", parsed.getDescription());
-        assertEquals(Collections.singletonMap("exchange", "NYSE"), parsed.getParams());
-        assertTrue(parsed.getSchema().containsKey("properties"));
+        assertEquals(Collections.singletonMap("exchange", "NYSE"), parsed.getParameters());
+        assertTrue(parsed.getAttributes().containsKey("properties"));
     }
 
     @Test
@@ -91,7 +91,7 @@ public class McpToolTest {
         parser.nextToken();
 
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("name field required");
+        exceptionRule.expectMessage("type field required");
         McpTool.parse(parser);
     }
 
@@ -101,10 +101,10 @@ public class McpToolTest {
         mcptool.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = builder.toString();
 
-        assertTrue(jsonStr.contains("\"name\":\"weather_tool\""));
+        assertTrue(jsonStr.contains("\"type\":\"weather_tool\""));
         assertTrue(jsonStr.contains("\"description\":\"Fetch weather data\""));
-        assertTrue(jsonStr.contains("\"params\":{\"unit\":\"celsius\"}"));
-        assertTrue(jsonStr.contains("\"schema\":{\"type\":\"object\"}"));
+        assertTrue(jsonStr.contains("\"parameters\":{\"unit\":\"celsius\"}"));
+        assertTrue(jsonStr.contains("\"input_schema\":{\"type\":\"object\"}"));
     }
 
     @Test
@@ -114,7 +114,7 @@ public class McpToolTest {
         minimalTool.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String jsonStr = builder.toString();
 
-        assertTrue(jsonStr.contains("\"name\":\"minimal_tool\""));
+        assertTrue(jsonStr.contains("\"type\":\"minimal_tool\""));
         assertFalse(jsonStr.contains("description"));
         assertFalse(jsonStr.contains("params"));
         assertFalse(jsonStr.contains("schema"));
@@ -128,10 +128,10 @@ public class McpToolTest {
         StreamInput input = output.bytes().streamInput();
         McpTool parsed = new McpTool(input);
 
-        assertEquals(toolName, parsed.getName());
+        assertEquals(toolName, parsed.getType());
         assertEquals(description, parsed.getDescription());
-        assertEquals(params, parsed.getParams());
-        assertEquals(schema, parsed.getSchema());
+        assertEquals(params, parsed.getParameters());
+        assertEquals(schema, parsed.getAttributes());
     }
 
     @Test
@@ -143,10 +143,10 @@ public class McpToolTest {
         StreamInput input = output.bytes().streamInput();
         McpTool parsed = new McpTool(input);
 
-        assertEquals("null_tool", parsed.getName());
+        assertEquals("null_tool", parsed.getType());
         assertNull(parsed.getDescription());
-        assertNull(parsed.getParams());
-        assertNull(parsed.getSchema());
+        assertNull(parsed.getParameters());
+        assertNull(parsed.getAttributes());
     }
 
     @Test
@@ -166,8 +166,8 @@ public class McpToolTest {
         complexTool.writeTo(output);
         McpTool parsed = new McpTool(output.bytes().streamInput());
 
-        assertEquals(complexParams, parsed.getParams());
-        assertEquals(complexSchema, parsed.getSchema());
+        assertEquals(complexParams, parsed.getParameters());
+        assertEquals(complexSchema, parsed.getAttributes());
 
         // XContent测试
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
