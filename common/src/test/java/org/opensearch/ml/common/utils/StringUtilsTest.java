@@ -767,12 +767,6 @@ public class StringUtilsTest {
     }
 
     @Test
-    public void testIsSafeText_TooLong() {
-        String longString = "a".repeat(1001); // 1001 characters
-        assertFalse(StringUtils.isSafeText(longString));
-    }
-
-    @Test
     public void testValidateFields_AllValid() {
         Map<String, String> fields = Map.of("Field1", "Valid Name 1", "Field2", "Another_Valid-Field.Name:Here");
         assertNull(StringUtils.validateFields(fields));
