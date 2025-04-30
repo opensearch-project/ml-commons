@@ -71,7 +71,7 @@ public class OpenSearchMcpServerTransportProviderTests extends OpenSearchTestCas
 
     @Test
     public void test_handleSseConnection_successful() {
-        StepVerifier.create(provider.handleSseConnection(channel, nodeId, client)).expectNextMatches(chunk -> {
+        StepVerifier.create(provider.handleSseConnection(channel, true, nodeId, client)).expectNextMatches(chunk -> {
             String data = chunk.content().utf8ToString();
             return data.contains("endpoint");
         }).verifyComplete();

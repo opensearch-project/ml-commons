@@ -41,8 +41,9 @@ public class McpToolsTest {
     private McpTools mcptools;
     private final List<McpTool> sampleTools = List
         .of(
-            new McpTool("weather_api", "Weather data provider", Map.of("unit", "celsius"), Map.of("type", "object")),
+            new McpTool(null, "weather_api", "Weather data provider", Map.of("unit", "celsius"), Map.of("type", "object")),
             new McpTool(
+                null,
                 "stock_api",
                 "Stock market data",
                 Map.of("exchange", "NYSE"),
