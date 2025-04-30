@@ -100,7 +100,7 @@ public class RestMcpConnectionMessageStreamingActionTests extends OpenSearchTest
     @Test
     public void test_prepareConnectionRequest_successful() {
         restMcpConnectionMessageStreamingAction
-            .prepareRequestInternal(RestMcpConnectionMessageStreamingAction.SSE_ENDPOINT, null, channel, client);
+            .prepareRequestInternal(RestMcpConnectionMessageStreamingAction.SSE_ENDPOINT, true, null, channel, client);
         verify(channel, times(1)).prepareResponse(any(), any());
     }
 
@@ -109,6 +109,7 @@ public class RestMcpConnectionMessageStreamingActionTests extends OpenSearchTest
         restMcpConnectionMessageStreamingAction
             .prepareRequestInternal(
                 RestMcpConnectionMessageStreamingAction.MESSAGE_ENDPOINT,
+                true,
                 UUID.randomUUID().toString(),
                 channel,
                 client
@@ -120,7 +121,7 @@ public class RestMcpConnectionMessageStreamingActionTests extends OpenSearchTest
     public void test_prepareMessageRequest_sessionIdIsNull() {
         try {
             restMcpConnectionMessageStreamingAction
-                .prepareRequestInternal(RestMcpConnectionMessageStreamingAction.MESSAGE_ENDPOINT, null, channel, client);
+                .prepareRequestInternal(RestMcpConnectionMessageStreamingAction.MESSAGE_ENDPOINT, true, null, channel, client);
         } catch (Exception e) {
             // The NPE is caused by not mocking the request, ignore it.
         }

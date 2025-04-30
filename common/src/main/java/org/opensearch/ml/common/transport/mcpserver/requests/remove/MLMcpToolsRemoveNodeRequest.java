@@ -20,6 +20,7 @@ public class MLMcpToolsRemoveNodeRequest extends TransportRequest {
     private List<String> tools;
 
     public MLMcpToolsRemoveNodeRequest(StreamInput in) throws IOException {
+        super(in);
         if (in.readBoolean()) {
             this.tools = in.readList(StreamInput::readString);
         }
@@ -32,6 +33,7 @@ public class MLMcpToolsRemoveNodeRequest extends TransportRequest {
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
+        super.writeTo(out);
         if (tools != null) {
             out.writeBoolean(true);
             out.writeStringArray(tools.toArray(new String[0]));

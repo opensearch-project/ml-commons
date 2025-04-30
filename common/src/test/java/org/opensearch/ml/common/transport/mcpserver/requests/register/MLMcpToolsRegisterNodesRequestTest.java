@@ -31,7 +31,10 @@ public class MLMcpToolsRegisterNodesRequestTest {
     @Before
     public void setup() {
         sampleTools = new McpTools(
-            Arrays.asList(new McpTool("metric_analyzer", "System monitoring tool", Map.of("interval", "60s"), Map.of("type", "object"))),
+            Arrays
+                .asList(
+                    new McpTool(null, "metric_analyzer", "System monitoring tool", Map.of("interval", "60s"), Map.of("type", "object"))
+                ),
             null,
             null
         );
