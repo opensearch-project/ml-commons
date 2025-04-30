@@ -5,7 +5,16 @@
 
 package org.opensearch.ml.rest;
 
-import com.google.common.collect.ImmutableList;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
+import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_ERR_MSG;
+import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
+import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
+
+import java.io.IOException;
+import java.util.List;
+import java.util.Locale;
+
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -16,15 +25,7 @@ import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
 import org.opensearch.transport.client.node.NodeClient;
 
-import java.io.IOException;
-import java.util.List;
-import java.util.Locale;
-
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
-import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_ERR_MSG;
-import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
-import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
+import com.google.common.collect.ImmutableList;
 
 public class RestMLUpdateAgentAction extends BaseRestHandler {
 
