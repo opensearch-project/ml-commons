@@ -75,7 +75,7 @@ public class TransportMcpMessageDispatchedAction extends HandledTransportAction<
                     channel.sendResponse(new BytesRestResponse(channel, new Exception(e)));
                     listener.onFailure(new Exception(e));
                 } catch (IOException ex) {
-                    log.error("Failed to send exception response to client during message handling due to IOException");
+                    log.error("Failed to send exception response to client during message handling due to IOException", ex);
                 }
             }))
             .subscribe();

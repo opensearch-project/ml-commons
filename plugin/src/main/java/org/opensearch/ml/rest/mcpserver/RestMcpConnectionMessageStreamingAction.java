@@ -154,7 +154,7 @@ public class RestMcpConnectionMessageStreamingAction extends BaseRestHandler {
                                 String nodeId = String.valueOf(r.getSourceAsMap().get("node_id"));
                                 DiscoveryNode node = clusterService.state().getNodes().getNodes().get(nodeId);
                                 if (node == null) {
-                                    log.error("The node:{} is no longer in the current cluster, can not handle the mcp request", r.getId());
+                                    log.error("The node:{} is no longer in the current cluster, can not handle the mcp request", nodeId);
                                     channel
                                         .sendResponse(
                                             new BytesRestResponse(
@@ -165,35 +165,18 @@ public class RestMcpConnectionMessageStreamingAction extends BaseRestHandler {
                                             )
                                         );
                                 } else {
-                                    ActionListener<AcknowledgedResponse> actionListener = ActionListener.wrap(y -> {
-                                        if (y.isAcknowledged()) {
-                                            log.debug("MCP request has been dispatched to corresponding node and handled successfully!");
-                                            if (requestBody.contains("notifications/initialized")) {
-                                                log
-                                                    .debug(
-                                                        "Starting to send OK response for notifications/initialized request in coordinator node"
-                                                    );
-                                                channel.sendChunk(createInitializedNotificationRes());
-                                            }
-                                        }
-                                    },
-                                        e -> {
-                                            log
-                                                .error(
-                                                    "MCP request has been dispatched to corresponding node but peer node failed to handle it",
-                                                    e
-                                                );
-                                        }
-                                    );
                                     if (clusterService.localNode().getId().equals(nodeId)) {
-                                        client
-                                            .execute(
-                                                MLMcpMessageAction.INSTANCE,
-                                                new MLMcpMessageRequest(sessionId, requestBody),
-                                                actionListener
-                                            );
                                         McpAsyncServerHolder.mcpServerTransportProvider
                                             .handleMessage(sessionId, requestBody)
+                                            .doOnSuccess(y -> {
+                                                if (requestBody.contains("notifications/initialized")) {
+                                                    log
+                                                        .debug(
+                                                            "Starting to send OK response for notifications/initialized request in local node"
+                                                        );
+                                                    channel.sendChunk(createInitializedNotificationRes());
+                                                }
+                                            })
                                             .onErrorResume(e -> Mono.fromRunnable(() -> {
                                                 try {
                                                     log.error("Error occurred when handling message", e);
@@ -201,34 +184,63 @@ public class RestMcpConnectionMessageStreamingAction extends BaseRestHandler {
                                                 } catch (IOException ex) {
                                                     log
                                                         .error(
-                                                            "Failed to send exception response to client during message handling in local due to IOException"
+                                                            "Failed to send exception response to client during message handling in local due to IOException, nodeId: {}",
+                                                            nodeId
                                                         );
                                                 }
                                             }))
                                             .subscribe();
                                     } else {
+                                        ActionListener<AcknowledgedResponse> actionListener = ActionListener.wrap(y -> {
+                                            if (y.isAcknowledged()) {
+                                                log
+                                                    .debug(
+                                                        "MCP request has been dispatched to corresponding node and handled successfully!"
+                                                    );
+                                                if (requestBody.contains("notifications/initialized")) {
+                                                    log
+                                                        .debug(
+                                                            "Starting to send OK response for notifications/initialized request in coordinator node"
+                                                        );
+                                                    channel.sendChunk(createInitializedNotificationRes());
+                                                }
+                                            }
+                                        },
+                                            e -> {
+                                                log
+                                                    .error(
+                                                        "MCP request has been dispatched to corresponding node but peer node failed to handle it",
+                                                        e
+                                                    );
+                                            }
+                                        );
                                         client
                                             .execute(
                                                 MLMcpMessageAction.INSTANCE,
-                                                new MLMcpMessageRequest(sessionId, requestBody),
+                                                new MLMcpMessageRequest(nodeId, sessionId, requestBody),
                                                 actionListener
                                             );
                                     }
                                 }
                             } else {
-                                log.error("SessionId not found in cluster");
+                                log.error("SessionId not found in cluster, sessionId: {}", sessionId);
                                 try {
                                     channel
                                         .sendResponse(
                                             new BytesRestResponse(
                                                 channel,
                                                 new IllegalArgumentException(
-                                                    "SessionId not found in cluster, please try to create session first"
+                                                    "SessionId not found in cluster, please try to create session first, sessionId: "
+                                                        + sessionId
                                                 )
                                             )
                                         );
                                 } catch (IOException ex) {
-                                    log.error("Failed to send exception response to client when session ID not found in cluster state");
+                                    log
+                                        .error(
+                                            "Failed to send exception response to client when session ID not found in cluster state, sessionId: {}",
+                                            sessionId
+                                        );
                                 }
                             }
 
@@ -245,7 +257,7 @@ public class RestMcpConnectionMessageStreamingAction extends BaseRestHandler {
                         try {
                             channel.sendResponse(new BytesRestResponse(channel, new Exception(e)));
                         } catch (IOException ex) {
-                            log.error("Failed to send exception response to client during message handling due to IOException");
+                            log.error("Failed to send exception response to client during message handling due to IOException", ex);
                         }
                     }))
                     .subscribe();

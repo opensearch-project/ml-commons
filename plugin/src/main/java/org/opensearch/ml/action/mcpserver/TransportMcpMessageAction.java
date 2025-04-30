@@ -8,14 +8,11 @@ package org.opensearch.ml.action.mcpserver;
 import static org.opensearch.threadpool.ThreadPool.Names.SAME;
 
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.action.support.clustermanager.AcknowledgedResponse;
-import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -70,11 +67,9 @@ public class TransportMcpMessageAction extends HandledTransportAction<ActionRequ
         MLMcpMessageRequest mlMcpMessageRequest = MLMcpMessageRequest.fromActionRequest(request);
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            Map<String, DiscoveryNode> nodes = new HashMap<>(clusterService.state().nodes().getNodes());
-            nodes.remove(clusterService.localNode().getId());
             transportService
                 .sendRequest(
-                    clusterService.state().nodes().getNodes().get(nodes.keySet().stream().findFirst().get()),
+                    clusterService.state().nodes().getNodes().get(mlMcpMessageRequest.getNodeId()),
                     MLMcpMessageDispatchAction.NAME,
                     mlMcpMessageRequest,
                     new TransportResponseHandler<AcknowledgedResponse>() {
@@ -90,8 +85,13 @@ public class TransportMcpMessageAction extends HandledTransportAction<ActionRequ
 
                         @Override
                         public void handleException(TransportException e) {
-                            System.out.println("got exception:" + e.getMessage());
-                            log.error("got exception: ", e);
+                            log
+                                .error(
+                                    "Failed to process the MCP message request during sending it to corresponding node, sessionId is: {}, request is: {}",
+                                    mlMcpMessageRequest.getSessionId(),
+                                    mlMcpMessageRequest.getRequestBody(),
+                                    e
+                                );
                         }
 
                         @Override
@@ -102,6 +102,13 @@ public class TransportMcpMessageAction extends HandledTransportAction<ActionRequ
                 );
 
         } catch (Exception e) {
+            log
+                .error(
+                    "Failed to send the MCP message request to corresponding node, sessionId is: {}, request is: {}",
+                    mlMcpMessageRequest.getSessionId(),
+                    mlMcpMessageRequest.getRequestBody(),
+                    e
+                );
             listener.onFailure(e);
         }
 

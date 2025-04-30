@@ -95,6 +95,7 @@ public class OpenSearchMcpServerTransportProvider implements McpServerTransportP
 
     @Override
     public Mono<Void> closeGracefully() {
+        McpAsyncServerHolder.CHANNELS.clear();
         return Flux
             .fromIterable(sessions.values())
             .doFirst(() -> log.debug("Initiating graceful shutdown with {} active sessions", sessions.size()))
@@ -121,6 +122,9 @@ public class OpenSearchMcpServerTransportProvider implements McpServerTransportP
                     String result = String.format("/sse/message?sessionId=%s", sessionId);
                     McpAsyncServerHolder.CHANNELS.put(sessionId, channel);
                     sink.success(createHttpChunk(ENDPOINT_EVENT_TYPE, result));
+                } else {
+                    log.error("Failed to create new SSE connection for session: {}", sessionId);
+                    sink.error(new IllegalStateException("Failed to create new SSE connection for session" + sessionId));
                 }
             }, e -> {
                 log.error("Failed to write sessionId into MCP session management index", e);

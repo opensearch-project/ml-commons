@@ -24,18 +24,23 @@ import lombok.Getter;
 @Getter
 public class MLMcpMessageRequest extends ActionRequest {
 
+    private final String nodeId;
+
     private final String sessionId;
 
     private final String requestBody;
 
     public MLMcpMessageRequest(StreamInput in) throws IOException {
         super(in);
+        this.nodeId = in.readString();
         this.sessionId = in.readString();
         this.requestBody = in.readString();
     }
 
     @Builder
-    public MLMcpMessageRequest(String sessionId, String requestBody) {
+    public MLMcpMessageRequest(String nodeId, String sessionId, String requestBody) {
+        super();
+        this.nodeId = nodeId;
         this.sessionId = sessionId;
         this.requestBody = requestBody;
     }
@@ -43,6 +48,7 @@ public class MLMcpMessageRequest extends ActionRequest {
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
+        out.writeString(nodeId);
         out.writeString(sessionId);
         out.writeString(requestBody);
     }
