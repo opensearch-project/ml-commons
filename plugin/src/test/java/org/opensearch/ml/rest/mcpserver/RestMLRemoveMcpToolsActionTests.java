@@ -8,6 +8,7 @@ package org.opensearch.ml.rest.mcpserver;
 import static org.mockito.Answers.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -23,6 +24,8 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.ClusterSettings;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.xcontent.MediaType;
@@ -54,6 +57,9 @@ public class RestMLRemoveMcpToolsActionTests extends OpenSearchTestCase {
         MockitoAnnotations.openMocks(this);
         when(discoveryNode.getId()).thenReturn("mockId");
         when(clusterService.state().nodes().getNodes()).thenReturn(ImmutableMap.of("mockId", discoveryNode));
+        Settings settings = Settings.builder().put(ML_COMMONS_MCP_SERVER_ENABLED.getKey(), true).build();
+        when(clusterService.getSettings()).thenReturn(settings);
+        when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MCP_SERVER_ENABLED)));
         restMLRemoveMcpToolsAction = new RestMLRemoveMcpToolsAction(clusterService);
     }
 
@@ -85,7 +91,7 @@ public class RestMLRemoveMcpToolsActionTests extends OpenSearchTestCase {
 
     @Test
     public void test_routes() {
-        Set<String> expectedRoutes = Set.of("POST /_plugins/_ml/mcp_tools/_remove");
+        Set<String> expectedRoutes = Set.of("POST /_plugins/_ml/mcp/tools/_remove");
         Set<String> routes = restMLRemoveMcpToolsAction
             .routes()
             .stream()

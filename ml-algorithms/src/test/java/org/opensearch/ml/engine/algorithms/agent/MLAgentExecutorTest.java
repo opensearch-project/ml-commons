@@ -11,6 +11,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.MEMORY_ID;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.QUESTION;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.REGENERATE_INTERACTION_ID;
@@ -57,7 +58,6 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.get.GetResult;
-import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.LLMSpec;
@@ -171,8 +171,7 @@ public class MLAgentExecutorTest {
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         when(this.clusterService.getSettings()).thenReturn(settings);
-        when(this.clusterService.getClusterSettings())
-            .thenReturn(new ClusterSettings(settings, Set.of(CommonValue.ML_COMMONS_MCP_FEATURE_ENABLED)));
+        when(this.clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MCP_CONNECTOR_ENABLED)));
 
         settings = Settings.builder().build();
         mlAgentExecutor = Mockito
