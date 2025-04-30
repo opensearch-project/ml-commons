@@ -60,7 +60,7 @@ public class McpToolTest {
     @Test
     public void testParse_AllFields() throws Exception {
         String jsonStr = "{\"type\":\"stock_tool\",\"description\":\"Stock data tool\","
-            + "\"parameters\":{\"exchange\":\"NYSE\"},\"input_schema\":{\"properties\":{\"symbol\":{\"type\":\"string\"}}}}";
+            + "\"parameters\":{\"exchange\":\"NYSE\"},\"attributes\": {\"input_schema\":{\"properties\":{\"symbol\":{\"type\":\"string\"}}}}}";
 
         XContentParser parser = XContentType.JSON
             .xContent()
@@ -75,7 +75,7 @@ public class McpToolTest {
         assertEquals("stock_tool", parsed.getType());
         assertEquals("Stock data tool", parsed.getDescription());
         assertEquals(Collections.singletonMap("exchange", "NYSE"), parsed.getParameters());
-        assertTrue(parsed.getAttributes().containsKey("properties"));
+        assertTrue(parsed.getAttributes().containsKey("input_schema"));
     }
 
     @Test
