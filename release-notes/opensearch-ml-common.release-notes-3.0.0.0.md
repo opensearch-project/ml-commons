@@ -10,6 +10,7 @@ Compatible with OpenSearch 3.0.0.0
 * Onboard MCP (#3721)[https://github.com/opensearch-project/ml-commons/pull/3721]
 * Plan, Execute and Reflect Agent Type (#3716)[https://github.com/opensearch-project/ml-commons/pull/3716]
 * Support custom prompts from user (#3731)[https://github.com/opensearch-project/ml-commons/pull/3731]
+* Support MCP server in OpenSearch ((#3781)[https://github.com/opensearch-project/ml-commons/pull/3781])
 
 ### Enhancements
 * Support sentence highlighting QA model (#3600)[https://github.com/opensearch-project/ml-commons/pull/3600]
