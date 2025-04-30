@@ -83,10 +83,10 @@ public class RestMLRegisterMcpToolsAction extends BaseRestHandler {
             .getTools()
             .stream()
             .map(McpTool::getType)
-            .filter(name -> !buildInToolNames.contains(name))
+            .filter(type -> !buildInToolNames.contains(type))
             .collect(Collectors.toSet());
         if (!unrecognizedTools.isEmpty()) {
-            exception.addValidationError(String.format(Locale.ROOT, "Unrecognized tool in request: {}", unrecognizedTools));
+            exception.addValidationError(String.format(Locale.ROOT, "Unrecognized tool in request: %s", unrecognizedTools));
             throw exception;
         }
         return channel -> client
