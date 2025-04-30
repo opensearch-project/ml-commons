@@ -10,9 +10,10 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.common.CommonValue.ML_COMMONS_MCP_FEATURE_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.REKOGNITION_TRUST_ENDPOINT_REGEX;
 import static org.opensearch.ml.task.MLPredictTaskRunnerTests.USER_STRING;
@@ -43,7 +44,6 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.AccessMode;
-import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -145,7 +145,7 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
             settings,
             ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX,
             ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED,
-            CommonValue.ML_COMMONS_MCP_FEATURE_ENABLED
+            ML_COMMONS_MCP_CONNECTOR_ENABLED
         );
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
 
@@ -639,7 +639,7 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         action.doExecute(task, request, actionListener);
         ArgumentCaptor<OpenSearchException> argCaptor = ArgumentCaptor.forClass(OpenSearchException.class);
         verify(actionListener).onFailure(argCaptor.capture());
-        assertEquals(argCaptor.getValue().getMessage(), ML_COMMONS_MCP_FEATURE_DISABLED_MESSAGE);
+        assertEquals(argCaptor.getValue().getMessage(), ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE);
     }
 
     public void test_connector_creation_success_rekognition() {

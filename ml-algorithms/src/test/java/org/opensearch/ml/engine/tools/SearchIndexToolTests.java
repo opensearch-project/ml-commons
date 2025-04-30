@@ -79,24 +79,17 @@ public class SearchIndexToolTests {
     @Test
     @SneakyThrows
     public void testDefaultAttributes() {
-        String expected =
-            """
-                {
-                  "input": {
-                    "index": {
-                      "type": "string",
-                      "description": "OpenSearch index name. for example: index1"
-                    },
-                    "query": {
-                      "type": "object",
-                      "description": "OpenSearch search index query. You need to get index mapping to write correct search query. It must be a valid OpenSearch query. Valid value:\\n{\\"query\\":{\\"match\\":{\\"population_description\\":\\"seattle 2023 population\\"}},\\"size\\":2,\\"_source\\":\\"population_description\\"}\\nInvalid value: \\n{\\"match\\":{\\"population_description\\":\\"seattle 2023 population\\"}}\\nThe value is invalid because the match not wrapped by \\"query\\".",
-                      "additionalProperties": false
-                    }
-                  }
-                }
-                """;
         Map<String, Object> attributes = mockedSearchIndexTool.getAttributes();
-        assertEquals(expected, attributes.get(INPUT_SCHEMA_FIELD));
+        assertEquals(
+            "{\"type\":\"object\",\"properties\":"
+                + "{\"index\":{\"type\":\"string\",\"description\":\"OpenSearch index name. for example: index1\"},"
+                + "\"query\":{\"type\":\"object\",\"description\":\"OpenSearch search index query. "
+                + "You need to get index mapping to write correct search query. It must be a valid OpenSearch query. "
+                + "Valid value:\\n{\\\"query\\\":{\\\"match\\\":{\\\"population_description\\\":\\\"seattle 2023 population\\\"}},\\\"size\\\":2,\\\"_source\\\":\\\"population_description\\\"}"
+                + "\\nInvalid value: \\n{\\\"match\\\":{\\\"population_description\\\":\\\"seattle 2023 population\\\"}}\\nThe value is invalid because the match not wrapped by \\\"query\\\".\","
+                + "\"additionalProperties\":false}},\"required\":[\"index\",\"query\"],\"additionalProperties\":false}",
+            attributes.get(INPUT_SCHEMA_FIELD)
+        );
         assertEquals(false, attributes.get(STRICT_FIELD));
     }
 

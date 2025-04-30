@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.action.mcpserver;
 
+import static org.opensearch.ml.common.transport.mcpserver.requests.register.McpTool.SCHEMA_FIELD;
+
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
@@ -110,11 +112,12 @@ public class TransportMcpToolsRegisterOnNodesAction extends
     private MLMcpRegisterNodeResponse registerToolsOnNode(McpTools mcpTools) {
         Flux.fromStream(mcpTools.getTools().stream()).flatMap(tool -> {
             // check if user request contains tools that not in our system.
-            String toolName = tool.getName();
+            String toolName = tool.getType();
             Tool.Factory factory = toolFactoryWrapper.getToolsFactories().get(toolName);
-            Tool actualTool = factory.create(tool.getParams());
+            Tool actualTool = factory.create(tool.getParameters());
             Map<String, Object> mSchema = Optional
-                .ofNullable(tool.getSchema())
+                .ofNullable(tool.getAttributes())
+                .map(x -> (Map<String, Object>) x.get(SCHEMA_FIELD))
                 .orElse(
                     Optional
                         .ofNullable(actualTool.getAttributes())

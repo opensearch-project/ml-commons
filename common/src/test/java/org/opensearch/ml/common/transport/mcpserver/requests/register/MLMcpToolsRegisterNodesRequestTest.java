@@ -43,7 +43,7 @@ public class MLMcpToolsRegisterNodesRequestTest {
 
         assertArrayEquals(nodeIds, request.nodesIds());
         assertEquals(1, request.getMcpTools().getTools().size());
-        assertEquals("metric_analyzer", request.getMcpTools().getTools().get(0).getName());
+        assertEquals("metric_analyzer", request.getMcpTools().getTools().get(0).getType());
     }
 
     @Test
@@ -58,7 +58,7 @@ public class MLMcpToolsRegisterNodesRequestTest {
 
         assertArrayEquals(nodeIds, deserialized.nodesIds());
         assertEquals(sampleTools.getCreatedTime(), deserialized.getMcpTools().getCreatedTime());
-        assertEquals("metric_analyzer", deserialized.getMcpTools().getTools().get(0).getName());
+        assertEquals("metric_analyzer", deserialized.getMcpTools().getTools().get(0).getType());
     }
 
     @Test
@@ -89,7 +89,7 @@ public class MLMcpToolsRegisterNodesRequestTest {
 
         MLMcpToolsRegisterNodesRequest converted = MLMcpToolsRegisterNodesRequest.fromActionRequest(wrappedRequest);
 
-        assertEquals("metric_analyzer", converted.getMcpTools().getTools().get(0).getName());
+        assertEquals("metric_analyzer", converted.getMcpTools().getTools().get(0).getType());
         assertArrayEquals(nodeIds, converted.nodesIds());
     }
 

@@ -59,7 +59,7 @@ public class MLMcpToolsRegisterNodeRequestTest {
 
         assertEquals(1, deserializedRequest.getMcpTools().getTools().size());
         assertEquals(timestamp, deserializedRequest.getMcpTools().getCreatedTime());
-        assertEquals("test_tool", deserializedRequest.getMcpTools().getTools().get(0).getName());
+        assertEquals("test_tool", deserializedRequest.getMcpTools().getTools().get(0).getType());
     }
 
     @Test
@@ -82,7 +82,7 @@ public class MLMcpToolsRegisterNodeRequestTest {
         MLMcpToolsRegisterNodeRequest result = MLMcpToolsRegisterNodeRequest.fromActionRequest(transportRequest);
 
         assertNotNull("Converted request should not be null", result);
-        assertEquals("test_tool", result.getMcpTools().getTools().get(0).getName());
+        assertEquals("test_tool", result.getMcpTools().getTools().get(0).getType());
         assertEquals(timestamp, result.getMcpTools().getCreatedTime());
     }
 

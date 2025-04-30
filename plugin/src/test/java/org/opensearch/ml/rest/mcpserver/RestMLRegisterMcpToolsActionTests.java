@@ -8,6 +8,7 @@ package org.opensearch.ml.rest.mcpserver;
 import static org.mockito.Answers.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -25,6 +26,8 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.ClusterSettings;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.xcontent.MediaType;
@@ -47,21 +50,23 @@ public class RestMLRegisterMcpToolsActionTests extends OpenSearchTestCase {
             {
                 "tools": [
                     {
-                        "name": "ListIndexTool",
+                        "type": "ListIndexTool",
                         "description": "This is my first list index tool",
-                        "params": {},
-                        "schema": {
-                            "type": "object",
-                            "properties": {
-                                "indices": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "string"
-                                    },
-                                    "description": "OpenSearch index name list, separated by comma. for example: [\\"index1\\", \\"index2\\"], use empty array [] to list all indices in the cluster"
-                                }
-                            },
-                            "additionalProperties": false
+                        "parameters": {},
+                        "attributes": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "indices": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string"
+                                        },
+                                        "description": "OpenSearch index name list, separated by comma. for example: [\\"index1\\", \\"index2\\"], use empty array [] to list all indices in the cluster"
+                                    }
+                                },
+                                "additionalProperties": false
+                            }
                         }
                     }
                 ]
@@ -84,6 +89,9 @@ public class RestMLRegisterMcpToolsActionTests extends OpenSearchTestCase {
         toolFactories.put("ListIndexTool", ListIndexTool.Factory.getInstance());
         when(discoveryNode.getId()).thenReturn("mockId");
         when(clusterService.state().nodes().getNodes()).thenReturn(ImmutableMap.of("mockId", discoveryNode));
+        Settings settings = Settings.builder().put(ML_COMMONS_MCP_SERVER_ENABLED.getKey(), true).build();
+        when(clusterService.getSettings()).thenReturn(settings);
+        when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MCP_SERVER_ENABLED)));
         restMLRegisterMcpToolsAction = new RestMLRegisterMcpToolsAction(toolFactories, clusterService);
     }
 
@@ -123,27 +131,29 @@ public class RestMLRegisterMcpToolsActionTests extends OpenSearchTestCase {
                         {
                             "name": "PPLTool",
                             "description": "Use this tool to transfer natural language to generate PPL and execute PPL to query inside. Use this tool after you know the index name, otherwise, call IndexRoutingTool first. The input parameters are: {index:IndexName, question:UserQuestion}",
-                            "params": {
+                            "parameters": {
                                 "model_type": "FINETUNE",
                                 "model_id": "${your_model_id}"
                             },
-                            "schema": {
-                                "type": "object",
-                                "properties": {
-                                    "parameters": {
-                                        "type": "object",
-                                        "question": {
-                                            "type": "string"
-                                        },
-                                        "index": {
-                                            "type": "string"
+                            "attributes": {
+                                "input_schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "parameters": {
+                                            "type": "object",
+                                            "question": {
+                                                "type": "string"
+                                            },
+                                            "index": {
+                                                "type": "string"
+                                            }
                                         }
-                                    }
-                                },
-                                "required": [
-                                    "question",
-                                    "index"
-                                ]
+                                    },
+                                    "required": [
+                                        "question",
+                                        "index"
+                                    ]
+                                }
                             }
                         }
                     ]
@@ -163,7 +173,7 @@ public class RestMLRegisterMcpToolsActionTests extends OpenSearchTestCase {
 
     @Test
     public void test_routes() {
-        Set<String> expectedRoutes = Set.of("POST /_plugins/_ml/mcp_tools/_register");
+        Set<String> expectedRoutes = Set.of("POST /_plugins/_ml/mcp/tools/_register");
         Set<String> routes = restMLRegisterMcpToolsAction
             .routes()
             .stream()
