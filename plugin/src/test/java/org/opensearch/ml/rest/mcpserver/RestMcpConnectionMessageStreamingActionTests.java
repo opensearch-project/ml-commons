@@ -13,9 +13,11 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED;
 
 import java.net.InetAddress;
 import java.util.Collections;
+import java.util.Set;
 import java.util.UUID;
 
 import org.junit.Before;
@@ -29,6 +31,8 @@ import org.opensearch.Version;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.ClusterSettings;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.core.rest.RestStatus;
@@ -70,6 +74,9 @@ public class RestMcpConnectionMessageStreamingActionTests extends OpenSearchTest
         );
         when(clusterService.state().nodes().getNodes()).thenReturn(ImmutableMap.of("foo0", localNode));
         when(clusterService.localNode()).thenReturn(localNode);
+        Settings settings = Settings.builder().put(ML_COMMONS_MCP_SERVER_ENABLED.getKey(), true).build();
+        when(clusterService.getSettings()).thenReturn(settings);
+        when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MCP_SERVER_ENABLED)));
         restMcpConnectionMessageStreamingAction = new RestMcpConnectionMessageStreamingAction(clusterService);
         doAnswer(invocationOnMock -> {
             ActionListener<IndexResponse> listener = invocationOnMock.getArgument(1);

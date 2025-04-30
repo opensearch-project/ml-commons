@@ -56,22 +56,12 @@ public class SearchIndexTool implements Tool {
     private static final String DEFAULT_DESCRIPTION =
         "Use this tool to search an index by providing two parameters: 'index' for the index name, and 'query' for the OpenSearch DSL formatted query. Only use this tool when both index name and DSL query is available.";
 
-    public static final String DEFAULT_INPUT_SCHEMA =
-        """
-            {
-              "input": {
-                "index": {
-                  "type": "string",
-                  "description": "OpenSearch index name. for example: index1"
-                },
-                "query": {
-                  "type": "object",
-                  "description": "OpenSearch search index query. You need to get index mapping to write correct search query. It must be a valid OpenSearch query. Valid value:\\n{\\"query\\":{\\"match\\":{\\"population_description\\":\\"seattle 2023 population\\"}},\\"size\\":2,\\"_source\\":\\"population_description\\"}\\nInvalid value: \\n{\\"match\\":{\\"population_description\\":\\"seattle 2023 population\\"}}\\nThe value is invalid because the match not wrapped by \\"query\\".",
-                  "additionalProperties": false
-                }
-              }
-            }
-            """;
+    public static final String DEFAULT_INPUT_SCHEMA = "{\"type\":\"object\","
+        + "\"properties\":{\"index\":{\"type\":\"string\",\"description\":\"OpenSearch index name. for example: index1\"},"
+        + "\"query\":{\"type\":\"object\",\"description\":\"OpenSearch search index query. You need to get index mapping to write correct search query. It must be a valid OpenSearch query."
+        + " Valid value:\\n{\\\"query\\\":{\\\"match\\\":{\\\"population_description\\\":\\\"seattle 2023 population\\\"}},\\\"size\\\":2,\\\"_source\\\":\\\"population_description\\\"}\\n"
+        + "Invalid value: \\n{\\\"match\\\":{\\\"population_description\\\":\\\"seattle 2023 population\\\"}}\\nThe value is invalid because the match not wrapped by \\\"query\\\".\","
+        + "\"additionalProperties\":false}},\"required\":[\"index\",\"query\"],\"additionalProperties\":false}";
 
     private static final Gson GSON = new GsonBuilder().serializeSpecialFloatingPointValues().create();
 

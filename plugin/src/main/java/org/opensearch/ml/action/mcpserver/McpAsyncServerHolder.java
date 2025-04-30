@@ -31,6 +31,6 @@ public class McpAsyncServerHolder {
     public static final McpAsyncServer asyncServer = McpServer
         .async(mcpServerTransportProvider)
         .capabilities(McpSchema.ServerCapabilities.builder().tools(true).logging().build())
-        .serverInfo("OpenSearch-MCP-Server", "1.0.0")
+        .serverInfo("OpenSearch-MCP-Server", "0.1.0")
         .build();
 }

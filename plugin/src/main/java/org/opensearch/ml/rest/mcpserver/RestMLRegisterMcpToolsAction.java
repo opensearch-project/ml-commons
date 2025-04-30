@@ -82,7 +82,7 @@ public class RestMLRegisterMcpToolsAction extends BaseRestHandler {
             .getMcpTools()
             .getTools()
             .stream()
-            .map(McpTool::getName)
+            .map(McpTool::getType)
             .filter(name -> !buildInToolNames.contains(name))
             .collect(Collectors.toSet());
         if (!unrecognizedTools.isEmpty()) {
