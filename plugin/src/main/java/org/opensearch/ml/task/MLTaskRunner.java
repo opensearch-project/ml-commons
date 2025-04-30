@@ -112,8 +112,7 @@ public abstract class MLTaskRunner<Request extends MLTaskRequest, Response exten
             if (clusterService.localNode().getId().equals(nodeId)) {
                 // Execute ML task locally
                 log.debug("Execute ML request {} locally on node {}", request.getRequestID(), nodeId);
-                checkOpenCircuitBreaker(mlCircuitBreakerService, mlStats);
-                executeTask(request, listener);
+                checkCBAndExecute(functionName, request, listener);
             } else {
                 // Execute ML task remotely
                 log.debug("Execute ML request {} remotely on node {}", request.getRequestID(), nodeId);
@@ -130,7 +129,8 @@ public abstract class MLTaskRunner<Request extends MLTaskRequest, Response exten
     protected abstract void executeTask(Request request, ActionListener<Response> listener);
 
     protected void checkCBAndExecute(FunctionName functionName, Request request, ActionListener<Response> listener) {
-        if (functionName != FunctionName.REMOTE) {
+        // for agent and remote model prediction we don't need to check circuit breaker
+        if (functionName != FunctionName.REMOTE && functionName != FunctionName.AGENT) {
             checkOpenCircuitBreaker(mlCircuitBreakerService, mlStats);
         }
         executeTask(request, listener);
