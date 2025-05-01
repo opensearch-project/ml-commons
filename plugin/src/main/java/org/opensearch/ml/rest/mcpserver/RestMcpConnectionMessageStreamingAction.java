@@ -83,9 +83,15 @@ public class RestMcpConnectionMessageStreamingAction extends BaseRestHandler {
         }
         String path = request.path();
         final String sessionId = request.param("sessionId");
-        final String ssePrefixStr = request.param("sse_prefix");
-        boolean ssePrefix = Optional.ofNullable(ssePrefixStr).map(x -> Boolean.parseBoolean(ssePrefixStr)).orElse(true);
-        final StreamingRestChannelConsumer consumer = (channel) -> prepareRequestInternal(path, ssePrefix, sessionId, channel, client);
+        final String sAppendToBaseUrl = request.param("append_to_base_url");
+        boolean appendToBaseUrl = Optional.ofNullable(sAppendToBaseUrl).map(x -> Boolean.parseBoolean(sAppendToBaseUrl)).orElse(false);
+        final StreamingRestChannelConsumer consumer = (channel) -> prepareRequestInternal(
+            path,
+            appendToBaseUrl,
+            sessionId,
+            channel,
+            client
+        );
         return channel -> {
             if (channel instanceof StreamingRestChannel) {
                 consumer.accept((StreamingRestChannel) channel);
@@ -101,25 +107,25 @@ public class RestMcpConnectionMessageStreamingAction extends BaseRestHandler {
     @VisibleForTesting
     protected void prepareRequestInternal(
         final String path,
-        final boolean ssePrefix,
+        final boolean appendToBaseUrl,
         final String sessionId,
         final StreamingRestChannel channel,
         final NodeClient client
     ) {
-        channel
-            .prepareResponse(
-                RestStatus.OK,
-                Map
-                    .of(
-                        "Content-Type",
-                        List.of("text/event-stream"),
-                        "Cache-Control",
-                        List.of("no-cache"),
-                        "Connection",
-                        List.of("keep-alive")
-                    )
-            );
         if (path.equals(SSE_ENDPOINT)) {
+            channel
+                .prepareResponse(
+                    RestStatus.OK,
+                    Map
+                        .of(
+                            "Content-Type",
+                            List.of("text/event-stream"),
+                            "Cache-Control",
+                            List.of("no-cache"),
+                            "Connection",
+                            List.of("keep-alive")
+                        )
+                );
             // The connection request doesn't have request body, but we're still reading the request body content,
             // The reason is that the response producer is created when http channel is been read, so here
             // we subscribe to channel to trigger the channel read, but ignoring the content.
@@ -129,7 +135,7 @@ public class RestMcpConnectionMessageStreamingAction extends BaseRestHandler {
                 .map(HttpChunk::content)
                 .flatMap(
                     x -> McpAsyncServerHolder.mcpServerTransportProvider
-                        .handleSseConnection(channel, ssePrefix, clusterService.localNode().getId(), client)
+                        .handleSseConnection(channel, appendToBaseUrl, clusterService.localNode().getId(), client)
                 )
                 .flatMap(y -> Mono.fromRunnable(() -> {
                     log.debug("starting to send sse connection chunk result");
@@ -145,6 +151,7 @@ public class RestMcpConnectionMessageStreamingAction extends BaseRestHandler {
                 }))
                 .subscribe();
         } else if (path.equals(MESSAGE_ENDPOINT)) {
+            channel.prepareResponse(RestStatus.OK, Map.of("Content-Type", List.of("text/plain")));
             if (sessionId == null) {
                 try {
                     channel
@@ -183,13 +190,8 @@ public class RestMcpConnectionMessageStreamingAction extends BaseRestHandler {
                                         McpAsyncServerHolder.mcpServerTransportProvider
                                             .handleMessage(sessionId, requestBody)
                                             .doOnSuccess(y -> {
-                                                if (requestBody.contains("notifications/initialized")) {
-                                                    log
-                                                        .debug(
-                                                            "Starting to send OK response for notifications/initialized request in local node"
-                                                        );
-                                                    channel.sendChunk(createInitializedNotificationRes());
-                                                }
+                                                log.debug("Starting to send rest response to client in local node");
+                                                channel.sendChunk(createRestResponse());
                                             })
                                             .onErrorResume(e -> Mono.fromRunnable(() -> {
                                                 try {
@@ -207,27 +209,25 @@ public class RestMcpConnectionMessageStreamingAction extends BaseRestHandler {
                                     } else {
                                         ActionListener<AcknowledgedResponse> actionListener = ActionListener.wrap(y -> {
                                             if (y.isAcknowledged()) {
-                                                log
-                                                    .debug(
-                                                        "MCP request has been dispatched to corresponding node and handled successfully!"
-                                                    );
-                                                if (requestBody.contains("notifications/initialized")) {
-                                                    log
-                                                        .debug(
-                                                            "Starting to send OK response for notifications/initialized request in coordinator node"
-                                                        );
-                                                    channel.sendChunk(createInitializedNotificationRes());
-                                                }
+                                                log.debug("Starting to send rest response to client as peer node returns successfully");
+                                                channel.sendChunk(createRestResponse());
                                             }
-                                        },
-                                            e -> {
+                                        }, e -> {
+                                            log
+                                                .error(
+                                                    "MCP request has been dispatched to corresponding node but peer node failed to handle it",
+                                                    e
+                                                );
+                                            try {
+                                                channel.sendResponse(new BytesRestResponse(channel, e));
+                                            } catch (IOException ex) {
                                                 log
                                                     .error(
-                                                        "MCP request has been dispatched to corresponding node but peer node failed to handle it",
-                                                        e
+                                                        "Failed to send exception response to client during message handling in remote node due to IOException, nodeId: {}",
+                                                        nodeId
                                                     );
                                             }
-                                        );
+                                        });
                                         client
                                             .execute(
                                                 MLMcpMessageAction.INSTANCE,
@@ -279,7 +279,7 @@ public class RestMcpConnectionMessageStreamingAction extends BaseRestHandler {
         }
     }
 
-    private HttpChunk createInitializedNotificationRes() {
+    private HttpChunk createRestResponse() {
         return new HttpChunk() {
             @Override
             public boolean isLast() {
