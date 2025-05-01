@@ -186,7 +186,12 @@ public class TransportUndeployModelAction extends
                             .stream(modelWorkNodesBeforeRemoval.get(modelId))
                             .filter(x -> !removedNodes.contains(x))
                             .collect(Collectors.toList());
-                        log.debug("Partially undeployed for model {} with remaining planning worker nodes: {}", modelId, newPlanningWorkerNodes);
+                        log
+                            .debug(
+                                "Partially undeployed for model {} with remaining planning worker nodes: {}",
+                                modelId,
+                                newPlanningWorkerNodes
+                            );
                         updateDocument.put(MLModel.PLANNING_WORKER_NODES_FIELD, newPlanningWorkerNodes);
                         updateDocument.put(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD, newPlanningWorkerNodes.size());
                         updateDocument.put(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD, newPlanningWorkerNodes.size());
