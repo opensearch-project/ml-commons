@@ -108,7 +108,7 @@ public class OpenSearchMcpServerTransportProvider implements McpServerTransportP
      * Handles new SSE connection requests from clients. Creates a new session for each
      * connection and sets up the SSE event stream.
      */
-    public Mono<HttpChunk> handleSseConnection(StreamingRestChannel channel, boolean ssePrefix, String nodeId, NodeClient client) {
+    public Mono<HttpChunk> handleSseConnection(StreamingRestChannel channel, boolean appendToBaseUrl, String nodeId, NodeClient client) {
         return Mono.create(sink -> {
             OpenSearchMcpSessionTransport sessionTransport = new OpenSearchMcpSessionTransport(channel);
             McpServerSession session = sessionFactory.create(sessionTransport);
@@ -121,10 +121,10 @@ public class OpenSearchMcpServerTransportProvider implements McpServerTransportP
                     // Send initial endpoint event
                     log.debug("Sending initial endpoint event to session: {}", sessionId);
                     String result;
-                    if (ssePrefix) {
-                        result = String.format(Locale.ROOT, "/sse/message?sessionId=%s", sessionId);
+                    if (appendToBaseUrl) {
+                        result = String.format(Locale.ROOT, "/_plugins/_ml/mcp/sse/message?sessionId=%s", sessionId);
                     } else {
-                        result = String.format(Locale.ROOT, "/message?sessionId=%s", sessionId);
+                        result = String.format(Locale.ROOT, "/sse/message?sessionId=%s", sessionId);
                     }
                     McpAsyncServerHolder.CHANNELS.put(sessionId, channel);
                     sink.success(createHttpChunk(ENDPOINT_EVENT_TYPE, result));
