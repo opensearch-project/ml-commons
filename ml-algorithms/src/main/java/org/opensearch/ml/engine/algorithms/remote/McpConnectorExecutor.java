@@ -82,8 +82,6 @@ public class McpConnectorExecutor extends AbstractConnectorExecutor {
             Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
 
             Consumer<HttpRequest.Builder> headerConfig = builder -> {
-                builder.header("Content-Type", "application/json");
-
                 for (Map.Entry<String, String> entry : connector.getDecryptedHeaders().entrySet()) {
                     builder.header(entry.getKey(), entry.getValue());
                 }
