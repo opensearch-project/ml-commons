@@ -139,6 +139,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         MLDeployModelRequest deployModelRequest = MLDeployModelRequest.fromActionRequest(request);
         String modelId = deployModelRequest.getModelId();
         String tenantId = deployModelRequest.getTenantId();
+        log.debug("Received deploy request for modelId: {}", modelId);
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, listener)) {
             return;
         }
@@ -215,6 +216,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
     ) {
         String[] targetNodeIds = deployModelRequest.getModelNodeIds();
         boolean deployToAllNodes = targetNodeIds == null || targetNodeIds.length == 0;
+        log.info("Starting model deployment for model: {}", modelId);
         if (!allowCustomDeploymentPlan && !deployToAllNodes) {
             throw new IllegalArgumentException("Don't allow custom deployment plan");
         }
@@ -283,6 +285,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
             .build();
         mlTaskManager.createMLTask(mlTask, ActionListener.wrap(response -> {
             String taskId = response.getId();
+            log.debug("ML deploy task {} created for modelId: {}", taskId, modelId);
             mlTask.setTaskId(taskId);
             if (algorithm == FunctionName.REMOTE) {
                 mlTaskManager.add(mlTask, eligibleNodeIds);
@@ -396,6 +399,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
             if (mlTaskManager.contains(taskId)) {
                 mlTaskManager.updateMLTask(taskId, tenantId, Map.of(STATE_FIELD, MLTaskState.RUNNING), TASK_SEMAPHORE_TIMEOUT, false);
             }
+            log.debug("Model deployment successful for model: {}", modelId);
             listener.onResponse(new MLDeployModelResponse(taskId, MLTaskType.DEPLOY_MODEL, MLTaskState.COMPLETED.name()));
         }, e -> {
             log.error("Failed to deploy model {}", modelId, e);
@@ -423,6 +427,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         List<DiscoveryNode> eligibleNodes,
         boolean deployToAllNodes
     ) {
+        log.debug("Triggering deploy on nodes for modelId: {}", modelId);
         MLDeployModelInput deployModelInput = new MLDeployModelInput(
             modelId,
             taskId,
@@ -438,6 +443,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
             deployModelInput
         );
         ActionListener<MLDeployModelNodesResponse> actionListener = ActionListener.wrap(r -> {
+            log.debug("Successfully triggered model deployment on nodes for model: {}", modelId);
             if (mlTaskManager.contains(taskId)) {
                 mlTaskManager
                     .updateMLTask(taskId, mlModel.getTenantId(), Map.of(STATE_FIELD, MLTaskState.RUNNING), TASK_SEMAPHORE_TIMEOUT, false);
@@ -462,6 +468,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         });
 
         List<String> workerNodes = eligibleNodes.stream().map(DiscoveryNode::getId).toList();
+        log.debug("Updating model state to DEPLOYING for modelId: {}", modelId);
         mlModelManager
             .updateModel(
                 modelId,
