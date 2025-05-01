@@ -140,6 +140,8 @@ public class TransportDeployModelOnNodeAction extends
 
         String localNodeId = clusterService.localNode().getId();
 
+        log.debug("Starting model deployment for model: {} on node {}", modelId, localNodeId);
+
         ActionListener<MLForwardResponse> taskDoneListener = ActionListener
             .wrap(res -> { log.info("deploy model task done {}", taskId); }, ex -> {
                 logException("Deploy model task failed: " + taskId, ex, log);
@@ -155,6 +157,7 @@ public class TransportDeployModelOnNodeAction extends
             deployToAllNodes,
             mlTask,
             ActionListener.wrap(r -> {
+                log.debug("Model deployed successfully on local node: {}. Sending DONE message to coordinating node: {}", localNodeId, coordinatingNodeId);
                 MLForwardInput mlForwardInput = MLForwardInput
                     .builder()
                     .requestType(MLForwardRequestType.DEPLOY_MODEL_DONE)
@@ -175,6 +178,7 @@ public class TransportDeployModelOnNodeAction extends
                         );
                 }
             }, e -> {
+                log.warn("Model deployment failed on local node: {}. Sending FAILED message to coordinating node {} with error: {}", localNodeId, coordinatingNodeId, e.getMessage());
                 MLForwardInput mlForwardInput = MLForwardInput
                     .builder()
                     .requestType(MLForwardRequestType.DEPLOY_MODEL_DONE)
