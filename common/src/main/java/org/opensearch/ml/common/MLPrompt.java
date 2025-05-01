@@ -1,12 +1,13 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package org.opensearch.ml.common;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
-
-import java.io.IOException;
-import java.time.Instant;
-import java.util.Map;
 
 import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -15,12 +16,19 @@ import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.transport.prompt.MLCreatePromptInput;
+
+import java.io.IOException;
+import java.time.Instant;
+import java.util.Map;
 
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
-import lombok.Setter;
 
+/**
+ * MLPrompt is the class to store prompt information.
+ */
 @Getter
 @EqualsAndHashCode
 public class MLPrompt implements ToXContentObject, Writeable {
@@ -33,19 +41,27 @@ public class MLPrompt implements ToXContentObject, Writeable {
     public static final String CREATE_TIME_FIELD = "create_time";
     public static final String LAST_UPDATE_TIME_FIELD = "last_update_time";
 
-    @Setter
     private String promptId;
     private String name;
     private String description;
-    @Setter
     private Map<String, String> prompt;
     private String tag;
     private String tenantId;
-    @Setter
     private Instant createTime;
-    @Setter
     private Instant lastUpdateTime;
 
+    /**
+     * Constructor to pass values to the MLPrompt constructor
+     *
+     * @param promptId The prompt id of the MLPrompt
+     * @param name The name of the MLPrompt
+     * @param description The description of the MLPrompt
+     * @param prompt The prompt of the MLPrompt -> contains system and user prompts
+     * @param tag The tag of the MLPrompt
+     * @param tenantId The tenant id of the MLPrompt
+     * @param createTime The create time of the MLPrompt
+     * @param lastUpdateTime The last update time of the MLPrompt
+     */
     @Builder(toBuilder = true)
     public MLPrompt(
         String promptId,
@@ -67,30 +83,37 @@ public class MLPrompt implements ToXContentObject, Writeable {
         this.lastUpdateTime = lastUpdateTime;
     }
 
+    /**
+     * Deserialize the Stream Input and constructs MLPrompt
+     *
+     * @param input Abstract class that describes Stream Input
+     * @throws IOException if an I/O exception occurred while reading from input stream
+     */
     public MLPrompt(StreamInput input) throws IOException {
         Version streamInputVersion = input.getVersion();
         this.promptId = input.readOptionalString();
         this.name = input.readOptionalString();
         this.description = input.readOptionalString();
-        if (input.readBoolean()) {
-            this.prompt = input.readMap(s -> s.readString(), s -> s.readString());
-        }
+        this.prompt = input.readMap(s -> s.readString(), s -> s.readString());
         this.tag = input.readOptionalString();
-        tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
+        this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
         this.createTime = input.readInstant();
         this.lastUpdateTime = input.readInstant();
     }
 
+    /**
+     * Serialize and Writes the MLPrompt object to the output stream.
+     *
+     * @param out Abstract class that describes Stream Output
+     * @throws IOException if an I/O exception occurred while writing to the output stream
+     */
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         Version streamOutputVersion = out.getVersion();
         out.writeOptionalString(promptId);
         out.writeOptionalString(name);
         out.writeOptionalString(description);
-        if (prompt != null) {
-            out.writeBoolean(true);
-            out.writeMap(prompt, StreamOutput::writeString, StreamOutput::writeString);
-        }
+        out.writeMap(prompt, StreamOutput::writeString, StreamOutput::writeString);
         out.writeOptionalString(tag);
         if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
             out.writeOptionalString(tenantId);
@@ -99,8 +122,16 @@ public class MLPrompt implements ToXContentObject, Writeable {
         out.writeInstant(lastUpdateTime);
     }
 
+    /**
+     * Serialize and Writes the MLPrompt object to the XContentBuilder
+     *
+     * @param xContentBuilder XContentBuilder
+     * @param params Parameters that need to be written to xContentBuilder
+     * @return XContentBuilder
+     * @throws IOException if an I/O exception occurred while writing field values to xContent
+     */
     @Override
-    public XContentBuilder toXContent(XContentBuilder xContentBuilder, Params params) throws java.io.IOException {
+    public XContentBuilder toXContent(XContentBuilder xContentBuilder, Params params) throws IOException {
         XContentBuilder builder = xContentBuilder.startObject();
         if (promptId != null) {
             builder.field(PROMPT_ID_FIELD, promptId);
@@ -129,10 +160,24 @@ public class MLPrompt implements ToXContentObject, Writeable {
         return builder.endObject();
     }
 
+    /**
+     * Creates MLPrompt from stream input
+     *
+     * @param in Input Stream
+     * @return MLPrompt
+     * @throws IOException if an I/O exception occurred while reading from input stream
+     */
     public static MLPrompt fromStream(StreamInput in) throws IOException {
         return new MLPrompt(in);
     }
 
+    /**
+     * Creates MLPrompt from XContentParser
+     *
+     * @param parser XContentParser
+     * @return MLPrompt
+     * @throws IOException if an I/O exception occurred while parsing the XContentParser into MLPrompt fields
+     */
     public static MLPrompt parse(XContentParser parser) throws IOException {
         String name = null;
         String description = null;
@@ -185,7 +230,12 @@ public class MLPrompt implements ToXContentObject, Writeable {
             .build();
     }
 
-    /*public void update(MLCreatePromptInput updateContent) {
+    /**
+     * Update MLPrompt with new content
+     *
+     * @param updateContent The new content to update the MLPrompt with
+     */
+    public void update(MLCreatePromptInput updateContent) {
         if (updateContent.getName() != null) {
             this.name = updateContent.getName();
         }
@@ -198,5 +248,6 @@ public class MLPrompt implements ToXContentObject, Writeable {
         if (updateContent.getTag() != null) {
             this.tag = updateContent.getTag();
         }
-    }*/
+        this.lastUpdateTime = Instant.now();
+    }
 }
