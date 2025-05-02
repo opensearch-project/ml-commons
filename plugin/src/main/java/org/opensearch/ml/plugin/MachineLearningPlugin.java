@@ -92,6 +92,7 @@ import org.opensearch.ml.action.prediction.TransportPredictionTaskAction;
 import org.opensearch.ml.action.profile.MLProfileAction;
 import org.opensearch.ml.action.profile.MLProfileTransportAction;
 import org.opensearch.ml.action.prompt.TransportCreatePromptAction;
+import org.opensearch.ml.action.prompt.GetPromptTransportAction;
 import org.opensearch.ml.action.register.TransportRegisterModelAction;
 import org.opensearch.ml.action.stats.MLStatsNodesAction;
 import org.opensearch.ml.action.stats.MLStatsNodesTransportAction;
@@ -164,6 +165,7 @@ import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupAction
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prompt.MLCreatePromptAction;
+import org.opensearch.ml.common.transport.prompt.MLPromptGetAction;
 import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
 import org.opensearch.ml.common.transport.task.MLCancelBatchJobAction;
@@ -232,6 +234,7 @@ import org.opensearch.ml.memory.index.ConversationMetaIndex;
 import org.opensearch.ml.memory.index.OpenSearchConversationalMemoryHandler;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.prompt.MLPromptManager;
 import org.opensearch.ml.processor.MLInferenceIngestProcessor;
 import org.opensearch.ml.processor.MLInferenceSearchRequestProcessor;
 import org.opensearch.ml.processor.MLInferenceSearchResponseProcessor;
@@ -239,7 +242,6 @@ import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.ml.rest.RestMLCancelBatchJobAction;
 import org.opensearch.ml.rest.RestMLCreateConnectorAction;
 import org.opensearch.ml.rest.RestMLCreateControllerAction;
-import org.opensearch.ml.rest.RestMLCreatePromptAction;
 import org.opensearch.ml.rest.RestMLDeleteAgentAction;
 import org.opensearch.ml.rest.RestMLDeleteConnectorAction;
 import org.opensearch.ml.rest.RestMLDeleteControllerAction;
@@ -289,6 +291,8 @@ import org.opensearch.ml.rest.RestMemorySearchConversationsAction;
 import org.opensearch.ml.rest.RestMemorySearchInteractionsAction;
 import org.opensearch.ml.rest.RestMemoryUpdateConversationAction;
 import org.opensearch.ml.rest.RestMemoryUpdateInteractionAction;
+import org.opensearch.ml.rest.RestMLCreatePromptAction;
+import org.opensearch.ml.rest.RestMLGetPromptAction;
 import org.opensearch.ml.searchext.MLInferenceRequestParametersExtBuilder;
 import org.opensearch.ml.settings.MLCommonsSettings;
 import org.opensearch.ml.settings.MLFeatureEnabledSetting;
@@ -362,7 +366,7 @@ public class MachineLearningPlugin extends Plugin
     private MLStats mlStats;
     private MLModelCacheHelper modelCacheHelper;
     private MLTaskManager mlTaskManager;
-    // private MLPromptManager mlPromptManager;
+    private MLPromptManager mlPromptManager;
     private MLModelManager mlModelManager;
     private MLIndicesHandler mlIndicesHandler;
     private MLInputDatasetHandler mlInputDatasetHandler;
@@ -445,7 +449,7 @@ public class MachineLearningPlugin extends Plugin
                 new ActionHandler<>(MLConnectorGetAction.INSTANCE, GetConnectorTransportAction.class),
                 new ActionHandler<>(MLConnectorDeleteAction.INSTANCE, DeleteConnectorTransportAction.class),
                 new ActionHandler<>(MLConnectorSearchAction.INSTANCE, SearchConnectorTransportAction.class),
-                // new ActionHandler<>(MLPromptGetAction.INSTANCE, GetPromptTransportAction.class),
+                new ActionHandler<>(MLPromptGetAction.INSTANCE, GetPromptTransportAction.class),
                 // new ActionHandler<>(MLPromptSearchAction.INSTANCE, SearchPromptTransportAction.class),
                 new ActionHandler<>(MLCreatePromptAction.INSTANCE, TransportCreatePromptAction.class),
                 // new ActionHandler<>(MLPromptDeleteAction.INSTANCE, DeletePromptTransportAction.class),
@@ -566,7 +570,7 @@ public class MachineLearningPlugin extends Plugin
         this.mlStats = new MLStats(stats);
 
         mlTaskManager = new MLTaskManager(client, sdkClient, threadPool, mlIndicesHandler);
-        // mlPromptManager = new MLPromptManager(client, sdkClient, threadPool, mlIndicesHandler);
+        mlPromptManager = new MLPromptManager(client, sdkClient, threadPool, mlIndicesHandler);
         modelHelper = new ModelHelper(mlEngine);
 
         mlInputDatasetHandler = new MLInputDatasetHandler(client);
@@ -744,7 +748,7 @@ public class MachineLearningPlugin extends Plugin
                 modelCacheHelper,
                 mlStats,
                 mlTaskManager,
-                // mlPromptManager,
+                mlPromptManager,
                 mlModelManager,
                 agentModelsSearcher,
                 mlIndicesHandler,
@@ -817,7 +821,7 @@ public class MachineLearningPlugin extends Plugin
         RestMLSearchConnectorAction restMLSearchConnectorAction = new RestMLSearchConnectorAction(mlFeatureEnabledSetting);
         RestMLCreatePromptAction restMLCreatePromptAction = new RestMLCreatePromptAction(mlFeatureEnabledSetting);
         // RestMLUpdatePromptAction restMLUpdatePromptAction = new RestMLUpdatePromptAction(mlFeatureEnabledSetting);
-        // RestMLGetPromptAction restMLGetPromptAction = new RestMLGetPromptAction(mlFeatureEnabledSetting);
+        RestMLGetPromptAction restMLGetPromptAction = new RestMLGetPromptAction(mlFeatureEnabledSetting);
         // RestMLSearchPromptAction restMLSearchPromptAction = new RestMLSearchPromptAction(mlFeatureEnabledSetting);
         // RestMLDeletePromptAction restMLDeletePromptAction = new RestMLDeletePromptAction(mlFeatureEnabledSetting);
         RestMemoryCreateConversationAction restCreateConversationAction = new RestMemoryCreateConversationAction();
@@ -877,8 +881,8 @@ public class MachineLearningPlugin extends Plugin
                 restMLDeleteConnectorAction,
                 restMLSearchConnectorAction,
                 restMLCreatePromptAction,
+                restMLGetPromptAction,
                 // restMLUpdatePromptAction,
-                // restMLGetPromptAction,
                 // restMLSearchPromptAction,
                 // restMLDeletePromptAction,
                 restCreateConversationAction,
