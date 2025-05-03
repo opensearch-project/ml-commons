@@ -21,6 +21,7 @@ import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.MLPrompt;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
+import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.threadpool.ThreadPool;
@@ -50,6 +51,7 @@ public class MLPromptManager {
 
     /**
      * Gets a prompt with the provided clients asynchronously.
+     *
      * @param sdkClient The SDKClient
      * @param client The OpenSearch client for thread pool management
      * @param context The Stored Context.  Executing this method will restore this context.
@@ -65,46 +67,50 @@ public class MLPromptManager {
             String promptId,
             ActionListener<MLPrompt> listener
     ) {
-        sdkClient.getDataObjectAsync(getDataObjectRequest).whenComplete((r, throwable) -> {
-            context.restore();
-            log.debug("Completed Get Prompt Request, id:{}", promptId);
-            if (throwable != null) {
-                Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                if (ExceptionsHelper.unwrap(throwable, IndexNotFoundException.class) != null) {
-                    log.error("Failed to get prompt index", cause);
-                    listener.onFailure(new OpenSearchStatusException("Failed to find prompt", RestStatus.NOT_FOUND));
-                } else {
-                    log.error("Failed to get ML prompt {}", promptId, cause);
-                    listener.onFailure(cause);
-                }
-            } else {
-                try {
-                    GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
-                    if (gr != null && gr.isExists()) {
-                        try (
-                                XContentParser parser = jsonXContent
-                                        .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, gr.getSourceAsString())
-                        ) {
-                            ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                            MLPrompt mlPrompt = MLPrompt.parse(parser);
-                            listener.onResponse(mlPrompt);
-                        } catch (Exception e) {
-                            log.error("Failed to parse ml prompt {}", r.id(), e);
-                            listener.onFailure(e);
-                        }
-                    } else {
-                        listener
-                                .onFailure(
-                                        new OpenSearchStatusException(
-                                                "Failed to find prompt with the provided prompt id: " + promptId,
-                                                RestStatus.NOT_FOUND
-                                        )
-                                );
-                    }
-                } catch (Exception e) {
-                    listener.onFailure(e);
-                }
+        sdkClient.
+                getDataObjectAsync(getDataObjectRequest)
+                .whenComplete((getAsyncResponse, throwable) -> {
+                    context.restore();
+                    handleAsyncResponse(getAsyncResponse, throwable, promptId, listener);
+                });
+    }
+
+    private void handleAsyncResponse(GetDataObjectResponse getAsyncResponse, Throwable throwable, String promptId, ActionListener<MLPrompt> listener) {
+        if (throwable != null) {
+            handleThrowable(throwable, promptId, listener);
+            return;
+        }
+        processResponse(getAsyncResponse, promptId, listener);
+    }
+
+    private void handleThrowable(Throwable throwable, String promptId, ActionListener<MLPrompt> listener) {
+        Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+        if (ExceptionsHelper.unwrap(throwable, IndexNotFoundException.class) != null) {
+            log.error("Failed to get prompt index", cause);
+            listener.onFailure(new OpenSearchStatusException("Failed to find prompt with the provided prompt id: " + promptId, RestStatus.NOT_FOUND));
+        } else {
+            log.error("Failed to get ML prompt {}", promptId, cause);
+            listener.onFailure(cause);
+        }
+    }
+
+    private void processResponse(GetDataObjectResponse getAsyncResponse, String promptId, ActionListener<MLPrompt> listener) {
+        try {
+            GetResponse getResponse = getAsyncResponse.parser() == null ? null : GetResponse.fromXContent(getAsyncResponse.parser());
+            if (getResponse == null || !getResponse.isExists()) {
+                listener.onFailure(new OpenSearchStatusException("Failed to find prompt with the provided prompt id: " + promptId, RestStatus.NOT_FOUND));
+                return;
             }
-        });
+            try (
+                    XContentParser parser = jsonXContent.createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, getResponse.getSourceAsString())
+            ) {
+                ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                MLPrompt mlPrompt = MLPrompt.parse(parser);
+                listener.onResponse(mlPrompt);
+            }
+        } catch (Exception e) {
+            log.error("Failed to parse GetDataObjectResponse for prompt {}", promptId, e);
+            listener.onFailure(e);
+        }
     }
 }
