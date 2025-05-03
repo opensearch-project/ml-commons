@@ -58,12 +58,12 @@ public class MLCreatePromptInput implements ToXContentObject, Writeable {
      */
     @Builder(toBuilder = true)
     public MLCreatePromptInput(
-            String name,
-            String description,
-            Map<String, String> prompt,
-            String tag,
-            String tenantId,
-            boolean updatePrompt
+        String name,
+        String description,
+        Map<String, String> prompt,
+        String tag,
+        String tenantId,
+        boolean updatePrompt
     ) {
         if (!updatePrompt) {
             if (name == null) {
@@ -166,14 +166,7 @@ public class MLCreatePromptInput implements ToXContentObject, Writeable {
                     break;
             }
         }
-        return new MLCreatePromptInput(
-                name,
-                description,
-                prompt,
-                tag,
-                tenantId,
-                updatePrompt
-        );
+        return new MLCreatePromptInput(name, description, prompt, tag, tenantId, updatePrompt);
     }
 
     /**
