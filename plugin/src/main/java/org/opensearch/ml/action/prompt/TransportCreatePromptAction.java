@@ -5,7 +5,10 @@
 
 package org.opensearch.ml.action.prompt;
 
-import lombok.extern.log4j.Log4j2;
+import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX;
+
+import java.time.Instant;
+
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -29,9 +32,7 @@ import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
 
-import java.time.Instant;
-
-import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX;
+import lombok.extern.log4j.Log4j2;
 
 /**
  * Transport Action class that handles received validated ActionRequest from Rest Layer and
@@ -114,13 +115,10 @@ public class TransportCreatePromptAction extends HandledTransportAction<ActionRe
 
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 PutDataObjectRequest putRequest = buildPromptPutRequest(prompt);
-                sdkClient
-                        .putDataObjectAsync(putRequest)
-                        .whenComplete((putResponse, throwable) -> {
-                            context.restore();
-                            handlePromptPutResponse(putResponse, throwable, listener);
-                        }
-                );
+                sdkClient.putDataObjectAsync(putRequest).whenComplete((putResponse, throwable) -> {
+                    context.restore();
+                    handlePromptPutResponse(putResponse, throwable, listener);
+                });
             }
         }, e -> {
             log.error("Failed to init ML prompt index", e);
@@ -135,12 +133,7 @@ public class TransportCreatePromptAction extends HandledTransportAction<ActionRe
      * @return PutDataObjectRequest
      */
     private PutDataObjectRequest buildPromptPutRequest(MLPrompt prompt) {
-        return PutDataObjectRequest
-                .builder()
-                .tenantId(prompt.getTenantId())
-                .index(ML_PROMPT_INDEX)
-                .dataObject(prompt)
-                .build();
+        return PutDataObjectRequest.builder().tenantId(prompt.getTenantId()).index(ML_PROMPT_INDEX).dataObject(prompt).build();
     }
 
     /**
