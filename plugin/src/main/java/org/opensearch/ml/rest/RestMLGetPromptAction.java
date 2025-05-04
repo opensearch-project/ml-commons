@@ -55,7 +55,7 @@ public class RestMLGetPromptAction extends BaseRestHandler {
     @Override
     public List<Route> routes() {
         return ImmutableList
-                .of(new Route(RestRequest.Method.GET, String.format(Locale.ROOT, "%s/prompts/{%s}", ML_BASE_URI, PARAMETER_PROMPT_ID)));
+            .of(new Route(RestRequest.Method.GET, String.format(Locale.ROOT, "%s/prompts/{%s}", ML_BASE_URI, PARAMETER_PROMPT_ID)));
     }
 
     /**

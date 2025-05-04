@@ -5,9 +5,8 @@
 
 package org.opensearch.ml.action.prompt;
 
-import lombok.AccessLevel;
-import lombok.experimental.FieldDefaults;
-import lombok.extern.log4j.Log4j2;
+import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX;
+
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
@@ -28,7 +27,9 @@ import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
 
-import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX;
+import lombok.AccessLevel;
+import lombok.experimental.FieldDefaults;
+import lombok.extern.log4j.Log4j2;
 
 /**
  * Transport Action class that handles received validated ActionRequest from Rest Layer and
@@ -44,13 +45,13 @@ public class GetPromptTransportAction extends HandledTransportAction<ActionReque
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Inject
-    public  GetPromptTransportAction(
-            TransportService transportService,
-            ActionFilters actionFilters,
-            Client client,
-            SdkClient sdkClient,
-            MLFeatureEnabledSetting mlFeatureEnabledSetting,
-            MLPromptManager mlPromptManager
+    public GetPromptTransportAction(
+        TransportService transportService,
+        ActionFilters actionFilters,
+        Client client,
+        SdkClient sdkClient,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        MLPromptManager mlPromptManager
     ) {
         super(MLPromptGetAction.NAME, transportService, actionFilters, MLPromptGetRequest::new);
         this.client = client;
@@ -78,22 +79,26 @@ public class GetPromptTransportAction extends HandledTransportAction<ActionReque
         }
         FetchSourceContext fetchSourceContext = new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);
         GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
-                .builder()
-                .index(ML_PROMPT_INDEX)
-                .id(promptId)
-                .tenantId(tenantId)
-                .fetchSourceContext(fetchSourceContext)
-                .build();
+            .builder()
+            .index(ML_PROMPT_INDEX)
+            .id(promptId)
+            .tenantId(tenantId)
+            .fetchSourceContext(fetchSourceContext)
+            .build();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            mlPromptManager.getPromptAsync(
+            mlPromptManager
+                .getPromptAsync(
                     sdkClient,
                     client,
                     context,
                     getDataObjectRequest,
                     promptId,
-                    ActionListener.wrap(mlPrompt -> actionListener.onResponse(MLPromptGetResponse.builder().mlPrompt(mlPrompt).build()),
-                            e -> handleFailure(e, promptId, actionListener))
-            );
+                    ActionListener
+                        .wrap(
+                            mlPrompt -> actionListener.onResponse(MLPromptGetResponse.builder().mlPrompt(mlPrompt).build()),
+                            e -> handleFailure(e, promptId, actionListener)
+                        )
+                );
         } catch (Exception e) {
             handleFailure(e, promptId, actionListener);
         }
