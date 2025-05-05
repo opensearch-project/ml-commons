@@ -13,6 +13,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.function.Supplier;
 
+import lombok.Setter;
 import org.opensearch.arrow.spi.StreamManager;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
@@ -31,6 +32,7 @@ import org.opensearch.ml.engine.encryptor.Encryptor;
 
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
+import org.opensearch.threadpool.ThreadPool;
 
 /**
  * This is the interface to all ml algorithms.
@@ -52,14 +54,16 @@ public class MLEngine {
 
     private Encryptor encryptor;
 
-    private Supplier<StreamManager> streamManager;
+    @Setter
+    private StreamManager streamManager;
+    @Setter
+    private ThreadPool threadPool;
 
-    public MLEngine(Path opensearchDataFolder, Encryptor encryptor, Supplier<StreamManager> streamManager) {
+    public MLEngine(Path opensearchDataFolder, Encryptor encryptor) {
         this.mlCachePath = opensearchDataFolder.resolve("ml_cache");
         this.mlModelsCachePath = mlCachePath.resolve("models_cache");
         this.mlConfigPath = mlCachePath.resolve("config");
         this.encryptor = encryptor;
-        this.streamManager = streamManager;
     }
 
     public String getPrebuiltModelMetaListPath() {
@@ -151,7 +155,7 @@ public class MLEngine {
 
     public Predictable deploy(MLModel mlModel, Map<String, Object> params) {
         Predictable predictable = MLEngineClassLoader.initInstance(mlModel.getAlgorithm(), null, MLAlgoParams.class);
-        predictable.initModel(mlModel, params, encryptor, streamManager);
+        predictable.initModel(mlModel, params, encryptor, streamManager, threadPool);
         return predictable;
     }
 
@@ -228,10 +232,6 @@ public class MLEngine {
 
     public String encrypt(String credential, String tenantId) {
         return encryptor.encrypt(credential, tenantId);
-    }
-
-    public void setStreamManager(Supplier<StreamManager> streamManager) {
-        this.streamManager = streamManager;
     }
 
 }

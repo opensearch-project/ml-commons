@@ -430,12 +430,6 @@ public class MachineLearningPlugin extends Plugin
 
     private StreamManager streamManager;
 
-    private StreamManager getStreamManagerRef() {
-        return this.streamManager;
-    }
-
-    private Supplier<StreamManager> streamManagerSupplier = () -> { return getStreamManagerRef();};
-
     public MachineLearningPlugin(Settings settings) {
         // Handle this here as this feature is tied to Search/Query API, not to a ml-common API
         // and as such, it can't be lazy-loaded when a ml-commons API is invoked.
@@ -565,7 +559,7 @@ public class MachineLearningPlugin extends Plugin
 
         encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
 
-        mlEngine = new MLEngine(dataPath, encryptor, streamManagerSupplier);
+        mlEngine = new MLEngine(dataPath, encryptor);
         streamManagerWrapper = new StreamManagerWrapper();
         nodeHelper = new DiscoveryNodeHelper(clusterService, settings);
         modelCacheHelper = new MLModelCacheHelper(clusterService, settings);
@@ -1297,15 +1291,16 @@ public class MachineLearningPlugin extends Plugin
         return factories;
     }
 
-    public void onStreamManagerInitialized(Supplier<StreamManager> streamManager) {
-        this.streamManager = streamManager.get();
+    public void onStreamManagerInitialized(StreamManager streamManager) {
+        this.streamManager = streamManager;
         mlEngine.setStreamManager(streamManager);
+        mlEngine.setThreadPool(threadPool);
         streamManagerWrapper.setStreamManager(streamManager);
     }
 
     @Data
     public static class StreamManagerWrapper {
-        private Supplier<StreamManager> streamManager;
+        private StreamManager streamManager;
     }
 
 }

@@ -17,6 +17,7 @@ import static org.opensearch.ml.utils.RestActionUtils.getParameterId;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -140,26 +141,23 @@ public class RestMLPredictionStreamingAction extends BaseRestHandler {
                                             ModelTensorOutput modelTensorOutput = (ModelTensorOutput) mlTaskResponse.getOutput();
                                             StreamTicket ticket = (StreamTicket) modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap().get("stream_ticket");
                                             log.info("[jngz rest] stream ticket is: {}", ticket);
-                                            StreamManager streamManager = streamManagerWrapper.getStreamManager().get();
-                                            StreamReader<VectorSchemaRoot> reader1 = streamManager.getStreamReader(ticket);
-                                            try (StreamReader<VectorSchemaRoot> reader = streamManagerWrapper.getStreamManager().get().getStreamReader(ticket)) {
+                                            StreamManager streamManager = streamManagerWrapper.getStreamManager();
+                                            try (StreamReader<VectorSchemaRoot> reader = streamManager.getStreamReader(ticket)) {
                                                 int totalBatches = 0;
-                                                VectorSchemaRoot vectorSchemaRoot = reader.getRoot();
-                                                VarCharVector eventVector1 = (VarCharVector) vectorSchemaRoot.getVector("event");
                                                 Preconditions.checkNotNull(reader.getRoot().getVector("event"));
                                                 while (reader.next()) {
                                                     VarCharVector eventVector = (VarCharVector) reader.getRoot().getVector("event");
                                                     Preconditions.checkArgument(1 == eventVector.getValueCount());
-                                                    String chunk = eventVector.get(0).toString();
-                                                    log.info("[Chunk {}]: {}", totalBatches, chunk);
+                                                    String chunk = new String(eventVector.get(0), StandardCharsets.UTF_8);
+                                                    log.info("[jngz rest][Chunk {}]: {}", totalBatches, chunk);
                                                     XContentBuilder builder = channel.newBuilder(mediaType, true);
                                                     builder.startObject();
-                                                    builder.field("chunk", chunk);
+                                                    builder.field(String.format("chunk%d", totalBatches), chunk);
                                                     builder.endObject();
                                                     channel.sendChunk(XContentHttpChunk.from(builder));
                                                     totalBatches++;
                                                 }
-                                                log.info("The number of batches: {}", totalBatches);
+                                                log.info("[jngz rest] The number of batches: {}", totalBatches);
                                                 channel.sendChunk(XContentHttpChunk.last());
                                             } catch (IOException e) {
                                                 throw new MLException("Sending http chunks failed.");

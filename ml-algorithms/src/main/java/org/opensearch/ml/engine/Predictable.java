@@ -15,6 +15,7 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.engine.encryptor.Encryptor;
+import org.opensearch.threadpool.ThreadPool;
 
 /**
  * This is machine learning algorithms predict interface.
@@ -53,7 +54,7 @@ public interface Predictable {
 
     };
 
-    default void initModel(MLModel model, Map<String, Object> params, Encryptor encryptor, Supplier<StreamManager> streamManager) {
+    default void initModel(MLModel model, Map<String, Object> params, Encryptor encryptor, StreamManager streamManager, ThreadPool threadPool) {
 
     };
 
