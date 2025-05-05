@@ -9,12 +9,6 @@ grant {
     permission java.lang.RuntimePermission "getClassLoader";
     permission java.lang.reflect.ReflectPermission "suppressAccessChecks";
 
-    // Register model
-    // s3 client opens socket connections for to access repository
-    // OKHttp3 SSE
-    permission java.net.SocketPermission "*", "connect,resolve";
-    permission java.net.SocketPermission "okhttp3.sse.*", "connect,resolve";
-
     // Deploy model
     permission java.lang.RuntimePermission "createClassLoader";
     permission java.lang.RuntimePermission "loadLibrary.*";
@@ -37,5 +31,6 @@ grant {
     // for accessing Unix domain socket on windows
     permission java.net.NetPermission "accessUnixDomainSocket";
 
+    permission java.net.SocketPermission "*", "accept,connect,listen,resolve";
     permission java.net.NetPermission "getProxySelector";
 };
