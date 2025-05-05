@@ -69,7 +69,7 @@ public class MLEngineTest extends MLStaticMockBase {
     @Before
     public void setUp() {
         Encryptor encryptor = new EncryptorImpl(null, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
-        mlEngine = new MLEngine(Path.of("/tmp/test" + UUID.randomUUID()), encryptor, null);
+        mlEngine = new MLEngine(Path.of("/tmp/test" + UUID.randomUUID()), encryptor);
     }
 
     @Test
@@ -439,7 +439,7 @@ public class MLEngineTest extends MLStaticMockBase {
     @Test
     public void testMLEngineInitialization() {
         Path testPath = Path.of("/tmp/test" + UUID.randomUUID());
-        mlEngine = new MLEngine(testPath, new EncryptorImpl(null, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w="), null);
+        mlEngine = new MLEngine(testPath, new EncryptorImpl(null, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w="));
 
         Path expectedMlCachePath = testPath.resolve("ml_cache");
         Path expectedMlConfigPath = expectedMlCachePath.resolve("config");

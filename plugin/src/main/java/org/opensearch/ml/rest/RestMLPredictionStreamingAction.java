@@ -22,52 +22,45 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-import java.util.function.Supplier;
 
-import com.google.common.base.Preconditions;
-import org.apache.arrow.vector.IntVector;
 import org.apache.arrow.vector.VarCharVector;
 import org.apache.arrow.vector.VectorSchemaRoot;
 import org.opensearch.action.ActionRequestValidationException;
-import org.opensearch.action.bulk.BulkResponse;
 import org.opensearch.arrow.spi.StreamManager;
 import org.opensearch.arrow.spi.StreamReader;
 import org.opensearch.arrow.spi.StreamTicket;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.support.XContentHttpChunk;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.core.xcontent.ToXContent;
-import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.ml.common.exception.MLException;
-import org.opensearch.ml.common.output.model.ModelTensorOutput;
-import org.opensearch.ml.common.transport.MLTaskResponse;
-import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
-import org.opensearch.ml.plugin.MachineLearningPlugin;
-import org.opensearch.rest.action.RestToXContentListener;
-import org.opensearch.transport.client.node.NodeClient;
-import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.common.bytes.CompositeBytesReference;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.MediaType;
+import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.connector.ConnectorAction.ActionType;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.plugin.MachineLearningPlugin;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.StreamingRestChannel;
+import org.opensearch.transport.client.node.NodeClient;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 
 import lombok.extern.log4j.Log4j2;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
 
 @Log4j2
 public class RestMLPredictionStreamingAction extends BaseRestHandler {
@@ -82,7 +75,11 @@ public class RestMLPredictionStreamingAction extends BaseRestHandler {
     /**
      * Constructor
      */
-    public RestMLPredictionStreamingAction(MLModelManager modelManager, MLFeatureEnabledSetting mlFeatureEnabledSetting, MachineLearningPlugin.StreamManagerWrapper streamManagerWrapper) {
+    public RestMLPredictionStreamingAction(
+        MLModelManager modelManager,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        MachineLearningPlugin.StreamManagerWrapper streamManagerWrapper
+    ) {
         this.modelManager = modelManager;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         this.streamManagerWrapper = streamManagerWrapper;
@@ -130,61 +127,63 @@ public class RestMLPredictionStreamingAction extends BaseRestHandler {
                     try {
                         MLPredictionTaskRequest taskRequest = getRequest(modelId, FunctionName.REMOTE.name(), request, bytesReference);
                         log.info("[jngz]: generated predict task request.");
-                        client
-                            .execute(
-                                    MLPredictionTaskAction.INSTANCE,
-                                    taskRequest,
-                                    new ActionListener<MLTaskResponse>() {
-                                        @Override
-                                        public void onResponse(MLTaskResponse mlTaskResponse) {
-                                            log.info("[jngz rest] get the response with ticket. The response is, {}", mlTaskResponse);
-                                            ModelTensorOutput modelTensorOutput = (ModelTensorOutput) mlTaskResponse.getOutput();
-                                            StreamTicket ticket = (StreamTicket) modelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap().get("stream_ticket");
-                                            log.info("[jngz rest] stream ticket is: {}", ticket);
-                                            StreamManager streamManager = streamManagerWrapper.getStreamManager();
-                                            try (StreamReader<VectorSchemaRoot> reader = streamManager.getStreamReader(ticket)) {
-                                                int totalBatches = 0;
-                                                Preconditions.checkNotNull(reader.getRoot().getVector("event"));
-                                                while (reader.next()) {
-                                                    VarCharVector eventVector = (VarCharVector) reader.getRoot().getVector("event");
-                                                    Preconditions.checkArgument(1 == eventVector.getValueCount());
-                                                    String chunk = new String(eventVector.get(0), StandardCharsets.UTF_8);
-                                                    log.info("[jngz rest][Chunk {}]: {}", totalBatches, chunk);
-                                                    XContentBuilder builder = channel.newBuilder(mediaType, true);
-                                                    builder.startObject();
-                                                    builder.field(String.format("chunk%d", totalBatches), chunk);
-                                                    builder.endObject();
-                                                    channel.sendChunk(XContentHttpChunk.from(builder));
-                                                    totalBatches++;
-                                                }
-                                                log.info("[jngz rest] The number of batches: {}", totalBatches);
-                                                channel.sendChunk(XContentHttpChunk.last());
-                                            } catch (IOException e) {
-                                                throw new MLException("Sending http chunks failed.");
-                                            }
-                                        }
-
-                                        @Override
-                                        public void onFailure(Exception e) {
-                                            throw new MLException("Got an exception in MLPredictionTaskAction.", e);
-                                        }
+                        client.execute(MLPredictionTaskAction.INSTANCE, taskRequest, new ActionListener<MLTaskResponse>() {
+                            @Override
+                            public void onResponse(MLTaskResponse mlTaskResponse) {
+                                log.info("[jngz rest] get the response with ticket. The response is, {}", mlTaskResponse);
+                                ModelTensorOutput modelTensorOutput = (ModelTensorOutput) mlTaskResponse.getOutput();
+                                StreamTicket ticket = (StreamTicket) modelTensorOutput
+                                    .getMlModelOutputs()
+                                    .get(0)
+                                    .getMlModelTensors()
+                                    .get(0)
+                                    .getDataAsMap()
+                                    .get("stream_ticket");
+                                log.info("[jngz rest] stream ticket is: {}", ticket);
+                                StreamManager streamManager = streamManagerWrapper.getStreamManager();
+                                try (StreamReader<VectorSchemaRoot> reader = streamManager.getStreamReader(ticket)) {
+                                    int totalBatches = 0;
+                                    Preconditions.checkNotNull(reader.getRoot().getVector("event"));
+                                    while (reader.next()) {
+                                        VarCharVector eventVector = (VarCharVector) reader.getRoot().getVector("event");
+                                        Preconditions.checkArgument(1 == eventVector.getValueCount());
+                                        String chunk = new String(eventVector.get(0), StandardCharsets.UTF_8);
+                                        log.info("[jngz rest][Chunk {}]: {}", totalBatches, chunk);
+                                        XContentBuilder builder = channel.newBuilder(mediaType, true);
+                                        builder.startObject();
+                                        builder.field(String.format("chunk%d", totalBatches), chunk);
+                                        builder.endObject();
+                                        channel.sendChunk(XContentHttpChunk.from(builder));
+                                        totalBatches++;
                                     }
-                            );
+                                    log.info("[jngz rest] The number of batches: {}", totalBatches);
+                                    channel.sendChunk(XContentHttpChunk.last());
+                                } catch (IOException e) {
+                                    throw new MLException("Sending http chunks failed.");
+                                }
+                            }
+
+                            @Override
+                            public void onFailure(Exception e) {
+                                throw new MLException("Got an exception in MLPredictionTaskAction.", e);
+                            }
+                        });
                     } catch (IOException e) {
                         throw new MLException("Got an exception in flux.", e);
                     }
-                }).onErrorComplete(ex -> {
-                        if (ex instanceof Error) {
-                            log.info("[jngz rest] got an error in flux");
-                            return false;
-                        }
-                        try {
-                            channel.sendResponse(new BytesRestResponse(channel, (Exception) ex));
-                            return true;
-                        } catch (final IOException e) {
-                            throw new UncheckedIOException(e);
-                        }
-                    })
+                })
+                .onErrorComplete(ex -> {
+                    if (ex instanceof Error) {
+                        log.info("[jngz rest] got an error in flux");
+                        return false;
+                    }
+                    try {
+                        channel.sendResponse(new BytesRestResponse(channel, (Exception) ex));
+                        return true;
+                    } catch (final IOException e) {
+                        throw new UncheckedIOException(e);
+                    }
+                })
                 .subscribe();
         };
 

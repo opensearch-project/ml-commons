@@ -39,7 +39,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
 import org.apache.lucene.analysis.Analyzer;
-import lombok.Data;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.arrow.spi.StreamManager;
 import org.opensearch.cluster.metadata.IndexNameExpressionResolver;
@@ -257,58 +256,7 @@ import org.opensearch.ml.processor.MLInferenceIngestProcessor;
 import org.opensearch.ml.processor.MLInferenceSearchRequestProcessor;
 import org.opensearch.ml.processor.MLInferenceSearchResponseProcessor;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
-import org.opensearch.ml.rest.RestMLCancelBatchJobAction;
-import org.opensearch.ml.rest.RestMLCreateConnectorAction;
-import org.opensearch.ml.rest.RestMLCreateControllerAction;
-import org.opensearch.ml.rest.RestMLDeleteAgentAction;
-import org.opensearch.ml.rest.RestMLDeleteConnectorAction;
-import org.opensearch.ml.rest.RestMLDeleteControllerAction;
-import org.opensearch.ml.rest.RestMLDeleteModelAction;
-import org.opensearch.ml.rest.RestMLDeleteModelGroupAction;
-import org.opensearch.ml.rest.RestMLDeleteTaskAction;
-import org.opensearch.ml.rest.RestMLDeployModelAction;
-import org.opensearch.ml.rest.RestMLExecuteAction;
-import org.opensearch.ml.rest.RestMLGetAgentAction;
-import org.opensearch.ml.rest.RestMLGetConfigAction;
-import org.opensearch.ml.rest.RestMLGetConnectorAction;
-import org.opensearch.ml.rest.RestMLGetControllerAction;
-import org.opensearch.ml.rest.RestMLGetModelAction;
-import org.opensearch.ml.rest.RestMLGetModelGroupAction;
-import org.opensearch.ml.rest.RestMLGetTaskAction;
-import org.opensearch.ml.rest.RestMLGetToolAction;
-import org.opensearch.ml.rest.RestMLListToolsAction;
-import org.opensearch.ml.rest.RestMLPredictionAction;
-import org.opensearch.ml.rest.RestMLProfileAction;
-import org.opensearch.ml.rest.RestMLRegisterAgentAction;
-import org.opensearch.ml.rest.RestMLRegisterModelAction;
-import org.opensearch.ml.rest.RestMLRegisterModelGroupAction;
-import org.opensearch.ml.rest.RestMLRegisterModelMetaAction;
-import org.opensearch.ml.rest.RestMLSearchAgentAction;
-import org.opensearch.ml.rest.RestMLSearchConnectorAction;
-import org.opensearch.ml.rest.RestMLSearchModelAction;
-import org.opensearch.ml.rest.RestMLSearchModelGroupAction;
-import org.opensearch.ml.rest.RestMLSearchTaskAction;
-import org.opensearch.ml.rest.RestMLStatsAction;
-import org.opensearch.ml.rest.RestMLTrainAndPredictAction;
-import org.opensearch.ml.rest.RestMLTrainingAction;
-import org.opensearch.ml.rest.RestMLUndeployModelAction;
-import org.opensearch.ml.rest.RestMLUpdateConnectorAction;
-import org.opensearch.ml.rest.RestMLUpdateControllerAction;
-import org.opensearch.ml.rest.RestMLUpdateModelAction;
-import org.opensearch.ml.rest.RestMLUpdateModelGroupAction;
-import org.opensearch.ml.rest.RestMLUploadModelChunkAction;
-import org.opensearch.ml.rest.RestMemoryCreateConversationAction;
-import org.opensearch.ml.rest.RestMemoryCreateInteractionAction;
-import org.opensearch.ml.rest.RestMemoryDeleteConversationAction;
-import org.opensearch.ml.rest.RestMemoryGetConversationAction;
-import org.opensearch.ml.rest.RestMemoryGetConversationsAction;
-import org.opensearch.ml.rest.RestMemoryGetInteractionAction;
-import org.opensearch.ml.rest.RestMemoryGetInteractionsAction;
-import org.opensearch.ml.rest.RestMemoryGetTracesAction;
-import org.opensearch.ml.rest.RestMemorySearchConversationsAction;
-import org.opensearch.ml.rest.RestMemorySearchInteractionsAction;
-import org.opensearch.ml.rest.RestMemoryUpdateConversationAction;
-import org.opensearch.ml.rest.RestMemoryUpdateInteractionAction;
+import org.opensearch.ml.rest.*;
 import org.opensearch.ml.rest.mcpserver.RestMLRegisterMcpToolsAction;
 import org.opensearch.ml.rest.mcpserver.RestMLRemoveMcpToolsAction;
 import org.opensearch.ml.rest.mcpserver.RestMcpConnectionMessageStreamingAction;
@@ -361,6 +309,7 @@ import org.opensearch.watcher.ResourceWatcherService;
 
 import com.google.common.annotations.VisibleForTesting;
 
+import lombok.Data;
 import lombok.SneakyThrows;
 
 public class MachineLearningPlugin extends Plugin
@@ -797,8 +746,7 @@ public class MachineLearningPlugin extends Plugin
                 mlModelAutoRedeployer,
                 cmHandler,
                 sdkClient,
-                toolFactoryWrapper,
-                streamManagerSupplier
+                toolFactoryWrapper
             );
     }
 
