@@ -86,7 +86,7 @@ public class TextSimilarityCrossEncoderModelTest {
     public void setUp() throws URISyntaxException {
         mlCachePath = Path.of("/tmp/ml_cache" + UUID.randomUUID());
         encryptor = new EncryptorImpl(null, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
-        mlEngine = new MLEngine(mlCachePath, encryptor, null);
+        mlEngine = new MLEngine(mlCachePath, encryptor);
         model = MLModel
             .builder()
             .modelFormat(MLModelFormat.TORCH_SCRIPT)

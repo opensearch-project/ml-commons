@@ -52,9 +52,18 @@ import org.opensearch.script.ScriptService;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
+import com.jayway.jsonpath.JsonPath;
+
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import okhttp3.internal.http2.StreamResetException;
+import okhttp3.sse.EventSource;
+import okhttp3.sse.EventSourceListener;
+import okhttp3.sse.EventSources;
 import software.amazon.awssdk.core.internal.http.async.SimpleHttpContentPublisher;
 import software.amazon.awssdk.http.SdkHttpFullRequest;
 import software.amazon.awssdk.http.async.AsyncExecuteRequest;
@@ -105,10 +114,10 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
         try {
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
                 this.okHttpClient = new OkHttpClient.Builder()
-                        .connectTimeout(10, TimeUnit.SECONDS)
-                        .readTimeout(1, TimeUnit.MINUTES)
-                        .retryOnConnectionFailure(true)
-                        .build();
+                    .connectTimeout(10, TimeUnit.SECONDS)
+                    .readTimeout(1, TimeUnit.MINUTES)
+                    .retryOnConnectionFailure(true)
+                    .build();
                 return null;
             });
         } catch (PrivilegedActionException e) {
@@ -188,8 +197,9 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
             List<ModelTensor> modelTensors = new ArrayList<>();
             modelTensors.add(ModelTensor.builder().name("response").dataAsMap(Map.of("stream_ticket", streamTicket)).build());
             getLogger().info("[jngz stream] spawn a new thread to execute onResponse which is waiting for streaming.");
-            threadPool.executor("opensearch_ml_predict_remote").execute(() -> { actionListener.onResponse(new Tuple<>(0, new ModelTensors(modelTensors))); });
-//            actionListener.onResponse(new Tuple<>(0, new ModelTensors(modelTensors)));
+            threadPool.executor("opensearch_ml_predict_remote").execute(() -> {
+                actionListener.onResponse(new Tuple<>(0, new ModelTensors(modelTensors)));
+            });
             EventSourceListener listener = new HttpJsonConnectorExecutor.HTTPEventSourceListener(getLogger(), true, streamProducer);
             Request request = ConnectorUtils.buildOKHttpRequestPOST(action, connector, parameters, payload);
             getLogger().info("[jngz stream] Stream request: {}", request);

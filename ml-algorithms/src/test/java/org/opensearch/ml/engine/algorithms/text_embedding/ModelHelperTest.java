@@ -60,7 +60,7 @@ public class ModelHelperTest {
         modelFormat = MLModelFormat.TORCH_SCRIPT;
         modelId = "model_id";
         encryptor = new EncryptorImpl(null, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
-        mlEngine = new MLEngine(Path.of("/tmp/test" + modelId), encryptor, null);
+        mlEngine = new MLEngine(Path.of("/tmp/test" + modelId), encryptor);
         modelHelper = new ModelHelper(mlEngine);
     }
 

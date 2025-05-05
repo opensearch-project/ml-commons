@@ -17,7 +17,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Supplier;
 
 import org.apache.logging.log4j.Logger;
 import org.opensearch.ExceptionsHelper;

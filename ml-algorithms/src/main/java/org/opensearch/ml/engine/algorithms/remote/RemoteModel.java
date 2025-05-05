@@ -9,7 +9,6 @@ import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PRED
 
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Supplier;
 
 import org.opensearch.arrow.spi.StreamManager;
 import org.opensearch.cluster.service.ClusterService;
@@ -101,7 +100,13 @@ public class RemoteModel implements Predictable {
     }
 
     @Override
-    public void initModel(MLModel model, Map<String, Object> params, Encryptor encryptor, StreamManager streamManager, ThreadPool threadPool) {
+    public void initModel(
+        MLModel model,
+        Map<String, Object> params,
+        Encryptor encryptor,
+        StreamManager streamManager,
+        ThreadPool threadPool
+    ) {
         try {
             Connector connector = model.getConnector().cloneConnector();
             connector
