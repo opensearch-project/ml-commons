@@ -97,10 +97,10 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
         try {
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
                 this.okHttpClient = new OkHttpClient.Builder()
-                        .connectTimeout(10, TimeUnit.SECONDS)
-                        .readTimeout(1, TimeUnit.MINUTES)
-                        .retryOnConnectionFailure(true)
-                        .build();
+                    .connectTimeout(10, TimeUnit.SECONDS)
+                    .readTimeout(1, TimeUnit.MINUTES)
+                    .retryOnConnectionFailure(true)
+                    .build();
                 return null;
             });
         } catch (PrivilegedActionException e) {
@@ -178,8 +178,9 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
             List<ModelTensor> modelTensors = new ArrayList<>();
             modelTensors.add(ModelTensor.builder().name("response").dataAsMap(Map.of("stream_ticket", streamTicket)).build());
             getLogger().info("[jngz stream] spawn a new thread to execute onResponse which is waiting for streaming.");
-            threadPool.executor("opensearch_ml_predict_remote").execute(() -> { actionListener.onResponse(new Tuple<>(0, new ModelTensors(modelTensors))); });
-//            actionListener.onResponse(new Tuple<>(0, new ModelTensors(modelTensors)));
+            threadPool.executor("opensearch_ml_predict_remote").execute(() -> {
+                actionListener.onResponse(new Tuple<>(0, new ModelTensors(modelTensors)));
+            });
             EventSourceListener listener = new AwsEventSourceListener(getLogger(), true, streamProducer);
             Request request = ConnectorUtils.buildOKHttpRequestPOST(action, connector, parameters, payload);
             getLogger().info("[jngz stream] Stream request: {}", request);
