@@ -31,6 +31,7 @@ import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.script.ScriptService;
+import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -100,7 +101,7 @@ public class RemoteModel implements Predictable {
     }
 
     @Override
-    public void initModel(MLModel model, Map<String, Object> params, Encryptor encryptor, Supplier<StreamManager> streamManager) {
+    public void initModel(MLModel model, Map<String, Object> params, Encryptor encryptor, StreamManager streamManager, ThreadPool threadPool) {
         try {
             Connector connector = model.getConnector().cloneConnector();
             connector
@@ -119,6 +120,7 @@ public class RemoteModel implements Predictable {
             this.connectorExecutor.setMlGuard((MLGuard) params.get(GUARDRAILS));
             this.connectorExecutor.setConnectorPrivateIpEnabled((AtomicBoolean) params.get(CONNECTOR_PRIVATE_IP_ENABLED));
             this.connectorExecutor.setStreamManager(streamManager);
+            this.connectorExecutor.setThreadPool(threadPool);
         } catch (RuntimeException e) {
             log.error("Failed to init remote model.", e);
             throw e;

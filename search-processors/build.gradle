@@ -37,7 +37,12 @@ dependencies {
     // https://mvnrepository.com/artifact/org.apache.httpcomponents.core5/httpcore5
     implementation group: 'org.apache.httpcomponents.core5', name: 'httpcore5', version: "${versions.httpcore5}"
     implementation (group: 'com.google.guava', name: 'guava', version: '32.1.2-jre') {
-	exclude group: 'com.google.errorprone', module: 'error_prone_annotations'
+        exclude group: 'com.google.guava', module: 'failureaccess'
+        exclude group: 'com.google.code.findbugs', module: 'jsr305'
+        exclude group: 'org.checkerframework', module: 'checker-qual'
+        exclude group: 'com.google.errorprone', module: 'error_prone_annotations'
+        exclude group: 'com.google.j2objc', module: 'j2objc-annotations'
+        exclude group: 'com.google.guava', module: 'listenablefuture'
     }
     implementation group: 'org.json', name: 'json', version: '20231013'
     implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'

@@ -19,7 +19,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Supplier;
 
 import org.apache.logging.log4j.Logger;
 import org.opensearch.arrow.spi.StreamManager;
@@ -38,6 +37,7 @@ import org.opensearch.ml.engine.annotation.ConnectorExecutor;
 import org.opensearch.ml.engine.arrow.RemoteModelStreamProducer;
 import org.opensearch.ml.engine.httpclient.MLHttpClientFactory;
 import org.opensearch.script.ScriptService;
+import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
 import lombok.Getter;
@@ -81,8 +81,11 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
 
     @Setter
     @Getter
-    private Supplier<StreamManager> streamManager;
+    private StreamManager streamManager;
     private OkHttpClient okHttpClient;
+    @Setter
+    @Getter
+    private ThreadPool threadPool;
 
     public AwsConnectorExecutor(Connector connector) {
         super.initialize(connector);
@@ -170,17 +173,19 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
     ) {
         try {
             RemoteModelStreamProducer streamProducer = new RemoteModelStreamProducer();
-            StreamTicket streamTicket = streamManager.get().registerStream(streamProducer, null);
+            StreamTicket streamTicket = streamManager.registerStream(streamProducer, null);
             getLogger().info("[jngz] stream ticket: {}", streamTicket);
             List<ModelTensor> modelTensors = new ArrayList<>();
             modelTensors.add(ModelTensor.builder().name("response").dataAsMap(Map.of("stream_ticket", streamTicket)).build());
-            actionListener.onResponse(new Tuple<>(0, new ModelTensors(modelTensors)));
+            getLogger().info("[jngz stream] spawn a new thread to execute onResponse which is waiting for streaming.");
+            threadPool.executor("opensearch_ml_predict_remote").execute(() -> { actionListener.onResponse(new Tuple<>(0, new ModelTensors(modelTensors))); });
+//            actionListener.onResponse(new Tuple<>(0, new ModelTensors(modelTensors)));
             EventSourceListener listener = new AwsEventSourceListener(getLogger(), true, streamProducer);
             Request request = ConnectorUtils.buildOKHttpRequestPOST(action, connector, parameters, payload);
-            getLogger().info("[jngz] Stream request: {}", request);
-            getLogger().info("[jngz] Stream request body: {}", request.body());
+            getLogger().info("[jngz stream] Stream request: {}", request);
+            getLogger().info("[jngz stream] Stream request body: {}", request.body());
             AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
-                EventSources.createFactory(okHttpClient).newEventSource(request, listener);
+                final EventSource eventSource = EventSources.createFactory(okHttpClient).newEventSource(request, listener);
                 return null;
             });
         } catch (PrivilegedActionException e) {
@@ -224,7 +229,7 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
          */
         @Override
         public void onOpen(EventSource eventSource, Response response) {
-            logger.info("[jngz] Connected to SSE Endpoint.");
+            logger.info("[jngz sse] Connected to SSE Endpoint.");
         }
 
         /***
@@ -236,7 +241,7 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
          */
         @Override
         public void onEvent(EventSource eventSource, String id, String type, String data) {
-            log.info("The event id is {} and the type is {}.", id, type);
+            log.info("[jngz sse] The event id is {} and the type is {}.", id, type);
             switch (type) {
                 case "content_block_start":
                     log.info("Got the content start.");
@@ -261,7 +266,7 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
          */
         @Override
         public void onClosed(EventSource eventSource) {
-            logger.info("Closed");
+            logger.info("[jngz sse] Closed");
         }
 
         /***
@@ -273,6 +278,7 @@ public class AwsConnectorExecutor extends AbstractConnectorExecutor {
          */
         @Override
         public void onFailure(EventSource eventSource, Throwable t, Response response) {
+            logger.error("[jngz sse] onFailure");
             if (t != null) {
                 logger.error("Error: " + t.getMessage(), t);
                 if (t instanceof StreamResetException && t.getMessage().contains("NO_ERROR")) {
