@@ -5,14 +5,9 @@
 
 package org.opensearch.ml.common;
 
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
-import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
-
-import java.io.IOException;
-import java.time.Instant;
-import java.util.Map;
-
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
 import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -20,11 +15,16 @@ import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.transport.prompt.MLCreatePromptInput;
 
-import lombok.Builder;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
+import java.io.IOException;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 
 /**
  * MLPrompt is the class to store prompt information.
@@ -36,16 +36,18 @@ public class MLPrompt implements ToXContentObject, Writeable {
     public static final String PROMPT_ID_FIELD = "prompt_id";
     public static final String NAME_FIELD = "name";
     public static final String DESCRIPTION_FIELD = "description";
+    public static final String VERSION_FIELD = "version";
     public static final String PROMPT_FIELD = "prompt";
-    public static final String TAG_FIELD = "tag";
+    public static final String TAGS_FIELD = "tags";
     public static final String CREATE_TIME_FIELD = "create_time";
     public static final String LAST_UPDATE_TIME_FIELD = "last_update_time";
 
     private String promptId;
     private String name;
     private String description;
+    private String version;
     private Map<String, String> prompt;
-    private String tag;
+    private List<String> tags;
     private String tenantId;
     private Instant createTime;
     private Instant lastUpdateTime;
@@ -56,8 +58,9 @@ public class MLPrompt implements ToXContentObject, Writeable {
      * @param promptId The prompt id of the MLPrompt
      * @param name The name of the MLPrompt
      * @param description The description of the MLPrompt
+     * @param version The version of the MLPrompt
      * @param prompt The prompt of the MLPrompt -> contains system and user prompts
-     * @param tag The tag of the MLPrompt
+     * @param tags The tags of the MLPrompt
      * @param tenantId The tenant id of the MLPrompt
      * @param createTime The create time of the MLPrompt
      * @param lastUpdateTime The last update time of the MLPrompt
@@ -67,8 +70,9 @@ public class MLPrompt implements ToXContentObject, Writeable {
         String promptId,
         String name,
         String description,
+        String version,
         Map<String, String> prompt,
-        String tag,
+        List<String> tags,
         String tenantId,
         Instant createTime,
         Instant lastUpdateTime
@@ -76,8 +80,9 @@ public class MLPrompt implements ToXContentObject, Writeable {
         this.promptId = promptId;
         this.name = name;
         this.description = description;
+        this.version = version;
         this.prompt = prompt;
-        this.tag = tag;
+        this.tags = tags;
         this.tenantId = tenantId;
         this.createTime = createTime;
         this.lastUpdateTime = lastUpdateTime;
@@ -94,8 +99,9 @@ public class MLPrompt implements ToXContentObject, Writeable {
         this.promptId = input.readOptionalString();
         this.name = input.readOptionalString();
         this.description = input.readOptionalString();
+        this.version = input.readOptionalString();
         this.prompt = input.readMap(s -> s.readString(), s -> s.readString());
-        this.tag = input.readOptionalString();
+        this.tags = input.readOptionalStringList();
         this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
         this.createTime = input.readInstant();
         this.lastUpdateTime = input.readInstant();
@@ -113,8 +119,9 @@ public class MLPrompt implements ToXContentObject, Writeable {
         out.writeOptionalString(promptId);
         out.writeOptionalString(name);
         out.writeOptionalString(description);
+        out.writeOptionalString(version);
         out.writeMap(prompt, StreamOutput::writeString, StreamOutput::writeString);
-        out.writeOptionalString(tag);
+        out.writeCollection(tags, StreamOutput::writeString);
         if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
             out.writeOptionalString(tenantId);
         }
@@ -142,11 +149,14 @@ public class MLPrompt implements ToXContentObject, Writeable {
         if (description != null) {
             builder.field(DESCRIPTION_FIELD, description);
         }
+        if (version != null) {
+            builder.field(VERSION_FIELD, version);
+        }
         if (prompt != null) {
             builder.field(PROMPT_FIELD, prompt);
         }
-        if (tag != null) {
-            builder.field(TAG_FIELD, tag);
+        if (tags != null) {
+            builder.field(TAGS_FIELD, tags);
         }
         if (tenantId != null) {
             builder.field(TENANT_ID_FIELD, tenantId);
@@ -181,8 +191,9 @@ public class MLPrompt implements ToXContentObject, Writeable {
     public static MLPrompt parse(XContentParser parser) throws IOException {
         String name = null;
         String description = null;
+        String version = null;
         Map<String, String> prompt = null;
-        String tag = null;
+        List<String> tags = null;
         String tenantId = null;
         Instant createTime = null;
         Instant lastUpdateTime = null;
@@ -198,11 +209,18 @@ public class MLPrompt implements ToXContentObject, Writeable {
                 case DESCRIPTION_FIELD:
                     description = parser.text();
                     break;
+                case VERSION_FIELD:
+                    version = parser.text();
+                    break;
                 case PROMPT_FIELD:
                     prompt = parser.mapStrings();
                     break;
-                case TAG_FIELD:
-                    tag = parser.text();
+                case TAGS_FIELD:
+                    tags = new ArrayList<>();
+                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                        tags.add(parser.text());
+                    }
                     break;
                 case TENANT_ID_FIELD:
                     tenantId = parser.text();
@@ -222,32 +240,12 @@ public class MLPrompt implements ToXContentObject, Writeable {
             .builder()
             .name(name)
             .description(description)
+            .version(version)
             .prompt(prompt)
-            .tag(tag)
+            .tags(tags)
             .tenantId(tenantId)
             .createTime(createTime)
             .lastUpdateTime(lastUpdateTime)
             .build();
-    }
-
-    /**
-     * Update MLPrompt with new content
-     *
-     * @param updateContent The new content to update the MLPrompt with
-     */
-    public void update(MLCreatePromptInput updateContent) {
-        if (updateContent.getName() != null) {
-            this.name = updateContent.getName();
-        }
-        if (updateContent.getDescription() != null) {
-            this.description = updateContent.getDescription();
-        }
-        if (updateContent.getPrompt() != null) {
-            this.prompt = updateContent.getPrompt();
-        }
-        if (updateContent.getTag() != null) {
-            this.tag = updateContent.getTag();
-        }
-        this.lastUpdateTime = Instant.now();
     }
 }

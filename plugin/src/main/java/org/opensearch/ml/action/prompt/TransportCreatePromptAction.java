@@ -63,12 +63,20 @@ public class TransportCreatePromptAction extends HandledTransportAction<ActionRe
     }
 
     /**
-     * Creates a system index for prompt, if needed. Creates a new prompt and store it into the system index. Notify the
-     * listener with the MLCreatePromptResponse with prompt id. Otherwise, failure exception is notified to the listener.
+     * Creates a new prompt and notify the listener with the response that contains prompt id, after it is successfully
+     * stored into the system index.
      *
      * @param task The task
-     * @param request MLCreatePromptRequest
+     * @param request MLCreatePromptRequest that contains the metadata needed to create a new prompt
      * @param listener a listener to be notified of the response
+     *
+     * @implNote This method is called by the TransportService to execute the action request on the node that is
+     *           handling the request. It first validates incoming request and then retrieve all the metadata
+     *           needed from the request body to create a new prompt. For an initial create api request, it creates
+     *           a system index for prompt.
+     *           The method also stores the successfully create prompt into the system index and then notify
+     *           the listener with the MLCreatePromptResponse with prompt id, if there is no failure. Otherwise,
+     *           failure exception is notified to the listener.
      */
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLCreatePromptResponse> listener) {
@@ -84,9 +92,10 @@ public class TransportCreatePromptAction extends HandledTransportAction<ActionRe
                 .builder()
                 .name(mlCreatePromptInput.getName())
                 .description(mlCreatePromptInput.getDescription())
+                .version(mlCreatePromptInput.getVersion())
                 .prompt(mlCreatePromptInput.getPrompt())
+                .tags(mlCreatePromptInput.getTags())
                 .tenantId(mlCreatePromptInput.getTenantId())
-                .tag(mlCreatePromptInput.getTag())
                 .createTime(Instant.now())
                 .lastUpdateTime(Instant.now())
                 .build();
@@ -137,28 +146,32 @@ public class TransportCreatePromptAction extends HandledTransportAction<ActionRe
     }
 
     /**
-     * If the prompt is successfully stored into the system index, notify the listener with the MLCreatePromptResponse with prompt id.
-     * Otherwise, failure exception is notified to the listener.
+     * Handles the response from the putDataObjectAsync based on whether exception is thrown or not.
      *
      * @param putResponse PutDataObjectResponse received from putDataObjectAsync op
      * @param throwable Throwable received from putDataObjectAsync op. It is null if no exception thrown.
      * @param listener ActionListener to be notified of the response
+     *
+     * @implNote This method uses Throwable object to check if the response is successful or not.
+     *           If the throwable object is null, then the prompt is successfully stored into the
+     *           system index and notify the listener with the MLCreatePromptResponse with prompt id.
+     *           Otherwise, failure exception is notified to the listener.
      */
     private void handlePromptPutResponse(
         PutDataObjectResponse putResponse,
         Throwable throwable,
         ActionListener<MLCreatePromptResponse> listener
     ) {
-        if (putResponse == null) {
+        if (putResponse == null || throwable != null) {
             Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-            handlePromptPutFailure(cause, listener);
+            handlePromptPutFailure(cause, listener, "Prompt Put Response cannot be null");
         }
         try {
             IndexResponse indexResponse = IndexResponse.fromXContent(putResponse.parser());
             log.info("Prompt creation result: {}, prompt id: {}", indexResponse.getResult(), indexResponse.getId());
             listener.onResponse(new MLCreatePromptResponse(indexResponse.getId()));
         } catch (Exception e) {
-            handlePromptPutFailure(e, listener);
+            handlePromptPutFailure(e, listener, "Failed to parse PutDataObjectResponse into Index Response from xContent");
         }
     }
 
@@ -168,8 +181,8 @@ public class TransportCreatePromptAction extends HandledTransportAction<ActionRe
      * @param cause The failure exception
      * @param listener ActionListener to be notified of the response
      */
-    private void handlePromptPutFailure(Exception cause, ActionListener<MLCreatePromptResponse> listener) {
-        log.error("Failed to save ML Prompt", cause);
+    private void handlePromptPutFailure(Exception cause, ActionListener<MLCreatePromptResponse> listener, String likelyCause) {
+        log.error("Failed to save ML Prompt: {}", likelyCause, cause);
         listener.onFailure(cause);
     }
 }

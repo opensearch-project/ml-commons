@@ -15,10 +15,16 @@
     "description": {
       "type": "text"
     },
+    "version": {
+      "type": "keyword"
+    },
     "prompt": {
       "type": "flat_object"
     },
-    "tag": {
+    "tags": {
+      "type": "keyword"
+    },
+    "tenant_id": {
       "type": "keyword"
     },
     "create_time": {
@@ -28,9 +34,6 @@
     "last_update_time": {
       "type": "date",
       "format": "strict_date_time||epoch_millis"
-    },
-    "tenant_id": {
-      "type": "keyword"
     }
   }
 }
