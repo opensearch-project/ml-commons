@@ -15,10 +15,10 @@ import java.util.List;
 import java.util.Locale;
 
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.prompt.MLCreatePromptAction;
 import org.opensearch.ml.common.transport.prompt.MLCreatePromptInput;
 import org.opensearch.ml.common.transport.prompt.MLCreatePromptRequest;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;

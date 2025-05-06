@@ -22,10 +22,10 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX_MAPPING_PATH;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX_MAPPING_PATH;
-import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX_MAPPING_PATH;
 import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX_MAPPING_PATH;
+import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX_MAPPING_PATH;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
