@@ -7,7 +7,6 @@ package org.opensearch.ml.common;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
-import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -15,7 +14,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -96,14 +94,13 @@ public class MLPrompt implements ToXContentObject, Writeable {
      * @throws IOException if an I/O exception occurred while reading from input stream
      */
     public MLPrompt(StreamInput input) throws IOException {
-        Version streamInputVersion = input.getVersion();
         this.promptId = input.readOptionalString();
         this.name = input.readOptionalString();
         this.description = input.readOptionalString();
         this.version = input.readOptionalString();
         this.prompt = input.readMap(s -> s.readString(), s -> s.readString());
         this.tags = input.readOptionalStringList();
-        this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
+        this.tenantId = input.readOptionalString();
         this.createTime = input.readInstant();
         this.lastUpdateTime = input.readInstant();
     }
@@ -116,16 +113,13 @@ public class MLPrompt implements ToXContentObject, Writeable {
      */
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        Version streamOutputVersion = out.getVersion();
         out.writeOptionalString(promptId);
         out.writeOptionalString(name);
         out.writeOptionalString(description);
         out.writeOptionalString(version);
         out.writeMap(prompt, StreamOutput::writeString, StreamOutput::writeString);
         out.writeCollection(tags, StreamOutput::writeString);
-        if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
-            out.writeOptionalString(tenantId);
-        }
+        out.writeOptionalString(tenantId);
         out.writeInstant(createTime);
         out.writeInstant(lastUpdateTime);
     }

@@ -7,7 +7,6 @@ package org.opensearch.ml.common.transport.prompt;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
-import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 import java.io.IOException;
@@ -15,14 +14,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.CommonValue;
 
 import lombok.Builder;
 import lombok.Data;
@@ -41,8 +38,6 @@ public class MLCreatePromptInput implements ToXContentObject, Writeable {
 
     public static final String PROMPT_FIELD_USER_PROMPT = "user";
     public static final String PROMPT_FIELD_SYSTEM_PROMPT = "system";
-
-    private static final Version MINIMAL_SUPPORTED_VERSION_FOR_CLIENT_CONFIG = CommonValue.VERSION_2_13_0;
 
     private String name;
     private String description;
@@ -105,13 +100,12 @@ public class MLCreatePromptInput implements ToXContentObject, Writeable {
      * @throws IOException thrown if an I/O exception occurred while reading the object from StreamInput
      */
     public MLCreatePromptInput(StreamInput input) throws IOException {
-        Version streamInputVersion = input.getVersion();
         this.name = input.readOptionalString();
         this.description = input.readOptionalString();
         this.version = input.readOptionalString();
         this.prompt = input.readMap(s -> s.readString(), s -> s.readString());
         this.tags = input.readOptionalStringList();
-        this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
+        this.tenantId = input.readOptionalString();
     }
 
     /**
@@ -122,15 +116,12 @@ public class MLCreatePromptInput implements ToXContentObject, Writeable {
      */
     @Override
     public void writeTo(StreamOutput output) throws IOException {
-        Version streamOutputVersion = output.getVersion();
         output.writeOptionalString(name);
         output.writeOptionalString(description);
         output.writeOptionalString(version);
         output.writeMap(prompt, StreamOutput::writeString, StreamOutput::writeString);
         output.writeCollection(tags, StreamOutput::writeString);
-        if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
-            output.writeOptionalString(tenantId);
-        }
+        output.writeOptionalString(tenantId);
     }
 
     /**
