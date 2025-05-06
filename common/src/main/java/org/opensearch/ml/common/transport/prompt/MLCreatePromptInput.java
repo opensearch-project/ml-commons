@@ -72,22 +72,22 @@ public class MLCreatePromptInput implements ToXContentObject, Writeable {
         String tenantId
     ) {
         if (name == null) {
-            throw new IllegalArgumentException("Prompt name field is null");
+            throw new IllegalArgumentException("MLPrompt name field is null");
         }
         if (prompt == null) {
-            throw new IllegalArgumentException("Prompt prompt field is null");
+            throw new IllegalArgumentException("MLPrompt prompt field is null");
         }
         if (prompt.isEmpty()) {
-            throw new IllegalArgumentException("Prompt prompt field cannot be empty");
+            throw new IllegalArgumentException("MLPrompt prompt field cannot be empty");
         }
         if (!prompt.containsKey(PROMPT_FIELD_SYSTEM_PROMPT)) {
-            throw new IllegalArgumentException("Prompt prompt field require system prompt");
+            throw new IllegalArgumentException("MLPrompt prompt field requires " + PROMPT_FIELD_USER_PROMPT + " parameter");
         }
         if (!prompt.containsKey(PROMPT_FIELD_USER_PROMPT)) {
-            throw new IllegalArgumentException("Prompt field require user prompt");
+            throw new IllegalArgumentException("MLPrompt prompt field requires " + PROMPT_FIELD_SYSTEM_PROMPT + " parameter");
         }
         if (version == null) {
-            throw new IllegalArgumentException("Prompt version field is null");
+            throw new IllegalArgumentException("MLPrompt version field is null");
         }
 
         this.name = name;
@@ -179,7 +179,14 @@ public class MLCreatePromptInput implements ToXContentObject, Writeable {
                     break;
             }
         }
-        return new MLCreatePromptInput(name, description, version, prompt, tags, tenantId);
+        return MLCreatePromptInput.builder()
+                .name(name)
+                .description(description)
+                .version(version)
+                .prompt(prompt)
+                .tags(tags)
+                .tenantId(tenantId)
+                .build();
     }
 
     /**

@@ -102,8 +102,7 @@ public class TransportCreatePromptAction extends HandledTransportAction<ActionRe
 
             indexPrompt(mlPrompt, listener);
         } catch (Exception e) {
-            log.error("Failed to create a Prompt", e);
-            listener.onFailure(e);
+            handleFailure(e, listener, "Failed to create a MLPrompt");
         }
     }
 
@@ -118,7 +117,8 @@ public class TransportCreatePromptAction extends HandledTransportAction<ActionRe
         log.info("prompt created, indexing into the prompt system index");
         mlIndicesHandler.initMLPromptIndex(ActionListener.wrap(indexCreated -> {
             if (!indexCreated) {
-                listener.onFailure(new RuntimeException("No response to create ML Prompt Index"));
+                Exception exception = new RuntimeException("No response to create ML Prompt Index");
+                handleFailure(exception, listener, "Failed to create a system index for prompt");
                 return;
             }
 
@@ -130,8 +130,7 @@ public class TransportCreatePromptAction extends HandledTransportAction<ActionRe
                 });
             }
         }, e -> {
-            log.error("Failed to init ML prompt index", e);
-            listener.onFailure(e);
+            handleFailure(e, listener, "Failed to init ML prompt index");
         }));
     }
 
@@ -164,14 +163,14 @@ public class TransportCreatePromptAction extends HandledTransportAction<ActionRe
     ) {
         if (putResponse == null || throwable != null) {
             Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-            handlePromptPutFailure(cause, listener, "Prompt Put Response cannot be null");
+            handleFailure(cause, listener, "Prompt Put Response cannot be null");
         }
         try {
             IndexResponse indexResponse = IndexResponse.fromXContent(putResponse.parser());
             log.info("Prompt creation result: {}, prompt id: {}", indexResponse.getResult(), indexResponse.getId());
             listener.onResponse(new MLCreatePromptResponse(indexResponse.getId()));
         } catch (Exception e) {
-            handlePromptPutFailure(e, listener, "Failed to parse PutDataObjectResponse into Index Response from xContent");
+            handleFailure(e, listener, "Failed to parse PutDataObjectResponse into Index Response from xContent");
         }
     }
 
@@ -181,8 +180,8 @@ public class TransportCreatePromptAction extends HandledTransportAction<ActionRe
      * @param cause The failure exception
      * @param listener ActionListener to be notified of the response
      */
-    private void handlePromptPutFailure(Exception cause, ActionListener<MLCreatePromptResponse> listener, String likelyCause) {
-        log.error("Failed to save ML Prompt: {}", likelyCause, cause);
+    private void handleFailure(Exception cause, ActionListener<MLCreatePromptResponse> listener, String likelyCause) {
+        log.error("Failed to create a prompt: {}", likelyCause, cause);
         listener.onFailure(cause);
     }
 }
