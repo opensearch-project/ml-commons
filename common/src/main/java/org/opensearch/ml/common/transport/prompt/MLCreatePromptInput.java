@@ -179,14 +179,15 @@ public class MLCreatePromptInput implements ToXContentObject, Writeable {
                     break;
             }
         }
-        return MLCreatePromptInput.builder()
-                .name(name)
-                .description(description)
-                .version(version)
-                .prompt(prompt)
-                .tags(tags)
-                .tenantId(tenantId)
-                .build();
+        return MLCreatePromptInput
+            .builder()
+            .name(name)
+            .description(description)
+            .version(version)
+            .prompt(prompt)
+            .tags(tags)
+            .tenantId(tenantId)
+            .build();
     }
 
     /**

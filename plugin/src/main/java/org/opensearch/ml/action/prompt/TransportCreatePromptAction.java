@@ -129,9 +129,7 @@ public class TransportCreatePromptAction extends HandledTransportAction<ActionRe
                     handlePromptPutResponse(putResponse, throwable, listener);
                 });
             }
-        }, e -> {
-            handleFailure(e, listener, "Failed to init ML prompt index");
-        }));
+        }, e -> { handleFailure(e, listener, "Failed to init ML prompt index"); }));
     }
 
     /**
