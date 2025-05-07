@@ -10,8 +10,10 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
@@ -182,25 +184,27 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         );
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
         when(clusterService.getSettings()).thenReturn(settings);
-        transportRegisterModelAction = new TransportRegisterModelAction(
-            transportService,
-            actionFilters,
-            modelHelper,
-            mlIndicesHandler,
-            mlModelManager,
-            mlTaskManager,
-            clusterService,
-            settings,
-            threadPool,
-            client,
-            sdkClient,
-            nodeFilter,
-            mlTaskDispatcher,
-            mlStats,
-            modelAccessControlHelper,
-            connectorAccessControlHelper,
-            mlModelGroupManager,
-            mlFeatureEnabledSetting
+        transportRegisterModelAction = spy(
+            new TransportRegisterModelAction(
+                transportService,
+                actionFilters,
+                modelHelper,
+                mlIndicesHandler,
+                mlModelManager,
+                mlTaskManager,
+                clusterService,
+                settings,
+                threadPool,
+                client,
+                sdkClient,
+                nodeFilter,
+                mlTaskDispatcher,
+                mlStats,
+                modelAccessControlHelper,
+                connectorAccessControlHelper,
+                mlModelGroupManager,
+                mlFeatureEnabledSetting
+            )
         );
         assertNotNull(transportRegisterModelAction);
 
@@ -595,6 +599,79 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void test_execute_registerRemoteModel_withUntrustedEndpoint() {
+        // Create request and input mocks
+        MLRegisterModelRequest request = mock(MLRegisterModelRequest.class);
+        MLRegisterModelInput input = MLRegisterModelInput
+            .builder()
+            .functionName(FunctionName.REMOTE)
+            .isHidden(false)
+            .modelName("test-model")
+            .build();
+
+        // Create a proper Connector instance instead of mocking it
+        Connector connector = mock(Connector.class);
+        when(connector.getActionEndpoint(anyString(), any(Map.class))).thenReturn("https://untrusted-endpoint.com");
+        // Set the connector on the input
+        input.setConnector(connector);
+
+        when(request.getRegisterModelInput()).thenReturn(input);
+
+        // Mock super admin check
+        doReturn(false).when(transportRegisterModelAction).isSuperAdminUserWrapper(any(), any());
+
+        // Mock model group validation
+        SearchResponse searchResponse = mock(SearchResponse.class);
+        SearchHits searchHits = new SearchHits(new SearchHit[0], new TotalHits(0L, TotalHits.Relation.EQUAL_TO), 0.0f);
+        when(searchResponse.getHits()).thenReturn(searchHits);
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(mlModelGroupManager).validateUniqueModelGroupName(any(), any(), any());
+
+        // Mock connector validation to throw exception
+        doThrow(new IllegalArgumentException("The connector endpoint provided is not trusted")).when(connector).validateConnectorURL(any());
+
+        // Execute
+        transportRegisterModelAction.doExecute(task, request, actionListener);
+
+        // Verify
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue().getMessage().contains("not trusted"));
+    }
+
+    @Test
+    public void test_execute_registerRemoteModel_withUntrustedEndpoint_hidden_model() {
+        MLRegisterModelRequest request = mock(MLRegisterModelRequest.class);
+        MLRegisterModelInput input = mock(MLRegisterModelInput.class);
+        when(request.getRegisterModelInput()).thenReturn(input);
+        when(input.getModelName()).thenReturn("Test Model");
+        when(input.getVersion()).thenReturn("1");
+        when(input.getModelGroupId()).thenReturn("modelGroupID");
+        when(input.getFunctionName()).thenReturn(FunctionName.REMOTE);
+        when(input.getIsHidden()).thenReturn(true);
+
+        // Create a proper Connector instance instead of mocking it
+        Connector connector = mock(Connector.class);
+        when(connector.getActionEndpoint(anyString(), any(Map.class))).thenReturn("https://untrusted-endpoint.com");
+        // Set the connector on the input
+        when(input.getConnector()).thenReturn(connector);
+        MLCreateConnectorResponse mlCreateConnectorResponse = mock(MLCreateConnectorResponse.class);
+        doAnswer(invocation -> {
+            ActionListener<MLCreateConnectorResponse> listener = invocation.getArgument(2);
+            listener.onResponse(mlCreateConnectorResponse);
+            return null;
+        }).when(client).execute(eq(MLCreateConnectorAction.INSTANCE), any(), isA(ActionListener.class));
+        MLRegisterModelResponse response = mock(MLRegisterModelResponse.class);
+        transportRegisterModelAction.doExecute(task, request, actionListener);
+        ArgumentCaptor<MLRegisterModelResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelResponse.class);
+        verify(mlModelManager).registerMLRemoteModel(eq(sdkClient), eq(input), isA(MLTask.class), eq(actionListener));
+    }
+
+    @Test
     public void test_ModelNameAlreadyExists() throws IOException {
         when(node1.getId()).thenReturn("NodeId1");
         when(node2.getId()).thenReturn("NodeId2");
@@ -647,6 +724,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         );
     }
 
+    @Test
     public void test_FailureWhenSearchingModelGroupName() throws IOException {
         doAnswer(invocation -> {
             ActionListener<SearchResponse> listener = invocation.getArgument(2);
@@ -661,6 +739,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
         assertEquals("Runtime exception", argumentCaptor.getValue().getMessage());
     }
 
+    @Test
     public void test_NoAccessWhenModelNameAlreadyExists() throws IOException {
 
         SearchResponse searchResponse = createModelGroupSearchResponse(1);
