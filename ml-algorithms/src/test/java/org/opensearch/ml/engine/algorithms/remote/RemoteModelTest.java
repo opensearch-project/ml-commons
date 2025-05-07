@@ -221,6 +221,41 @@ public class RemoteModelTest extends MLStaticMockBase {
         assertEquals("tenantId", executor.getConnector().getTenantId());
     }
 
+    @Test
+    public void initModel_bothTenantIdsNull() {
+        Connector connector = createConnector(ImmutableMap.of("Authorization", "Bearer ${credential.key}"));
+        when(mlModel.getConnector()).thenReturn(connector);
+        when(mlModel.getTenantId()).thenReturn(null);
+        remoteModel.initModel(mlModel, ImmutableMap.of(), encryptor);
+        RemoteConnectorExecutor executor = remoteModel.getConnectorExecutor();
+        assertNull(connector.getTenantId());
+        assertNull(executor.getConnector().getTenantId());
+    }
+
+    @Test
+    public void initModel_connectorHasTenantId() {
+        Connector connector = createConnector(ImmutableMap.of("Authorization", "Bearer ${credential.key}"));
+        connector.setTenantId("connectorTenantId");
+        when(mlModel.getConnector()).thenReturn(connector);
+        when(mlModel.getTenantId()).thenReturn(null);
+        remoteModel.initModel(mlModel, ImmutableMap.of(), encryptor);
+        RemoteConnectorExecutor executor = remoteModel.getConnectorExecutor();
+        assertEquals("connectorTenantId", connector.getTenantId());
+        assertEquals("connectorTenantId", executor.getConnector().getTenantId());
+    }
+
+    @Test
+    public void initModel_bothHaveTenantIds() {
+        Connector connector = createConnector(ImmutableMap.of("Authorization", "Bearer ${credential.key}"));
+        connector.setTenantId("connectorTenantId");
+        when(mlModel.getConnector()).thenReturn(connector);
+        when(mlModel.getTenantId()).thenReturn("modelTenantId");
+        remoteModel.initModel(mlModel, ImmutableMap.of(), encryptor);
+        RemoteConnectorExecutor executor = remoteModel.getConnectorExecutor();
+        assertEquals("connectorTenantId", connector.getTenantId());
+        assertEquals("connectorTenantId", executor.getConnector().getTenantId());
+    }
+
     private Connector createConnector(Map<String, String> headers) {
         ConnectorAction predictAction = ConnectorAction
             .builder()
