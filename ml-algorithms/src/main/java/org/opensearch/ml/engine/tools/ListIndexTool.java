@@ -85,6 +85,7 @@ public class ListIndexTool implements Tool {
         + "\"description\":\"OpenSearch index name list, separated by comma. "
         + "for example: [\\\"index1\\\", \\\"index2\\\"], use empty array [] to list all indices in the cluster\"}},"
         + "\"additionalProperties\":false}";
+    public static final Map<String, Object> DEFAULT_ATTRIBUTES = Map.of(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA, STRICT_FIELD, false);
 
     @Setter
     @Getter
@@ -477,6 +478,11 @@ public class ListIndexTool implements Tool {
         @Override
         public String getDefaultVersion() {
             return null;
+        }
+
+        @Override
+        public Map<String, Object> getDefaultAttributes() {
+            return DEFAULT_ATTRIBUTES;
         }
     }
 

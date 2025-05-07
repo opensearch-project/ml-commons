@@ -102,6 +102,7 @@ public class MLSyncUpCron implements Runnable {
         initMLConfig();
         if (!clusterService.state().metadata().indices().containsKey(ML_MODEL_INDEX)) {
             // no need to run sync up job if no model index
+            log.info("Skipping sync up job - ML model index not found");
             return;
         }
         log.debug("ML sync job starts");
@@ -111,6 +112,7 @@ public class MLSyncUpCron implements Runnable {
 
         // gather running model/tasks on nodes
         client.execute(MLSyncUpAction.INSTANCE, gatherInfoRequest, ActionListener.wrap(r -> {
+            log.debug("Received sync up responses from nodes");
             List<MLSyncUpNodeResponse> responses = r.getNodes();
             if (r.failures() != null && !r.failures().isEmpty()) {
                 log
@@ -130,6 +132,7 @@ public class MLSyncUpCron implements Runnable {
             Map<String, Set<String>> expiredModelToNodes = new HashMap<>();
             for (MLSyncUpNodeResponse response : responses) {
                 String nodeId = response.getNode().getId();
+                log.debug("Processing sync response from node: {}", nodeId);
                 String[] expiredModelIds = response.getExpiredModelIds();
                 if (expiredModelIds != null && expiredModelIds.length > 0) {
                     Arrays
@@ -215,6 +218,7 @@ public class MLSyncUpCron implements Runnable {
         Map<String, Set<String>> deployingModels
     ) {
         String[] targetNodeIds = getAllNodes(clusterService);
+        log.debug("Sending requests to undeploy expired models: {}", expiredModels);
         MLUndeployModelsRequest mlUndeployModelsRequest = new MLUndeployModelsRequest(
             expiredModels.toArray(new String[expiredModels.size()]),
             targetNodeIds,
@@ -279,6 +283,7 @@ public class MLSyncUpCron implements Runnable {
     @VisibleForTesting
     void refreshModelState(Map<String, Set<String>> modelWorkerNodes, Map<String, Set<String>> deployingModels) {
         if (!updateModelStateSemaphore.tryAcquire()) {
+            log.debug("Model state refresh already in progress. Skipping this cycle.");
             return;
         }
         try {

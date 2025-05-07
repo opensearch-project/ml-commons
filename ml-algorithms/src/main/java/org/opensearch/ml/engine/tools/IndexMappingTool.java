@@ -53,6 +53,7 @@ public class IndexMappingTool implements Tool {
         + "\"items\":{\"type\":\"string\"}}},"
         + "\"required\":[\"index\"],"
         + "\"additionalProperties\":false}";
+    public static final Map<String, Object> DEFAULT_ATTRIBUTES = Map.of(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA, STRICT_FIELD, true);
 
     @Setter
     @Getter
@@ -227,6 +228,11 @@ public class IndexMappingTool implements Tool {
         @Override
         public String getDefaultVersion() {
             return null;
+        }
+
+        @Override
+        public Map<String, Object> getDefaultAttributes() {
+            return DEFAULT_ATTRIBUTES;
         }
     }
 }

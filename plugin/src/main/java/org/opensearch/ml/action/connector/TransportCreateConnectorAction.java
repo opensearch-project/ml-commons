@@ -5,8 +5,9 @@
 
 package org.opensearch.ml.action.connector;
 
-import static org.opensearch.ml.common.CommonValue.ML_COMMONS_MCP_FEATURE_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 
 import java.time.Instant;
@@ -29,7 +30,6 @@ import org.opensearch.core.common.util.CollectionUtils;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.AccessMode;
-import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -66,7 +66,7 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
 
     private volatile List<String> trustedConnectorEndpointsRegex;
 
-    private volatile boolean mcpFeatureIsEnabled;
+    private volatile boolean mcpConnectorIsEnabled;
 
     @Inject
     public TransportCreateConnectorAction(
@@ -94,10 +94,8 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX, it -> trustedConnectorEndpointsRegex = it);
-        this.mcpFeatureIsEnabled = CommonValue.ML_COMMONS_MCP_FEATURE_ENABLED.get(clusterService.getSettings());
-        clusterService
-            .getClusterSettings()
-            .addSettingsUpdateConsumer(CommonValue.ML_COMMONS_MCP_FEATURE_ENABLED, it -> mcpFeatureIsEnabled = it);
+        this.mcpConnectorIsEnabled = ML_COMMONS_MCP_CONNECTOR_ENABLED.get(clusterService.getSettings());
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MCP_CONNECTOR_ENABLED, it -> mcpConnectorIsEnabled = it);
     }
 
     @Override
@@ -106,9 +104,9 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         MLCreateConnectorInput mlCreateConnectorInput = mlCreateConnectorRequest.getMlCreateConnectorInput();
         if (mlCreateConnectorInput.getProtocol() != null
             && mlCreateConnectorInput.getProtocol().equals(ConnectorProtocols.MCP_SSE)
-            && !this.mcpFeatureIsEnabled) {
+            && !this.mcpConnectorIsEnabled) {
             // MCP connector provided but MCP feature is disabled, so abort.
-            listener.onFailure(new OpenSearchException(ML_COMMONS_MCP_FEATURE_DISABLED_MESSAGE));
+            listener.onFailure(new OpenSearchException(ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE));
             return;
         }
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, mlCreateConnectorInput.getTenantId(), listener)) {

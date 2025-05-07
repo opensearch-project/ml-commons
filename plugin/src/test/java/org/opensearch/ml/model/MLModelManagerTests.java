@@ -361,6 +361,18 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         verify(mlTaskManager).updateMLTask(anyString(), any(), anyMap(), anyLong(), anyBoolean());
     }
 
+    public void testRegisterMLModel_CircuitBreakerNotOpenForAgent() {
+        registerModelInput.setFunctionName(FunctionName.AGENT);
+        doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
+        when(mlCircuitBreakerService.checkOpenCB()).thenReturn(thresholdCircuitBreaker);
+        when(thresholdCircuitBreaker.getName()).thenReturn("Disk Circuit Breaker");
+        when(thresholdCircuitBreaker.getThreshold()).thenReturn(87);
+        expectedEx.expect(CircuitBreakingException.class);
+        expectedEx.expectMessage("Disk Circuit Breaker is open, please check your resources!");
+        modelManager.registerMLModel(registerModelInput, mlTask);
+        verify(mlTaskManager).updateMLTask(anyString(), any(), anyMap(), anyLong(), anyBoolean());
+    }
+
     public void testRegisterMLModel_InitModelIndexFailure() {
         doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);

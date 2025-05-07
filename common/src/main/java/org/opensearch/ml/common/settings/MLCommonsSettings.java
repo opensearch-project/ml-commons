@@ -16,7 +16,6 @@ import java.util.function.Function;
 import org.opensearch.common.settings.Setting;
 import org.opensearch.core.common.unit.ByteSizeUnit;
 import org.opensearch.core.common.unit.ByteSizeValue;
-import org.opensearch.ml.common.CommonValue;
 
 import com.google.common.collect.ImmutableList;
 
@@ -217,7 +216,15 @@ public final class MLCommonsSettings {
     public static final Setting<Boolean> ML_COMMONS_MEMORY_FEATURE_ENABLED = Setting
         .boolSetting("plugins.ml_commons.memory_feature_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
-    public static final Setting<Boolean> ML_COMMONS_MCP_FEATURE_ENABLED = CommonValue.ML_COMMONS_MCP_FEATURE_ENABLED;
+    public static final Setting<Boolean> ML_COMMONS_MCP_CONNECTOR_ENABLED = Setting
+        .boolSetting("plugins.ml_commons.mcp_connector_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+    public static final String ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE =
+        "The MCP connector is not enabled. To enable, please update the setting " + ML_COMMONS_MCP_CONNECTOR_ENABLED.getKey();
+
+    public static final Setting<Boolean> ML_COMMONS_MCP_SERVER_ENABLED = Setting
+        .boolSetting("plugins.ml_commons.mcp_server_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+    public static final String ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE =
+        "The MCP server is not enabled. To enable, please update the setting " + ML_COMMONS_MCP_SERVER_ENABLED.getKey();
 
     // Feature flag for enabling search processors for Retrieval Augmented Generation using OpenSearch and Remote Inference.
     public static final Setting<Boolean> ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED = Setting

@@ -975,7 +975,9 @@ public class MLModelManager {
      * @param runningTaskLimit limit
      */
     public void checkAndAddRunningTask(MLTask mlTask, Integer runningTaskLimit) {
-        if (Objects.nonNull(mlTask) && mlTask.getFunctionName() != FunctionName.REMOTE) {
+
+        // for agent and remote model prediction we don't need to check circuit breaker
+        if (Objects.nonNull(mlTask) && mlTask.getFunctionName() != FunctionName.REMOTE && mlTask.getFunctionName() != FunctionName.AGENT) {
             checkOpenCircuitBreaker(mlCircuitBreakerService, mlStats);
         }
         mlTaskManager.checkLimitAndAddRunningTask(mlTask, runningTaskLimit);

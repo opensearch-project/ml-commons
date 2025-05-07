@@ -13,6 +13,7 @@ import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX_MAPPING_PATH;
 import static org.opensearch.ml.common.CommonValue.ML_CONTROLLER_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_CONTROLLER_INDEX_MAPPING_PATH;
+import static org.opensearch.ml.common.CommonValue.ML_MCP_SESSION_MANAGEMENT_INDEX_MAPPING_PATH;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_MESSAGE_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_MESSAGE_INDEX_MAPPING_PATH;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_META_INDEX;
@@ -38,7 +39,8 @@ public enum MLIndex {
     CONTROLLER(ML_CONTROLLER_INDEX, false, ML_CONTROLLER_INDEX_MAPPING_PATH),
     AGENT(ML_AGENT_INDEX, false, ML_AGENT_INDEX_MAPPING_PATH),
     MEMORY_META(ML_MEMORY_META_INDEX, false, ML_MEMORY_META_INDEX_MAPPING_PATH),
-    MEMORY_MESSAGE(ML_MEMORY_MESSAGE_INDEX, false, ML_MEMORY_MESSAGE_INDEX_MAPPING_PATH);
+    MEMORY_MESSAGE(ML_MEMORY_MESSAGE_INDEX, false, ML_MEMORY_MESSAGE_INDEX_MAPPING_PATH),
+    MCP_SESSION_MANAGEMENT(ML_MCP_SESSION_MANAGEMENT_INDEX_MAPPING_PATH, false, ML_MCP_SESSION_MANAGEMENT_INDEX_MAPPING_PATH);
 
     private final String indexName;
     // whether we use an alias for the index
