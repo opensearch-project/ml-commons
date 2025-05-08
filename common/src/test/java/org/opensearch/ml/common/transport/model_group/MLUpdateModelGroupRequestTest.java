@@ -4,6 +4,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
+import static org.opensearch.ml.common.utils.StringUtils.SAFE_INPUT_DESCRIPTION;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -129,10 +130,7 @@ public class MLUpdateModelGroupRequestTest {
 
         MLUpdateModelGroupRequest request = MLUpdateModelGroupRequest.builder().updateModelGroupInput(unsafeInput).build();
         ActionRequestValidationException exception = request.validate();
-        assertEquals(
-            "Validation Failed: 1: Model group name can only contain letters, digits, spaces, underscores (_), hyphens (-), dots (.), and colons (:);",
-            exception.getMessage()
-        );
+        assertEquals("Validation Failed: 1: Model group name " + SAFE_INPUT_DESCRIPTION + ";", exception.getMessage());
     }
 
     @Test
@@ -149,9 +147,6 @@ public class MLUpdateModelGroupRequestTest {
 
         MLUpdateModelGroupRequest request = MLUpdateModelGroupRequest.builder().updateModelGroupInput(unsafeInput).build();
         ActionRequestValidationException exception = request.validate();
-        assertEquals(
-            "Validation Failed: 1: Model group description can only contain letters, digits, spaces, underscores (_), hyphens (-), dots (.), and colons (:);",
-            exception.getMessage()
-        );
+        assertEquals("Validation Failed: 1: Model group description " + SAFE_INPUT_DESCRIPTION + ";", exception.getMessage());
     }
 }

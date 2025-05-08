@@ -1,6 +1,7 @@
 package org.opensearch.ml.common.transport.register;
 
 import static org.junit.Assert.*;
+import static org.opensearch.ml.common.utils.StringUtils.SAFE_INPUT_DESCRIPTION;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -159,10 +160,7 @@ public class MLRegisterModelRequestTest {
 
         MLRegisterModelRequest request = MLRegisterModelRequest.builder().registerModelInput(unsafeInput).build();
         ActionRequestValidationException exception = request.validate();
-        assertEquals(
-            "Validation Failed: 1: Model name can only contain letters, digits, spaces, underscores (_), hyphens (-), dots (.), and colons (:);",
-            exception.getMessage()
-        );
+        assertEquals("Validation Failed: 1: Model name " + SAFE_INPUT_DESCRIPTION + ";", exception.getMessage());
     }
 
     @Test
@@ -190,10 +188,7 @@ public class MLRegisterModelRequestTest {
 
         MLRegisterModelRequest request = MLRegisterModelRequest.builder().registerModelInput(unsafeInput).build();
         ActionRequestValidationException exception = request.validate();
-        assertEquals(
-            "Validation Failed: 1: Model description can only contain letters, digits, spaces, underscores (_), hyphens (-), dots (.), and colons (:);",
-            exception.getMessage()
-        );
+        assertEquals("Validation Failed: 1: Model description " + SAFE_INPUT_DESCRIPTION + ";", exception.getMessage());
     }
 
 }
