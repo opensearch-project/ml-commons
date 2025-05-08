@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
-import static org.opensearch.ml.common.CommonValue.MCP_EXECUTOR_SERVICE;
 import static org.opensearch.ml.common.CommonValue.MCP_SYNC_CLIENT;
 import static org.opensearch.ml.common.CommonValue.MCP_TOOLS_FIELD;
 import static org.opensearch.ml.common.CommonValue.MCP_TOOL_DESCRIPTION_FIELD;
@@ -15,18 +14,12 @@ import static org.opensearch.ml.common.CommonValue.TOOL_INPUT_SCHEMA_FIELD;
 import static org.opensearch.ml.common.connector.ConnectorProtocols.MCP_SSE;
 
 import java.net.http.HttpRequest;
-import java.security.AccessController;
-import java.security.PrivilegedExceptionAction;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.SynchronousQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 import org.apache.logging.log4j.Logger;
@@ -85,71 +78,55 @@ public class McpConnectorExecutor extends AbstractConnectorExecutor {
         }
         List<MLToolSpec> mcpToolSpecs = new ArrayList<>();
         try {
-            AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
+            Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());
+            Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
 
-                // TODO: USE DEFAULT EXECUTOR AFTER JSM SHUTDOWN
-                // Create a privileged executor service
-                // TODO: Make these hardcoded numbers configurable
-                ExecutorService executor = new ThreadPoolExecutor(2, 10, 60L, TimeUnit.SECONDS, new SynchronousQueue<>(), r -> {
-                    Thread thread = new Thread(r);
-                    thread.setDaemon(true);
-                    return thread;
-                });
-
-                Duration connectionTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getConnectionTimeout());
-                Duration readTimeout = Duration.ofSeconds(super.getConnectorClientConfig().getReadTimeout());
-
-                Consumer<HttpRequest.Builder> headerConfig = builder -> {
-                    builder.header("Content-Type", "application/json");
-
-                    for (Map.Entry<String, String> entry : connector.getDecryptedHeaders().entrySet()) {
-                        builder.header(entry.getKey(), entry.getValue());
-                    }
-                };
-
-                // Create transport
-                McpClientTransport transport = HttpClientSseClientTransport.builder(mcpServerUrl).customizeClient(clientBuilder -> {
-                    clientBuilder.executor(executor).connectTimeout(connectionTimeout);
-                }).customizeRequest(headerConfig).build();
-
-                // Create and initialize client
-                McpSyncClient client = McpClient
-                    .sync(transport)
-                    .requestTimeout(readTimeout)
-                    .capabilities(McpSchema.ClientCapabilities.builder().roots(false).build())
-                    .build();
-
-                client.initialize();
-                McpSchema.ListToolsResult tools = client.listTools();
-
-                // Process the results
-                Gson gson = new Gson();
-                String json = gson.toJson(tools, McpSchema.ListToolsResult.class);
-                Map<String, Object> map = gson.fromJson(json, Map.class);
-
-                List<Object> mcpTools = (List<Object>) map.get(MCP_TOOLS_FIELD);
-
-                for (Object tool : mcpTools) {
-                    Map<String, Object> toolMap = (Map<String, Object>) tool;
-                    Map<String, String> attributes = new HashMap<>();
-                    attributes.put(TOOL_INPUT_SCHEMA_FIELD, StringUtils.toJson(toolMap.get(MCP_TOOL_INPUT_SCHEMA_FIELD)));
-
-                    String description = (toolMap.containsKey(MCP_TOOL_DESCRIPTION_FIELD))
-                        ? StringUtils.processTextDoc(toolMap.get(MCP_TOOL_DESCRIPTION_FIELD).toString())
-                        : McpSseTool.DEFAULT_DESCRIPTION;
-                    MLToolSpec mlToolSpec = MLToolSpec
-                        .builder()
-                        .type(McpSseTool.TYPE)
-                        .name(toolMap.get(MCP_TOOL_NAME_FIELD).toString())
-                        .description(description)
-                        .attributes(attributes)
-                        .build();
-                    mlToolSpec.addRuntimeResource(MCP_SYNC_CLIENT, client);
-                    mlToolSpec.addRuntimeResource(MCP_EXECUTOR_SERVICE, executor);
-                    mcpToolSpecs.add(mlToolSpec);
+            Consumer<HttpRequest.Builder> headerConfig = builder -> {
+                for (Map.Entry<String, String> entry : connector.getDecryptedHeaders().entrySet()) {
+                    builder.header(entry.getKey(), entry.getValue());
                 }
-                return null;
-            });
+            };
+
+            // Create transport
+            McpClientTransport transport = HttpClientSseClientTransport.builder(mcpServerUrl).customizeClient(clientBuilder -> {
+                clientBuilder.connectTimeout(connectionTimeout);
+            }).customizeRequest(headerConfig).build();
+
+            // Create and initialize client
+            McpSyncClient client = McpClient
+                .sync(transport)
+                .requestTimeout(readTimeout)
+                .capabilities(McpSchema.ClientCapabilities.builder().roots(false).build())
+                .build();
+
+            client.initialize();
+            McpSchema.ListToolsResult tools = client.listTools();
+
+            // Process the results
+            Gson gson = new Gson();
+            String json = gson.toJson(tools, McpSchema.ListToolsResult.class);
+            Map<String, Object> map = gson.fromJson(json, Map.class);
+
+            List<Object> mcpTools = (List<Object>) map.get(MCP_TOOLS_FIELD);
+
+            for (Object tool : mcpTools) {
+                Map<String, Object> toolMap = (Map<String, Object>) tool;
+                Map<String, String> attributes = new HashMap<>();
+                attributes.put(TOOL_INPUT_SCHEMA_FIELD, StringUtils.toJson(toolMap.get(MCP_TOOL_INPUT_SCHEMA_FIELD)));
+
+                String description = (toolMap.containsKey(MCP_TOOL_DESCRIPTION_FIELD))
+                    ? StringUtils.processTextDoc(toolMap.get(MCP_TOOL_DESCRIPTION_FIELD).toString())
+                    : McpSseTool.DEFAULT_DESCRIPTION;
+                MLToolSpec mlToolSpec = MLToolSpec
+                    .builder()
+                    .type(McpSseTool.TYPE)
+                    .name(toolMap.get(MCP_TOOL_NAME_FIELD).toString())
+                    .description(description)
+                    .attributes(attributes)
+                    .build();
+                mlToolSpec.addRuntimeResource(MCP_SYNC_CLIENT, client);
+                mcpToolSpecs.add(mlToolSpec);
+            }
 
             return mcpToolSpecs;
         } catch (Exception e) {

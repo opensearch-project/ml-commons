@@ -72,6 +72,7 @@ import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
@@ -171,7 +172,8 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                 "To upload custom model user needs to enable allow_registering_model_via_url settings. Otherwise please use OpenSearch pre-trained models."
             );
         }
-        registerModelInput.setIsHidden(RestActionUtils.isSuperAdminUser(clusterService, client));
+        boolean isSuperAdmin = isSuperAdminUserWrapper(clusterService, client);
+        registerModelInput.setIsHidden(isSuperAdmin);
         if (StringUtils.isEmpty(registerModelInput.getModelGroupId())) {
             mlModelGroupManager
                 .validateUniqueModelGroupName(
@@ -368,7 +370,11 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             throw new IllegalArgumentException("Connector endpoint is required when creating a remote model without connector id!");
         }
         // check if the connector url is trusted
-        registerModelInput.getConnector().validateConnectorURL(trustedConnectorEndpointsRegex);
+        // if the model is a hidden model, that means Superuser of this domain or cloud provider is settings up this
+        // model, so no need to verify the connector endpoint as trusted or not
+        if (!registerModelInput.getIsHidden()) {
+            registerModelInput.getConnector().validateConnectorURL(trustedConnectorEndpointsRegex);
+        }
     }
 
     private void registerModel(MLRegisterModelInput registerModelInput, ActionListener<MLRegisterModelResponse> listener) {
@@ -469,5 +475,11 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             .isAddAllBackendRoles(registerModelInput.getAddAllBackendRoles())
             .tenantId(registerModelInput.getTenantId())
             .build();
+    }
+
+    // this method is only to stub static method.
+    @VisibleForTesting
+    boolean isSuperAdminUserWrapper(ClusterService clusterService, Client client) {
+        return RestActionUtils.isSuperAdminUser(clusterService, client);
     }
 }
