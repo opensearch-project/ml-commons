@@ -69,14 +69,6 @@ public class TransportCreatePromptAction extends HandledTransportAction<ActionRe
      * @param task The task
      * @param request MLCreatePromptRequest that contains the metadata needed to create a new prompt
      * @param listener a listener to be notified of the response
-     *
-     * @implNote This method is called by the TransportService to execute the action request on the node that is
-     *           handling the request. It first validates incoming request and then retrieve all the metadata
-     *           needed from the request body to create a new prompt. For an initial create api request, it creates
-     *           a system index for prompt.
-     *           The method also stores the successfully create prompt into the system index and then notify
-     *           the listener with the MLCreatePromptResponse with prompt id, if there is no failure. Otherwise,
-     *           failure exception is notified to the listener.
      */
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLCreatePromptResponse> listener) {
@@ -148,11 +140,6 @@ public class TransportCreatePromptAction extends HandledTransportAction<ActionRe
      * @param putResponse PutDataObjectResponse received from putDataObjectAsync op
      * @param throwable Throwable received from putDataObjectAsync op. It is null if no exception thrown.
      * @param listener ActionListener to be notified of the response
-     *
-     * @implNote This method uses Throwable object to check if the response is successful or not.
-     *           If the throwable object is null, then the prompt is successfully stored into the
-     *           system index and notify the listener with the MLCreatePromptResponse with prompt id.
-     *           Otherwise, failure exception is notified to the listener.
      */
     private void handlePromptPutResponse(
         PutDataObjectResponse putResponse,
