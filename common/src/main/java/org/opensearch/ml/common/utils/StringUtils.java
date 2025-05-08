@@ -64,7 +64,10 @@ public class StringUtils {
         + "\n    }\n";
 
     // Regex allows letters, digits, spaces, hyphens, underscores, and dots.
-    private static final String SAFE_INPUT_REGEX = "^[a-zA-Z0-9 _\\-\\.:,'()]+$";
+    private static final Pattern SAFE_INPUT_PATTERN = Pattern.compile("^[\\p{L}\\p{N}\\s.,!?():@\\-_'\"]*$");
+
+    private static final String SAFE_INPUT_DESCRIPTION =
+        "can only contain letters, numbers, whitespace, and basic punctuation (.,!?():@-_'\")";
 
     public static final Gson gson;
 
@@ -513,7 +516,7 @@ public class StringUtils {
         if (value == null || value.isBlank()) {
             return false;
         }
-        return value.matches(SAFE_INPUT_REGEX);
+        return SAFE_INPUT_PATTERN.matcher(value).matches();
     }
 
     /**
@@ -533,10 +536,8 @@ public class StringUtils {
             String value = entry.getValue();
 
             if (value != null && !isSafeText(value)) {
-                exception = addValidationError(
-                    key + " can only contain letters, digits, spaces, underscores (_), hyphens (-), dots (.), and colons (:)",
-                    exception
-                );
+                String errorMessage = key + " " + SAFE_INPUT_DESCRIPTION;
+                exception = addValidationError(errorMessage, exception);
             }
         }
 
