@@ -99,10 +99,10 @@ public class MLPrompt implements ToXContentObject, Writeable {
         this.description = input.readOptionalString();
         this.version = input.readOptionalString();
         this.prompt = input.readMap(s -> s.readString(), s -> s.readString());
-        this.tags = input.readOptionalStringList();
+        this.tags = input.readList(StreamInput::readString);
         this.tenantId = input.readOptionalString();
-        this.createTime = input.readInstant();
-        this.lastUpdateTime = input.readInstant();
+        this.createTime = input.readOptionalInstant();
+        this.lastUpdateTime = input.readOptionalInstant();
     }
 
     /**
@@ -120,8 +120,8 @@ public class MLPrompt implements ToXContentObject, Writeable {
         out.writeMap(prompt, StreamOutput::writeString, StreamOutput::writeString);
         out.writeCollection(tags, StreamOutput::writeString);
         out.writeOptionalString(tenantId);
-        out.writeInstant(createTime);
-        out.writeInstant(lastUpdateTime);
+        out.writeOptionalInstant(createTime);
+        out.writeOptionalInstant(lastUpdateTime);
     }
 
     /**
@@ -157,10 +157,10 @@ public class MLPrompt implements ToXContentObject, Writeable {
             builder.field(TENANT_ID_FIELD, tenantId);
         }
         if (createTime != null) {
-            builder.field(CREATE_TIME_FIELD, createTime);
+            builder.field(CREATE_TIME_FIELD, createTime.toEpochMilli());
         }
         if (lastUpdateTime != null) {
-            builder.field(LAST_UPDATE_TIME_FIELD, lastUpdateTime);
+            builder.field(LAST_UPDATE_TIME_FIELD, lastUpdateTime.toEpochMilli());
         }
         return builder.endObject();
     }
@@ -184,6 +184,7 @@ public class MLPrompt implements ToXContentObject, Writeable {
      * @throws IOException if an I/O exception occurred while parsing the XContentParser into MLPrompt fields
      */
     public static MLPrompt parse(XContentParser parser) throws IOException {
+        String promptId = null;
         String name = null;
         String description = null;
         String version = null;
@@ -198,6 +199,9 @@ public class MLPrompt implements ToXContentObject, Writeable {
             String fieldName = parser.currentName();
             parser.nextToken();
             switch (fieldName) {
+                case PROMPT_ID_FIELD:
+                    promptId = parser.text();
+                    break;
                 case NAME_FIELD:
                     name = parser.text();
                     break;
@@ -221,10 +225,10 @@ public class MLPrompt implements ToXContentObject, Writeable {
                     tenantId = parser.text();
                     break;
                 case CREATE_TIME_FIELD:
-                    createTime = Instant.parse(parser.text());
+                    createTime = Instant.ofEpochMilli(parser.longValue());
                     break;
                 case LAST_UPDATE_TIME_FIELD:
-                    lastUpdateTime = Instant.parse(parser.text());
+                    lastUpdateTime = Instant.ofEpochMilli(parser.longValue());
                     break;
                 default:
                     parser.skipChildren();
@@ -233,6 +237,7 @@ public class MLPrompt implements ToXContentObject, Writeable {
         }
         return MLPrompt
             .builder()
+            .promptId(promptId)
             .name(name)
             .description(description)
             .version(version)

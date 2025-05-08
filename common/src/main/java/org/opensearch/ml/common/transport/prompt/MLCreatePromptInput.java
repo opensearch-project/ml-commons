@@ -76,10 +76,10 @@ public class MLCreatePromptInput implements ToXContentObject, Writeable {
             throw new IllegalArgumentException("MLPrompt prompt field cannot be empty");
         }
         if (!prompt.containsKey(PROMPT_FIELD_SYSTEM_PROMPT)) {
-            throw new IllegalArgumentException("MLPrompt prompt field requires " + PROMPT_FIELD_USER_PROMPT + " parameter");
+            throw new IllegalArgumentException("MLPrompt prompt field requires " + PROMPT_FIELD_SYSTEM_PROMPT + " parameter");
         }
         if (!prompt.containsKey(PROMPT_FIELD_USER_PROMPT)) {
-            throw new IllegalArgumentException("MLPrompt prompt field requires " + PROMPT_FIELD_SYSTEM_PROMPT + " parameter");
+            throw new IllegalArgumentException("MLPrompt prompt field requires " + PROMPT_FIELD_USER_PROMPT + " parameter");
         }
         if (version == null) {
             throw new IllegalArgumentException("MLPrompt version field is null");
@@ -104,7 +104,7 @@ public class MLCreatePromptInput implements ToXContentObject, Writeable {
         this.description = input.readOptionalString();
         this.version = input.readOptionalString();
         this.prompt = input.readMap(s -> s.readString(), s -> s.readString());
-        this.tags = input.readOptionalStringList();
+        this.tags = input.readList(StreamInput::readString);
         this.tenantId = input.readOptionalString();
     }
 

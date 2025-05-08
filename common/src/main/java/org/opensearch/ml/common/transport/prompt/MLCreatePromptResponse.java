@@ -90,7 +90,7 @@ public class MLCreatePromptResponse extends ActionResponse implements ToXContent
                 return new MLCreatePromptResponse(input);
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("failed to parse ActionResponse into MLCreatePromptResponse", e);
+            throw new UncheckedIOException("Failed to parse ActionResponse into MLCreatePromptResponse", e);
         }
 
     }
