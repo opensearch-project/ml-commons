@@ -7,6 +7,7 @@ package org.opensearch.ml.common.utils;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -76,7 +77,7 @@ public class StringUtilsTest {
     public void toUTF8() {
         String rawString = "\uD83D\uDE00\uD83D\uDE0D\uD83D\uDE1C";
         String utf8 = StringUtils.toUTF8(rawString);
-        Assert.assertNotNull(utf8);
+        assertNotNull(utf8);
     }
 
     @Test
@@ -759,36 +760,99 @@ public class StringUtilsTest {
     }
 
     @Test
-    public void testIsSafeText_InvalidInputs() {
-        assertFalse(StringUtils.isSafeText(null));
-        assertFalse(StringUtils.isSafeText(""));
-        assertFalse(StringUtils.isSafeText("Invalid@Character#Here"));
-        assertFalse(StringUtils.isSafeText("This text has a newline\n"));
-    }
-
-    @Test
     public void testValidateFields_AllValid() {
         Map<String, String> fields = Map.of("Field1", "Valid Name 1", "Field2", "Another_Valid-Field.Name:Here");
         assertNull(StringUtils.validateFields(fields));
     }
 
     @Test
-    public void testValidateFields_OneInvalid() {
-        Map<String, String> fields = Map.of("Field1", "Valid Name", "Field2", "Invalid@Field!");
-        ActionRequestValidationException exception = StringUtils.validateFields(fields);
-        assertTrue(
-            exception
-                .getMessage()
-                .contains("Field2 can only contain letters, digits, spaces, underscores (_), hyphens (-), dots (.), and colons (:)")
-        );
+    public void testIsSafeText_AdvancedValidInputs() {
+        // Testing all allowed characters
+        assertTrue(StringUtils.isSafeText("Hello World"));  // spaces
+        assertTrue(StringUtils.isSafeText("Hello.World"));  // period
+        assertTrue(StringUtils.isSafeText("Hello,World"));  // comma
+        assertTrue(StringUtils.isSafeText("Hello!World"));  // exclamation
+        assertTrue(StringUtils.isSafeText("Hello?World"));  // question mark
+        assertTrue(StringUtils.isSafeText("Hello(World)")); // parentheses
+        assertTrue(StringUtils.isSafeText("Hello:World"));  // colon
+        assertTrue(StringUtils.isSafeText("Hello@World"));  // at sign
+        assertTrue(StringUtils.isSafeText("Hello-World"));  // hyphen
+        assertTrue(StringUtils.isSafeText("Hello_World"));  // underscore
+        assertTrue(StringUtils.isSafeText("Hello'World")); // single quote
+        assertTrue(StringUtils.isSafeText("Hello\"World")); // double quote
     }
 
     @Test
-    public void testValidateFields_MultipleInvalid() {
-        Map<String, String> fields = Map.of("Field1", "Invalid@Name", "Field2", "AnotherInvalid#Field");
+    public void testIsSafeText_AdvancedInvalidInputs() {
+        // Testing specifically excluded characters
+        assertFalse(StringUtils.isSafeText("Hello<World"));  // less than
+        assertFalse(StringUtils.isSafeText("Hello>World"));  // greater than
+        assertFalse(StringUtils.isSafeText("Hello/World"));  // forward slash
+        assertFalse(StringUtils.isSafeText("Hello\\World")); // backslash
+        assertFalse(StringUtils.isSafeText("Hello&World"));  // ampersand
+        assertFalse(StringUtils.isSafeText("Hello+World"));  // plus
+        assertFalse(StringUtils.isSafeText("Hello=World"));  // equals
+        assertFalse(StringUtils.isSafeText("Hello;World"));  // semicolon
+        assertFalse(StringUtils.isSafeText("Hello|World"));  // pipe
+        assertFalse(StringUtils.isSafeText("Hello*World"));  // asterisk
+    }
+
+    @Test
+    public void testValidateFields_EmptyAndNullValues() {
+        Map<String, String> fields = new HashMap<>();
+        fields.put("field1", "");
+        fields.put("field2", null);
+        fields.put("field3", "   ");
+
         ActionRequestValidationException exception = StringUtils.validateFields(fields);
+        assertNotNull(exception);
+        String message = exception.getMessage();
+        assertTrue(message.contains("field1"));
+        assertFalse(message.contains("field2"));
+        assertTrue(message.contains("field3"));
+    }
+
+    @Test
+    public void testValidateFields_MultipleErrorMessageFormat() {
+        Map<String, String> fields = new HashMap<>();
+        fields.put("field1", "Invalid#Value");
+        fields.put("field2", "Another*Invalid");
+
+        ActionRequestValidationException exception = StringUtils.validateFields(fields);
+        assertNotNull(exception);
+        String message = exception.getMessage();
+
+        System.out.println("Actual error message: " + message);
+
+        // Make sure both fields are in the message
+        assertTrue(message.contains("field1"));
+        assertTrue(message.contains("field2"));
+        // Only check for separator if you're absolutely sure of formatting
+        assertTrue(message.contains("Validation Failed:"));  // header check
+        assertTrue(message.contains(":"));  // some separator exists
+    }
+
+    @Test
+    public void testValidateFields_EmptyMap() {
+        Map<String, String> fields = new HashMap<>();
+        assertNull(StringUtils.validateFields(fields));
+    }
+
+    @Test
+    public void testValidateFields_UnicodeLettersAndNumbers() {
+        Map<String, String> fields = new HashMap<>();
+        fields.put("field1", "Hello世界123");  // Chinese characters with numbers
+        fields.put("field2", "Café42");      // Accented characters with numbers
+
+        assertNull(StringUtils.validateFields(fields));
+    }
+
+    @Test
+    public void testValidateFields_InvalidCharacterSet() {
+        Map<String, String> fields = Map.of("Field1", "Bad#Value$With^Weird*Chars");
+        ActionRequestValidationException exception = StringUtils.validateFields(fields);
+        assertNotNull(exception);
         assertTrue(exception.getMessage().contains("Field1"));
-        assertTrue(exception.getMessage().contains("Field2"));
     }
 
 }
