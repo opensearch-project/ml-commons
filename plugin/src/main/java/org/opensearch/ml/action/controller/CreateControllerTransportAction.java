@@ -30,6 +30,7 @@ import org.opensearch.action.support.WriteRequest;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.authuser.User;
@@ -66,6 +67,7 @@ import lombok.extern.log4j.Log4j2;
 public class CreateControllerTransportAction extends HandledTransportAction<ActionRequest, MLCreateControllerResponse> {
     MLIndicesHandler mlIndicesHandler;
     Client client;
+    Settings settings;
     MLModelManager mlModelManager;
     ClusterService clusterService;
     MLModelCacheHelper mlModelCacheHelper;
@@ -78,6 +80,7 @@ public class CreateControllerTransportAction extends HandledTransportAction<Acti
         ActionFilters actionFilters,
         MLIndicesHandler mlIndicesHandler,
         Client client,
+        Settings settings,
         ClusterService clusterService,
         ModelAccessControlHelper modelAccessControlHelper,
         MLModelCacheHelper mlModelCacheHelper,
@@ -87,6 +90,7 @@ public class CreateControllerTransportAction extends HandledTransportAction<Acti
         super(MLCreateControllerAction.NAME, transportService, actionFilters, MLCreateControllerRequest::new);
         this.mlIndicesHandler = mlIndicesHandler;
         this.client = client;
+        this.settings = settings;
         this.mlModelManager = mlModelManager;
         this.clusterService = clusterService;
         this.mlModelCacheHelper = mlModelCacheHelper;
@@ -112,7 +116,7 @@ public class CreateControllerTransportAction extends HandledTransportAction<Acti
                 Boolean isHidden = mlModel.getIsHidden();
                 if (functionName == TEXT_EMBEDDING || functionName == REMOTE) {
                     modelAccessControlHelper
-                        .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {
+                        .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, settings, ActionListener.wrap(hasPermission -> {
                             if (hasPermission) {
                                 if (mlModel.getModelState() != MLModelState.DEPLOYING) {
                                     indexAndCreateController(mlModel, controller, wrappedListener);

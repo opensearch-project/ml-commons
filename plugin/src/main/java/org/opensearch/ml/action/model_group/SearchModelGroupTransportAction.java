@@ -7,6 +7,8 @@ package org.opensearch.ml.action.model_group;
 
 import static org.opensearch.ml.action.handler.MLSearchHandler.wrapRestActionListener;
 import static org.opensearch.ml.utils.RestActionUtils.wrapListenerToHandleSearchIndexNotFound;
+import static org.opensearch.security.spi.resources.FeatureConfigConstants.OPENSEARCH_RESOURCE_SHARING_ENABLED;
+import static org.opensearch.security.spi.resources.FeatureConfigConstants.OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT;
 
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
@@ -14,6 +16,7 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
@@ -35,6 +38,7 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class SearchModelGroupTransportAction extends HandledTransportAction<MLSearchActionRequest, SearchResponse> {
     Client client;
+    Settings settings;
     SdkClient sdkClient;
     ClusterService clusterService;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
@@ -46,6 +50,7 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<MLSe
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
+        Settings settings,
         SdkClient sdkClient,
         ClusterService clusterService,
         ModelAccessControlHelper modelAccessControlHelper,
@@ -53,6 +58,7 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<MLSe
     ) {
         super(MLModelGroupSearchAction.NAME, transportService, actionFilters, MLSearchActionRequest::new);
         this.client = client;
+        this.settings = settings;
         this.sdkClient = sdkClient;
         this.clusterService = clusterService;
         this.modelAccessControlHelper = modelAccessControlHelper;
@@ -76,13 +82,19 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<MLSe
         User user,
         ActionListener<SearchResponse> listener
     ) {
+        boolean isResourceSharingFeatureEnabled = this.settings
+            .getAsBoolean(OPENSEARCH_RESOURCE_SHARING_ENABLED, OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<SearchResponse> wrappedListener = ActionListener.runBefore(listener, context::restore);
 
             final ActionListener<SearchResponse> doubleWrappedListener = ActionListener
                 .wrap(wrappedListener::onResponse, e -> wrapListenerToHandleSearchIndexNotFound(e, wrappedListener));
 
-            if (!modelAccessControlHelper.skipModelAccessControl(user)) {
+            // TODO: Remove this feature flag check once feature is GA, as it will be enabled by default
+            if (isResourceSharingFeatureEnabled) {
+                // User will be fetched from thread context using persistent header, so stash context will not stash user info
+                modelAccessControlHelper.addAccessibleModelGroupsFilter(request.source());
+            } else if (!modelAccessControlHelper.skipModelAccessControl(user)) {
                 // Security is enabled, filter is enabled and user isn't admin
                 modelAccessControlHelper.addUserBackendRolesFilter(user, request.source());
                 log.debug("Filtering result by {}", user.getBackendRoles());

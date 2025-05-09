@@ -147,6 +147,7 @@ public class DeleteControllerTransportActionTests extends OpenSearchTestCase {
                 transportService,
                 actionFilters,
                 client,
+                Settings.EMPTY,
                 xContentRegistry,
                 clusterService,
                 mlModelManager,
@@ -162,7 +163,7 @@ public class DeleteControllerTransportActionTests extends OpenSearchTestCase {
             ActionListener<Boolean> listener = invocation.getArgument(3);
             listener.onResponse(true);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ActionListener<MLModel> listener = invocation.getArgument(3);
@@ -216,7 +217,7 @@ public class DeleteControllerTransportActionTests extends OpenSearchTestCase {
             ActionListener<Boolean> listener = invocation.getArgument(3);
             listener.onResponse(false);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
 
         deleteControllerTransportAction.doExecute(null, mlControllerDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -241,7 +242,7 @@ public class DeleteControllerTransportActionTests extends OpenSearchTestCase {
             ActionListener<Boolean> listener = invocation.getArgument(3);
             listener.onResponse(false);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
 
         deleteControllerTransportAction.doExecute(null, mlControllerDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -258,7 +259,7 @@ public class DeleteControllerTransportActionTests extends OpenSearchTestCase {
             ActionListener<Boolean> listener = invocation.getArgument(3);
             listener.onFailure(new RuntimeException("Exception occurred. Please check log for more details."));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
 
         deleteControllerTransportAction.doExecute(null, mlControllerDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -283,7 +284,7 @@ public class DeleteControllerTransportActionTests extends OpenSearchTestCase {
                     new RuntimeException("Permission denied: Unable to delete the model controller with the provided model. Details: ")
                 );
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
 
         deleteControllerTransportAction.doExecute(null, mlControllerDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);

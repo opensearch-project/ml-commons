@@ -164,6 +164,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                                         mlModel.getModelGroupId(),
                                         client,
                                         sdkClient,
+                                        settings,
                                         ActionListener.wrap(hasPermission -> {
                                             if (hasPermission) {
                                                 updateRemoteOrTextEmbeddingModel(
@@ -380,7 +381,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         UpdateRequest updateRequest = new UpdateRequest(ML_MODEL_INDEX, modelId);
         if (newModelGroupId != null) {
             modelAccessControlHelper
-                .validateModelGroupAccess(user, newModelGroupId, client, ActionListener.wrap(hasNewModelGroupPermission -> {
+                .validateModelGroupAccess(user, newModelGroupId, client, settings, ActionListener.wrap(hasNewModelGroupPermission -> {
                     if (hasNewModelGroupPermission) {
                         mlModelGroupManager.getModelGroupResponse(sdkClient, newModelGroupId, ActionListener.wrap(newModelGroupResponse -> {
                             buildUpdateRequest(

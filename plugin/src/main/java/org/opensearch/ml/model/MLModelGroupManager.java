@@ -7,9 +7,14 @@ package org.opensearch.ml.model;
 
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+import static org.opensearch.security.spi.resources.FeatureConfigConstants.OPENSEARCH_RESOURCE_SHARING_ENABLED;
+import static org.opensearch.security.spi.resources.FeatureConfigConstants.OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT;
 
 import java.time.Instant;
 import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
@@ -19,6 +24,7 @@ import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.commons.authuser.User;
@@ -34,6 +40,7 @@ import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLModelGroup;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
@@ -48,6 +55,9 @@ import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
+import org.opensearch.security.spi.resources.sharing.Recipient;
+import org.opensearch.security.spi.resources.sharing.SharedWithActionGroup;
 import org.opensearch.transport.client.Client;
 
 import lombok.extern.log4j.Log4j2;
@@ -56,6 +66,7 @@ import lombok.extern.log4j.Log4j2;
 public class MLModelGroupManager {
     private final MLIndicesHandler mlIndicesHandler;
     private final Client client;
+    private final Settings settings;
     private final SdkClient sdkClient;
     ClusterService clusterService;
 
@@ -66,6 +77,7 @@ public class MLModelGroupManager {
     public MLModelGroupManager(
         MLIndicesHandler mlIndicesHandler,
         Client client,
+        Settings settings,
         SdkClient sdkClient,
         ClusterService clusterService,
         ModelAccessControlHelper modelAccessControlHelper,
@@ -73,6 +85,7 @@ public class MLModelGroupManager {
     ) {
         this.mlIndicesHandler = mlIndicesHandler;
         this.client = client;
+        this.settings = settings;
         this.sdkClient = sdkClient;
         this.clusterService = clusterService;
         this.modelAccessControlHelper = modelAccessControlHelper;
@@ -83,6 +96,11 @@ public class MLModelGroupManager {
         try {
             String modelName = input.getName();
             User user = RestActionUtils.getUserContext(client);
+            // Create a recipient sharing list
+            AtomicReference<Map<Recipient, Set<String>>> recipientMap = new AtomicReference<>();
+            boolean isResourceSharingFeatureEnabled = this.settings
+                .getAsBoolean(OPENSEARCH_RESOURCE_SHARING_ENABLED, OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT);
+
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 ActionListener<String> wrappedListener = ActionListener.runBefore(listener, context::restore);
                 validateUniqueModelGroupName(input.getName(), input.getTenantId(), ActionListener.wrap(modelGroups -> {
@@ -101,9 +119,16 @@ public class MLModelGroupManager {
                     } else {
                         MLModelGroup.MLModelGroupBuilder builder = MLModelGroup.builder();
                         MLModelGroup mlModelGroup;
+
+                        // TODO: Remove security-related entries from MLModelGroup builder
                         if (modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(user)) {
                             validateRequestForAccessControl(input, user);
                             builder = builder.access(input.getModelAccessMode().getValue());
+
+                            // share with current user's backend-roles
+                            // TODO: check if resource should be shared with user's backend roles by default
+                            recipientMap.set(Map.of(Recipient.BACKEND_ROLES, Set.copyOf(user.getBackendRoles())));
+
                             if (Boolean.TRUE.equals(input.getIsAddAllBackendRoles())) {
                                 input.setBackendRoles(user.getBackendRoles());
                             }
@@ -118,6 +143,14 @@ public class MLModelGroupManager {
                                 .build();
                         } else {
                             validateSecurityDisabledOrModelAccessControlDisabled(input);
+
+                            // TODO: Check if following line is actually required since by default the model will be pass-through when sec
+                            // is disabled
+                            recipientMap
+                                .set(
+                                    Map.of(Recipient.USERS, Set.of("*"), Recipient.ROLES, Set.of("*"), Recipient.BACKEND_ROLES, Set.of("*"))
+                                );
+
                             mlModelGroup = builder
                                 .name(modelName)
                                 .description(input.getDescription())
@@ -152,7 +185,39 @@ public class MLModelGroupManager {
                                                     indexResponse.getResult(),
                                                     indexResponse.getId()
                                                 );
-                                            wrappedListener.onResponse(r.id());
+
+                                            // TODO: Remove this feature flag check once feature is GA, as it will be enabled by default
+                                            if (isResourceSharingFeatureEnabled) {
+                                                // Create an entry in resource-sharing index
+                                                String modelGroupId = indexResponse.getId();
+                                                String modelGroupIndex = indexResponse.getIndex();
+                                                SharedWithActionGroup.ActionGroupRecipients recipients =
+                                                    new SharedWithActionGroup.ActionGroupRecipients(recipientMap.get());
+
+                                                ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor
+                                                    .getInstance()
+                                                    .getResourceSharingClient();
+
+                                                resourceSharingClient
+                                                    .share(
+                                                        modelGroupId,
+                                                        modelGroupIndex,
+                                                        recipients,
+                                                        ActionListener.wrap(resourceSharing -> {
+                                                            log
+                                                                .debug(
+                                                                    "Successfully shared ml-model-group: {} with entities: {}",
+                                                                    modelName,
+                                                                    recipientMap
+                                                                );
+
+                                                            wrappedListener.onResponse(r.id());
+                                                        }, listener::onFailure)
+                                                    );
+                                            } else {
+                                                wrappedListener.onResponse(r.id());
+                                            }
+
                                         } catch (Exception e) {
                                             wrappedListener.onFailure(e);
                                         }
