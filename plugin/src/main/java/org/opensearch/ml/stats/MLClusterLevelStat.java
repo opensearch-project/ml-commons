@@ -12,6 +12,7 @@ package org.opensearch.ml.stats;
 public enum MLClusterLevelStat {
     ML_MODEL_INDEX_STATUS,
     ML_CONNECTOR_INDEX_STATUS,
+    ML_PROMPT_INDEX_STATUS,
     ML_CONFIG_INDEX_STATUS,
     ML_TASK_INDEX_STATUS,
     ML_CONTROLLER_INDEX_STATUS,

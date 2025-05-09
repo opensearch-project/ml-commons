@@ -83,6 +83,7 @@ import org.opensearch.ml.common.input.execute.metricscorrelation.MetricsCorrelat
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
 import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
+import org.opensearch.ml.common.transport.prompt.MLCreatePromptInput;
 import org.opensearch.ml.profile.MLProfileInput;
 import org.opensearch.ml.stats.MLStatsInput;
 import org.opensearch.rest.RestRequest;
@@ -590,5 +591,38 @@ public class TestHelper {
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .build();
         return request;
+    }
+
+    public static RestRequest getCreatePromptRestRequest(String tenantId) {
+        Map<String, List<String>> headers = new HashMap<>();
+        if (tenantId != null) {
+            headers.put(Constants.TENANT_ID_HEADER, Collections.singletonList(tenantId));
+        }
+
+        final String requestcontent = "{\n"
+            + "  \"name\": \"test_prompt\",\n"
+            + "  \"description\": \"This is a test prompt\",\n"
+            + "  \"version\": \"1\",\n"
+            + "  \"prompt\": {\n"
+            + "     \"system\": \"test system prompt\",\n"
+            + "     \"user\": \"test user prompt\"\n"
+            + "  },\n"
+            + "  \"tags\": [\n"
+            + "     \"test\"\n"
+            + "  ]\n"
+            + "}";
+        RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
+            .withHeaders(headers)
+            .withContent(new BytesArray(requestcontent), XContentType.JSON)
+            .build();
+        return request;
+    }
+
+    public static void verifyParsedCreatePromptInput(MLCreatePromptInput mlCreatePromptInput) {
+        assertEquals("test_prompt", mlCreatePromptInput.getName());
+        assertEquals("This is a test prompt", mlCreatePromptInput.getDescription());
+        assertEquals("1", mlCreatePromptInput.getVersion());
+        assertEquals(List.of("test"), mlCreatePromptInput.getTags());
+        assertNotNull(mlCreatePromptInput.getPrompt());
     }
 }

@@ -68,6 +68,10 @@ public class MLIndicesHandler {
         initMLIndexIfAbsent(MLIndex.CONNECTOR, listener);
     }
 
+    public void initMLPromptIndex(ActionListener<Boolean> listener) {
+        initMLIndexIfAbsent(MLIndex.PROMPT, listener);
+    }
+
     public void initMemoryMetaIndex(ActionListener<Boolean> listener) {
         initMLIndexIfAbsent(MLIndex.MEMORY_META, listener);
     }

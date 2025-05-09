@@ -37,6 +37,7 @@ public class CommonValue {
     public static final String ML_MODEL_INDEX = ".plugins-ml-model";
     public static final String ML_TASK_INDEX = ".plugins-ml-task";
     public static final String ML_CONNECTOR_INDEX = ".plugins-ml-connector";
+    public static final String ML_PROMPT_INDEX = ".plugins-ml-prompt";
     public static final String ML_CONFIG_INDEX = ".plugins-ml-config";
     public static final String ML_CONTROLLER_INDEX = ".plugins-ml-controller";
     public static final String ML_MAP_RESPONSE_KEY = "response";
@@ -54,6 +55,7 @@ public class CommonValue {
     public static final String ML_MODEL_INDEX_MAPPING_PATH = "index-mappings/ml_model.json";
     public static final String ML_TASK_INDEX_MAPPING_PATH = "index-mappings/ml_task.json";
     public static final String ML_CONNECTOR_INDEX_MAPPING_PATH = "index-mappings/ml_connector.json";
+    public static final String ML_PROMPT_INDEX_MAPPING_PATH = "index-mappings/ml_prompt.json";
     public static final String ML_CONFIG_INDEX_MAPPING_PATH = "index-mappings/ml_config.json";
     public static final String ML_CONTROLLER_INDEX_MAPPING_PATH = "index-mappings/ml_controller.json";
     public static final String ML_AGENT_INDEX_MAPPING_PATH = "index-mappings/ml_agent.json";
