@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.common.utils;
 
+import static org.opensearch.action.ValidateActions.addValidationError;
+
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.AccessController;
@@ -28,6 +30,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.opensearch.OpenSearchParseException;
+import org.opensearch.action.ActionRequestValidationException;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -59,6 +62,12 @@ public class StringUtils {
         + "      if (input.contains('\f')) {\n        input = input.replace('\f', '\\\\f');\n      }\n"
         + "      return input;"
         + "\n    }\n";
+
+    // Regex allows letters, digits, spaces, hyphens, underscores, and dots.
+    private static final Pattern SAFE_INPUT_PATTERN = Pattern.compile("^[\\p{L}\\p{N}\\s.,!?():@\\-_'\"]*$");
+
+    public static final String SAFE_INPUT_DESCRIPTION =
+        "can only contain letters, numbers, whitespace, and basic punctuation (.,!?():@-_'\")";
 
     public static final Gson gson;
 
@@ -495,6 +504,44 @@ public class StringUtils {
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException("Error: Unable to compute hash", e);
         }
+    }
+
+    /**
+     * Checks if the input is safe (non-null, non-blank, matches safe character set).
+     *
+     * @param value The input string to validate
+     * @return true if input is safe, false otherwise
+     */
+    public static boolean isSafeText(String value) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+        return SAFE_INPUT_PATTERN.matcher(value).matches();
+    }
+
+    /**
+     * Validates a map of fields to ensure that their values only contain allowed characters.
+     * <p>
+     * Allowed characters are: letters, digits, spaces, underscores (_), hyphens (-), dots (.), and colons (:).
+     * If a value does not comply, a validation error is added.
+     *
+     * @param fields A map where the key is the field name (used for error messages) and the value is the text to validate.
+     * @return An {@link ActionRequestValidationException} containing all validation errors, or {@code null} if all fields are valid.
+     */
+    public static ActionRequestValidationException validateFields(Map<String, String> fields) {
+        ActionRequestValidationException exception = null;
+
+        for (Map.Entry<String, String> entry : fields.entrySet()) {
+            String key = entry.getKey();
+            String value = entry.getValue();
+
+            if (value != null && !isSafeText(value)) {
+                String errorMessage = key + " " + SAFE_INPUT_DESCRIPTION;
+                exception = addValidationError(errorMessage, exception);
+            }
+        }
+
+        return exception;
     }
 
 }

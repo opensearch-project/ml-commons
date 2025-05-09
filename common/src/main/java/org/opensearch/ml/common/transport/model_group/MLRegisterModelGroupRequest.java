@@ -6,11 +6,14 @@
 package org.opensearch.ml.common.transport.model_group;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
+import static org.opensearch.ml.common.utils.StringUtils.validateFields;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
@@ -44,12 +47,15 @@ public class MLRegisterModelGroupRequest extends ActionRequest {
 
     @Override
     public ActionRequestValidationException validate() {
-        ActionRequestValidationException exception = null;
         if (registerModelGroupInput == null) {
-            exception = addValidationError("Model meta input can't be null", exception);
+            return addValidationError("Model group input can't be null", null);
         }
 
-        return exception;
+        Map<String, String> fieldsToValidate = new HashMap<>();
+        fieldsToValidate.put("Model group name", registerModelGroupInput.getName());
+        fieldsToValidate.put("Model group description", registerModelGroupInput.getDescription());
+
+        return validateFields(fieldsToValidate);
     }
 
     @Override

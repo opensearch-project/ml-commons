@@ -6,11 +6,14 @@
 package org.opensearch.ml.common.transport.model;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
+import static org.opensearch.ml.common.utils.StringUtils.validateFields;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
@@ -44,12 +47,13 @@ public class MLUpdateModelRequest extends ActionRequest {
 
     @Override
     public ActionRequestValidationException validate() {
-        ActionRequestValidationException exception = null;
         if (updateModelInput == null) {
-            exception = addValidationError("Update Model Input can't be null", exception);
+            return addValidationError("Update Model Input can't be null", null);
         }
-
-        return exception;
+        Map<String, String> fieldsToValidate = new HashMap<>();
+        fieldsToValidate.put("Model Name", updateModelInput.getName());
+        fieldsToValidate.put("Model Description", updateModelInput.getDescription());
+        return validateFields(fieldsToValidate);
     }
 
     @Override

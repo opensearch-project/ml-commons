@@ -9,6 +9,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
+import static org.opensearch.ml.common.utils.StringUtils.SAFE_INPUT_DESCRIPTION;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -147,4 +148,47 @@ public class MLCreateConnectorRequestTests {
         };
         MLCreateConnectorRequest.fromActionRequest(actionRequest);
     }
+
+    @Test
+    public void validateWithUnsafeModelConnectorName() {
+        MLCreateConnectorInput unsafeInput = MLCreateConnectorInput
+            .builder()
+            .name("<script>bad</script>")  // Unsafe name
+            .description("safe description")
+            .version("1")
+            .protocol("http")
+            .parameters(Map.of("input", "test"))
+            .credential(Map.of("key", "value"))
+            .actions(List.of())
+            .access(AccessMode.PUBLIC)
+            .backendRoles(Arrays.asList("role1"))
+            .addAllBackendRoles(false)
+            .build();
+
+        MLCreateConnectorRequest request = MLCreateConnectorRequest.builder().mlCreateConnectorInput(unsafeInput).build();
+        ActionRequestValidationException exception = request.validate();
+        assertEquals("Validation Failed: 1: Model connector name " + SAFE_INPUT_DESCRIPTION + ";", exception.getMessage());
+    }
+
+    @Test
+    public void validateWithUnsafeModelConnectorDescription() {
+        MLCreateConnectorInput unsafeInput = MLCreateConnectorInput
+            .builder()
+            .name("safeName")
+            .description("<script>bad</script>")  // Unsafe description
+            .version("1")
+            .protocol("http")
+            .parameters(Map.of("input", "test"))
+            .credential(Map.of("key", "value"))
+            .actions(List.of())
+            .access(AccessMode.PUBLIC)
+            .backendRoles(Arrays.asList("role1"))
+            .addAllBackendRoles(false)
+            .build();
+
+        MLCreateConnectorRequest request = MLCreateConnectorRequest.builder().mlCreateConnectorInput(unsafeInput).build();
+        ActionRequestValidationException exception = request.validate();
+        assertEquals("Validation Failed: 1: Model connector description " + SAFE_INPUT_DESCRIPTION + ";", exception.getMessage());
+    }
+
 }

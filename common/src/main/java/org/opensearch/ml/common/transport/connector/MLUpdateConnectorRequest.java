@@ -6,11 +6,14 @@
 package org.opensearch.ml.common.transport.connector;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
+import static org.opensearch.ml.common.utils.StringUtils.validateFields;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
@@ -57,8 +60,12 @@ public class MLUpdateConnectorRequest extends ActionRequest {
 
         if (updateContent == null) {
             exception = addValidationError("Update connector content can't be null", exception);
+        } else {
+            Map<String, String> fieldsToValidate = new HashMap<>();
+            fieldsToValidate.put("Model connector name", updateContent.getName());
+            fieldsToValidate.put("Model connector description", updateContent.getDescription());
+            exception = validateFields(fieldsToValidate);
         }
-
         return exception;
     }
 
