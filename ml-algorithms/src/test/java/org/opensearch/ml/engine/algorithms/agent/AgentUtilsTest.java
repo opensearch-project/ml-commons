@@ -7,6 +7,8 @@ package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_PATH;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_TOOL_USE;
@@ -44,16 +46,31 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.engine.encryptor.Encryptor;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.transport.client.Client;
+
 
 public class AgentUtilsTest {
 
     @Mock
     private Tool tool1, tool2;
+
+    @Mock
+    private MLAgent mlAgent;
+    @Mock
+    private Client client;
+    @Mock
+    private SdkClient sdkClient;
+    @Mock
+    private Encryptor encryptor;
 
     private Map<String, Map<String, String>> llmResponseExpectedParseResults;
 
@@ -1150,6 +1167,16 @@ public class AgentUtilsTest {
         Assert.assertNull(output3.get(ACTION_INPUT));
         Assert.assertNull(output3.get(TOOL_CALL_ID));
         Assert.assertTrue(output3.get(FINAL_ANSWER).contains("This is a test response"));
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_NoMcpJsonConfig() {
+        when(mlAgent.getParameters()).thenReturn(null);
+
+        ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+        AgentUtils.getMcpToolSpecs(mlAgent, client, sdkClient, encryptor, listener);
+
+        verify(listener).onResponse(Collections.emptyList());
     }
 
     private void verifyConstructToolParams(String question, String actionInput, Consumer<Map<String, String>> verify) {
