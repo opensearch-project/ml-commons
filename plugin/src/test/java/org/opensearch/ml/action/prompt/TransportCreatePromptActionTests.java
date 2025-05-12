@@ -161,6 +161,21 @@ public class TransportCreatePromptActionTests {
     }
 
     @Test
+    public void testDoExecute_initIndex_fail() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(false);
+            return null;
+        }).when(mlIndicesHandler).initMLPromptIndex(isA(ActionListener.class));
+
+        transportCreatePromptAction.doExecute(task, mlCreatePromptRequest, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(RuntimeException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("No response to create ML Prompt Index", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
     public void testDoExecute_multi_tenancy_fail() throws InterruptedException {
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
 
