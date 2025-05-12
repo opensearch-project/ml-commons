@@ -13,6 +13,7 @@ import static org.opensearch.ml.common.CommonValue.ML_MEMORY_MESSAGE_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_META_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_STOP_WORDS_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
@@ -101,6 +102,7 @@ import org.opensearch.ml.action.models.UpdateModelTransportAction;
 import org.opensearch.ml.action.prediction.TransportPredictionTaskAction;
 import org.opensearch.ml.action.profile.MLProfileAction;
 import org.opensearch.ml.action.profile.MLProfileTransportAction;
+import org.opensearch.ml.action.prompt.TransportCreatePromptAction;
 import org.opensearch.ml.action.register.TransportRegisterModelAction;
 import org.opensearch.ml.action.stats.MLStatsNodesAction;
 import org.opensearch.ml.action.stats.MLStatsNodesTransportAction;
@@ -178,6 +180,7 @@ import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupAction;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
+import org.opensearch.ml.common.transport.prompt.MLCreatePromptAction;
 import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
 import org.opensearch.ml.common.transport.task.MLCancelBatchJobAction;
@@ -259,6 +262,7 @@ import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
 import org.opensearch.ml.rest.RestMLCancelBatchJobAction;
 import org.opensearch.ml.rest.RestMLCreateConnectorAction;
 import org.opensearch.ml.rest.RestMLCreateControllerAction;
+import org.opensearch.ml.rest.RestMLCreatePromptAction;
 import org.opensearch.ml.rest.RestMLDeleteAgentAction;
 import org.opensearch.ml.rest.RestMLDeleteConnectorAction;
 import org.opensearch.ml.rest.RestMLDeleteControllerAction;
@@ -467,6 +471,7 @@ public class MachineLearningPlugin extends Plugin
                 new ActionHandler<>(MLConnectorGetAction.INSTANCE, GetConnectorTransportAction.class),
                 new ActionHandler<>(MLConnectorDeleteAction.INSTANCE, DeleteConnectorTransportAction.class),
                 new ActionHandler<>(MLConnectorSearchAction.INSTANCE, SearchConnectorTransportAction.class),
+                new ActionHandler<>(MLCreatePromptAction.INSTANCE, TransportCreatePromptAction.class),
                 new ActionHandler<>(CreateConversationAction.INSTANCE, CreateConversationTransportAction.class),
                 new ActionHandler<>(GetConversationsAction.INSTANCE, GetConversationsTransportAction.class),
                 new ActionHandler<>(CreateInteractionAction.INSTANCE, CreateInteractionTransportAction.class),
@@ -569,6 +574,7 @@ public class MachineLearningPlugin extends Plugin
         stats.put(MLClusterLevelStat.ML_MODEL_INDEX_STATUS, new MLStat<>(true, new IndexStatusSupplier(indexUtils, ML_MODEL_INDEX)));
         stats
             .put(MLClusterLevelStat.ML_CONNECTOR_INDEX_STATUS, new MLStat<>(true, new IndexStatusSupplier(indexUtils, ML_CONNECTOR_INDEX)));
+        stats.put(MLClusterLevelStat.ML_PROMPT_INDEX_STATUS, new MLStat<>(true, new IndexStatusSupplier(indexUtils, ML_PROMPT_INDEX)));
         stats.put(MLClusterLevelStat.ML_CONFIG_INDEX_STATUS, new MLStat<>(true, new IndexStatusSupplier(indexUtils, ML_CONFIG_INDEX)));
         stats.put(MLClusterLevelStat.ML_TASK_INDEX_STATUS, new MLStat<>(true, new IndexStatusSupplier(indexUtils, ML_TASK_INDEX)));
         stats
@@ -840,6 +846,7 @@ public class MachineLearningPlugin extends Plugin
         RestMLGetConnectorAction restMLGetConnectorAction = new RestMLGetConnectorAction(clusterService, settings, mlFeatureEnabledSetting);
         RestMLDeleteConnectorAction restMLDeleteConnectorAction = new RestMLDeleteConnectorAction(mlFeatureEnabledSetting);
         RestMLSearchConnectorAction restMLSearchConnectorAction = new RestMLSearchConnectorAction(mlFeatureEnabledSetting);
+        RestMLCreatePromptAction restMLCreatePromptAction = new RestMLCreatePromptAction(mlFeatureEnabledSetting);
         RestMemoryCreateConversationAction restCreateConversationAction = new RestMemoryCreateConversationAction();
         RestMemoryGetConversationsAction restListConversationsAction = new RestMemoryGetConversationsAction();
         RestMemoryCreateInteractionAction restCreateInteractionAction = new RestMemoryCreateInteractionAction();
@@ -901,6 +908,7 @@ public class MachineLearningPlugin extends Plugin
                 restMLGetConnectorAction,
                 restMLDeleteConnectorAction,
                 restMLSearchConnectorAction,
+                restMLCreatePromptAction,
                 restCreateConversationAction,
                 restListConversationsAction,
                 restCreateInteractionAction,
@@ -1210,6 +1218,7 @@ public class MachineLearningPlugin extends Plugin
         systemIndexDescriptors.add(new SystemIndexDescriptor(ML_AGENT_INDEX, "ML Commons Agent Index"));
         systemIndexDescriptors.add(new SystemIndexDescriptor(ML_CONFIG_INDEX, "ML Commons Configuration Index"));
         systemIndexDescriptors.add(new SystemIndexDescriptor(ML_CONNECTOR_INDEX, "ML Commons Connector Index"));
+        systemIndexDescriptors.add(new SystemIndexDescriptor(ML_PROMPT_INDEX, "ML Commons Prompt Index"));
         systemIndexDescriptors.add(new SystemIndexDescriptor(ML_CONTROLLER_INDEX, "ML Commons Controller Index"));
         systemIndexDescriptors.add(new SystemIndexDescriptor(ML_MODEL_GROUP_INDEX, "ML Commons Model Group Index"));
         systemIndexDescriptors.add(new SystemIndexDescriptor(ML_MODEL_INDEX, "ML Commons Model Index"));

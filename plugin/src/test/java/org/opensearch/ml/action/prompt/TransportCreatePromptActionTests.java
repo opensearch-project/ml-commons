@@ -1,0 +1,191 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+package org.opensearch.ml.action.prompt;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.isA;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX;
+
+import java.io.IOException;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.ExpectedException;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
+import org.opensearch.action.index.IndexRequest;
+import org.opensearch.action.index.IndexResponse;
+import org.opensearch.action.support.ActionFilters;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.index.shard.ShardId;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.common.transport.prompt.MLCreatePromptInput;
+import org.opensearch.ml.common.transport.prompt.MLCreatePromptRequest;
+import org.opensearch.ml.common.transport.prompt.MLCreatePromptResponse;
+import org.opensearch.ml.engine.indices.MLIndicesHandler;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
+import org.opensearch.tasks.Task;
+import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
+
+public class TransportCreatePromptActionTests {
+
+    private static final String PROMPT_ID = "prompt_id";
+
+    @Rule
+    public ExpectedException exceptionRule = ExpectedException.none();
+
+    @Mock
+    private TransportService transportService;
+
+    @Mock
+    private MLIndicesHandler mlIndicesHandler;
+
+    @Mock
+    private Client client;
+
+    private SdkClient sdkClient;
+
+    @Mock
+    ThreadPool threadPool;
+
+    ThreadContext threadContext;
+
+    @Mock
+    private ActionFilters actionFilters;
+
+    @Mock
+    private Task task;
+
+    @Mock
+    private ActionListener<MLCreatePromptResponse> actionListener;
+
+    @Mock
+    private IndexResponse indexResponse;
+
+    private TransportCreatePromptAction transportCreatePromptAction;
+
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
+    @Mock
+    private MLCreatePromptRequest mlCreatePromptRequest;
+
+    private MLCreatePromptInput mlCreatePromptInput;
+
+    @Before
+    public void setup() throws IOException {
+        MockitoAnnotations.openMocks(this);
+
+        sdkClient = SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap());
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
+        indexResponse = new IndexResponse(new ShardId(ML_PROMPT_INDEX, "_na_", 0), PROMPT_ID, 1, 0, 2, true);
+        transportCreatePromptAction = spy(
+            new TransportCreatePromptAction(transportService, actionFilters, mlIndicesHandler, client, sdkClient, mlFeatureEnabledSetting)
+        );
+        threadContext = new ThreadContext(Settings.EMPTY);
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        Map<String, String> testPrompt = new HashMap<>();
+        testPrompt.put("system", "test system prompt");
+        testPrompt.put("user", "test user prompt");
+        List<String> testTags = List.of("test_tag");
+        mlCreatePromptInput = MLCreatePromptInput
+            .builder()
+            .name("test_prompt")
+            .description("test")
+            .version("1")
+            .prompt(testPrompt)
+            .tags(testTags)
+            .build();
+        mlCreatePromptRequest = MLCreatePromptRequest.builder().mlCreatePromptInput(mlCreatePromptInput).build();
+    }
+
+    @Test
+    public void testConstructor() {
+        TransportCreatePromptAction transportCreatePromptAction = new TransportCreatePromptAction(
+            transportService,
+            actionFilters,
+            mlIndicesHandler,
+            client,
+            sdkClient,
+            mlFeatureEnabledSetting
+        );
+        assertNotNull(transportCreatePromptAction);
+    }
+
+    @Test
+    public void testDoExecute_success() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLPromptIndex(isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(IndexRequest.class), isA(ActionListener.class));
+
+        transportCreatePromptAction.doExecute(task, mlCreatePromptRequest, actionListener);
+
+        ArgumentCaptor<MLCreatePromptResponse> captor = ArgumentCaptor.forClass(MLCreatePromptResponse.class);
+        verify(actionListener).onResponse(captor.capture());
+
+        MLCreatePromptResponse response = captor.getValue();
+        assertNotNull(response);
+        assertEquals(PROMPT_ID, response.getPromptId());
+    }
+
+    @Test
+    public void testDoExecute_initIndex_fail() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(false);
+            return null;
+        }).when(mlIndicesHandler).initMLPromptIndex(isA(ActionListener.class));
+
+        transportCreatePromptAction.doExecute(task, mlCreatePromptRequest, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(RuntimeException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("No response to create ML Prompt Index", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testDoExecute_multi_tenancy_fail() throws InterruptedException {
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
+
+        transportCreatePromptAction.doExecute(task, mlCreatePromptRequest, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+                "You don't have permission to access this resource",
+                argumentCaptor.getValue().getMessage()
+        );
+    }
+}
