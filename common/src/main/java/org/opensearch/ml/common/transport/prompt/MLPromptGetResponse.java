@@ -89,7 +89,7 @@ public class MLPromptGetResponse extends ActionResponse implements ToXContentObj
                 return new MLPromptGetResponse(input);
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("failed to parse ActionResponse into MLPromptGetResponse", e);
+            throw new UncheckedIOException("Failed to parse ActionResponse into MLPromptGetResponse", e);
         }
     }
 }

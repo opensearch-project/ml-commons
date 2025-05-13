@@ -5,8 +5,6 @@
 
 package org.opensearch.ml.action.prompt;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.isA;
@@ -22,9 +20,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -45,16 +41,14 @@ import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.tasks.Task;
+import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
 
-public class TransportCreatePromptActionTests {
+public class TransportCreatePromptActionTests extends OpenSearchTestCase {
 
     private static final String PROMPT_ID = "prompt_id";
-
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
 
     @Mock
     private TransportService transportService;

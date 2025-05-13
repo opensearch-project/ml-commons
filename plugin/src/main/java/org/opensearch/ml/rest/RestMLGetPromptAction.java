@@ -14,9 +14,9 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
 
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.prompt.MLPromptGetAction;
 import org.opensearch.ml.common.transport.prompt.MLPromptGetRequest;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
@@ -31,7 +31,7 @@ import com.google.common.collect.ImmutableList;
 public class RestMLGetPromptAction extends BaseRestHandler {
     private static final String ML_GET_PROMPT_ACTION = "ml_get_prompt_action";
 
-    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     public RestMLGetPromptAction(MLFeatureEnabledSetting mlFeatureEnabledSetting) {
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;

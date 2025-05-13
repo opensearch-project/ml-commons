@@ -6,14 +6,12 @@
 package org.opensearch.ml.common.transport.prompt;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
-import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 
-import org.opensearch.Version;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
@@ -53,9 +51,8 @@ public class MLPromptGetRequest extends ActionRequest {
      */
     public MLPromptGetRequest(StreamInput in) throws IOException {
         super(in);
-        Version streamInputVersion = in.getVersion();
         this.promptId = in.readString();
-        this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? in.readOptionalString() : null;
+        this.tenantId = in.readOptionalString();
     }
 
     /**
@@ -67,11 +64,8 @@ public class MLPromptGetRequest extends ActionRequest {
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        Version streamOutputVersion = out.getVersion();
         out.writeString(this.promptId);
-        if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
-            out.writeOptionalString(this.tenantId);
-        }
+        out.writeOptionalString(this.tenantId);
     }
 
     /**
@@ -107,7 +101,7 @@ public class MLPromptGetRequest extends ActionRequest {
                 return new MLPromptGetRequest(input);
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("failed to parse ActionRequest into MLPromptGetRequest", e);
+            throw new UncheckedIOException("Failed to parse ActionRequest into MLPromptGetRequest", e);
         }
     }
 }

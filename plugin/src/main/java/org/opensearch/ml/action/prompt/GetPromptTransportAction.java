@@ -11,14 +11,13 @@ import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.common.inject.Inject;
-import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.prompt.MLPromptGetAction;
 import org.opensearch.ml.common.transport.prompt.MLPromptGetRequest;
 import org.opensearch.ml.common.transport.prompt.MLPromptGetResponse;
 import org.opensearch.ml.prompt.MLPromptManager;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -77,6 +76,7 @@ public class GetPromptTransportAction extends HandledTransportAction<ActionReque
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
             return;
         }
+
         FetchSourceContext fetchSourceContext = new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);
         GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
             .builder()
@@ -85,23 +85,17 @@ public class GetPromptTransportAction extends HandledTransportAction<ActionReque
             .tenantId(tenantId)
             .fetchSourceContext(fetchSourceContext)
             .build();
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            mlPromptManager
-                .getPromptAsync(
-                    sdkClient,
-                    client,
-                    context,
-                    getDataObjectRequest,
-                    promptId,
-                    ActionListener
-                        .wrap(
-                            mlPrompt -> actionListener.onResponse(MLPromptGetResponse.builder().mlPrompt(mlPrompt).build()),
-                            e -> handleFailure(e, promptId, actionListener)
-                        )
-                );
-        } catch (Exception e) {
-            handleFailure(e, promptId, actionListener);
-        }
+
+        mlPromptManager
+            .getPromptAsync(
+                getDataObjectRequest,
+                promptId,
+                ActionListener
+                    .wrap(
+                        mlPrompt -> actionListener.onResponse(MLPromptGetResponse.builder().mlPrompt(mlPrompt).build()),
+                        e -> handleFailure(e, promptId, actionListener)
+                    )
+            );
     }
 
     /**
