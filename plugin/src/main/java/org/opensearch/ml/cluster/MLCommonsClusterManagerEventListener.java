@@ -32,7 +32,6 @@ import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.jobs.MLJobParameter;
 import org.opensearch.ml.jobs.MLJobType;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.threadpool.Scheduler;
 import org.opensearch.threadpool.ThreadPool;
