@@ -52,26 +52,26 @@ public class MLStatsJobProcessor extends MLJobProcessor {
         // fetch all models
     }
 
-    public List<MLModel> fetchAllModels() {
-        List<MLModel> models = new ArrayList<>();
-        SearchRequest searchRequest = new SearchRequest(ML_MODEL_INDEX);
-        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-        searchSourceBuilder.query(QueryBuilders.matchAllQuery());
-        searchSourceBuilder.size(10000); // Adjust this value based on your needs
-        searchRequest.source(searchSourceBuilder);
-
-
-
-        try {
-            SearchResponse searchResponse = client.search(searchRequest, RequestOptions.DEFAULT);
-            for (SearchHit hit : searchResponse.getHits().getHits()) {
-                MLModel model = MLModel.parse(hit.getSourceAsMap());
-                models.add(model);
-            }
-        } catch (IOException e) {
-            log.error("Failed to fetch models from index", e);
-        }
-
-        return models;
-    }
+//    public List<MLModel> fetchAllModels() {
+//        List<MLModel> models = new ArrayList<>();
+//        SearchRequest searchRequest = new SearchRequest(ML_MODEL_INDEX);
+//        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+//        searchSourceBuilder.query(QueryBuilders.matchAllQuery());
+//        searchSourceBuilder.size(10000); // Adjust this value based on your needs
+//        searchRequest.source(searchSourceBuilder);
+//
+//
+//
+//        try {
+//            SearchResponse searchResponse = client.search(searchRequest, RequestOptions.DEFAULT);
+//            for (SearchHit hit : searchResponse.getHits().getHits()) {
+//                MLModel model = MLModel.parse(hit.getSourceAsMap());
+//                models.add(model);
+//            }
+//        } catch (IOException e) {
+//            log.error("Failed to fetch models from index", e);
+//        }
+//
+//        return models;
+//    }
 }
