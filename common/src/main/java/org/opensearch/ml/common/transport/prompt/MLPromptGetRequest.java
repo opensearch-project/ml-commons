@@ -74,7 +74,6 @@ public class MLPromptGetRequest extends ActionRequest {
         }
     }
 
-
     /**
      * Validate MLPromptGetRequest
      *
