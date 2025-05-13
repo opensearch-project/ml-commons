@@ -38,6 +38,7 @@ public class MLCreatePromptInput implements ToXContentObject, Writeable {
 
     public static final String PROMPT_FIELD_USER_PROMPT = "user";
     public static final String PROMPT_FIELD_SYSTEM_PROMPT = "system";
+    public static final String PROMPT_VERSION_INITIAL_VERSION = "1";
 
     private String name;
     private String description;
@@ -69,11 +70,8 @@ public class MLCreatePromptInput implements ToXContentObject, Writeable {
         if (name == null) {
             throw new IllegalArgumentException("MLPrompt name field is null");
         }
-        if (prompt == null) {
-            throw new IllegalArgumentException("MLPrompt prompt field is null");
-        }
-        if (prompt.isEmpty()) {
-            throw new IllegalArgumentException("MLPrompt prompt field cannot be empty");
+        if (prompt == null || prompt.isEmpty()) {
+            throw new IllegalArgumentException("MLPrompt prompt field cannot be empty or null");
         }
         if (!prompt.containsKey(PROMPT_FIELD_SYSTEM_PROMPT)) {
             throw new IllegalArgumentException("MLPrompt prompt field requires " + PROMPT_FIELD_SYSTEM_PROMPT + " parameter");
@@ -81,13 +79,10 @@ public class MLCreatePromptInput implements ToXContentObject, Writeable {
         if (!prompt.containsKey(PROMPT_FIELD_USER_PROMPT)) {
             throw new IllegalArgumentException("MLPrompt prompt field requires " + PROMPT_FIELD_USER_PROMPT + " parameter");
         }
-        if (version == null) {
-            throw new IllegalArgumentException("MLPrompt version field is null");
-        }
 
         this.name = name;
         this.description = description;
-        this.version = version;
+        this.version = version == null ? PROMPT_VERSION_INITIAL_VERSION : version;
         this.prompt = prompt;
         this.tags = tags;
         this.tenantId = tenantId;

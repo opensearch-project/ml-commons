@@ -78,8 +78,6 @@ public class MLCreatePromptInputTest {
 
     @Test
     public void constructMLCreatePromptInput_NullVersion() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("MLPrompt version field is null");
         MLCreatePromptInput mlCreatePromptInput = MLCreatePromptInput
             .builder()
             .name(TEST_PROMPT_NAME)
@@ -89,12 +87,14 @@ public class MLCreatePromptInputTest {
             .tags(TEST_PROMPT_TAGS)
             .tenantId(TEST_PROMPT_TENANTID)
             .build();
+
+        Assert.assertEquals(mlCreatePromptInput.getVersion(), TEST_PROMPT_VERSION);
     }
 
     @Test
     public void constructMLCreatePromptInput_NullPrompt() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("MLPrompt prompt field is null");
+        exceptionRule.expectMessage("MLPrompt prompt field cannot be empty or null");
         MLCreatePromptInput mlCreatePromptInput = MLCreatePromptInput
             .builder()
             .name(TEST_PROMPT_NAME)
@@ -109,7 +109,7 @@ public class MLCreatePromptInputTest {
     @Test
     public void constructMLCreatePromptInput_EmptyPromptField() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("MLPrompt prompt field cannot be empty");
+        exceptionRule.expectMessage("MLPrompt prompt field cannot be empty or null");
         MLCreatePromptInput mlCreatePromptInput = MLCreatePromptInput
             .builder()
             .name(TEST_PROMPT_NAME)
@@ -232,7 +232,7 @@ public class MLCreatePromptInputTest {
         XContentParser parser = createParser(jsonMissingPrompt);
 
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("MLPrompt prompt field is null");
+        exceptionRule.expectMessage("MLPrompt prompt field cannot be empty or null");
         MLCreatePromptInput.parse(parser);
     }
 
