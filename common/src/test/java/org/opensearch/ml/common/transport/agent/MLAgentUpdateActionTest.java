@@ -10,7 +10,7 @@ import static org.junit.Assert.assertNotNull;
 
 import org.junit.Test;
 
-public class MLAgentUpdateActionTests {
+public class MLAgentUpdateActionTest {
 
     @Test
     public void testInstance() {

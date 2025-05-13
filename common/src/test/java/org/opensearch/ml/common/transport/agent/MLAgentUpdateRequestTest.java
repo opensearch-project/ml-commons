@@ -17,69 +17,55 @@ import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
 
-public class MLAgentUpdateRequestTests {
+public class MLAgentUpdateRequestTest {
 
-    String agentId;
-    MLAgent mlAgent;
+    MLAgentUpdateInput mlAgentUpdateInput;
 
     @Before
     public void setUp() {
-        agentId = "test_agent_id";
-        mlAgent = MLAgent
+        mlAgentUpdateInput = MLAgentUpdateInput
             .builder()
+            .agentId("test_agent_id")
             .name("test_agent")
             .appType("test_app")
-            .type("flow")
             .tools(Collections.singletonList(MLToolSpec.builder().type("ListIndexTool").build()))
             .build();
     }
 
     @Test
-    public void constructor_Agent() {
-        MLAgentUpdateRequest mlAgentUpdateRequest = new MLAgentUpdateRequest(agentId, mlAgent);
-        assertEquals(agentId, mlAgentUpdateRequest.getAgentId());
-        assertEquals(mlAgent, mlAgentUpdateRequest.getMlAgent());
+    public void constructor_Input() {
+        MLAgentUpdateRequest mlAgentUpdateRequest = new MLAgentUpdateRequest(mlAgentUpdateInput);
+        assertEquals(mlAgentUpdateInput, mlAgentUpdateRequest.getMlAgentUpdateInput());
 
         ActionRequestValidationException validationException = mlAgentUpdateRequest.validate();
         assertNull(validationException);
     }
 
     @Test
-    public void constructor_NullId() {
-        MLAgentUpdateRequest mlAgentUpdateRequest = new MLAgentUpdateRequest(null, mlAgent);
-        assertNull(mlAgentUpdateRequest.getAgentId());
+    public void constructor_NullInput() {
+        MLAgentUpdateRequest mlAgentUpdateRequest = new MLAgentUpdateRequest((MLAgentUpdateInput) null);
+        assertNull(mlAgentUpdateRequest.getMlAgentUpdateInput());
 
         ActionRequestValidationException validationException = mlAgentUpdateRequest.validate();
         assertNotNull(validationException);
-        assertTrue(validationException.toString().contains("Agent ID and ML Agent cannot be null"));
-    }
-
-    @Test
-    public void constructor_NullAgent() {
-        MLAgentUpdateRequest mlAgentUpdateRequest = new MLAgentUpdateRequest(agentId, null);
-        assertNull(mlAgentUpdateRequest.getMlAgent());
-
-        ActionRequestValidationException validationException = mlAgentUpdateRequest.validate();
-        assertNotNull(validationException);
-        assertTrue(validationException.toString().contains("Agent ID and ML Agent cannot be null"));
+        assertTrue(validationException.toString().contains("ML Agent Update Input cannot be null"));
     }
 
     @Test
     public void writeTo_Success() throws IOException {
-        MLAgentUpdateRequest mlAgentUpdateRequest = new MLAgentUpdateRequest(agentId, mlAgent);
+        MLAgentUpdateRequest mlAgentUpdateRequest = new MLAgentUpdateRequest(mlAgentUpdateInput);
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         mlAgentUpdateRequest.writeTo(bytesStreamOutput);
         MLAgentUpdateRequest parsedRequest = new MLAgentUpdateRequest(bytesStreamOutput.bytes().streamInput());
-        assertEquals(agentId, parsedRequest.getAgentId());
-        assertEquals(mlAgent, parsedRequest.getMlAgent());
+        assertEquals(mlAgentUpdateInput.getAgentId(), parsedRequest.getMlAgentUpdateInput().getAgentId());
+        assertEquals(mlAgentUpdateInput.getName(), parsedRequest.getMlAgentUpdateInput().getName());
     }
 
     @Test
     public void fromActionRequest_Success() {
-        MLAgentUpdateRequest mlAgentUpdateRequest = new MLAgentUpdateRequest(agentId, mlAgent);
+        MLAgentUpdateRequest mlAgentUpdateRequest = new MLAgentUpdateRequest(mlAgentUpdateInput);
         ActionRequest actionRequest = new ActionRequest() {
             @Override
             public ActionRequestValidationException validate() {
@@ -93,13 +79,13 @@ public class MLAgentUpdateRequestTests {
         };
         MLAgentUpdateRequest parsedRequest = MLAgentUpdateRequest.fromActionRequest(actionRequest);
         assertNotSame(mlAgentUpdateRequest, parsedRequest);
-        assertEquals(mlAgentUpdateRequest.getAgentId(), parsedRequest.getAgentId());
-        assertEquals(mlAgentUpdateRequest.getMlAgent(), parsedRequest.getMlAgent());
+        assertEquals(mlAgentUpdateRequest.getMlAgentUpdateInput().getAgentId(), parsedRequest.getMlAgentUpdateInput().getAgentId());
+        assertEquals(mlAgentUpdateRequest.getMlAgentUpdateInput().getName(), parsedRequest.getMlAgentUpdateInput().getName());
     }
 
     @Test
     public void fromActionRequest_Success_MLAgentUpdateRequest() {
-        MLAgentUpdateRequest mlAgentUpdateRequest = new MLAgentUpdateRequest(agentId, mlAgent);
+        MLAgentUpdateRequest mlAgentUpdateRequest = new MLAgentUpdateRequest(mlAgentUpdateInput);
         MLAgentUpdateRequest parsedRequest = MLAgentUpdateRequest.fromActionRequest(mlAgentUpdateRequest);
         assertSame(mlAgentUpdateRequest, parsedRequest);
     }

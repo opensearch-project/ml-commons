@@ -20,9 +20,9 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.agent.MLAgentUpdateAction;
+import org.opensearch.ml.common.transport.agent.MLAgentUpdateInput;
 import org.opensearch.ml.common.transport.agent.MLAgentUpdateRequest;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
@@ -96,12 +96,10 @@ public class RestMLUpdateAgentActionTests extends OpenSearchTestCase {
 
         ArgumentCaptor<MLAgentUpdateRequest> argumentCaptor = ArgumentCaptor.forClass(MLAgentUpdateRequest.class);
         verify(client, times(1)).execute(eq(MLAgentUpdateAction.INSTANCE), argumentCaptor.capture(), any());
-        String agentId = argumentCaptor.getValue().getAgentId();
-        MLAgent mlAgent = argumentCaptor.getValue().getMlAgent();
-        assertEquals("agent_id", agentId);
-        assertEquals("testAgentName", mlAgent.getName());
-        assertEquals("This is a test agent description", mlAgent.getDescription());
-        assertEquals("FLOW", mlAgent.getType());
+        MLAgentUpdateInput input = argumentCaptor.getValue().getMlAgentUpdateInput();
+        assertEquals("agent_id", input.getAgentId());
+        assertEquals("testAgentName", input.getName());
+        assertEquals("This is a test agent description", input.getDescription());
     }
 
     public void test_PrepareRequest_disabled() {
@@ -115,8 +113,7 @@ public class RestMLUpdateAgentActionTests extends OpenSearchTestCase {
         RestRequest.Method method = RestRequest.Method.PUT;
         Map<String, String> params = new HashMap<>();
         params.put(PARAMETER_AGENT_ID, "agent_id");
-        final Map<String, Object> agentData = Map
-            .of("name", "testAgentName", "description", "This is a test agent description", "type", "FLOW");
+        final Map<String, Object> agentData = Map.of("name", "testAgentName", "description", "This is a test agent description");
         String requestContent = new Gson().toJson(agentData);
         return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withMethod(method)

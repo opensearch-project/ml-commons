@@ -11,6 +11,7 @@ import static org.mockito.Mockito.*;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.HashMap;
 
@@ -40,6 +41,7 @@ import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.common.transport.agent.MLAgentUpdateInput;
 import org.opensearch.ml.common.transport.agent.MLAgentUpdateRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
@@ -125,18 +127,18 @@ public class UpdateAgentTransportActionTests {
     @Test
     public void testDoExecute_Success() throws IOException {
         String agentId = "test_agent_id";
-        MLAgent mlAgent = MLAgent
+        MLAgentUpdateInput mlAgentUpdateInput = MLAgentUpdateInput
             .builder()
+            .agentId(agentId)
             .name("agent")
-            .type(MLAgentType.CONVERSATIONAL.name())
             .description("description")
             .llm(new LLMSpec("model_id", new HashMap<>()))
             .build();
+
         GetResponse getResponse = prepareMLAgentGetResponse(agentId, false, "test_tenant_id");
 
         MLAgentUpdateRequest updateRequest = mock(MLAgentUpdateRequest.class);
-        when(updateRequest.getAgentId()).thenReturn(agentId);
-        when(updateRequest.getMlAgent()).thenReturn(mlAgent);
+        when(updateRequest.getMlAgentUpdateInput()).thenReturn(mlAgentUpdateInput);
         doReturn(true).when(updateAgentTransportAction).isSuperAdminUserWrapper(clusterService, client);
 
         doAnswer(invocation -> {
@@ -160,17 +162,16 @@ public class UpdateAgentTransportActionTests {
     @Test
     public void testDoExecute_GetFailure() {
         String agentId = "test_agent_id";
-        MLAgent mlAgent = MLAgent
+        MLAgentUpdateInput mlAgentUpdateInput = MLAgentUpdateInput
             .builder()
+            .agentId(agentId)
             .name("agent")
-            .type(MLAgentType.CONVERSATIONAL.name())
             .description("description")
             .llm(new LLMSpec("model_id", new HashMap<>()))
             .build();
 
         MLAgentUpdateRequest updateRequest = mock(MLAgentUpdateRequest.class);
-        when(updateRequest.getAgentId()).thenReturn(agentId);
-        when(updateRequest.getMlAgent()).thenReturn(mlAgent);
+        when(updateRequest.getMlAgentUpdateInput()).thenReturn(mlAgentUpdateInput);
 
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
@@ -187,18 +188,18 @@ public class UpdateAgentTransportActionTests {
     @Test
     public void testDoExecute_UpdateFailure() throws IOException {
         String agentId = "test_agent_id";
-        MLAgent mlAgent = MLAgent
+        MLAgentUpdateInput mlAgentUpdateInput = MLAgentUpdateInput
             .builder()
+            .agentId(agentId)
             .name("agent")
-            .type(MLAgentType.CONVERSATIONAL.name())
             .description("description")
             .llm(new LLMSpec("model_id", new HashMap<>()))
             .build();
+
         GetResponse getResponse = prepareMLAgentGetResponse(agentId, false, null);
 
         MLAgentUpdateRequest updateRequest = mock(MLAgentUpdateRequest.class);
-        when(updateRequest.getAgentId()).thenReturn(agentId);
-        when(updateRequest.getMlAgent()).thenReturn(mlAgent);
+        when(updateRequest.getMlAgentUpdateInput()).thenReturn(mlAgentUpdateInput);
 
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
@@ -221,18 +222,18 @@ public class UpdateAgentTransportActionTests {
     @Test
     public void testDoExecute_HiddenAgentSuperAdmin() throws IOException {
         String agentId = "test_agent_id";
-        MLAgent mlAgent = MLAgent
+        MLAgentUpdateInput mlAgentUpdateInput = MLAgentUpdateInput
             .builder()
+            .agentId(agentId)
             .name("updated_agent")
-            .type(MLAgentType.CONVERSATIONAL.name())
             .description("updated description")
             .llm(new LLMSpec("model_id", new HashMap<>()))
             .build();
+
         GetResponse getResponse = prepareMLAgentGetResponse(agentId, true, null);
 
         MLAgentUpdateRequest updateRequest = mock(MLAgentUpdateRequest.class);
-        when(updateRequest.getAgentId()).thenReturn(agentId);
-        when(updateRequest.getMlAgent()).thenReturn(mlAgent);
+        when(updateRequest.getMlAgentUpdateInput()).thenReturn(mlAgentUpdateInput);
 
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
@@ -257,18 +258,18 @@ public class UpdateAgentTransportActionTests {
     @Test
     public void testDoExecute_HiddenAgentNonSuperAdmin() throws IOException {
         String agentId = "test_agent_id";
-        MLAgent mlAgent = MLAgent
+        MLAgentUpdateInput mlAgentUpdateInput = MLAgentUpdateInput
             .builder()
+            .agentId(agentId)
             .name("updated_agent")
-            .type(MLAgentType.CONVERSATIONAL.name())
             .description("updated description")
             .llm(new LLMSpec("model_id", new HashMap<>()))
             .build();
+
         GetResponse getResponse = prepareMLAgentGetResponse(agentId, true, null);
 
         MLAgentUpdateRequest updateRequest = mock(MLAgentUpdateRequest.class);
-        when(updateRequest.getAgentId()).thenReturn(agentId);
-        when(updateRequest.getMlAgent()).thenReturn(mlAgent);
+        when(updateRequest.getMlAgentUpdateInput()).thenReturn(mlAgentUpdateInput);
 
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
@@ -293,6 +294,7 @@ public class UpdateAgentTransportActionTests {
             .llm(new LLMSpec("model_id", new HashMap<>()))
             .isHidden(isHidden)
             .tenantId(tenantId)
+            .createdTime(Instant.now())
             .build();
 
         XContentBuilder content = mlAgent.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);

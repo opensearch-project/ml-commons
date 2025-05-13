@@ -90,16 +90,20 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
             llm = new LLMSpec(in);
         }
         if (in.readBoolean()) {
-            tools = in.readList(MLToolSpec::new);
+            tools = new ArrayList<>();
+            int size = in.readInt();
+            for (int i = 0; i < size; i++) {
+                tools.add(new MLToolSpec(in));
+            }
         }
         if (in.readBoolean()) {
-            parameters = in.readMap(StreamInput::readString, StreamInput::readString);
+            parameters = in.readMap(StreamInput::readString, StreamInput::readOptionalString);
         }
         if (in.readBoolean()) {
             memory = new MLMemorySpec(in);
         }
-        appType = in.readOptionalString();
         lastUpdateTime = in.readOptionalInstant();
+        appType = in.readOptionalString();
         tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? in.readOptionalString() : null;
     }
 
@@ -161,7 +165,7 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
         }
         if (parameters != null && !parameters.isEmpty()) {
             out.writeBoolean(true);
-            out.writeMap(parameters, StreamOutput::writeString, StreamOutput::writeString);
+            out.writeMap(parameters, StreamOutput::writeString, StreamOutput::writeOptionalString);
         } else {
             out.writeBoolean(false);
         }
@@ -171,8 +175,8 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
         } else {
             out.writeBoolean(false);
         }
-        out.writeOptionalString(appType);
         out.writeOptionalInstant(lastUpdateTime);
+        out.writeOptionalString(appType);
         if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
             out.writeOptionalString(tenantId);
         }
