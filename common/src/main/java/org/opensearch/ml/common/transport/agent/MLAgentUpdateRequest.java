@@ -18,7 +18,6 @@ import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.ml.common.agent.MLAgent;
 
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -31,26 +30,23 @@ import lombok.experimental.FieldDefaults;
 @ToString
 public class MLAgentUpdateRequest extends ActionRequest {
 
-    String agentId;
-    MLAgent mlAgent;
+    MLAgentUpdateInput mlAgentUpdateInput;
 
     @Builder
-    public MLAgentUpdateRequest(String agentId, MLAgent mlAgent) {
-        this.agentId = agentId;
-        this.mlAgent = mlAgent;
+    public MLAgentUpdateRequest(MLAgentUpdateInput mlAgentUpdateInput) {
+        this.mlAgentUpdateInput = mlAgentUpdateInput;
     }
 
     public MLAgentUpdateRequest(StreamInput in) throws IOException {
         super(in);
-        this.agentId = in.readString();
-        this.mlAgent = new MLAgent(in);
+        this.mlAgentUpdateInput = new MLAgentUpdateInput(in);
     }
 
     @Override
     public ActionRequestValidationException validate() {
         ActionRequestValidationException exception = null;
-        if (agentId == null || mlAgent == null) {
-            exception = addValidationError("Agent ID and ML Agent cannot be null", exception);
+        if (mlAgentUpdateInput == null) {
+            exception = addValidationError("ML Agent Update Input cannot be null", exception);
         }
         return exception;
     }
@@ -58,8 +54,7 @@ public class MLAgentUpdateRequest extends ActionRequest {
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        out.writeString(this.agentId);
-        this.mlAgent.writeTo(out);
+        this.mlAgentUpdateInput.writeTo(out);
     }
 
     public static MLAgentUpdateRequest fromActionRequest(ActionRequest actionRequest) {

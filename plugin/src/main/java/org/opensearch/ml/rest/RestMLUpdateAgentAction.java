@@ -16,9 +16,9 @@ import java.util.List;
 import java.util.Locale;
 
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.agent.MLAgentUpdateAction;
+import org.opensearch.ml.common.transport.agent.MLAgentUpdateInput;
 import org.opensearch.ml.common.transport.agent.MLAgentUpdateRequest;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
@@ -53,8 +53,8 @@ public class RestMLUpdateAgentAction extends BaseRestHandler {
 
     @Override
     protected RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
-        MLAgentUpdateRequest updateAgentRequest = getRequest(request);
-        return channel -> client.execute(MLAgentUpdateAction.INSTANCE, updateAgentRequest, new RestToXContentListener<>(channel));
+        MLAgentUpdateRequest mlAgentUpdateRequest = getRequest(request);
+        return channel -> client.execute(MLAgentUpdateAction.INSTANCE, mlAgentUpdateRequest, new RestToXContentListener<>(channel));
     }
 
     /**
@@ -74,8 +74,8 @@ public class RestMLUpdateAgentAction extends BaseRestHandler {
 
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-        MLAgent mlAgent = MLAgent.parseFromUserInput(parser).toBuilder().tenantId(tenantId).build();
+        MLAgentUpdateInput mlAgentUpdateInput = MLAgentUpdateInput.parse(parser).toBuilder().agentId(agentId).tenantId(tenantId).build();
 
-        return new MLAgentUpdateRequest(agentId, mlAgent);
+        return new MLAgentUpdateRequest(mlAgentUpdateInput);
     }
 }

@@ -30,6 +30,7 @@ import org.opensearch.core.xcontent.XContentParserUtils;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.agent.MLAgentUpdateAction;
+import org.opensearch.ml.common.transport.agent.MLAgentUpdateInput;
 import org.opensearch.ml.common.transport.agent.MLAgentUpdateRequest;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
@@ -77,9 +78,9 @@ public class UpdateAgentTransportAction extends HandledTransportAction<ActionReq
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<UpdateResponse> actionListener) {
         MLAgentUpdateRequest mlAgentUpdateRequest = MLAgentUpdateRequest.fromActionRequest(request);
-        String agentId = mlAgentUpdateRequest.getAgentId();
-        MLAgent mlAgent = mlAgentUpdateRequest.getMlAgent();
-        String tenantId = mlAgent.getTenantId();
+        MLAgentUpdateInput mlAgentUpdateInput = mlAgentUpdateRequest.getMlAgentUpdateInput();
+        String agentId = mlAgentUpdateInput.getAgentId();
+        String tenantId = mlAgentUpdateInput.getTenantId();
 
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
             return;
@@ -92,7 +93,6 @@ public class UpdateAgentTransportAction extends HandledTransportAction<ActionReq
             .builder()
             .index(ML_AGENT_INDEX)
             .id(agentId)
-            .tenantId(tenantId)
             .fetchSourceContext(fetchSourceContext)
             .build();
 
@@ -124,7 +124,7 @@ public class UpdateAgentTransportAction extends HandledTransportAction<ActionReq
                                         )
                                     );
                             } else {
-                                updateAgent(agentId, mlAgent, wrappedListener);
+                                updateAgent(agentId, mlAgentUpdateInput, retrievedAgent, wrappedListener);
                             }
                         }
                     } catch (Exception e) {
@@ -136,17 +136,22 @@ public class UpdateAgentTransportAction extends HandledTransportAction<ActionReq
         }
     }
 
-    private void updateAgent(String agentId, MLAgent agent, ActionListener<UpdateResponse> wrappedListener) {
+    private void updateAgent(
+        String agentId,
+        MLAgentUpdateInput updateInput,
+        MLAgent originalAgent,
+        ActionListener<UpdateResponse> wrappedListener
+    ) {
         Instant now = Instant.now();
-        MLAgent mlAgent = agent.toBuilder().lastUpdateTime(now).build();
-        String tenantId = agent.getTenantId();
+        updateInput.setLastUpdateTime(now);
+
+        MLAgent updatedAgent = updateInput.toMLAgent(originalAgent);
 
         UpdateDataObjectRequest updateDataObjectRequest = UpdateDataObjectRequest
             .builder()
             .index(ML_AGENT_INDEX)
             .id(agentId)
-            .tenantId(tenantId)
-            .dataObject(mlAgent)
+            .dataObject(updatedAgent)
             .build();
 
         sdkClient.updateDataObjectAsync(updateDataObjectRequest).whenComplete((r, throwable) -> {
