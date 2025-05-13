@@ -160,7 +160,7 @@ public class UpdateAgentTransportAction extends HandledTransportAction<ActionReq
                     UpdateResponse updateResponse = r.updateResponse();
                     assert updateResponse != null : "Failed to update Agent";
                     if (updateResponse.getResult() == DocWriteResponse.Result.UPDATED) {
-                        log.info("Successfully updated ");
+                        log.info("Successfully updated ML agent {}", agentId);
                         wrappedListener.onResponse(updateResponse);
                     }
                 } catch (Exception e) {
