@@ -36,7 +36,7 @@ public class MLPromptTest {
 
     @Before
     public void setup() {
-        Instant time = Instant.ofEpochSecond(1641600000);
+        Instant time = Instant.parse("2022-01-08T00:00:00Z");
         Map<String, String> testPrompt = new HashMap<>();
         testPrompt.put("system", "some system prompt");
         testPrompt.put("user", "some user prompt");

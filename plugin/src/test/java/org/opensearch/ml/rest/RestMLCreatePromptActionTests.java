@@ -12,7 +12,6 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.utils.MLExceptionUtils.REMOTE_INFERENCE_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.TestHelper.getCreatePromptRestRequest;
 import static org.opensearch.ml.utils.TestHelper.verifyParsedCreatePromptInput;
 
@@ -63,7 +62,6 @@ public class RestMLCreatePromptActionTests extends OpenSearchTestCase {
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(true);
         restMLCreatePromptAction = new RestMLCreatePromptAction(mlFeatureEnabledSetting);
 
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
@@ -136,15 +134,6 @@ public class RestMLCreatePromptActionTests extends OpenSearchTestCase {
         Map<String, String> params = new HashMap<>();
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(params).build();
 
-        restMLCreatePromptAction.handleRequest(request, channel, client);
-    }
-
-    public void testPrepareRequestFeatureDisabled() throws Exception {
-        exceptionRule.expect(IllegalStateException.class);
-        exceptionRule.expectMessage(REMOTE_INFERENCE_DISABLED_ERR_MSG);
-
-        when(mlFeatureEnabledSetting.isRemoteInferenceEnabled()).thenReturn(false);
-        RestRequest request = getCreatePromptRestRequest(null);
         restMLCreatePromptAction.handleRequest(request, channel, client);
     }
 }
