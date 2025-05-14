@@ -14,6 +14,7 @@ import static org.opensearch.ml.common.utils.StringUtils.filteredParameterMap;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -32,13 +33,14 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.controller.MLRateLimiter;
-import org.opensearch.ml.common.model.DefaultModelConfig;
+import org.opensearch.ml.common.model.BaseModelConfig;
 import org.opensearch.ml.common.model.Guardrails;
 import org.opensearch.ml.common.model.MLDeploySetting;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
 import org.opensearch.ml.common.model.QuestionAnsweringModelConfig;
+import org.opensearch.ml.common.model.RemoteModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 
 import lombok.Builder;
@@ -107,6 +109,29 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
     private Map<String, String> modelInterface;
     private String tenantId;
 
+    private static final Map<String, String> MODEL_SPACE_TYPE_MAPPING = Map
+        .ofEntries(
+            Map.entry("all-distilroberta-v1", "l2"),
+            Map.entry("all-MiniLM-L6-v2", "l2"),
+            Map.entry("all-MiniLM-L12-v2", "l2"),
+            Map.entry("all-mpnet-base-v2", "l2"),
+            Map.entry("msmarco-distilbert-base-tas-b", "innerproduct"),
+            Map.entry("multi-qa-MiniLM-L6-cos-v1", "l2"),
+            Map.entry("multi-qa-mpnet-base-dot-v1", "innerproduct"),
+            Map.entry("paraphrase-MiniLM-L3-v2", "cosine"),
+            Map.entry("paraphrase-multilingual-MiniLM-L12-v2", "cosine"),
+            Map.entry("paraphrase-mpnet-base-v2", "cosine"),
+            Map.entry("distiluse-base-multilingual-cased-v1", "cosine")
+        );
+
+    private String extractModelName(String fullPath) {
+        if (fullPath == null) {
+            return null;
+        }
+        String[] parts = fullPath.split("/");
+        return parts[parts.length - 1];
+    }
+
     @Builder(toBuilder = true)
     public MLRegisterModelInput(
         FunctionName functionName,
@@ -150,6 +175,18 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                                                                    // type of sparse model, which is pretrained, and
                                                                    // it doesn't necessitate a model configuration.
                 throw new IllegalArgumentException("model config is null");
+            }
+        }
+        if (modelConfig instanceof TextEmbeddingModelConfig && modelName != null) {
+            String baseModelName = extractModelName(modelName);
+            String spaceType = MODEL_SPACE_TYPE_MAPPING.get(baseModelName);
+            if (spaceType != null) {
+                Map<String, Object> additionalConfig = modelConfig.getAdditionalConfig();
+                if (additionalConfig == null) {
+                    additionalConfig = new HashMap<>();
+                    modelConfig.setAdditionalConfig(additionalConfig);
+                }
+                additionalConfig.put("space_type", spaceType);
             }
         }
         this.modelName = modelName;
@@ -196,8 +233,10 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                 this.modelConfig = new QuestionAnsweringModelConfig(in);
             } else if (this.functionName.equals(FunctionName.TEXT_EMBEDDING)) {
                 this.modelConfig = new TextEmbeddingModelConfig(in);
+            } else if (this.functionName.equals(FunctionName.REMOTE)) {
+                this.modelConfig = new RemoteModelConfig(in);
             } else {
-                this.modelConfig = new DefaultModelConfig(in);
+                this.modelConfig = new BaseModelConfig(in);
             }
         }
         this.deployModel = in.readBoolean();
@@ -454,8 +493,10 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                         modelConfig = QuestionAnsweringModelConfig.parse(parser);
                     } else if (FunctionName.TEXT_EMBEDDING.equals(functionName)) {
                         modelConfig = TextEmbeddingModelConfig.parse(parser);
+                    } else if (FunctionName.REMOTE.equals(functionName)) {
+                        modelConfig = RemoteModelConfig.parse(parser);
                     } else {
-                        modelConfig = DefaultModelConfig.parse(parser);
+                        modelConfig = BaseModelConfig.parse(parser);
                     }
                     break;
                 case DEPLOY_SETTING_FIELD:
@@ -605,8 +646,10 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
                         modelConfig = QuestionAnsweringModelConfig.parse(parser);
                     } else if (FunctionName.TEXT_EMBEDDING.equals(functionName)) {
                         modelConfig = TextEmbeddingModelConfig.parse(parser);
+                    } else if (FunctionName.REMOTE.equals(functionName)) {
+                        modelConfig = RemoteModelConfig.parse(parser);
                     } else {
-                        modelConfig = DefaultModelConfig.parse(parser);
+                        modelConfig = BaseModelConfig.parse(parser);
                     }
                     break;
                 case DEPLOY_SETTING_FIELD:

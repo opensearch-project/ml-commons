@@ -264,6 +264,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
                                 123,
                                 TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS,
                                 "all config",
+                                null,
                                 TextEmbeddingModelConfig.PoolingMode.MEAN,
                                 true,
                                 512
@@ -778,6 +779,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
                     123,
                     TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS,
                     "all config",
+                    null,
                     TextEmbeddingModelConfig.PoolingMode.MEAN,
                     true,
                     512

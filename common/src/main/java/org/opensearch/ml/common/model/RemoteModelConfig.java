@@ -29,10 +29,10 @@ import lombok.Setter;
 
 @Setter
 @Getter
-public class DefaultModelConfig extends MLModelConfig {
-    public static final String PARSE_FIELD_NAME = "default";
+public class RemoteModelConfig extends MLModelConfig {
+    public static final String PARSE_FIELD_NAME = "remote";
     public static final NamedXContentRegistry.Entry XCONTENT_REGISTRY = new NamedXContentRegistry.Entry(
-        DefaultModelConfig.class,
+        RemoteModelConfig.class,
         new ParseField(PARSE_FIELD_NAME),
         it -> parse(it)
     );
@@ -50,7 +50,7 @@ public class DefaultModelConfig extends MLModelConfig {
     private final Integer modelMaxLength;
 
     @Builder(toBuilder = true)
-    public DefaultModelConfig(
+    public RemoteModelConfig(
         String modelType,
         Integer embeddingDimension,
         FrameworkType frameworkType,
@@ -68,9 +68,10 @@ public class DefaultModelConfig extends MLModelConfig {
         this.modelMaxLength = modelMaxLength;
 
         validateNoDuplicateKeys(allConfig, additionalConfig);
+        validateTextEmbeddingConfig();
     }
 
-    public static DefaultModelConfig parse(XContentParser parser) throws IOException {
+    public static RemoteModelConfig parse(XContentParser parser) throws IOException {
         String modelType = null;
         Integer embeddingDimension = null;
         FrameworkType frameworkType = null;
@@ -115,7 +116,7 @@ public class DefaultModelConfig extends MLModelConfig {
                     break;
             }
         }
-        return new DefaultModelConfig(
+        return new RemoteModelConfig(
             modelType,
             embeddingDimension,
             frameworkType,
@@ -132,7 +133,7 @@ public class DefaultModelConfig extends MLModelConfig {
         return PARSE_FIELD_NAME;
     }
 
-    public DefaultModelConfig(StreamInput in) throws IOException {
+    public RemoteModelConfig(StreamInput in) throws IOException {
         super(in);
         embeddingDimension = in.readInt();
         frameworkType = in.readEnum(FrameworkType.class);
@@ -251,6 +252,20 @@ public class DefaultModelConfig extends MLModelConfig {
             throw new IllegalArgumentException(
                 "Duplicate keys found in both all_config and additional_config: " + String.join(", ", additionalConfig.keySet())
             );
+        }
+    }
+
+    private void validateTextEmbeddingConfig() {
+        if (modelType != null && modelType.equalsIgnoreCase("text_embedding")) {
+            if (embeddingDimension == null) {
+                throw new IllegalArgumentException("Embedding dimension must be provided for remote text embedding model");
+            }
+            if (frameworkType == null) {
+                throw new IllegalArgumentException("Framework type must be provided for remote text embedding model");
+            }
+            if (additionalConfig == null || !additionalConfig.containsKey("space_type")) {
+                throw new IllegalArgumentException("Space type must be provided in additional_config for remote text embedding model");
+            }
         }
     }
 }

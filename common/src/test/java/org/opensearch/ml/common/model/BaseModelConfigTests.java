@@ -24,35 +24,30 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.TestHelper;
 
-public class DefaultModelConfigTests {
+public class BaseModelConfigTests {
 
-    DefaultModelConfig config;
-    Function<XContentParser, DefaultModelConfig> function;
+    BaseModelConfig config;
+    Function<XContentParser, BaseModelConfig> function;
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
     @Before
     public void setUp() {
         Map<String, Object> additionalConfig = new HashMap<>();
-        additionalConfig.put("test_key1", "test_value1");
+        additionalConfig.put("space_type", "l2");
 
-        config = DefaultModelConfig
+        config = BaseModelConfig
             .builder()
             .modelType("testModelType")
             .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
-            .frameworkType(DefaultModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
-            .embeddingDimension(100)
-            .poolingMode(DefaultModelConfig.PoolingMode.MEAN)
-            .normalizeResult(true)
-            .modelMaxLength(512)
             .additionalConfig(additionalConfig)
             .build();
 
         function = parser -> {
             try {
-                return DefaultModelConfig.parse(parser);
+                return BaseModelConfig.parse(parser);
             } catch (IOException e) {
-                throw new RuntimeException("Failed to parse DefaultModelConfig", e);
+                throw new RuntimeException("Failed to parse BaseModelConfig", e);
             }
         };
     }
@@ -63,7 +58,7 @@ public class DefaultModelConfigTests {
         config.toXContent(builder, EMPTY_PARAMS);
         String configContent = TestHelper.xContentBuilderToString(builder);
         assertEquals(
-            "{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\",\"pooling_mode\":\"MEAN\",\"normalize_result\":true,\"model_max_length\":512,\"additional_config\":{\"test_key1\":\"test_value1\"}}",
+            "{\"model_type\":\"testModelType\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\",\"additional_config\":{\"space_type\":\"l2\"}}",
             configContent
         );
     }
@@ -72,7 +67,7 @@ public class DefaultModelConfigTests {
     public void nullFields_ModelType() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model type is null");
-        config = DefaultModelConfig.builder().build();
+        config = BaseModelConfig.builder().build();
     }
 
     @Test
@@ -83,26 +78,18 @@ public class DefaultModelConfigTests {
     }
 
     @Test
-    public void frameworkType_wrongValue() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Wrong framework type");
-        DefaultModelConfig.FrameworkType.from("test_wrong_value");
-    }
-
-    @Test
     public void readInputStream_Success() throws IOException {
         readInputStream(config);
     }
 
-    public void readInputStream(DefaultModelConfig config) throws IOException {
+    public void readInputStream(BaseModelConfig config) throws IOException {
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         config.writeTo(bytesStreamOutput);
 
         StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
-        DefaultModelConfig parsedConfig = new DefaultModelConfig(streamInput);
+        BaseModelConfig parsedConfig = new BaseModelConfig(streamInput);
         assertEquals(config.getModelType(), parsedConfig.getModelType());
         assertEquals(config.getAllConfig(), parsedConfig.getAllConfig());
-        assertEquals(config.getFrameworkType(), parsedConfig.getFrameworkType());
         assertEquals(config.getAdditionalConfig(), parsedConfig.getAdditionalConfig());
         assertEquals(config.getWriteableName(), parsedConfig.getWriteableName());
     }
@@ -115,6 +102,6 @@ public class DefaultModelConfigTests {
         String allConfig = "{\"key1\":\"value1\",\"key2\":\"value2\"}";
         Map<String, Object> additionalConfig = Map.of("key1", "value3");
 
-        DefaultModelConfig.builder().allConfig(allConfig).modelType("testModelType").additionalConfig(additionalConfig).build();
+        BaseModelConfig.builder().allConfig(allConfig).modelType("testModelType").additionalConfig(additionalConfig).build();
     }
 }

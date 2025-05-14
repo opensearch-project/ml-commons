@@ -20,13 +20,13 @@ import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.model.DefaultModelConfig;
+import org.opensearch.ml.common.model.BaseModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
 
 public class MLRegisterModelMetaRequestTest {
 
-    DefaultModelConfig config;
+    BaseModelConfig config;
     MLRegisterModelMetaInput mlRegisterModelMetaInput;
 
     @Before
@@ -34,16 +34,7 @@ public class MLRegisterModelMetaRequestTest {
         Map<String, Object> additionalConfig = new HashMap<>();
         additionalConfig.put("test_key", "test_value");
 
-        config = new DefaultModelConfig(
-            "Model Type",
-            123,
-            DefaultModelConfig.FrameworkType.SENTENCE_TRANSFORMERS,
-            "\"test_key1\":\"test_value1\"",
-            DefaultModelConfig.PoolingMode.MEAN,
-            true,
-            512,
-            additionalConfig
-        );
+        config = new BaseModelConfig("Model Type", "\"test_key1\":\"test_value1\"", additionalConfig);
         mlRegisterModelMetaInput = new MLRegisterModelMetaInput(
             "Model Name",
             FunctionName.BATCH_RCF,

@@ -5,6 +5,8 @@ import static org.opensearch.ml.common.utils.StringUtils.SAFE_INPUT_DESCRIPTION;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -13,7 +15,7 @@ import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.model.DefaultModelConfig;
+import org.opensearch.ml.common.model.BaseModelConfig;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 
@@ -23,13 +25,14 @@ public class MLRegisterModelRequestTest {
 
     @Before
     public void setUp() {
+        Map<String, Object> additionalConfig = new HashMap<>();
+        additionalConfig.put("space_type", "l2");
 
-        DefaultModelConfig config = DefaultModelConfig
+        BaseModelConfig config = BaseModelConfig
             .builder()
             .modelType("testModelType")
             .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
-            .frameworkType(DefaultModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
-            .embeddingDimension(100)
+            .additionalConfig(additionalConfig)
             .build();
 
         mlRegisterModelInput = mlRegisterModelInput
@@ -64,7 +67,7 @@ public class MLRegisterModelRequestTest {
         assertTrue(request.getRegisterModelInput().isDeployModel());
         String[] modelNodeIds = request.getRegisterModelInput().getModelNodeIds();
         assertEquals("modelNodeIds", modelNodeIds[0]);
-        assertEquals("default", config1.getWriteableName());
+        assertEquals("base", config1.getWriteableName());
     }
 
     @Test

@@ -27,12 +27,13 @@ import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.controller.MLRateLimiter;
-import org.opensearch.ml.common.model.DefaultModelConfig;
+import org.opensearch.ml.common.model.BaseModelConfig;
 import org.opensearch.ml.common.model.MLDeploySetting;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.model.QuestionAnsweringModelConfig;
+import org.opensearch.ml.common.model.RemoteModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
@@ -195,8 +196,10 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable {
                 this.modelConfig = new QuestionAnsweringModelConfig(in);
             } else if (this.functionName.equals(FunctionName.TEXT_EMBEDDING)) {
                 this.modelConfig = new TextEmbeddingModelConfig(in);
+            } else if (FunctionName.REMOTE.equals(functionName)) {
+                this.modelConfig = new RemoteModelConfig(in);
             } else {
-                this.modelConfig = new DefaultModelConfig(in);
+                this.modelConfig = new BaseModelConfig(in);
             }
         }
         this.totalChunks = in.readInt();
@@ -420,8 +423,10 @@ public class MLRegisterModelMetaInput implements ToXContentObject, Writeable {
                         modelConfig = QuestionAnsweringModelConfig.parse(parser);
                     } else if (FunctionName.TEXT_EMBEDDING.equals(functionName)) {
                         modelConfig = TextEmbeddingModelConfig.parse(parser);
+                    } else if (FunctionName.REMOTE.equals(functionName)) {
+                        modelConfig = RemoteModelConfig.parse(parser);
                     } else {
-                        modelConfig = DefaultModelConfig.parse(parser);
+                        modelConfig = BaseModelConfig.parse(parser);
                     }
                     break;
                 case DEPLOY_SETTING_FIELD:

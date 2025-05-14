@@ -52,4 +52,12 @@ public abstract class MLModelConfig implements ToXContentObject, NamedWriteable 
         out.writeOptionalString(allConfig);
         out.writeMap(additionalConfig);
     }
+
+    public Map<String, Object> getAdditionalConfig() {
+        return this.additionalConfig;
+    }
+
+    public void setAdditionalConfig(Map<String, Object> additionalConfig) {
+        this.additionalConfig = additionalConfig;
+    }
 }

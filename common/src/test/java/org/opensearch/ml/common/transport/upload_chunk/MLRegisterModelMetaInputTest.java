@@ -22,7 +22,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.TestHelper;
-import org.opensearch.ml.common.model.DefaultModelConfig;
+import org.opensearch.ml.common.model.BaseModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
 
@@ -35,7 +35,7 @@ public class MLRegisterModelMetaInputTest {
             throw new RuntimeException("Failed to parse MLRegisterModelMetaInput", e);
         }
     };
-    DefaultModelConfig config;
+    BaseModelConfig config;
     MLRegisterModelMetaInput mLRegisterModelMetaInput;
 
     @Before
@@ -43,16 +43,7 @@ public class MLRegisterModelMetaInputTest {
         Map<String, Object> additionalConfig = new HashMap<>();
         additionalConfig.put("test_key", "test_value");
 
-        config = new DefaultModelConfig(
-            "Model Type",
-            123,
-            DefaultModelConfig.FrameworkType.SENTENCE_TRANSFORMERS,
-            "\"test_key1\":\"test_value1\"",
-            DefaultModelConfig.PoolingMode.MEAN,
-            true,
-            512,
-            additionalConfig
-        );
+        config = new BaseModelConfig("Model Type", "\"test_key1\":\"test_value1\"", additionalConfig);
 
         mLRegisterModelMetaInput = new MLRegisterModelMetaInput(
             "Model Name",
@@ -123,9 +114,8 @@ public class MLRegisterModelMetaInputTest {
             + "\"model_group_id\",\"version\":\"1.0\",\"description\":\"Model Description\","
             + "\"model_format\":\"TORCH_SCRIPT\",\"model_state\":\"DEPLOYING\","
             + "\"model_content_size_in_bytes\":200,\"model_content_hash_value\":\"123\","
-            + "\"model_config\":{\"model_type\":\"Model Type\",\"embedding_dimension\":123,"
-            + "\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"\\\"test_key1\\\":\\\"test_value1\\\"\","
-            + "\"pooling_mode\":\"MEAN\",\"normalize_result\":true,\"model_max_length\":512,\"additional_config\":{\"test_key\":\"test_value\"}},\"total_chunks\":2,"
+            + "\"model_config\":{\"model_type\":\"Model Type\",\"all_config\":\"\\\"test_key1\\\":\\\"test_value1\\\"\","
+            + "\"additional_config\":{\"test_key\":\"test_value\"}},\"total_chunks\":2,"
             + "\"add_all_backend_roles\":false,\"does_version_create_model_group\":false,\"is_hidden\":false}";
         assertEquals(expected, mlModelContent);
     }

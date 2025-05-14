@@ -36,7 +36,7 @@ import org.opensearch.core.common.Strings;
 import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.model.DefaultModelConfig;
+import org.opensearch.ml.common.model.BaseModelConfig;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model.MLModelGetResponse;
 import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
@@ -139,7 +139,7 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
         assertEquals("test_model", registerModelInput.getModelName());
         assertEquals("1", registerModelInput.getVersion());
         assertEquals("TORCH_SCRIPT", registerModelInput.getModelFormat().toString());
-        assertEquals(null, ((DefaultModelConfig) registerModelInput.getModelConfig()).getAdditionalConfig());
+        assertEquals(null, ((BaseModelConfig) registerModelInput.getModelConfig()).getAdditionalConfig());
     }
 
     public void testRegisterAsymmetricModelRequest() throws Exception {
@@ -151,7 +151,7 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
         assertEquals("test_model", registerModelInput.getModelName());
         assertEquals("1", registerModelInput.getVersion());
         assertEquals("TORCH_SCRIPT", registerModelInput.getModelFormat().toString());
-        assertEquals(null, ((DefaultModelConfig) registerModelInput.getModelConfig()).getAdditionalConfig());
+        assertEquals(null, ((BaseModelConfig) registerModelInput.getModelConfig()).getAdditionalConfig());
     }
 
     public void testRegisterModelRequestRemoteInferenceDisabled() throws Exception {

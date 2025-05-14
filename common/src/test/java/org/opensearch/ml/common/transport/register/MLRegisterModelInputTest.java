@@ -33,7 +33,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.connector.HttpConnectorTest;
-import org.opensearch.ml.common.model.DefaultModelConfig;
+import org.opensearch.ml.common.model.BaseModelConfig;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
@@ -49,7 +49,7 @@ public class MLRegisterModelInputTest {
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
-    private final String expectedInputStr = "{\"function_name\":\"LINEAR_REGRESSION\",\"name\":\"modelName\","
+    private final String expectedInputStr = "{\"function_name\":\"TEXT_EMBEDDING\",\"name\":\"modelName\","
         + "\"version\":\"version\",\"model_group_id\":\"modelGroupId\",\"description\":\"test description\","
         + "\"url\":\"url\",\"model_content_hash_value\":\"hash_value_test\",\"model_format\":\"ONNX\","
         + "\"model_config\":{\"model_type\":\"testModelType\",\"embedding_dimension\":100,"
@@ -66,7 +66,7 @@ public class MLRegisterModelInputTest {
         + "\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\","
         + "\"client_config\":{\"max_connection\":30,\"connection_timeout\":30000,\"read_timeout\":30000,"
         + "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}},\"is_hidden\":false}";
-    private final FunctionName functionName = FunctionName.LINEAR_REGRESSION;
+    private final FunctionName functionName = FunctionName.TEXT_EMBEDDING;
     private final String modelName = "modelName";
     private final String version = "version";
     private final String url = "url";
@@ -75,12 +75,12 @@ public class MLRegisterModelInputTest {
 
     @Before
     public void setUp() throws Exception {
-        config = DefaultModelConfig
+        config = TextEmbeddingModelConfig
             .builder()
             .modelType("testModelType")
-            .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
-            .frameworkType(DefaultModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
             .embeddingDimension(100)
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
             .build();
         HttpConnector connector = HttpConnectorTest.createHttpConnector();
 
@@ -173,7 +173,7 @@ public class MLRegisterModelInputTest {
         assertNotNull(builder);
         String jsonStr = builder.toString();
 
-        String expectedFunctionInputStr = "{\"function_name\":\"LINEAR_REGRESSION\",\"name\":\"modelName\","
+        String expectedFunctionInputStr = "{\"function_name\":\"TEXT_EMBEDDING\",\"name\":\"modelName\","
             + "\"version\":\"version\",\"model_group_id\":\"modelGroupId\",\"description\":\"test description\","
             + "\"url\":\"url\",\"model_content_hash_value\":\"hash_value_test\",\"model_format\":\"ONNX\","
             + "\"model_config\":{\"model_type\":\"testModelType\",\"embedding_dimension\":100,"
@@ -206,7 +206,7 @@ public class MLRegisterModelInputTest {
 
         String jsonStr = builder.toString();
 
-        String expectedIncompleteInputStr = "{\"function_name\":\"LINEAR_REGRESSION\","
+        String expectedIncompleteInputStr = "{\"function_name\":\"TEXT_EMBEDDING\","
             + "\"name\":\"modelName\",\"version\":\"version\",\"model_group_id\":\"modelGroupId\","
             + "\"description\":\"test description\",\"model_content_hash_value\":\"hash_value_test\","
             + "\"deploy_model\":true,\"connector\":{\"name\":\"test_connector_name\",\"version\":\"1\","
@@ -227,7 +227,7 @@ public class MLRegisterModelInputTest {
     @Test
     public void parse_WithModel() throws Exception {
         testParseFromJsonString("modelNameInsideTest", "versionInsideTest", true, expectedInputStr, parsedInput -> {
-            assertEquals(FunctionName.LINEAR_REGRESSION, parsedInput.getFunctionName());
+            assertEquals(FunctionName.TEXT_EMBEDDING, parsedInput.getFunctionName());
             assertEquals("modelNameInsideTest", parsedInput.getModelName());
             assertEquals("versionInsideTest", parsedInput.getVersion());
         });
@@ -469,7 +469,7 @@ public class MLRegisterModelInputTest {
         Map<String, Object> additionalConfig = new HashMap<>();
         additionalConfig.put("space_type", "l2");
 
-        DefaultModelConfig defaultConfig = DefaultModelConfig
+        BaseModelConfig baseConfig = BaseModelConfig
             .builder()
             .modelType("testModelType")
             .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
@@ -484,7 +484,7 @@ public class MLRegisterModelInputTest {
             .modelGroupId(modelGroupId)
             .url(url)
             .modelFormat(MLModelFormat.TORCH_SCRIPT)
-            .modelConfig(defaultConfig)
+            .modelConfig(baseConfig)
             .deployModel(true)
             .modelNodeIds(new String[] { "modelNodeIds" })
             .build();
@@ -499,12 +499,10 @@ public class MLRegisterModelInputTest {
         Map<String, Object> additionalConfig = new HashMap<>();
         additionalConfig.put("space_type", "l2");
 
-        DefaultModelConfig defaultConfig = DefaultModelConfig
+        BaseModelConfig baseConfig = BaseModelConfig
             .builder()
             .modelType("testModelType")
             .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
-            .frameworkType(DefaultModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
-            .embeddingDimension(100)
             .additionalConfig(additionalConfig)
             .build();
 
@@ -516,14 +514,14 @@ public class MLRegisterModelInputTest {
             .modelGroupId(modelGroupId)
             .url(url)
             .modelFormat(MLModelFormat.TORCH_SCRIPT)
-            .modelConfig(defaultConfig)
+            .modelConfig(baseConfig)
             .deployModel(true)
             .modelNodeIds(new String[] { "modelNodeIds" })
             .build();
         readInputStream(generalInput, parsedInput -> {
-            assertEquals(parsedInput.getModelConfig().getModelType(), defaultConfig.getModelType());
-            assertEquals(parsedInput.getModelConfig().getAllConfig(), defaultConfig.getAllConfig());
-            assertEquals(((DefaultModelConfig) parsedInput.getModelConfig()).getAdditionalConfig(), additionalConfig);
+            assertEquals(parsedInput.getModelConfig().getModelType(), baseConfig.getModelType());
+            assertEquals(parsedInput.getModelConfig().getAllConfig(), baseConfig.getAllConfig());
+            assertEquals(((BaseModelConfig) parsedInput.getModelConfig()).getAdditionalConfig(), additionalConfig);
             assertEquals(parsedInput.getFunctionName(), FunctionName.SPARSE_ENCODING);
             assertEquals(parsedInput.getModelName(), "SPARSE_ENCODING");
             assertEquals(parsedInput.getModelGroupId(), modelGroupId);
@@ -574,6 +572,36 @@ public class MLRegisterModelInputTest {
 
         // Verify tenantId is not present
         assertFalse(jsonStr.contains("\"tenant_id\""));
+    }
+
+    @Test
+    public void testSpaceTypeMapping() throws IOException {
+        TextEmbeddingModelConfig config = TextEmbeddingModelConfig
+            .builder()
+            .modelType("testModelType")
+            .embeddingDimension(768)
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .build();
+
+        MLRegisterModelInput input = MLRegisterModelInput
+            .builder()
+            .functionName(FunctionName.TEXT_EMBEDDING)
+            .modelName("all-distilroberta-v1")
+            .version("1.0.0")
+            .modelFormat(MLModelFormat.TORCH_SCRIPT)
+            .modelConfig(config)
+            .build();
+
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        input.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String jsonStr = builder.toString();
+        assertTrue(jsonStr.contains("\"space_type\":\"l2\""));
+
+        readInputStream(input, parsedInput -> {
+            assertTrue(parsedInput.getModelConfig() instanceof TextEmbeddingModelConfig);
+            TextEmbeddingModelConfig parsedConfig = (TextEmbeddingModelConfig) parsedInput.getModelConfig();
+            assertEquals("l2", parsedConfig.getAdditionalConfig().get("space_type"));
+        });
     }
 
     private void readInputStream(MLRegisterModelInput input, Consumer<MLRegisterModelInput> verify) throws IOException {

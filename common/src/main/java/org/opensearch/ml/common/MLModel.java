@@ -32,7 +32,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.controller.MLRateLimiter;
-import org.opensearch.ml.common.model.DefaultModelConfig;
+import org.opensearch.ml.common.model.BaseModelConfig;
 import org.opensearch.ml.common.model.Guardrails;
 import org.opensearch.ml.common.model.MLDeploySetting;
 import org.opensearch.ml.common.model.MLModelConfig;
@@ -40,6 +40,7 @@ import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
 import org.opensearch.ml.common.model.QuestionAnsweringModelConfig;
+import org.opensearch.ml.common.model.RemoteModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 
 import lombok.Builder;
@@ -281,8 +282,10 @@ public class MLModel implements ToXContentObject {
                     modelConfig = new QuestionAnsweringModelConfig(input);
                 } else if (algorithm.equals(FunctionName.TEXT_EMBEDDING)) {
                     modelConfig = new TextEmbeddingModelConfig(input);
+                } else if (algorithm.equals(FunctionName.REMOTE)) {
+                    modelConfig = new RemoteModelConfig(input);
                 } else {
-                    modelConfig = new DefaultModelConfig(input);
+                    modelConfig = new BaseModelConfig(input);
                 }
             }
             if (input.readBoolean()) {
@@ -628,8 +631,10 @@ public class MLModel implements ToXContentObject {
                         modelConfig = QuestionAnsweringModelConfig.parse(parser);
                     } else if (FunctionName.TEXT_EMBEDDING.name().equals(algorithmName)) {
                         modelConfig = TextEmbeddingModelConfig.parse(parser);
+                    } else if (FunctionName.REMOTE.name().equals(algorithmName)) {
+                        modelConfig = RemoteModelConfig.parse(parser);
                     } else {
-                        modelConfig = DefaultModelConfig.parse(parser);
+                        modelConfig = BaseModelConfig.parse(parser);
                     }
                     break;
                 case DEPLOY_SETTING_FIELD:
