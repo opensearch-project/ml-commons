@@ -529,7 +529,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
         response = response.trim();
         if (!isJson(response)) {
-            throw new IllegalStateException("Failed to parse LLM output due to invalid JSON, response=" + response);
+            throw new IllegalStateException("Failed to parse LLM output due to invalid JSON");
         }
 
         return response;

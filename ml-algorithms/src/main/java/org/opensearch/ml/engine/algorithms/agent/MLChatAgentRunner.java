@@ -701,8 +701,13 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         );
                     nextStepListener
                         .onResponse(
-                            String.format(Locale.ROOT, "Failed to run the tool %s with the error message %s.",
-                                    finalAction, e.getMessage().replaceAll("\\n", "\n"))
+                            String
+                                .format(
+                                    Locale.ROOT,
+                                    "Failed to run the tool %s with the error message %s.",
+                                    finalAction,
+                                    e.getMessage().replaceAll("\\n", "\n")
+                                )
                         );
                 });
                 if (tools.get(action) instanceof MLModelTool) {
