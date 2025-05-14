@@ -37,21 +37,20 @@ public class McpSseToolTests {
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        // Initialize the tool with the mocked client
+        // Initialize the tool with the mocked mcp client
         tool = McpSseTool.Factory.getInstance().create(Map.of(MCP_SYNC_CLIENT, mcpSyncClient));
         validParams = Map.of("input", "{\"foo\":\"bar\"}");
     }
 
     @Test
     public void testRunSuccess() {
-        // Arrange: create a CallToolResult wrapping a JSON string
+        // create a CallToolResult wrapping a JSON string
         McpSchema.CallToolResult result = new McpSchema.CallToolResult("{\"foo\":\"bar\"}", false);
         when(mcpSyncClient.callTool(any(McpSchema.CallToolRequest.class))).thenReturn(result);
 
-        // Act
         tool.run(validParams, listener);
 
-        // Assert: ensure onResponse is called with the JSON string
+        // Assert
         verify(listener).onResponse("[{\"text\":\"{\\\"foo\\\":\\\"bar\\\"}\"}]");
         verify(listener, never()).onFailure(any());
     }
@@ -79,7 +78,7 @@ public class McpSseToolTests {
 
     @Test
     public void testRunMissingInputParam() {
-        // No "input" key in parameters should also be caught
+        // No "input" key in parameters should be caught
         tool.run(Collections.emptyMap(), listener);
 
         verify(listener).onFailure(any(Exception.class));

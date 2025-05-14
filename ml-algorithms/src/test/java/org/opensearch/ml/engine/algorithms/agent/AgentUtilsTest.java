@@ -95,10 +95,10 @@ public class AgentUtilsTest extends MLStaticMockBase {
     @Mock
     private Encryptor encryptor;
 
-    ThreadContext threadContext;
+    private ThreadContext threadContext;
 
     @Mock
-    ThreadPool threadPool;
+    private ThreadPool threadPool;
 
     private Map<String, Map<String, String>> llmResponseExpectedParseResults;
 
