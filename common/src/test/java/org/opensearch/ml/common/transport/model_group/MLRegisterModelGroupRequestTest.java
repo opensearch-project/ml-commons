@@ -1,6 +1,7 @@
 package org.opensearch.ml.common.transport.model_group;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
@@ -73,7 +74,6 @@ public class MLRegisterModelGroupRequestTest {
     }
 
     @Test
-    // MLRegisterModelGroupInput check its parameters when created, so exception is not thrown here
     public void validateNullMLModelNameException() {
         mlRegisterModelGroupInput.setName(null);
         MLRegisterModelGroupRequest request = MLRegisterModelGroupRequest
@@ -81,8 +81,9 @@ public class MLRegisterModelGroupRequestTest {
             .registerModelGroupInput(mlRegisterModelGroupInput)
             .build();
 
-        assertNull(request.validate());
-        assertNull(request.getRegisterModelGroupInput().getName());
+        ActionRequestValidationException exception = request.validate();
+        assertNotNull(exception);
+        assertEquals("Validation Failed: 1: Model group name is required and cannot be null or blank;", exception.getMessage());
     }
 
     @Test

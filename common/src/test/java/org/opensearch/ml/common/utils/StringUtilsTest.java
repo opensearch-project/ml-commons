@@ -761,8 +761,31 @@ public class StringUtilsTest {
 
     @Test
     public void testValidateFields_AllValid() {
-        Map<String, String> fields = Map.of("Field1", "Valid Name 1", "Field2", "Another_Valid-Field.Name:Here");
+        Map<String, FieldDescriptor> fields = Map
+            .of("Field1", new FieldDescriptor("Valid Name 1", true), "Field2", new FieldDescriptor("Another_Valid-Field.Name:Here", true));
         assertNull(StringUtils.validateFields(fields));
+    }
+
+    @Test
+    public void testValidateFields_OptionalFieldsValidWhenBlank() {
+        Map<String, FieldDescriptor> fields = Map
+            .of(
+                "OptionalField1",
+                new FieldDescriptor("", false),
+                "OptionalField2",
+                new FieldDescriptor("   ", false),
+                "OptionalField3",
+                new FieldDescriptor(null, false)
+            );
+        assertNull(StringUtils.validateFields(fields));
+    }
+
+    @Test
+    public void testValidateFields_OptionalFieldInvalidPattern() {
+        Map<String, FieldDescriptor> fields = Map.of("OptionalField1", new FieldDescriptor("Bad@Value$", false));
+        ActionRequestValidationException exception = StringUtils.validateFields(fields);
+        assertNotNull(exception);
+        assertTrue(exception.getMessage().contains("OptionalField1"));
     }
 
     @Test
@@ -798,58 +821,38 @@ public class StringUtilsTest {
     }
 
     @Test
-    public void testValidateFields_EmptyAndNullValues() {
-        Map<String, String> fields = new HashMap<>();
-        fields.put("field1", "");
-        fields.put("field2", null);
-        fields.put("field3", "   ");
+    public void testValidateFields_RequiredFields_MissingOrInvalid() {
+        Map<String, FieldDescriptor> fields = new HashMap<>();
+        fields.put("RequiredField1", new FieldDescriptor("", true));
+        fields.put("RequiredField2", new FieldDescriptor("   ", true));
+        fields.put("RequiredField3", new FieldDescriptor("Bad@#Char$", true));
+        fields.put("RequiredField4", new FieldDescriptor(null, true));
 
         ActionRequestValidationException exception = StringUtils.validateFields(fields);
         assertNotNull(exception);
         String message = exception.getMessage();
-        assertTrue(message.contains("field1"));
-        assertFalse(message.contains("field2"));
-        assertTrue(message.contains("field3"));
-    }
-
-    @Test
-    public void testValidateFields_MultipleErrorMessageFormat() {
-        Map<String, String> fields = new HashMap<>();
-        fields.put("field1", "Invalid#Value");
-        fields.put("field2", "Another*Invalid");
-
-        ActionRequestValidationException exception = StringUtils.validateFields(fields);
-        assertNotNull(exception);
-        String message = exception.getMessage();
-
-        System.out.println("Actual error message: " + message);
-
-        // Make sure both fields are in the message
-        assertTrue(message.contains("field1"));
-        assertTrue(message.contains("field2"));
-        // Only check for separator if you're absolutely sure of formatting
-        assertTrue(message.contains("Validation Failed:"));  // header check
-        assertTrue(message.contains(":"));  // some separator exists
+        assertTrue(message.contains("RequiredField1"));
+        assertTrue(message.contains("RequiredField2"));
+        assertTrue(message.contains("RequiredField3"));
+        assertTrue(message.contains("RequiredField4"));
     }
 
     @Test
     public void testValidateFields_EmptyMap() {
-        Map<String, String> fields = new HashMap<>();
+        Map<String, FieldDescriptor> fields = new HashMap<>();
         assertNull(StringUtils.validateFields(fields));
     }
 
     @Test
     public void testValidateFields_UnicodeLettersAndNumbers() {
-        Map<String, String> fields = new HashMap<>();
-        fields.put("field1", "Hello世界123");  // Chinese characters with numbers
-        fields.put("field2", "Café42");      // Accented characters with numbers
-
+        Map<String, FieldDescriptor> fields = Map
+            .of("field1", new FieldDescriptor("Hello世界123", true), "field2", new FieldDescriptor("Café42", true));
         assertNull(StringUtils.validateFields(fields));
     }
 
     @Test
     public void testValidateFields_InvalidCharacterSet() {
-        Map<String, String> fields = Map.of("Field1", "Bad#Value$With^Weird*Chars");
+        Map<String, FieldDescriptor> fields = Map.of("Field1", new FieldDescriptor("Bad#Value$With^Weird*Chars", true));
         ActionRequestValidationException exception = StringUtils.validateFields(fields);
         assertNotNull(exception);
         assertTrue(exception.getMessage().contains("Field1"));

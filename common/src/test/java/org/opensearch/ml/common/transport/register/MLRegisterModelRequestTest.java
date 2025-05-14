@@ -82,13 +82,13 @@ public class MLRegisterModelRequestTest {
     }
 
     @Test
-    // MLRegisterModelInput check its parameters when created, so exception is not thrown here
     public void validate_Exception_NullMLModelName() {
         mlRegisterModelInput.setModelName(null);
         MLRegisterModelRequest request = MLRegisterModelRequest.builder().registerModelInput(mlRegisterModelInput).build();
 
-        assertNull(request.validate());
-        assertNull(request.getRegisterModelInput().getModelName());
+        ActionRequestValidationException exception = request.validate();
+        assertNotNull(exception);
+        assertEquals("Validation Failed: 1: Model name is required and cannot be null or blank;", exception.getMessage());
     }
 
     @Test

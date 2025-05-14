@@ -9,6 +9,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.common.utils.StringUtils.SAFE_INPUT_DESCRIPTION;
 
 import java.io.IOException;
@@ -189,6 +190,84 @@ public class MLCreateConnectorRequestTests {
         MLCreateConnectorRequest request = MLCreateConnectorRequest.builder().mlCreateConnectorInput(unsafeInput).build();
         ActionRequestValidationException exception = request.validate();
         assertEquals("Validation Failed: 1: Model connector description " + SAFE_INPUT_DESCRIPTION + ";", exception.getMessage());
+    }
+
+    @Test
+    public void validateWithEmptyAndInvalidModelConnectorNameAndDescription() {
+        // Test empty name (should fail validation)
+        MLCreateConnectorInput emptyNameInput = MLCreateConnectorInput
+            .builder()
+            .name("")  // Empty name
+            .description("valid description")
+            .version("1")
+            .protocol("http")
+            .parameters(Map.of("input", "test"))
+            .credential(Map.of("key", "value"))
+            .actions(List.of())
+            .access(AccessMode.PUBLIC)
+            .backendRoles(Arrays.asList("role1"))
+            .addAllBackendRoles(false)
+            .build();
+
+        MLCreateConnectorRequest emptyNameRequest = MLCreateConnectorRequest.builder().mlCreateConnectorInput(emptyNameInput).build();
+        ActionRequestValidationException emptyNameException = emptyNameRequest.validate();
+        assertEquals(
+            "Validation Failed: 1: Model connector name is required and cannot be null or blank;",
+            emptyNameException.getMessage()
+        );
+
+        // Test empty description (should pass validation)
+        MLCreateConnectorInput emptyDescriptionInput = MLCreateConnectorInput
+            .builder()
+            .name("valid name")
+            .description("")  // Empty description
+            .version("1")
+            .protocol("http")
+            .parameters(Map.of("input", "test"))
+            .credential(Map.of("key", "value"))
+            .actions(List.of())
+            .access(AccessMode.PUBLIC)
+            .backendRoles(Arrays.asList("role1"))
+            .addAllBackendRoles(false)
+            .build();
+
+        MLCreateConnectorRequest emptyDescriptionRequest = MLCreateConnectorRequest
+            .builder()
+            .mlCreateConnectorInput(emptyDescriptionInput)
+            .build();
+        ActionRequestValidationException emptyDescriptionException = emptyDescriptionRequest.validate();
+        assertNull("Empty description should pass validation", emptyDescriptionException);
+
+        // Test invalid characters in name and description
+        MLCreateConnectorInput invalidInput = MLCreateConnectorInput
+            .builder()
+            .name("invalid<name>")
+            .description("invalid<description>")
+            .version("1")
+            .protocol("http")
+            .parameters(Map.of("input", "test"))
+            .credential(Map.of("key", "value"))
+            .actions(List.of())
+            .access(AccessMode.PUBLIC)
+            .backendRoles(Arrays.asList("role1"))
+            .addAllBackendRoles(false)
+            .build();
+
+        MLCreateConnectorRequest invalidRequest = MLCreateConnectorRequest.builder().mlCreateConnectorInput(invalidInput).build();
+        ActionRequestValidationException invalidException = invalidRequest.validate();
+        String exceptionMessage = invalidException.getMessage();
+        assertTrue(
+            "Error message should contain name validation failure",
+            exceptionMessage
+                .contains("Model connector name can only contain letters, numbers, whitespace, and basic punctuation (.,!?():@-_'\");")
+        );
+        assertTrue(
+            "Error message should contain description validation failure",
+            exceptionMessage
+                .contains(
+                    "Model connector description can only contain letters, numbers, whitespace, and basic punctuation (.,!?():@-_'\");"
+                )
+        );
     }
 
 }

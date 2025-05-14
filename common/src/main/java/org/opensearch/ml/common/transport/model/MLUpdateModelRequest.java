@@ -21,6 +21,7 @@ import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.ml.common.utils.FieldDescriptor;
 
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -50,9 +51,9 @@ public class MLUpdateModelRequest extends ActionRequest {
         if (updateModelInput == null) {
             return addValidationError("Update Model Input can't be null", null);
         }
-        Map<String, String> fieldsToValidate = new HashMap<>();
-        fieldsToValidate.put("Model Name", updateModelInput.getName());
-        fieldsToValidate.put("Model Description", updateModelInput.getDescription());
+        Map<String, FieldDescriptor> fieldsToValidate = new HashMap<>();
+        fieldsToValidate.put("Model Name", new FieldDescriptor(updateModelInput.getName(), false));
+        fieldsToValidate.put("Model Description", new FieldDescriptor(updateModelInput.getDescription(), false));
         return validateFields(fieldsToValidate);
     }
 

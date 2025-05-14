@@ -21,6 +21,7 @@ import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.ml.common.utils.FieldDescriptor;
 
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -51,9 +52,9 @@ public class MLRegisterModelRequest extends ActionRequest {
             return addValidationError("ML input can't be null", null);
         }
 
-        Map<String, String> fieldsToValidate = new HashMap<>();
-        fieldsToValidate.put("Model name", registerModelInput.getModelName());
-        fieldsToValidate.put("Model description", registerModelInput.getDescription());
+        Map<String, FieldDescriptor> fieldsToValidate = new HashMap<>();
+        fieldsToValidate.put("Model name", new FieldDescriptor(registerModelInput.getModelName(), true));
+        fieldsToValidate.put("Model description", new FieldDescriptor(registerModelInput.getDescription(), false));
 
         return validateFields(fieldsToValidate);
     }

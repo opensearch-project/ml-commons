@@ -21,6 +21,7 @@ import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.ml.common.utils.FieldDescriptor;
 
 import lombok.Builder;
 import lombok.Getter;
@@ -44,9 +45,9 @@ public class MLCreateConnectorRequest extends ActionRequest {
         if (mlCreateConnectorInput == null) {
             return addValidationError("ML Connector input can't be null", null);
         }
-        Map<String, String> fieldsToValidate = new HashMap<>();
-        fieldsToValidate.put("Model connector name", mlCreateConnectorInput.getName());
-        fieldsToValidate.put("Model connector description", mlCreateConnectorInput.getDescription());
+        Map<String, FieldDescriptor> fieldsToValidate = new HashMap<>();
+        fieldsToValidate.put("Model connector name", new FieldDescriptor(mlCreateConnectorInput.getName(), true));
+        fieldsToValidate.put("Model connector description", new FieldDescriptor(mlCreateConnectorInput.getDescription(), false));
 
         return validateFields(fieldsToValidate);
     }

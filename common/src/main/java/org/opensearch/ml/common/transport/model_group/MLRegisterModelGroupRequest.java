@@ -21,6 +21,7 @@ import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.ml.common.utils.FieldDescriptor;
 
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -51,9 +52,9 @@ public class MLRegisterModelGroupRequest extends ActionRequest {
             return addValidationError("Model group input can't be null", null);
         }
 
-        Map<String, String> fieldsToValidate = new HashMap<>();
-        fieldsToValidate.put("Model group name", registerModelGroupInput.getName());
-        fieldsToValidate.put("Model group description", registerModelGroupInput.getDescription());
+        Map<String, FieldDescriptor> fieldsToValidate = new HashMap<>();
+        fieldsToValidate.put("Model group name", new FieldDescriptor(registerModelGroupInput.getName(), true));
+        fieldsToValidate.put("Model group description", new FieldDescriptor(registerModelGroupInput.getDescription(), false));
 
         return validateFields(fieldsToValidate);
     }
