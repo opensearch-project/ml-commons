@@ -51,7 +51,7 @@ public class McpConnectorExecutorTest extends MLStaticMockBase {
     public void getMcpToolSpecs_returnsExpectedSpecs() {
 
         String inputSchemaJSON =
-                "{\"type\":\"object\",\"properties\":{\"state\":{\"title\":\"State\",\"type\":\"string\"}},\"required\":[\"state\"],\"additionalProperties\":false}";
+            "{\"type\":\"object\",\"properties\":{\"state\":{\"title\":\"State\",\"type\":\"string\"}},\"required\":[\"state\"],\"additionalProperties\":false}";
 
         McpSchema.Tool tool = new McpSchema.Tool("tool1", "desc1", inputSchemaJSON);
         McpSchema.ListToolsResult mockTools = new McpSchema.ListToolsResult(List.of(tool), null);

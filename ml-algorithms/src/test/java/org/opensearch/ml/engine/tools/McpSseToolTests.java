@@ -1,9 +1,9 @@
 package org.opensearch.ml.engine.tools;
 
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -38,9 +38,7 @@ public class McpSseToolTests {
     public void setup() {
         MockitoAnnotations.openMocks(this);
         // Initialize the tool with the mocked client
-        tool = McpSseTool.Factory.getInstance().create(
-                Map.of(MCP_SYNC_CLIENT, mcpSyncClient)
-        );
+        tool = McpSseTool.Factory.getInstance().create(Map.of(MCP_SYNC_CLIENT, mcpSyncClient));
         validParams = Map.of("input", "{\"foo\":\"bar\"}");
     }
 
@@ -48,16 +46,13 @@ public class McpSseToolTests {
     public void testRunSuccess() {
         // Arrange: create a CallToolResult wrapping a JSON string
         McpSchema.CallToolResult result = new McpSchema.CallToolResult("{\"foo\":\"bar\"}", false);
-        when(mcpSyncClient.callTool(any(McpSchema.CallToolRequest.class)))
-                .thenReturn(result);
+        when(mcpSyncClient.callTool(any(McpSchema.CallToolRequest.class))).thenReturn(result);
 
         // Act
         tool.run(validParams, listener);
 
         // Assert: ensure onResponse is called with the JSON string
-        verify(listener).onResponse(
-                "[{\"text\":\"{\\\"foo\\\":\\\"bar\\\"}\"}]"
-        );
+        verify(listener).onResponse("[{\"text\":\"{\\\"foo\\\":\\\"bar\\\"}\"}]");
         verify(listener, never()).onFailure(any());
     }
 

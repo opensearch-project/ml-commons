@@ -193,18 +193,19 @@ public class McpConnectorTest {
         updatedHeaders.put("new_header", "new_header_value");
         updatedHeaders.put("updated_api_key", "${credential.new_key}"); // Referencing new credential key
 
-        MLCreateConnectorInput updateInput = MLCreateConnectorInput.builder()
-                .name(updatedName)
-                .description(updatedDescription)
-                .version(updatedVersion)
-                .credential(updatedCredential)
-                .backendRoles(updatedBackendRoles)
-                .access(updatedAccessMode)
-                .connectorClientConfig(updatedClientConfig)
-                .url(updatedUrl)
-                .headers(updatedHeaders)
-                .protocol(MCP_SSE)
-                .build();
+        MLCreateConnectorInput updateInput = MLCreateConnectorInput
+            .builder()
+            .name(updatedName)
+            .description(updatedDescription)
+            .version(updatedVersion)
+            .credential(updatedCredential)
+            .backendRoles(updatedBackendRoles)
+            .access(updatedAccessMode)
+            .connectorClientConfig(updatedClientConfig)
+            .url(updatedUrl)
+            .headers(updatedHeaders)
+            .protocol(MCP_SSE)
+            .build();
 
         // Call the update method
         connector.update(updateInput, encryptFunction);

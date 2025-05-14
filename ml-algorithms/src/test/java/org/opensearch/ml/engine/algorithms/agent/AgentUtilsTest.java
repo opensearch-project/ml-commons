@@ -7,9 +7,14 @@ package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
+import static org.opensearch.ml.common.CommonValue.MCP_CONNECTOR_ID_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_PATH;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_TOOL_USE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_GEN_INPUT;
@@ -21,6 +26,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALLS_TO
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALLS_TOOL_NAME;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALL_ID;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALL_ID_PATH;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_FILTERS_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.ACTION;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.ACTION_INPUT;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_HISTORY;
@@ -38,27 +44,44 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
+import org.opensearch.ml.common.connector.AwsConnector;
+import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Tool;
-import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.engine.MLEngineClassLoader;
+import org.opensearch.ml.engine.MLStaticMockBase;
+import org.opensearch.ml.engine.algorithms.remote.McpConnectorExecutor;
 import org.opensearch.ml.engine.encryptor.Encryptor;
+import org.opensearch.ml.engine.tools.McpSseTool;
+import org.opensearch.remote.metadata.client.GetDataObjectRequest;
+import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
-
-public class AgentUtilsTest {
+public class AgentUtilsTest extends MLStaticMockBase {
 
     @Mock
     private Tool tool1, tool2;
@@ -71,6 +94,11 @@ public class AgentUtilsTest {
     private SdkClient sdkClient;
     @Mock
     private Encryptor encryptor;
+
+    ThreadContext threadContext;
+
+    @Mock
+    ThreadPool threadPool;
 
     private Map<String, Map<String, String>> llmResponseExpectedParseResults;
 
@@ -1169,6 +1197,49 @@ public class AgentUtilsTest {
         Assert.assertTrue(output3.get(FINAL_ANSWER).contains("This is a test response"));
     }
 
+    private static MLToolSpec tool(String name) {
+        return MLToolSpec.builder().type(McpSseTool.TYPE).name(name).description("mock").build();
+    }
+
+    private void stubGetConnector() {
+        threadContext = new ThreadContext(Settings.builder().build());
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenAnswer(inv -> {
+            String json = "{\"_index\":\"i\",\"_id\":\"j\",\"found\":true,\"_source\":{}}";
+            XContentParser parser = XContentType.JSON.xContent().createParser(NamedXContentRegistry.EMPTY, null, json);
+
+            GetDataObjectResponse resp = mock(GetDataObjectResponse.class);
+            when(resp.parser()).thenReturn(parser);
+
+            CompletionStage<GetDataObjectResponse> stage = mock(CompletionStage.class);
+            when(stage.whenComplete(any())).thenAnswer(cbInv -> {
+                BiConsumer<GetDataObjectResponse, Throwable> cb = cbInv.getArgument(0);
+                cb.accept(resp, null);
+                return stage;
+            });
+
+            return stage;
+        });
+    }
+
+    // create + register a mock McpConnector with Connector.createConnector
+    private void mockMcpConnector(MockedStatic<Connector> connectorStatic) {
+        McpConnector mockConnector = mock(McpConnector.class);
+        when(mockConnector.getProtocol()).thenReturn("mcp_sse");
+        doNothing().when(mockConnector).decrypt(anyString(), any(), anyString());
+        connectorStatic.when(() -> Connector.createConnector(any(XContentParser.class))).thenReturn(mockConnector);
+    }
+
+    // create a mock MLAgent with connector-config JSON
+    private MLAgent mockAgent(String json, String tenant) {
+        MLAgent mockAgent = mock(MLAgent.class);
+        when(mockAgent.getParameters()).thenReturn(Map.of(MCP_CONNECTORS_FIELD, json));
+        when(mockAgent.getTenantId()).thenReturn(tenant);
+        return mockAgent;
+    }
+
     @Test
     public void testGetMcpToolSpecs_NoMcpJsonConfig() {
         when(mlAgent.getParameters()).thenReturn(null);
@@ -1177,6 +1248,109 @@ public class AgentUtilsTest {
         AgentUtils.getMcpToolSpecs(mlAgent, client, sdkClient, encryptor, listener);
 
         verify(listener).onResponse(Collections.emptyList());
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_SingleConnectorSuccess() throws Exception {
+        stubGetConnector();
+        List<MLToolSpec> expected = List.of(tool("Demo"));
+
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            // mock McpConnector, McpConnectorExecutor, agent, and listener
+            mockMcpConnector(connStatic);
+            McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenReturn(expected);
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            MLAgent mlAgent = mockAgent("[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]", "tenant");
+            ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+
+            // run and verify
+            AgentUtils.getMcpToolSpecs(mlAgent, client, sdkClient, null, listener);
+            verify(listener).onResponse(expected);
+        }
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_ToolFilterApplied() throws Exception {
+        stubGetConnector();
+        List<MLToolSpec> repo = List.of(tool("FilterTool"), tool("TempTool"));
+        List<MLToolSpec> expected = List.of(tool("FilterTool"));
+
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            // mock McpConnector, McpConnectorExecutor, agent, and listener
+            mockMcpConnector(connStatic);
+
+            McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenReturn(repo);
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            String mcpJsonConfig = "[{\""
+                + MCP_CONNECTOR_ID_FIELD
+                + "\":\"c1\",\""
+                + TOOL_FILTERS_FIELD
+                + "\":[\"^Filter.*\", \"SecondDemoFilter\"]}]";
+            MLAgent agent = mockAgent(mcpJsonConfig, "tenant");
+
+            ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+
+            // run and verify
+            AgentUtils.getMcpToolSpecs(agent, client, sdkClient, null, listener);
+            verify(listener).onResponse(expected);
+        }
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_MultipleConnectorsMerged() throws Exception {
+        stubGetConnector();                                  // now safe
+
+        List<MLToolSpec> aTools = List.of(tool("A1"));
+        List<MLToolSpec> bTools = List.of(tool("B1"), tool("B2"));
+        List<MLToolSpec> expected = new ArrayList<>();
+        expected.addAll(aTools);
+        expected.addAll(bTools);
+
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            // mock McpConnector, McpConnectorExecutor, agent, and listener
+            mockMcpConnector(connStatic);
+
+            McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenReturn(aTools, bTools);
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            String mcpJsonConfig = "[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"A\"}," + "{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"B\"}]";
+            MLAgent agent = mockAgent(mcpJsonConfig, "tenant");
+
+            ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+
+            // run and verify
+            AgentUtils.getMcpToolSpecs(agent, client, sdkClient, null, listener);
+            verify(listener).onResponse(expected);
+        }
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_NonMcpConnectorReturnsEmpty() throws Exception {
+        stubGetConnector();
+        try (MockedStatic<Connector> connStatic = mockStatic(Connector.class)) {
+
+            connStatic.when(() -> Connector.createConnector(any(XContentParser.class))).thenReturn(mock(AwsConnector.class));
+            MLAgent agent = mockAgent("[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]", "tenant");
+
+            ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+            AgentUtils.getMcpToolSpecs(agent, client, sdkClient, null, listener);
+
+            verify(listener).onResponse(Collections.emptyList());
+        }
     }
 
     private void verifyConstructToolParams(String question, String actionInput, Consumer<Map<String, String>> verify) {
