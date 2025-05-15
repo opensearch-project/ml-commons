@@ -607,7 +607,7 @@ public class MLCommonsBackwardsCompatibilityRestTestCase extends OpenSearchRestT
 
     public MLRegisterModelInput createRegisterModelInput() {
         MLModelConfig modelConfig = TextEmbeddingModelConfig
-            .builder()
+            .textEmbeddingConfigBuilder()
             .modelType("bert")
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
             .embeddingDimension(768)

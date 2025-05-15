@@ -76,7 +76,7 @@ public class MLRegisterModelInputTest {
     @Before
     public void setUp() throws Exception {
         config = TextEmbeddingModelConfig
-            .builder()
+            .textEmbeddingConfigBuilder()
             .modelType("testModelType")
             .embeddingDimension(100)
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
@@ -396,7 +396,7 @@ public class MLRegisterModelInputTest {
             "{\"function_name\":\"TEXT_EMBEDDING\",\"name\":\"TEXT_EMBEDDING\",\"version\":\"1.0.0\",\"model_group_id\":\"modelGroupId\",\"url\":\"url\",\"model_format\":\"TORCH_SCRIPT\",\"model_config\":{\"model_type\":\"testModelType\",\"embedding_dimension\":768,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\",\"normalize_result\":true},\"deploy_model\":true,\"model_node_ids\":[\"modelNodeIds\"]}";
 
         TextEmbeddingModelConfig embeddingConfig = TextEmbeddingModelConfig
-            .builder()
+            .textEmbeddingConfigBuilder()
             .modelType("testModelType")
             .embeddingDimension(768)
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
@@ -425,7 +425,7 @@ public class MLRegisterModelInputTest {
     @Test
     public void readInputStream_Embedding() throws IOException {
         TextEmbeddingModelConfig embeddingConfig = TextEmbeddingModelConfig
-            .builder()
+            .textEmbeddingConfigBuilder()
             .modelType("testModelType")
             .embeddingDimension(768)
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
@@ -577,7 +577,7 @@ public class MLRegisterModelInputTest {
     @Test
     public void testSpaceTypeMapping() throws IOException {
         TextEmbeddingModelConfig config = TextEmbeddingModelConfig
-            .builder()
+            .textEmbeddingConfigBuilder()
             .modelType("testModelType")
             .embeddingDimension(768)
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)

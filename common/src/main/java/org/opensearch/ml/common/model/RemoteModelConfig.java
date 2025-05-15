@@ -29,7 +29,7 @@ import lombok.Setter;
 
 @Setter
 @Getter
-public class RemoteModelConfig extends MLModelConfig {
+public class RemoteModelConfig extends BaseModelConfig {
     public static final String PARSE_FIELD_NAME = "remote";
     public static final NamedXContentRegistry.Entry XCONTENT_REGISTRY = new NamedXContentRegistry.Entry(
         RemoteModelConfig.class,
@@ -49,7 +49,7 @@ public class RemoteModelConfig extends MLModelConfig {
     private final boolean normalizeResult;
     private final Integer modelMaxLength;
 
-    @Builder(toBuilder = true)
+    @Builder(builderMethodName = "remoteModelConfigBuilder")
     public RemoteModelConfig(
         String modelType,
         Integer embeddingDimension,

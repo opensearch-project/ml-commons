@@ -178,13 +178,14 @@ public class MLRegisterModelInput implements ToXContentObject, Writeable {
             }
         }
         if (modelConfig instanceof TextEmbeddingModelConfig && modelName != null) {
+            BaseModelConfig baseModelConfig = (BaseModelConfig) modelConfig;
             String baseModelName = extractModelName(modelName);
             String spaceType = MODEL_SPACE_TYPE_MAPPING.get(baseModelName);
             if (spaceType != null) {
-                Map<String, Object> additionalConfig = modelConfig.getAdditionalConfig();
+                Map<String, Object> additionalConfig = baseModelConfig.getAdditionalConfig();
                 if (additionalConfig == null) {
                     additionalConfig = new HashMap<>();
-                    modelConfig.setAdditionalConfig(additionalConfig);
+                    baseModelConfig.setAdditionalConfig(additionalConfig);
                 }
                 additionalConfig.put("space_type", spaceType);
             }

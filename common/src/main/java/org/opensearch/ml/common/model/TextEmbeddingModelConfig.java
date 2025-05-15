@@ -30,7 +30,7 @@ import lombok.Setter;
 
 @Setter
 @Getter
-public class TextEmbeddingModelConfig extends MLModelConfig {
+public class TextEmbeddingModelConfig extends BaseModelConfig {
     public static final String PARSE_FIELD_NAME = FunctionName.TEXT_EMBEDDING.name();
     public static final NamedXContentRegistry.Entry XCONTENT_REGISTRY = new NamedXContentRegistry.Entry(
         TextEmbeddingModelConfig.class,
@@ -78,7 +78,7 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
         );
     }
 
-    @Builder(toBuilder = true)
+    @Builder(builderMethodName = "textEmbeddingConfigBuilder")
     public TextEmbeddingModelConfig(
         String modelType,
         Integer embeddingDimension,

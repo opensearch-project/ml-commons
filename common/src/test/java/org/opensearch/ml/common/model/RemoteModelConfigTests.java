@@ -37,7 +37,7 @@ public class RemoteModelConfigTests {
         additionalConfig.put("space_type", "l2");
 
         config = RemoteModelConfig
-            .builder()
+            .remoteModelConfigBuilder()
             .modelType("testModelType")
             .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
             .frameworkType(RemoteModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
@@ -76,21 +76,21 @@ public class RemoteModelConfigTests {
     public void nullFields_ModelType() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model type is null");
-        config = RemoteModelConfig.builder().build();
+        config = RemoteModelConfig.remoteModelConfigBuilder().build();
     }
 
     @Test
     public void textEmbedding_MissingEmbeddingDimension() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Embedding dimension must be provided for remote text embedding model");
-        RemoteModelConfig.builder().modelType("text_embedding").additionalConfig(Map.of("space_type", "l2")).build();
+        RemoteModelConfig.remoteModelConfigBuilder().modelType("text_embedding").additionalConfig(Map.of("space_type", "l2")).build();
     }
 
     @Test
     public void textEmbedding_MissingFrameworkType() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Framework type must be provided for remote text embedding model");
-        RemoteModelConfig.builder().modelType("text_embedding").embeddingDimension(100).build();
+        RemoteModelConfig.remoteModelConfigBuilder().modelType("text_embedding").embeddingDimension(100).build();
     }
 
     @Test
@@ -98,7 +98,7 @@ public class RemoteModelConfigTests {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Space type must be provided in additional_config for remote text embedding model");
         RemoteModelConfig
-            .builder()
+            .remoteModelConfigBuilder()
             .modelType("text_embedding")
             .embeddingDimension(100)
             .frameworkType(RemoteModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
@@ -111,7 +111,7 @@ public class RemoteModelConfigTests {
         additionalConfig.put("space_type", "l2");
 
         RemoteModelConfig config = RemoteModelConfig
-            .builder()
+            .remoteModelConfigBuilder()
             .modelType("text_embedding")
             .embeddingDimension(100)
             .additionalConfig(additionalConfig)

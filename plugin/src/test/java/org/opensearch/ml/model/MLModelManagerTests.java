@@ -232,7 +232,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         version = "1";
         url = "http://testurl";
         MLModelConfig modelConfig = TextEmbeddingModelConfig
-            .builder()
+            .textEmbeddingConfigBuilder()
             .modelType("bert")
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
             .embeddingDimension(384)
@@ -689,7 +689,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
 
     public void testDeployModel_FailedToGetModel() {
         MLModelConfig modelConfig = TextEmbeddingModelConfig
-            .builder()
+            .textEmbeddingConfigBuilder()
             .modelType("bert")
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
             .embeddingDimension(384)
@@ -738,7 +738,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
 
     public void testDeployModel_GetModelResponse_NotExist() {
         MLModelConfig modelConfig = TextEmbeddingModelConfig
-            .builder()
+            .textEmbeddingConfigBuilder()
             .modelType("bert")
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
             .embeddingDimension(384)
@@ -779,7 +779,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
 
     public void testDeployModel_GetModelResponse_wrong_hash_value() {
         MLModelConfig modelConfig = TextEmbeddingModelConfig
-            .builder()
+            .textEmbeddingConfigBuilder()
             .modelType("bert")
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
             .embeddingDimension(384)
@@ -830,7 +830,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
 
     public void testDeployModel_GetModelResponse_FailedToDeploy() {
         MLModelConfig modelConfig = TextEmbeddingModelConfig
-            .builder()
+            .textEmbeddingConfigBuilder()
             .modelType("bert")
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
             .embeddingDimension(384)
@@ -898,7 +898,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
 
     public void testDeployModel_ThreadPoolException() {
         MLModelConfig modelConfig = TextEmbeddingModelConfig
-            .builder()
+            .textEmbeddingConfigBuilder()
             .modelType("bert")
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
             .embeddingDimension(384)
@@ -1051,7 +1051,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
 
     private void testDeployModel_FailedToRetrieveModelChunks(boolean lastChunk) {
         MLModelConfig modelConfig = TextEmbeddingModelConfig
-            .builder()
+            .textEmbeddingConfigBuilder()
             .modelType("bert")
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
             .embeddingDimension(384)

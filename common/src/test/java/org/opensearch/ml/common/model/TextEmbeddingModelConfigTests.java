@@ -33,7 +33,7 @@ public class TextEmbeddingModelConfigTests {
     @Before
     public void setUp() {
         config = TextEmbeddingModelConfig
-            .builder()
+            .textEmbeddingConfigBuilder()
             .modelType("testModelType")
             .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
@@ -65,21 +65,21 @@ public class TextEmbeddingModelConfigTests {
     public void nullFields_ModelType() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model type is null");
-        config = TextEmbeddingModelConfig.builder().build();
+        config = TextEmbeddingModelConfig.textEmbeddingConfigBuilder().build();
     }
 
     @Test
     public void nullFields_EmbeddingDimension() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("embedding dimension is null");
-        config = TextEmbeddingModelConfig.builder().modelType("testModelType").build();
+        config = TextEmbeddingModelConfig.textEmbeddingConfigBuilder().modelType("testModelType").build();
     }
 
     @Test
     public void nullFields_FrameworkType() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("framework type is null");
-        config = TextEmbeddingModelConfig.builder().modelType("testModelType").embeddingDimension(100).build();
+        config = TextEmbeddingModelConfig.textEmbeddingConfigBuilder().modelType("testModelType").embeddingDimension(100).build();
     }
 
     @Test

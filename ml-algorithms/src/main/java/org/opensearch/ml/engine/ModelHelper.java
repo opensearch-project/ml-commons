@@ -141,7 +141,8 @@ public class ModelHelper {
                                 }
                                 builder.modelConfig(configBuilder.build());
                             } else if (FunctionName.TEXT_EMBEDDING.equals(algorithm)) {
-                                TextEmbeddingModelConfig.TextEmbeddingModelConfigBuilder configBuilder = TextEmbeddingModelConfig.builder();
+                                TextEmbeddingModelConfig.TextEmbeddingModelConfigBuilder configBuilder = TextEmbeddingModelConfig
+                                    .textEmbeddingConfigBuilder();
                                 Map<?, ?> configMap = (Map<?, ?>) entry.getValue();
                                 for (Map.Entry<?, ?> configEntry : configMap.entrySet()) {
                                     switch (configEntry.getKey().toString()) {
@@ -151,7 +152,7 @@ public class ModelHelper {
                                         case MLModelConfig.ALL_CONFIG_FIELD:
                                             configBuilder.allConfig(configEntry.getValue().toString());
                                             break;
-                                        case MLModelConfig.ADDITIONAL_CONFIG_FIELD:
+                                        case BaseModelConfig.ADDITIONAL_CONFIG_FIELD:
                                             configBuilder.additionalConfig((Map<String, Object>) configEntry.getValue());
                                         case TextEmbeddingModelConfig.EMBEDDING_DIMENSION_FIELD:
                                             configBuilder.embeddingDimension(((Double) configEntry.getValue()).intValue());
@@ -187,7 +188,7 @@ public class ModelHelper {
                                 }
                                 builder.modelConfig(configBuilder.build());
                             } else if (FunctionName.REMOTE.equals(algorithm)) {
-                                RemoteModelConfig.RemoteModelConfigBuilder configBuilder = RemoteModelConfig.builder();
+                                RemoteModelConfig.RemoteModelConfigBuilder configBuilder = RemoteModelConfig.remoteModelConfigBuilder();
                                 Map<?, ?> configMap = (Map<?, ?>) entry.getValue();
                                 for (Map.Entry<?, ?> configEntry : configMap.entrySet()) {
                                     switch (configEntry.getKey().toString()) {
@@ -197,7 +198,7 @@ public class ModelHelper {
                                         case MLModelConfig.ALL_CONFIG_FIELD:
                                             configBuilder.allConfig(configEntry.getValue().toString());
                                             break;
-                                        case MLModelConfig.ADDITIONAL_CONFIG_FIELD:
+                                        case BaseModelConfig.ADDITIONAL_CONFIG_FIELD:
                                             if (configEntry.getValue() instanceof Map) {
                                                 Map<String, Object> additionalConfig = (Map<String, Object>) configEntry.getValue();
                                                 configBuilder.additionalConfig(additionalConfig);
@@ -239,7 +240,7 @@ public class ModelHelper {
                                         case MLModelConfig.ALL_CONFIG_FIELD:
                                             configBuilder.allConfig(configEntry.getValue().toString());
                                             break;
-                                        case MLModelConfig.ADDITIONAL_CONFIG_FIELD:
+                                        case BaseModelConfig.ADDITIONAL_CONFIG_FIELD:
                                             if (configEntry.getValue() instanceof Map) {
                                                 Map<String, Object> additionalConfig = (Map<String, Object>) configEntry.getValue();
                                                 configBuilder.additionalConfig(additionalConfig);

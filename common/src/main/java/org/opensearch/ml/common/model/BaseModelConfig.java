@@ -40,9 +40,13 @@ public class BaseModelConfig extends MLModelConfig {
         it -> parse(it)
     );
 
+    public static final String ADDITIONAL_CONFIG_FIELD = "additional_config";
+    protected Map<String, Object> additionalConfig;
+
     @Builder(toBuilder = true)
     public BaseModelConfig(String modelType, String allConfig, Map<String, Object> additionalConfig) {
-        super(modelType, allConfig, additionalConfig);
+        super(modelType, allConfig);
+        this.additionalConfig = additionalConfig;
         validateNoDuplicateKeys(allConfig, additionalConfig);
     }
 
@@ -81,11 +85,13 @@ public class BaseModelConfig extends MLModelConfig {
 
     public BaseModelConfig(StreamInput in) throws IOException {
         super(in);
+        this.additionalConfig = in.readMap();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
+        out.writeMap(additionalConfig);
     }
 
     @Override
@@ -116,5 +122,13 @@ public class BaseModelConfig extends MLModelConfig {
                 "Duplicate keys found in both all_config and additional_config: " + String.join(", ", duplicateKeys)
             );
         }
+    }
+
+    public Map<String, Object> getAdditionalConfig() {
+        return this.additionalConfig;
+    }
+
+    public void setAdditionalConfig(Map<String, Object> additionalConfig) {
+        this.additionalConfig = additionalConfig;
     }
 }

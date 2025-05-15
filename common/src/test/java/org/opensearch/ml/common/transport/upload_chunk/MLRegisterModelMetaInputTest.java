@@ -92,7 +92,6 @@ public class MLRegisterModelMetaInputTest {
         assertEquals(input.getModelFormat(), newInput.getModelFormat());
         assertEquals(input.getModelConfig().getAllConfig(), newInput.getModelConfig().getAllConfig());
         assertEquals(input.getModelConfig().getModelType(), newInput.getModelConfig().getModelType());
-        assertEquals(input.getModelConfig().getAdditionalConfig(), newInput.getModelConfig().getAdditionalConfig());
         assertEquals(input.getModelFormat(), newInput.getModelFormat());
         assertEquals(input.getModelState(), newInput.getModelState());
         assertEquals(input.getModelContentSizeInBytes(), newInput.getModelContentSizeInBytes());

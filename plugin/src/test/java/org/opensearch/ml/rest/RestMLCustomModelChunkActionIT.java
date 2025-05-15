@@ -123,7 +123,7 @@ public class RestMLCustomModelChunkActionIT extends MLCommonsRestTestCase {
 
     private String prepareModelMeta() throws IOException {
         TextEmbeddingModelConfig config = TextEmbeddingModelConfig
-            .builder()
+            .textEmbeddingConfigBuilder()
             .allConfig("All Config")
             .embeddingDimension(1235)
             .frameworkType(FrameworkType.SENTENCE_TRANSFORMERS)
