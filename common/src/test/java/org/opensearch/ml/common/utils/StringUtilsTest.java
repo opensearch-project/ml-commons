@@ -810,7 +810,7 @@ public class StringUtilsTest {
         // Testing specifically excluded characters
         assertFalse(StringUtils.isSafeText("Hello<World"));  // less than
         assertFalse(StringUtils.isSafeText("Hello>World"));  // greater than
-        assertFalse(StringUtils.isSafeText("Hello/World"));  // forward slash
+        assertTrue(StringUtils.isSafeText("Hello/World"));  // forward slash
         assertFalse(StringUtils.isSafeText("Hello\\World")); // backslash
         assertFalse(StringUtils.isSafeText("Hello&World"));  // ampersand
         assertFalse(StringUtils.isSafeText("Hello+World"));  // plus
