@@ -64,10 +64,9 @@ public class StringUtils {
         + "\n    }\n";
 
     // Regex allows letters, digits, spaces, hyphens, underscores, and dots.
-    private static final Pattern SAFE_INPUT_PATTERN = Pattern.compile("^[\\p{L}\\p{N}\\s.,!?():@\\-_'\"]*$");
+    private static final Pattern SAFE_INPUT_PATTERN = Pattern.compile("^[\\p{L}\\p{N}\\s.,!?():@\\-_/'\"]*$");
 
-    public static final String SAFE_INPUT_DESCRIPTION =
-        "can only contain letters, numbers, whitespace, and basic punctuation (.,!?():@-_'\")";
+    public static final String SAFE_INPUT_DESCRIPTION = "can only contain letters, numbers, spaces, and basic punctuation (.,!?():@-_'/\")";
 
     public static final Gson gson;
 
