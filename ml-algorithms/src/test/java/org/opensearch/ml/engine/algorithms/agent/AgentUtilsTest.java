@@ -1197,7 +1197,7 @@ public class AgentUtilsTest extends MLStaticMockBase {
         Assert.assertTrue(output3.get(FINAL_ANSWER).contains("This is a test response"));
     }
 
-    private static MLToolSpec tool(String name) {
+    private static MLToolSpec buildTool(String name) {
         return MLToolSpec.builder().type(McpSseTool.TYPE).name(name).description("mock").build();
     }
 
@@ -1253,7 +1253,7 @@ public class AgentUtilsTest extends MLStaticMockBase {
     @Test
     public void testGetMcpToolSpecs_SingleConnectorSuccess() throws Exception {
         stubGetConnector();
-        List<MLToolSpec> expected = List.of(tool("Demo"));
+        List<MLToolSpec> expected = List.of(buildTool("Demo"));
 
         try (
             MockedStatic<Connector> connStatic = mockStatic(Connector.class);
@@ -1277,8 +1277,8 @@ public class AgentUtilsTest extends MLStaticMockBase {
     @Test
     public void testGetMcpToolSpecs_ToolFilterApplied() throws Exception {
         stubGetConnector();
-        List<MLToolSpec> repo = List.of(tool("FilterTool"), tool("TempTool"));
-        List<MLToolSpec> expected = List.of(tool("FilterTool"));
+        List<MLToolSpec> repo = List.of(buildTool("FilterTool"), buildTool("TempTool"));
+        List<MLToolSpec> expected = List.of(buildTool("FilterTool"));
 
         try (
             MockedStatic<Connector> connStatic = mockStatic(Connector.class);
@@ -1310,8 +1310,8 @@ public class AgentUtilsTest extends MLStaticMockBase {
     public void testGetMcpToolSpecs_MultipleConnectorsMerged() throws Exception {
         stubGetConnector();                                  // now safe
 
-        List<MLToolSpec> aTools = List.of(tool("A1"));
-        List<MLToolSpec> bTools = List.of(tool("B1"), tool("B2"));
+        List<MLToolSpec> aTools = List.of(buildTool("A1"));
+        List<MLToolSpec> bTools = List.of(buildTool("B1"), buildTool("B2"));
         List<MLToolSpec> expected = new ArrayList<>();
         expected.addAll(aTools);
         expected.addAll(bTools);
