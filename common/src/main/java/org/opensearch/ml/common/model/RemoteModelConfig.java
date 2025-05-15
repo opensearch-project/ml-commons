@@ -238,19 +238,11 @@ public class RemoteModelConfig extends MLModelConfig {
             return;
         }
 
-        try {
-            // Parse allConfig JSON string to Map
-            Map<String, Object> allConfigMap = XContentHelper.convertToMap(XContentType.JSON.xContent(), allConfig, false);
-
-            // Check for duplicate keys
-            Set<String> duplicateKeys = allConfigMap.keySet().stream().filter(additionalConfig::containsKey).collect(Collectors.toSet());
-
-            if (!duplicateKeys.isEmpty()) {
-                throw new Exception();
-            }
-        } catch (Exception e) {
+        Map<String, Object> allConfigMap = XContentHelper.convertToMap(XContentType.JSON.xContent(), allConfig, false);
+        Set<String> duplicateKeys = allConfigMap.keySet().stream().filter(additionalConfig::containsKey).collect(Collectors.toSet());
+        if (!duplicateKeys.isEmpty()) {
             throw new IllegalArgumentException(
-                "Duplicate keys found in both all_config and additional_config: " + String.join(", ", additionalConfig.keySet())
+                "Duplicate keys found in both all_config and additional_config: " + String.join(", ", duplicateKeys)
             );
         }
     }

@@ -26,6 +26,10 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Base configuration class for ML models. This class handles 
+ * the basic configuration parameters that every ML model can support.
+ */
 @Setter
 @Getter
 public class BaseModelConfig extends MLModelConfig {
@@ -105,15 +109,11 @@ public class BaseModelConfig extends MLModelConfig {
             return;
         }
 
-        try {
-            Map<String, Object> allConfigMap = XContentHelper.convertToMap(XContentType.JSON.xContent(), allConfig, false);
-            Set<String> duplicateKeys = allConfigMap.keySet().stream().filter(additionalConfig::containsKey).collect(Collectors.toSet());
-            if (!duplicateKeys.isEmpty()) {
-                throw new Exception();
-            }
-        } catch (Exception e) {
+        Map<String, Object> allConfigMap = XContentHelper.convertToMap(XContentType.JSON.xContent(), allConfig, false);
+        Set<String> duplicateKeys = allConfigMap.keySet().stream().filter(additionalConfig::containsKey).collect(Collectors.toSet());
+        if (!duplicateKeys.isEmpty()) {
             throw new IllegalArgumentException(
-                "Duplicate keys found in both all_config and additional_config: " + String.join(", ", additionalConfig.keySet())
+                "Duplicate keys found in both all_config and additional_config: " + String.join(", ", duplicateKeys)
             );
         }
     }

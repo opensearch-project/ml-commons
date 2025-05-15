@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.common.model;
 
+import static org.opensearch.ml.common.CommonValue.VERSION_3_1_0;
+
 import java.io.IOException;
 import java.util.Map;
 
@@ -44,13 +46,18 @@ public abstract class MLModelConfig implements ToXContentObject, NamedWriteable 
     public MLModelConfig(StreamInput in) throws IOException {
         this.modelType = in.readString();
         this.allConfig = in.readOptionalString();
-        this.additionalConfig = in.readMap();
+        if (in.getVersion().onOrAfter(VERSION_3_1_0)) {
+            this.additionalConfig = in.readMap();
+        }
+
     }
 
     public void writeTo(StreamOutput out) throws IOException {
         out.writeString(modelType);
         out.writeOptionalString(allConfig);
-        out.writeMap(additionalConfig);
+        if (out.getVersion().onOrAfter(VERSION_3_1_0)) {
+            out.writeMap(additionalConfig);
+        }
     }
 
     public Map<String, Object> getAdditionalConfig() {
