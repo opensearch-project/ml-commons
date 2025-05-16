@@ -27,6 +27,7 @@ import java.util.zip.ZipFile;
 
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.model.BaseModelConfig;
 import org.opensearch.ml.common.model.MLDeploySetting;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
@@ -150,6 +151,8 @@ public class ModelHelper {
                                         case MLModelConfig.ALL_CONFIG_FIELD:
                                             configBuilder.allConfig(configEntry.getValue().toString());
                                             break;
+                                        case BaseModelConfig.ADDITIONAL_CONFIG_FIELD:
+                                            configBuilder.additionalConfig((Map<String, Object>) configEntry.getValue());
                                         case TextEmbeddingModelConfig.EMBEDDING_DIMENSION_FIELD:
                                             configBuilder.embeddingDimension(((Double) configEntry.getValue()).intValue());
                                             break;

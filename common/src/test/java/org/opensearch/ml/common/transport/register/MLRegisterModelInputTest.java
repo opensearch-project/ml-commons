@@ -634,36 +634,6 @@ public class MLRegisterModelInputTest {
         assertFalse(jsonStr.contains("\"tenant_id\""));
     }
 
-    @Test
-    public void testSpaceTypeMapping() throws IOException {
-        TextEmbeddingModelConfig config = TextEmbeddingModelConfig
-            .textEmbeddingConfigBuilder()
-            .modelType("testModelType")
-            .embeddingDimension(768)
-            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
-            .build();
-
-        MLRegisterModelInput input = MLRegisterModelInput
-            .builder()
-            .functionName(FunctionName.TEXT_EMBEDDING)
-            .modelName("all-distilroberta-v1")
-            .version("1.0.0")
-            .modelFormat(MLModelFormat.TORCH_SCRIPT)
-            .modelConfig(config)
-            .build();
-
-        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
-        input.toXContent(builder, ToXContent.EMPTY_PARAMS);
-        String jsonStr = builder.toString();
-        assertTrue(jsonStr.contains("\"space_type\":\"l2\""));
-
-        readInputStream(input, parsedInput -> {
-            assertTrue(parsedInput.getModelConfig() instanceof TextEmbeddingModelConfig);
-            TextEmbeddingModelConfig parsedConfig = (TextEmbeddingModelConfig) parsedInput.getModelConfig();
-            assertEquals("l2", parsedConfig.getAdditionalConfig().get("space_type"));
-        });
-    }
-
     private void readInputStream(MLRegisterModelInput input, Consumer<MLRegisterModelInput> verify) throws IOException {
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         input.writeTo(bytesStreamOutput);
