@@ -24,10 +24,8 @@ import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.jobscheduler.spi.schedule.IntervalSchedule;
 import org.opensearch.ml.autoredeploy.MLModelAutoReDeployer;
-import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
-import org.opensearch.ml.engine.encryptor.Encryptor;
-import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.common.CommonValue;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.jobs.MLJobParameter;
@@ -107,12 +105,12 @@ public class MLCommonsClusterManagerEventListener implements LocalNodeClusterMan
                 TimeValue.timeValueSeconds(jobInterval),
                 GENERAL_THREAD_POOL
             );
-//        startStatsCollectorJob();
+        startStatsCollectorJob();
     }
 
     public void startStatsCollectorJob() {
         try {
-            int intervalInMinutes = 5;
+            int intervalInMinutes = 1;
             Long lockDurationSeconds = 20L;
 
             MLJobParameter jobParameter = new MLJobParameter(
