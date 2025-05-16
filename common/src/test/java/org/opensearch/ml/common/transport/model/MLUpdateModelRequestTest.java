@@ -117,7 +117,7 @@ public class MLUpdateModelRequestTest {
     @Test
     public void validate_Exception_InvalidName() {
         MLModelConfig config = TextEmbeddingModelConfig
-            .builder()
+            .textEmbeddingConfigBuilder()
             .modelType("testModelType")
             .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
@@ -140,7 +140,7 @@ public class MLUpdateModelRequestTest {
     @Test
     public void validate_Exception_InvalidDescription() {
         MLModelConfig config = TextEmbeddingModelConfig
-            .builder()
+            .textEmbeddingConfigBuilder()
             .modelType("testModelType")
             .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)

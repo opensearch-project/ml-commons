@@ -37,6 +37,7 @@ import org.opensearch.ml.common.model.BaseModelConfig;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
+import org.opensearch.ml.common.model.RemoteModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.search.SearchModule;
 
@@ -462,7 +463,7 @@ public class MLRegisterModelInputTest {
     }
 
     @Test
-    public void testGeneralModelInput() throws IOException {
+    public void testBaseModelInput() throws IOException {
         String testString =
             "{\"function_name\":\"SPARSE_ENCODING\",\"name\":\"SPARSE_ENCODING\",\"version\":\"1.0.0\",\"model_group_id\":\"modelGroupId\",\"url\":\"url\",\"model_format\":\"TORCH_SCRIPT\",\"model_config\":{\"model_type\":\"testModelType\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\",\"additional_config\":{\"space_type\":\"l2\"}},\"deploy_model\":true,\"model_node_ids\":[\"modelNodeIds\"]}";
 
@@ -495,7 +496,7 @@ public class MLRegisterModelInputTest {
     }
 
     @Test
-    public void readInputStream_general() throws IOException {
+    public void readInputStream_Base() throws IOException {
         Map<String, Object> additionalConfig = new HashMap<>();
         additionalConfig.put("space_type", "l2");
 
@@ -525,6 +526,65 @@ public class MLRegisterModelInputTest {
             assertEquals(parsedInput.getFunctionName(), FunctionName.SPARSE_ENCODING);
             assertEquals(parsedInput.getModelName(), "SPARSE_ENCODING");
             assertEquals(parsedInput.getModelGroupId(), modelGroupId);
+        });
+    }
+
+    @Test
+    public void testRemoteModelInput() throws IOException {
+        String testString =
+            "{\"function_name\":\"REMOTE\",\"name\":\"test_remote_model\",\"model_group_id\":\"modelGroupId\",\"model_config\":{\"model_type\":\"testModelType\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\",\"additional_config\":{\"space_type\":\"l2\"}},\"deploy_model\":false,\"connector_id\":\"connectorId\"}";
+        String connectorId = "connectorId";
+        Map<String, Object> additionalConfig = new HashMap<>();
+        additionalConfig.put("space_type", "l2");
+        RemoteModelConfig remoteConfig = RemoteModelConfig
+            .remoteModelConfigBuilder()
+            .modelType("testModelType")
+            .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
+            .additionalConfig(additionalConfig)
+            .build();
+        MLRegisterModelInput remoteInput = MLRegisterModelInput
+            .builder()
+            .functionName(FunctionName.REMOTE)
+            .modelName("test_remote_model")
+            .modelGroupId(modelGroupId)
+            .connectorId(connectorId)
+            .modelConfig(remoteConfig)
+            .deployModel(false)
+            .build();
+        XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
+        remoteInput.toXContent(builder, ToXContent.EMPTY_PARAMS);
+        String jsonStr = builder.toString();
+        assertEquals(testString, jsonStr);
+    }
+
+    @Test
+    public void readInputStream_Remote() throws IOException {
+        Map<String, Object> additionalConfig = new HashMap<>();
+        additionalConfig.put("space_type", "l2");
+        String connectorId = "connectorId";
+        RemoteModelConfig remoteConfig = RemoteModelConfig
+            .remoteModelConfigBuilder()
+            .modelType("test")
+            .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
+            .additionalConfig(additionalConfig)
+            .build();
+        MLRegisterModelInput remoteInput = MLRegisterModelInput
+            .builder()
+            .functionName(FunctionName.REMOTE)
+            .modelName("test_remote_model")
+            .modelGroupId(modelGroupId)
+            .connectorId(connectorId)
+            .modelConfig(remoteConfig)
+            .deployModel(false)
+            .build();
+        readInputStream(remoteInput, parsedInput -> {
+            assertEquals(parsedInput.getModelConfig().getModelType(), remoteConfig.getModelType());
+            assertEquals(parsedInput.getModelConfig().getAllConfig(), remoteConfig.getAllConfig());
+            assertEquals(((BaseModelConfig) parsedInput.getModelConfig()).getAdditionalConfig(), additionalConfig);
+            assertEquals(parsedInput.getFunctionName(), FunctionName.REMOTE);
+            assertEquals(parsedInput.getModelName(), "test_remote_model");
+            assertEquals(parsedInput.getModelGroupId(), modelGroupId);
+            assertEquals(parsedInput.getConnectorId(), connectorId);
         });
     }
 

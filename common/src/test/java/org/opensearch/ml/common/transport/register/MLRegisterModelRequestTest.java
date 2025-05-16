@@ -18,6 +18,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.model.BaseModelConfig;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
+import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 
 public class MLRegisterModelRequestTest {
 
@@ -142,7 +143,7 @@ public class MLRegisterModelRequestTest {
     @Test
     public void validate_Exception_UnsafeModelName() {
         TextEmbeddingModelConfig config = TextEmbeddingModelConfig
-            .builder()
+            .textEmbeddingConfigBuilder()
             .modelType("testModelType")
             .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
@@ -169,7 +170,7 @@ public class MLRegisterModelRequestTest {
     @Test
     public void validate_Exception_UnsafeDescription() {
         TextEmbeddingModelConfig config = TextEmbeddingModelConfig
-            .builder()
+            .textEmbeddingConfigBuilder()
             .modelType("testModelType")
             .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)

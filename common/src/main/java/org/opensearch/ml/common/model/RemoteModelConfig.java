@@ -10,11 +10,7 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import java.io.IOException;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
 
-import org.opensearch.common.xcontent.XContentHelper;
-import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.ParseField;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -135,8 +131,12 @@ public class RemoteModelConfig extends BaseModelConfig {
 
     public RemoteModelConfig(StreamInput in) throws IOException {
         super(in);
-        embeddingDimension = in.readInt();
-        frameworkType = in.readEnum(FrameworkType.class);
+        embeddingDimension = in.readOptionalInt();
+        if (in.readBoolean()) {
+            frameworkType = in.readEnum(FrameworkType.class);
+        } else {
+            frameworkType = null;
+        }
         if (in.readBoolean()) {
             poolingMode = in.readEnum(PoolingMode.class);
         } else {
@@ -149,8 +149,13 @@ public class RemoteModelConfig extends BaseModelConfig {
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        out.writeInt(embeddingDimension);
-        out.writeEnum(frameworkType);
+        out.writeOptionalInt(embeddingDimension);
+        if (frameworkType != null) {
+            out.writeBoolean(true);
+            out.writeEnum(frameworkType);
+        } else {
+            out.writeBoolean(false);
+        }
         if (poolingMode != null) {
             out.writeBoolean(true);
             out.writeEnum(poolingMode);
@@ -230,20 +235,6 @@ public class RemoteModelConfig extends BaseModelConfig {
             } catch (Exception e) {
                 throw new IllegalArgumentException("Wrong framework type");
             }
-        }
-    }
-
-    private void validateNoDuplicateKeys(String allConfig, Map<String, Object> additionalConfig) {
-        if (allConfig == null || additionalConfig == null || additionalConfig.isEmpty()) {
-            return;
-        }
-
-        Map<String, Object> allConfigMap = XContentHelper.convertToMap(XContentType.JSON.xContent(), allConfig, false);
-        Set<String> duplicateKeys = allConfigMap.keySet().stream().filter(additionalConfig::containsKey).collect(Collectors.toSet());
-        if (!duplicateKeys.isEmpty()) {
-            throw new IllegalArgumentException(
-                "Duplicate keys found in both all_config and additional_config: " + String.join(", ", duplicateKeys)
-            );
         }
     }
 

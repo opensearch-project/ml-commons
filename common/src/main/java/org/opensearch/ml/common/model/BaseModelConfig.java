@@ -110,7 +110,7 @@ public class BaseModelConfig extends MLModelConfig {
         return builder;
     }
 
-    private void validateNoDuplicateKeys(String allConfig, Map<String, Object> additionalConfig) {
+    protected void validateNoDuplicateKeys(String allConfig, Map<String, Object> additionalConfig) {
         if (allConfig == null || additionalConfig == null || additionalConfig.isEmpty()) {
             return;
         }

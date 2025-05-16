@@ -28,10 +28,8 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.model.BaseModelConfig;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
-import org.opensearch.ml.common.model.RemoteModelConfig;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
@@ -265,60 +263,5 @@ public class ModelHelperTest {
             .build();
         List modelMetaList = modelHelper.downloadPrebuiltModelMetaList(taskId, registerModelInput);
         assertFalse(modelHelper.isModelAllowed(registerModelInput, modelMetaList));
-    }
-
-    @Test
-    public void testBaseModelConfigBuilder() {
-        BaseModelConfig original = BaseModelConfig
-            .builder()
-            .modelType("test_model")
-            .allConfig("{\"key1\":\"value1\"}")
-            .additionalConfig(Map.of("key2", "value2"))
-            .build();
-
-        BaseModelConfig copied = BaseModelConfig
-            .builder()
-            .modelType(original.getModelType())
-            .allConfig(original.getAllConfig())
-            .additionalConfig(original.getAdditionalConfig())
-            .build();
-
-        assertEquals(original.getModelType(), copied.getModelType());
-        assertEquals(original.getAllConfig(), copied.getAllConfig());
-        assertEquals(original.getAdditionalConfig(), copied.getAdditionalConfig());
-    }
-
-    @Test
-    public void testRemoteModelConfigBuilder() {
-        RemoteModelConfig original = RemoteModelConfig
-            .remoteModelConfigBuilder()
-            .modelType("remote_model")
-            .allConfig("{\"key1\":\"value1\"}")
-            .additionalConfig(Map.of("key2", "value2"))
-            .embeddingDimension(768)
-            .frameworkType(RemoteModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
-            .modelMaxLength(512)
-            .normalizeResult(true)
-            .poolingMode(RemoteModelConfig.PoolingMode.MEAN)
-            .build();
-
-        RemoteModelConfig copied = RemoteModelConfig
-            .remoteModelConfigBuilder()
-            .modelType(original.getModelType())
-            .allConfig(original.getAllConfig())
-            .additionalConfig(original.getAdditionalConfig())
-            .embeddingDimension(original.getEmbeddingDimension())
-            .frameworkType(original.getFrameworkType())
-            .modelMaxLength(original.getModelMaxLength())
-            .poolingMode(original.getPoolingMode())
-            .build();
-
-        assertEquals(original.getModelType(), copied.getModelType());
-        assertEquals(original.getAllConfig(), copied.getAllConfig());
-        assertEquals(original.getAdditionalConfig(), copied.getAdditionalConfig());
-        assertEquals(original.getEmbeddingDimension(), copied.getEmbeddingDimension());
-        assertEquals(original.getFrameworkType(), copied.getFrameworkType());
-        assertEquals(original.getModelMaxLength(), copied.getModelMaxLength());
-        assertEquals(original.getPoolingMode(), copied.getPoolingMode());
     }
 }

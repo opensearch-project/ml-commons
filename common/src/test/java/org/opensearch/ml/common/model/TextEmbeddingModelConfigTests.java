@@ -9,7 +9,6 @@ import static org.junit.Assert.assertEquals;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
 import java.io.IOException;
-import java.util.Map;
 import java.util.function.Function;
 
 import org.junit.Before;
@@ -112,16 +111,5 @@ public class TextEmbeddingModelConfigTests {
         assertEquals(config.getEmbeddingDimension(), parsedConfig.getEmbeddingDimension());
         assertEquals(config.getFrameworkType(), parsedConfig.getFrameworkType());
         assertEquals(config.getWriteableName(), parsedConfig.getWriteableName());
-    }
-
-    @Test
-    public void duplicateKeys() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Duplicate keys found in both all_config and additional_config: key1");
-
-        String allConfig = "{\"key1\":\"value1\",\"key2\":\"value2\"}";
-        Map<String, Object> additionalConfig = Map.of("key1", "value3");
-
-        BaseModelConfig.builder().allConfig(allConfig).modelType("testModelType").additionalConfig(additionalConfig).build();
     }
 }

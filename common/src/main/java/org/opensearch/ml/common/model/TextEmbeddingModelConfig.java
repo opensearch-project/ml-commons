@@ -10,11 +10,7 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import java.io.IOException;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
 
-import org.opensearch.common.xcontent.XContentHelper;
-import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.ParseField;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -287,20 +283,6 @@ public class TextEmbeddingModelConfig extends BaseModelConfig {
             } catch (Exception e) {
                 throw new IllegalArgumentException("Wrong framework type");
             }
-        }
-    }
-
-    private void validateNoDuplicateKeys(String allConfig, Map<String, Object> additionalConfig) {
-        if (allConfig == null || additionalConfig == null || additionalConfig.isEmpty()) {
-            return;
-        }
-
-        Map<String, Object> allConfigMap = XContentHelper.convertToMap(XContentType.JSON.xContent(), allConfig, false);
-        Set<String> duplicateKeys = allConfigMap.keySet().stream().filter(additionalConfig::containsKey).collect(Collectors.toSet());
-        if (!duplicateKeys.isEmpty()) {
-            throw new IllegalArgumentException(
-                "Duplicate keys found in both all_config and additional_config: " + String.join(", ", duplicateKeys)
-            );
         }
     }
 }

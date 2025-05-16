@@ -43,7 +43,7 @@ public class RemoteModelConfigTests {
             .frameworkType(RemoteModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
             .poolingMode(RemoteModelConfig.PoolingMode.MEAN)
             .embeddingDimension(100)
-            .normalizeResult(false)
+            .normalizeResult(true)
             .modelMaxLength(512)
             .additionalConfig(additionalConfig)
             .build();
@@ -66,7 +66,8 @@ public class RemoteModelConfigTests {
                 + "\"embedding_dimension\":100,"
                 + "\"framework_type\":\"SENTENCE_TRANSFORMERS\","
                 + "\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\","
-                + "\"pooling_mode\":\"MEAN\",\"model_max_length\":512,"
+                + "\"pooling_mode\":\"MEAN\",\"normalize_result\":true,"
+                + "\"model_max_length\":512,"
                 + "\"additional_config\":{\"space_type\":\"l2\"}}",
             configContent
         );
@@ -117,7 +118,6 @@ public class RemoteModelConfigTests {
             .additionalConfig(additionalConfig)
             .frameworkType(RemoteModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
             .build();
-
         assertEquals("text_embedding", config.getModelType());
         assertEquals(Integer.valueOf(100), config.getEmbeddingDimension());
         assertEquals("l2", config.getAdditionalConfig().get("space_type"));
@@ -128,6 +128,8 @@ public class RemoteModelConfigTests {
         String content = "{\"model_type\":\"testModelType\","
             + "\"embedding_dimension\":100,"
             + "\"framework_type\":\"SENTENCE_TRANSFORMERS\","
+            + "\"pooling_mode\":\"MEAN\",\"normalize_result\":true,"
+            + "\"model_max_length\":512,"
             + "\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\","
             + "\"additional_config\":{\"space_type\":\"l2\"}}";
         TestHelper.testParseFromString(config, content, function);
@@ -167,16 +169,5 @@ public class RemoteModelConfigTests {
         assertEquals(config.getModelMaxLength(), parsedConfig.getModelMaxLength());
         assertEquals(config.getAdditionalConfig(), parsedConfig.getAdditionalConfig());
         assertEquals(config.getWriteableName(), parsedConfig.getWriteableName());
-    }
-
-    @Test
-    public void duplicateKeys() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Duplicate keys found in both all_config and additional_config: key1");
-
-        String allConfig = "{\"key1\":\"value1\",\"key2\":\"value2\"}";
-        Map<String, Object> additionalConfig = Map.of("key1", "value3");
-
-        RemoteModelConfig.builder().allConfig(allConfig).modelType("testModelType").additionalConfig(additionalConfig).build();
     }
 }

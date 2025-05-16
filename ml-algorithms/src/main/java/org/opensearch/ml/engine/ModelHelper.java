@@ -27,12 +27,10 @@ import java.util.zip.ZipFile;
 
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.model.BaseModelConfig;
 import org.opensearch.ml.common.model.MLDeploySetting;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.QuestionAnsweringModelConfig;
-import org.opensearch.ml.common.model.RemoteModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
@@ -140,7 +138,7 @@ public class ModelHelper {
                                     }
                                 }
                                 builder.modelConfig(configBuilder.build());
-                            } else if (FunctionName.TEXT_EMBEDDING.equals(algorithm)) {
+                            } else {
                                 TextEmbeddingModelConfig.TextEmbeddingModelConfigBuilder configBuilder = TextEmbeddingModelConfig
                                     .textEmbeddingConfigBuilder();
                                 Map<?, ?> configMap = (Map<?, ?>) entry.getValue();
@@ -152,8 +150,6 @@ public class ModelHelper {
                                         case MLModelConfig.ALL_CONFIG_FIELD:
                                             configBuilder.allConfig(configEntry.getValue().toString());
                                             break;
-                                        case BaseModelConfig.ADDITIONAL_CONFIG_FIELD:
-                                            configBuilder.additionalConfig((Map<String, Object>) configEntry.getValue());
                                         case TextEmbeddingModelConfig.EMBEDDING_DIMENSION_FIELD:
                                             configBuilder.embeddingDimension(((Double) configEntry.getValue()).intValue());
                                             break;
@@ -181,70 +177,6 @@ public class ModelHelper {
                                             break;
                                         case TextEmbeddingModelConfig.PASSAGE_PREFIX:
                                             configBuilder.passagePrefix(configEntry.getValue().toString());
-                                            break;
-                                        default:
-                                            break;
-                                    }
-                                }
-                                builder.modelConfig(configBuilder.build());
-                            } else if (FunctionName.REMOTE.equals(algorithm)) {
-                                RemoteModelConfig.RemoteModelConfigBuilder configBuilder = RemoteModelConfig.remoteModelConfigBuilder();
-                                Map<?, ?> configMap = (Map<?, ?>) entry.getValue();
-                                for (Map.Entry<?, ?> configEntry : configMap.entrySet()) {
-                                    switch (configEntry.getKey().toString()) {
-                                        case MLModelConfig.MODEL_TYPE_FIELD:
-                                            configBuilder.modelType(configEntry.getValue().toString());
-                                            break;
-                                        case MLModelConfig.ALL_CONFIG_FIELD:
-                                            configBuilder.allConfig(configEntry.getValue().toString());
-                                            break;
-                                        case BaseModelConfig.ADDITIONAL_CONFIG_FIELD:
-                                            if (configEntry.getValue() instanceof Map) {
-                                                Map<String, Object> additionalConfig = (Map<String, Object>) configEntry.getValue();
-                                                configBuilder.additionalConfig(additionalConfig);
-                                            }
-                                            break;
-                                        case RemoteModelConfig.EMBEDDING_DIMENSION_FIELD:
-                                            configBuilder.embeddingDimension(((Double) configEntry.getValue()).intValue());
-                                            break;
-                                        case RemoteModelConfig.FRAMEWORK_TYPE_FIELD:
-                                            configBuilder
-                                                .frameworkType(RemoteModelConfig.FrameworkType.from(configEntry.getValue().toString()));
-                                            break;
-                                        case RemoteModelConfig.POOLING_MODE_FIELD:
-                                            configBuilder
-                                                .poolingMode(
-                                                    RemoteModelConfig.PoolingMode
-                                                        .from(configEntry.getValue().toString().toUpperCase(Locale.ROOT))
-                                                );
-                                            break;
-                                        case RemoteModelConfig.NORMALIZE_RESULT_FIELD:
-                                            configBuilder.normalizeResult(Boolean.parseBoolean(configEntry.getValue().toString()));
-                                            break;
-                                        case RemoteModelConfig.MODEL_MAX_LENGTH_FIELD:
-                                            configBuilder.modelMaxLength(((Double) configEntry.getValue()).intValue());
-                                            break;
-                                        default:
-                                            break;
-                                    }
-                                }
-                                builder.modelConfig(configBuilder.build());
-                            } else {
-                                BaseModelConfig.BaseModelConfigBuilder configBuilder = BaseModelConfig.builder();
-                                Map<?, ?> configMap = (Map<?, ?>) entry.getValue();
-                                for (Map.Entry<?, ?> configEntry : configMap.entrySet()) {
-                                    switch (configEntry.getKey().toString()) {
-                                        case MLModelConfig.MODEL_TYPE_FIELD:
-                                            configBuilder.modelType(configEntry.getValue().toString());
-                                            break;
-                                        case MLModelConfig.ALL_CONFIG_FIELD:
-                                            configBuilder.allConfig(configEntry.getValue().toString());
-                                            break;
-                                        case BaseModelConfig.ADDITIONAL_CONFIG_FIELD:
-                                            if (configEntry.getValue() instanceof Map) {
-                                                Map<String, Object> additionalConfig = (Map<String, Object>) configEntry.getValue();
-                                                configBuilder.additionalConfig(additionalConfig);
-                                            }
                                             break;
                                         default:
                                             break;
