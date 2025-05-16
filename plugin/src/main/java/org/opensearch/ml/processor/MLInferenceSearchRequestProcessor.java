@@ -4,23 +4,13 @@
  */
 package org.opensearch.ml.processor;
 
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.utils.StringUtils.toJson;
-import static org.opensearch.ml.processor.InferenceProcessorAttributes.INPUT_MAP;
-import static org.opensearch.ml.processor.InferenceProcessorAttributes.MAX_PREDICTION_TASKS;
-import static org.opensearch.ml.processor.InferenceProcessorAttributes.MODEL_CONFIG;
-import static org.opensearch.ml.processor.InferenceProcessorAttributes.MODEL_ID;
-import static org.opensearch.ml.processor.InferenceProcessorAttributes.OUTPUT_MAP;
-import static org.opensearch.ml.processor.ModelExecutor.combineMaps;
-
-import java.io.IOException;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
+import com.google.gson.Gson;
+import com.jayway.jsonpath.Configuration;
+import com.jayway.jsonpath.JsonPath;
+import com.jayway.jsonpath.Option;
+import com.jayway.jsonpath.PathNotFoundException;
+import com.jayway.jsonpath.ReadContext;
+import lombok.Getter;
 import org.apache.commons.text.StringSubstitutor;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -46,13 +36,22 @@ import org.opensearch.search.pipeline.Processor;
 import org.opensearch.search.pipeline.SearchRequestProcessor;
 import org.opensearch.transport.client.Client;
 
-import com.jayway.jsonpath.Configuration;
-import com.jayway.jsonpath.JsonPath;
-import com.jayway.jsonpath.Option;
-import com.jayway.jsonpath.PathNotFoundException;
-import com.jayway.jsonpath.ReadContext;
+import java.io.IOException;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
-import lombok.Getter;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.utils.StringUtils.toJson;
+import static org.opensearch.ml.processor.InferenceProcessorAttributes.INPUT_MAP;
+import static org.opensearch.ml.processor.InferenceProcessorAttributes.MAX_PREDICTION_TASKS;
+import static org.opensearch.ml.processor.InferenceProcessorAttributes.MODEL_CONFIG;
+import static org.opensearch.ml.processor.InferenceProcessorAttributes.MODEL_ID;
+import static org.opensearch.ml.processor.InferenceProcessorAttributes.OUTPUT_MAP;
+import static org.opensearch.ml.processor.ModelExecutor.combineMaps;
 
 /**
  * MLInferenceSearchRequestProcessor requires a modelId string to call model inferences
@@ -360,6 +359,9 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
                     String newQueryField = outputMapEntry.getKey();
                     String modelOutputFieldName = outputMapEntry.getValue();
                     Object modelOutputValue = getModelOutputValue(mlOutput, modelOutputFieldName, ignoreMissing, fullResponsePath);
+                    if (modelOutputValue instanceof Map) {
+                        modelOutputValue = new Gson().toJson(modelOutputValue);
+                    }
                     valuesMap.put(newQueryField, modelOutputValue);
                 }
                 StringSubstitutor sub = new StringSubstitutor(valuesMap);
