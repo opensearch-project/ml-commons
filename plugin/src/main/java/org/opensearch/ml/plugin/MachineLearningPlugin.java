@@ -336,6 +336,7 @@ import org.opensearch.ml.stats.MLClusterLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
+import org.opensearch.ml.stats.otel.counters.MLAdoptionMetricsCounter;
 import org.opensearch.ml.stats.otel.counters.MLOperationalMetricsCounter;
 import org.opensearch.ml.stats.suppliers.CounterSupplier;
 import org.opensearch.ml.stats.suppliers.IndexStatusSupplier;
@@ -450,7 +451,6 @@ public class MachineLearningPlugin extends Plugin
     private Map<String, Tool.Factory> toolFactories;
     private ScriptService scriptService;
     private Encryptor encryptor;
-
     private McpToolsHelper mcpToolsHelper;
 
     public MachineLearningPlugin() {}
@@ -794,8 +794,8 @@ public class MachineLearningPlugin extends Plugin
         MLJobRunner.getInstance().initialize(clusterService, threadPool, client);
 
         // todo: add setting
-         MLOperationalMetricsCounter.initialize(clusterService.getClusterName().toString(), metricsRegistry);
-        // MLAdoptionMetricsCounter.initialize(clusterService.getClusterName().toString(), metricsRegistry);
+        MLOperationalMetricsCounter.initialize(clusterService.getClusterName().toString(), metricsRegistry);
+        MLAdoptionMetricsCounter.initialize(clusterService.getClusterName().toString(), metricsRegistry);
 
         mcpToolsHelper = new McpToolsHelper(client, threadPool, toolFactoryWrapper);
         McpAsyncServerHolder.init(mlIndicesHandler, mcpToolsHelper);
@@ -1299,21 +1299,21 @@ public class MachineLearningPlugin extends Plugin
     public List<PreBuiltAnalyzerProviderFactory> getPreBuiltAnalyzerProviderFactories() {
         List<PreBuiltAnalyzerProviderFactory> factories = new ArrayList<>();
         factories
-                .add(
-                        new PreBuiltAnalyzerProviderFactory(
-                                HFModelTokenizerFactory.DEFAULT_TOKENIZER_NAME,
-                                PreBuiltCacheFactory.CachingStrategy.ONE,
-                                () -> new HFModelAnalyzer(HFModelTokenizerFactory::createDefault)
-                        )
-                );
+            .add(
+                new PreBuiltAnalyzerProviderFactory(
+                    HFModelTokenizerFactory.DEFAULT_TOKENIZER_NAME,
+                    PreBuiltCacheFactory.CachingStrategy.ONE,
+                    () -> new HFModelAnalyzer(HFModelTokenizerFactory::createDefault)
+                )
+            );
         factories
-                .add(
-                        new PreBuiltAnalyzerProviderFactory(
-                                HFModelTokenizerFactory.DEFAULT_MULTILINGUAL_TOKENIZER_NAME,
-                                PreBuiltCacheFactory.CachingStrategy.ONE,
-                                () -> new HFModelAnalyzer(HFModelTokenizerFactory::createDefaultMultilingual)
-                        )
-                );
+            .add(
+                new PreBuiltAnalyzerProviderFactory(
+                    HFModelTokenizerFactory.DEFAULT_MULTILINGUAL_TOKENIZER_NAME,
+                    PreBuiltCacheFactory.CachingStrategy.ONE,
+                    () -> new HFModelAnalyzer(HFModelTokenizerFactory::createDefaultMultilingual)
+                )
+            );
         return factories;
     }
 
