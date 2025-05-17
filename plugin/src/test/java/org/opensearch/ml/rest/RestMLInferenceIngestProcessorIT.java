@@ -519,7 +519,7 @@ public class RestMLInferenceIngestProcessorIT extends MLCommonsRestTestCase {
 
     private MLRegisterModelInput registerAsymmetricEmbeddingModelInput() {
         MLModelConfig modelConfig = TextEmbeddingModelConfig
-            .builder()
+            .textEmbeddingConfigBuilder()
             .modelType("bert")
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
             .embeddingDimension(768)
@@ -709,7 +709,7 @@ public class RestMLInferenceIngestProcessorIT extends MLCommonsRestTestCase {
     protected MLRegisterModelInput registerModelInput() throws IOException, InterruptedException {
 
         MLModelConfig modelConfig = TextEmbeddingModelConfig
-            .builder()
+            .textEmbeddingConfigBuilder()
             .modelType("bert")
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
             .embeddingDimension(768)

@@ -71,6 +71,7 @@ public class SearchModelITTests extends MLCommonsIntegTestCase {
             TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS,
             null,
             null,
+            null,
             false,
             768
         );

@@ -10,6 +10,8 @@ import static org.junit.Assert.assertNotSame;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -18,27 +20,21 @@ import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.model.BaseModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
-import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
-import org.opensearch.ml.common.model.TextEmbeddingModelConfig.FrameworkType;
 
 public class MLRegisterModelMetaRequestTest {
 
-    TextEmbeddingModelConfig config;
+    BaseModelConfig config;
     MLRegisterModelMetaInput mlRegisterModelMetaInput;
 
     @Before
     public void setUp() {
-        config = new TextEmbeddingModelConfig(
-            "Model Type",
-            123,
-            FrameworkType.SENTENCE_TRANSFORMERS,
-            "All Config",
-            TextEmbeddingModelConfig.PoolingMode.MEAN,
-            true,
-            512
-        );
+        Map<String, Object> additionalConfig = new HashMap<>();
+        additionalConfig.put("test_key", "test_value");
+
+        config = new BaseModelConfig("Model Type", "\"test_key1\":\"test_value1\"", additionalConfig);
         mlRegisterModelMetaInput = new MLRegisterModelMetaInput(
             "Model Name",
             FunctionName.BATCH_RCF,

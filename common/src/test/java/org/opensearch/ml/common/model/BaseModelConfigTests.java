@@ -24,10 +24,10 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.TestHelper;
 
-public class TextEmbeddingModelConfigTests {
+public class BaseModelConfigTests {
 
-    TextEmbeddingModelConfig config;
-    Function<XContentParser, TextEmbeddingModelConfig> function;
+    BaseModelConfig config;
+    Function<XContentParser, BaseModelConfig> function;
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
@@ -36,21 +36,18 @@ public class TextEmbeddingModelConfigTests {
         Map<String, Object> additionalConfig = new HashMap<>();
         additionalConfig.put("space_type", "l2");
 
-        config = TextEmbeddingModelConfig
-            .textEmbeddingConfigBuilder()
+        config = BaseModelConfig
+            .builder()
             .modelType("testModelType")
             .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
             .additionalConfig(additionalConfig)
-            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
-            .embeddingDimension(100)
-            .passagePrefix("passage: ")
-            .queryPrefix("query: ")
             .build();
+
         function = parser -> {
             try {
-                return TextEmbeddingModelConfig.parse(parser);
+                return BaseModelConfig.parse(parser);
             } catch (IOException e) {
-                throw new RuntimeException("Failed to parse TextEmbeddingModelConfig", e);
+                throw new RuntimeException("Failed to parse BaseModelConfig", e);
             }
         };
     }
@@ -61,7 +58,7 @@ public class TextEmbeddingModelConfigTests {
         config.toXContent(builder, EMPTY_PARAMS);
         String configContent = TestHelper.xContentBuilderToString(builder);
         assertEquals(
-            "{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\",\"additional_config\":{\"space_type\":\"l2\"},\"query_prefix\":\"query: \",\"passage_prefix\":\"passage: \"}",
+            "{\"model_type\":\"testModelType\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\",\"additional_config\":{\"space_type\":\"l2\"}}",
             configContent
         );
     }
@@ -70,21 +67,7 @@ public class TextEmbeddingModelConfigTests {
     public void nullFields_ModelType() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model type is null");
-        config = TextEmbeddingModelConfig.textEmbeddingConfigBuilder().build();
-    }
-
-    @Test
-    public void nullFields_EmbeddingDimension() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("embedding dimension is null");
-        config = TextEmbeddingModelConfig.textEmbeddingConfigBuilder().modelType("testModelType").build();
-    }
-
-    @Test
-    public void nullFields_FrameworkType() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("framework type is null");
-        config = TextEmbeddingModelConfig.textEmbeddingConfigBuilder().modelType("testModelType").embeddingDimension(100).build();
+        config = BaseModelConfig.builder().build();
     }
 
     @Test
@@ -95,27 +78,30 @@ public class TextEmbeddingModelConfigTests {
     }
 
     @Test
-    public void frameworkType_wrongValue() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Wrong framework type");
-        TextEmbeddingModelConfig.FrameworkType.from("test_wrong_value");
-    }
-
-    @Test
     public void readInputStream_Success() throws IOException {
         readInputStream(config);
     }
 
-    public void readInputStream(TextEmbeddingModelConfig config) throws IOException {
+    public void readInputStream(BaseModelConfig config) throws IOException {
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         config.writeTo(bytesStreamOutput);
 
         StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
-        TextEmbeddingModelConfig parsedConfig = new TextEmbeddingModelConfig(streamInput);
+        BaseModelConfig parsedConfig = new BaseModelConfig(streamInput);
         assertEquals(config.getModelType(), parsedConfig.getModelType());
         assertEquals(config.getAllConfig(), parsedConfig.getAllConfig());
-        assertEquals(config.getEmbeddingDimension(), parsedConfig.getEmbeddingDimension());
-        assertEquals(config.getFrameworkType(), parsedConfig.getFrameworkType());
+        assertEquals(config.getAdditionalConfig(), parsedConfig.getAdditionalConfig());
         assertEquals(config.getWriteableName(), parsedConfig.getWriteableName());
+    }
+
+    @Test
+    public void duplicateKeys() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Duplicate keys found in both all_config and additional_config: key1");
+
+        String allConfig = "{\"key1\":\"value1\",\"key2\":\"value2\"}";
+        Map<String, Object> additionalConfig = Map.of("key1", "value3");
+
+        BaseModelConfig.builder().allConfig(allConfig).modelType("testModelType").additionalConfig(additionalConfig).build();
     }
 }
