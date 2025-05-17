@@ -153,6 +153,7 @@ public class ModelHelper {
                                             break;
                                         case BaseModelConfig.ADDITIONAL_CONFIG_FIELD:
                                             configBuilder.additionalConfig((Map<String, Object>) configEntry.getValue());
+                                            break;
                                         case TextEmbeddingModelConfig.EMBEDDING_DIMENSION_FIELD:
                                             configBuilder.embeddingDimension(((Double) configEntry.getValue()).intValue());
                                             break;
