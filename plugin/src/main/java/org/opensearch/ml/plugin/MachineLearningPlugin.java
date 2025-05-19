@@ -791,7 +791,7 @@ public class MachineLearningPlugin extends Plugin
             .getClusterSettings()
             .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED, it -> ragSearchPipelineEnabled = it);
 
-        MLJobRunner.getInstance().initialize(clusterService, threadPool, client);
+        MLJobRunner.getInstance().initialize(clusterService, threadPool, client, sdkClient, connectorAccessControlHelper);
 
         // todo: add setting
         MLOperationalMetricsCounter.initialize(clusterService.getClusterName().toString(), metricsRegistry);

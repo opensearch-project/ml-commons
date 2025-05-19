@@ -9,8 +9,10 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.jobscheduler.spi.JobExecutionContext;
 import org.opensearch.jobscheduler.spi.ScheduledJobParameter;
 import org.opensearch.jobscheduler.spi.ScheduledJobRunner;
+import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.jobs.processors.MLBatchTaskUpdateProcessor;
 import org.opensearch.ml.jobs.processors.MLStatsJobProcessor;
+import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
@@ -44,16 +46,30 @@ public class MLJobRunner implements ScheduledJobRunner {
     @Setter
     private Client client;
 
+    @Setter
+    private SdkClient sdkClient;
+
+    @Setter
+    private ConnectorAccessControlHelper connectorAccessControlHelper;
+
     private boolean initialized;
 
     private MLJobRunner() {
         // Singleton class, use getJobRunner method instead of constructor
     }
 
-    public void initialize(final ClusterService clusterService, final ThreadPool threadPool, final Client client) {
+    public void initialize(
+        final ClusterService clusterService,
+        final ThreadPool threadPool,
+        final Client client,
+        final SdkClient sdkClient,
+        final ConnectorAccessControlHelper connectorAccessControlHelper
+    ) {
         this.clusterService = clusterService;
         this.threadPool = threadPool;
         this.client = client;
+        this.sdkClient = sdkClient;
+        this.connectorAccessControlHelper = connectorAccessControlHelper;
         this.initialized = true;
     }
 
@@ -66,7 +82,9 @@ public class MLJobRunner implements ScheduledJobRunner {
         MLJobParameter jobParameter = (MLJobParameter) scheduledJobParameter;
         switch (jobParameter.getJobType()) {
             case STATS_COLLECTOR:
-                MLStatsJobProcessor.getInstance(clusterService, client, threadPool).process(jobParameter, jobExecutionContext);
+                MLStatsJobProcessor
+                    .getInstance(clusterService, client, threadPool, connectorAccessControlHelper, sdkClient)
+                    .process(jobParameter, jobExecutionContext);
                 break;
             case BATCH_TASK_UPDATE:
                 MLBatchTaskUpdateProcessor.getInstance(clusterService, client, threadPool).process(jobParameter, jobExecutionContext);

@@ -844,18 +844,22 @@ public class MLModel implements ToXContentObject {
     }
 
     public Tags getTags() {
-        if (algorithm == FunctionName.REMOTE && connector != null) {
-            return getRemoteModelTags();
+        return getTags(this.connector);
+    }
+
+    public Tags getTags(Connector connector) {
+        if (this.algorithm == FunctionName.REMOTE && connector != null) {
+            return getRemoteModelTags(connector);
         }
 
-        if (name != null && name.contains("/") && name.split("/").length >= 3) {
+        if (this.name != null && this.name.contains("/") && this.name.split("/").length >= 3) {
             return getPreTrainedModelTags();
         }
 
         return getCustomModelTags();
     }
 
-    private Tags getRemoteModelTags() {
+    private Tags getRemoteModelTags(Connector connector) {
         String serviceProvider = TAG_VALUE_UNKNOWN;
         String model = TAG_VALUE_UNKNOWN;
         String modelType = TAG_VALUE_UNKNOWN;
@@ -878,7 +882,7 @@ public class MLModel implements ToXContentObject {
                 }
 
                 serviceProvider = identifyServiceProvider(url);
-                model = identifyModel(serviceProvider, url, requestBody);
+                model = identifyModel(serviceProvider, url, requestBody, connector);
                 modelType = identifyModelType(model);
             } catch (Exception e) {
                 log.warn("Error identifying model provider and model from connector: {}", e.getMessage());
@@ -916,7 +920,7 @@ public class MLModel implements ToXContentObject {
     /**
      * Extracts model information based on the identified provider and URL/body patterns
      */
-    private String identifyModel(String provider, String url, JSONObject requestBody) {
+    private String identifyModel(String provider, String url, JSONObject requestBody, Connector connector) {
         try {
             // bedrock expects model in the url after `/model/`
             if (provider.equals(BEDROCK)) {
@@ -992,13 +996,13 @@ public class MLModel implements ToXContentObject {
 
     private Tags getPreTrainedModelTags() {
         String modelType = TAG_VALUE_UNKNOWN;
-        if (modelConfig != null) {
-            if (modelConfig.getModelType() != null) {
-                modelType = modelConfig.getModelType();
+        if (this.modelConfig != null) {
+            if (this.modelConfig.getModelType() != null) {
+                modelType = this.modelConfig.getModelType();
             }
         }
 
-        String[] nameParts = name.split("/");
+        String[] nameParts = this.name.split("/");
         Tags tags = Tags
             .create()
             .addTag(TAG_DEPLOYMENT, TAG_PRE_TRAINED_DEPLOYMENT_VALUE)
@@ -1007,8 +1011,8 @@ public class MLModel implements ToXContentObject {
             .addTag(TAG_MODEL, nameParts[2])
             .addTag(TAG_TYPE, modelType);
 
-        if (modelFormat != null) {
-            tags.addTag(TAG_MODEL_FORMAT, modelFormat.name());
+        if (this.modelFormat != null) {
+            tags.addTag(TAG_MODEL_FORMAT, this.modelFormat.name());
         }
 
         return tags;
@@ -1017,18 +1021,18 @@ public class MLModel implements ToXContentObject {
     // not capturing model or provider here
     private Tags getCustomModelTags() {
         String modelType = TAG_VALUE_UNKNOWN;
-        if (modelConfig != null && modelConfig.getModelType() != null) {
-            modelType = modelConfig.getModelType();
+        if (this.modelConfig != null && this.modelConfig.getModelType() != null) {
+            modelType = this.modelConfig.getModelType();
         }
 
         Tags tags = Tags
             .create()
             .addTag(TAG_DEPLOYMENT, TAG_CUSTOM_DEPLOYMENT_VALUE)
-            .addTag(TAG_ALGORITHM, algorithm.name())
+            .addTag(TAG_ALGORITHM, this.algorithm.name())
             .addTag(TAG_TYPE, modelType);
 
-        if (modelFormat != null) {
-            tags.addTag(TAG_MODEL_FORMAT, modelFormat.name());
+        if (this.modelFormat != null) {
+            tags.addTag(TAG_MODEL_FORMAT, this.modelFormat.name());
         }
 
         return tags;
