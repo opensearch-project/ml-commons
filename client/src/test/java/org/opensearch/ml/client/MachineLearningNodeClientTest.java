@@ -929,7 +929,7 @@ public class MachineLearningNodeClientTest {
 
         ArgumentCaptor<MLRegisterModelResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterModelResponse.class);
         MLModelConfig config = TextEmbeddingModelConfig
-            .textEmbeddingConfigBuilder()
+            .builder()
             .modelType("testModelType")
             .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)

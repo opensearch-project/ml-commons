@@ -140,8 +140,7 @@ public class ModelHelper {
                                 }
                                 builder.modelConfig(configBuilder.build());
                             } else {
-                                TextEmbeddingModelConfig.TextEmbeddingModelConfigBuilder configBuilder = TextEmbeddingModelConfig
-                                    .textEmbeddingConfigBuilder();
+                                TextEmbeddingModelConfig.TextEmbeddingModelConfigBuilder configBuilder = TextEmbeddingModelConfig.builder();
                                 Map<?, ?> configMap = (Map<?, ?>) entry.getValue();
                                 for (Map.Entry<?, ?> configEntry : configMap.entrySet()) {
                                     switch (configEntry.getKey().toString()) {

@@ -290,7 +290,7 @@ public class MLCommonsIntegTestCase extends ParameterizedStaticSettingsOpenSearc
         boolean deployModel
     ) {
         MLModelConfig modelConfig = TextEmbeddingModelConfig
-            .textEmbeddingConfigBuilder()
+            .builder()
             .modelType(modelType)
             .frameworkType(frameworkType)
             .embeddingDimension(dimension)

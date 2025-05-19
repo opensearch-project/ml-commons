@@ -34,7 +34,11 @@ public class MLModelTests {
     public void setUp() {
         FunctionName algorithm = FunctionName.KMEANS;
         User user = new User();
-        config = BaseModelConfig.builder().modelType("testModelType").allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}").build();
+        config = BaseModelConfig
+            .baseModelConfigBuilder()
+            .modelType("testModelType")
+            .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
+            .build();
         Instant now = Instant.now();
         mlModel = MLModel
             .builder()

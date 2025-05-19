@@ -29,7 +29,7 @@ import lombok.Setter;
 
 /**
  * Base configuration class for ML models. This class handles 
- * the basic configuration parameters that every ML model can support.
+ * the basic configuration parameters that every local model can support.
  */
 @Setter
 @Getter
@@ -44,7 +44,7 @@ public class BaseModelConfig extends MLModelConfig {
     public static final String ADDITIONAL_CONFIG_FIELD = "additional_config";
     protected Map<String, Object> additionalConfig;
 
-    @Builder(toBuilder = true)
+    @Builder(builderMethodName = "baseModelConfigBuilder")
     public BaseModelConfig(String modelType, String allConfig, Map<String, Object> additionalConfig) {
         super(modelType, allConfig);
         this.additionalConfig = additionalConfig;

@@ -723,7 +723,7 @@ public class RestMLInferenceSearchResponseProcessorIT extends MLCommonsRestTestC
     protected MLRegisterModelInput registerModelInput() throws IOException, InterruptedException {
 
         MLModelConfig modelConfig = TextEmbeddingModelConfig
-            .textEmbeddingConfigBuilder()
+            .builder()
             .modelType("bert")
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
             .embeddingDimension(768)

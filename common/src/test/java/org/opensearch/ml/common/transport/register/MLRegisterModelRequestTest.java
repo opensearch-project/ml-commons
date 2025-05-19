@@ -30,7 +30,7 @@ public class MLRegisterModelRequestTest {
         additionalConfig.put("space_type", "l2");
 
         BaseModelConfig config = BaseModelConfig
-            .builder()
+            .baseModelConfigBuilder()
             .modelType("testModelType")
             .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
             .additionalConfig(additionalConfig)
@@ -143,7 +143,7 @@ public class MLRegisterModelRequestTest {
     @Test
     public void validate_Exception_UnsafeModelName() {
         TextEmbeddingModelConfig config = TextEmbeddingModelConfig
-            .textEmbeddingConfigBuilder()
+            .builder()
             .modelType("testModelType")
             .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
@@ -170,7 +170,7 @@ public class MLRegisterModelRequestTest {
     @Test
     public void validate_Exception_UnsafeDescription() {
         TextEmbeddingModelConfig config = TextEmbeddingModelConfig
-            .textEmbeddingConfigBuilder()
+            .builder()
             .modelType("testModelType")
             .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)

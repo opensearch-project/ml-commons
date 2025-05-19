@@ -37,7 +37,7 @@ public class TextEmbeddingModelConfigTests {
         additionalConfig.put("space_type", "l2");
 
         config = TextEmbeddingModelConfig
-            .textEmbeddingConfigBuilder()
+            .builder()
             .modelType("testModelType")
             .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
             .additionalConfig(additionalConfig)
@@ -70,27 +70,27 @@ public class TextEmbeddingModelConfigTests {
     public void nullFields_ModelType() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model type is null");
-        config = TextEmbeddingModelConfig.textEmbeddingConfigBuilder().build();
+        config = TextEmbeddingModelConfig.builder().build();
     }
 
     @Test
     public void nullFields_EmbeddingDimension() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("embedding dimension is null");
-        config = TextEmbeddingModelConfig.textEmbeddingConfigBuilder().modelType("testModelType").build();
+        config = TextEmbeddingModelConfig.builder().modelType("testModelType").build();
     }
 
     @Test
     public void nullFields_FrameworkType() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("framework type is null");
-        config = TextEmbeddingModelConfig.textEmbeddingConfigBuilder().modelType("testModelType").embeddingDimension(100).build();
+        config = TextEmbeddingModelConfig.builder().modelType("testModelType").embeddingDimension(100).build();
     }
 
     @Test
     public void parse() throws IOException {
         String content =
-            "{\"wrong_field\":\"test_value\", \"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\",\"query_prefix\":\"query: \",\"passage_prefix\":\"passage: \"}";
+            "{\"wrong_field\":\"test_value\", \"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\",\"query_prefix\":\"query: \",\"passage_prefix\":\"passage: \",\"additional_config\":{\"space_type\":\"l2\"}}";
         TestHelper.testParseFromString(config, content, function);
     }
 

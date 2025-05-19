@@ -139,7 +139,7 @@ public class MLRegisterModelMetaInputTest {
         additionalConfig.put("space_type", "l2");
 
         RemoteModelConfig remoteConfig = RemoteModelConfig
-            .remoteModelConfigBuilder()
+            .builder()
             .modelType("text_embedding")
             .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
             .additionalConfig(additionalConfig)

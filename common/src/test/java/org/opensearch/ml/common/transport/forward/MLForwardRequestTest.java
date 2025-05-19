@@ -73,7 +73,7 @@ public class MLForwardRequestTest {
             .inputDataset(DataFrameInputDataset.builder().dataFrame(dataFrame).build())
             .build();
         MLModelConfig config = BaseModelConfig
-            .builder()
+            .baseModelConfigBuilder()
             .modelType("testModelType")
             .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
             .build();

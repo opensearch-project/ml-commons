@@ -74,7 +74,7 @@ public class TextEmbeddingModelConfig extends BaseModelConfig {
         );
     }
 
-    @Builder(builderMethodName = "textEmbeddingConfigBuilder")
+    @Builder(toBuilder = true)
     public TextEmbeddingModelConfig(
         String modelType,
         Integer embeddingDimension,

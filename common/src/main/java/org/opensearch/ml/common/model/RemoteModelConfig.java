@@ -45,7 +45,7 @@ public class RemoteModelConfig extends BaseModelConfig {
     private final boolean normalizeResult;
     private final Integer modelMaxLength;
 
-    @Builder(builderMethodName = "remoteModelConfigBuilder")
+    @Builder(toBuilder = true)
     public RemoteModelConfig(
         String modelType,
         Integer embeddingDimension,

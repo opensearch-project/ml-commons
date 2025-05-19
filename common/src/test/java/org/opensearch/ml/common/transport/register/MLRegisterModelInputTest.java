@@ -77,7 +77,7 @@ public class MLRegisterModelInputTest {
     @Before
     public void setUp() throws Exception {
         config = TextEmbeddingModelConfig
-            .textEmbeddingConfigBuilder()
+            .builder()
             .modelType("testModelType")
             .embeddingDimension(100)
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
@@ -243,6 +243,55 @@ public class MLRegisterModelInputTest {
         });
     }
 
+    @Test
+    public void parse_WithRemoteModel() throws Exception {
+        String remoteModelInput = "{"
+            + "\"function_name\": \"remote\","
+            + "\"model_config\": {"
+            + "\"model_type\": \"text_embedding\","
+            + "\"embedding_dimension\": 768,"
+            + "\"framework_type\": \"SENTENCE_TRANSFORMERS\","
+            + "\"additional_config\": {"
+            + "\"space_type\": \"l2\""
+            + "}}}";
+
+        testParseFromJsonString("remoteModelName", "1.0", true, remoteModelInput, parsedInput -> {
+            assertEquals(FunctionName.REMOTE, parsedInput.getFunctionName());
+            assertTrue(parsedInput.getModelConfig() instanceof RemoteModelConfig);
+            RemoteModelConfig remoteConfig = (RemoteModelConfig) parsedInput.getModelConfig();
+            assertEquals("text_embedding", remoteConfig.getModelType());
+            assertEquals(768, remoteConfig.getEmbeddingDimension().intValue());
+            assertEquals(RemoteModelConfig.FrameworkType.SENTENCE_TRANSFORMERS, remoteConfig.getFrameworkType());
+            Map<String, Object> additionalConfig = remoteConfig.getAdditionalConfig();
+            assertNotNull(additionalConfig);
+            assertEquals("l2", additionalConfig.get("space_type"));
+        });
+    }
+
+    @Test
+    public void parse_WithBaseModel() throws Exception {
+        String baseModelInput = "{"
+            + "\"function_name\": \"SPARSE_ENCODING\","
+            + "\"model_format\": \"TORCH_SCRIPT\","
+            + "\"model_config\": {"
+            + "\"model_type\": \"sparse_encoding\","
+            + "\"all_config\": \"{\\\"key\\\": \\\"value\\\"}\","
+            + "\"additional_config\": {"
+            + "\"space_type\": \"l2\""
+            + "}}}";
+
+        testParseFromJsonString("baseModelName", "1.0", true, baseModelInput, parsedInput -> {
+            assertEquals(FunctionName.SPARSE_ENCODING, parsedInput.getFunctionName());
+            assertTrue(parsedInput.getModelConfig() instanceof BaseModelConfig);
+            BaseModelConfig baseConfig = (BaseModelConfig) parsedInput.getModelConfig();
+            assertEquals("sparse_encoding", baseConfig.getModelType());
+            assertEquals("{\"key\": \"value\"}", baseConfig.getAllConfig());
+            Map<String, Object> additionalConfig = baseConfig.getAdditionalConfig();
+            assertNotNull(additionalConfig);
+            assertEquals("l2", additionalConfig.get("space_type"));
+        });
+    }
+
     private void testParseFromJsonString(
         String modelName,
         String version,
@@ -397,7 +446,7 @@ public class MLRegisterModelInputTest {
             "{\"function_name\":\"TEXT_EMBEDDING\",\"name\":\"TEXT_EMBEDDING\",\"version\":\"1.0.0\",\"model_group_id\":\"modelGroupId\",\"url\":\"url\",\"model_format\":\"TORCH_SCRIPT\",\"model_config\":{\"model_type\":\"testModelType\",\"embedding_dimension\":768,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\",\"normalize_result\":true},\"deploy_model\":true,\"model_node_ids\":[\"modelNodeIds\"]}";
 
         TextEmbeddingModelConfig embeddingConfig = TextEmbeddingModelConfig
-            .textEmbeddingConfigBuilder()
+            .builder()
             .modelType("testModelType")
             .embeddingDimension(768)
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
@@ -426,7 +475,7 @@ public class MLRegisterModelInputTest {
     @Test
     public void readInputStream_Embedding() throws IOException {
         TextEmbeddingModelConfig embeddingConfig = TextEmbeddingModelConfig
-            .textEmbeddingConfigBuilder()
+            .builder()
             .modelType("testModelType")
             .embeddingDimension(768)
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
@@ -471,7 +520,7 @@ public class MLRegisterModelInputTest {
         additionalConfig.put("space_type", "l2");
 
         BaseModelConfig baseConfig = BaseModelConfig
-            .builder()
+            .baseModelConfigBuilder()
             .modelType("testModelType")
             .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
             .additionalConfig(additionalConfig)
@@ -501,7 +550,7 @@ public class MLRegisterModelInputTest {
         additionalConfig.put("space_type", "l2");
 
         BaseModelConfig baseConfig = BaseModelConfig
-            .builder()
+            .baseModelConfigBuilder()
             .modelType("testModelType")
             .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
             .additionalConfig(additionalConfig)
@@ -537,7 +586,7 @@ public class MLRegisterModelInputTest {
         Map<String, Object> additionalConfig = new HashMap<>();
         additionalConfig.put("space_type", "l2");
         RemoteModelConfig remoteConfig = RemoteModelConfig
-            .remoteModelConfigBuilder()
+            .builder()
             .modelType("testModelType")
             .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
             .additionalConfig(additionalConfig)
@@ -563,7 +612,7 @@ public class MLRegisterModelInputTest {
         additionalConfig.put("space_type", "l2");
         String connectorId = "connectorId";
         RemoteModelConfig remoteConfig = RemoteModelConfig
-            .remoteModelConfigBuilder()
+            .builder()
             .modelType("test")
             .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
             .additionalConfig(additionalConfig)

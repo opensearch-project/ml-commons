@@ -87,7 +87,7 @@ public class TextEmbeddingDenseModelTest {
         functionName = FunctionName.TEXT_EMBEDDING;
         version = "1";
         modelConfig = TextEmbeddingModelConfig
-            .textEmbeddingConfigBuilder()
+            .builder()
             .modelType("bert")
             .embeddingDimension(dimension)
             .frameworkType(SENTENCE_TRANSFORMERS)
@@ -120,7 +120,7 @@ public class TextEmbeddingDenseModelTest {
         params.put(MODEL_ZIP_FILE, new File(getClass().getResource("traced_small_model.zip").toURI()));
         params.put(ML_ENGINE, mlEngine);
         TextEmbeddingModelConfig modelConfig = this.modelConfig
-            .textEmbeddingConfigBuilder()
+            .builder()
             .modelType("bert")
             .embeddingDimension(768)
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
@@ -228,7 +228,7 @@ public class TextEmbeddingDenseModelTest {
         params.put(MODEL_ZIP_FILE, new File(getClass().getResource(modelFile).toURI()));
         params.put(ML_ENGINE, mlEngine);
         TextEmbeddingModelConfig onnxModelConfig = modelConfig
-            .textEmbeddingConfigBuilder()
+            .builder()
             .frameworkType(HUGGINGFACE_TRANSFORMERS)
             .embeddingDimension(dimension)
             .modelType(modelType)
@@ -261,7 +261,7 @@ public class TextEmbeddingDenseModelTest {
         params.put(ML_ENGINE, mlEngine);
 
         TextEmbeddingModelConfig asymmetricModelConfig = this.modelConfig
-            .textEmbeddingConfigBuilder()
+            .builder()
             .modelType("bert")
             .embeddingDimension(768)
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
@@ -303,7 +303,7 @@ public class TextEmbeddingDenseModelTest {
         ModelTensorOutput asymmetricPassageEmbeddings = (ModelTensorOutput) textEmbeddingDenseModel.predict(asymmetricMlInputPassages);
 
         TextEmbeddingModelConfig symmetricModelConfig = this.modelConfig
-            .textEmbeddingConfigBuilder()
+            .builder()
             .modelType("bert")
             .embeddingDimension(768)
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
@@ -394,7 +394,7 @@ public class TextEmbeddingDenseModelTest {
         params.put(ML_ENGINE, mlEngine);
 
         TextEmbeddingModelConfig asymmetricModelConfig = this.modelConfig
-            .textEmbeddingConfigBuilder()
+            .builder()
             .modelType("bert")
             .embeddingDimension(768)
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
@@ -423,7 +423,7 @@ public class TextEmbeddingDenseModelTest {
         ModelTensorOutput asymmetricPassageEmbeddings = (ModelTensorOutput) textEmbeddingDenseModel.predict(asymmetricMlInputPassages);
 
         TextEmbeddingModelConfig symmetricModelConfig = this.modelConfig
-            .textEmbeddingConfigBuilder()
+            .builder()
             .modelType("bert")
             .embeddingDimension(768)
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
@@ -477,7 +477,7 @@ public class TextEmbeddingDenseModelTest {
         params.put(ML_ENGINE, mlEngine);
 
         TextEmbeddingModelConfig asymmetricModelConfig = this.modelConfig
-            .textEmbeddingConfigBuilder()
+            .builder()
             .modelType("bert")
             .embeddingDimension(768)
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
@@ -521,7 +521,7 @@ public class TextEmbeddingDenseModelTest {
         params.put(ML_ENGINE, mlEngine);
 
         TextEmbeddingModelConfig symmetricModelConfig = this.modelConfig
-            .textEmbeddingConfigBuilder()
+            .builder()
             .modelType("bert")
             .embeddingDimension(768)
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)

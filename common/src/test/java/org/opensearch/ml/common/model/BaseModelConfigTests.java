@@ -40,7 +40,7 @@ public class BaseModelConfigTests {
         additionalConfig.put("space_type", "l2");
 
         config = BaseModelConfig
-            .builder()
+            .baseModelConfigBuilder()
             .modelType("testModelType")
             .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
             .additionalConfig(additionalConfig)
@@ -70,7 +70,7 @@ public class BaseModelConfigTests {
     public void nullFields_ModelType() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("model type is null");
-        config = BaseModelConfig.builder().build();
+        config = BaseModelConfig.baseModelConfigBuilder().build();
     }
 
     @Test
@@ -120,6 +120,6 @@ public class BaseModelConfigTests {
         String allConfig = "{\"key1\":\"value1\",\"key2\":\"value2\"}";
         Map<String, Object> additionalConfig = Map.of("key1", "value3");
 
-        BaseModelConfig.builder().allConfig(allConfig).modelType("testModelType").additionalConfig(additionalConfig).build();
+        BaseModelConfig.baseModelConfigBuilder().allConfig(allConfig).modelType("testModelType").additionalConfig(additionalConfig).build();
     }
 }
