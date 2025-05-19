@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.model;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_1_0;
 
 import java.io.IOException;
 import java.util.Map;
@@ -85,13 +86,17 @@ public class BaseModelConfig extends MLModelConfig {
 
     public BaseModelConfig(StreamInput in) throws IOException {
         super(in);
-        this.additionalConfig = in.readMap();
+        if (in.getVersion().onOrAfter(VERSION_3_1_0)) {
+            this.additionalConfig = in.readMap();
+        }
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        out.writeMap(additionalConfig);
+        if (out.getVersion().onOrAfter(VERSION_3_1_0)) {
+            out.writeMap(additionalConfig);
+        }
     }
 
     @Override
@@ -126,9 +131,5 @@ public class BaseModelConfig extends MLModelConfig {
 
     public Map<String, Object> getAdditionalConfig() {
         return this.additionalConfig;
-    }
-
-    public void setAdditionalConfig(Map<String, Object> additionalConfig) {
-        this.additionalConfig = additionalConfig;
     }
 }

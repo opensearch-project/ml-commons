@@ -131,7 +131,8 @@ public class RemoteModelConfigTests {
             + "\"pooling_mode\":\"MEAN\",\"normalize_result\":true,"
             + "\"model_max_length\":512,"
             + "\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\","
-            + "\"additional_config\":{\"space_type\":\"l2\"}}";
+            + "\"additional_config\":{\"space_type\":\"l2\"},"
+            + "\"wrong_filed\":\"test_value\"}";
         TestHelper.testParseFromString(config, content, function);
     }
 

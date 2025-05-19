@@ -6,7 +6,10 @@
 package org.opensearch.ml.common.model;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_0_0;
+import static org.opensearch.ml.common.CommonValue.VERSION_3_1_0;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -78,19 +81,34 @@ public class BaseModelConfigTests {
     }
 
     @Test
-    public void readInputStream_Success() throws IOException {
-        readInputStream(config);
-    }
-
-    public void readInputStream(BaseModelConfig config) throws IOException {
+    public void testStreamInputVersionAfter_3_1_0() throws IOException {
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
+        bytesStreamOutput.setVersion(VERSION_3_1_0);
         config.writeTo(bytesStreamOutput);
 
         StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
+        streamInput.setVersion(VERSION_3_1_0);
         BaseModelConfig parsedConfig = new BaseModelConfig(streamInput);
+
         assertEquals(config.getModelType(), parsedConfig.getModelType());
         assertEquals(config.getAllConfig(), parsedConfig.getAllConfig());
         assertEquals(config.getAdditionalConfig(), parsedConfig.getAdditionalConfig());
+        assertEquals(config.getWriteableName(), parsedConfig.getWriteableName());
+    }
+
+    @Test
+    public void testStreamInputVersionBefore_3_1_0() throws IOException {
+        BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
+        bytesStreamOutput.setVersion(VERSION_3_0_0);
+        config.writeTo(bytesStreamOutput);
+
+        StreamInput streamInput = bytesStreamOutput.bytes().streamInput();
+        streamInput.setVersion(VERSION_3_0_0);
+        BaseModelConfig parsedConfig = new BaseModelConfig(streamInput);
+
+        assertEquals(config.getModelType(), parsedConfig.getModelType());
+        assertEquals(config.getAllConfig(), parsedConfig.getAllConfig());
+        assertNull(parsedConfig.getAdditionalConfig());
         assertEquals(config.getWriteableName(), parsedConfig.getWriteableName());
     }
 
