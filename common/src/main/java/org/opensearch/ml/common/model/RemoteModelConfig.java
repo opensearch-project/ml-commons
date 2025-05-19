@@ -23,6 +23,10 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Configuration class for remote models. This class extends BaseModelConfig
+ * and provides specific configuration parameters for remote models.
+ */
 @Setter
 @Getter
 public class RemoteModelConfig extends BaseModelConfig {

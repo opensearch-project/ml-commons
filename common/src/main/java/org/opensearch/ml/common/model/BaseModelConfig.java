@@ -28,7 +28,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * Base configuration class for ML models. This class handles 
+ * Base configuration class for ML local models. This class handles
  * the basic configuration parameters that every local model can support.
  */
 @Setter
