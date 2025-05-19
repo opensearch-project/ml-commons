@@ -207,7 +207,7 @@ public class QuestionAnsweringModelTest {
     @Test
     public void initModel_NullModelHelper() throws URISyntaxException {
         Map<String, Object> params = new HashMap<>();
-        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("question_answering_pt.zip").toURI()));
+        params.put(MODEL_ZIP_FILE, modelZipFile);
         IllegalArgumentException e = assertThrows(
             IllegalArgumentException.class,
             () -> questionAnsweringModel.initModel(mlModel, params, encryptor)
@@ -218,7 +218,7 @@ public class QuestionAnsweringModelTest {
     @Test
     public void initModel_NullMLEngine() throws URISyntaxException {
         Map<String, Object> params = new HashMap<>();
-        params.put(MODEL_ZIP_FILE, new File(getClass().getResource("question_answering_pt.zip").toURI()));
+        params.put(MODEL_ZIP_FILE, modelZipFile);
         params.put(MODEL_HELPER, modelHelper);
         IllegalArgumentException e = assertThrows(
             IllegalArgumentException.class,

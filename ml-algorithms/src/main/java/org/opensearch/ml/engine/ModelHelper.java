@@ -27,6 +27,7 @@ import java.util.zip.ZipFile;
 
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.model.ImageEmbeddingModelConfig;
 import org.opensearch.ml.common.model.MLDeploySetting;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
@@ -49,6 +50,7 @@ public class ModelHelper {
     public static final String PYTORCH_FILE_EXTENSION = ".pt";
     public static final String ONNX_FILE_EXTENSION = ".onnx";
     public static final String TOKENIZER_FILE_NAME = "tokenizer.json";
+    public static final String IMAGE_PREPROCESSOR_CONFIG_FILE_NAME = "preprocessor_config.json";
     public static final String PYTORCH_ENGINE = "PyTorch";
     public static final String ONNX_ENGINE = "OnnxRuntime";
     private final MLEngine mlEngine;
@@ -82,7 +84,7 @@ public class ModelHelper {
                 String modelZipFileUrl = mlEngine.getPrebuiltModelPath(modelName, version, modelFormat);
                 DownloadUtils.download(configFileUrl, configCacheFilePath, new ProgressBar());
 
-                Map<?, ?> config = null;
+                Map<String, ?> config = null;
                 try (JsonReader reader = new JsonReader(new FileReader(configCacheFilePath))) {
                     config = gson.fromJson(reader, Map.class);
                 }
@@ -118,7 +120,7 @@ public class ModelHelper {
                             if (FunctionName.QUESTION_ANSWERING.equals(algorithm)) {
                                 QuestionAnsweringModelConfig.QuestionAnsweringModelConfigBuilder configBuilder =
                                     QuestionAnsweringModelConfig.builder();
-                                Map<?, ?> configMap = (Map<?, ?>) entry.getValue();
+                                Map<String, ?> configMap = (Map<String, ?>) entry.getValue();
                                 for (Map.Entry<?, ?> configEntry : configMap.entrySet()) {
                                     switch (configEntry.getKey().toString()) {
                                         case MLModelConfig.MODEL_TYPE_FIELD:
@@ -138,9 +140,29 @@ public class ModelHelper {
                                     }
                                 }
                                 builder.modelConfig(configBuilder.build());
+                            } else if (FunctionName.IMAGE_EMBEDDING.equals(algorithm)) {
+                                ImageEmbeddingModelConfig.ImageEmbeddingModelConfigBuilder configBuilder = ImageEmbeddingModelConfig
+                                    .builder();
+                                Map<String, ?> configMap = (Map<String, ?>) entry.getValue();
+                                for (Map.Entry<?, ?> configEntry : configMap.entrySet()) {
+                                    switch (configEntry.getKey().toString()) {
+                                        case MLModelConfig.MODEL_TYPE_FIELD:
+                                            configBuilder.modelType(configEntry.getValue().toString());
+                                            break;
+                                        case MLModelConfig.ALL_CONFIG_FIELD:
+                                            configBuilder.allConfig(configEntry.getValue().toString());
+                                            break;
+                                        case ImageEmbeddingModelConfig.EMBEDDING_DIMENSION_FIELD:
+                                            configBuilder.embeddingDimension((Integer) configEntry.getValue());
+                                            break;
+                                        default:
+                                            break;
+                                    }
+                                }
+                                builder.modelConfig(configBuilder.build());
                             } else {
                                 TextEmbeddingModelConfig.TextEmbeddingModelConfigBuilder configBuilder = TextEmbeddingModelConfig.builder();
-                                Map<?, ?> configMap = (Map<?, ?>) entry.getValue();
+                                Map<String, ?> configMap = (Map<String, ?>) entry.getValue();
                                 for (Map.Entry<?, ?> configEntry : configMap.entrySet()) {
                                     switch (configEntry.getKey().toString()) {
                                         case MLModelConfig.MODEL_TYPE_FIELD:
@@ -304,6 +326,7 @@ public class ModelHelper {
         boolean hasPtFile = false;
         boolean hasOnnxFile = false;
         boolean hasTokenizerFile = false;
+        boolean hasImagePreprocessorConfigFile = false;
         try (ZipFile zipFile = new ZipFile(modelZipFilePath)) {
             Enumeration zipEntries = zipFile.entries();
             while (zipEntries.hasMoreElements()) {
@@ -313,15 +336,19 @@ public class ModelHelper {
                 if (fileName.equals(TOKENIZER_FILE_NAME)) {
                     hasTokenizerFile = true;
                 }
+                if (fileName.equals(IMAGE_PREPROCESSOR_CONFIG_FILE_NAME)) {
+                    hasImagePreprocessorConfigFile = true;
+                }
             }
         }
         if (!hasPtFile && !hasOnnxFile && functionName != FunctionName.SPARSE_TOKENIZE) { // sparse tokenizer model doesn't need model file.
             throw new IllegalArgumentException("Can't find model file");
         }
-        if (!hasTokenizerFile) {
-            if (modelName != FunctionName.METRICS_CORRELATION.toString()) {
-                throw new IllegalArgumentException("No tokenizer file");
-            }
+        if (!hasTokenizerFile && FunctionName.METRICS_CORRELATION != functionName && FunctionName.IMAGE_EMBEDDING != functionName) {
+            throw new IllegalArgumentException("No tokenizer file");
+        }
+        if (!hasImagePreprocessorConfigFile && FunctionName.IMAGE_EMBEDDING == functionName) {
+            throw new IllegalArgumentException("No image preprocessor config file");
         }
     }
 
