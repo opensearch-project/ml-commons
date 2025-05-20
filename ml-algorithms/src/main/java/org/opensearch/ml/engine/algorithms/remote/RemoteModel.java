@@ -8,7 +8,6 @@ package org.opensearch.ml.engine.algorithms.remote;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
 
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.util.TokenBucket;
@@ -115,7 +114,6 @@ public class RemoteModel implements Predictable {
             this.connectorExecutor.setRateLimiter((TokenBucket) params.get(RATE_LIMITER));
             this.connectorExecutor.setUserRateLimiterMap((Map<String, TokenBucket>) params.get(USER_RATE_LIMITER_MAP));
             this.connectorExecutor.setMlGuard((MLGuard) params.get(GUARDRAILS));
-            this.connectorExecutor.setConnectorPrivateIpEnabled((AtomicBoolean) params.get(CONNECTOR_PRIVATE_IP_ENABLED));
         } catch (RuntimeException e) {
             log.error("Failed to init remote model.", e);
             throw e;
