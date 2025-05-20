@@ -40,6 +40,8 @@ public class MLFeatureEnabledSetting {
     // This is to identify if this node is in multi-tenancy or not.
     private volatile Boolean isMultiTenancyEnabled;
 
+    private volatile Boolean isRagSearchPipelineEnabled;
+
     private final List<SettingsChangeListener> listeners = new ArrayList<>();
 
     public MLFeatureEnabledSetting(ClusterService clusterService, Settings settings) {
@@ -69,6 +71,9 @@ public class MLFeatureEnabledSetting {
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_OFFLINE_BATCH_INFERENCE_ENABLED, it -> isBatchInferenceEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED, it -> isRagSearchPipelineEnabled = it);
     }
 
     /**
@@ -133,6 +138,14 @@ public class MLFeatureEnabledSetting {
 
     public void addListener(SettingsChangeListener listener) {
         listeners.add(listener);
+    }
+
+    /**
+     * Whether the rag search pipeline feature is enabled. If disabled, APIs in ml-commons will block rag search pipeline.
+     * @return whether the feature is enabled.
+     */
+    public boolean isRagSearchPipelineEnabled() {
+        return isRagSearchPipelineEnabled;
     }
 
     @VisibleForTesting

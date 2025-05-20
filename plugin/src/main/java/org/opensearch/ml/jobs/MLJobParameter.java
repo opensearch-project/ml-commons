@@ -22,12 +22,6 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
 
-/**
- * A sample job parameter.
- * <p>
- * It adds an additional "indexToWatch" field to {@link ScheduledJobParameter}, which stores the index
- * the job runner will watch.
- */
 @Setter
 @Log4j2
 public class MLJobParameter implements ScheduledJobParameter {

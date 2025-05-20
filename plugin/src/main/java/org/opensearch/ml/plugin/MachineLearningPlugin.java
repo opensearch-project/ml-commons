@@ -438,12 +438,6 @@ public class MachineLearningPlugin extends Plugin
     private ScriptService scriptService;
     private Encryptor encryptor;
 
-    // public MachineLearningPlugin(Settings settings) {
-    // // Handle this here as this feature is tied to Search/Query API, not to a ml-common API
-    // // and as such, it can't be lazy-loaded when a ml-commons API is invoked.
-    // this.ragSearchPipelineEnabled = MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED.get(settings);
-    // }
-
     public MachineLearningPlugin() {}
 
     @Override
@@ -769,13 +763,6 @@ public class MachineLearningPlugin extends Plugin
             mlModelAutoRedeployer,
             mlFeatureEnabledSetting
         );
-
-        // TODO move this into MLFeatureEnabledSetting
-        // search processor factories below will get BooleanSupplier that supplies the
-        // current value being updated through this.
-        clusterService
-            .getClusterSettings()
-            .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED, it -> ragSearchPipelineEnabled = it);
 
         MLJobRunner.getInstance().initialize(clusterService, threadPool, client, sdkClient, connectorAccessControlHelper);
 
@@ -1163,7 +1150,7 @@ public class MachineLearningPlugin extends Plugin
         requestProcessors
             .put(
                 GenerativeQAProcessorConstants.REQUEST_PROCESSOR_TYPE,
-                new GenerativeQARequestProcessor.Factory(() -> this.ragSearchPipelineEnabled)
+                new GenerativeQARequestProcessor.Factory(this.mlFeatureEnabledSetting)
             );
         requestProcessors
             .put(
@@ -1180,7 +1167,7 @@ public class MachineLearningPlugin extends Plugin
         responseProcessors
             .put(
                 GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE,
-                new GenerativeQAResponseProcessor.Factory(this.client, () -> this.ragSearchPipelineEnabled)
+                new GenerativeQAResponseProcessor.Factory(this.client, this.mlFeatureEnabledSetting)
             );
 
         responseProcessors
