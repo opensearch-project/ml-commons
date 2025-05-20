@@ -6,7 +6,7 @@
 package org.opensearch.ml.common.transport.model;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
-import static org.opensearch.ml.common.utils.StringUtils.validateFields;
+import static org.opensearch.ml.common.utils.Validator.validateFields;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;

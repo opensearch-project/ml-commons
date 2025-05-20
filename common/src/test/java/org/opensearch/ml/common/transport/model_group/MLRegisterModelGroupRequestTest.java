@@ -5,7 +5,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
-import static org.opensearch.ml.common.utils.StringUtils.SAFE_INPUT_DESCRIPTION;
+import static org.opensearch.ml.common.utils.Validator.SAFE_INPUT_DESCRIPTION;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
