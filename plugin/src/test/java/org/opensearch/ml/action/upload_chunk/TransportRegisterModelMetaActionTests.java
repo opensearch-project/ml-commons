@@ -264,6 +264,7 @@ public class TransportRegisterModelMetaActionTests extends OpenSearchTestCase {
                     123,
                     FrameworkType.SENTENCE_TRANSFORMERS,
                     "all config",
+                    null,
                     TextEmbeddingModelConfig.PoolingMode.MEAN,
                     true,
                     512
