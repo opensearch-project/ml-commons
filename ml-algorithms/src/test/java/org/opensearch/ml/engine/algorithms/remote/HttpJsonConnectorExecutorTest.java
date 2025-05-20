@@ -10,12 +10,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED;
 
 import java.lang.reflect.Field;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -25,7 +27,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.collect.Tuple;
+import org.opensearch.common.settings.ClusterSettings;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.connector.Connector;
@@ -44,6 +49,9 @@ public class HttpJsonConnectorExecutorTest {
 
     @Mock
     private ActionListener<Tuple<Integer, ModelTensors>> actionListener;
+
+    @Mock
+    ClusterService clusterService;
 
     @Before
     public void setUp() {
@@ -121,9 +129,11 @@ public class HttpJsonConnectorExecutorTest {
             .protocol("http")
             .actions(Arrays.asList(predictAction))
             .build();
+        Settings settings = Settings.builder().put(ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED.getKey(), true).build();
+        ClusterSettings clusterSettings = new ClusterSettings(settings, Collections.singleton(ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED));
+        when(this.clusterService.getClusterSettings()).thenReturn(clusterSettings);
         HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
-        AtomicBoolean privateIpEnabled = new AtomicBoolean(true);
-        executor.setConnectorPrivateIpEnabled(privateIpEnabled);
+        executor.setClusterService(this.clusterService);
         executor
             .invokeRemoteService(
                 PREDICT.name(),
@@ -134,8 +144,29 @@ public class HttpJsonConnectorExecutorTest {
                 actionListener
             );
         Mockito.verify(actionListener, never()).onFailure(any());
+    }
 
-        privateIpEnabled.set(false);
+    @Test
+    public void invokeRemoteService_DisabledPrivateIpAddress() {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("http://127.0.0.1/mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .actions(Arrays.asList(predictAction))
+            .build();
+        Settings settings = Settings.builder().put(ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED.getKey(), false).build();
+        ClusterSettings clusterSettings = new ClusterSettings(settings, Collections.singleton(ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED));
+        when(this.clusterService.getClusterSettings()).thenReturn(clusterSettings);
+        HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
+        executor.setClusterService(this.clusterService);
         executor
             .invokeRemoteService(
                 PREDICT.name(),
