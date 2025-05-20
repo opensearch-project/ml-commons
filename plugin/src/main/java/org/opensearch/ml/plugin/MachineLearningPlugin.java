@@ -784,13 +784,6 @@ public class MachineLearningPlugin extends Plugin
             mlFeatureEnabledSetting
         );
 
-        // TODO move this into MLFeatureEnabledSetting
-        // search processor factories below will get BooleanSupplier that supplies the
-        // current value being updated through this.
-        clusterService
-            .getClusterSettings()
-            .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED, it -> ragSearchPipelineEnabled = it);
-
         MLJobRunner.getInstance().initialize(clusterService, threadPool, client, sdkClient, connectorAccessControlHelper);
 
         // todo: add setting
@@ -1190,7 +1183,7 @@ public class MachineLearningPlugin extends Plugin
         requestProcessors
             .put(
                 GenerativeQAProcessorConstants.REQUEST_PROCESSOR_TYPE,
-                new GenerativeQARequestProcessor.Factory(() -> this.ragSearchPipelineEnabled)
+                new GenerativeQARequestProcessor.Factory(this.mlFeatureEnabledSetting)
             );
         requestProcessors
             .put(
@@ -1207,7 +1200,7 @@ public class MachineLearningPlugin extends Plugin
         responseProcessors
             .put(
                 GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE,
-                new GenerativeQAResponseProcessor.Factory(this.client, () -> this.ragSearchPipelineEnabled)
+                new GenerativeQAResponseProcessor.Factory(this.client, this.mlFeatureEnabledSetting)
             );
 
         responseProcessors

@@ -73,10 +73,7 @@ import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
-import org.opensearch.ml.stats.otel.counters.MLOperationalMetricsCounter;
-import org.opensearch.ml.stats.otel.metrics.OperationalMetric;
 import org.opensearch.ml.utils.MLNodeUtils;
-import org.opensearch.telemetry.metrics.tags.Tags;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportResponseHandler;
 import org.opensearch.transport.TransportService;
@@ -463,9 +460,6 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                             } else {
                                 handleAsyncMLTaskComplete(mlTask);
                                 mlModelManager.trackPredictDuration(modelId, startTime);
-                                MLOperationalMetricsCounter
-                                    .getInstance()
-                                    .incrementCounter(OperationalMetric.MODEL_PREDICT_COUNT, Tags.create().addTag("MODEL_ID", modelId));
                                 internalListener.onResponse(output);
                             }
                         }, e -> handlePredictFailure(mlTask, internalListener, e, false, modelId, actionName));

@@ -108,7 +108,7 @@ public class MLCommonsClusterManagerEventListener implements LocalNodeClusterMan
         startStatsCollectorJob();
     }
 
-    public void startStatsCollectorJob() {
+    private void startStatsCollectorJob() {
         try {
             int intervalInMinutes = 1;
             Long lockDurationSeconds = 20L;

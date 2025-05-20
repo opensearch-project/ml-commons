@@ -48,7 +48,7 @@ public class CommonValue {
     public static final String TASK_POLLING_JOB_INDEX = ".ml_commons_task_polling_job";
     public static final String MCP_SESSION_MANAGEMENT_INDEX = ".plugins-ml-mcp-session-management";
     public static final String MCP_TOOLS_INDEX = ".plugins-ml-mcp-tools";
-    // index created in 3.0 to track all ml jobs created via job scheduler
+    // index created in 3.1 to track all ml jobs created via job scheduler
     public static final String ML_JOBS_INDEX = ".plugins-ml-jobs";
     public static final Set<String> stopWordsIndices = ImmutableSet.of(".plugins-ml-stop-words");
     public static final String TOOL_PARAMETERS_PREFIX = "tools.parameters.";

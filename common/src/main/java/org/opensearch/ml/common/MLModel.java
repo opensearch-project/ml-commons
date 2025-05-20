@@ -163,6 +163,7 @@ public class MLModel implements ToXContentObject {
     private static final String IMAGE_GENERATION_MODEL_TYPE = "image_generation";
     private static final String SPEECH_AUDIO_MODEL_TYPE = "speech_audio";
 
+    // keywords in model name used to infer type of remote model
     private static final List<String> LLM_KEYWORDS = Arrays
         .asList(
             "gpt",
@@ -848,10 +849,12 @@ public class MLModel implements ToXContentObject {
     }
 
     public Tags getTags(Connector connector) {
+        // if connector is present, model is a remote model
         if (this.algorithm == FunctionName.REMOTE && connector != null) {
             return getRemoteModelTags(connector);
         }
 
+        // pre-trained models follow a specific naming convention, relying on that to identify a pre-trained model
         if (this.name != null && this.name.contains("/") && this.name.split("/").length >= 3) {
             return getPreTrainedModelTags();
         }
@@ -906,6 +909,7 @@ public class MLModel implements ToXContentObject {
 
     /**
      * Identifies the service provider from the connector URL
+     * Matches keywords in `MODEL_SERVICE_PROVIDER_KEYWORDS`
      */
     private String identifyServiceProvider(String url) {
         for (String provider : MODEL_SERVICE_PROVIDER_KEYWORDS) {
@@ -966,7 +970,7 @@ public class MLModel implements ToXContentObject {
     }
 
     /**
-     * Determines the model type based on the provider and model name
+     * Determines the model type based on the model name
      */
     private String identifyModelType(String model) {
         if (model == null || TAG_VALUE_UNKNOWN.equals(model)) {
@@ -1018,7 +1022,6 @@ public class MLModel implements ToXContentObject {
         return tags;
     }
 
-    // not capturing model or provider here
     private Tags getCustomModelTags() {
         String modelType = TAG_VALUE_UNKNOWN;
         if (this.modelConfig != null && this.modelConfig.getModelType() != null) {
