@@ -75,7 +75,8 @@ public class TransportMcpMessageDispatchedAction extends HandledTransportAction<
         final StreamingRestChannel channel = McpAsyncServerHolder.CHANNELS.get(mlMcpMessageRequest.getSessionId());
         Mono
             .from(
-                McpAsyncServerHolder.mcpServerTransportProvider
+                McpAsyncServerHolder
+                    .getMcpServerTransportProviderInstance()
                     .handleMessage(mlMcpMessageRequest.getSessionId(), mlMcpMessageRequest.getRequestBody())
             )
             .doOnSuccess(y -> {

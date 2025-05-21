@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.common.transport.mcpserver.responses.register;
+package org.opensearch.ml.common.transport.mcpserver.responses.update;
 
 import java.io.IOException;
 
@@ -19,34 +19,34 @@ import lombok.extern.log4j.Log4j2;
 
 @Getter
 @Log4j2
-public class MLMcpRegisterNodeResponse extends BaseNodeResponse implements ToXContentObject {
+public class MLMcpToolsUpdateNodeResponse extends BaseNodeResponse implements ToXContentObject {
 
-    private final Boolean created;
+    private final Boolean updated;
 
-    public MLMcpRegisterNodeResponse(DiscoveryNode node, Boolean created) {
+    public MLMcpToolsUpdateNodeResponse(DiscoveryNode node, Boolean updated) {
         super(node);
-        this.created = created;
+        this.updated = updated;
     }
 
-    public MLMcpRegisterNodeResponse(StreamInput in) throws IOException {
+    public MLMcpToolsUpdateNodeResponse(StreamInput in) throws IOException {
         super(in);
-        this.created = in.readBoolean();
+        this.updated = in.readBoolean();
     }
 
-    public static MLMcpRegisterNodeResponse readResponse(StreamInput in) throws IOException {
-        return new MLMcpRegisterNodeResponse(in);
+    public static MLMcpToolsUpdateNodeResponse readResponse(StreamInput in) throws IOException {
+        return new MLMcpToolsUpdateNodeResponse(in);
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        out.writeBoolean(created);
+        out.writeBoolean(updated);
     }
 
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
         builder.field(getNode().getId());
-        builder.value(created);
+        builder.value(updated);
         builder.endObject();
         return builder;
     }

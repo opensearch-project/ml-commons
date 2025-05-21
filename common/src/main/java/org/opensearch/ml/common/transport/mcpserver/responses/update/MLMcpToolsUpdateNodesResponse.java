@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.common.transport.mcpserver.responses.register;
+package org.opensearch.ml.common.transport.mcpserver.responses.update;
 
 import java.io.IOException;
 import java.util.List;
@@ -19,13 +19,17 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
-public class MLMcpRegisterNodesResponse extends BaseNodesResponse<MLMcpRegisterNodeResponse> implements ToXContentObject {
+public class MLMcpToolsUpdateNodesResponse extends BaseNodesResponse<MLMcpToolsUpdateNodeResponse> implements ToXContentObject {
 
-    public MLMcpRegisterNodesResponse(StreamInput in) throws IOException {
-        super(new ClusterName(in), in.readList(MLMcpRegisterNodeResponse::readResponse), in.readList(FailedNodeException::new));
+    public MLMcpToolsUpdateNodesResponse(StreamInput in) throws IOException {
+        super(new ClusterName(in), in.readList(MLMcpToolsUpdateNodeResponse::readResponse), in.readList(FailedNodeException::new));
     }
 
-    public MLMcpRegisterNodesResponse(ClusterName clusterName, List<MLMcpRegisterNodeResponse> nodes, List<FailedNodeException> failures) {
+    public MLMcpToolsUpdateNodesResponse(
+        ClusterName clusterName,
+        List<MLMcpToolsUpdateNodeResponse> nodes,
+        List<FailedNodeException> failures
+    ) {
         super(clusterName, nodes, failures);
     }
 
@@ -35,22 +39,22 @@ public class MLMcpRegisterNodesResponse extends BaseNodesResponse<MLMcpRegisterN
     }
 
     @Override
-    public void writeNodesTo(StreamOutput out, List<MLMcpRegisterNodeResponse> nodes) throws IOException {
+    public void writeNodesTo(StreamOutput out, List<MLMcpToolsUpdateNodeResponse> nodes) throws IOException {
         out.writeList(nodes);
     }
 
     @Override
-    public List<MLMcpRegisterNodeResponse> readNodesFrom(StreamInput in) throws IOException {
-        return in.readList(MLMcpRegisterNodeResponse::readResponse);
+    public List<MLMcpToolsUpdateNodeResponse> readNodesFrom(StreamInput in) throws IOException {
+        return in.readList(MLMcpToolsUpdateNodeResponse::readResponse);
     }
 
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
-        for (MLMcpRegisterNodeResponse created : getNodes()) {
-            builder.startObject(created.getNode().getId());
-            builder.field("created");
-            builder.value(created.getCreated());
+        for (MLMcpToolsUpdateNodeResponse updated : getNodes()) {
+            builder.startObject(updated.getNode().getId());
+            builder.field("updated");
+            builder.value(updated.getUpdated());
             builder.endObject();
         }
         for (FailedNodeException failedNodeException : failures()) {

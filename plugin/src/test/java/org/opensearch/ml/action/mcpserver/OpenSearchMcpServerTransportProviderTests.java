@@ -16,10 +16,14 @@ import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.index.IndexResponse;
+import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.ml.engine.indices.MLIndicesHandler;
+import org.opensearch.ml.rest.mcpserver.ToolFactoryWrapper;
 import org.opensearch.rest.StreamingRestChannel;
 import org.opensearch.test.OpenSearchTestCase;
+import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.node.NodeClient;
 
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -35,9 +39,9 @@ public class OpenSearchMcpServerTransportProviderTests extends OpenSearchTestCas
     @Mock
     StreamingRestChannel channel = mock(StreamingRestChannel.class);
 
-    private final OpenSearchMcpServerTransportProvider provider = new OpenSearchMcpServerTransportProvider(new ObjectMapper());
+    private OpenSearchMcpServerTransportProvider provider;
 
-    OpenSearchMcpServerTransportProvider.OpenSearchMcpSessionTransport transport = provider.new OpenSearchMcpSessionTransport(channel);
+    OpenSearchMcpServerTransportProvider.OpenSearchMcpSessionTransport transport;
 
     @Mock
     private McpServerSession.Factory factory;
@@ -54,6 +58,14 @@ public class OpenSearchMcpServerTransportProviderTests extends OpenSearchTestCas
     public void setUp() throws Exception {
         super.setUp();
         MockitoAnnotations.openMocks(this);
+        McpToolsHelper mcpToolsHelper = new McpToolsHelper(
+            client,
+            mock(ThreadPool.class),
+            mock(ClusterService.class),
+            mock(ToolFactoryWrapper.class)
+        );
+        provider = new OpenSearchMcpServerTransportProvider(mock(MLIndicesHandler.class), mcpToolsHelper, new ObjectMapper());
+        transport = provider.new OpenSearchMcpSessionTransport(channel);
         provider.setSessionFactory(factory);
         when(factory.create(any())).thenReturn(mcpServerSession);
         when(mcpServerSession.getId()).thenReturn("mockId");

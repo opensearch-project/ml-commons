@@ -5,25 +5,7 @@
 
 package org.opensearch.ml.common;
 
-import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX_MAPPING_PATH;
-import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX_MAPPING_PATH;
-import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX_MAPPING_PATH;
-import static org.opensearch.ml.common.CommonValue.ML_CONTROLLER_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_CONTROLLER_INDEX_MAPPING_PATH;
-import static org.opensearch.ml.common.CommonValue.ML_MCP_SESSION_MANAGEMENT_INDEX_MAPPING_PATH;
-import static org.opensearch.ml.common.CommonValue.ML_MEMORY_MESSAGE_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_MEMORY_MESSAGE_INDEX_MAPPING_PATH;
-import static org.opensearch.ml.common.CommonValue.ML_MEMORY_META_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_MEMORY_META_INDEX_MAPPING_PATH;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX_MAPPING_PATH;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX_MAPPING_PATH;
-import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX_MAPPING_PATH;
+import static org.opensearch.ml.common.CommonValue.*;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -40,7 +22,8 @@ public enum MLIndex {
     AGENT(ML_AGENT_INDEX, false, ML_AGENT_INDEX_MAPPING_PATH),
     MEMORY_META(ML_MEMORY_META_INDEX, false, ML_MEMORY_META_INDEX_MAPPING_PATH),
     MEMORY_MESSAGE(ML_MEMORY_MESSAGE_INDEX, false, ML_MEMORY_MESSAGE_INDEX_MAPPING_PATH),
-    MCP_SESSION_MANAGEMENT(ML_MCP_SESSION_MANAGEMENT_INDEX_MAPPING_PATH, false, ML_MCP_SESSION_MANAGEMENT_INDEX_MAPPING_PATH);
+    MCP_SESSION_MANAGEMENT(MCP_SESSION_MANAGEMENT_INDEX, false, ML_MCP_SESSION_MANAGEMENT_INDEX_MAPPING_PATH),
+    MCP_TOOLS(MCP_TOOLS_INDEX, false, ML_MCP_TOOLS_INDEX_MAPPING_PATH);
 
     private final String indexName;
     // whether we use an alias for the index
