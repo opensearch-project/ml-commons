@@ -99,11 +99,33 @@ public class TransportMcpToolsRemoveOnNodesAction extends
     private MLMcpRemoveNodeResponse removeMcpTools(List<String> tools) {
         AtomicReference<List<String>> errors = new AtomicReference<>();
         errors.set(new ArrayList<>());
-        Flux.fromStream(tools.stream()).flatMap(toolName -> McpAsyncServerHolder.asyncServer.removeTool(toolName).doOnError(e -> {
-            errors.get().add(toolName);
-        }).onErrorResume(e -> Mono.empty())).doOnError(e -> { log.error(e.getMessage(), e); }).doOnComplete(() -> {
-            log.debug("Successfully removed tools on node: {}", clusterService.localNode().getId());
-        }).subscribe();
+        Flux.fromStream(tools.stream()).flatMap(toolName -> {
+            if (McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.containsKey(toolName)) {
+                McpAsyncServerHolder.getMcpAsyncServerInstance().removeTool(toolName).onErrorResume(e -> {
+                    log
+                        .error(
+                            "Failed to remove mcp tool on node: {} with error: {}",
+                            clusterService.localNode().getId(),
+                            e.getMessage(),
+                            e
+                        );
+                    errors.get().add(toolName);
+                    return Mono.empty();
+                }).subscribe();
+            }
+            return Mono.empty();
+        })
+            .doOnComplete(() -> log.debug("Successfully removed tools on node: {}", clusterService.localNode().getId()))
+            .doOnError(
+                e -> log
+                    .error(
+                        "Failed to remove tools in MCP server memory with error: {} on node: {}",
+                        e.getMessage(),
+                        clusterService.localNode().getId(),
+                        e
+                    )
+            )
+            .subscribe();
         if (!errors.get().isEmpty()) {
             String errMsg = String.format(Locale.ROOT, "Tools: %s not found", errors.get());
             OpenSearchException openSearchException = new OpenSearchException(errMsg);

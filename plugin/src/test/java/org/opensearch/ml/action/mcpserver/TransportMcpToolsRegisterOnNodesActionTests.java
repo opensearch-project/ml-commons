@@ -32,10 +32,9 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.mcpserver.requests.register.MLMcpToolsRegisterNodeRequest;
 import org.opensearch.ml.common.transport.mcpserver.requests.register.MLMcpToolsRegisterNodesRequest;
-import org.opensearch.ml.common.transport.mcpserver.requests.register.McpTool;
-import org.opensearch.ml.common.transport.mcpserver.requests.register.McpTools;
-import org.opensearch.ml.common.transport.mcpserver.responses.register.MLMcpRegisterNodeResponse;
-import org.opensearch.ml.common.transport.mcpserver.responses.register.MLMcpRegisterNodesResponse;
+import org.opensearch.ml.common.transport.mcpserver.requests.register.RegisterMcpTool;
+import org.opensearch.ml.common.transport.mcpserver.responses.register.MLMcpToolsRegisterNodeResponse;
+import org.opensearch.ml.common.transport.mcpserver.responses.register.MLMcpToolsRegisterNodesResponse;
 import org.opensearch.ml.engine.tools.ListIndexTool;
 import org.opensearch.ml.rest.mcpserver.ToolFactoryWrapper;
 import org.opensearch.test.OpenSearchTestCase;
@@ -72,6 +71,7 @@ public class TransportMcpToolsRegisterOnNodesActionTests extends OpenSearchTestC
     public void setUp() throws Exception {
         super.setUp();
         MockitoAnnotations.openMocks(this);
+        McpToolsHelper mcpToolsHelper = new McpToolsHelper(client, threadPool, clusterService, toolFactoryWrapper);
         when(toolFactoryWrapper.getToolsFactories()).thenReturn(toolFactories);
         when(clusterService.getClusterName()).thenReturn(new ClusterName("clusterName"));
         when(clusterService.localNode().getId()).thenReturn("localNodeId");
@@ -82,13 +82,15 @@ public class TransportMcpToolsRegisterOnNodesActionTests extends OpenSearchTestC
             threadPool,
             client,
             xContentRegistry,
-            toolFactoryWrapper
+            toolFactoryWrapper,
+            mcpToolsHelper
         );
     }
 
     @Test
     public void testNewResponse() {
-        McpTools mcpTools = mock(McpTools.class);
+        List<RegisterMcpTool> mcpTools = List
+            .of(new RegisterMcpTool("ListIndexTool", "ListIndexTool", "ListIndexTool", Map.of(), Map.of(), null, null));
         MLMcpToolsRegisterNodesRequest nodesRequest = new MLMcpToolsRegisterNodesRequest(new String[] { "node1", "node2" }, mcpTools);
         DiscoveryNode discoveryNode1 = mock(DiscoveryNode.class);
         when(discoveryNode1.getId()).thenReturn("node1");
@@ -96,16 +98,17 @@ public class TransportMcpToolsRegisterOnNodesActionTests extends OpenSearchTestC
         DiscoveryNode discoveryNode2 = mock(DiscoveryNode.class);
         when(discoveryNode2.getId()).thenReturn("node2");
 
-        List<MLMcpRegisterNodeResponse> responses = List.of(new MLMcpRegisterNodeResponse(discoveryNode1, true));
+        List<MLMcpToolsRegisterNodeResponse> responses = List.of(new MLMcpToolsRegisterNodeResponse(discoveryNode1, true));
         List<FailedNodeException> failures = List.of(new FailedNodeException("node2", "failed", new Exception("failed")));
-        MLMcpRegisterNodesResponse response = action.newResponse(nodesRequest, responses, failures);
+        MLMcpToolsRegisterNodesResponse response = action.newResponse(nodesRequest, responses, failures);
         assertEquals(1, response.getNodes().size());
         assertEquals(1, response.failures().size());
     }
 
     @Test
     public void testNewNodeRequest() {
-        McpTools mcpTools = mock(McpTools.class);
+        List<RegisterMcpTool> mcpTools = List
+            .of(new RegisterMcpTool("ListIndexTool", "ListIndexTool", "ListIndexTool", Map.of(), Map.of(), null, null));
         MLMcpToolsRegisterNodesRequest nodesRequest = new MLMcpToolsRegisterNodesRequest(new String[] { "node1", "node2" }, mcpTools);
         MLMcpToolsRegisterNodeRequest nodeRequest = action.newNodeRequest(nodesRequest);
         assertEquals(nodesRequest.getMcpTools(), nodeRequest.getMcpTools());
@@ -121,40 +124,36 @@ public class TransportMcpToolsRegisterOnNodesActionTests extends OpenSearchTestC
             Collections.singleton(CLUSTER_MANAGER_ROLE),
             Version.CURRENT
         );
-        MLMcpRegisterNodeResponse response = new MLMcpRegisterNodeResponse(node, true);
+        MLMcpToolsRegisterNodeResponse response = new MLMcpToolsRegisterNodeResponse(node, true);
         BytesStreamOutput output = new BytesStreamOutput();
         response.writeTo(output);
-        MLMcpRegisterNodeResponse newNodeResponse = action.newNodeResponse(output.bytes().streamInput());
+        MLMcpToolsRegisterNodeResponse newNodeResponse = action.newNodeResponse(output.bytes().streamInput());
         assertEquals("node1", newNodeResponse.getNode().getId());
     }
 
     @Test
     public void testNodeOperation() {
-        McpTools mcpTools = new McpTools(
-            List
-                .of(
-                    new McpTool(
-                        null,
-                        "ListIndexTool",
-                        "OpenSearch index name list, separated by comma. for example: [\\\"index1\\\", \\\"index2\\\"], use empty array [] to list all indices in the cluster",
-                        Map.of(),
-                        Map
-                            .of(
-                                "type",
-                                "object",
-                                "properties",
-                                Map.of("indices", Map.of("type", "array", "items", Map.of("type", "string"))),
-                                "additionalProperties",
-                                false
-                            )
-                    )
-                ),
-            null,
-            null
-        );
+        List<RegisterMcpTool> mcpTools = List
+            .of(
+                new RegisterMcpTool(
+                    null,
+                    "ListIndexTool",
+                    "OpenSearch index name list, separated by comma. for example: [\\\"index1\\\", \\\"index2\\\"], use empty array [] to list all indices in the cluster",
+                    Map.of(),
+                    Map
+                        .of(
+                            "type",
+                            "object",
+                            "properties",
+                            Map.of("indices", Map.of("type", "array", "items", Map.of("type", "string"))),
+                            "additionalProperties",
+                            false
+                        ), null, null
+                )
+            );
 
         MLMcpToolsRegisterNodeRequest request = new MLMcpToolsRegisterNodeRequest(mcpTools);
-        MLMcpRegisterNodeResponse response = action.nodeOperation(request);
+        MLMcpToolsRegisterNodeResponse response = action.nodeOperation(request);
         assertEquals(true, response.getCreated());
     }
 }
