@@ -1629,13 +1629,8 @@ public class MLInferenceSearchRequestProcessorTests extends AbstractBuilderTestC
 
         String queryTemplate = "${llm_query}";
 
-        String llmQuery = "{\n" +
-                          "  \"query\": {\n" +
-                          "    \"match_all\": {}\n" +
-                          "  }\n" +
-                          "}";
+        String llmQuery = "{\n" + "  \"query\": {\n" + "    \"match_all\": {}\n" + "  }\n" + "}";
         Map content = Map.of("content", List.of(Map.of("text", llmQuery)));
-
 
         List<Map<String, String>> optionalInputMap = new ArrayList<>();
         Map<String, String> input = new HashMap<>();
@@ -1648,23 +1643,23 @@ public class MLInferenceSearchRequestProcessorTests extends AbstractBuilderTestC
         optionalOutputMap.add(output);
 
         MLInferenceSearchRequestProcessor requestProcessor = new MLInferenceSearchRequestProcessor(
-                "model1",
-                queryTemplate,
-                null,
-                null,
-                optionalInputMap,
-                optionalOutputMap,
-                null,
-                DEFAULT_MAX_PREDICTION_TASKS,
-                PROCESSOR_TAG,
-                DESCRIPTION,
-                false,
-                "remote",
-                true,
-                false,
-                "{ \"parameters\": ${ml_inference.parameters} }",
-                client,
-                TEST_XCONTENT_REGISTRY_FOR_QUERY
+            "model1",
+            queryTemplate,
+            null,
+            null,
+            optionalInputMap,
+            optionalOutputMap,
+            null,
+            DEFAULT_MAX_PREDICTION_TASKS,
+            PROCESSOR_TAG,
+            DESCRIPTION,
+            false,
+            "remote",
+            true,
+            false,
+            "{ \"parameters\": ${ml_inference.parameters} }",
+            client,
+            TEST_XCONTENT_REGISTRY_FOR_QUERY
         );
 
         /**
@@ -1680,11 +1675,7 @@ public class MLInferenceSearchRequestProcessorTests extends AbstractBuilderTestC
          *   } ]
          * }
          */
-        ModelTensor modelTensor = ModelTensor
-                .builder()
-                .name("response")
-                .dataAsMap(content)
-                .build();
+        ModelTensor modelTensor = ModelTensor.builder().name("response").dataAsMap(content).build();
         ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
         ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
 
