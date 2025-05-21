@@ -1662,14 +1662,14 @@ public class MLInferenceSearchRequestProcessorTests extends AbstractBuilderTestC
             TEST_XCONTENT_REGISTRY_FOR_QUERY
         );
 
-        /**
+        /*
          * {
          *   "inference_results" : [ {
          *     "output" : [ {
          *       "name" : "response",
          *       "dataAsMap" : {
-         * 		  "content": [
-         * 			"text": "{\"query\": \"match_all\" : {}}"
+         *        "content": [
+         *           "text": "{\"query\": \"match_all\" : {}}"
          *       }
          *     } ]
          *   } ]
