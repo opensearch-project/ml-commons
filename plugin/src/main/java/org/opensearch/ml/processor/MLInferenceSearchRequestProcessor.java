@@ -46,7 +46,6 @@ import org.opensearch.search.pipeline.Processor;
 import org.opensearch.search.pipeline.SearchRequestProcessor;
 import org.opensearch.transport.client.Client;
 
-import com.google.gson.Gson;
 import com.jayway.jsonpath.Configuration;
 import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.Option;
@@ -362,7 +361,7 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
                     String modelOutputFieldName = outputMapEntry.getValue();
                     Object modelOutputValue = getModelOutputValue(mlOutput, modelOutputFieldName, ignoreMissing, fullResponsePath);
                     if (modelOutputValue instanceof Map) {
-                        modelOutputValue = new Gson().toJson(modelOutputValue);
+                        modelOutputValue = toJson(modelOutputValue);
                     }
                     valuesMap.put(newQueryField, modelOutputValue);
                 }
