@@ -90,6 +90,11 @@ public class ModelAccessControlHelper {
             RangeQueryBuilder.class
         );
 
+    private boolean isResourceSharingFeatureEnabled(Settings settings) {
+        return isModelAccessControlEnabled()
+            && settings.getAsBoolean(OPENSEARCH_RESOURCE_SHARING_ENABLED, OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT);
+    }
+
     // TODO Eventually remove this when all usages of it have been migrated to the SdkClient version
     public void validateModelGroupAccess(
         User user,
@@ -102,11 +107,10 @@ public class ModelAccessControlHelper {
             listener.onResponse(true);
             return;
         }
-        boolean isResourceSharingFeatureEnabled = settings
-            .getAsBoolean(OPENSEARCH_RESOURCE_SHARING_ENABLED, OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT);
+        boolean isResourceSharingFeatureEnabled = isResourceSharingFeatureEnabled(settings);
         if (isResourceSharingFeatureEnabled) {
             ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
-            resourceSharingClient.verifyResourceAccess(modelGroupId, ML_MODEL_GROUP_INDEX, ActionListener.wrap(isAuthorized -> {
+            resourceSharingClient.verifyAccess(modelGroupId, ML_MODEL_GROUP_INDEX, ActionListener.wrap(isAuthorized -> {
                 if (!isAuthorized) {
                     listener
                         .onFailure(
@@ -174,11 +178,10 @@ public class ModelAccessControlHelper {
             listener.onResponse(true);
             return;
         }
-        boolean isResourceSharingFeatureEnabled = settings
-            .getAsBoolean(OPENSEARCH_RESOURCE_SHARING_ENABLED, OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT);
+        boolean isResourceSharingFeatureEnabled = isResourceSharingFeatureEnabled(settings);
         if (isResourceSharingFeatureEnabled) {
             ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
-            resourceSharingClient.verifyResourceAccess(modelGroupId, ML_MODEL_GROUP_INDEX, ActionListener.wrap(isAuthorized -> {
+            resourceSharingClient.verifyAccess(modelGroupId, ML_MODEL_GROUP_INDEX, ActionListener.wrap(isAuthorized -> {
                 if (!isAuthorized) {
                     listener
                         .onFailure(
@@ -371,8 +374,7 @@ public class ModelAccessControlHelper {
     }
 
     public SearchSourceBuilder createSearchSourceBuilder(User user, Settings settings) {
-        boolean isResourceSharingFeatureEnabled = settings
-            .getAsBoolean(OPENSEARCH_RESOURCE_SHARING_ENABLED, OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT);
+        boolean isResourceSharingFeatureEnabled = isResourceSharingFeatureEnabled(settings);
         // TODO: Remove this feature flag check once feature is GA, as it will be enabled by default
         if (isResourceSharingFeatureEnabled) {
             return addAccessibleModelGroupsFilter(new SearchSourceBuilder());

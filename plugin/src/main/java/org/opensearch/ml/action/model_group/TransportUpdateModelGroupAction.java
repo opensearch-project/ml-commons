@@ -8,6 +8,7 @@ package org.opensearch.ml.action.model_group;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 import static org.opensearch.security.spi.resources.FeatureConfigConstants.OPENSEARCH_RESOURCE_SHARING_ENABLED;
 import static org.opensearch.security.spi.resources.FeatureConfigConstants.OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT;
@@ -115,8 +116,8 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
             return;
         }
         User user = RestActionUtils.getUserContext(client);
-        boolean isResourceSharingFeatureEnabled = this.settings
-            .getAsBoolean(OPENSEARCH_RESOURCE_SHARING_ENABLED, OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT);
+        boolean isResourceSharingFeatureEnabled = ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED.get(settings)
+            && this.settings.getAsBoolean(OPENSEARCH_RESOURCE_SHARING_ENABLED, OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT);
         FetchSourceContext fetchSourceContext = new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);
         GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
             .builder()
@@ -162,7 +163,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
                                             .getInstance()
                                             .getResourceSharingClient();
                                         resourceSharingClient
-                                            .verifyResourceAccess(modelGroupId, ML_MODEL_GROUP_INDEX, ActionListener.wrap(isAuthorized -> {
+                                            .verifyAccess(modelGroupId, ML_MODEL_GROUP_INDEX, ActionListener.wrap(isAuthorized -> {
                                                 if (!isAuthorized) {
                                                     listener
                                                         .onFailure(

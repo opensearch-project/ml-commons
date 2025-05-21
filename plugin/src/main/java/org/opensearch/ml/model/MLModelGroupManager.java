@@ -7,8 +7,10 @@ package org.opensearch.ml.model;
 
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED;
 import static org.opensearch.security.spi.resources.FeatureConfigConstants.OPENSEARCH_RESOURCE_SHARING_ENABLED;
 import static org.opensearch.security.spi.resources.FeatureConfigConstants.OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT;
+import static org.opensearch.security.spi.resources.ResourceAccessLevels.PLACE_HOLDER;
 
 import java.time.Instant;
 import java.util.HashSet;
@@ -57,7 +59,8 @@ import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.security.spi.resources.sharing.Recipient;
-import org.opensearch.security.spi.resources.sharing.SharedWithActionGroup;
+import org.opensearch.security.spi.resources.sharing.Recipients;
+import org.opensearch.security.spi.resources.sharing.ShareWith;
 import org.opensearch.transport.client.Client;
 
 import lombok.extern.log4j.Log4j2;
@@ -98,8 +101,8 @@ public class MLModelGroupManager {
             User user = RestActionUtils.getUserContext(client);
             // Create a recipient sharing list
             AtomicReference<Map<Recipient, Set<String>>> recipientMap = new AtomicReference<>();
-            boolean isResourceSharingFeatureEnabled = this.settings
-                .getAsBoolean(OPENSEARCH_RESOURCE_SHARING_ENABLED, OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT);
+            boolean isResourceSharingFeatureEnabled = ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED.get(settings)
+                && this.settings.getAsBoolean(OPENSEARCH_RESOURCE_SHARING_ENABLED, OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT);
 
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 ActionListener<String> wrappedListener = ActionListener.runBefore(listener, context::restore);
@@ -191,8 +194,9 @@ public class MLModelGroupManager {
                                                 // Create an entry in resource-sharing index
                                                 String modelGroupId = indexResponse.getId();
                                                 String modelGroupIndex = indexResponse.getIndex();
-                                                SharedWithActionGroup.ActionGroupRecipients recipients =
-                                                    new SharedWithActionGroup.ActionGroupRecipients(recipientMap.get());
+                                                ShareWith shareWith = new ShareWith(
+                                                    Map.of(PLACE_HOLDER, new Recipients(recipientMap.get()))
+                                                );
 
                                                 ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor
                                                     .getInstance()
@@ -202,7 +206,7 @@ public class MLModelGroupManager {
                                                     .share(
                                                         modelGroupId,
                                                         modelGroupIndex,
-                                                        recipients,
+                                                        shareWith,
                                                         ActionListener.wrap(resourceSharing -> {
                                                             log
                                                                 .debug(

@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.model_group;
 
 import static org.opensearch.ml.action.handler.MLSearchHandler.wrapRestActionListener;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED;
 import static org.opensearch.ml.utils.RestActionUtils.wrapListenerToHandleSearchIndexNotFound;
 import static org.opensearch.security.spi.resources.FeatureConfigConstants.OPENSEARCH_RESOURCE_SHARING_ENABLED;
 import static org.opensearch.security.spi.resources.FeatureConfigConstants.OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT;
@@ -82,8 +83,8 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<MLSe
         User user,
         ActionListener<SearchResponse> listener
     ) {
-        boolean isResourceSharingFeatureEnabled = this.settings
-            .getAsBoolean(OPENSEARCH_RESOURCE_SHARING_ENABLED, OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT);
+        boolean isResourceSharingFeatureEnabled = ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED.get(settings)
+            && this.settings.getAsBoolean(OPENSEARCH_RESOURCE_SHARING_ENABLED, OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<SearchResponse> wrappedListener = ActionListener.runBefore(listener, context::restore);
 
