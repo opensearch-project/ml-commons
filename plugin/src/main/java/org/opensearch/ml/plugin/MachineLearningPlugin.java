@@ -784,11 +784,11 @@ public class MachineLearningPlugin extends Plugin
             mlFeatureEnabledSetting
         );
 
-        MLJobRunner.getInstance().initialize(clusterService, threadPool, client, sdkClient, connectorAccessControlHelper);
-
-        // todo: add setting
-        MLOperationalMetricsCounter.initialize(clusterService.getClusterName().toString(), metricsRegistry);
-        MLAdoptionMetricsCounter.initialize(clusterService.getClusterName().toString(), metricsRegistry);
+        MLJobRunner
+            .getInstance()
+            .initialize(clusterService, threadPool, client, sdkClient, connectorAccessControlHelper, mlFeatureEnabledSetting);
+        MLOperationalMetricsCounter.initialize(clusterService.getClusterName().toString(), metricsRegistry, mlFeatureEnabledSetting);
+        MLAdoptionMetricsCounter.initialize(clusterService.getClusterName().toString(), metricsRegistry, mlFeatureEnabledSetting);
 
         mcpToolsHelper = new McpToolsHelper(client, threadPool, toolFactoryWrapper);
         McpAsyncServerHolder.init(mlIndicesHandler, mcpToolsHelper);

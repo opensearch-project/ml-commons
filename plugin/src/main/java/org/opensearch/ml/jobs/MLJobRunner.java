@@ -9,6 +9,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.jobscheduler.spi.JobExecutionContext;
 import org.opensearch.jobscheduler.spi.ScheduledJobParameter;
 import org.opensearch.jobscheduler.spi.ScheduledJobRunner;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.jobs.processors.MLBatchTaskUpdateProcessor;
 import org.opensearch.ml.jobs.processors.MLStatsJobProcessor;
@@ -52,6 +53,9 @@ public class MLJobRunner implements ScheduledJobRunner {
     @Setter
     private ConnectorAccessControlHelper connectorAccessControlHelper;
 
+    @Setter
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     private boolean initialized;
 
     private MLJobRunner() {
@@ -63,7 +67,8 @@ public class MLJobRunner implements ScheduledJobRunner {
         final ThreadPool threadPool,
         final Client client,
         final SdkClient sdkClient,
-        final ConnectorAccessControlHelper connectorAccessControlHelper
+        final ConnectorAccessControlHelper connectorAccessControlHelper,
+        final MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         this.clusterService = clusterService;
         this.threadPool = threadPool;
@@ -71,6 +76,7 @@ public class MLJobRunner implements ScheduledJobRunner {
         this.sdkClient = sdkClient;
         this.connectorAccessControlHelper = connectorAccessControlHelper;
         this.initialized = true;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
@@ -84,7 +90,7 @@ public class MLJobRunner implements ScheduledJobRunner {
             case STATS_COLLECTOR:
                 MLStatsJobProcessor
                     .getInstance(clusterService, client, threadPool, connectorAccessControlHelper, sdkClient)
-                    .process(jobParameter, jobExecutionContext);
+                    .process(jobParameter, jobExecutionContext, mlFeatureEnabledSetting.isStaticMetricCollectionEnabled());
                 break;
             case BATCH_TASK_UPDATE:
                 MLBatchTaskUpdateProcessor.getInstance(clusterService, client, threadPool).process(jobParameter, jobExecutionContext);

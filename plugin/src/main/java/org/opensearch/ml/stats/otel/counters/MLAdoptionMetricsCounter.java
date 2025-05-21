@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.stats.otel.counters;
 
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.stats.otel.metrics.AdoptionMetric;
 import org.opensearch.telemetry.metrics.MetricsRegistry;
 
@@ -12,12 +13,16 @@ public class MLAdoptionMetricsCounter extends AbstractMLMetricsCounter<AdoptionM
 
     private static MLAdoptionMetricsCounter instance;
 
-    private MLAdoptionMetricsCounter(String clusterName, MetricsRegistry metricsRegistry) {
-        super(clusterName, metricsRegistry, AdoptionMetric.class);
+    private MLAdoptionMetricsCounter(String clusterName, MetricsRegistry metricsRegistry, MLFeatureEnabledSetting mlFeatureEnabledSetting) {
+        super(clusterName, metricsRegistry, AdoptionMetric.class, mlFeatureEnabledSetting);
     }
 
-    public static synchronized void initialize(String clusterName, MetricsRegistry metricsRegistry) {
-        instance = new MLAdoptionMetricsCounter(clusterName, metricsRegistry);
+    public static synchronized void initialize(
+        String clusterName,
+        MetricsRegistry metricsRegistry,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
+    ) {
+        instance = new MLAdoptionMetricsCounter(clusterName, metricsRegistry, mlFeatureEnabledSetting);
     }
 
     public static synchronized MLAdoptionMetricsCounter getInstance() {
