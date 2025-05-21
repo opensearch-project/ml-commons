@@ -9,7 +9,6 @@ package org.opensearch.ml.common.transport.mcpserver.requests.register;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
@@ -17,6 +16,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.Instant;
 import java.util.Collections;
+import java.util.List;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -27,25 +27,21 @@ import org.opensearch.transport.TransportRequest;
 
 public class MLMcpToolsRegisterNodeRequestTest {
 
-    private McpTools sampleTools;
-    private final Instant timestamp = Instant.parse("2025-04-28T08:30:00Z");
+    private List<RegisterMcpTool> sampleTools;
 
     @Before
     public void setUp() {
-        sampleTools = new McpTools(
-            Collections
-                .singletonList(
-                    new McpTool(
-                        null,
-                        "test_tool",
-                        "Sample tool",
-                        Collections.singletonMap("param", "value"),
-                        Collections.singletonMap("type", "object")
-                    )
-                ),
-            timestamp,
-            timestamp.plusSeconds(3600)
-        );
+        sampleTools = Collections
+            .singletonList(
+                new RegisterMcpTool(
+                    null,
+                    "test_tool",
+                    "Sample tool",
+                    Collections.singletonMap("param", "value"),
+                    Collections.singletonMap("type", "object"),
+                        null, null
+                )
+            );
     }
 
     @Test
@@ -58,9 +54,8 @@ public class MLMcpToolsRegisterNodeRequestTest {
         StreamInput input = output.bytes().streamInput();
         MLMcpToolsRegisterNodeRequest deserializedRequest = new MLMcpToolsRegisterNodeRequest(input);
 
-        assertEquals(1, deserializedRequest.getMcpTools().getTools().size());
-        assertEquals(timestamp, deserializedRequest.getMcpTools().getCreatedTime());
-        assertEquals("test_tool", deserializedRequest.getMcpTools().getTools().get(0).getType());
+        assertEquals(1, deserializedRequest.getMcpTools().size());
+        assertEquals("test_tool", deserializedRequest.getMcpTools().get(0).getType());
     }
 
     @Test
@@ -83,8 +78,7 @@ public class MLMcpToolsRegisterNodeRequestTest {
         MLMcpToolsRegisterNodeRequest result = MLMcpToolsRegisterNodeRequest.fromActionRequest(transportRequest);
 
         assertNotNull("Converted request should not be null", result);
-        assertEquals("test_tool", result.getMcpTools().getTools().get(0).getType());
-        assertEquals(timestamp, result.getMcpTools().getCreatedTime());
+        assertEquals("test_tool", result.getMcpTools().get(0).getType());
     }
 
     @Test(expected = UncheckedIOException.class)
@@ -107,14 +101,13 @@ public class MLMcpToolsRegisterNodeRequestTest {
 
     @Test
     public void testEmptyToolsHandling() throws IOException {
-        McpTools emptyTools = new McpTools(Collections.emptyList(), null, null);
+        List<RegisterMcpTool> emptyTools = Collections.emptyList();
         MLMcpToolsRegisterNodeRequest request = new MLMcpToolsRegisterNodeRequest(emptyTools);
 
         BytesStreamOutput output = new BytesStreamOutput();
         request.writeTo(output);
         MLMcpToolsRegisterNodeRequest result = new MLMcpToolsRegisterNodeRequest(output.bytes().streamInput());
 
-        assertTrue("Should preserve empty tools list", result.getMcpTools().getTools().isEmpty());
-        assertNull("Should preserve null create time", result.getMcpTools().getCreatedTime());
+        assertTrue("Should preserve empty tools list", result.getMcpTools().isEmpty());
     }
 }

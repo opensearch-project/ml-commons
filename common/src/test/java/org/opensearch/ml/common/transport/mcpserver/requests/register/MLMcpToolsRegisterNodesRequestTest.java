@@ -11,8 +11,8 @@ import static org.junit.Assert.*;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 import org.junit.Before;
@@ -25,19 +25,15 @@ import org.opensearch.core.common.io.stream.StreamOutput;
 
 public class MLMcpToolsRegisterNodesRequestTest {
 
-    private McpTools sampleTools;
+    private List<RegisterMcpTool> sampleTools;
     private final String[] nodeIds = { "node1", "node2" };
 
     @Before
     public void setup() {
-        sampleTools = new McpTools(
-            Arrays
-                .asList(
-                    new McpTool(null, "metric_analyzer", "System monitoring tool", Map.of("interval", "60s"), Map.of("type", "object"))
-                ),
-            null,
-            null
-        );
+        sampleTools = List
+            .of(
+                new RegisterMcpTool(null, "metric_analyzer", "System monitoring tool", Map.of("interval", "60s"), Map.of("type", "object"), null, null)
+            );
     }
 
     @Test
@@ -45,8 +41,8 @@ public class MLMcpToolsRegisterNodesRequestTest {
         MLMcpToolsRegisterNodesRequest request = new MLMcpToolsRegisterNodesRequest(nodeIds, sampleTools);
 
         assertArrayEquals(nodeIds, request.nodesIds());
-        assertEquals(1, request.getMcpTools().getTools().size());
-        assertEquals("metric_analyzer", request.getMcpTools().getTools().get(0).getType());
+        assertEquals(1, request.getMcpTools().size());
+        assertEquals("metric_analyzer", request.getMcpTools().get(0).getType());
     }
 
     @Test
@@ -60,16 +56,12 @@ public class MLMcpToolsRegisterNodesRequestTest {
         MLMcpToolsRegisterNodesRequest deserialized = new MLMcpToolsRegisterNodesRequest(input);
 
         assertArrayEquals(nodeIds, deserialized.nodesIds());
-        assertEquals(sampleTools.getCreatedTime(), deserialized.getMcpTools().getCreatedTime());
-        assertEquals("metric_analyzer", deserialized.getMcpTools().getTools().get(0).getType());
+        assertEquals("metric_analyzer", deserialized.getMcpTools().get(0).getType());
     }
 
     @Test
     public void testValidateWithEmptyTools() {
-        MLMcpToolsRegisterNodesRequest request = new MLMcpToolsRegisterNodesRequest(
-            nodeIds,
-            new McpTools(Collections.emptyList(), null, null)
-        );
+        MLMcpToolsRegisterNodesRequest request = new MLMcpToolsRegisterNodesRequest(nodeIds, Collections.emptyList());
 
         assertNotNull("Should return validation error", request.validate());
         assertEquals(1, request.validate().validationErrors().size());
@@ -92,7 +84,7 @@ public class MLMcpToolsRegisterNodesRequestTest {
 
         MLMcpToolsRegisterNodesRequest converted = MLMcpToolsRegisterNodesRequest.fromActionRequest(wrappedRequest);
 
-        assertEquals("metric_analyzer", converted.getMcpTools().getTools().get(0).getType());
+        assertEquals("metric_analyzer", converted.getMcpTools().get(0).getType());
         assertArrayEquals(nodeIds, converted.nodesIds());
     }
 

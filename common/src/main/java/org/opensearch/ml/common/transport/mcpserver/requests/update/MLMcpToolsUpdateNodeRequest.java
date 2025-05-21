@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package org.opensearch.ml.common.transport.mcpserver.requests.register;
+package org.opensearch.ml.common.transport.mcpserver.requests.update;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -23,12 +23,12 @@ import lombok.Builder;
 import lombok.Data;
 
 @Data
-public class MLMcpToolsRegisterNodeRequest extends ActionRequest {
-    private List<RegisterMcpTool> mcpTools;
+public class MLMcpToolsUpdateNodeRequest extends ActionRequest {
+    private List<UpdateMcpTool> mcpTools;
 
-    public MLMcpToolsRegisterNodeRequest(StreamInput in) throws IOException {
+    public MLMcpToolsUpdateNodeRequest(StreamInput in) throws IOException {
         super(in);
-        this.mcpTools = in.readList(RegisterMcpTool::new);
+        this.mcpTools = in.readList(UpdateMcpTool::new);
     }
 
     @Override
@@ -37,7 +37,7 @@ public class MLMcpToolsRegisterNodeRequest extends ActionRequest {
     }
 
     @Builder
-    public MLMcpToolsRegisterNodeRequest(List<RegisterMcpTool> mcpTools) {
+    public MLMcpToolsUpdateNodeRequest(List<UpdateMcpTool> mcpTools) {
         this.mcpTools = mcpTools;
     }
 
@@ -47,18 +47,18 @@ public class MLMcpToolsRegisterNodeRequest extends ActionRequest {
         out.writeList(mcpTools);
     }
 
-    public static MLMcpToolsRegisterNodeRequest fromActionRequest(TransportRequest actionRequest) {
-        if (actionRequest instanceof MLMcpToolsRegisterNodeRequest) {
-            return (MLMcpToolsRegisterNodeRequest) actionRequest;
+    public static MLMcpToolsUpdateNodeRequest fromActionRequest(TransportRequest actionRequest) {
+        if (actionRequest instanceof MLMcpToolsUpdateNodeRequest) {
+            return (MLMcpToolsUpdateNodeRequest) actionRequest;
         }
 
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream(); OutputStreamStreamOutput osso = new OutputStreamStreamOutput(baos)) {
             actionRequest.writeTo(osso);
             try (StreamInput input = new InputStreamStreamInput(new ByteArrayInputStream(baos.toByteArray()))) {
-                return new MLMcpToolsRegisterNodeRequest(input);
+                return new MLMcpToolsUpdateNodeRequest(input);
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("Failed to parse ActionRequest into MLMcpToolsRegisterNodeRequest", e);
+            throw new UncheckedIOException("Failed to parse ActionRequest into MLMcpToolsUpdateNodeRequest", e);
         }
     }
 

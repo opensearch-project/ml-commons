@@ -48,11 +48,11 @@ public class MLMcpRegisterNodesResponseTest {
 
     @Test
     public void testMultiNodeSerialization() throws IOException {
-        MLMcpRegisterNodesResponse original = getMlMcpRegisterNodesResponse();
+        MLMcpToolsRegisterNodesResponse original = getMlMcpRegisterNodesResponse();
         BytesStreamOutput output = new BytesStreamOutput();
         original.writeTo(output);
 
-        MLMcpRegisterNodesResponse deserialized = new MLMcpRegisterNodesResponse(output.bytes().streamInput());
+        MLMcpToolsRegisterNodesResponse deserialized = new MLMcpToolsRegisterNodesResponse(output.bytes().streamInput());
 
         assertEquals(2, deserialized.getNodes().size());
         assertEquals(1, deserialized.failures().size());
@@ -61,9 +61,9 @@ public class MLMcpRegisterNodesResponseTest {
     @Test
     public void testResponseJsonStructure() throws IOException {
         XContentBuilder builder = XContentFactory.jsonBuilder();
-        MLMcpRegisterNodesResponse response = new MLMcpRegisterNodesResponse(
+        MLMcpToolsRegisterNodesResponse response = new MLMcpToolsRegisterNodesResponse(
             new ClusterName("test"),
-            Collections.singletonList(new MLMcpRegisterNodeResponse(node1, true)),
+            Collections.singletonList(new MLMcpToolsRegisterNodeResponse(node1, true)),
             Collections.singletonList(new FailedNodeException("foo2", "Connection timeout", new IOException()))
         );
 
@@ -72,12 +72,12 @@ public class MLMcpRegisterNodesResponseTest {
         assertTrue(json.contains("\"foo1\":{\"created\":true}"));
     }
 
-    private MLMcpRegisterNodesResponse getMlMcpRegisterNodesResponse() {
-        List<MLMcpRegisterNodeResponse> nodes = Arrays
-            .asList(new MLMcpRegisterNodeResponse(node1, true), new MLMcpRegisterNodeResponse(node2, false));
+    private MLMcpToolsRegisterNodesResponse getMlMcpRegisterNodesResponse() {
+        List<MLMcpToolsRegisterNodeResponse> nodes = Arrays
+            .asList(new MLMcpToolsRegisterNodeResponse(node1, true), new MLMcpToolsRegisterNodeResponse(node2, false));
         List<FailedNodeException> failures = Collections
             .singletonList(new FailedNodeException("node3", "Connection timeout", new IOException()));
 
-        return new MLMcpRegisterNodesResponse(new ClusterName("test-cluster"), nodes, failures);
+        return new MLMcpToolsRegisterNodesResponse(new ClusterName("test-cluster"), nodes, failures);
     }
 }

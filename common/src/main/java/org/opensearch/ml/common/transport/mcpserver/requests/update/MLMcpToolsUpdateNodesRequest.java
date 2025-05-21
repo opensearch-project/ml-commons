@@ -5,7 +5,7 @@
  *
  */
 
-package org.opensearch.ml.common.transport.mcpserver.requests.remove;
+package org.opensearch.ml.common.transport.mcpserver.requests.update;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.agent.MLAgent.TOOLS_FIELD;
@@ -32,67 +32,66 @@ import lombok.EqualsAndHashCode;
 
 @Data
 @EqualsAndHashCode(callSuper = false)
-public class MLMcpToolsRemoveNodesRequest extends BaseNodesRequest<MLMcpToolsRemoveNodesRequest> {
-    private List<String> tools;
+public class MLMcpToolsUpdateNodesRequest extends BaseNodesRequest<MLMcpToolsUpdateNodesRequest> {
+    private List<UpdateMcpTool> mcpTools;
 
-    public MLMcpToolsRemoveNodesRequest(StreamInput in) throws IOException {
+    public MLMcpToolsUpdateNodesRequest(StreamInput in) throws IOException {
         super(in);
-        this.tools = in.readList(StreamInput::readString);
+        this.mcpTools = in.readList(UpdateMcpTool::new);
     }
 
-    public MLMcpToolsRemoveNodesRequest(String[] nodeIds, List<String> tools) {
+    public MLMcpToolsUpdateNodesRequest(String[] nodeIds, List<UpdateMcpTool> mcpTools) {
         super(nodeIds);
-        this.tools = tools;
-    }
-
-    @Override
-    public ActionRequestValidationException validate() {
-        if (CollectionUtils.isEmpty(tools)) {
-            ActionRequestValidationException exception = new ActionRequestValidationException();
-            exception.addValidationError("remove tools list can not be null");
-            return exception;
-        }
-        return null;
+        this.mcpTools = mcpTools;
     }
 
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        out.writeStringArray(tools.toArray(new String[0]));
+        out.writeList(mcpTools);
     }
 
-    public static MLMcpToolsRemoveNodesRequest parse(XContentParser parser, String[] allNodeIds) throws IOException {
-        List<String> tools = null;
+    public static MLMcpToolsUpdateNodesRequest parse(XContentParser parser, String[] allNodeIds) throws IOException {
+        List<UpdateMcpTool> mcpTools = null;
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
             String fieldName = parser.currentName();
             parser.nextToken();
 
             if (fieldName.equals(TOOLS_FIELD)) {
+                mcpTools = new ArrayList<>();
                 ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
-                tools = new ArrayList<>();
                 while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
-                    tools.add(parser.text());
+                    mcpTools.add(UpdateMcpTool.parse(parser));
                 }
             } else {
                 parser.skipChildren();
             }
         }
-
-        return new MLMcpToolsRemoveNodesRequest(allNodeIds, tools);
+        return new MLMcpToolsUpdateNodesRequest(allNodeIds, mcpTools);
     }
 
-    public static MLMcpToolsRemoveNodesRequest fromActionRequest(ActionRequest actionRequest) {
-        if (actionRequest instanceof MLMcpToolsRemoveNodesRequest) {
-            return (MLMcpToolsRemoveNodesRequest) actionRequest;
+    @Override
+    public ActionRequestValidationException validate() {
+        if (CollectionUtils.isEmpty(mcpTools)) {
+            ActionRequestValidationException exception = new ActionRequestValidationException();
+            exception.addValidationError("tools list can not be null");
+            return exception;
+        }
+        return null;
+    }
+
+    public static MLMcpToolsUpdateNodesRequest fromActionRequest(ActionRequest actionRequest) {
+        if (actionRequest instanceof MLMcpToolsUpdateNodesRequest) {
+            return (MLMcpToolsUpdateNodesRequest) actionRequest;
         }
 
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream(); OutputStreamStreamOutput osso = new OutputStreamStreamOutput(baos)) {
             actionRequest.writeTo(osso);
             try (StreamInput input = new InputStreamStreamInput(new ByteArrayInputStream(baos.toByteArray()))) {
-                return new MLMcpToolsRemoveNodesRequest(input);
+                return new MLMcpToolsUpdateNodesRequest(input);
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("Failed to parse ActionRequest into MLMcpToolsRemoveNodesRequest", e);
+            throw new UncheckedIOException("Failed to parse ActionRequest into MLMcpToolsUpdateRequest", e);
         }
     }
 }

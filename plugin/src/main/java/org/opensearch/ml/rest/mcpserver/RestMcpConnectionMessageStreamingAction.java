@@ -48,6 +48,11 @@ import lombok.extern.log4j.Log4j2;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+/**
+ * This class handles the connection request and message streaming request from client.
+ * There's a sync up job running every 10 seconds to sync MCP tools from system index to memory,
+ * so the system will maintain eventually consistency.
+ */
 @Log4j2
 @ExperimentalApi
 public class RestMcpConnectionMessageStreamingAction extends BaseRestHandler {
@@ -134,7 +139,8 @@ public class RestMcpConnectionMessageStreamingAction extends BaseRestHandler {
                 .ofType(HttpChunk.class)
                 .map(HttpChunk::content)
                 .flatMap(
-                    x -> McpAsyncServerHolder.mcpServerTransportProvider
+                    x -> McpAsyncServerHolder
+                        .getMcpServerTransportProviderInstance()
                         .handleSseConnection(channel, appendToBaseUrl, clusterService.localNode().getId(), client)
                 )
                 .flatMap(y -> Mono.fromRunnable(() -> {
@@ -187,7 +193,8 @@ public class RestMcpConnectionMessageStreamingAction extends BaseRestHandler {
                                         );
                                 } else {
                                     if (clusterService.localNode().getId().equals(nodeId)) {
-                                        McpAsyncServerHolder.mcpServerTransportProvider
+                                        McpAsyncServerHolder
+                                            .getMcpServerTransportProviderInstance()
                                             .handleMessage(sessionId, requestBody)
                                             .doOnSuccess(y -> {
                                                 log.debug("Starting to send rest response to client in local node");

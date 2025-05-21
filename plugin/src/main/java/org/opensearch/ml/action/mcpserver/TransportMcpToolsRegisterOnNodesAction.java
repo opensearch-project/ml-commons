@@ -5,12 +5,8 @@
 
 package org.opensearch.ml.action.mcpserver;
 
-import static org.opensearch.ml.common.transport.mcpserver.requests.register.McpTool.SCHEMA_FIELD;
-
 import java.io.IOException;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.opensearch.OpenSearchException;
@@ -19,26 +15,19 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.nodes.TransportNodesAction;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
-import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRegisterOnNodesAction;
 import org.opensearch.ml.common.transport.mcpserver.requests.register.MLMcpToolsRegisterNodeRequest;
 import org.opensearch.ml.common.transport.mcpserver.requests.register.MLMcpToolsRegisterNodesRequest;
-import org.opensearch.ml.common.transport.mcpserver.requests.register.McpTools;
-import org.opensearch.ml.common.transport.mcpserver.responses.register.MLMcpRegisterNodeResponse;
-import org.opensearch.ml.common.transport.mcpserver.responses.register.MLMcpRegisterNodesResponse;
-import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.common.transport.mcpserver.requests.register.RegisterMcpTool;
+import org.opensearch.ml.common.transport.mcpserver.responses.register.MLMcpToolsRegisterNodeResponse;
+import org.opensearch.ml.common.transport.mcpserver.responses.register.MLMcpToolsRegisterNodesResponse;
 import org.opensearch.ml.rest.mcpserver.ToolFactoryWrapper;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
 
-import com.google.common.collect.ImmutableMap;
-
-import io.modelcontextprotocol.server.McpServerFeatures;
-import io.modelcontextprotocol.spec.McpSchema;
 import lombok.extern.log4j.Log4j2;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -48,15 +37,14 @@ import reactor.core.publisher.Mono;
  */
 @Log4j2
 public class TransportMcpToolsRegisterOnNodesAction extends
-    TransportNodesAction<MLMcpToolsRegisterNodesRequest, MLMcpRegisterNodesResponse, MLMcpToolsRegisterNodeRequest, MLMcpRegisterNodeResponse> {
+    TransportNodesAction<MLMcpToolsRegisterNodesRequest, MLMcpToolsRegisterNodesResponse, MLMcpToolsRegisterNodeRequest, MLMcpToolsRegisterNodeResponse> {
     TransportService transportService;
     ClusterService clusterService;
     ThreadPool threadPool;
     Client client;
     NamedXContentRegistry xContentRegistry;
     ToolFactoryWrapper toolFactoryWrapper;
-
-    private static final String INPUT_SCHEMA = "input_schema";
+    McpToolsHelper mcpToolsHelper;
 
     @Inject
     public TransportMcpToolsRegisterOnNodesAction(
@@ -66,7 +54,8 @@ public class TransportMcpToolsRegisterOnNodesAction extends
         ThreadPool threadPool,
         Client client,
         NamedXContentRegistry xContentRegistry,
-        ToolFactoryWrapper toolFactoryWrapper
+        ToolFactoryWrapper toolFactoryWrapper,
+        McpToolsHelper mcpToolsHelper
     ) {
         super(
             MLMcpToolsRegisterOnNodesAction.NAME,
@@ -77,7 +66,7 @@ public class TransportMcpToolsRegisterOnNodesAction extends
             MLMcpToolsRegisterNodesRequest::new,
             MLMcpToolsRegisterNodeRequest::new,
             ThreadPool.Names.MANAGEMENT,
-            MLMcpRegisterNodeResponse.class
+            MLMcpToolsRegisterNodeResponse.class
         );
         this.transportService = transportService;
         this.clusterService = clusterService;
@@ -85,15 +74,16 @@ public class TransportMcpToolsRegisterOnNodesAction extends
         this.client = client;
         this.xContentRegistry = xContentRegistry;
         this.toolFactoryWrapper = toolFactoryWrapper;
+        this.mcpToolsHelper = mcpToolsHelper;
     }
 
     @Override
-    protected MLMcpRegisterNodesResponse newResponse(
+    protected MLMcpToolsRegisterNodesResponse newResponse(
         MLMcpToolsRegisterNodesRequest nodesRequest,
-        List<MLMcpRegisterNodeResponse> responses,
+        List<MLMcpToolsRegisterNodeResponse> responses,
         List<FailedNodeException> failures
     ) {
-        return new MLMcpRegisterNodesResponse(clusterService.getClusterName(), responses, failures);
+        return new MLMcpToolsRegisterNodesResponse(clusterService.getClusterName(), responses, failures);
     }
 
     @Override
@@ -102,45 +92,41 @@ public class TransportMcpToolsRegisterOnNodesAction extends
     }
 
     @Override
-    protected MLMcpRegisterNodeResponse newNodeResponse(StreamInput in) throws IOException {
-        return new MLMcpRegisterNodeResponse(in);
+    protected MLMcpToolsRegisterNodeResponse newNodeResponse(StreamInput in) throws IOException {
+        return new MLMcpToolsRegisterNodeResponse(in);
     }
 
     @Override
-    protected MLMcpRegisterNodeResponse nodeOperation(MLMcpToolsRegisterNodeRequest request) {
+    protected MLMcpToolsRegisterNodeResponse nodeOperation(MLMcpToolsRegisterNodeRequest request) {
         return registerToolsOnNode(request.getMcpTools());
     }
 
-    private MLMcpRegisterNodeResponse registerToolsOnNode(McpTools mcpTools) {
+    /**
+     * The underlying MCP SDK guaranteed the multi-thread safety for addTool.
+     * The coordinator might fail to receive the register response due to network issue, we need to handle the retry request from coordinator
+     * by remove the tools first then register.
+     * @param mcpTools
+     * @return
+     */
+    private MLMcpToolsRegisterNodeResponse registerToolsOnNode(List<RegisterMcpTool> mcpTools) {
         AtomicReference<Throwable> exception = new AtomicReference<>();
-        Flux.fromStream(mcpTools.getTools().stream()).flatMap(tool -> {
-            // check if user request contains tools that not in our system.
-            String toolName = Optional.ofNullable(tool.getName()).orElse(tool.getType());
-            Tool.Factory factory = toolFactoryWrapper.getToolsFactories().get(tool.getType());
-            Tool actualTool = factory.create(Optional.ofNullable(tool.getParameters()).orElse(ImmutableMap.of()));
-            Map<String, Object> mSchema = Optional
-                .ofNullable(tool.getAttributes())
-                .map(x -> (Map<String, Object>) x.get(SCHEMA_FIELD))
-                .orElse(
-                    Optional
-                        .ofNullable(actualTool.getAttributes())
-                        .map(x -> StringUtils.fromJson(((String) x.get(INPUT_SCHEMA)), INPUT_SCHEMA))
-                        .orElse(ImmutableMap.of())
-                );
-            String schema = StringUtils.gson.toJson(mSchema);
-            String description = Optional.ofNullable(tool.getDescription()).orElse(factory.getDefaultDescription());
-            McpServerFeatures.AsyncToolSpecification toolSpecification = new McpServerFeatures.AsyncToolSpecification(
-                new McpSchema.Tool(toolName, String.valueOf(description), schema),
-                (exchange, arguments) -> Mono.create(sink -> {
-                    ActionListener<String> actionListener = ActionListener
-                        .wrap(r -> sink.success(new McpSchema.CallToolResult(List.of(new McpSchema.TextContent(r)), false)), e -> {
-                            log.error("Failed to execute tool, tool name: {}", toolName, e);
-                            sink.error(e);
-                        });
-                    actualTool.run(StringUtils.getParameterMap(arguments), actionListener);
-                })
-            );
-            return McpAsyncServerHolder.asyncServer.addTool(toolSpecification);
+        Flux.fromStream(mcpTools.stream()).flatMap(tool -> {
+            if (!McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.containsKey(tool.getName())) {
+                McpAsyncServerHolder
+                    .getMcpAsyncServerInstance()
+                    .addTool(mcpToolsHelper.createToolSpecification(tool))
+                    .doOnSuccess(x -> McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.put(tool.getName(), tool.getVersion()))
+                    .doOnError(e -> {
+                        log
+                            .error(
+                                "Failed to register tool: {} in MCP server memory on node: {}",
+                                tool.getName(),
+                                clusterService.localNode().getId()
+                            );
+                    })
+                    .subscribe();
+            }
+            return Mono.empty();
         })
             .doOnComplete(() -> { log.debug("Successfully register tools on node: {}", clusterService.localNode().getId()); })
             .doOnError(e -> {
@@ -152,7 +138,7 @@ public class TransportMcpToolsRegisterOnNodesAction extends
             String errorMsg = exception.get().getMessage();
             throw new FailedNodeException(clusterService.localNode().getId(), errorMsg, new OpenSearchException(errorMsg));
         }
-        return new MLMcpRegisterNodeResponse(clusterService.localNode(), true);
+        return new MLMcpToolsRegisterNodeResponse(clusterService.localNode(), true);
     }
 
 }

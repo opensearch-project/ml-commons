@@ -5,8 +5,6 @@
 
 package org.opensearch.ml.action.mcpserver;
 
-import static org.opensearch.ml.common.CommonValue.MCP_SESSION_MANAGEMENT_INDEX;
-
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -15,6 +13,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.opensearch.OpenSearchException;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.common.lease.Releasable;
@@ -22,6 +21,8 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.http.HttpChunk;
+import org.opensearch.ml.common.MLIndex;
+import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.StreamingRestChannel;
 import org.opensearch.transport.client.node.NodeClient;
@@ -41,6 +42,7 @@ import lombok.extern.log4j.Log4j2;
 import reactor.core.Exceptions;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.MonoSink;
 
 /**
  * This class is the implementation of McpServerTransportProvider that handles client connection request and client
@@ -58,14 +60,23 @@ public class OpenSearchMcpServerTransportProvider implements McpServerTransportP
 
     private McpServerSession.Factory sessionFactory;
 
+    private final MLIndicesHandler mlIndicesHandler;
+
+    private final McpToolsHelper mcpToolsHelper;
+
     /**
      * Map of active client sessions, keyed by session ID.
      */
     private final Map<String, McpServerSession> sessions = new ConcurrentHashMap<>();
 
-    public OpenSearchMcpServerTransportProvider(ObjectMapper objectMapper) {
+    public OpenSearchMcpServerTransportProvider(
+        MLIndicesHandler mlIndicesHandler,
+        McpToolsHelper mcpToolsHelper,
+        ObjectMapper objectMapper
+    ) {
         Assert.notNull(objectMapper, "ObjectMapper must not be null");
-
+        this.mlIndicesHandler = mlIndicesHandler;
+        this.mcpToolsHelper = mcpToolsHelper;
         this.objectMapper = objectMapper;
     }
 
@@ -113,33 +124,104 @@ public class OpenSearchMcpServerTransportProvider implements McpServerTransportP
             OpenSearchMcpSessionTransport sessionTransport = new OpenSearchMcpSessionTransport(channel);
             McpServerSession session = sessionFactory.create(sessionTransport);
             String sessionId = session.getId();
-            ActionListener<IndexResponse> actionListener = ActionListener.wrap(r -> {
-                if (r != null && r.status() == RestStatus.CREATED) {
-                    log.debug("Created new SSE connection for session: {}", sessionId);
-                    sessions.put(sessionId, session);
-
-                    // Send initial endpoint event
-                    log.debug("Sending initial endpoint event to session: {}", sessionId);
-                    String result;
-                    if (appendToBaseUrl) {
-                        result = String.format(Locale.ROOT, "/_plugins/_ml/mcp/sse/message?sessionId=%s", sessionId);
-                    } else {
-                        result = String.format(Locale.ROOT, "/sse/message?sessionId=%s", sessionId);
-                    }
-                    McpAsyncServerHolder.CHANNELS.put(sessionId, channel);
-                    sink.success(createHttpChunk(ENDPOINT_EVENT_TYPE, result));
+            ActionListener<Boolean> initIndexListener = ActionListener.wrap(created -> {
+                if (created) {
+                    log.debug("Successfully created MCP session management index");
+                    addSession(sessionId, session, appendToBaseUrl, nodeId, client, channel, sink);
                 } else {
-                    log.error("Failed to create new SSE connection for session: {}", sessionId);
-                    sink.error(new IllegalStateException("Failed to create new SSE connection for session" + sessionId));
+                    log.debug("Failed to create MCP session management index for session: {}", sessionId);
+                    sink
+                        .error(
+                            new IllegalStateException(
+                                String.format(Locale.ROOT, "Failed to create MCP session management index for session: %s", sessionId)
+                            )
+                        );
                 }
             }, e -> {
-                log.error("Failed to write sessionId into MCP session management index", e);
-                sink.error(e);
+                log.error("Failed to create session management index for session: {}", sessionId);
+                sink.error(new IllegalStateException("Failed to create session management index for session" + sessionId));
             });
-            Map<String, Object> source = ImmutableMap.of("node_id", nodeId, "status", "active", "create_time", Instant.now());
-            IndexRequest indexRequest = new IndexRequest(MCP_SESSION_MANAGEMENT_INDEX).id(sessionId).source(source);
-            client.index(indexRequest, actionListener);
+            mlIndicesHandler.initMLMcpSessionManagementIndex(initIndexListener);
         });
+    }
+
+    private void addSession(
+        String sessionId,
+        McpServerSession session,
+        boolean appendToBaseUrl,
+        String nodeId,
+        NodeClient client,
+        StreamingRestChannel channel,
+        MonoSink<HttpChunk> sink
+    ) {
+        ActionListener<IndexResponse> actionListener = ActionListener.wrap(r -> {
+            if (r != null && r.status() == RestStatus.CREATED) {
+                reloadAllMcpTools(sessionId, session, appendToBaseUrl, channel, sink);
+            } else {
+                log.error("Failed to create new SSE connection for session: {}", sessionId);
+                sink.error(new IllegalStateException("Failed to create new SSE connection for session" + sessionId));
+            }
+        }, e -> {
+            log.error("Failed to write sessionId into MCP session management index", e);
+            sink.error(e);
+        });
+        Map<String, Object> source = ImmutableMap.of("node_id", nodeId, "status", "active", "create_time", Instant.now());
+        IndexRequest indexRequest = new IndexRequest(MLIndex.MCP_SESSION_MANAGEMENT.getIndexName()).id(sessionId).source(source);
+        client.index(indexRequest, actionListener);
+    }
+
+    private void reloadAllMcpTools(
+        String sessionId,
+        McpServerSession session,
+        boolean appendToBaseUrl,
+        StreamingRestChannel channel,
+        MonoSink<HttpChunk> sink
+    ) {
+        if (this.sessions.isEmpty()) {
+            ActionListener<Boolean> reloadMcpToolsListener = ActionListener.wrap(reloadResult -> {
+                if (reloadResult) {
+                    initSessionInMemory(sessionId, session, appendToBaseUrl, channel, sink);
+                }
+            }, e -> {
+                log.error("Failed to reload mcp tools", e);
+                sink
+                    .error(
+                        new OpenSearchException(
+                            String
+                                .format(
+                                    Locale.ROOT,
+                                    "Failed to create SSE connection because the target node MCP server failed to init tools with error: %s",
+                                    e.getMessage()
+                                )
+                        )
+                    );
+            });
+            mcpToolsHelper.autoLoadAllMcpTools(reloadMcpToolsListener);
+        } else {
+            initSessionInMemory(sessionId, session, appendToBaseUrl, channel, sink);
+        }
+    }
+
+    private void initSessionInMemory(
+        String sessionId,
+        McpServerSession session,
+        boolean appendToBaseUrl,
+        StreamingRestChannel channel,
+        MonoSink<HttpChunk> sink
+    ) {
+        log.debug("Created new SSE connection for session: {}", sessionId);
+        sessions.put(sessionId, session);
+
+        // Send initial endpoint event
+        log.debug("Sending initial endpoint event to session: {}", sessionId);
+        String result;
+        if (appendToBaseUrl) {
+            result = String.format(Locale.ROOT, "/_plugins/_ml/mcp/sse/message?sessionId=%s", sessionId);
+        } else {
+            result = String.format(Locale.ROOT, "/sse/message?sessionId=%s", sessionId);
+        }
+        McpAsyncServerHolder.CHANNELS.put(sessionId, channel);
+        sink.success(createHttpChunk(ENDPOINT_EVENT_TYPE, result));
     }
 
     public Mono<Void> handleMessage(String sessionId, String requestBody) {
