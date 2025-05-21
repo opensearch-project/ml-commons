@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "model_format": "TORCH_SCRIPT",
   "model_task_type": "text_embedding",
+  "function_name": "text_embedding",
   "model_content_hash_value": "e13b74006290a9d0f58c1376f9629d4ebc05a0f9385f40db837452b167ae9021",
   "model_config": {
     "model_type": "bert",

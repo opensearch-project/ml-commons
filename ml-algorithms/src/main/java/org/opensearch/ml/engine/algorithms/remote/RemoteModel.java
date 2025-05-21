@@ -103,6 +103,10 @@ public class RemoteModel implements Predictable {
             Connector connector = model.getConnector().cloneConnector();
             connector
                 .decrypt(PREDICT.name(), (credential, tenantId) -> encryptor.decrypt(credential, model.getTenantId()), model.getTenantId());
+            // This situation can only happen for inline connector where we don't provide tenant id.
+            if (connector.getTenantId() == null && model.getTenantId() != null) {
+                connector.setTenantId(model.getTenantId());
+            }
             this.connectorExecutor = MLEngineClassLoader.initInstance(connector.getProtocol(), connector, Connector.class);
             this.connectorExecutor.setScriptService((ScriptService) params.get(SCRIPT_SERVICE));
             this.connectorExecutor.setClusterService((ClusterService) params.get(CLUSTER_SERVICE));

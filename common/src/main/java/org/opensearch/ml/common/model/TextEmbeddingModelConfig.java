@@ -9,6 +9,7 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 
 import java.io.IOException;
 import java.util.Locale;
+import java.util.Map;
 
 import org.opensearch.core.ParseField;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -25,7 +26,7 @@ import lombok.Setter;
 
 @Setter
 @Getter
-public class TextEmbeddingModelConfig extends MLModelConfig {
+public class TextEmbeddingModelConfig extends BaseModelConfig {
     public static final String PARSE_FIELD_NAME = FunctionName.TEXT_EMBEDDING.name();
     public static final NamedXContentRegistry.Entry XCONTENT_REGISTRY = new NamedXContentRegistry.Entry(
         TextEmbeddingModelConfig.class,
@@ -54,11 +55,23 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
         Integer embeddingDimension,
         FrameworkType frameworkType,
         String allConfig,
+        Map<String, Object> additionalConfig,
         PoolingMode poolingMode,
         boolean normalizeResult,
         Integer modelMaxLength
     ) {
-        this(modelType, embeddingDimension, frameworkType, allConfig, poolingMode, normalizeResult, modelMaxLength, null, null);
+        this(
+            modelType,
+            embeddingDimension,
+            frameworkType,
+            allConfig,
+            additionalConfig,
+            poolingMode,
+            normalizeResult,
+            modelMaxLength,
+            null,
+            null
+        );
     }
 
     @Builder(toBuilder = true)
@@ -67,19 +80,21 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
         Integer embeddingDimension,
         FrameworkType frameworkType,
         String allConfig,
+        Map<String, Object> additionalConfig,
         PoolingMode poolingMode,
         boolean normalizeResult,
         Integer modelMaxLength,
         String queryPrefix,
         String passagePrefix
     ) {
-        super(modelType, allConfig);
+        super(modelType, allConfig, additionalConfig);
         if (embeddingDimension == null) {
             throw new IllegalArgumentException("embedding dimension is null");
         }
         if (frameworkType == null) {
             throw new IllegalArgumentException("framework type is null");
         }
+        validateNoDuplicateKeys(allConfig, additionalConfig);
         this.embeddingDimension = embeddingDimension;
         this.frameworkType = frameworkType;
         this.poolingMode = poolingMode;
@@ -94,6 +109,7 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
         Integer embeddingDimension = null;
         FrameworkType frameworkType = null;
         String allConfig = null;
+        Map<String, Object> additionalConfig = null;
         PoolingMode poolingMode = null;
         boolean normalizeResult = false;
         Integer modelMaxLength = null;
@@ -117,6 +133,9 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
                     break;
                 case ALL_CONFIG_FIELD:
                     allConfig = parser.text();
+                    break;
+                case ADDITIONAL_CONFIG_FIELD:
+                    additionalConfig = parser.map();
                     break;
                 case POOLING_MODE_FIELD:
                     poolingMode = PoolingMode.from(parser.text().toUpperCase(Locale.ROOT));
@@ -143,6 +162,7 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
             embeddingDimension,
             frameworkType,
             allConfig,
+            additionalConfig,
             poolingMode,
             normalizeResult,
             modelMaxLength,
@@ -203,6 +223,9 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
         if (allConfig != null) {
             builder.field(ALL_CONFIG_FIELD, allConfig);
         }
+        if (additionalConfig != null) {
+            builder.field(ADDITIONAL_CONFIG_FIELD, additionalConfig);
+        }
         if (modelMaxLength != null) {
             builder.field(MODEL_MAX_LENGTH_FIELD, modelMaxLength);
         }
@@ -262,5 +285,4 @@ public class TextEmbeddingModelConfig extends MLModelConfig {
             }
         }
     }
-
 }
