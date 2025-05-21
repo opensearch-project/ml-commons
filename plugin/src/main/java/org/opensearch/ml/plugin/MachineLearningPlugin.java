@@ -135,6 +135,7 @@ import org.opensearch.ml.common.input.parameter.regression.LinearRegressionParam
 import org.opensearch.ml.common.input.parameter.regression.LogisticRegressionParams;
 import org.opensearch.ml.common.input.parameter.sample.SampleAlgoParams;
 import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters;
+import org.opensearch.ml.common.input.parameter.textembedding.SparseEncodingParameters;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -1038,7 +1039,8 @@ public class MachineLearningPlugin extends Plugin
                 RCFSummarizeParams.XCONTENT_REGISTRY,
                 LogisticRegressionParams.XCONTENT_REGISTRY,
                 TextEmbeddingModelConfig.XCONTENT_REGISTRY,
-                AsymmetricTextEmbeddingParameters.XCONTENT_REGISTRY
+                AsymmetricTextEmbeddingParameters.XCONTENT_REGISTRY,
+                SparseEncodingParameters.XCONTENT_REGISTRY
             );
     }
 
