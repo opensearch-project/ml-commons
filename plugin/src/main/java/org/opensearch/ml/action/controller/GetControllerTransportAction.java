@@ -19,6 +19,7 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
@@ -48,6 +49,7 @@ import lombok.extern.log4j.Log4j2;
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 public class GetControllerTransportAction extends HandledTransportAction<ActionRequest, MLControllerGetResponse> {
     Client client;
+    Settings settings;
     NamedXContentRegistry xContentRegistry;
     ClusterService clusterService;
     MLModelManager mlModelManager;
@@ -59,6 +61,7 @@ public class GetControllerTransportAction extends HandledTransportAction<ActionR
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
+        Settings settings,
         NamedXContentRegistry xContentRegistry,
         ClusterService clusterService,
         MLModelManager mlModelManager,
@@ -67,6 +70,7 @@ public class GetControllerTransportAction extends HandledTransportAction<ActionR
     ) {
         super(MLControllerGetAction.NAME, transportService, actionFilters, MLControllerGetRequest::new);
         this.client = client;
+        this.settings = settings;
         this.xContentRegistry = xContentRegistry;
         this.clusterService = clusterService;
         this.mlModelManager = mlModelManager;
@@ -96,34 +100,40 @@ public class GetControllerTransportAction extends HandledTransportAction<ActionR
                         mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
                             Boolean isHidden = mlModel.getIsHidden();
                             modelAccessControlHelper
-                                .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {
-                                    if (hasPermission) {
-                                        wrappedListener.onResponse(MLControllerGetResponse.builder().controller(controller).build());
-                                    } else {
-                                        wrappedListener
-                                            .onFailure(
-                                                new OpenSearchStatusException(
-                                                    getErrorMessage(
-                                                        "User doesn't have privilege to perform this operation on this model controller.",
-                                                        modelId,
-                                                        isHidden
-                                                    ),
-                                                    RestStatus.FORBIDDEN
-                                                )
+                                .validateModelGroupAccess(
+                                    user,
+                                    mlModel.getModelGroupId(),
+                                    client,
+                                    settings,
+                                    ActionListener.wrap(hasPermission -> {
+                                        if (hasPermission) {
+                                            wrappedListener.onResponse(MLControllerGetResponse.builder().controller(controller).build());
+                                        } else {
+                                            wrappedListener
+                                                .onFailure(
+                                                    new OpenSearchStatusException(
+                                                        getErrorMessage(
+                                                            "User doesn't have privilege to perform this operation on this model controller.",
+                                                            modelId,
+                                                            isHidden
+                                                        ),
+                                                        RestStatus.FORBIDDEN
+                                                    )
+                                                );
+                                        }
+                                    }, exception -> {
+                                        log
+                                            .error(
+                                                getErrorMessage(
+                                                    "Permission denied: Unable to create the model controller for the given model.",
+                                                    modelId,
+                                                    isHidden
+                                                ),
+                                                exception
                                             );
-                                    }
-                                }, exception -> {
-                                    log
-                                        .error(
-                                            getErrorMessage(
-                                                "Permission denied: Unable to create the model controller for the given model.",
-                                                modelId,
-                                                isHidden
-                                            ),
-                                            exception
-                                        );
-                                    wrappedListener.onFailure(exception);
-                                }));
+                                        wrappedListener.onFailure(exception);
+                                    })
+                                );
                         },
                             e -> wrappedListener
                                 .onFailure(

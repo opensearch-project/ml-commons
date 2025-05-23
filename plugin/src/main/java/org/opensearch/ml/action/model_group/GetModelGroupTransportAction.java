@@ -17,6 +17,7 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.commons.authuser.User;
@@ -52,6 +53,7 @@ import lombok.extern.log4j.Log4j2;
 public class GetModelGroupTransportAction extends HandledTransportAction<ActionRequest, MLModelGroupGetResponse> {
 
     final Client client;
+    final Settings settings;
     final SdkClient sdkClient;
     final NamedXContentRegistry xContentRegistry;
     final ClusterService clusterService;
@@ -63,6 +65,7 @@ public class GetModelGroupTransportAction extends HandledTransportAction<ActionR
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
+        Settings settings,
         SdkClient sdkClient,
         NamedXContentRegistry xContentRegistry,
         ClusterService clusterService,
@@ -71,6 +74,7 @@ public class GetModelGroupTransportAction extends HandledTransportAction<ActionR
     ) {
         super(MLModelGroupGetAction.NAME, transportService, actionFilters, MLModelGroupGetRequest::new);
         this.client = client;
+        this.settings = settings;
         this.sdkClient = sdkClient;
         this.xContentRegistry = xContentRegistry;
         this.clusterService = clusterService;
@@ -183,7 +187,7 @@ public class GetModelGroupTransportAction extends HandledTransportAction<ActionR
         MLModelGroup mlModelGroup,
         ActionListener<MLModelGroupGetResponse> wrappedListener
     ) {
-        modelAccessControlHelper.validateModelGroupAccess(user, modelGroupId, client, ActionListener.wrap(access -> {
+        modelAccessControlHelper.validateModelGroupAccess(user, modelGroupId, client, settings, ActionListener.wrap(access -> {
             if (!access) {
                 wrappedListener
                     .onFailure(

@@ -19,6 +19,7 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
@@ -57,6 +58,7 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
     final SdkClient sdkClient;
     final NamedXContentRegistry xContentRegistry;
     final ClusterService clusterService;
+    final Settings settings;
 
     final ModelAccessControlHelper modelAccessControlHelper;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
@@ -66,6 +68,7 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
+        Settings settings,
         SdkClient sdkClient,
         NamedXContentRegistry xContentRegistry,
         ClusterService clusterService,
@@ -74,6 +77,7 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
     ) {
         super(MLModelGroupDeleteAction.NAME, transportService, actionFilters, MLModelGroupDeleteRequest::new);
         this.client = client;
+        this.settings = settings;
         this.sdkClient = sdkClient;
         this.xContentRegistry = xContentRegistry;
         this.clusterService = clusterService;
@@ -93,6 +97,7 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
+            // TODO: Remove this feature flag check once feature is GA, as it will be enabled by default
             validateAndDeleteModelGroup(modelGroupId, tenantId, wrappedListener);
         }
     }
@@ -107,6 +112,7 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
                 modelGroupId,
                 client,
                 sdkClient,
+                settings,
                 ActionListener
                     .wrap(
                         hasAccess -> handleAccessValidation(hasAccess, modelGroupId, tenantId, listener),

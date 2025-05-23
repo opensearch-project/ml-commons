@@ -307,6 +307,7 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
                             mlModel.getModelGroupId(),
                             client,
                             sdkClient,
+                            settings,
                             listener
                         );
                 }
