@@ -9,6 +9,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.jobscheduler.spi.JobExecutionContext;
 import org.opensearch.jobscheduler.spi.ScheduledJobParameter;
 import org.opensearch.jobscheduler.spi.ScheduledJobRunner;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.jobs.processors.MLBatchTaskUpdateProcessor;
@@ -16,6 +17,8 @@ import org.opensearch.ml.jobs.processors.MLStatsJobProcessor;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
+
+import com.google.common.annotations.VisibleForTesting;
 
 import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
@@ -58,7 +61,8 @@ public class MLJobRunner implements ScheduledJobRunner {
 
     private boolean initialized;
 
-    private MLJobRunner() {
+    @VisibleForTesting
+    MLJobRunner() {
         // Singleton class, use getJobRunner method instead of constructor
     }
 
@@ -86,6 +90,10 @@ public class MLJobRunner implements ScheduledJobRunner {
         }
 
         MLJobParameter jobParameter = (MLJobParameter) scheduledJobParameter;
+        if (jobParameter == null || jobParameter.getJobType() == null) {
+            throw new IllegalArgumentException("Job parameters is invalid.");
+        }
+
         switch (jobParameter.getJobType()) {
             case STATS_COLLECTOR:
                 MLStatsJobProcessor
