@@ -7,7 +7,6 @@ package org.opensearch.ml.action.prompt;
 
 import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX;
 
-import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.common.inject.Inject;
@@ -36,7 +35,7 @@ import lombok.extern.log4j.Log4j2;
  */
 @Log4j2
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
-public class GetPromptTransportAction extends HandledTransportAction<ActionRequest, MLPromptGetResponse> {
+public class GetPromptTransportAction extends HandledTransportAction<MLPromptGetRequest, MLPromptGetResponse> {
     Client client;
     SdkClient sdkClient;
     MLPromptManager mlPromptManager;
@@ -65,12 +64,11 @@ public class GetPromptTransportAction extends HandledTransportAction<ActionReque
      * notified to the listener.
      *
      * @param task The task
-     * @param request The ActionRequest to be executed
+     * @param mlPromptGetRequest The MLPromptGetRequest to be executed
      * @param actionListener The listener to be notified of the response
      */
     @Override
-    protected void doExecute(Task task, ActionRequest request, ActionListener<MLPromptGetResponse> actionListener) {
-        MLPromptGetRequest mlPromptGetRequest = MLPromptGetRequest.fromActionRequest(request);
+    protected void doExecute(Task task, MLPromptGetRequest mlPromptGetRequest, ActionListener<MLPromptGetResponse> actionListener) {
         String promptId = mlPromptGetRequest.getPromptId();
         String tenantId = mlPromptGetRequest.getTenantId();
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {

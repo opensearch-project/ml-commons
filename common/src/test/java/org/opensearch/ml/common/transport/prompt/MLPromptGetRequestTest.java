@@ -37,7 +37,7 @@ public class MLPromptGetRequestTest {
 
     @Test
     public void constructor() {
-        assertEquals(mlPromptGetRequest.getPromptId(), promptId);
+        assertEquals(promptId, mlPromptGetRequest.getPromptId());
         assertNull(mlPromptGetRequest.getTenantId());
     }
 
@@ -51,7 +51,7 @@ public class MLPromptGetRequestTest {
         BytesStreamOutput streamOutput = new BytesStreamOutput();
         mlPromptGetRequest.writeTo(streamOutput);
         MLPromptGetRequest parsedRequest = new MLPromptGetRequest(streamOutput.bytes().streamInput());
-        assertEquals(parsedRequest.getPromptId(), mlPromptGetRequest.getPromptId());
+        assertEquals(mlPromptGetRequest.getPromptId(), parsedRequest.getPromptId());
     }
 
     @Test

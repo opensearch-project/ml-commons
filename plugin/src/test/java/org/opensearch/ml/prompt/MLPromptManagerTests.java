@@ -120,7 +120,7 @@ public class MLPromptManagerTests extends OpenSearchTestCase {
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(getPromptActionListener).onFailure(argumentCaptor.capture());
-        assertEquals(argumentCaptor.getValue().getMessage(), "Failed to get data object from index .plugins-ml-prompt");
+        assertEquals("Failed to get data object from index .plugins-ml-prompt", argumentCaptor.getValue().getMessage());
     }
 
     @Test

@@ -105,7 +105,7 @@ public class RestMLGetPromptActionTests extends OpenSearchTestCase {
         MLPromptGetRequest mlPromptGetRequest = restMLGetPromptAction.getRequest(request);
 
         String promptId = mlPromptGetRequest.getPromptId();
-        assertEquals(promptId, "prompt_id");
+        assertEquals("prompt_id", promptId);
     }
 
     public void testGetRequest_MultiTenancyEnabled() throws IOException {
@@ -126,7 +126,7 @@ public class RestMLGetPromptActionTests extends OpenSearchTestCase {
         ArgumentCaptor<MLPromptGetRequest> argumentcaptor = ArgumentCaptor.forClass(MLPromptGetRequest.class);
         verify(client, times(1)).execute(eq(MLPromptGetAction.INSTANCE), argumentcaptor.capture(), any());
         String promptId = argumentcaptor.getValue().getPromptId();
-        assertEquals(promptId, "prompt_id");
+        assertEquals("prompt_id", promptId);
     }
 
     public void testPrepareRequest_EmptyContent() throws Exception {

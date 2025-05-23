@@ -8,6 +8,8 @@ package org.opensearch.ml.prompt;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
+import java.util.Objects;
+
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetResponse;
@@ -25,6 +27,7 @@ import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.transport.client.Client;
 
+import lombok.NonNull;
 import lombok.extern.log4j.Log4j2;
 
 /**
@@ -35,9 +38,9 @@ public class MLPromptManager {
     private final Client client;
     private final SdkClient sdkClient;
 
-    public MLPromptManager(Client client, SdkClient sdkClient) {
-        this.client = client;
-        this.sdkClient = sdkClient;
+    public MLPromptManager(@NonNull Client client, @NonNull SdkClient sdkClient) {
+        this.client = Objects.requireNonNull(client, "Client cannot be null");
+        this.sdkClient = Objects.requireNonNull(sdkClient, "SdkClient cannot be null");
     }
 
     /**

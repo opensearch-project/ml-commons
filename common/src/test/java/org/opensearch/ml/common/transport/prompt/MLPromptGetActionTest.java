@@ -14,6 +14,6 @@ public class MLPromptGetActionTest {
     @Test
     public void testMLPromptGetActionInstance() {
         assertNotNull(MLPromptGetAction.INSTANCE);
-        assertEquals(MLPromptGetAction.NAME, "cluster:admin/opensearch/ml/prompts/get");
+        assertEquals("cluster:admin/opensearch/ml/prompts/get", MLPromptGetAction.NAME);
     }
 }

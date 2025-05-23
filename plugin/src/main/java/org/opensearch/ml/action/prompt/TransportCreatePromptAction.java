@@ -9,7 +9,6 @@ import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX;
 
 import java.time.Instant;
 
-import org.opensearch.action.ActionRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
@@ -39,7 +38,7 @@ import lombok.extern.log4j.Log4j2;
  * executes the actual operation of creating a prompt in the system index.
  */
 @Log4j2
-public class TransportCreatePromptAction extends HandledTransportAction<ActionRequest, MLCreatePromptResponse> {
+public class TransportCreatePromptAction extends HandledTransportAction<MLCreatePromptRequest, MLCreatePromptResponse> {
     private static final String INITIAL_VERSION = "1";
     private final MLIndicesHandler mlIndicesHandler;
     private final Client client;
@@ -68,7 +67,7 @@ public class TransportCreatePromptAction extends HandledTransportAction<ActionRe
      * stored into the system index.
      *
      * @param task The task
-     * @param request MLCreatePromptRequest that contains the metadata needed to create a new prompt
+     * @param mlCreatePromptRequest MLCreatePromptRequest that contains the metadata needed to create a new prompt
      * @param listener a listener to be notified of the response
      * <p>
      *      This method is called by the TransportService to execute the action request on the node that is
@@ -81,8 +80,7 @@ public class TransportCreatePromptAction extends HandledTransportAction<ActionRe
      * </p>
      */
     @Override
-    protected void doExecute(Task task, ActionRequest request, ActionListener<MLCreatePromptResponse> listener) {
-        MLCreatePromptRequest mlCreatePromptRequest = MLCreatePromptRequest.fromActionRequest(request);
+    protected void doExecute(Task task, MLCreatePromptRequest mlCreatePromptRequest, ActionListener<MLCreatePromptResponse> listener) {
         MLCreatePromptInput mlCreatePromptInput = mlCreatePromptRequest.getMlCreatePromptInput();
 
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, mlCreatePromptInput.getTenantId(), listener)) {

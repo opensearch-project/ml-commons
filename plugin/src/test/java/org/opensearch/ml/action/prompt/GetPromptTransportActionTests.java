@@ -155,7 +155,7 @@ public class GetPromptTransportActionTests extends OpenSearchTestCase {
 
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(argumentCaptor.getValue().getMessage(), "Failed to find prompt with the provided prompt id: prompt_id");
+        assertEquals("Failed to find prompt with the provided prompt id: prompt_id", argumentCaptor.getValue().getMessage());
     }
 
     @Test

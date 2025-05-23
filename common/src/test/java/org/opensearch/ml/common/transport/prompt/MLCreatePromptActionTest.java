@@ -14,6 +14,6 @@ public class MLCreatePromptActionTest {
     @Test
     public void testMLCreatePromptActionInstance() {
         assertNotNull(MLCreatePromptAction.INSTANCE);
-        assertEquals(MLCreatePromptAction.NAME, "cluster:admin/opensearch/ml/create_prompt");
+        assertEquals("cluster:admin/opensearch/ml/create_prompt", MLCreatePromptAction.NAME);
     }
 }

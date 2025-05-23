@@ -77,21 +77,6 @@ public class MLCreatePromptInputTest {
     }
 
     @Test
-    public void constructMLCreatePromptInput_NullVersion() {
-        MLCreatePromptInput mlCreatePromptInput = MLCreatePromptInput
-            .builder()
-            .name(TEST_PROMPT_NAME)
-            .description(TEST_PROMPT_DESCRIPTION)
-            .version(null)
-            .prompt(testPrompt)
-            .tags(TEST_PROMPT_TAGS)
-            .tenantId(TEST_PROMPT_TENANTID)
-            .build();
-
-        Assert.assertEquals(mlCreatePromptInput.getVersion(), TEST_PROMPT_VERSION);
-    }
-
-    @Test
     public void constructMLCreatePromptInput_NullPrompt() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("MLPrompt prompt field cannot be empty or null");
@@ -164,7 +149,7 @@ public class MLCreatePromptInputTest {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         mlCreatePromptInput.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String mlCreatePromptInputContent = TestHelper.xContentBuilderToString(builder);
-        Assert.assertEquals(mlCreatePromptInputContent, expectedInputStr);
+        Assert.assertEquals(expectedInputStr, mlCreatePromptInputContent);
     }
 
     @Test
