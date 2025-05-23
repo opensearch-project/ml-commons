@@ -75,6 +75,7 @@ import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.algorithms.remote.McpConnectorExecutor;
 import org.opensearch.ml.engine.encryptor.Encryptor;
+import org.opensearch.ml.engine.function_calling.FunctionCalling;
 import org.opensearch.ml.engine.tools.McpSseTool;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -128,6 +129,8 @@ public class AgentUtils {
     public static final String LLM_FINISH_REASON_PATH = "llm_finish_reason_path";
     public static final String LLM_FINISH_REASON_TOOL_USE = "llm_finish_reason_tool_use";
     public static final String TOOL_FILTERS_FIELD = "tool_filters";
+
+    public static final String DEFAULT_NO_ESCAPE_PARAMS = "_chat_history,_tools,_interactions,tool_configs";
 
     public static String addExamplesToPrompt(Map<String, String> parameters, String prompt) {
         Map<String, String> examplesMap = new HashMap<>();
@@ -299,7 +302,8 @@ public class AgentUtils {
         ModelTensorOutput tmpModelTensorOutput,
         List<String> llmResponsePatterns,
         Set<String> inputTools,
-        List<String> interactions
+        List<String> interactions,
+        FunctionCalling functionCalling
     ) {
         Map<String, String> modelOutput = new HashMap<>();
         Map<String, ?> dataAsMap = tmpModelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
@@ -333,26 +337,40 @@ public class AgentUtils {
             String llmFinishReasonPath = parameters.get(LLM_FINISH_REASON_PATH);
             String llmFinishReason = "";
             if (llmFinishReasonPath.startsWith("_llm_response.")) {// TODO: support _llm_response for all other places
+                // FIXME: the below will fail sometimes with "com.google.gson.stream.MalformedJsonException"
                 Map<String, Object> llmResponse = StringUtils.fromJson(response.toString(), RESPONSE_FIELD);
                 llmFinishReason = JsonPath.read(llmResponse, llmFinishReasonPath.substring("_llm_response.".length()));
             } else {
                 llmFinishReason = JsonPath.read(dataAsMap, llmFinishReasonPath);
             }
             if (parameters.get(LLM_FINISH_REASON_TOOL_USE).equalsIgnoreCase(llmFinishReason) || isToolUseResponse) {
-                List toolCalls = null;
+                List<Map<String, String>> toolCalls = null;
                 try {
-                    String toolCallsPath = parameters.get(TOOL_CALLS_PATH);
-                    if (toolCallsPath.startsWith("_llm_response.")) {
-                        Map<String, Object> llmResponse = StringUtils.fromJson(response.toString(), RESPONSE_FIELD);
-                        toolCalls = JsonPath.read(llmResponse, toolCallsPath.substring("_llm_response.".length()));
+                    String toolName = "";
+                    String toolInput = "";
+                    String toolCallId = "";
+                    if (functionCalling != null) {
+                        toolCalls = functionCalling.handle(tmpModelTensorOutput, parameters);
+                        // TODO: support multiple tool calls here
+                        toolName = toolCalls.getFirst().get("tool_name");
+                        toolInput = toolCalls.getFirst().get("tool_input");
+                        toolCallId = toolCalls.getFirst().get("tool_call_id");
                     } else {
-                        toolCalls = JsonPath.read(dataAsMap, toolCallsPath);
+                        String toolCallsPath = parameters.get(TOOL_CALLS_PATH);
+                        if (toolCallsPath.startsWith("_llm_response.")) {
+                            Map<String, Object> llmResponse = StringUtils.fromJson(response.toString(), RESPONSE_FIELD);
+                            toolCalls = JsonPath.read(llmResponse, toolCallsPath.substring("_llm_response.".length()));
+                        } else {
+                            toolCalls = JsonPath.read(dataAsMap, toolCallsPath);
+                        }
+                        toolName = JsonPath.read(toolCalls.get(0), parameters.get(TOOL_CALLS_TOOL_NAME));
+                        toolInput = StringUtils.toJson(JsonPath.read(toolCalls.get(0), parameters.get(TOOL_CALLS_TOOL_INPUT)));
+                        toolCallId = JsonPath.read(toolCalls.get(0), parameters.get(TOOL_CALL_ID_PATH));
                     }
                     String toolCallsMsgPath = parameters.get(INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS_PATH);
                     String toolCallsMsgExcludePath = parameters.get(INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS_EXCLUDE_PATH);
                     if (toolCallsMsgPath != null) {
                         if (toolCallsMsgExcludePath != null) {
-
                             Map<String, ?> newDataAsMap = removeJsonPath(dataAsMap, toolCallsMsgExcludePath, false);
                             Object toolCallsMsg = JsonPath.read(newDataAsMap, toolCallsMsgPath);
                             interactions.add(StringUtils.toJson(toolCallsMsg));
@@ -371,9 +389,6 @@ public class AgentUtils {
                                 )
                             );
                     }
-                    String toolName = JsonPath.read(toolCalls.get(0), parameters.get(TOOL_CALLS_TOOL_NAME));
-                    String toolInput = StringUtils.toJson(JsonPath.read(toolCalls.get(0), parameters.get(TOOL_CALLS_TOOL_INPUT)));
-                    String toolCallId = JsonPath.read(toolCalls.get(0), parameters.get(TOOL_CALL_ID_PATH));
                     modelOutput.put(THOUGHT, "");
                     modelOutput.put(ACTION, toolName);
                     modelOutput.put(ACTION_INPUT, toolInput);
