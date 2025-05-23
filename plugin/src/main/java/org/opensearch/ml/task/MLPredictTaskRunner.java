@@ -6,8 +6,8 @@
 package org.opensearch.ml.task;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.ML_JOBS_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
-import static org.opensearch.ml.common.CommonValue.TASK_POLLING_JOB_INDEX;
 import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE;
 import static org.opensearch.ml.common.utils.StringUtils.getErrorMessage;
@@ -433,7 +433,8 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                                                     remoteJob
                                                 );
 
-                                                if (!clusterService.state().metadata().indices().containsKey(TASK_POLLING_JOB_INDEX)) {
+                                                // todo: logic for starting the job
+                                                if (!clusterService.state().metadata().indices().containsKey(ML_JOBS_INDEX)) {
                                                     mlTaskManager.startTaskPollingJob();
                                                 }
 
@@ -462,9 +463,10 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                                 internalListener.onResponse(output);
                             }
                         }, e -> handlePredictFailure(mlTask, internalListener, e, false, modelId, actionName));
-                        predictor.asyncPredict(mlInput, trackPredictDurationListener);
+                        predictor.asyncPredict(mlInput, trackPredictDurationListener); // with listener
                     } else {
-                        MLOutput output = mlModelManager.trackPredictDuration(modelId, () -> predictor.predict(mlInput));
+                        MLOutput output = mlModelManager.trackPredictDuration(modelId, () -> predictor.predict(mlInput)); // without
+                                                                                                                          // listener
                         if (output instanceof MLPredictionOutput) {
                             ((MLPredictionOutput) output).setStatus(MLTaskState.COMPLETED.name());
                         }

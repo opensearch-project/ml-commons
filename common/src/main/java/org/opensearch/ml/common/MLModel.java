@@ -20,8 +20,13 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
+import org.apache.commons.text.StringSubstitutor;
+import org.json.JSONObject;
 import org.opensearch.Version;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -31,6 +36,7 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.model.BaseModelConfig;
 import org.opensearch.ml.common.model.Guardrails;
@@ -42,12 +48,17 @@ import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
 import org.opensearch.ml.common.model.QuestionAnsweringModelConfig;
 import org.opensearch.ml.common.model.RemoteModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
+import org.opensearch.telemetry.metrics.tags.Tags;
+
+import com.google.common.annotations.VisibleForTesting;
 
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.extern.log4j.Log4j2;
 
 @Getter
+@Log4j2
 public class MLModel implements ToXContentObject {
     @Deprecated
     public static final String ALGORITHM_FIELD = "algorithm";
@@ -101,6 +112,86 @@ public class MLModel implements ToXContentObject {
     public static final String CONNECTOR_ID_FIELD = "connector_id";
     public static final String GUARDRAILS_FIELD = "guardrails";
     public static final String INTERFACE_FIELD = "interface";
+
+    private static final String TAG_DEPLOYMENT = "deployment";
+    private static final String TAG_REMOTE_DEPLOYMENT_VALUE = "remote";
+    private static final String TAG_PRE_TRAINED_DEPLOYMENT_VALUE = "local:pre_trained";
+    private static final String TAG_CUSTOM_DEPLOYMENT_VALUE = "local:custom";
+    private static final String TAG_ALGORITHM = "algorithm";
+    private static final String TAG_MODEL = "model";
+    private static final String TAG_SERVICE_PROVIDER = "service_provider";
+    private static final String TAG_VALUE_UNKNOWN = "unknown";
+    private static final String TAG_TYPE = "type";
+    private static final String TAG_MODEL_FORMAT = "model_format";
+    private static final String TAG_URL = "url";
+
+    // do not modify -- used to match keywords in endpoints
+    private static final String BEDROCK = "bedrock";
+    private static final String SAGEMAKER = "sagemaker";
+    private static final String AZURE = "azure";
+    private static final String GOOGLE = "google";
+    private static final String OPENAI = "openai";
+    private static final String DEEPSEEK = "deepseek";
+    private static final String COHERE = "cohere";
+    private static final String VERTEXAI = "vertexai";
+    private static final String ALEPH_ALPHA = "aleph-alpha";
+    private static final String COMPREHEND = "comprehend";
+    private static final String TEXTRACT = "textract";
+    private static final String ANTHROPIC = "anthropic";
+    private static final String MISTRAL = "mistral";
+    private static final String X_AI = "x.ai";
+
+    // Maintain order (generic providers -> specific providers)
+    private static final List<String> MODEL_SERVICE_PROVIDER_KEYWORDS = Arrays
+        .asList(
+            BEDROCK,
+            SAGEMAKER,
+            AZURE,
+            GOOGLE,
+            ANTHROPIC,
+            OPENAI,
+            DEEPSEEK,
+            COHERE,
+            VERTEXAI,
+            ALEPH_ALPHA,
+            COMPREHEND,
+            TEXTRACT,
+            MISTRAL,
+            X_AI
+        );
+
+    private static final String LLM_MODEL_TYPE = "llm";
+    private static final String EMBEDDING_MODEL_TYPE = "embedding";
+    private static final String IMAGE_GENERATION_MODEL_TYPE = "image_generation";
+    private static final String SPEECH_AUDIO_MODEL_TYPE = "speech_audio";
+
+    // keywords in model name used to infer type of remote model
+    private static final List<String> LLM_KEYWORDS = Arrays
+        .asList(
+            "gpt",
+            "o3",
+            "o4-mini",
+            "claude",
+            "llama",
+            "mistral",
+            "mixtral",
+            "gemini",
+            "palm",
+            "bard",
+            "j1-",
+            "j2-",
+            "jurassic",
+            "command",
+            "grok",
+            "chat",
+            "llm"
+        );
+
+    private static final List<String> EMBEDDING_KEYWORDS = Arrays.asList("embedding", "embed", "ada", "text-similarity-");
+
+    private static final List<String> IMAGE_GEN_KEYWORDS = Arrays.asList("diffusion", "dall-e", "imagen", "midjourney", "image");
+
+    private static final List<String> SPEECH_AUDIO_KEYWORDS = Arrays.asList("whisper", "audio", "speech");
 
     public static final Set<String> allowedInterfaceFieldKeys = new HashSet<>(Arrays.asList("input", "output"));
 
@@ -755,4 +846,191 @@ public class MLModel implements ToXContentObject {
         return new MLModel(in);
     }
 
+    public Tags getTags() {
+        return getTags(this.connector);
+    }
+
+    public Tags getTags(Connector connector) {
+        // if connector is present, model is a remote model
+        if (this.algorithm == FunctionName.REMOTE && connector != null) {
+            return getRemoteModelTags(connector);
+        }
+
+        // pre-trained models follow a specific naming convention, relying on that to identify a pre-trained model
+        if (this.name != null && this.name.contains("/") && this.name.split("/").length >= 3) {
+            return getPreTrainedModelTags();
+        }
+
+        return getCustomModelTags();
+    }
+
+    @VisibleForTesting
+    Tags getRemoteModelTags(Connector connector) {
+        String serviceProvider = TAG_VALUE_UNKNOWN;
+        String model = TAG_VALUE_UNKNOWN;
+        String modelType = TAG_VALUE_UNKNOWN;
+        String url = TAG_VALUE_UNKNOWN;
+
+        Optional<ConnectorAction> predictAction = connector.findAction(ConnectorAction.ActionType.PREDICT.name());
+        if (predictAction.isPresent()) {
+            try {
+                StringSubstitutor stringSubstitutor = new StringSubstitutor(connector.getParameters(), "${parameters.", "}");
+                url = stringSubstitutor.replace(predictAction.get().getUrl()).toLowerCase();
+
+                JSONObject requestBody = null;
+                if (predictAction.get().getRequestBody() != null) {
+                    try {
+                        String body = stringSubstitutor.replace(predictAction.get().getRequestBody());
+                        requestBody = new JSONObject(body);
+                    } catch (Exception e) {
+                        log.error("Failed to parse request body as JSON: {}", e.getMessage());
+                    }
+                }
+
+                serviceProvider = identifyServiceProvider(url);
+                model = identifyModel(serviceProvider, url, requestBody, connector);
+                modelType = identifyModelType(model);
+            } catch (Exception e) {
+                log.warn("Error identifying model provider and model from connector: {}", e.getMessage());
+            }
+        }
+
+        Tags tags = Tags
+            .create()
+            .addTag(TAG_DEPLOYMENT, TAG_REMOTE_DEPLOYMENT_VALUE)
+            .addTag(TAG_SERVICE_PROVIDER, serviceProvider)
+            .addTag(TAG_ALGORITHM, algorithm.name())
+            .addTag(TAG_MODEL, model)
+            .addTag(TAG_TYPE, modelType);
+
+        if ((serviceProvider.equals(TAG_VALUE_UNKNOWN) || model.equals(TAG_VALUE_UNKNOWN)) && !url.equals(TAG_VALUE_UNKNOWN)) {
+            tags.addTag(TAG_URL, url);
+        }
+
+        return tags;
+    }
+
+    @VisibleForTesting
+    String identifyServiceProvider(String url) {
+        for (String provider : MODEL_SERVICE_PROVIDER_KEYWORDS) {
+            if (url.contains(provider)) {
+                return provider;
+            }
+        }
+
+        return TAG_VALUE_UNKNOWN;
+    }
+
+    @VisibleForTesting
+    String identifyModel(String provider, String url, JSONObject requestBody, Connector connector) {
+        try {
+            // bedrock expects model in the url after `/model/`
+            if (provider.equals(BEDROCK)) {
+                Pattern bedrockPattern = Pattern.compile("/model/([^/]+)/");
+                Matcher bedrockMatcher = bedrockPattern.matcher(url);
+                if (bedrockMatcher.find()) {
+                    return bedrockMatcher.group(1);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error extracting model information: {}", e.getMessage());
+        }
+
+        // check if request body has `model` -- typical for OpenAI/Sagemaker
+        if (requestBody != null) {
+            if (requestBody.keySet().contains("model")) {
+                return requestBody.getString("model");
+            }
+
+            if (requestBody.keySet().contains("ModelName")) {
+                return requestBody.getString("ModelName");
+            }
+        }
+
+        // check if parameters has `model` -- recommended via blueprints
+        if (connector.getParameters() != null && connector.getParameters().containsKey("model")) {
+            return connector.getParameters().get("model");
+        }
+
+        return TAG_VALUE_UNKNOWN;
+    }
+
+    private static boolean containsAny(String target, List<String> keywords) {
+        for (String key : keywords) {
+            if (target.contains(key)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @VisibleForTesting
+    String identifyModelType(String model) {
+        if (model == null || TAG_VALUE_UNKNOWN.equals(model)) {
+            return TAG_VALUE_UNKNOWN;
+        }
+
+        String modelLower = model.toLowerCase();
+
+        if (containsAny(modelLower, LLM_KEYWORDS)) {
+            return LLM_MODEL_TYPE;
+        }
+
+        if (containsAny(modelLower, EMBEDDING_KEYWORDS)) {
+            return EMBEDDING_MODEL_TYPE;
+        }
+
+        if (containsAny(modelLower, IMAGE_GEN_KEYWORDS)) {
+            return IMAGE_GENERATION_MODEL_TYPE;
+        }
+
+        if (containsAny(modelLower, SPEECH_AUDIO_KEYWORDS)) {
+            return SPEECH_AUDIO_MODEL_TYPE;
+        }
+
+        return TAG_VALUE_UNKNOWN;
+    }
+
+    @VisibleForTesting
+    Tags getPreTrainedModelTags() {
+        String modelType = TAG_VALUE_UNKNOWN;
+        if (this.modelConfig != null && this.modelConfig.getModelType() != null) {
+            modelType = this.modelConfig.getModelType();
+        }
+
+        String[] nameParts = this.name.split("/");
+        Tags tags = Tags
+            .create()
+            .addTag(TAG_DEPLOYMENT, TAG_PRE_TRAINED_DEPLOYMENT_VALUE)
+            .addTag(TAG_SERVICE_PROVIDER, nameParts[0])
+            .addTag(TAG_ALGORITHM, this.algorithm.name()) // nameParts[1] is not used
+            .addTag(TAG_MODEL, nameParts[2])
+            .addTag(TAG_TYPE, modelType);
+
+        if (this.modelFormat != null) {
+            tags.addTag(TAG_MODEL_FORMAT, this.modelFormat.name());
+        }
+
+        return tags;
+    }
+
+    @VisibleForTesting
+    Tags getCustomModelTags() {
+        String modelType = TAG_VALUE_UNKNOWN;
+        if (this.modelConfig != null && this.modelConfig.getModelType() != null) {
+            modelType = this.modelConfig.getModelType();
+        }
+
+        Tags tags = Tags
+            .create()
+            .addTag(TAG_DEPLOYMENT, TAG_CUSTOM_DEPLOYMENT_VALUE)
+            .addTag(TAG_ALGORITHM, this.algorithm.name())
+            .addTag(TAG_TYPE, modelType);
+
+        if (this.modelFormat != null) {
+            tags.addTag(TAG_MODEL_FORMAT, this.modelFormat.name());
+        }
+
+        return tags;
+    }
 }
