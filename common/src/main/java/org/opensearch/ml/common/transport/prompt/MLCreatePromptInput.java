@@ -38,7 +38,6 @@ public class MLCreatePromptInput implements ToXContentObject, Writeable {
 
     public static final String PROMPT_FIELD_USER_PROMPT = "user";
     public static final String PROMPT_FIELD_SYSTEM_PROMPT = "system";
-    public static final String PROMPT_VERSION_INITIAL_VERSION = "1";
 
     private String name;
     private String description;
@@ -82,7 +81,7 @@ public class MLCreatePromptInput implements ToXContentObject, Writeable {
 
         this.name = name;
         this.description = description;
-        this.version = version == null ? PROMPT_VERSION_INITIAL_VERSION : version;
+        this.version = version;
         this.prompt = prompt;
         this.tags = tags;
         this.tenantId = tenantId;

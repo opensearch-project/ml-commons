@@ -16,7 +16,7 @@ import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.ml.common.MLPrompt;
+import org.opensearch.ml.common.prompt.MLPrompt;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.prompt.MLCreatePromptAction;
 import org.opensearch.ml.common.transport.prompt.MLCreatePromptInput;
@@ -40,6 +40,7 @@ import lombok.extern.log4j.Log4j2;
  */
 @Log4j2
 public class TransportCreatePromptAction extends HandledTransportAction<ActionRequest, MLCreatePromptResponse> {
+    private static final String INITIAL_VERSION = "1";
     private final MLIndicesHandler mlIndicesHandler;
     private final Client client;
     private final SdkClient sdkClient;
@@ -89,11 +90,12 @@ public class TransportCreatePromptAction extends HandledTransportAction<ActionRe
         }
 
         try {
+            String version = mlCreatePromptInput.getVersion();
             MLPrompt mlPrompt = MLPrompt
                 .builder()
                 .name(mlCreatePromptInput.getName())
                 .description(mlCreatePromptInput.getDescription())
-                .version(mlCreatePromptInput.getVersion())
+                .version(version == null ? INITIAL_VERSION : version)
                 .prompt(mlCreatePromptInput.getPrompt())
                 .tags(mlCreatePromptInput.getTags())
                 .tenantId(mlCreatePromptInput.getTenantId())

@@ -24,7 +24,6 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.MLPrompt;
 import org.opensearch.ml.common.TestHelper;
 
 public class MLPromptTest {

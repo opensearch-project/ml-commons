@@ -30,7 +30,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.ml.common.MLPrompt;
+import org.opensearch.ml.common.prompt.MLPrompt;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.prompt.MLPromptGetRequest;
 import org.opensearch.ml.common.transport.prompt.MLPromptGetResponse;
