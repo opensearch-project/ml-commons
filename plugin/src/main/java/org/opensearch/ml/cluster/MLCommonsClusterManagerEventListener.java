@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.cluster;
 
+import static org.opensearch.ml.common.CommonValue.ML_JOBS_INDEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_SYNC_UP_JOB_INTERVAL_IN_SECONDS;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.GENERAL_THREAD_POOL;
 
@@ -110,7 +111,7 @@ public class MLCommonsClusterManagerEventListener implements LocalNodeClusterMan
 
     private void startStatsCollectorJob() {
         try {
-            int intervalInMinutes = 1;
+            int intervalInMinutes = 5;
             Long lockDurationSeconds = 20L;
 
             MLJobParameter jobParameter = new MLJobParameter(

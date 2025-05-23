@@ -50,6 +50,8 @@ import org.opensearch.ml.common.model.RemoteModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.telemetry.metrics.tags.Tags;
 
+import com.google.common.annotations.VisibleForTesting;
+
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
@@ -862,7 +864,8 @@ public class MLModel implements ToXContentObject {
         return getCustomModelTags();
     }
 
-    private Tags getRemoteModelTags(Connector connector) {
+    @VisibleForTesting
+    Tags getRemoteModelTags(Connector connector) {
         String serviceProvider = TAG_VALUE_UNKNOWN;
         String model = TAG_VALUE_UNKNOWN;
         String modelType = TAG_VALUE_UNKNOWN;
@@ -907,11 +910,8 @@ public class MLModel implements ToXContentObject {
         return tags;
     }
 
-    /**
-     * Identifies the service provider from the connector URL
-     * Matches keywords in `MODEL_SERVICE_PROVIDER_KEYWORDS`
-     */
-    private String identifyServiceProvider(String url) {
+    @VisibleForTesting
+    String identifyServiceProvider(String url) {
         for (String provider : MODEL_SERVICE_PROVIDER_KEYWORDS) {
             if (url.contains(provider)) {
                 return provider;
@@ -921,10 +921,8 @@ public class MLModel implements ToXContentObject {
         return TAG_VALUE_UNKNOWN;
     }
 
-    /**
-     * Extracts model information based on the identified provider and URL/body patterns
-     */
-    private String identifyModel(String provider, String url, JSONObject requestBody, Connector connector) {
+    @VisibleForTesting
+    String identifyModel(String provider, String url, JSONObject requestBody, Connector connector) {
         try {
             // bedrock expects model in the url after `/model/`
             if (provider.equals(BEDROCK)) {
@@ -950,16 +948,13 @@ public class MLModel implements ToXContentObject {
         }
 
         // check if parameters has `model` -- recommended via blueprints
-        if (connector.getParameters().containsKey("model")) {
+        if (connector.getParameters() != null && connector.getParameters().containsKey("model")) {
             return connector.getParameters().get("model");
         }
 
         return TAG_VALUE_UNKNOWN;
     }
 
-    /**
-     * Utility to check if the target string contains any of the keywords.
-     */
     private static boolean containsAny(String target, List<String> keywords) {
         for (String key : keywords) {
             if (target.contains(key)) {
@@ -969,10 +964,8 @@ public class MLModel implements ToXContentObject {
         return false;
     }
 
-    /**
-     * Determines the model type based on the model name
-     */
-    private String identifyModelType(String model) {
+    @VisibleForTesting
+    String identifyModelType(String model) {
         if (model == null || TAG_VALUE_UNKNOWN.equals(model)) {
             return TAG_VALUE_UNKNOWN;
         }
@@ -998,12 +991,11 @@ public class MLModel implements ToXContentObject {
         return TAG_VALUE_UNKNOWN;
     }
 
-    private Tags getPreTrainedModelTags() {
+    @VisibleForTesting
+    Tags getPreTrainedModelTags() {
         String modelType = TAG_VALUE_UNKNOWN;
-        if (this.modelConfig != null) {
-            if (this.modelConfig.getModelType() != null) {
-                modelType = this.modelConfig.getModelType();
-            }
+        if (this.modelConfig != null && this.modelConfig.getModelType() != null) {
+            modelType = this.modelConfig.getModelType();
         }
 
         String[] nameParts = this.name.split("/");
@@ -1022,7 +1014,8 @@ public class MLModel implements ToXContentObject {
         return tags;
     }
 
-    private Tags getCustomModelTags() {
+    @VisibleForTesting
+    Tags getCustomModelTags() {
         String modelType = TAG_VALUE_UNKNOWN;
         if (this.modelConfig != null && this.modelConfig.getModelType() != null) {
             modelType = this.modelConfig.getModelType();

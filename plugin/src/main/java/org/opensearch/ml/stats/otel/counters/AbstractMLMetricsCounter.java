@@ -41,6 +41,10 @@ public abstract class AbstractMLMetricsCounter<T extends Enum<T>> {
         Stream.of(metricClass.getEnumConstants()).forEach(metric -> metricCounterMap.computeIfAbsent(metric, this::createMetricCounter));
     }
 
+    public void incrementCounter(T metric) {
+        incrementCounter(metric, null);
+    }
+
     public void incrementCounter(T metric, Tags customTags) {
         if (!mlFeatureEnabledSetting.isMetricCollectionEnabled()) {
             return;

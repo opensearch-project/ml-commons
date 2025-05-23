@@ -48,9 +48,7 @@ public class MLFeatureEnabledSetting {
 
     private volatile Boolean isRagSearchPipelineEnabled;
 
-    // block any push
     private volatile Boolean isMetricCollectionEnabled;
-    // block static push
     private volatile Boolean isStaticMetricCollectionEnabled;
 
     private final List<SettingsChangeListener> listeners = new ArrayList<>();

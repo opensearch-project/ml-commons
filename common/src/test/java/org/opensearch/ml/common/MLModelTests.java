@@ -6,12 +6,18 @@
 package org.opensearch.ml.common;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.function.Function;
 
+import org.json.JSONObject;
 import org.junit.Before;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
@@ -23,6 +29,11 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.model.BaseModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.connector.HttpConnector;
+import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
+import org.opensearch.telemetry.metrics.tags.Tags;
 
 public class MLModelTests {
 
@@ -176,4 +187,269 @@ public class MLModelTests {
         assertEquals("test_tenant", mlModelWithTenantId.getTenantId());
     }
 
+    @Test
+    public void testGetTags_RemoteModel() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("model", "gpt-4");
+
+        Connector connector = HttpConnector
+            .builder()
+            .name("test-connector")
+            .protocol("http")
+            .parameters(parameters)
+            .actions(
+                Collections
+                    .singletonList(
+                        ConnectorAction
+                            .builder()
+                            .actionType(ConnectorAction.ActionType.PREDICT)
+                            .method("POST")
+                            .url("https://api.openai.com/test-url")
+                            .requestBody("{\"model\": \"${parameters.model}\"}")
+                            .build()
+                    )
+            )
+            .build();
+
+        MLModel model = MLModel.builder().name("test-model").algorithm(FunctionName.REMOTE).connector(connector).build();
+
+        Tags tags = model.getTags();
+        assertNotNull(tags);
+        assertEquals("remote", tags.getTagsMap().get("deployment"));
+        assertEquals("openai", tags.getTagsMap().get("service_provider"));
+        assertEquals("REMOTE", tags.getTagsMap().get("algorithm"));
+        assertEquals("gpt-4", tags.getTagsMap().get("model"));
+        assertEquals("llm", tags.getTagsMap().get("type"));
+
+        // Unknown service-provider
+        Connector unknownConnector = HttpConnector
+            .builder()
+            .name("unknown-connector")
+            .protocol("http")
+            .actions(
+                Collections
+                    .singletonList(
+                        ConnectorAction
+                            .builder()
+                            .actionType(ConnectorAction.ActionType.PREDICT)
+                            .method("POST")
+                            .url("https://unknown-service.com/api/v1/predict")
+                            .build()
+                    )
+            )
+            .build();
+
+        MLModel unknownModel = MLModel.builder().name("unknown-model").algorithm(FunctionName.REMOTE).connector(unknownConnector).build();
+
+        tags = unknownModel.getTags();
+        assertNotNull(tags);
+        assertEquals("remote", tags.getTagsMap().get("deployment"));
+        assertEquals("unknown", tags.getTagsMap().get("service_provider"));
+        assertEquals("REMOTE", tags.getTagsMap().get("algorithm"));
+        assertEquals("unknown", tags.getTagsMap().get("model"));
+        assertEquals("unknown", tags.getTagsMap().get("type"));
+        assertEquals("https://unknown-service.com/api/v1/predict", tags.getTagsMap().get("url"));
+
+        // Unknown model
+        Connector invalidConnector = HttpConnector
+            .builder()
+            .name("invalid-connector")
+            .protocol("http")
+            .actions(
+                Collections
+                    .singletonList(
+                        ConnectorAction
+                            .builder()
+                            .actionType(ConnectorAction.ActionType.PREDICT)
+                            .method("POST")
+                            .url("https://api.openai.com/test-url")
+                            .requestBody("{}")
+                            .build()
+                    )
+            )
+            .build();
+
+        MLModel invalidModel = MLModel.builder().name("invalid-model").algorithm(FunctionName.REMOTE).connector(invalidConnector).build();
+
+        tags = invalidModel.getTags();
+        assertNotNull(tags);
+        assertEquals("remote", tags.getTagsMap().get("deployment"));
+        assertEquals("openai", tags.getTagsMap().get("service_provider"));
+        assertEquals("REMOTE", tags.getTagsMap().get("algorithm"));
+        assertEquals("unknown", tags.getTagsMap().get("model"));
+        assertEquals("unknown", tags.getTagsMap().get("type"));
+    }
+
+    @Test
+    public void testGetTags_WithPreTrainedModel() {
+        TextEmbeddingModelConfig config = TextEmbeddingModelConfig
+            .builder()
+            .modelType("embedding-test-type")
+            .embeddingDimension(1)
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.HUGGINGFACE_TRANSFORMERS)
+            .build();
+
+        MLModel model = MLModel
+            .builder()
+            .name("huggingface/bert/bert-base-uncased")
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .modelConfig(config)
+            .modelFormat(MLModelFormat.TORCH_SCRIPT)
+            .build();
+
+        Tags tags = model.getTags();
+        assertNotNull(tags);
+        assertEquals("local:pre_trained", tags.getTagsMap().get("deployment"));
+        assertEquals("huggingface", tags.getTagsMap().get("service_provider"));
+        assertEquals("TEXT_EMBEDDING", tags.getTagsMap().get("algorithm"));
+        assertEquals("bert-base-uncased", tags.getTagsMap().get("model"));
+        assertEquals("embedding-test-type", tags.getTagsMap().get("type"));
+        assertEquals("TORCH_SCRIPT", tags.getTagsMap().get("model_format"));
+    }
+
+    @Test
+    public void testGetTags_WithCustomModel() {
+        TextEmbeddingModelConfig config = TextEmbeddingModelConfig
+            .builder()
+            .modelType("custom_embedding")
+            .embeddingDimension(1)
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.HUGGINGFACE_TRANSFORMERS)
+            .build();
+
+        MLModel model = MLModel
+            .builder()
+            .name("custom-model")
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .modelConfig(config)
+            .modelFormat(MLModelFormat.ONNX)
+            .build();
+
+        Tags tags = model.getTags();
+        assertNotNull(tags);
+        assertEquals("local:custom", tags.getTagsMap().get("deployment"));
+        assertEquals("TEXT_EMBEDDING", tags.getTagsMap().get("algorithm"));
+        assertEquals("custom_embedding", tags.getTagsMap().get("type"));
+        assertEquals("ONNX", tags.getTagsMap().get("model_format"));
+
+        // missing type
+        MLModel noTypeModel = MLModel
+            .builder()
+            .name("custom-model")
+            .algorithm(FunctionName.TEXT_EMBEDDING)
+            .modelFormat(MLModelFormat.ONNX)
+            .build();
+
+        tags = noTypeModel.getTags();
+        assertNotNull(tags);
+        assertEquals("local:custom", tags.getTagsMap().get("deployment"));
+        assertEquals("TEXT_EMBEDDING", tags.getTagsMap().get("algorithm"));
+        assertEquals("unknown", tags.getTagsMap().get("type"));
+        assertEquals("ONNX", tags.getTagsMap().get("model_format"));
+
+        // missing model format
+        MLModel noFormatModel = MLModel.builder().name("custom-model").algorithm(FunctionName.TEXT_EMBEDDING).modelConfig(config).build();
+
+        tags = noFormatModel.getTags();
+        assertNotNull(tags);
+        assertEquals("local:custom", tags.getTagsMap().get("deployment"));
+        assertEquals("TEXT_EMBEDDING", tags.getTagsMap().get("algorithm"));
+        assertEquals("custom_embedding", tags.getTagsMap().get("type"));
+        assertNull(tags.getTagsMap().get("model_format"));
+    }
+
+    @Test
+    public void testIdentifyServiceProvider() {
+        assertEquals("bedrock", mlModel.identifyServiceProvider("https://test-bedrock-url.com/api"));
+        assertEquals("sagemaker", mlModel.identifyServiceProvider("https://test-sagemaker-url.com/api"));
+        assertEquals("azure", mlModel.identifyServiceProvider("https://test-azure-url.com/api"));
+        assertEquals("google", mlModel.identifyServiceProvider("https://test-google-url.com/api"));
+        assertEquals("anthropic", mlModel.identifyServiceProvider("https://test-anthropic-url.com/api"));
+        assertEquals("openai", mlModel.identifyServiceProvider("https://test-openai-url.com/api"));
+        assertEquals("deepseek", mlModel.identifyServiceProvider("https://test-deepseek-url.com/api"));
+        assertEquals("cohere", mlModel.identifyServiceProvider("https://test-cohere-url.com/api"));
+        assertEquals("vertexai", mlModel.identifyServiceProvider("https://test-vertexai-url.com/api"));
+        assertEquals("aleph-alpha", mlModel.identifyServiceProvider("https://test-aleph-alpha-url.com/api"));
+        assertEquals("comprehend", mlModel.identifyServiceProvider("https://test-comprehend-url.com/api"));
+        assertEquals("textract", mlModel.identifyServiceProvider("https://test-textract-url.com/api"));
+        assertEquals("mistral", mlModel.identifyServiceProvider("https://test-mistral-url.com/api"));
+        assertEquals("x.ai", mlModel.identifyServiceProvider("https://test-x.ai-url.com/api"));
+        assertEquals("unknown", mlModel.identifyServiceProvider("https://unknown-provider.com/api"));
+    }
+
+    @Test
+    public void testIdentifyModel() {
+        // Bedrock test case (/model/{model}/)
+        Connector bedrockConnector = HttpConnector
+            .builder()
+            .name("bedrock-connector")
+            .protocol("http")
+            .actions(
+                Collections
+                    .singletonList(
+                        ConnectorAction
+                            .builder()
+                            .actionType(ConnectorAction.ActionType.PREDICT)
+                            .method("POST")
+                            .url("https://test-bedrock-url.com/api/model/test-model/invoke")
+                            .build()
+                    )
+            )
+            .build();
+        assertEquals(
+            "test-model",
+            mlModel.identifyModel("bedrock", "https://test-bedrock-url.com/api/model/test-model/invoke", null, bedrockConnector)
+        );
+
+        // Model in request body
+        String requestBody = "{\"model\": \"test-model\"}";
+        Connector openaiConnector = HttpConnector
+            .builder()
+            .name("openai-connector")
+            .protocol("http")
+            .actions(
+                java.util.Arrays
+                    .asList(
+                        ConnectorAction
+                            .builder()
+                            .actionType(ConnectorAction.ActionType.PREDICT)
+                            .method("POST")
+                            .url("https://test-openai-url.com/api")
+                            .requestBody(requestBody)
+                            .build()
+                    )
+            )
+            .build();
+        assertEquals(
+            "test-model",
+            mlModel.identifyModel("openai", "https://test-openai-url.com/api", new JSONObject(requestBody), openaiConnector)
+        );
+
+        // Test with model in parameters but not in request body
+        requestBody = "{\"messages\": [{\"role\": \"user\", \"content\": \"Hello\"}]}";
+        Map<String, String> paramsOnly = new HashMap<>();
+        paramsOnly.put("model", "test-model");
+        Connector paramsOnlyConnector = HttpConnector
+            .builder()
+            .name("params-only-connector")
+            .protocol("http")
+            .parameters(paramsOnly)
+            .actions(
+                java.util.Arrays
+                    .asList(
+                        ConnectorAction
+                            .builder()
+                            .actionType(ConnectorAction.ActionType.PREDICT)
+                            .method("POST")
+                            .url("https://test-api.anthropic.com/v1/messages")
+                            .requestBody(requestBody)
+                            .build()
+                    )
+            )
+            .build();
+        assertEquals(
+            "test-model",
+            mlModel
+                .identifyModel("anthropic", "https://test-api.anthropic.com/v1/messages", new JSONObject(requestBody), paramsOnlyConnector)
+        );
+    }
 }
