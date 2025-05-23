@@ -26,8 +26,8 @@ import org.opensearch.core.action.ActionResponse;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.ml.common.prompt.MLPrompt;
 import org.opensearch.ml.common.TestHelper;
+import org.opensearch.ml.common.prompt.MLPrompt;
 
 public class MLPromptGetResponseTest {
     MLPrompt mlPrompt;
