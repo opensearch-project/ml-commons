@@ -360,6 +360,9 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
                     String newQueryField = outputMapEntry.getKey();
                     String modelOutputFieldName = outputMapEntry.getValue();
                     Object modelOutputValue = getModelOutputValue(mlOutput, modelOutputFieldName, ignoreMissing, fullResponsePath);
+                    if (modelOutputValue instanceof Map) {
+                        modelOutputValue = toJson(modelOutputValue);
+                    }
                     valuesMap.put(newQueryField, modelOutputValue);
                 }
                 StringSubstitutor sub = new StringSubstitutor(valuesMap);
