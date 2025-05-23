@@ -465,7 +465,8 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                         }, e -> handlePredictFailure(mlTask, internalListener, e, false, modelId, actionName));
                         predictor.asyncPredict(mlInput, trackPredictDurationListener); // with listener
                     } else {
-                        MLOutput output = mlModelManager.trackPredictDuration(modelId, () -> predictor.predict(mlInput)); // without listener
+                        MLOutput output = mlModelManager.trackPredictDuration(modelId, () -> predictor.predict(mlInput)); // without
+                                                                                                                          // listener
                         if (output instanceof MLPredictionOutput) {
                             ((MLPredictionOutput) output).setStatus(MLTaskState.COMPLETED.name());
                         }

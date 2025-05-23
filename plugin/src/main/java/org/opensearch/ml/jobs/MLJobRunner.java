@@ -9,7 +9,6 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.jobscheduler.spi.JobExecutionContext;
 import org.opensearch.jobscheduler.spi.ScheduledJobParameter;
 import org.opensearch.jobscheduler.spi.ScheduledJobRunner;
-import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.jobs.processors.MLBatchTaskUpdateProcessor;
