@@ -77,24 +77,9 @@ public class MLCreatePromptInputTest {
     }
 
     @Test
-    public void constructMLCreatePromptInput_NullVersion() {
-        exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("MLPrompt version field is null");
-        MLCreatePromptInput mlCreatePromptInput = MLCreatePromptInput
-            .builder()
-            .name(TEST_PROMPT_NAME)
-            .description(TEST_PROMPT_DESCRIPTION)
-            .version(null)
-            .prompt(testPrompt)
-            .tags(TEST_PROMPT_TAGS)
-            .tenantId(TEST_PROMPT_TENANTID)
-            .build();
-    }
-
-    @Test
     public void constructMLCreatePromptInput_NullPrompt() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("MLPrompt prompt field is null");
+        exceptionRule.expectMessage("MLPrompt prompt field cannot be empty or null");
         MLCreatePromptInput mlCreatePromptInput = MLCreatePromptInput
             .builder()
             .name(TEST_PROMPT_NAME)
@@ -109,7 +94,7 @@ public class MLCreatePromptInputTest {
     @Test
     public void constructMLCreatePromptInput_EmptyPromptField() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("MLPrompt prompt field cannot be empty");
+        exceptionRule.expectMessage("MLPrompt prompt field cannot be empty or null");
         MLCreatePromptInput mlCreatePromptInput = MLCreatePromptInput
             .builder()
             .name(TEST_PROMPT_NAME)
@@ -164,7 +149,7 @@ public class MLCreatePromptInputTest {
         XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
         mlCreatePromptInput.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String mlCreatePromptInputContent = TestHelper.xContentBuilderToString(builder);
-        Assert.assertEquals(mlCreatePromptInputContent, expectedInputStr);
+        Assert.assertEquals(expectedInputStr, mlCreatePromptInputContent);
     }
 
     @Test
@@ -232,7 +217,7 @@ public class MLCreatePromptInputTest {
         XContentParser parser = createParser(jsonMissingPrompt);
 
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("MLPrompt prompt field is null");
+        exceptionRule.expectMessage("MLPrompt prompt field cannot be empty or null");
         MLCreatePromptInput.parse(parser);
     }
 

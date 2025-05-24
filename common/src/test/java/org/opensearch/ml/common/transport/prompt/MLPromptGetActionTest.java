@@ -10,10 +10,10 @@ import static org.junit.Assert.assertNotNull;
 
 import org.junit.Test;
 
-public class MLCreatePromptActionTest {
+public class MLPromptGetActionTest {
     @Test
-    public void testMLCreatePromptActionInstance() {
-        assertNotNull(MLCreatePromptAction.INSTANCE);
-        assertEquals("cluster:admin/opensearch/ml/create_prompt", MLCreatePromptAction.NAME);
+    public void testMLPromptGetActionInstance() {
+        assertNotNull(MLPromptGetAction.INSTANCE);
+        assertEquals("cluster:admin/opensearch/ml/prompts/get", MLPromptGetAction.NAME);
     }
 }

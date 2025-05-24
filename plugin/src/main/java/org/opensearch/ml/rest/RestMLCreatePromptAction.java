@@ -7,7 +7,6 @@ package org.opensearch.ml.rest;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
-import static org.opensearch.ml.utils.MLExceptionUtils.REMOTE_INFERENCE_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
 import java.io.IOException;
@@ -85,9 +84,6 @@ public class RestMLCreatePromptAction extends BaseRestHandler {
      */
     @VisibleForTesting
     MLCreatePromptRequest getRequest(RestRequest request) throws IOException {
-        if (!mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
-            throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
-        }
         if (!request.hasContent()) {
             throw new IOException("Create Prompt request has empty body");
         }

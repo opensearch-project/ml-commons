@@ -24,7 +24,6 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.MLPrompt;
 import org.opensearch.ml.common.TestHelper;
 
 public class MLPromptTest {
@@ -36,7 +35,7 @@ public class MLPromptTest {
 
     @Before
     public void setup() {
-        Instant time = Instant.ofEpochSecond(1641600000);
+        Instant time = Instant.parse("2022-01-08T00:00:00Z");
         Map<String, String> testPrompt = new HashMap<>();
         testPrompt.put("system", "some system prompt");
         testPrompt.put("user", "some user prompt");
