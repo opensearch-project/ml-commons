@@ -32,7 +32,6 @@ import lombok.Setter;
  */
 @Data
 public class MLUpdatePromptInput implements ToXContentObject, Writeable {
-    public static final String PROMPT_ID_FIELD = "prompt_id";
     public static final String PROMPT_NAME_FIELD = "name";
     public static final String PROMPT_DESCRIPTION_FIELD = "description";
     public static final String PROMPT_VERSION_FIELD = "version";
@@ -44,7 +43,6 @@ public class MLUpdatePromptInput implements ToXContentObject, Writeable {
 
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
 
-    private String promptId;
     private String name;
     private String description;
     private String version;
@@ -57,17 +55,14 @@ public class MLUpdatePromptInput implements ToXContentObject, Writeable {
     /**
      * Constructor to pass values to the MLUpdatePromptInput constructor.
      *
-     * @param promptId The prompt id of the prompt passed by user during update request
      * @param name The name of the prompt passed by user in update request body
      * @param description The description of the prompt passed by user in update request body
-     * @param version The version of the prompt passed by user in update request body
      * @param prompt The prompt passed by user in update request body
      * @param tags The tags passed by user in update request body
      * @param tenantId The tenant id
      */
     @Builder(toBuilder = true)
     public MLUpdatePromptInput(
-        String promptId,
         String name,
         String description,
         String version,
@@ -76,7 +71,6 @@ public class MLUpdatePromptInput implements ToXContentObject, Writeable {
         String tenantId,
         Instant lastUpdateTime
     ) {
-        this.promptId = promptId;
         this.name = name;
         this.description = description;
         this.version = version;
@@ -93,7 +87,6 @@ public class MLUpdatePromptInput implements ToXContentObject, Writeable {
      * @throws IOException thrown if an I/O exception occurred while reading the object from StreamInput
      */
     public MLUpdatePromptInput(StreamInput input) throws IOException {
-        this.promptId = input.readString();
         this.name = input.readOptionalString();
         this.description = input.readOptionalString();
         this.version = input.readOptionalString();
@@ -111,7 +104,6 @@ public class MLUpdatePromptInput implements ToXContentObject, Writeable {
      */
     @Override
     public void writeTo(StreamOutput output) throws IOException {
-        output.writeString(promptId);
         output.writeOptionalString(name);
         output.writeOptionalString(description);
         output.writeOptionalString(version);
@@ -151,7 +143,7 @@ public class MLUpdatePromptInput implements ToXContentObject, Writeable {
             builder.field(TENANT_ID_FIELD, tenantId);
         }
         if (lastUpdateTime != null) {
-            builder.field(LAST_UPDATED_TIME_FIELD, lastUpdateTime);
+            builder.field(LAST_UPDATED_TIME_FIELD, lastUpdateTime.toEpochMilli());
         }
         builder.endObject();
         return builder;
@@ -165,7 +157,6 @@ public class MLUpdatePromptInput implements ToXContentObject, Writeable {
      * @throws IOException if an I/O exception occurred while parsing the XContent
      */
     public static MLUpdatePromptInput parse(XContentParser parser) throws IOException {
-        String promptId = null;
         String name = null;
         String description = null;
         String version = null;
@@ -179,9 +170,6 @@ public class MLUpdatePromptInput implements ToXContentObject, Writeable {
             String fieldName = parser.currentName();
             parser.nextToken();
             switch (fieldName) {
-                case PROMPT_ID_FIELD:
-                    promptId = parser.text();
-                    break;
                 case PROMPT_NAME_FIELD:
                     name = parser.text();
                     break;
@@ -210,7 +198,6 @@ public class MLUpdatePromptInput implements ToXContentObject, Writeable {
         }
         return MLUpdatePromptInput
             .builder()
-            .promptId(promptId)
             .name(name)
             .description(description)
             .version(version)

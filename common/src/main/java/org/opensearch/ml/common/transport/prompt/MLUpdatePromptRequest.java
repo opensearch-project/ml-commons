@@ -33,6 +33,7 @@ import lombok.experimental.FieldDefaults;
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 @ToString
 public class MLUpdatePromptRequest extends ActionRequest {
+    String promptId;
     MLUpdatePromptInput mlUpdatePromptInput;
 
     /**
@@ -41,7 +42,8 @@ public class MLUpdatePromptRequest extends ActionRequest {
      * @param mlUpdatePromptInput MLUpdatePromptInput that contains request body for create
      */
     @Builder
-    public MLUpdatePromptRequest(MLUpdatePromptInput mlUpdatePromptInput) {
+    public MLUpdatePromptRequest(String promptId, MLUpdatePromptInput mlUpdatePromptInput) {
+        this.promptId = promptId;
         this.mlUpdatePromptInput = mlUpdatePromptInput;
     }
 
@@ -53,7 +55,8 @@ public class MLUpdatePromptRequest extends ActionRequest {
      */
     public MLUpdatePromptRequest(StreamInput in) throws IOException {
         super(in);
-        mlUpdatePromptInput = new MLUpdatePromptInput(in);
+        this.promptId = in.readString();
+        this.mlUpdatePromptInput = new MLUpdatePromptInput(in);
     }
 
     /**
@@ -64,7 +67,10 @@ public class MLUpdatePromptRequest extends ActionRequest {
     @Override
     public ActionRequestValidationException validate() {
         ActionRequestValidationException exception = null;
-        if (mlUpdatePromptInput == null) {
+        if (this.promptId == null) {
+            exception = addValidationError("ML prompt id can't be null", exception);
+        }
+        if (this.mlUpdatePromptInput == null) {
             exception = addValidationError("Update Prompt Input can't be null", exception);
         }
 
@@ -80,6 +86,7 @@ public class MLUpdatePromptRequest extends ActionRequest {
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
+        out.writeString(this.promptId);
         this.mlUpdatePromptInput.writeTo(out);
     }
 

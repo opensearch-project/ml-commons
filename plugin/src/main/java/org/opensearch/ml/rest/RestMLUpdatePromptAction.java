@@ -96,13 +96,9 @@ public class RestMLUpdatePromptAction extends BaseRestHandler {
 
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-        try {
-            MLUpdatePromptInput input = MLUpdatePromptInput.parse(parser);
-            input.setPromptId(promptId);
-            input.setTenantId(tenantId);
-            return new MLUpdatePromptRequest(input);
-        } catch (IllegalStateException e) {
-            throw new OpenSearchParseException(e.getMessage());
-        }
+
+        MLUpdatePromptInput input = MLUpdatePromptInput.parse(parser);
+        input.setTenantId(tenantId);
+        return new MLUpdatePromptRequest(promptId, input);
     }
 }

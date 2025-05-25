@@ -9,16 +9,12 @@ import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX;
 
 import java.time.Instant;
 
-import org.opensearch.ExceptionsHelper;
-import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.core.rest.RestStatus;
-import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.prompt.MLPrompt;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.prompt.MLUpdatePromptAction;
@@ -80,7 +76,7 @@ public class UpdatePromptTransportAction extends HandledTransportAction<MLUpdate
     @Override
     protected void doExecute(Task task, MLUpdatePromptRequest mlUpdatePromptRequest, ActionListener<UpdateResponse> actionListener) {
         MLUpdatePromptInput mlUpdatePromptInput = mlUpdatePromptRequest.getMlUpdatePromptInput();
-        String promptId = mlUpdatePromptInput.getPromptId();
+        String promptId = mlUpdatePromptRequest.getPromptId();
         String tenantId = mlUpdatePromptInput.getTenantId();
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
             return;
@@ -181,15 +177,7 @@ public class UpdatePromptTransportAction extends HandledTransportAction<MLUpdate
      * @param likelyCause the likely cause message of failure
      */
     private void handleFailure(Exception exception, String promptId, ActionListener<UpdateResponse> listener, String likelyCause) {
-        if (ExceptionsHelper.unwrap(exception, IndexNotFoundException.class) != null) {
-            log.error("Failed to find prompt index for prompt {}", promptId, exception);
-            listener
-                .onFailure(
-                    new OpenSearchStatusException("Failed to find prompt with the provided prompt id: " + promptId, RestStatus.NOT_FOUND)
-                );
-        } else {
-            log.error(likelyCause, promptId, exception);
-            listener.onFailure(exception);
-        }
+        log.error(likelyCause, promptId, exception);
+        listener.onFailure(exception);
     }
 }
