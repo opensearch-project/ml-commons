@@ -2,6 +2,10 @@
 
 Anthropic's Claude 4 models are now available on Amazon Bedrock. For more details, check out this [blog](https://www.aboutamazon.com/news/aws/anthropic-claude-4-opus-sonnet-amazon-bedrock).
 
+Similar to Claude 3.7 Sonnet, Claude 4 offers both standard mode and [extended thinking mode](https://www.anthropic.com/news/visible-extended-thinking). Extended thinking mode directs the model to think more deeply about trickier questions by creating `thinking` content blocks for its internal reasoning. This also provides transparency into Claude's thought process before it delivers a final answer.
+
+This blueprint will cover both the standard mode and the extended thinking mode.
+
 ## 1. Add connector endpoint to trusted URLs:
 
 Note: This step is only necessary for OpenSearch versions prior to 2.11.0.
@@ -18,6 +22,8 @@ PUT /_cluster/settings
 ```
 
 ## 2. Standard mode
+
+If you would like to use the extended thinking mode, skip to [section 3](#section3).
 ### 2.1 Create connector
 
 If you are using self-managed Opensearch, you should supply AWS credentials:
@@ -173,9 +179,9 @@ Sample response:
 }
 ```
 
-## 3. Extended thinking mode
+## <a id="section3"></a>3. Extended thinking mode
 
-Extended thinking mode allows Claude 4 to perform more in-depth reasoning before providing a response.
+Extended thinking mode allows Claude 4 to perform more in-depth reasoning before providing a response. Note that `budget_tokens` can be specified in parameters, which determines the number of tokens Claude can use for its internal reasoning process. See Claude [documentation](https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking#how-to-use-extended-thinking) for more details.
 
 ### 3.1 Create connector
 
