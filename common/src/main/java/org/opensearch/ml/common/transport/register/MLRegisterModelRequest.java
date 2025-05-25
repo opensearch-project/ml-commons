@@ -6,11 +6,14 @@
 package org.opensearch.ml.common.transport.register;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
+import static org.opensearch.ml.common.utils.StringUtils.validateFields;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
@@ -18,6 +21,7 @@ import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.ml.common.utils.FieldDescriptor;
 
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -44,12 +48,15 @@ public class MLRegisterModelRequest extends ActionRequest {
 
     @Override
     public ActionRequestValidationException validate() {
-        ActionRequestValidationException exception = null;
         if (registerModelInput == null) {
-            exception = addValidationError("ML input can't be null", exception);
+            return addValidationError("ML input can't be null", null);
         }
 
-        return exception;
+        Map<String, FieldDescriptor> fieldsToValidate = new HashMap<>();
+        fieldsToValidate.put("Model name", new FieldDescriptor(registerModelInput.getModelName(), true));
+        fieldsToValidate.put("Model description", new FieldDescriptor(registerModelInput.getDescription(), false));
+
+        return validateFields(fieldsToValidate);
     }
 
     @Override
