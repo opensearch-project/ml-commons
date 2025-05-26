@@ -115,9 +115,7 @@ public class TransportMcpToolsRemoveOnNodesAction extends
                 }).subscribe();
             }
             return Mono.empty();
-        })
-            .doOnComplete(() -> log.debug("Successfully removed tools on node: {}", clusterService.localNode().getId()))
-            .subscribe();
+        }).doOnComplete(() -> log.debug("Successfully removed tools on node: {}", clusterService.localNode().getId())).subscribe();
         if (!errors.get().isEmpty()) {
             String errMsg = String.format(Locale.ROOT, "Tools: %s not found on node: %s", errors.get(), clusterService.localNode().getId());
             OpenSearchException openSearchException = new OpenSearchException(errMsg);

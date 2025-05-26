@@ -14,7 +14,6 @@ import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 
@@ -39,7 +38,8 @@ public class MLMcpToolsRegisterNodeRequestTest {
                     "Sample tool",
                     Collections.singletonMap("param", "value"),
                     Collections.singletonMap("type", "object"),
-                        null, null
+                    null,
+                    null
                 )
             );
     }

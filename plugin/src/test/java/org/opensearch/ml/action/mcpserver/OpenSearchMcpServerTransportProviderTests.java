@@ -49,7 +49,8 @@ public class OpenSearchMcpServerTransportProviderTests extends OpenSearchTestCas
     @Mock
     private MLIndicesHandler mlIndicesHandler;
 
-    @Mock McpToolsHelper mcpToolsHelper;
+    @Mock
+    McpToolsHelper mcpToolsHelper;
 
     @Mock
     private NodeClient client;
@@ -83,9 +84,9 @@ public class OpenSearchMcpServerTransportProviderTests extends OpenSearchTestCas
         }).when(client).index(any(), isA(ActionListener.class));
 
         doAnswer(invocationOnMock -> {
-                ActionListener<Boolean> listener = invocationOnMock.getArgument(0);
-                listener.onResponse(true);
-                return null;
+            ActionListener<Boolean> listener = invocationOnMock.getArgument(0);
+            listener.onResponse(true);
+            return null;
         }).when(mcpToolsHelper).autoLoadAllMcpTools(isA(ActionListener.class));
     }
 

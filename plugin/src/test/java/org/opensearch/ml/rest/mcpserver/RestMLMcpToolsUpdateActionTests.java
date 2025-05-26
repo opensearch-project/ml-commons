@@ -5,7 +5,19 @@
 
 package org.opensearch.ml.rest.mcpserver;
 
-import com.google.common.collect.ImmutableMap;
+import static org.mockito.Answers.RETURNS_DEEP_STUBS;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED;
+
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -29,19 +41,7 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
 import org.opensearch.transport.client.node.NodeClient;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
-import java.util.stream.Collectors;
-
-import static org.mockito.Answers.RETURNS_DEEP_STUBS;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED;
+import com.google.common.collect.ImmutableMap;
 
 public class RestMLMcpToolsUpdateActionTests extends OpenSearchTestCase {
 
@@ -99,24 +99,23 @@ public class RestMLMcpToolsUpdateActionTests extends OpenSearchTestCase {
 
     public void test_doExecute_featureFlagDisabled() throws IOException {
         exceptionRule.expect(OpenSearchException.class);
-        exceptionRule.expectMessage("The MCP server is not enabled. To enable, please update the setting plugins.ml_commons.mcp_server_enabled");
+        exceptionRule
+            .expectMessage("The MCP server is not enabled. To enable, please update the setting plugins.ml_commons.mcp_server_enabled");
         Settings settings = Settings.builder().put(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED.getKey(), false).build();
         when(this.clusterService.getSettings()).thenReturn(settings);
         when(this.clusterService.getClusterSettings())
-                .thenReturn(new ClusterSettings(settings, Set.of(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED)));
+            .thenReturn(new ClusterSettings(settings, Set.of(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED)));
         RestMLMcpToolsUpdateAction restMLMcpToolsUpdateAction = new RestMLMcpToolsUpdateAction(clusterService);
-        BytesReference bytesReference = BytesReference
-                .fromByteBuffer(ByteBuffer.wrap(updateToolRequest.getBytes(StandardCharsets.UTF_8)));
+        BytesReference bytesReference = BytesReference.fromByteBuffer(ByteBuffer.wrap(updateToolRequest.getBytes(StandardCharsets.UTF_8)));
         RestRequest restRequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
-                .withContent(bytesReference, MediaType.fromMediaType(XContentType.JSON.mediaType()))
-                .build();
+            .withContent(bytesReference, MediaType.fromMediaType(XContentType.JSON.mediaType()))
+            .build();
         restMLMcpToolsUpdateAction.prepareRequest(restRequest, mock(NodeClient.class));
     }
 
     @Test
     public void test_prepareRequest_successful() throws IOException {
-        BytesReference bytesReference = BytesReference
-            .fromByteBuffer(ByteBuffer.wrap(updateToolRequest.getBytes(StandardCharsets.UTF_8)));
+        BytesReference bytesReference = BytesReference.fromByteBuffer(ByteBuffer.wrap(updateToolRequest.getBytes(StandardCharsets.UTF_8)));
         RestRequest restRequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withContent(bytesReference, MediaType.fromMediaType(XContentType.JSON.mediaType()))
             .build();

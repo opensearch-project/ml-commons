@@ -28,25 +28,27 @@ public class MLMcpListToolsResponseTest {
 
     @Before
     public void setUp() {
-        sampleTools = List.of(
+        sampleTools = List
+            .of(
                 new RegisterMcpTool(
-                        "weather_api",
-                        "weather_tool",
-                        "Real-time weather data fetcher",
-                        Collections.singletonMap("unit", "celsius"),
-                        Collections.singletonMap("input_schema",
-                                Collections.singletonMap("type", "object")),
-                        null, null
+                    "weather_api",
+                    "weather_tool",
+                    "Real-time weather data fetcher",
+                    Collections.singletonMap("unit", "celsius"),
+                    Collections.singletonMap("input_schema", Collections.singletonMap("type", "object")),
+                    null,
+                    null
                 ),
                 new RegisterMcpTool(
-                        "stock_api",
-                        "stock_tool",
-                        "Stock market analyzer",
-                        Collections.singletonMap("exchange", "NYSE"),
-                        Collections.singletonMap("output_schema",
-                                Collections.singletonMap("format", "json")), null, null
+                    "stock_api",
+                    "stock_tool",
+                    "Stock market analyzer",
+                    Collections.singletonMap("exchange", "NYSE"),
+                    Collections.singletonMap("output_schema", Collections.singletonMap("format", "json")),
+                    null,
+                    null
                 )
-        );
+            );
     }
 
     @Test

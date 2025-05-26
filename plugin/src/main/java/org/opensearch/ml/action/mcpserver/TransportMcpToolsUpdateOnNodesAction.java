@@ -114,21 +114,19 @@ public class TransportMcpToolsUpdateOnNodesAction extends
         Flux.fromStream(mcpTools.stream()).flatMap(tool -> {
             McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.remove(tool.getName());
             McpAsyncServerHolder.getMcpAsyncServerInstance().removeTool(tool.getName()).onErrorResume(e -> Mono.empty()).subscribe();
-           return McpAsyncServerHolder
+            return McpAsyncServerHolder
                 .getMcpAsyncServerInstance()
                 .addTool(mcpToolsHelper.createToolSpecification(tool))
                 .doOnSuccess(x -> McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.put(tool.getName(), tool.getVersion()));
         }).doOnError(e -> {
             log
-                    .error(
-                            "Failed to Update tools: {} in MCP server memory on node: {}",
-                            mcpTools.stream().map(BaseMcpTool::getName).toList(),
-                            clusterService.localNode().getId()
-                    );
+                .error(
+                    "Failed to Update tools: {} in MCP server memory on node: {}",
+                    mcpTools.stream().map(BaseMcpTool::getName).toList(),
+                    clusterService.localNode().getId()
+                );
             exception.set(e);
-        })
-                .doOnComplete(() -> log.debug("Successfully Update tools on node: {}", clusterService.localNode().getId()))
-                .subscribe();
+        }).doOnComplete(() -> log.debug("Successfully Update tools on node: {}", clusterService.localNode().getId())).subscribe();
         if (exception.get() != null) {
             String errorMsg = exception.get().getMessage();
             throw new FailedNodeException(clusterService.localNode().getId(), errorMsg, new OpenSearchException(errorMsg));

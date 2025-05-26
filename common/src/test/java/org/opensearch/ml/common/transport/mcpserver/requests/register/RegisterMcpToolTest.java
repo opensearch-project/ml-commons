@@ -60,16 +60,16 @@ public class RegisterMcpToolTest {
 
     @Test
     public void testParse_AllFields() throws Exception {
-        String jsonStr = "{\n" +
-                "  \"type\": \"stock_tool\",\n" +
-                "  \"description\": \"Stock data tool\",\n" +
-                "  \"parameters\": { \"exchange\": \"NYSE\" },\n" +
-                "  \"attributes\": {\n" +
-                "    \"input_schema\": { \"properties\": { \"symbol\": { \"type\": \"string\" } } }\n" +
-                "  },\n" +
-                "  \"create_time\": 1747812806243,\n" +
-                "  \"last_update_time\": 1747812806243\n" +
-                "}\n";
+        String jsonStr = "{\n"
+            + "  \"type\": \"stock_tool\",\n"
+            + "  \"description\": \"Stock data tool\",\n"
+            + "  \"parameters\": { \"exchange\": \"NYSE\" },\n"
+            + "  \"attributes\": {\n"
+            + "    \"input_schema\": { \"properties\": { \"symbol\": { \"type\": \"string\" } } }\n"
+            + "  },\n"
+            + "  \"create_time\": 1747812806243,\n"
+            + "  \"last_update_time\": 1747812806243\n"
+            + "}\n";
 
         XContentParser parser = XContentType.JSON
             .xContent()

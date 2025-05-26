@@ -266,7 +266,8 @@ public class TransportMcpToolsRegisterAction extends HandledTransportAction<Acti
                     if (errMsgBuilder.isEmpty()) {
                         restoreListener.onResponse(r);
                     } else {
-                        restoreListener.onFailure(new OpenSearchException(errMsgBuilder.deleteCharAt(errMsgBuilder.length() - 1).toString()));
+                        restoreListener
+                            .onFailure(new OpenSearchException(errMsgBuilder.deleteCharAt(errMsgBuilder.length() - 1).toString()));
                     }
                 }
             }, e -> {
