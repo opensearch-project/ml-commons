@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.action.mcpserver;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
@@ -15,6 +16,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import io.modelcontextprotocol.server.McpServerFeatures;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Answers;
@@ -35,6 +37,7 @@ import org.opensearch.ml.common.transport.mcpserver.requests.register.MLMcpTools
 import org.opensearch.ml.common.transport.mcpserver.requests.register.RegisterMcpTool;
 import org.opensearch.ml.common.transport.mcpserver.responses.register.MLMcpToolsRegisterNodeResponse;
 import org.opensearch.ml.common.transport.mcpserver.responses.register.MLMcpToolsRegisterNodesResponse;
+import org.opensearch.ml.engine.tools.AgentTool;
 import org.opensearch.ml.engine.tools.ListIndexTool;
 import org.opensearch.ml.rest.mcpserver.ToolFactoryWrapper;
 import org.opensearch.test.OpenSearchTestCase;
@@ -63,7 +66,10 @@ public class TransportMcpToolsRegisterOnNodesActionTests extends OpenSearchTestC
     @Mock
     private ToolFactoryWrapper toolFactoryWrapper;
 
-    private Map<String, Tool.Factory> toolFactories = ImmutableMap.of("ListIndexTool", ListIndexTool.Factory.getInstance());
+    private Map<String, Tool.Factory> toolFactories = ImmutableMap.of("ListIndexTool", ListIndexTool.Factory.getInstance(),
+            "AgentTool", AgentTool.Factory.getInstance());
+
+    private McpToolsHelper mcpToolsHelper;
 
     private TransportMcpToolsRegisterOnNodesAction action;
 
@@ -71,7 +77,7 @@ public class TransportMcpToolsRegisterOnNodesActionTests extends OpenSearchTestC
     public void setUp() throws Exception {
         super.setUp();
         MockitoAnnotations.openMocks(this);
-        McpToolsHelper mcpToolsHelper = new McpToolsHelper(client, threadPool, clusterService, toolFactoryWrapper);
+        mcpToolsHelper = new McpToolsHelper(client, threadPool, toolFactoryWrapper);
         when(toolFactoryWrapper.getToolsFactories()).thenReturn(toolFactories);
         when(clusterService.getClusterName()).thenReturn(new ClusterName("clusterName"));
         when(clusterService.localNode().getId()).thenReturn("localNodeId");
@@ -133,27 +139,49 @@ public class TransportMcpToolsRegisterOnNodesActionTests extends OpenSearchTestC
 
     @Test
     public void testNodeOperation() {
-        List<RegisterMcpTool> mcpTools = List
-            .of(
-                new RegisterMcpTool(
-                    null,
-                    "ListIndexTool",
-                    "OpenSearch index name list, separated by comma. for example: [\\\"index1\\\", \\\"index2\\\"], use empty array [] to list all indices in the cluster",
-                    Map.of(),
-                    Map
-                        .of(
-                            "type",
-                            "object",
-                            "properties",
-                            Map.of("indices", Map.of("type", "array", "items", Map.of("type", "string"))),
-                            "additionalProperties",
-                            false
-                        ), null, null
-                )
-            );
-
+        List<RegisterMcpTool> mcpTools = List.of(getRegisterMcpTool());
+        McpAsyncServerHolder.getMcpAsyncServerInstance().removeTool("ListIndexTool").subscribe();
         MLMcpToolsRegisterNodeRequest request = new MLMcpToolsRegisterNodeRequest(mcpTools);
         MLMcpToolsRegisterNodeResponse response = action.nodeOperation(request);
         assertEquals(true, response.getCreated());
     }
+
+    @Test(expected = FailedNodeException.class)
+    public void testNodeOperation_OnError() {
+        List<RegisterMcpTool> mcpTools = List
+                .of(
+                        new RegisterMcpTool(
+                                "AgentTool",
+                                "AgentTool",
+                                "test agent tool",
+                                null, null, null, null
+                        )
+                );
+        McpServerFeatures.AsyncToolSpecification specification = mcpToolsHelper.createToolSpecification(mcpTools.get(0));
+        McpAsyncServerHolder.getMcpAsyncServerInstance().addTool(specification).subscribe();
+        MLMcpToolsRegisterNodeRequest request = new MLMcpToolsRegisterNodeRequest(mcpTools);
+
+       action.nodeOperation(request);
+    }
+
+    private RegisterMcpTool getRegisterMcpTool() {
+        RegisterMcpTool registerMcpTool = new RegisterMcpTool(
+                "ListIndexTool",
+                "ListIndexTool",
+                "OpenSearch index name list, separated by comma. for example: [\\\"index1\\\", \\\"index2\\\"], use empty array [] to list all indices in the cluster",
+                Map.of(),
+                Map
+                        .of(
+                                "type",
+                                "object",
+                                "properties",
+                                Map.of("indices", Map.of("type", "array", "items", Map.of("type", "string"))),
+                                "additionalProperties",
+                                false
+                        ), null, null
+        );
+        registerMcpTool.setVersion(1L);
+        return registerMcpTool;
+    }
+
 }

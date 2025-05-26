@@ -322,8 +322,8 @@ import org.opensearch.ml.rest.RestMemoryUpdateConversationAction;
 import org.opensearch.ml.rest.RestMemoryUpdateInteractionAction;
 import org.opensearch.ml.rest.mcpserver.RestMLMcpToolsListAction;
 import org.opensearch.ml.rest.mcpserver.RestMLMcpToolsUpdateAction;
-import org.opensearch.ml.rest.mcpserver.RestMLRegisterMcpToolsAction;
-import org.opensearch.ml.rest.mcpserver.RestMLRemoveMcpToolsAction;
+import org.opensearch.ml.rest.mcpserver.RestMLMcpToolsRegisterAction;
+import org.opensearch.ml.rest.mcpserver.RestMLMcpToolsRemoveAction;
 import org.opensearch.ml.rest.mcpserver.RestMcpConnectionMessageStreamingAction;
 import org.opensearch.ml.rest.mcpserver.ToolFactoryWrapper;
 import org.opensearch.ml.searchext.MLInferenceRequestParametersExtBuilder;
@@ -782,7 +782,7 @@ public class MachineLearningPlugin extends Plugin
 
         MLBatchTaskUpdateJobRunner.getJobRunnerInstance().initialize(clusterService, threadPool, client);
 
-        mcpToolsHelper = new McpToolsHelper(client, threadPool, clusterService, toolFactoryWrapper);
+        mcpToolsHelper = new McpToolsHelper(client, threadPool, toolFactoryWrapper);
         McpAsyncServerHolder.init(mlIndicesHandler, mcpToolsHelper);
 
         return ImmutableList
@@ -894,8 +894,8 @@ public class MachineLearningPlugin extends Plugin
         RestMcpConnectionMessageStreamingAction restMcpConnectionMessageStreamingAction = new RestMcpConnectionMessageStreamingAction(
             clusterService
         );
-        RestMLRegisterMcpToolsAction restMLRegisterMcpToolsAction = new RestMLRegisterMcpToolsAction(toolFactories, clusterService);
-        RestMLRemoveMcpToolsAction restMLRemoveMcpToolsAction = new RestMLRemoveMcpToolsAction(clusterService);
+        RestMLMcpToolsRegisterAction restMLRegisterMcpToolsAction = new RestMLMcpToolsRegisterAction(toolFactories, clusterService);
+        RestMLMcpToolsRemoveAction restMLRemoveMcpToolsAction = new RestMLMcpToolsRemoveAction(clusterService);
         RestMLMcpToolsListAction restMLListMcpToolsAction = new RestMLMcpToolsListAction(clusterService);
         RestMLMcpToolsUpdateAction restMLMcpToolsUpdateAction = new RestMLMcpToolsUpdateAction(clusterService);
         return ImmutableList

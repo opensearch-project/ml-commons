@@ -8,6 +8,8 @@ package org.opensearch.ml.utils;
 import static org.apache.hc.core5.http.ContentType.APPLICATION_JSON;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.DATA_ROLE;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.INGEST_ROLE;
@@ -43,7 +45,10 @@ import org.apache.hc.core5.http.Header;
 import org.apache.hc.core5.http.HttpEntity;
 import org.apache.hc.core5.http.io.entity.StringEntity;
 import org.apache.logging.log4j.util.Strings;
+import org.apache.lucene.search.TotalHits;
 import org.opensearch.Version;
+import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.client.Request;
 import org.opensearch.client.RequestOptions;
 import org.opensearch.client.Response;
@@ -59,6 +64,7 @@ import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Setting;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
@@ -86,11 +92,19 @@ import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.profile.MLProfileInput;
 import org.opensearch.ml.stats.MLStatsInput;
 import org.opensearch.rest.RestRequest;
+import org.opensearch.search.SearchHit;
+import org.opensearch.search.SearchHits;
 import org.opensearch.search.SearchModule;
+import org.opensearch.search.aggregations.InternalAggregations;
+import org.opensearch.search.internal.InternalSearchResponse;
+import org.opensearch.search.profile.SearchProfileShardResults;
+import org.opensearch.search.suggest.Suggest;
 import org.opensearch.test.rest.FakeRestRequest;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
+import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.client.Client;
 
 public class TestHelper {
 
@@ -590,5 +604,56 @@ public class TestHelper {
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .build();
         return request;
+    }
+
+    public static void mockClientStashContext(Client client, Settings settings) {
+        ThreadPool threadPool = mock(ThreadPool.class);
+        ThreadContext threadContext = new ThreadContext(settings);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+        when(client.threadPool()).thenReturn(threadPool);
+    }
+
+    public static SearchResponse createSearchResponse(ToXContent toXContent, int size) throws IOException {
+        if (size == 0) {
+            return new SearchResponse(
+                    new InternalSearchResponse(
+                            new SearchHits(new SearchHit[0], new TotalHits(0, TotalHits.Relation.EQUAL_TO), 1.0f),
+                            InternalAggregations.EMPTY,
+                            new Suggest(Collections.emptyList()),
+                            new SearchProfileShardResults(Collections.emptyMap()),
+                            false,
+                            false,
+                            1
+                    ),
+                    "",
+                    1,
+                    1,
+                    0,
+                    100,
+                    ShardSearchFailure.EMPTY_ARRAY,
+                    SearchResponse.Clusters.EMPTY
+            );
+        }
+        XContentBuilder content = toXContent.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
+        SearchHit[] hits = new SearchHit[size];
+        hits[0] = new SearchHit(0).sourceRef(BytesReference.bytes(content));
+        return new SearchResponse(
+                new InternalSearchResponse(
+                        new SearchHits(hits, new TotalHits(size, TotalHits.Relation.EQUAL_TO), 1.0f),
+                        InternalAggregations.EMPTY,
+                        new Suggest(Collections.emptyList()),
+                        new SearchProfileShardResults(Collections.emptyMap()),
+                        false,
+                        false,
+                        1
+                ),
+                "",
+                1,
+                1,
+                0,
+                100,
+                ShardSearchFailure.EMPTY_ARRAY,
+                SearchResponse.Clusters.EMPTY
+        );
     }
 }

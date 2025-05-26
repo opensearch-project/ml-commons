@@ -18,6 +18,7 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsUpdateOnNodesAction;
+import org.opensearch.ml.common.transport.mcpserver.requests.BaseMcpTool;
 import org.opensearch.ml.common.transport.mcpserver.requests.update.MLMcpToolsUpdateNodeRequest;
 import org.opensearch.ml.common.transport.mcpserver.requests.update.MLMcpToolsUpdateNodesRequest;
 import org.opensearch.ml.common.transport.mcpserver.requests.update.UpdateMcpTool;
@@ -44,7 +45,7 @@ public class TransportMcpToolsUpdateOnNodesAction extends
     Client client;
     NamedXContentRegistry xContentRegistry;
     ToolFactoryWrapper toolFactoryWrapper;
-    McpToolsHelper mcpToolsIndexSearchHelper;
+    McpToolsHelper mcpToolsHelper;
 
     @Inject
     public TransportMcpToolsUpdateOnNodesAction(
@@ -55,7 +56,7 @@ public class TransportMcpToolsUpdateOnNodesAction extends
         Client client,
         NamedXContentRegistry xContentRegistry,
         ToolFactoryWrapper toolFactoryWrapper,
-        McpToolsHelper mcpToolsIndexSearchHelper
+        McpToolsHelper mcpToolsHelper
     ) {
         super(
             MLMcpToolsUpdateOnNodesAction.NAME,
@@ -74,7 +75,7 @@ public class TransportMcpToolsUpdateOnNodesAction extends
         this.client = client;
         this.xContentRegistry = xContentRegistry;
         this.toolFactoryWrapper = toolFactoryWrapper;
-        this.mcpToolsIndexSearchHelper = mcpToolsIndexSearchHelper;
+        this.mcpToolsHelper = mcpToolsHelper;
     }
 
     @Override
@@ -98,7 +99,7 @@ public class TransportMcpToolsUpdateOnNodesAction extends
 
     @Override
     protected MLMcpToolsUpdateNodeResponse nodeOperation(MLMcpToolsUpdateNodeRequest request) {
-        return UpdateToolsOnNode(request.getMcpTools());
+        return updateToolsOnNode(request.getMcpTools());
     }
 
     /**
@@ -108,30 +109,26 @@ public class TransportMcpToolsUpdateOnNodesAction extends
      * @param mcpTools
      * @return
      */
-    private MLMcpToolsUpdateNodeResponse UpdateToolsOnNode(List<UpdateMcpTool> mcpTools) {
+    private MLMcpToolsUpdateNodeResponse updateToolsOnNode(List<UpdateMcpTool> mcpTools) {
         AtomicReference<Throwable> exception = new AtomicReference<>();
         Flux.fromStream(mcpTools.stream()).flatMap(tool -> {
             McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.remove(tool.getName());
             McpAsyncServerHolder.getMcpAsyncServerInstance().removeTool(tool.getName()).onErrorResume(e -> Mono.empty()).subscribe();
-            McpAsyncServerHolder
+           return McpAsyncServerHolder
                 .getMcpAsyncServerInstance()
-                .addTool(mcpToolsIndexSearchHelper.createToolSpecification(tool))
-                .doOnSuccess(x -> McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.put(tool.getName(), tool.getVersion()))
-                .doOnError(e -> {
-                    log
-                        .error(
-                            "Failed to Update tool: {} in MCP server memory on node: {}",
-                            tool.getName(),
+                .addTool(mcpToolsHelper.createToolSpecification(tool))
+                .doOnSuccess(x -> McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.put(tool.getName(), tool.getVersion()));
+        }).doOnError(e -> {
+            log
+                    .error(
+                            "Failed to Update tools: {} in MCP server memory on node: {}",
+                            mcpTools.stream().map(BaseMcpTool::getName).toList(),
                             clusterService.localNode().getId()
-                        );
-                })
-                .subscribe();
-
-            return Mono.empty();
-        }).doOnComplete(() -> { log.debug("Successfully Update tools on node: {}", clusterService.localNode().getId()); }).doOnError(e -> {
+                    );
             exception.set(e);
-            log.error("Failed to Update tools on node: {}", clusterService.localNode().getId(), e);
-        }).subscribe();
+        })
+                .doOnComplete(() -> log.debug("Successfully Update tools on node: {}", clusterService.localNode().getId()))
+                .subscribe();
         if (exception.get() != null) {
             String errorMsg = exception.get().getMessage();
             throw new FailedNodeException(clusterService.localNode().getId(), errorMsg, new OpenSearchException(errorMsg));

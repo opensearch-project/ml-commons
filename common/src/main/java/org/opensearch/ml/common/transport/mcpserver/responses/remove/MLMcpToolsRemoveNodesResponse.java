@@ -18,13 +18,13 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
-public class MLMcpRemoveNodesResponse extends BaseNodesResponse<MLMcpRemoveNodeResponse> implements ToXContentObject {
+public class MLMcpToolsRemoveNodesResponse extends BaseNodesResponse<MLMcpToolsRemoveNodeResponse> implements ToXContentObject {
 
-    public MLMcpRemoveNodesResponse(StreamInput in) throws IOException {
-        super(new ClusterName(in), in.readList(MLMcpRemoveNodeResponse::readResponse), in.readList(FailedNodeException::new));
+    public MLMcpToolsRemoveNodesResponse(StreamInput in) throws IOException {
+        super(new ClusterName(in), in.readList(MLMcpToolsRemoveNodeResponse::readResponse), in.readList(FailedNodeException::new));
     }
 
-    public MLMcpRemoveNodesResponse(ClusterName clusterName, List<MLMcpRemoveNodeResponse> nodes, List<FailedNodeException> failures) {
+    public MLMcpToolsRemoveNodesResponse(ClusterName clusterName, List<MLMcpToolsRemoveNodeResponse> nodes, List<FailedNodeException> failures) {
         super(clusterName, nodes, failures);
     }
 
@@ -34,19 +34,19 @@ public class MLMcpRemoveNodesResponse extends BaseNodesResponse<MLMcpRemoveNodeR
     }
 
     @Override
-    public void writeNodesTo(StreamOutput out, List<MLMcpRemoveNodeResponse> nodes) throws IOException {
+    public void writeNodesTo(StreamOutput out, List<MLMcpToolsRemoveNodeResponse> nodes) throws IOException {
         out.writeList(nodes);
     }
 
     @Override
-    public List<MLMcpRemoveNodeResponse> readNodesFrom(StreamInput in) throws IOException {
-        return in.readList(MLMcpRemoveNodeResponse::readResponse);
+    public List<MLMcpToolsRemoveNodeResponse> readNodesFrom(StreamInput in) throws IOException {
+        return in.readList(MLMcpToolsRemoveNodeResponse::readResponse);
     }
 
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
-        for (MLMcpRemoveNodeResponse removed : getNodes()) {
+        for (MLMcpToolsRemoveNodeResponse removed : getNodes()) {
             builder.startObject(removed.getNode().getId());
             builder.field("removed");
             builder.value(removed.getDeleted());

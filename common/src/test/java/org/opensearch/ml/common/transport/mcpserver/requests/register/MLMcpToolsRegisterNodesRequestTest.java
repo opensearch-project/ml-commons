@@ -11,6 +11,7 @@ import static org.junit.Assert.*;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -20,8 +21,14 @@ import org.junit.Test;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.search.SearchModule;
 
 public class MLMcpToolsRegisterNodesRequestTest {
 
@@ -32,7 +39,7 @@ public class MLMcpToolsRegisterNodesRequestTest {
     public void setup() {
         sampleTools = List
             .of(
-                new RegisterMcpTool(null, "metric_analyzer", "System monitoring tool", Map.of("interval", "60s"), Map.of("type", "object"), null, null)
+                new RegisterMcpTool(null, "metric_analyzer", "System monitoring tool", Map.of("interval", "60s"), Map.of("type", "object"), Instant.now(), Instant.now())
             );
     }
 
@@ -66,6 +73,39 @@ public class MLMcpToolsRegisterNodesRequestTest {
         assertNotNull("Should return validation error", request.validate());
         assertEquals(1, request.validate().validationErrors().size());
         assertTrue(request.validate().validationErrors().get(0).contains("tools list can not be null"));
+    }
+
+    @Test
+    public void testParse_AllFields() throws Exception {
+        String jsonStr = "{\n" +
+                "  \"tools\": [\n" +
+                "    {\n" +
+                "      \"type\": \"stock_tool\",\n" +
+                "      \"name\": \"stock_tool\",\n" +
+                "      \"description\": \"Stock data tool\",\n" +
+                "      \"parameters\": { \"exchange\": \"NYSE\" },\n" +
+                "      \"attributes\": {\n" +
+                "        \"input_schema\": { \"properties\": { \"symbol\": { \"type\": \"string\" } } }\n" +
+                "      },\n" +
+                "      \"create_time\": 1747812806243,\n" +
+                "      \"last_update_time\": 1747812806243\n" +
+                "    }\n" +
+                "  ]\n" +
+                "}\n";
+
+        XContentParser parser = XContentType.JSON
+                .xContent()
+                .createParser(
+                        new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                        LoggingDeprecationHandler.INSTANCE,
+                        jsonStr
+                );
+
+        MLMcpToolsRegisterNodesRequest parsed = MLMcpToolsRegisterNodesRequest.parse(parser, new String[]{"nodeId"});
+        assertEquals(1, parsed.getMcpTools().size());
+        assertEquals("Stock data tool", parsed.getMcpTools().get(0).getDescription());
+        assertEquals(Collections.singletonMap("exchange", "NYSE"), parsed.getMcpTools().get(0).getParameters());
+        assertTrue(parsed.getMcpTools().get(0).getAttributes().containsKey("input_schema"));
     }
 
     @Test

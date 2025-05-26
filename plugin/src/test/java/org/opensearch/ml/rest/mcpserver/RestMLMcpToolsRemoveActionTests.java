@@ -37,9 +37,9 @@ import org.opensearch.transport.client.node.NodeClient;
 
 import com.google.common.collect.ImmutableMap;
 
-public class RestMLRemoveMcpToolsActionTests extends OpenSearchTestCase {
+public class RestMLMcpToolsRemoveActionTests extends OpenSearchTestCase {
 
-    private RestMLRemoveMcpToolsAction restMLRemoveMcpToolsAction;
+    private RestMLMcpToolsRemoveAction restMLRemoveMcpToolsAction;
 
     private final String removeToolRequest = "[\"ListIndexTool\"]";
 
@@ -60,7 +60,7 @@ public class RestMLRemoveMcpToolsActionTests extends OpenSearchTestCase {
         Settings settings = Settings.builder().put(ML_COMMONS_MCP_SERVER_ENABLED.getKey(), true).build();
         when(clusterService.getSettings()).thenReturn(settings);
         when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MCP_SERVER_ENABLED)));
-        restMLRemoveMcpToolsAction = new RestMLRemoveMcpToolsAction(clusterService);
+        restMLRemoveMcpToolsAction = new RestMLMcpToolsRemoveAction(clusterService);
     }
 
     @Test

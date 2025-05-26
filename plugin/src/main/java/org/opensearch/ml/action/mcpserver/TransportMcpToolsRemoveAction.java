@@ -32,7 +32,7 @@ import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRemoveOnNod
 import org.opensearch.ml.common.transport.mcpserver.requests.message.MLMcpMessageRequest;
 import org.opensearch.ml.common.transport.mcpserver.requests.register.RegisterMcpTool;
 import org.opensearch.ml.common.transport.mcpserver.requests.remove.MLMcpToolsRemoveNodesRequest;
-import org.opensearch.ml.common.transport.mcpserver.responses.remove.MLMcpRemoveNodesResponse;
+import org.opensearch.ml.common.transport.mcpserver.responses.remove.MLMcpToolsRemoveNodesResponse;
 import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -41,7 +41,7 @@ import org.opensearch.transport.client.Client;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
-public class TransportMcpToolsRemoveAction extends HandledTransportAction<ActionRequest, MLMcpRemoveNodesResponse> {
+public class TransportMcpToolsRemoveAction extends HandledTransportAction<ActionRequest, MLMcpToolsRemoveNodesResponse> {
 
     TransportService transportService;
     ClusterService clusterService;
@@ -77,26 +77,26 @@ public class TransportMcpToolsRemoveAction extends HandledTransportAction<Action
     }
 
     @Override
-    protected void doExecute(Task task, ActionRequest request, ActionListener<MLMcpRemoveNodesResponse> listener) {
+    protected void doExecute(Task task, ActionRequest request, ActionListener<MLMcpToolsRemoveNodesResponse> listener) {
         if (!mcpServerEnabled) {
             listener.onFailure(new OpenSearchException(ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE));
             return;
         }
         MLMcpToolsRemoveNodesRequest removeToolsOnNodesRequest = (MLMcpToolsRemoveNodesRequest) request;
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<MLMcpRemoveNodesResponse> restoreListener = ActionListener.runBefore(listener, context::restore);
+            ActionListener<MLMcpToolsRemoveNodesResponse> restoreListener = ActionListener.runBefore(listener, context::restore);
             ActionListener<List<RegisterMcpTool>> searchResultListener = ActionListener.wrap(searchResult -> {
                 if (!searchResult.isEmpty()) {
                     // Tools search found results.
                     List<String> foundTools = searchResult.stream().map(RegisterMcpTool::getName).toList();
-                    foundTools.forEach(x -> removeToolsOnNodesRequest.getTools().remove(x));
-                    if (!removeToolsOnNodesRequest.getTools().isEmpty()) {
+                    foundTools.forEach(x -> removeToolsOnNodesRequest.getMcpTools().remove(x));
+                    if (!removeToolsOnNodesRequest.getMcpTools().isEmpty()) {
                         // There are tools not found, do not proceed.
                         String exceptionMessage = String
                             .format(
                                 Locale.ROOT,
                                 "Unable to remove tools as these tools: %s are not found in system index",
-                                removeToolsOnNodesRequest.getTools()
+                                removeToolsOnNodesRequest.getMcpTools()
                             );
                         log.info(exceptionMessage);
                         restoreListener.onFailure(new OpenSearchException(exceptionMessage));
@@ -113,7 +113,7 @@ public class TransportMcpToolsRemoveAction extends HandledTransportAction<Action
                 log.error("Failed to search mcp tools index", e);
                 restoreListener.onFailure(e);
             });
-            mcpToolsHelper.searchToolsWithParsedResult(removeToolsOnNodesRequest.getTools(), searchResultListener);
+            mcpToolsHelper.searchToolsWithVersion(removeToolsOnNodesRequest.getMcpTools(), searchResultListener);
         } catch (Exception e) {
             log.error("Failed to remove mcp tools caused by system internal error", e);
             listener.onFailure(e);
@@ -123,10 +123,10 @@ public class TransportMcpToolsRemoveAction extends HandledTransportAction<Action
     private void bulkDeleteMcpTools(
         MLMcpToolsRemoveNodesRequest removeToolsOnNodesRequest,
         List<String> foundTools,
-        ActionListener<MLMcpRemoveNodesResponse> listener
+        ActionListener<MLMcpToolsRemoveNodesResponse> listener
     ) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<MLMcpRemoveNodesResponse> restoreListener = ActionListener.runBefore(listener, context::restore);
+            ActionListener<MLMcpToolsRemoveNodesResponse> restoreListener = ActionListener.runBefore(listener, context::restore);
             // All tools to remove are found in MCP server, proceeding to remove from index.
             ActionListener<BulkResponse> bulkResultListener = ActionListener.wrap(bulkResponse -> {
                 if (!bulkResponse.hasFailures()) {
@@ -146,7 +146,7 @@ public class TransportMcpToolsRemoveAction extends HandledTransportAction<Action
                                             Locale.ROOT,
                                             "Failed to remove tool: %s from index with error: %s",
                                             x.getId(),
-                                            x.getFailureMessage()
+                                            x.getFailure().getMessage()
                                         )
                                 );
                             errMsgBuilder.append("\n");
@@ -155,7 +155,7 @@ public class TransportMcpToolsRemoveAction extends HandledTransportAction<Action
                         }
                     });
 
-                    removeToolsOnNodesRequest.setTools(removeSucceedTools);
+                    removeToolsOnNodesRequest.setMcpTools(removeSucceedTools);
                     removeMcpToolsInMemory(removeToolsOnNodesRequest, errMsgBuilder, removeSucceedTools, restoreListener);
                 }
             }, e -> {
@@ -178,11 +178,11 @@ public class TransportMcpToolsRemoveAction extends HandledTransportAction<Action
         MLMcpToolsRemoveNodesRequest removeToolsOnNodesRequest,
         StringBuilder errMsgBuilder,
         List<String> removeSucceedTools,
-        ActionListener<MLMcpRemoveNodesResponse> listener
+        ActionListener<MLMcpToolsRemoveNodesResponse> listener
     ) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<MLMcpRemoveNodesResponse> restoreListener = ActionListener.runBefore(listener, context::restore);
-            ActionListener<MLMcpRemoveNodesResponse> removeFromMemoryResultListener = ActionListener.wrap(r -> {
+            ActionListener<MLMcpToolsRemoveNodesResponse> restoreListener = ActionListener.runBefore(listener, context::restore);
+            ActionListener<MLMcpToolsRemoveNodesResponse> removeFromMemoryResultListener = ActionListener.wrap(r -> {
                 if (r.failures() != null && !r.failures().isEmpty()) {
                     r.failures().forEach(x -> {
 
@@ -203,7 +203,11 @@ public class TransportMcpToolsRemoveAction extends HandledTransportAction<Action
                     log.error(errMsgBuilder.toString());
                     restoreListener.onFailure(new OpenSearchException(errMsgBuilder.toString()));
                 } else {
-                    restoreListener.onResponse(r);
+                    if (errMsgBuilder.isEmpty()) {
+                        restoreListener.onResponse(r);
+                    } else {
+                        restoreListener.onFailure(new OpenSearchException(errMsgBuilder.deleteCharAt(errMsgBuilder.length() - 1).toString()));
+                    }
                 }
             }, e -> {
 
@@ -220,7 +224,7 @@ public class TransportMcpToolsRemoveAction extends HandledTransportAction<Action
                 log.error(errMsgBuilder.toString(), e);
                 restoreListener.onFailure(new OpenSearchException(errMsgBuilder.toString()));
             });
-            removeToolsOnNodesRequest.setTools(removeSucceedTools);
+            removeToolsOnNodesRequest.setMcpTools(removeSucceedTools);
             client.execute(MLMcpToolsRemoveOnNodesAction.INSTANCE, removeToolsOnNodesRequest, removeFromMemoryResultListener);
         } catch (Exception e) {
             String errMsg = String.format(Locale.ROOT, "Failed to remove mcp tools on nodes memory with error: %s", e.getMessage());

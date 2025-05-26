@@ -32,6 +32,10 @@ import org.opensearch.transport.client.Client;
 import lombok.extern.log4j.Log4j2;
 import reactor.core.publisher.Mono;
 
+/**
+ * This class is responsible for handling the dispatched request, if the node itself has the session it handles it directly with this class,
+ * otherwise it will forward the request to the node that has the session and use this class to process the request.
+ */
 @Log4j2
 public class TransportMcpMessageDispatchedAction extends HandledTransportAction<ActionRequest, AcknowledgedResponse> {
 
@@ -85,9 +89,9 @@ public class TransportMcpMessageDispatchedAction extends HandledTransportAction<
             .onErrorResume(e -> Mono.fromRunnable(() -> {
                 try {
                     channel.sendResponse(new BytesRestResponse(channel, new Exception(e)));
-                    listener.onFailure(new Exception(e));
                 } catch (IOException ex) {
                     log.error("Failed to send exception response to client during message handling due to IOException", ex);
+                    listener.onFailure(new Exception(e));
                 }
             }))
             .subscribe();

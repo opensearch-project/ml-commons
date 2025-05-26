@@ -35,6 +35,9 @@ public class RegisterMcpTool extends BaseMcpTool {
 
     public RegisterMcpTool(String name, String type, String description, Map<String, Object> parameters, Map<String, Object> attributes, Instant createdTime, Instant lastUpdateTime) {
         super(name, type, description, parameters, attributes, createdTime, lastUpdateTime);
+        if (type == null) {
+            throw new IllegalArgumentException(TYPE_NOT_SHOWN_EXCEPTION_MESSAGE);
+        }
     }
 
     public static RegisterMcpTool parse(XContentParser parser) throws IOException {

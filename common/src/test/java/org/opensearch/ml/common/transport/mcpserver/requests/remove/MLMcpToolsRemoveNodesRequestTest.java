@@ -19,8 +19,14 @@ import org.junit.Test;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.search.SearchModule;
 
 public class MLMcpToolsRemoveNodesRequestTest {
 
@@ -32,8 +38,8 @@ public class MLMcpToolsRemoveNodesRequestTest {
         MLMcpToolsRemoveNodesRequest request = new MLMcpToolsRemoveNodesRequest(nodeIds, sampleTools);
 
         assertArrayEquals(nodeIds, request.nodesIds());
-        assertEquals(2, request.getTools().size());
-        assertTrue(request.getTools().contains("weather_api"));
+        assertEquals(2, request.getMcpTools().size());
+        assertTrue(request.getMcpTools().contains("weather_api"));
     }
 
     @Test
@@ -47,7 +53,7 @@ public class MLMcpToolsRemoveNodesRequestTest {
         MLMcpToolsRemoveNodesRequest deserialized = new MLMcpToolsRemoveNodesRequest(input);
 
         assertArrayEquals(nodeIds, deserialized.nodesIds());
-        assertEquals(sampleTools, deserialized.getTools());
+        assertEquals(sampleTools, deserialized.getMcpTools());
     }
 
     @Test
@@ -88,7 +94,7 @@ public class MLMcpToolsRemoveNodesRequestTest {
         };
 
         MLMcpToolsRemoveNodesRequest converted = MLMcpToolsRemoveNodesRequest.fromActionRequest(wrappedRequest);
-        assertEquals(sampleTools, converted.getTools());
+        assertEquals(sampleTools, converted.getMcpTools());
         assertArrayEquals(nodeIds, converted.nodesIds());
     }
 
@@ -106,5 +112,23 @@ public class MLMcpToolsRemoveNodesRequestTest {
             }
         };
         MLMcpToolsRemoveNodesRequest.fromActionRequest(faultyRequest);
+    }
+
+    @Test
+    public void testParse_AllFields() throws Exception {
+        String jsonStr = "[\n" +
+                "    \"MyListIndexTool2\"\n" +
+                "]";
+
+        XContentParser parser = XContentType.JSON
+                .xContent()
+                .createParser(
+                        new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                        LoggingDeprecationHandler.INSTANCE,
+                        jsonStr
+                );
+
+        MLMcpToolsRemoveNodesRequest parsed = MLMcpToolsRemoveNodesRequest.parse(parser, new String[]{"nodeId"});
+        assertEquals(1, parsed.getMcpTools().size());
     }
 }
