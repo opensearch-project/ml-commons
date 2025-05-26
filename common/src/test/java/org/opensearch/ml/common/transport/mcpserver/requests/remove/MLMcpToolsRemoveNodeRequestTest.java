@@ -25,8 +25,8 @@ public class MLMcpToolsRemoveNodeRequestTest {
     @Test
     public void testConstructorWithToolList() {
         MLMcpToolsRemoveNodeRequest request = new MLMcpToolsRemoveNodeRequest(sampleTools);
-        assertEquals(2, request.getTools().size());
-        assertTrue(request.getTools().contains("weather_api"));
+        assertEquals(2, request.getMcpTools().size());
+        assertTrue(request.getMcpTools().contains("weather_api"));
     }
 
     @Test
@@ -38,7 +38,7 @@ public class MLMcpToolsRemoveNodeRequestTest {
         StreamInput input = output.bytes().streamInput();
         MLMcpToolsRemoveNodeRequest deserialized = new MLMcpToolsRemoveNodeRequest(input);
 
-        assertEquals(sampleTools, deserialized.getTools());
+        assertEquals(sampleTools, deserialized.getMcpTools());
     }
 
     @Test
@@ -50,7 +50,7 @@ public class MLMcpToolsRemoveNodeRequestTest {
         StreamInput input = output.bytes().streamInput();
         MLMcpToolsRemoveNodeRequest result = new MLMcpToolsRemoveNodeRequest(input);
 
-        assertTrue(result.getTools().isEmpty());
+        assertTrue(result.getMcpTools().isEmpty());
     }
 
     @Test
@@ -62,7 +62,7 @@ public class MLMcpToolsRemoveNodeRequestTest {
         StreamInput input = output.bytes().streamInput();
         MLMcpToolsRemoveNodeRequest result = new MLMcpToolsRemoveNodeRequest(input);
 
-        assertNull(result.getTools());
+        assertNull(result.getMcpTools());
     }
 
 }

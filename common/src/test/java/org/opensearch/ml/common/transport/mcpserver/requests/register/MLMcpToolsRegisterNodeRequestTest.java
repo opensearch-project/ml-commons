@@ -34,7 +34,7 @@ public class MLMcpToolsRegisterNodeRequestTest {
         sampleTools = Collections
             .singletonList(
                 new RegisterMcpTool(
-                    null,
+                    "test_tool",
                     "test_tool",
                     "Sample tool",
                     Collections.singletonMap("param", "value"),

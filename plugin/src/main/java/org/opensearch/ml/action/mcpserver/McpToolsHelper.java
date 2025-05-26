@@ -19,11 +19,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
-import org.apache.lucene.search.join.ScoreMode;
 import org.opensearch.OpenSearchException;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
-import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -33,7 +31,6 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.MatchAllQueryBuilder;
-import org.opensearch.index.query.NestedQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLIndex;
@@ -55,19 +52,16 @@ import reactor.core.publisher.Mono;
 
 @Slf4j
 public class McpToolsHelper {
-    public static final String TOOL = "tool";
     public static final int MAX_TOOL_NUMBER = 1000;
     private static final int SYNC_MCP_TOOLS_JOB_INTERVAL = 10;
 
     private final Client client;
     private final ThreadPool threadPool;
-    private final ClusterService clusterService;
     private final ToolFactoryWrapper toolFactoryWrapper;
 
-    public McpToolsHelper(Client client, ThreadPool threadPool, ClusterService clusterService, ToolFactoryWrapper toolFactoryWrapper) {
+    public McpToolsHelper(Client client, ThreadPool threadPool, ToolFactoryWrapper toolFactoryWrapper) {
         this.client = client;
         this.threadPool = threadPool;
-        this.clusterService = clusterService;
         this.toolFactoryWrapper = toolFactoryWrapper;
     }
 
@@ -76,37 +70,24 @@ public class McpToolsHelper {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<Boolean> restoreListener = ActionListener.runBefore(listener, context::restore);
             ActionListener<Map<String, Tuple<RegisterMcpTool, Long>>> searchListener = ActionListener.wrap(r -> {
-                StringBuilder errMsgBuilder = new StringBuilder();
-                r.entrySet().forEach(x -> {
-                    if (!McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.containsKey(x.getKey())
-                        || McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.get(x.getKey()) < x.getValue().v2()) {
+                r.forEach((key, value) -> {
+                    if (!McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.containsKey(key)) {
                         McpAsyncServerHolder
-                            .getMcpAsyncServerInstance()
-                            .addTool(createToolSpecification(x.getValue().v1()))
-                            .doOnSuccess(y -> {
-                                McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.put(x.getKey(), x.getValue().v2());
-                            })
-                            .doOnError(e -> {
-                                String errMsg = String
-                                    .format(
-                                        Locale.ROOT,
-                                        "Failed to add tool: %s in MCP server memory in node: %s with error: %s",
-                                        x.getKey(),
-                                        clusterService.localNode().getId(),
-                                        e.getMessage()
-                                    );
-                                log.error(errMsg);
-                                errMsgBuilder.append(errMsg).append("\n");
-                            })
-                            .subscribe();
+                                .getMcpAsyncServerInstance()
+                                .addTool(createToolSpecification(value.v1()))
+                                .doOnSuccess(y -> McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.put(key, value.v2()))
+                                .subscribe();
+                    } else if (McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.get(key) < value.v2()) {
+                        McpAsyncServerHolder.getMcpAsyncServerInstance().removeTool(key).onErrorResume(e -> Mono.empty()).subscribe();
+                        McpAsyncServerHolder
+                                .getMcpAsyncServerInstance()
+                                .addTool(createToolSpecification(value.v1()))
+                                .doOnSuccess(x -> McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.put(key, value.v2()))
+                                .subscribe();
                     }
                 });
-                if (!errMsgBuilder.isEmpty()) {
-                    restoreListener.onFailure(new OpenSearchException(errMsgBuilder.toString()));
-                } else {
-                    startSyncMcpToolsJob();
-                    restoreListener.onResponse(true);
-                }
+                startSyncMcpToolsJob();
+                restoreListener.onResponse(true);
             }, e -> {
                 log.error("Failed to auto load all MCP tools to MCP server", e);
                 restoreListener.onFailure(e);
@@ -130,6 +111,9 @@ public class McpToolsHelper {
     public McpServerFeatures.AsyncToolSpecification createToolSpecification(BaseMcpTool tool) {
         String toolName = Optional.ofNullable(tool.getName()).orElse(tool.getType());
         Tool.Factory factory = toolFactoryWrapper.getToolsFactories().get(tool.getType());
+        if (factory == null) {
+            throw new OpenSearchException("Failed to find tool factory for tool type: " + tool.getType());
+        }
         Tool actualTool = factory.create(Optional.ofNullable(tool.getParameters()).orElse(ImmutableMap.of()));
         // MCP server doesn't allow null schema.
         String schema = Optional
@@ -152,32 +136,29 @@ public class McpToolsHelper {
         );
     }
 
-    public void searchToolsWithParsedResult(List<String> toolNames, ActionListener<List<RegisterMcpTool>> listener) {
+    public void searchToolsWithVersion(List<String> toolNames, ActionListener<List<RegisterMcpTool>> listener) {
         ActionListener<SearchResponse> actionListener = createSearchResponseListener(listener);
-        SearchRequest searchRequest = new SearchRequest();
-        searchRequest.indices(MLIndex.MCP_TOOLS.getIndexName());
-
-        BoolQueryBuilder queryBuilder = QueryBuilders.boolQuery();
-        toolNames.forEach(toolName -> queryBuilder.should(QueryBuilders.matchQuery("name", toolName)));
-        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-        searchSourceBuilder.version(true);
-        searchSourceBuilder.seqNoAndPrimaryTerm(true);
-        searchSourceBuilder.query(queryBuilder);
-        searchRequest.source(searchSourceBuilder);
+        SearchRequest searchRequest = buildSearchRequest(toolNames);
+        searchRequest.source().version(true);
         client.search(searchRequest, actionListener);
     }
 
-    public void searchToolsForUpdate(List<String> toolNames, ActionListener<SearchResponse> listener) {
+    public void searchToolsWithPrimaryTermAndSeqNo(List<String> toolNames, ActionListener<SearchResponse> listener) {
+        SearchRequest searchRequest = buildSearchRequest(toolNames);
+        searchRequest.source().seqNoAndPrimaryTerm(true);
+        client.search(searchRequest, listener);
+    }
+
+    private SearchRequest buildSearchRequest(List<String> toolNames) {
         SearchRequest searchRequest = new SearchRequest();
         searchRequest.indices(MLIndex.MCP_TOOLS.getIndexName());
 
         BoolQueryBuilder queryBuilder = QueryBuilders.boolQuery();
         toolNames.forEach(toolName -> queryBuilder.should(QueryBuilders.matchQuery("name", toolName)));
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-        searchSourceBuilder.seqNoAndPrimaryTerm(true);
         searchSourceBuilder.query(queryBuilder);
         searchRequest.source(searchSourceBuilder);
-        client.search(searchRequest, listener);
+        return searchRequest;
     }
 
     public void searchAllToolsWithVersion(ActionListener<Map<String, Tuple<RegisterMcpTool, Long>>> listener) {
@@ -197,8 +178,9 @@ public class McpToolsHelper {
                 });
                 restoreListener.onResponse(mcpTools);
             }, e -> {
-                log.error("Failed to search mcp tools index", e);
-                restoreListener.onFailure(new OpenSearchException("Failed to search mcp tools index"));
+                String errMsg = String.format(Locale.ROOT, "Failed to search mcp tools index with error: %s", e.getMessage());
+                log.error(errMsg, e);
+                restoreListener.onFailure(new OpenSearchException(errMsg));
             });
             client.search(buildSearchRequest(), actionListener);
         } catch (Exception e) {
@@ -222,8 +204,9 @@ public class McpToolsHelper {
                 });
                 restoreListener.onResponse(mcpTools);
             }, e -> {
-                log.error("Failed to search mcp tools index", e);
-                restoreListener.onFailure(new OpenSearchException("Failed to search mcp tools index"));
+                String errMsg = String.format(Locale.ROOT, "Failed to search mcp tools index with error: %s", e.getMessage());
+                log.error(errMsg, e);
+                restoreListener.onFailure(new OpenSearchException(errMsg));
             });
 
             client.search(buildSearchRequest(), actionListener);
@@ -259,8 +242,9 @@ public class McpToolsHelper {
             });
             listener.onResponse(mcpTools);
         }, e -> {
-            log.error("Failed to search mcp tools index", e);
-            listener.onFailure(new OpenSearchException("Failed to search mcp tools index"));
+            String errMsg = String.format(Locale.ROOT, "Failed to search mcp tools index with error: %s", e.getMessage());
+            log.error(errMsg, e);
+            listener.onFailure(new OpenSearchException(errMsg));
         });
     }
 

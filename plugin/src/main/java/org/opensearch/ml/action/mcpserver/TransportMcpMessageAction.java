@@ -44,7 +44,6 @@ public class TransportMcpMessageAction extends HandledTransportAction<ActionRequ
     Client client;
 
     NamedXContentRegistry xContentRegistry;
-    DiscoveryNodeHelper nodeFilter;
     private volatile boolean mcpServerEnabled;
 
     @Inject
@@ -54,8 +53,7 @@ public class TransportMcpMessageAction extends HandledTransportAction<ActionRequ
         ClusterService clusterService,
         ThreadPool threadPool,
         Client client,
-        NamedXContentRegistry xContentRegistry,
-        DiscoveryNodeHelper nodeFilter
+        NamedXContentRegistry xContentRegistry
     ) {
         super(MLMcpMessageAction.NAME, transportService, actionFilters, MLMcpMessageRequest::new);
         this.transportService = transportService;
@@ -63,7 +61,6 @@ public class TransportMcpMessageAction extends HandledTransportAction<ActionRequ
         this.threadPool = threadPool;
         this.client = client;
         this.xContentRegistry = xContentRegistry;
-        this.nodeFilter = nodeFilter;
         mcpServerEnabled = ML_COMMONS_MCP_SERVER_ENABLED.get(clusterService.getSettings());
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MCP_SERVER_ENABLED, it -> mcpServerEnabled = it);
     }
@@ -76,6 +73,7 @@ public class TransportMcpMessageAction extends HandledTransportAction<ActionRequ
         }
         MLMcpMessageRequest mlMcpMessageRequest = MLMcpMessageRequest.fromActionRequest(request);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<AcknowledgedResponse> restoreListener = ActionListener.runBefore(listener, context::restore);
             transportService
                 .sendRequest(
                     clusterService.state().nodes().getNodes().get(mlMcpMessageRequest.getNodeId()),
@@ -89,7 +87,7 @@ public class TransportMcpMessageAction extends HandledTransportAction<ActionRequ
 
                         @Override
                         public void handleResponse(AcknowledgedResponse acknowledgedResponse) {
-                            listener.onResponse(acknowledgedResponse);
+                            restoreListener.onResponse(acknowledgedResponse);
                         }
 
                         @Override
@@ -101,6 +99,7 @@ public class TransportMcpMessageAction extends HandledTransportAction<ActionRequ
                                     mlMcpMessageRequest.getRequestBody(),
                                     e
                                 );
+                            restoreListener.onFailure(e);
                         }
 
                         @Override

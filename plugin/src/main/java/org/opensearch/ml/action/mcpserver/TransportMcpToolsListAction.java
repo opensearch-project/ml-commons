@@ -22,14 +22,14 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsListAction;
 import org.opensearch.ml.common.transport.mcpserver.requests.register.RegisterMcpTool;
-import org.opensearch.ml.common.transport.mcpserver.responses.list.MLMcpListToolsResponse;
+import org.opensearch.ml.common.transport.mcpserver.responses.list.MLMcpToolsListResponse;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
-public class TransportMcpToolsListAction extends HandledTransportAction<ActionRequest, MLMcpListToolsResponse> {
+public class TransportMcpToolsListAction extends HandledTransportAction<ActionRequest, MLMcpToolsListResponse> {
 
     private final McpToolsHelper mcpToolsHelper;
     TransportService transportService;
@@ -63,13 +63,13 @@ public class TransportMcpToolsListAction extends HandledTransportAction<ActionRe
     }
 
     @Override
-    protected void doExecute(Task task, ActionRequest request, ActionListener<MLMcpListToolsResponse> listener) {
+    protected void doExecute(Task task, ActionRequest request, ActionListener<MLMcpToolsListResponse> listener) {
         if (!mcpServerEnabled) {
             listener.onFailure(new OpenSearchException(ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE));
             return;
         }
         ActionListener<List<RegisterMcpTool>> searchListener = ActionListener
-            .wrap(r -> { listener.onResponse(new MLMcpListToolsResponse(r)); }, e -> {
+            .wrap(r -> { listener.onResponse(new MLMcpToolsListResponse(r)); }, e -> {
                 log.error("Failed to list MCP tools", e);
                 listener.onFailure(e);
             });

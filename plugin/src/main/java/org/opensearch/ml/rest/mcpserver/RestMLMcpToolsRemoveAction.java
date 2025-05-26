@@ -36,14 +36,14 @@ import lombok.extern.log4j.Log4j2;
  */
 @ExperimentalApi
 @Log4j2
-public class RestMLRemoveMcpToolsAction extends BaseRestHandler {
+public class RestMLMcpToolsRemoveAction extends BaseRestHandler {
     private static final String ML_REGISTER_MCP_TOOLS_ACTION = "ml_remove_mcp_tools_action";
     private final ClusterService clusterService;
     private final String REMOVE_PATH = String.format(Locale.ROOT, "%s/mcp/tools/_remove", ML_BASE_URI);
 
     private volatile boolean mcpServerEnabled;
 
-    public RestMLRemoveMcpToolsAction(ClusterService clusterService) {
+    public RestMLMcpToolsRemoveAction(ClusterService clusterService) {
         this.clusterService = clusterService;
         mcpServerEnabled = ML_COMMONS_MCP_SERVER_ENABLED.get(clusterService.getSettings());
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MCP_SERVER_ENABLED, it -> mcpServerEnabled = it);
@@ -66,7 +66,7 @@ public class RestMLRemoveMcpToolsAction extends BaseRestHandler {
         }
         MLMcpToolsRemoveNodesRequest removeNodesRequest = getRequest(request);
         ActionRequestValidationException exception = new ActionRequestValidationException();
-        if (CollectionUtils.isEmpty(removeNodesRequest.getTools())) {
+        if (CollectionUtils.isEmpty(removeNodesRequest.getMcpTools())) {
             exception.addValidationError("tools list can not be null");
             throw exception;
         }

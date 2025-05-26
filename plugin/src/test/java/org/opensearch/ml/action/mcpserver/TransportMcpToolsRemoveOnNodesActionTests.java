@@ -32,10 +32,11 @@ import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.common.transport.mcpserver.requests.register.RegisterMcpTool;
 import org.opensearch.ml.common.transport.mcpserver.requests.remove.MLMcpToolsRemoveNodeRequest;
 import org.opensearch.ml.common.transport.mcpserver.requests.remove.MLMcpToolsRemoveNodesRequest;
-import org.opensearch.ml.common.transport.mcpserver.responses.remove.MLMcpRemoveNodeResponse;
-import org.opensearch.ml.common.transport.mcpserver.responses.remove.MLMcpRemoveNodesResponse;
+import org.opensearch.ml.common.transport.mcpserver.responses.remove.MLMcpToolsRemoveNodeResponse;
+import org.opensearch.ml.common.transport.mcpserver.responses.remove.MLMcpToolsRemoveNodesResponse;
 import org.opensearch.ml.engine.tools.ListIndexTool;
 import org.opensearch.ml.rest.mcpserver.ToolFactoryWrapper;
 import org.opensearch.test.OpenSearchTestCase;
@@ -70,6 +71,8 @@ public class TransportMcpToolsRemoveOnNodesActionTests extends OpenSearchTestCas
 
     private TransportMcpToolsRemoveOnNodesAction action;
 
+    private McpToolsHelper mcpToolsHelper;
+
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
@@ -88,6 +91,7 @@ public class TransportMcpToolsRemoveOnNodesActionTests extends OpenSearchTestCas
             client,
             xContentRegistry
         );
+        mcpToolsHelper = new McpToolsHelper(client, threadPool, toolFactoryWrapper);
     }
 
     @Test
@@ -99,9 +103,9 @@ public class TransportMcpToolsRemoveOnNodesActionTests extends OpenSearchTestCas
         DiscoveryNode discoveryNode2 = mock(DiscoveryNode.class);
         when(discoveryNode2.getId()).thenReturn("node2");
 
-        List<MLMcpRemoveNodeResponse> responses = List.of(new MLMcpRemoveNodeResponse(discoveryNode1, true));
+        List<MLMcpToolsRemoveNodeResponse> responses = List.of(new MLMcpToolsRemoveNodeResponse(discoveryNode1, true));
         List<FailedNodeException> failures = List.of(new FailedNodeException("node2", "failed", new Exception("failed")));
-        MLMcpRemoveNodesResponse response = action.newResponse(nodesRequest, responses, failures);
+        MLMcpToolsRemoveNodesResponse response = action.newResponse(nodesRequest, responses, failures);
         assertEquals(1, response.getNodes().size());
         assertEquals(1, response.failures().size());
     }
@@ -110,7 +114,7 @@ public class TransportMcpToolsRemoveOnNodesActionTests extends OpenSearchTestCas
     public void testNewNodeRequest() {
         MLMcpToolsRemoveNodesRequest nodesRequest = new MLMcpToolsRemoveNodesRequest(new String[] { "node1", "node2" }, toRemoveTools);
         MLMcpToolsRemoveNodeRequest nodeRequest = action.newNodeRequest(nodesRequest);
-        assertEquals(nodesRequest.getTools(), nodeRequest.getTools());
+        assertEquals(nodesRequest.getMcpTools(), nodeRequest.getMcpTools());
     }
 
     @Test
@@ -123,18 +127,48 @@ public class TransportMcpToolsRemoveOnNodesActionTests extends OpenSearchTestCas
             Collections.singleton(CLUSTER_MANAGER_ROLE),
             Version.CURRENT
         );
-        MLMcpRemoveNodeResponse response = new MLMcpRemoveNodeResponse(node, true);
+        MLMcpToolsRemoveNodeResponse response = new MLMcpToolsRemoveNodeResponse(node, true);
         BytesStreamOutput output = new BytesStreamOutput();
         response.writeTo(output);
-        MLMcpRemoveNodeResponse newNodeResponse = action.newNodeResponse(output.bytes().streamInput());
+        MLMcpToolsRemoveNodeResponse newNodeResponse = action.newNodeResponse(output.bytes().streamInput());
         assertEquals("node1", newNodeResponse.getNode().getId());
     }
 
     @Test
     public void testNodeOperation() {
+        MLMcpToolsRemoveNodeRequest request = new MLMcpToolsRemoveNodeRequest(toRemoveTools);
+        McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.put("ListIndexTool", 1L);
+        McpAsyncServerHolder.getMcpAsyncServerInstance().addTool(mcpToolsHelper.createToolSpecification(getRegisterMcpTool())).subscribe();
+        MLMcpToolsRemoveNodeResponse response = action.nodeOperation(request);
+        assertEquals(true, response.getDeleted());
+    }
+
+    @Test
+    public void testNodeOperation_exception() {
         exceptionRule.expect(FailedNodeException.class);
         MLMcpToolsRemoveNodeRequest request = new MLMcpToolsRemoveNodeRequest(toRemoveTools);
-        MLMcpRemoveNodeResponse response = action.nodeOperation(request);
+        McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.put("ListIndexTool", 1L);
+        MLMcpToolsRemoveNodeResponse response = action.nodeOperation(request);
         assertEquals(true, response.getDeleted());
+    }
+
+    private RegisterMcpTool getRegisterMcpTool() {
+        RegisterMcpTool registerMcpTool = new RegisterMcpTool(
+                "ListIndexTool",
+                "ListIndexTool",
+                "OpenSearch index name list, separated by comma. for example: [\\\"index1\\\", \\\"index2\\\"], use empty array [] to list all indices in the cluster",
+                Map.of(),
+                Map
+                        .of(
+                                "type",
+                                "object",
+                                "properties",
+                                Map.of("indices", Map.of("type", "array", "items", Map.of("type", "string"))),
+                                "additionalProperties",
+                                false
+                        ), null, null
+        );
+        registerMcpTool.setVersion(1L);
+        return registerMcpTool;
     }
 }

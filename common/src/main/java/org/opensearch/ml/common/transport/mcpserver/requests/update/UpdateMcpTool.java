@@ -21,6 +21,9 @@ public class UpdateMcpTool extends BaseMcpTool {
 
     public UpdateMcpTool(String name, String description, Map<String, Object> parameters, Map<String, Object> attributes, Instant createdTime, Instant lastUpdateTime) {
         super(name, null, description, parameters, attributes, createdTime, lastUpdateTime);
+        if (name == null) {
+            throw new IllegalArgumentException(NAME_NOT_SHOWN_EXCEPTION_MESSAGE);
+        }
     }
 
     public static UpdateMcpTool parse(XContentParser parser) throws IOException {
