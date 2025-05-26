@@ -46,7 +46,7 @@ import lombok.extern.log4j.Log4j2;
  */
 @ExperimentalApi
 @Log4j2
-public class RestMLRegisterMcpToolsAction extends BaseRestHandler {
+public class RestMLMcpToolsRegisterAction extends BaseRestHandler {
     private static final String ML_REGISTER_MCP_TOOLS_ACTION = "ml_register_mcp_tools_action";
     private final Map<String, Tool.Factory> toolFactories;
     private ClusterService clusterService;
@@ -55,7 +55,7 @@ public class RestMLRegisterMcpToolsAction extends BaseRestHandler {
     /**
      * Constructor
      */
-    public RestMLRegisterMcpToolsAction(Map<String, Tool.Factory> toolFactories, ClusterService clusterService) {
+    public RestMLMcpToolsRegisterAction(Map<String, Tool.Factory> toolFactories, ClusterService clusterService) {
         this.toolFactories = toolFactories;
         this.clusterService = clusterService;
         mcpServerEnabled = ML_COMMONS_MCP_SERVER_ENABLED.get(clusterService.getSettings());

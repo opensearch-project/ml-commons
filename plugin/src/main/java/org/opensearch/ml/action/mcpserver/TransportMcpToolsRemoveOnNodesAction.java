@@ -6,9 +6,10 @@
 package org.opensearch.ml.action.mcpserver;
 
 import java.io.IOException;
-import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.opensearch.OpenSearchException;
@@ -22,8 +23,8 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRemoveOnNodesAction;
 import org.opensearch.ml.common.transport.mcpserver.requests.remove.MLMcpToolsRemoveNodeRequest;
 import org.opensearch.ml.common.transport.mcpserver.requests.remove.MLMcpToolsRemoveNodesRequest;
-import org.opensearch.ml.common.transport.mcpserver.responses.remove.MLMcpRemoveNodeResponse;
-import org.opensearch.ml.common.transport.mcpserver.responses.remove.MLMcpRemoveNodesResponse;
+import org.opensearch.ml.common.transport.mcpserver.responses.remove.MLMcpToolsRemoveNodeResponse;
+import org.opensearch.ml.common.transport.mcpserver.responses.remove.MLMcpToolsRemoveNodesResponse;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -38,7 +39,7 @@ import reactor.core.publisher.Mono;
  */
 @Log4j2
 public class TransportMcpToolsRemoveOnNodesAction extends
-    TransportNodesAction<MLMcpToolsRemoveNodesRequest, MLMcpRemoveNodesResponse, MLMcpToolsRemoveNodeRequest, MLMcpRemoveNodeResponse> {
+    TransportNodesAction<MLMcpToolsRemoveNodesRequest, MLMcpToolsRemoveNodesResponse, MLMcpToolsRemoveNodeRequest, MLMcpToolsRemoveNodeResponse> {
     TransportService transportService;
     ClusterService clusterService;
     ThreadPool threadPool;
@@ -63,7 +64,7 @@ public class TransportMcpToolsRemoveOnNodesAction extends
             MLMcpToolsRemoveNodesRequest::new,
             MLMcpToolsRemoveNodeRequest::new,
             ThreadPool.Names.MANAGEMENT,
-            MLMcpRemoveNodeResponse.class
+            MLMcpToolsRemoveNodeResponse.class
         );
         this.transportService = transportService;
         this.clusterService = clusterService;
@@ -73,32 +74,32 @@ public class TransportMcpToolsRemoveOnNodesAction extends
     }
 
     @Override
-    protected MLMcpRemoveNodesResponse newResponse(
+    protected MLMcpToolsRemoveNodesResponse newResponse(
         MLMcpToolsRemoveNodesRequest nodesRequest,
-        List<MLMcpRemoveNodeResponse> responses,
+        List<MLMcpToolsRemoveNodeResponse> responses,
         List<FailedNodeException> failures
     ) {
-        return new MLMcpRemoveNodesResponse(clusterService.getClusterName(), responses, failures);
+        return new MLMcpToolsRemoveNodesResponse(clusterService.getClusterName(), responses, failures);
     }
 
     @Override
     protected MLMcpToolsRemoveNodeRequest newNodeRequest(MLMcpToolsRemoveNodesRequest request) {
-        return new MLMcpToolsRemoveNodeRequest(request.getTools());
+        return new MLMcpToolsRemoveNodeRequest(request.getMcpTools());
     }
 
     @Override
-    protected MLMcpRemoveNodeResponse newNodeResponse(StreamInput in) throws IOException {
-        return new MLMcpRemoveNodeResponse(in);
+    protected MLMcpToolsRemoveNodeResponse newNodeResponse(StreamInput in) throws IOException {
+        return new MLMcpToolsRemoveNodeResponse(in);
     }
 
     @Override
-    protected MLMcpRemoveNodeResponse nodeOperation(MLMcpToolsRemoveNodeRequest request) {
-        return removeMcpTools(request.getTools());
+    protected MLMcpToolsRemoveNodeResponse nodeOperation(MLMcpToolsRemoveNodeRequest request) {
+        return removeMcpTools(request.getMcpTools());
     }
 
-    private MLMcpRemoveNodeResponse removeMcpTools(List<String> tools) {
-        AtomicReference<List<String>> errors = new AtomicReference<>();
-        errors.set(new ArrayList<>());
+    private MLMcpToolsRemoveNodeResponse removeMcpTools(List<String> tools) {
+        AtomicReference<Set<String>> errors = new AtomicReference<>();
+        errors.set(new HashSet<>());
         Flux.fromStream(tools.stream()).flatMap(toolName -> {
             if (McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.containsKey(toolName)) {
                 McpAsyncServerHolder.getMcpAsyncServerInstance().removeTool(toolName).onErrorResume(e -> {
@@ -116,22 +117,13 @@ public class TransportMcpToolsRemoveOnNodesAction extends
             return Mono.empty();
         })
             .doOnComplete(() -> log.debug("Successfully removed tools on node: {}", clusterService.localNode().getId()))
-            .doOnError(
-                e -> log
-                    .error(
-                        "Failed to remove tools in MCP server memory with error: {} on node: {}",
-                        e.getMessage(),
-                        clusterService.localNode().getId(),
-                        e
-                    )
-            )
             .subscribe();
         if (!errors.get().isEmpty()) {
-            String errMsg = String.format(Locale.ROOT, "Tools: %s not found", errors.get());
+            String errMsg = String.format(Locale.ROOT, "Tools: %s not found on node: %s", errors.get(), clusterService.localNode().getId());
             OpenSearchException openSearchException = new OpenSearchException(errMsg);
             throw new FailedNodeException(clusterService.localNode().getId(), openSearchException.getMessage(), openSearchException);
         } else {
-            return new MLMcpRemoveNodeResponse(clusterService.localNode(), true);
+            return new MLMcpToolsRemoveNodeResponse(clusterService.localNode(), true);
         }
     }
 

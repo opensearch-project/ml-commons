@@ -21,6 +21,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.http.HttpChunk;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.rest.BytesRestResponse;
@@ -165,7 +166,7 @@ public class OpenSearchMcpServerTransportProvider implements McpServerTransportP
             log.error("Failed to write sessionId into MCP session management index", e);
             sink.error(e);
         });
-        Map<String, Object> source = ImmutableMap.of("node_id", nodeId, "status", "active", "create_time", Instant.now());
+        Map<String, Object> source = ImmutableMap.of("node_id", nodeId, "status", "active", CommonValue.CREATE_TIME_FIELD, Instant.now());
         IndexRequest indexRequest = new IndexRequest(MLIndex.MCP_SESSION_MANAGEMENT.getIndexName()).id(sessionId).source(source);
         client.index(indexRequest, actionListener);
     }

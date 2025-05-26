@@ -41,9 +41,9 @@ import org.opensearch.transport.client.node.NodeClient;
 
 import com.google.common.collect.ImmutableMap;
 
-public class RestMLRegisterMcpToolsActionTests extends OpenSearchTestCase {
+public class RestMLMcpToolsRegisterActionTests extends OpenSearchTestCase {
 
-    private RestMLRegisterMcpToolsAction restMLRegisterMcpToolsAction;
+    private RestMLMcpToolsRegisterAction restMLRegisterMcpToolsAction;
 
     private final String registerToolRequest =
         """
@@ -92,7 +92,7 @@ public class RestMLRegisterMcpToolsActionTests extends OpenSearchTestCase {
         Settings settings = Settings.builder().put(ML_COMMONS_MCP_SERVER_ENABLED.getKey(), true).build();
         when(clusterService.getSettings()).thenReturn(settings);
         when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MCP_SERVER_ENABLED)));
-        restMLRegisterMcpToolsAction = new RestMLRegisterMcpToolsAction(toolFactories, clusterService);
+        restMLRegisterMcpToolsAction = new RestMLMcpToolsRegisterAction(toolFactories, clusterService);
     }
 
     @Test

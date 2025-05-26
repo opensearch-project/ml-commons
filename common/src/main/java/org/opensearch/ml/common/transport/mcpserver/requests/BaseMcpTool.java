@@ -43,7 +43,7 @@ public class BaseMcpTool implements ToXContentObject, Writeable {
     private Instant createdTime;
     private Instant lastUpdatedTime;
     public static final String TYPE_NOT_SHOWN_EXCEPTION_MESSAGE = "type field required";
-    public static final String NAME_NOT_SHOWN_EXCEPTION_MESSAGE = "name field required if it's memory only register request";
+    public static final String NAME_NOT_SHOWN_EXCEPTION_MESSAGE = "name field required";
 
     public BaseMcpTool(StreamInput streamInput) throws IOException {
         type = streamInput.readString();

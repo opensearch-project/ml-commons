@@ -19,22 +19,22 @@ import lombok.extern.log4j.Log4j2;
 
 @Getter
 @Log4j2
-public class MLMcpRemoveNodeResponse extends BaseNodeResponse implements ToXContentFragment {
+public class MLMcpToolsRemoveNodeResponse extends BaseNodeResponse implements ToXContentFragment {
 
     private final Boolean deleted;
 
-    public MLMcpRemoveNodeResponse(DiscoveryNode node, Boolean deleted) {
+    public MLMcpToolsRemoveNodeResponse(DiscoveryNode node, Boolean deleted) {
         super(node);
         this.deleted = deleted;
     }
 
-    public MLMcpRemoveNodeResponse(StreamInput in) throws IOException {
+    public MLMcpToolsRemoveNodeResponse(StreamInput in) throws IOException {
         super(in);
         this.deleted = in.readBoolean();
     }
 
-    public static MLMcpRemoveNodeResponse readResponse(StreamInput in) throws IOException {
-        return new MLMcpRemoveNodeResponse(in);
+    public static MLMcpToolsRemoveNodeResponse readResponse(StreamInput in) throws IOException {
+        return new MLMcpToolsRemoveNodeResponse(in);
     }
 
     @Override

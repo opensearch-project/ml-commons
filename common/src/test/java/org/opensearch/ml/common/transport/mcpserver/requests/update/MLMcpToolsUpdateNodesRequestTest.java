@@ -21,16 +21,19 @@ import org.junit.Test;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.transport.mcpserver.requests.register.MLMcpToolsRegisterNodesRequest;
+import org.opensearch.search.SearchModule;
 
 public class MLMcpToolsUpdateNodesRequestTest {
 
     private List<UpdateMcpTool> sampleTools;
-    private List<String> sampleBackendRoles;
     private final String[] nodeIds = { "nodeA", "nodeB" };
 
     @Before
@@ -74,11 +77,19 @@ public class MLMcpToolsUpdateNodesRequestTest {
         assertEquals("updated_tool", deserialized.getMcpTools().get(0).getType());
     }
 
-    @Test(expected = UncheckedIOException.class)
+    @Test(expected = IllegalArgumentException.class)
     public void testStreamSerializationWithEmptyName() throws IOException {
+        UpdateMcpTool updateMcpTool = new UpdateMcpTool(
+                null,
+                "Updated description",
+                Collections.singletonMap("parameters", "value"),
+                Collections.singletonMap("attributes", "object"),
+                null, null
+        );
+        updateMcpTool.setType("updated_tool");
         MLMcpToolsUpdateNodesRequest original = new MLMcpToolsUpdateNodesRequest(
                 nodeIds,
-                sampleTools
+                List.of(updateMcpTool)
         );
 
         BytesStreamOutput output = new BytesStreamOutput();
@@ -144,26 +155,36 @@ public class MLMcpToolsUpdateNodesRequestTest {
     }
 
     @Test
-    public void testParseFromXContent() throws IOException {
-        String json = "{"
-                + "\"tools\":[{"
-                + "\"name\":\"network_monitor\","
-                + "\"description\":\"Network traffic analyzer\","
-                + "\"parameters\":{\"threshold\":\"80%\"},"
-                + "\"attributes\":{\"input_schema\":{\"foo\": \"bar\"}}"
-                + "}]"
-                + "}";
+    public void testParse_AllFields() throws Exception {
+        String jsonStr = "{\n" +
+                "  \"tools\": [\n" +
+                "    {\n" +
+                "      \"type\": \"stock_tool\",\n" +
+                "      \"name\": \"stock_tool\",\n" +
+                "      \"description\": \"Stock data tool\",\n" +
+                "      \"parameters\": { \"exchange\": \"NYSE\" },\n" +
+                "      \"attributes\": {\n" +
+                "        \"input_schema\": { \"properties\": { \"symbol\": { \"type\": \"string\" } } }\n" +
+                "      },\n" +
+                "      \"create_time\": 1747812806243,\n" +
+                "      \"last_update_time\": 1747812806243\n" +
+                "    }\n" +
+                "  ]\n" +
+                "}\n";
 
-        try (XContentParser parser = jsonXContent
-                .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, json)
-        ) {
-            MLMcpToolsUpdateNodesRequest request = MLMcpToolsUpdateNodesRequest.parse(
-                    parser,
-                    new String[]{"nodeX"}
-            );
+        XContentParser parser = XContentType.JSON
+                .xContent()
+                .createParser(
+                        new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                        LoggingDeprecationHandler.INSTANCE,
+                        jsonStr
+                );
 
-            assertEquals("network_monitor", request.getMcpTools().get(0).getName());
-        }
+        MLMcpToolsUpdateNodesRequest parsed = MLMcpToolsUpdateNodesRequest.parse(parser, new String[]{"nodeId"});
+        assertEquals(1, parsed.getMcpTools().size());
+        assertEquals("Stock data tool", parsed.getMcpTools().get(0).getDescription());
+        assertEquals(Collections.singletonMap("exchange", "NYSE"), parsed.getMcpTools().get(0).getParameters());
+        assertTrue(parsed.getMcpTools().get(0).getAttributes().containsKey("input_schema"));
     }
 
 

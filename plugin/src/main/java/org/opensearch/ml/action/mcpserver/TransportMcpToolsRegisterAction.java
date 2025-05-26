@@ -31,7 +31,6 @@ import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
-import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
@@ -44,7 +43,6 @@ import org.opensearch.ml.common.transport.mcpserver.requests.register.MLMcpTools
 import org.opensearch.ml.common.transport.mcpserver.requests.register.RegisterMcpTool;
 import org.opensearch.ml.common.transport.mcpserver.responses.register.MLMcpToolsRegisterNodesResponse;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
-import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -125,7 +123,7 @@ public class TransportMcpToolsRegisterAction extends HandledTransportAction<Acti
                     restoreListener.onFailure(e);
                 });
                 mcpToolsHelper
-                    .searchToolsWithParsedResult(
+                    .searchToolsWithVersion(
                         registerNodesRequest.getMcpTools().stream().map(RegisterMcpTool::getName).toList(),
                         searchResultListener
                     );
@@ -265,10 +263,13 @@ public class TransportMcpToolsRegisterAction extends HandledTransportAction<Acti
                     log.error(errMsgBuilder.toString());
                     restoreListener.onFailure(new OpenSearchException(errMsgBuilder.toString()));
                 } else {
-                    restoreListener.onResponse(r);
+                    if (errMsgBuilder.isEmpty()) {
+                        restoreListener.onResponse(r);
+                    } else {
+                        restoreListener.onFailure(new OpenSearchException(errMsgBuilder.deleteCharAt(errMsgBuilder.length() - 1).toString()));
+                    }
                 }
             }, e -> {
-
                 errMsgBuilder
                     .append(
                         String

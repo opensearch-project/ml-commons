@@ -25,7 +25,7 @@ public class McpAsyncServerHolder {
 
     public static Map<String, StreamingRestChannel> CHANNELS = new ConcurrentHashMap<>();
     public static Map<String, Long> IN_MEMORY_MCP_TOOLS = new ConcurrentHashMap<>();
-    private static MLIndicesHandler mlIndicesHandler;
+    private static volatile MLIndicesHandler mlIndicesHandler;
     private static volatile McpToolsHelper mcpToolsHelper;
 
     public static void init(MLIndicesHandler mlIndicesHandler, McpToolsHelper mcpToolsHelper) {

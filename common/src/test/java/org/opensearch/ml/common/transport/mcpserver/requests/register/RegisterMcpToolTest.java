@@ -13,6 +13,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -42,11 +43,11 @@ public class RegisterMcpToolTest {
     private final String toolName = "weather_tool";
     private final String description = "Fetch weather data";
     private final Map<String, Object> params = Collections.singletonMap("unit", "celsius");
-    private final Map<String, Object> schema = Collections.singletonMap("type", "object");
+    private final Map<String, Object> attributes = Collections.singletonMap("type", "object");
 
     @Before
     public void setUp() {
-        mcptool = new RegisterMcpTool(toolName, toolName, description, params, schema, null, null);
+        mcptool = new RegisterMcpTool(toolName, toolName, description, params, attributes, Instant.now(), Instant.now());
     }
 
     @Test
@@ -54,13 +55,21 @@ public class RegisterMcpToolTest {
         assertEquals(toolName, mcptool.getType());
         assertEquals(description, mcptool.getDescription());
         assertEquals(params, mcptool.getParameters());
-        assertEquals(schema, mcptool.getAttributes());
+        assertEquals(attributes, mcptool.getAttributes());
     }
 
     @Test
     public void testParse_AllFields() throws Exception {
-        String jsonStr = "{\"type\":\"stock_tool\",\"description\":\"Stock data tool\","
-            + "\"parameters\":{\"exchange\":\"NYSE\"},\"attributes\": {\"input_schema\":{\"properties\":{\"symbol\":{\"type\":\"string\"}}}}}";
+        String jsonStr = "{\n" +
+                "  \"type\": \"stock_tool\",\n" +
+                "  \"description\": \"Stock data tool\",\n" +
+                "  \"parameters\": { \"exchange\": \"NYSE\" },\n" +
+                "  \"attributes\": {\n" +
+                "    \"input_schema\": { \"properties\": { \"symbol\": { \"type\": \"string\" } } }\n" +
+                "  },\n" +
+                "  \"create_time\": 1747812806243,\n" +
+                "  \"last_update_time\": 1747812806243\n" +
+                "}\n";
 
         XContentParser parser = XContentType.JSON
             .xContent()
@@ -79,7 +88,7 @@ public class RegisterMcpToolTest {
     }
 
     @Test
-    public void testParse_MissingNameField() throws Exception {
+    public void testParse_MissingTypeField() throws Exception {
         String invalidJson = "{\"description\":\"Invalid tool\"}";
         XContentParser parser = XContentType.JSON
             .xContent()
@@ -104,7 +113,7 @@ public class RegisterMcpToolTest {
         assertTrue(jsonStr.contains("\"type\":\"weather_tool\""));
         assertTrue(jsonStr.contains("\"description\":\"Fetch weather data\""));
         assertTrue(jsonStr.contains("\"parameters\":{\"unit\":\"celsius\"}"));
-        assertTrue(jsonStr.contains("\"input_schema\":{\"type\":\"object\"}"));
+        assertTrue(jsonStr.contains("\"attributes\":{\"type\":\"object\"}"));
     }
 
     @Test
@@ -131,7 +140,7 @@ public class RegisterMcpToolTest {
         assertEquals(toolName, parsed.getType());
         assertEquals(description, parsed.getDescription());
         assertEquals(params, parsed.getParameters());
-        assertEquals(schema, parsed.getAttributes());
+        assertEquals(attributes, parsed.getAttributes());
     }
 
     @Test

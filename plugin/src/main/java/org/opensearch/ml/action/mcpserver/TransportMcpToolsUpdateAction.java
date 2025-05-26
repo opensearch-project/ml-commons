@@ -24,7 +24,6 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
-import com.google.common.collect.ImmutableMap;
 import org.opensearch.OpenSearchException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.bulk.BulkItemResponse;
@@ -52,7 +51,6 @@ import org.opensearch.ml.common.transport.mcpserver.requests.register.RegisterMc
 import org.opensearch.ml.common.transport.mcpserver.requests.update.MLMcpToolsUpdateNodesRequest;
 import org.opensearch.ml.common.transport.mcpserver.requests.update.UpdateMcpTool;
 import org.opensearch.ml.common.transport.mcpserver.responses.update.MLMcpToolsUpdateNodesResponse;
-import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -155,7 +153,7 @@ public class TransportMcpToolsUpdateAction extends HandledTransportAction<Action
                 restoreListener.onFailure(e);
             });
             mcpToolsHelper
-                .searchToolsForUpdate(updateNodesRequest.getMcpTools().stream().map(UpdateMcpTool::getName).toList(), searchResultListener);
+                .searchToolsWithPrimaryTermAndSeqNo(updateNodesRequest.getMcpTools().stream().map(UpdateMcpTool::getName).toList(), searchResultListener);
         } catch (Exception e) {
             log.error("Failed to update mcp tools", e);
             listener.onFailure(e);
@@ -285,7 +283,7 @@ public class TransportMcpToolsUpdateAction extends HandledTransportAction<Action
 
     private void updateMcpToolsOnNodes(
         StringBuilder errMsgBuilder,
-        MLMcpToolsUpdateNodesRequest registerNodesRequest,
+        MLMcpToolsUpdateNodesRequest toolsUpdateNodesRequest,
         Set<String> indexSucceedTools,
         ActionListener<MLMcpToolsUpdateNodesResponse> listener
     ) {
@@ -310,7 +308,11 @@ public class TransportMcpToolsUpdateAction extends HandledTransportAction<Action
                     log.error(errMsgBuilder.toString());
                     restoreListener.onFailure(new OpenSearchException(errMsgBuilder.toString()));
                 } else {
-                    restoreListener.onResponse(r);
+                    if (errMsgBuilder.isEmpty()) {
+                        restoreListener.onResponse(r);
+                    } else {
+                        restoreListener.onFailure(new OpenSearchException(errMsgBuilder.deleteCharAt(errMsgBuilder.length() - 1).toString()));
+                    }
                 }
             }, e -> {
                 errMsgBuilder
@@ -325,7 +327,7 @@ public class TransportMcpToolsUpdateAction extends HandledTransportAction<Action
                 log.error(errMsgBuilder.toString(), e);
                 restoreListener.onFailure(new OpenSearchException(errMsgBuilder.toString()));
             });
-            client.execute(MLMcpToolsUpdateOnNodesAction.INSTANCE, registerNodesRequest, addToMemoryResultListener);
+            client.execute(MLMcpToolsUpdateOnNodesAction.INSTANCE, toolsUpdateNodesRequest, addToMemoryResultListener);
         } catch (Exception e) {
             log.error("Failed to update mcp tools on nodes", e);
             listener.onFailure(e);
