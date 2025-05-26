@@ -16,10 +16,10 @@ import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.ml.common.CommonValue;
 
 import lombok.Data;
 import lombok.extern.log4j.Log4j2;
-import org.opensearch.ml.common.CommonValue;
 
 /**
  *  This class represents a tool that can be registered with OpenSearch. It contains information about the tool's name,
@@ -60,7 +60,15 @@ public class BaseMcpTool implements ToXContentObject, Writeable {
         version = streamInput.readOptionalLong();
     }
 
-    public BaseMcpTool(String name, String type, String description, Map<String, Object> parameters, Map<String, Object> attributes, Instant createdTime, Instant lastUpdatedTime) {
+    public BaseMcpTool(
+        String name,
+        String type,
+        String description,
+        Map<String, Object> parameters,
+        Map<String, Object> attributes,
+        Instant createdTime,
+        Instant lastUpdatedTime
+    ) {
         this.name = name;
         this.type = type;
         this.description = description;

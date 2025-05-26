@@ -15,10 +15,10 @@ import java.util.Map;
 
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.XContentParser;
-
-import lombok.extern.log4j.Log4j2;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.transport.mcpserver.requests.BaseMcpTool;
+
+import lombok.extern.log4j.Log4j2;
 
 /**
  *  This class represents a tool that can be registered with OpenSearch. It contains information about the tool's name,
@@ -33,7 +33,15 @@ public class RegisterMcpTool extends BaseMcpTool {
         }
     }
 
-    public RegisterMcpTool(String name, String type, String description, Map<String, Object> parameters, Map<String, Object> attributes, Instant createdTime, Instant lastUpdateTime) {
+    public RegisterMcpTool(
+        String name,
+        String type,
+        String description,
+        Map<String, Object> parameters,
+        Map<String, Object> attributes,
+        Instant createdTime,
+        Instant lastUpdateTime
+    ) {
         super(name, type, description, parameters, attributes, createdTime, lastUpdateTime);
         if (type == null) {
             throw new IllegalArgumentException(TYPE_NOT_SHOWN_EXCEPTION_MESSAGE);

@@ -7,9 +7,7 @@ package org.opensearch.ml.common.transport.mcpserver.requests.update;
  *
  */
 
-
 import static org.junit.Assert.*;
-import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -28,7 +26,6 @@ import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.transport.mcpserver.requests.register.MLMcpToolsRegisterNodesRequest;
 import org.opensearch.search.SearchModule;
 
 public class MLMcpToolsUpdateNodesRequestTest {
@@ -39,11 +36,12 @@ public class MLMcpToolsUpdateNodesRequestTest {
     @Before
     public void setup() {
         UpdateMcpTool updateMcpTool = new UpdateMcpTool(
-                "updated_tool",
-                "Updated description",
-                Collections.singletonMap("parameters", "value"),
-                Collections.singletonMap("attributes", "object"),
-                null, null
+            "updated_tool",
+            "Updated description",
+            Collections.singletonMap("parameters", "value"),
+            Collections.singletonMap("attributes", "object"),
+            null,
+            null
         );
         updateMcpTool.setType("updated_tool");
         sampleTools = Collections.singletonList(updateMcpTool);
@@ -51,10 +49,7 @@ public class MLMcpToolsUpdateNodesRequestTest {
 
     @Test
     public void testConstructorWithNodeIds() {
-        MLMcpToolsUpdateNodesRequest request = new MLMcpToolsUpdateNodesRequest(
-                nodeIds,
-                sampleTools
-        );
+        MLMcpToolsUpdateNodesRequest request = new MLMcpToolsUpdateNodesRequest(nodeIds, sampleTools);
 
         assertArrayEquals(nodeIds, request.nodesIds());
         assertEquals("updated_tool", request.getMcpTools().get(0).getType());
@@ -62,10 +57,7 @@ public class MLMcpToolsUpdateNodesRequestTest {
 
     @Test
     public void testStreamSerialization() throws IOException {
-        MLMcpToolsUpdateNodesRequest original = new MLMcpToolsUpdateNodesRequest(
-                nodeIds,
-                sampleTools
-        );
+        MLMcpToolsUpdateNodesRequest original = new MLMcpToolsUpdateNodesRequest(nodeIds, sampleTools);
 
         BytesStreamOutput output = new BytesStreamOutput();
         original.writeTo(output);
@@ -80,17 +72,15 @@ public class MLMcpToolsUpdateNodesRequestTest {
     @Test(expected = IllegalArgumentException.class)
     public void testStreamSerializationWithEmptyName() throws IOException {
         UpdateMcpTool updateMcpTool = new UpdateMcpTool(
-                null,
-                "Updated description",
-                Collections.singletonMap("parameters", "value"),
-                Collections.singletonMap("attributes", "object"),
-                null, null
+            null,
+            "Updated description",
+            Collections.singletonMap("parameters", "value"),
+            Collections.singletonMap("attributes", "object"),
+            null,
+            null
         );
         updateMcpTool.setType("updated_tool");
-        MLMcpToolsUpdateNodesRequest original = new MLMcpToolsUpdateNodesRequest(
-                nodeIds,
-                List.of(updateMcpTool)
-        );
+        MLMcpToolsUpdateNodesRequest original = new MLMcpToolsUpdateNodesRequest(nodeIds, List.of(updateMcpTool));
 
         BytesStreamOutput output = new BytesStreamOutput();
         original.writeTo(output);
@@ -104,10 +94,7 @@ public class MLMcpToolsUpdateNodesRequestTest {
 
     @Test
     public void testValidateWithEmptyTools() {
-        MLMcpToolsUpdateNodesRequest request = new MLMcpToolsUpdateNodesRequest(
-                nodeIds,
-                Collections.emptyList()
-        );
+        MLMcpToolsUpdateNodesRequest request = new MLMcpToolsUpdateNodesRequest(nodeIds, Collections.emptyList());
 
         ActionRequestValidationException validationResult = request.validate();
         assertNotNull("Should return validation error", validationResult);
@@ -125,10 +112,7 @@ public class MLMcpToolsUpdateNodesRequestTest {
 
             @Override
             public void writeTo(StreamOutput out) throws IOException {
-                new MLMcpToolsUpdateNodesRequest(
-                        nodeIds,
-                        sampleTools
-                ).writeTo(out);
+                new MLMcpToolsUpdateNodesRequest(nodeIds, sampleTools).writeTo(out);
             }
         };
 
@@ -156,45 +140,40 @@ public class MLMcpToolsUpdateNodesRequestTest {
 
     @Test
     public void testParse_AllFields() throws Exception {
-        String jsonStr = "{\n" +
-                "  \"tools\": [\n" +
-                "    {\n" +
-                "      \"type\": \"stock_tool\",\n" +
-                "      \"name\": \"stock_tool\",\n" +
-                "      \"description\": \"Stock data tool\",\n" +
-                "      \"parameters\": { \"exchange\": \"NYSE\" },\n" +
-                "      \"attributes\": {\n" +
-                "        \"input_schema\": { \"properties\": { \"symbol\": { \"type\": \"string\" } } }\n" +
-                "      },\n" +
-                "      \"create_time\": 1747812806243,\n" +
-                "      \"last_update_time\": 1747812806243\n" +
-                "    }\n" +
-                "  ]\n" +
-                "}\n";
+        String jsonStr = "{\n"
+            + "  \"tools\": [\n"
+            + "    {\n"
+            + "      \"type\": \"stock_tool\",\n"
+            + "      \"name\": \"stock_tool\",\n"
+            + "      \"description\": \"Stock data tool\",\n"
+            + "      \"parameters\": { \"exchange\": \"NYSE\" },\n"
+            + "      \"attributes\": {\n"
+            + "        \"input_schema\": { \"properties\": { \"symbol\": { \"type\": \"string\" } } }\n"
+            + "      },\n"
+            + "      \"create_time\": 1747812806243,\n"
+            + "      \"last_update_time\": 1747812806243\n"
+            + "    }\n"
+            + "  ]\n"
+            + "}\n";
 
         XContentParser parser = XContentType.JSON
-                .xContent()
-                .createParser(
-                        new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
-                        LoggingDeprecationHandler.INSTANCE,
-                        jsonStr
-                );
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                LoggingDeprecationHandler.INSTANCE,
+                jsonStr
+            );
 
-        MLMcpToolsUpdateNodesRequest parsed = MLMcpToolsUpdateNodesRequest.parse(parser, new String[]{"nodeId"});
+        MLMcpToolsUpdateNodesRequest parsed = MLMcpToolsUpdateNodesRequest.parse(parser, new String[] { "nodeId" });
         assertEquals(1, parsed.getMcpTools().size());
         assertEquals("Stock data tool", parsed.getMcpTools().get(0).getDescription());
         assertEquals(Collections.singletonMap("exchange", "NYSE"), parsed.getMcpTools().get(0).getParameters());
         assertTrue(parsed.getMcpTools().get(0).getAttributes().containsKey("input_schema"));
     }
 
-
-
     @Test
     public void testSameInstanceReturn() {
-        MLMcpToolsUpdateNodesRequest request = new MLMcpToolsUpdateNodesRequest(
-                nodeIds,
-                sampleTools
-        );
+        MLMcpToolsUpdateNodesRequest request = new MLMcpToolsUpdateNodesRequest(nodeIds, sampleTools);
         MLMcpToolsUpdateNodesRequest converted = MLMcpToolsUpdateNodesRequest.fromActionRequest(request);
         assertSame("Should return same instance when types match", request, converted);
     }

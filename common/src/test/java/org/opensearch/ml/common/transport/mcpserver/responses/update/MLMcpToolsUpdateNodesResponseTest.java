@@ -29,21 +29,21 @@ import org.opensearch.core.xcontent.XContentBuilder;
 public class MLMcpToolsUpdateNodesResponseTest {
 
     private final DiscoveryNode node1 = new DiscoveryNode(
-            "nodeA",
-            "nodeA",
-            new TransportAddress(TransportAddress.META_ADDRESS, 9300),
-            Collections.emptyMap(),
-            Collections.singleton(CLUSTER_MANAGER_ROLE),
-            Version.CURRENT
+        "nodeA",
+        "nodeA",
+        new TransportAddress(TransportAddress.META_ADDRESS, 9300),
+        Collections.emptyMap(),
+        Collections.singleton(CLUSTER_MANAGER_ROLE),
+        Version.CURRENT
     );
 
     private final DiscoveryNode node2 = new DiscoveryNode(
-            "nodeB",
-            "nodeB",
-            new TransportAddress(TransportAddress.META_ADDRESS, 9300),
-            Collections.emptyMap(),
-            Collections.singleton(DATA_ROLE),
-            Version.CURRENT
+        "nodeB",
+        "nodeB",
+        new TransportAddress(TransportAddress.META_ADDRESS, 9300),
+        Collections.emptyMap(),
+        Collections.singleton(DATA_ROLE),
+        Version.CURRENT
     );
 
     @Test
@@ -64,12 +64,9 @@ public class MLMcpToolsUpdateNodesResponseTest {
     public void testResponseJsonStructure() throws IOException {
         XContentBuilder builder = XContentFactory.jsonBuilder();
         MLMcpToolsUpdateNodesResponse response = new MLMcpToolsUpdateNodesResponse(
-                new ClusterName("prod-cluster"),
-                Arrays.asList(
-                        new MLMcpToolsUpdateNodeResponse(node1, true),
-                        new MLMcpToolsUpdateNodeResponse(node2, true)
-                ),
-                Collections.singletonList(new FailedNodeException("nodeC", "Timeout", new IOException("Timeout")))
+            new ClusterName("prod-cluster"),
+            Arrays.asList(new MLMcpToolsUpdateNodeResponse(node1, true), new MLMcpToolsUpdateNodeResponse(node2, true)),
+            Collections.singletonList(new FailedNodeException("nodeC", "Timeout", new IOException("Timeout")))
         );
 
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
@@ -81,18 +78,11 @@ public class MLMcpToolsUpdateNodesResponseTest {
     }
 
     private MLMcpToolsUpdateNodesResponse createTestResponse() {
-        List<MLMcpToolsUpdateNodeResponse> nodes = Arrays.asList(
-                new MLMcpToolsUpdateNodeResponse(node1, true),
-                new MLMcpToolsUpdateNodeResponse(node2, false)
-        );
-        List<FailedNodeException> failures = Collections.singletonList(
-                new FailedNodeException("nodeX", "Connection refused", new IOException())
-        );
+        List<MLMcpToolsUpdateNodeResponse> nodes = Arrays
+            .asList(new MLMcpToolsUpdateNodeResponse(node1, true), new MLMcpToolsUpdateNodeResponse(node2, false));
+        List<FailedNodeException> failures = Collections
+            .singletonList(new FailedNodeException("nodeX", "Connection refused", new IOException()));
 
-        return new MLMcpToolsUpdateNodesResponse(
-                new ClusterName("test-cluster"),
-                nodes,
-                failures
-        );
+        return new MLMcpToolsUpdateNodesResponse(new ClusterName("test-cluster"), nodes, failures);
     }
 }

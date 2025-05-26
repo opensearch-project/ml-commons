@@ -100,11 +100,11 @@ import org.opensearch.search.internal.InternalSearchResponse;
 import org.opensearch.search.profile.SearchProfileShardResults;
 import org.opensearch.search.suggest.Suggest;
 import org.opensearch.test.rest.FakeRestRequest;
+import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
-import org.opensearch.threadpool.ThreadPool;
-import org.opensearch.transport.client.Client;
 
 public class TestHelper {
 
@@ -616,36 +616,14 @@ public class TestHelper {
     public static SearchResponse createSearchResponse(ToXContent toXContent, int size) throws IOException {
         if (size == 0) {
             return new SearchResponse(
-                    new InternalSearchResponse(
-                            new SearchHits(new SearchHit[0], new TotalHits(0, TotalHits.Relation.EQUAL_TO), 1.0f),
-                            InternalAggregations.EMPTY,
-                            new Suggest(Collections.emptyList()),
-                            new SearchProfileShardResults(Collections.emptyMap()),
-                            false,
-                            false,
-                            1
-                    ),
-                    "",
-                    1,
-                    1,
-                    0,
-                    100,
-                    ShardSearchFailure.EMPTY_ARRAY,
-                    SearchResponse.Clusters.EMPTY
-            );
-        }
-        XContentBuilder content = toXContent.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
-        SearchHit[] hits = new SearchHit[size];
-        hits[0] = new SearchHit(0).sourceRef(BytesReference.bytes(content));
-        return new SearchResponse(
                 new InternalSearchResponse(
-                        new SearchHits(hits, new TotalHits(size, TotalHits.Relation.EQUAL_TO), 1.0f),
-                        InternalAggregations.EMPTY,
-                        new Suggest(Collections.emptyList()),
-                        new SearchProfileShardResults(Collections.emptyMap()),
-                        false,
-                        false,
-                        1
+                    new SearchHits(new SearchHit[0], new TotalHits(0, TotalHits.Relation.EQUAL_TO), 1.0f),
+                    InternalAggregations.EMPTY,
+                    new Suggest(Collections.emptyList()),
+                    new SearchProfileShardResults(Collections.emptyMap()),
+                    false,
+                    false,
+                    1
                 ),
                 "",
                 1,
@@ -654,6 +632,28 @@ public class TestHelper {
                 100,
                 ShardSearchFailure.EMPTY_ARRAY,
                 SearchResponse.Clusters.EMPTY
+            );
+        }
+        XContentBuilder content = toXContent.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
+        SearchHit[] hits = new SearchHit[size];
+        hits[0] = new SearchHit(0).sourceRef(BytesReference.bytes(content));
+        return new SearchResponse(
+            new InternalSearchResponse(
+                new SearchHits(hits, new TotalHits(size, TotalHits.Relation.EQUAL_TO), 1.0f),
+                InternalAggregations.EMPTY,
+                new Suggest(Collections.emptyList()),
+                new SearchProfileShardResults(Collections.emptyMap()),
+                false,
+                false,
+                1
+            ),
+            "",
+            1,
+            1,
+            0,
+            100,
+            ShardSearchFailure.EMPTY_ARRAY,
+            SearchResponse.Clusters.EMPTY
         );
     }
 }
