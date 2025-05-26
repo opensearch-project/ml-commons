@@ -101,7 +101,7 @@ public class MLPromptDeleteRequest extends ActionRequest {
                 return new MLPromptDeleteRequest(input);
             }
         } catch (IOException e) {
-            throw new UncheckedIOException("failed to parse ActionRequest into MLPromptDeleteRequest", e);
+            throw new UncheckedIOException("Failed to parse ActionRequest into MLPromptDeleteRequest", e);
         }
     }
 }
