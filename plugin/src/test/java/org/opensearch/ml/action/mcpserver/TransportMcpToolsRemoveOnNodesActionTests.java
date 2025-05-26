@@ -154,19 +154,21 @@ public class TransportMcpToolsRemoveOnNodesActionTests extends OpenSearchTestCas
 
     private RegisterMcpTool getRegisterMcpTool() {
         RegisterMcpTool registerMcpTool = new RegisterMcpTool(
-                "ListIndexTool",
-                "ListIndexTool",
-                "OpenSearch index name list, separated by comma. for example: [\\\"index1\\\", \\\"index2\\\"], use empty array [] to list all indices in the cluster",
-                Map.of(),
-                Map
-                        .of(
-                                "type",
-                                "object",
-                                "properties",
-                                Map.of("indices", Map.of("type", "array", "items", Map.of("type", "string"))),
-                                "additionalProperties",
-                                false
-                        ), null, null
+            "ListIndexTool",
+            "ListIndexTool",
+            "OpenSearch index name list, separated by comma. for example: [\\\"index1\\\", \\\"index2\\\"], use empty array [] to list all indices in the cluster",
+            Map.of(),
+            Map
+                .of(
+                    "type",
+                    "object",
+                    "properties",
+                    Map.of("indices", Map.of("type", "array", "items", Map.of("type", "string"))),
+                    "additionalProperties",
+                    false
+                ),
+            null,
+            null
         );
         registerMcpTool.setVersion(1L);
         return registerMcpTool;

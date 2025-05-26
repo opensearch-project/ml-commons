@@ -5,12 +5,12 @@
 
 package org.opensearch.ml.action.mcpserver;
 
-import io.modelcontextprotocol.server.McpAsyncServer;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.test.OpenSearchTestCase;
 
+import io.modelcontextprotocol.server.McpAsyncServer;
 
 public class McpAsyncServerHolderTests extends OpenSearchTestCase {
 

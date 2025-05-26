@@ -116,19 +116,17 @@ public class MLMcpToolsRemoveNodesRequestTest {
 
     @Test
     public void testParse_AllFields() throws Exception {
-        String jsonStr = "[\n" +
-                "    \"MyListIndexTool2\"\n" +
-                "]";
+        String jsonStr = "[\n" + "    \"MyListIndexTool2\"\n" + "]";
 
         XContentParser parser = XContentType.JSON
-                .xContent()
-                .createParser(
-                        new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
-                        LoggingDeprecationHandler.INSTANCE,
-                        jsonStr
-                );
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                LoggingDeprecationHandler.INSTANCE,
+                jsonStr
+            );
 
-        MLMcpToolsRemoveNodesRequest parsed = MLMcpToolsRemoveNodesRequest.parse(parser, new String[]{"nodeId"});
+        MLMcpToolsRemoveNodesRequest parsed = MLMcpToolsRemoveNodesRequest.parse(parser, new String[] { "nodeId" });
         assertEquals(1, parsed.getMcpTools().size());
     }
 }

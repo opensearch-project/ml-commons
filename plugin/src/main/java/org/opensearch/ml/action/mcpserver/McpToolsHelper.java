@@ -73,17 +73,17 @@ public class McpToolsHelper {
                 r.forEach((key, value) -> {
                     if (!McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.containsKey(key)) {
                         McpAsyncServerHolder
-                                .getMcpAsyncServerInstance()
-                                .addTool(createToolSpecification(value.v1()))
-                                .doOnSuccess(y -> McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.put(key, value.v2()))
-                                .subscribe();
+                            .getMcpAsyncServerInstance()
+                            .addTool(createToolSpecification(value.v1()))
+                            .doOnSuccess(y -> McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.put(key, value.v2()))
+                            .subscribe();
                     } else if (McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.get(key) < value.v2()) {
                         McpAsyncServerHolder.getMcpAsyncServerInstance().removeTool(key).onErrorResume(e -> Mono.empty()).subscribe();
                         McpAsyncServerHolder
-                                .getMcpAsyncServerInstance()
-                                .addTool(createToolSpecification(value.v1()))
-                                .doOnSuccess(x -> McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.put(key, value.v2()))
-                                .subscribe();
+                            .getMcpAsyncServerInstance()
+                            .addTool(createToolSpecification(value.v1()))
+                            .doOnSuccess(x -> McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.put(key, value.v2()))
+                            .subscribe();
                     }
                 });
                 startSyncMcpToolsJob();
@@ -249,10 +249,7 @@ public class McpToolsHelper {
     }
 
     private RegisterMcpTool parseMcpTool(String input) throws IOException {
-        try (
-            XContentParser parser = jsonXContent
-                .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, input)
-        ) {
+        try (XContentParser parser = jsonXContent.createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, input)) {
             ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
             return RegisterMcpTool.parse(parser);
         } catch (IOException e) {

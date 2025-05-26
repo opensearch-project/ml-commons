@@ -1,5 +1,15 @@
 package org.opensearch.ml.action.mcpserver;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.opensearch.ml.utils.TestHelper.mockClientStashContext;
+import static org.opensearch.ml.utils.TestHelper.setupTestClusterState;
+
+import java.util.Set;
+
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -20,16 +30,6 @@ import org.opensearch.transport.TransportException;
 import org.opensearch.transport.TransportResponseHandler;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
-
-import java.util.Set;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.isA;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static org.opensearch.ml.utils.TestHelper.mockClientStashContext;
-import static org.opensearch.ml.utils.TestHelper.setupTestClusterState;
 
 public class TransportMcpMessageActionTests extends OpenSearchTestCase {
 
@@ -61,10 +61,17 @@ public class TransportMcpMessageActionTests extends OpenSearchTestCase {
         Settings settings = Settings.builder().put(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED.getKey(), true).build();
         when(this.clusterService.getSettings()).thenReturn(settings);
         when(this.clusterService.getClusterSettings())
-                .thenReturn(new ClusterSettings(settings, Set.of(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED)));
+            .thenReturn(new ClusterSettings(settings, Set.of(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED)));
         mockClientStashContext(client, settings);
         when(clusterService.state()).thenReturn(setupTestClusterState("node"));
-        transportMcpMessageAction = new TransportMcpMessageAction(transportService, actionFilters, clusterService, threadPool, client, xContentRegistry);
+        transportMcpMessageAction = new TransportMcpMessageAction(
+            transportService,
+            actionFilters,
+            clusterService,
+            threadPool,
+            client,
+            xContentRegistry
+        );
     }
 
     public void test_doExecute_successful() {
@@ -73,7 +80,12 @@ public class TransportMcpMessageActionTests extends OpenSearchTestCase {
             handler.handleResponse(new AcknowledgedResponse(true));
             return null;
         }).when(transportService).sendRequest(any(), any(), any(), isA(TransportResponseHandler.class));
-        MLMcpMessageRequest request = MLMcpMessageRequest.builder().nodeId("mockNodeId").sessionId("mockSessionId").requestBody("mockRequestBody").build();
+        MLMcpMessageRequest request = MLMcpMessageRequest
+            .builder()
+            .nodeId("mockNodeId")
+            .sessionId("mockSessionId")
+            .requestBody("mockRequestBody")
+            .build();
         transportMcpMessageAction.doExecute(task, request, listener);
         ArgumentCaptor<AcknowledgedResponse> argumentCaptor = ArgumentCaptor.forClass(AcknowledgedResponse.class);
         verify(listener).onResponse(argumentCaptor.capture());
@@ -86,7 +98,12 @@ public class TransportMcpMessageActionTests extends OpenSearchTestCase {
             handler.handleException(new TransportException("mock exception"));
             return null;
         }).when(transportService).sendRequest(any(), any(), any(), isA(TransportResponseHandler.class));
-        MLMcpMessageRequest request = MLMcpMessageRequest.builder().nodeId("mockNodeId").sessionId("mockSessionId").requestBody("mockRequestBody").build();
+        MLMcpMessageRequest request = MLMcpMessageRequest
+            .builder()
+            .nodeId("mockNodeId")
+            .sessionId("mockSessionId")
+            .requestBody("mockRequestBody")
+            .build();
         transportMcpMessageAction.doExecute(task, request, listener);
         ArgumentCaptor<TransportException> argumentCaptor = ArgumentCaptor.forClass(TransportException.class);
         verify(listener).onFailure(argumentCaptor.capture());

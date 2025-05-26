@@ -321,9 +321,9 @@ import org.opensearch.ml.rest.RestMemorySearchInteractionsAction;
 import org.opensearch.ml.rest.RestMemoryUpdateConversationAction;
 import org.opensearch.ml.rest.RestMemoryUpdateInteractionAction;
 import org.opensearch.ml.rest.mcpserver.RestMLMcpToolsListAction;
-import org.opensearch.ml.rest.mcpserver.RestMLMcpToolsUpdateAction;
 import org.opensearch.ml.rest.mcpserver.RestMLMcpToolsRegisterAction;
 import org.opensearch.ml.rest.mcpserver.RestMLMcpToolsRemoveAction;
+import org.opensearch.ml.rest.mcpserver.RestMLMcpToolsUpdateAction;
 import org.opensearch.ml.rest.mcpserver.RestMcpConnectionMessageStreamingAction;
 import org.opensearch.ml.rest.mcpserver.ToolFactoryWrapper;
 import org.opensearch.ml.searchext.MLInferenceRequestParametersExtBuilder;
@@ -518,8 +518,8 @@ public class MachineLearningPlugin extends Plugin
                 new ActionHandler<>(MLMcpMessageAction.INSTANCE, TransportMcpMessageAction.class),
                 new ActionHandler<>(MLMcpMessageDispatchAction.INSTANCE, TransportMcpMessageDispatchedAction.class),
                 new ActionHandler<>(MLMcpToolsListAction.INSTANCE, TransportMcpToolsListAction.class),
-                    new ActionHandler<>(MLMcpToolsUpdateAction.INSTANCE, TransportMcpToolsUpdateAction.class),
-                    new ActionHandler<>(MLMcpToolsUpdateOnNodesAction.INSTANCE, TransportMcpToolsUpdateOnNodesAction.class)
+                new ActionHandler<>(MLMcpToolsUpdateAction.INSTANCE, TransportMcpToolsUpdateAction.class),
+                new ActionHandler<>(MLMcpToolsUpdateOnNodesAction.INSTANCE, TransportMcpToolsUpdateOnNodesAction.class)
             );
     }
 

@@ -34,11 +34,12 @@ public class MLMcpToolsUpdateNodeRequestTest {
     @Before
     public void setUp() {
         UpdateMcpTool updateMcpTool = new UpdateMcpTool(
-                "updated_tool",
-                "Updated description",
-                Collections.singletonMap("parameters", "value"),
-                Collections.singletonMap("attributes", "object"),
-                null, null
+            "updated_tool",
+            "Updated description",
+            Collections.singletonMap("parameters", "value"),
+            Collections.singletonMap("attributes", "object"),
+            null,
+            null
         );
         updateMcpTool.setType("updated_tool");
         sampleTools = Collections.singletonList(updateMcpTool);
@@ -123,9 +124,7 @@ public class MLMcpToolsUpdateNodeRequestTest {
 
         try (InputStreamStreamInput input = new InputStreamStreamInput(baos.bytes().streamInput())) {
             MLMcpToolsUpdateNodeRequest reconstructed = new MLMcpToolsUpdateNodeRequest(input);
-            assertEquals("Should maintain tool count through stream",
-                    request.getMcpTools().size(),
-                    reconstructed.getMcpTools().size());
+            assertEquals("Should maintain tool count through stream", request.getMcpTools().size(), reconstructed.getMcpTools().size());
         }
     }
 }

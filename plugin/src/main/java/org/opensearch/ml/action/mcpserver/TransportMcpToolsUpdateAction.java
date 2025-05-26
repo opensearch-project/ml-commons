@@ -117,11 +117,7 @@ public class TransportMcpToolsUpdateAction extends HandledTransportAction<Action
                     Arrays.stream(Objects.requireNonNull(searchResult.getHits().getHits())).forEach(x -> {
                         try (
                             XContentParser parser = jsonXContent
-                                .createParser(
-                                    NamedXContentRegistry.EMPTY,
-                                    LoggingDeprecationHandler.INSTANCE,
-                                    x.getSourceAsString()
-                                )
+                                .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, x.getSourceAsString())
                         ) {
                             ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                             RegisterMcpTool registerMcpTool = RegisterMcpTool.parse(parser);
@@ -153,7 +149,10 @@ public class TransportMcpToolsUpdateAction extends HandledTransportAction<Action
                 restoreListener.onFailure(e);
             });
             mcpToolsHelper
-                .searchToolsWithPrimaryTermAndSeqNo(updateNodesRequest.getMcpTools().stream().map(UpdateMcpTool::getName).toList(), searchResultListener);
+                .searchToolsWithPrimaryTermAndSeqNo(
+                    updateNodesRequest.getMcpTools().stream().map(UpdateMcpTool::getName).toList(),
+                    searchResultListener
+                );
         } catch (Exception e) {
             log.error("Failed to update mcp tools", e);
             listener.onFailure(e);
@@ -237,9 +236,12 @@ public class TransportMcpToolsUpdateAction extends HandledTransportAction<Action
                 updateRequest.setIfSeqNo(searchedMcpToolWrapperMap.get(mcpTool.getName()).getSeqNo());
                 updateRequest.setIfPrimaryTerm(searchedMcpToolWrapperMap.get(mcpTool.getName()).getPrimaryTerm());
                 Map<String, Object> source = new HashMap<>();
-                if (mcpTool.getDescription() != null) source.put(BaseMcpTool.DESCRIPTION_FIELD, mcpTool.getDescription());
-                if (mcpTool.getParameters() != null) source.put(BaseMcpTool.PARAMS_FIELD, mcpTool.getParameters());
-                if (mcpTool.getAttributes() != null) source.put(BaseMcpTool.ATTRIBUTES_FIELD, mcpTool.getAttributes());
+                if (mcpTool.getDescription() != null)
+                    source.put(BaseMcpTool.DESCRIPTION_FIELD, mcpTool.getDescription());
+                if (mcpTool.getParameters() != null)
+                    source.put(BaseMcpTool.PARAMS_FIELD, mcpTool.getParameters());
+                if (mcpTool.getAttributes() != null)
+                    source.put(BaseMcpTool.ATTRIBUTES_FIELD, mcpTool.getAttributes());
                 source.put(CommonValue.LAST_UPDATE_TIME_FIELD, Instant.now().toEpochMilli());
                 updateRequest.doc(source);
                 bulkRequest.add(updateRequest);
@@ -311,7 +313,8 @@ public class TransportMcpToolsUpdateAction extends HandledTransportAction<Action
                     if (errMsgBuilder.isEmpty()) {
                         restoreListener.onResponse(r);
                     } else {
-                        restoreListener.onFailure(new OpenSearchException(errMsgBuilder.deleteCharAt(errMsgBuilder.length() - 1).toString()));
+                        restoreListener
+                            .onFailure(new OpenSearchException(errMsgBuilder.deleteCharAt(errMsgBuilder.length() - 1).toString()));
                     }
                 }
             }, e -> {

@@ -24,7 +24,11 @@ public class MLMcpToolsRemoveNodesResponse extends BaseNodesResponse<MLMcpToolsR
         super(new ClusterName(in), in.readList(MLMcpToolsRemoveNodeResponse::readResponse), in.readList(FailedNodeException::new));
     }
 
-    public MLMcpToolsRemoveNodesResponse(ClusterName clusterName, List<MLMcpToolsRemoveNodeResponse> nodes, List<FailedNodeException> failures) {
+    public MLMcpToolsRemoveNodesResponse(
+        ClusterName clusterName,
+        List<MLMcpToolsRemoveNodeResponse> nodes,
+        List<FailedNodeException> failures
+    ) {
         super(clusterName, nodes, failures);
     }
 

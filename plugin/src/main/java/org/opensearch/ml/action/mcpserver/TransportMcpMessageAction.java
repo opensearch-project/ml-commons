@@ -22,7 +22,6 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpMessageAction;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpMessageDispatchAction;
 import org.opensearch.ml.common.transport.mcpserver.requests.message.MLMcpMessageRequest;

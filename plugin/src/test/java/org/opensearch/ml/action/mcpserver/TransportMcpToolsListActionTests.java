@@ -1,6 +1,16 @@
 package org.opensearch.ml.action.mcpserver;
 
-import com.google.common.collect.ImmutableMap;
+import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -25,16 +35,7 @@ import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
-import static org.mockito.ArgumentMatchers.isA;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import com.google.common.collect.ImmutableMap;
 
 public class TransportMcpToolsListActionTests extends OpenSearchTestCase {
 
@@ -71,7 +72,7 @@ public class TransportMcpToolsListActionTests extends OpenSearchTestCase {
         Settings settings = Settings.builder().put(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED.getKey(), true).build();
         when(this.clusterService.getSettings()).thenReturn(settings);
         when(this.clusterService.getClusterSettings())
-                .thenReturn(new ClusterSettings(settings, Set.of(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED)));
+            .thenReturn(new ClusterSettings(settings, Set.of(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED)));
         TestHelper.mockClientStashContext(client, settings);
         when(toolFactoryWrapper.getToolsFactories()).thenReturn(toolFactories);
         doAnswer(invocationOnMock -> {
@@ -79,7 +80,14 @@ public class TransportMcpToolsListActionTests extends OpenSearchTestCase {
             actionListener.onResponse(getRegisterMcpTools());
             return null;
         }).when(mcpToolsHelper).searchAllTools(isA(ActionListener.class));
-        transportMcpToolsListAction = new TransportMcpToolsListAction(transportService, clusterService, actionFilters, xContentRegistry, nodeFilter, mcpToolsHelper);
+        transportMcpToolsListAction = new TransportMcpToolsListAction(
+            transportService,
+            clusterService,
+            actionFilters,
+            xContentRegistry,
+            nodeFilter,
+            mcpToolsHelper
+        );
     }
 
     public void test_doExecute_success() {
@@ -94,13 +102,23 @@ public class TransportMcpToolsListActionTests extends OpenSearchTestCase {
         Settings settings = Settings.builder().put(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED.getKey(), false).build();
         when(this.clusterService.getSettings()).thenReturn(settings);
         when(this.clusterService.getClusterSettings())
-                .thenReturn(new ClusterSettings(settings, Set.of(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED)));
-        TransportMcpToolsListAction mcpToolsRemoveAction = new TransportMcpToolsListAction(transportService, clusterService, actionFilters, xContentRegistry, nodeFilter, mcpToolsHelper);
+            .thenReturn(new ClusterSettings(settings, Set.of(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED)));
+        TransportMcpToolsListAction mcpToolsRemoveAction = new TransportMcpToolsListAction(
+            transportService,
+            clusterService,
+            actionFilters,
+            xContentRegistry,
+            nodeFilter,
+            mcpToolsHelper
+        );
         ActionRequest nodesRequest = mock(ActionRequest.class);
         mcpToolsRemoveAction.doExecute(task, nodesRequest, listener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
-        assertEquals("The MCP server is not enabled. To enable, please update the setting plugins.ml_commons.mcp_server_enabled", argumentCaptor.getValue().getMessage());
+        assertEquals(
+            "The MCP server is not enabled. To enable, please update the setting plugins.ml_commons.mcp_server_enabled",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 
     public void test_doExecute_exception() {
@@ -117,13 +135,7 @@ public class TransportMcpToolsListActionTests extends OpenSearchTestCase {
     }
 
     private List<RegisterMcpTool> getRegisterMcpTools() {
-        RegisterMcpTool listIndexTool = new RegisterMcpTool(
-                "ListIndexTool",
-                "ListIndexTool",
-                "",
-                Map.of(),
-                Map.of(), null, null
-        );
+        RegisterMcpTool listIndexTool = new RegisterMcpTool("ListIndexTool", "ListIndexTool", "", Map.of(), Map.of(), null, null);
         listIndexTool.setVersion(1L);
         return List.of(listIndexTool);
     }

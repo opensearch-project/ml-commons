@@ -1,7 +1,21 @@
 package org.opensearch.ml.action.mcpserver;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
+
+import java.net.InetAddress;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -36,21 +50,8 @@ import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
 
-import java.net.InetAddress;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.isA;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 
 public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
 
@@ -89,7 +90,7 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
         Settings settings = Settings.builder().put(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED.getKey(), true).build();
         when(this.clusterService.getSettings()).thenReturn(settings);
         when(this.clusterService.getClusterSettings())
-                .thenReturn(new ClusterSettings(settings, Set.of(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED)));
+            .thenReturn(new ClusterSettings(settings, Set.of(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED)));
         TestHelper.mockClientStashContext(client, settings);
         when(toolFactoryWrapper.getToolsFactories()).thenReturn(toolFactories);
         doAnswer(invocationOnMock -> {
@@ -119,19 +120,35 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
         }).when(client).bulk(any(), isA(ActionListener.class));
         doAnswer(invocationOnMock -> {
             ActionListener<MLMcpToolsRegisterNodesResponse> actionListener = invocationOnMock.getArgument(2);
-            List<MLMcpToolsRegisterNodeResponse> nodes = List.of(new MLMcpToolsRegisterNodeResponse(new DiscoveryNode(
-                    "foo0",
-                    "foo0",
-                    new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
-                    Collections.emptyMap(),
-                    Collections.singleton(CLUSTER_MANAGER_ROLE),
-                    Version.CURRENT
-            ), true));
+            List<MLMcpToolsRegisterNodeResponse> nodes = List
+                .of(
+                    new MLMcpToolsRegisterNodeResponse(
+                        new DiscoveryNode(
+                            "foo0",
+                            "foo0",
+                            new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
+                            Collections.emptyMap(),
+                            Collections.singleton(CLUSTER_MANAGER_ROLE),
+                            Version.CURRENT
+                        ),
+                        true
+                    )
+                );
             MLMcpToolsRegisterNodesResponse response = new MLMcpToolsRegisterNodesResponse(ClusterName.DEFAULT, nodes, ImmutableList.of());
             actionListener.onResponse(response);
             return null;
         }).when(client).execute(any(), any(), isA(ActionListener.class));
-        transportMcpToolsRegisterAction = new TransportMcpToolsRegisterAction(transportService, actionFilters, clusterService, threadPool, client, xContentRegistry, nodeFilter, mlIndicesHandler, mcpToolsHelper);
+        transportMcpToolsRegisterAction = new TransportMcpToolsRegisterAction(
+            transportService,
+            actionFilters,
+            clusterService,
+            threadPool,
+            client,
+            xContentRegistry,
+            nodeFilter,
+            mlIndicesHandler,
+            mcpToolsHelper
+        );
     }
 
     public void test_doExecute_success() {
@@ -148,15 +165,28 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
         Settings settings = Settings.builder().put(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED.getKey(), false).build();
         when(this.clusterService.getSettings()).thenReturn(settings);
         when(this.clusterService.getClusterSettings())
-                .thenReturn(new ClusterSettings(settings, Set.of(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED)));
-        TransportMcpToolsRegisterAction transportMcpToolsRegisterAction = new TransportMcpToolsRegisterAction(transportService, actionFilters, clusterService, threadPool, client, xContentRegistry, nodeFilter, mlIndicesHandler, mcpToolsHelper);
+            .thenReturn(new ClusterSettings(settings, Set.of(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED)));
+        TransportMcpToolsRegisterAction transportMcpToolsRegisterAction = new TransportMcpToolsRegisterAction(
+            transportService,
+            actionFilters,
+            clusterService,
+            threadPool,
+            client,
+            xContentRegistry,
+            nodeFilter,
+            mlIndicesHandler,
+            mcpToolsHelper
+        );
         MLMcpToolsRegisterNodesRequest nodesRequest = mock(MLMcpToolsRegisterNodesRequest.class);
         List<RegisterMcpTool> mcpTools = List.of(getRegisterMcpTool());
         when(nodesRequest.getMcpTools()).thenReturn(mcpTools);
         transportMcpToolsRegisterAction.doExecute(task, nodesRequest, listener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
-        assertEquals("The MCP server is not enabled. To enable, please update the setting plugins.ml_commons.mcp_server_enabled", argumentCaptor.getValue().getMessage());
+        assertEquals(
+            "The MCP server is not enabled. To enable, please update the setting plugins.ml_commons.mcp_server_enabled",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 
     public void test_doExecute_clientThreadContextException() {
@@ -222,7 +252,11 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
             BulkItemResponse[] responses = new BulkItemResponse[1];
             BulkItemResponse bulkItemResponse = mock(BulkItemResponse.class);
             when(bulkItemResponse.isFailed()).thenReturn(true);
-            BulkItemResponse.Failure failure = new BulkItemResponse.Failure("mock_index", "ListIndexTool", new RuntimeException("Network issue"));
+            BulkItemResponse.Failure failure = new BulkItemResponse.Failure(
+                "mock_index",
+                "ListIndexTool",
+                new RuntimeException("Network issue")
+            );
             when(bulkItemResponse.getFailure()).thenReturn(failure);
             when(bulkItemResponse.getId()).thenReturn("ListIndexTool");
             responses[0] = bulkItemResponse;
@@ -238,7 +272,10 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
         transportMcpToolsRegisterAction.doExecute(task, nodesRequest, listener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
-        assertEquals("Failed to persist mcp tool: ListIndexTool into system index with error: java.lang.RuntimeException: Network issue", argumentCaptor.getValue().getMessage());
+        assertEquals(
+            "Failed to persist mcp tool: ListIndexTool into system index with error: java.lang.RuntimeException: Network issue",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 
     public void test_doExecute_bulkIndexPartialFailed() {
@@ -249,7 +286,11 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
 
             BulkItemResponse failedItem = mock(BulkItemResponse.class);
             when(failedItem.isFailed()).thenReturn(true);
-            BulkItemResponse.Failure failure = new BulkItemResponse.Failure("mock_index", "ListIndexTool", new RuntimeException("Network issue"));
+            BulkItemResponse.Failure failure = new BulkItemResponse.Failure(
+                "mock_index",
+                "ListIndexTool",
+                new RuntimeException("Network issue")
+            );
             when(failedItem.getFailure()).thenReturn(failure);
             when(failedItem.getId()).thenReturn("ListIndexTool");
 
@@ -274,14 +315,22 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
         transportMcpToolsRegisterAction.doExecute(task, nodesRequest, listener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
-        assertEquals("Failed to persist mcp tool: ListIndexTool into system index with error: java.lang.RuntimeException: Network issue", argumentCaptor.getValue().getMessage());
+        assertEquals(
+            "Failed to persist mcp tool: ListIndexTool into system index with error: java.lang.RuntimeException: Network issue",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 
     public void test_doExecute_registerOnNodeHasFailure() {
         doAnswer(invocationOnMock -> {
             ActionListener<MLMcpToolsRegisterNodesResponse> actionListener = invocationOnMock.getArgument(2);
-            List<FailedNodeException> failures = List.of(new FailedNodeException("mockNodeId", "Network issue", new RuntimeException("Network issue")));
-            MLMcpToolsRegisterNodesResponse response = new MLMcpToolsRegisterNodesResponse(ClusterName.DEFAULT, ImmutableList.of(), failures);
+            List<FailedNodeException> failures = List
+                .of(new FailedNodeException("mockNodeId", "Network issue", new RuntimeException("Network issue")));
+            MLMcpToolsRegisterNodesResponse response = new MLMcpToolsRegisterNodesResponse(
+                ClusterName.DEFAULT,
+                ImmutableList.of(),
+                failures
+            );
             actionListener.onResponse(response);
             return null;
         }).when(client).execute(any(), any(), isA(ActionListener.class));
@@ -292,7 +341,10 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
         transportMcpToolsRegisterAction.doExecute(task, nodesRequest, listener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
-        assertEquals("Tools: [ListIndexTool] are persisted successfully but failed to register to mcp server memory with error: Network issue", argumentCaptor.getValue().getMessage());
+        assertEquals(
+            "Tools: [ListIndexTool] are persisted successfully but failed to register to mcp server memory with error: Network issue",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 
     public void test_doExecute_registerOnNodeException() {
@@ -308,24 +360,29 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
         transportMcpToolsRegisterAction.doExecute(task, nodesRequest, listener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
-        assertEquals("Tools are persisted successfully but failed to register to mcp server memory with error: Serialization failure", argumentCaptor.getValue().getMessage());
+        assertEquals(
+            "Tools are persisted successfully but failed to register to mcp server memory with error: Serialization failure",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 
     private RegisterMcpTool getRegisterMcpTool() {
         RegisterMcpTool registerMcpTool = new RegisterMcpTool(
-                "ListIndexTool",
-                "ListIndexTool",
-                "OpenSearch index name list, separated by comma. for example: [\\\"index1\\\", \\\"index2\\\"], use empty array [] to list all indices in the cluster",
-                Map.of(),
-                Map
-                        .of(
-                                "type",
-                                "object",
-                                "properties",
-                                Map.of("indices", Map.of("type", "array", "items", Map.of("type", "string"))),
-                                "additionalProperties",
-                                false
-                        ), null, null
+            "ListIndexTool",
+            "ListIndexTool",
+            "OpenSearch index name list, separated by comma. for example: [\\\"index1\\\", \\\"index2\\\"], use empty array [] to list all indices in the cluster",
+            Map.of(),
+            Map
+                .of(
+                    "type",
+                    "object",
+                    "properties",
+                    Map.of("indices", Map.of("type", "array", "items", Map.of("type", "string"))),
+                    "additionalProperties",
+                    false
+                ),
+            null,
+            null
         );
         registerMcpTool.setVersion(1L);
         return registerMcpTool;

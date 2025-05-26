@@ -25,12 +25,12 @@ import org.opensearch.core.xcontent.XContentBuilder;
 public class MLMcpToolsUpdateNodeResponseTest {
 
     private final DiscoveryNode node = new DiscoveryNode(
-            "node-01",
-            "node-01",
-            new TransportAddress(TransportAddress.META_ADDRESS, 9300),
-            Collections.emptyMap(),
-            Collections.singleton(CLUSTER_MANAGER_ROLE),
-            Version.CURRENT
+        "node-01",
+        "node-01",
+        new TransportAddress(TransportAddress.META_ADDRESS, 9300),
+        Collections.emptyMap(),
+        Collections.singleton(CLUSTER_MANAGER_ROLE),
+        Version.CURRENT
     );
 
     @Test

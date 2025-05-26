@@ -39,7 +39,15 @@ public class MLMcpToolsRegisterNodesRequestTest {
     public void setup() {
         sampleTools = List
             .of(
-                new RegisterMcpTool(null, "metric_analyzer", "System monitoring tool", Map.of("interval", "60s"), Map.of("type", "object"), Instant.now(), Instant.now())
+                new RegisterMcpTool(
+                    null,
+                    "metric_analyzer",
+                    "System monitoring tool",
+                    Map.of("interval", "60s"),
+                    Map.of("type", "object"),
+                    Instant.now(),
+                    Instant.now()
+                )
             );
     }
 
@@ -77,31 +85,31 @@ public class MLMcpToolsRegisterNodesRequestTest {
 
     @Test
     public void testParse_AllFields() throws Exception {
-        String jsonStr = "{\n" +
-                "  \"tools\": [\n" +
-                "    {\n" +
-                "      \"type\": \"stock_tool\",\n" +
-                "      \"name\": \"stock_tool\",\n" +
-                "      \"description\": \"Stock data tool\",\n" +
-                "      \"parameters\": { \"exchange\": \"NYSE\" },\n" +
-                "      \"attributes\": {\n" +
-                "        \"input_schema\": { \"properties\": { \"symbol\": { \"type\": \"string\" } } }\n" +
-                "      },\n" +
-                "      \"create_time\": 1747812806243,\n" +
-                "      \"last_update_time\": 1747812806243\n" +
-                "    }\n" +
-                "  ]\n" +
-                "}\n";
+        String jsonStr = "{\n"
+            + "  \"tools\": [\n"
+            + "    {\n"
+            + "      \"type\": \"stock_tool\",\n"
+            + "      \"name\": \"stock_tool\",\n"
+            + "      \"description\": \"Stock data tool\",\n"
+            + "      \"parameters\": { \"exchange\": \"NYSE\" },\n"
+            + "      \"attributes\": {\n"
+            + "        \"input_schema\": { \"properties\": { \"symbol\": { \"type\": \"string\" } } }\n"
+            + "      },\n"
+            + "      \"create_time\": 1747812806243,\n"
+            + "      \"last_update_time\": 1747812806243\n"
+            + "    }\n"
+            + "  ]\n"
+            + "}\n";
 
         XContentParser parser = XContentType.JSON
-                .xContent()
-                .createParser(
-                        new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
-                        LoggingDeprecationHandler.INSTANCE,
-                        jsonStr
-                );
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                LoggingDeprecationHandler.INSTANCE,
+                jsonStr
+            );
 
-        MLMcpToolsRegisterNodesRequest parsed = MLMcpToolsRegisterNodesRequest.parse(parser, new String[]{"nodeId"});
+        MLMcpToolsRegisterNodesRequest parsed = MLMcpToolsRegisterNodesRequest.parse(parser, new String[] { "nodeId" });
         assertEquals(1, parsed.getMcpTools().size());
         assertEquals("Stock data tool", parsed.getMcpTools().get(0).getDescription());
         assertEquals(Collections.singletonMap("exchange", "NYSE"), parsed.getMcpTools().get(0).getParameters());

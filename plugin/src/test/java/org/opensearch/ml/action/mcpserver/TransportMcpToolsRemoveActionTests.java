@@ -1,7 +1,21 @@
 package org.opensearch.ml.action.mcpserver;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isA;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
+
+import java.net.InetAddress;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -36,21 +50,8 @@ import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
 
-import java.net.InetAddress;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.isA;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 
 public class TransportMcpToolsRemoveActionTests extends OpenSearchTestCase {
 
@@ -89,7 +90,7 @@ public class TransportMcpToolsRemoveActionTests extends OpenSearchTestCase {
         Settings settings = Settings.builder().put(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED.getKey(), true).build();
         when(this.clusterService.getSettings()).thenReturn(settings);
         when(this.clusterService.getClusterSettings())
-                .thenReturn(new ClusterSettings(settings, Set.of(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED)));
+            .thenReturn(new ClusterSettings(settings, Set.of(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED)));
         TestHelper.mockClientStashContext(client, settings);
         when(toolFactoryWrapper.getToolsFactories()).thenReturn(toolFactories);
         doAnswer(invocationOnMock -> {
@@ -114,19 +115,34 @@ public class TransportMcpToolsRemoveActionTests extends OpenSearchTestCase {
         }).when(client).bulk(any(), isA(ActionListener.class));
         doAnswer(invocationOnMock -> {
             ActionListener<MLMcpToolsRemoveNodesResponse> actionListener = invocationOnMock.getArgument(2);
-            List<MLMcpToolsRemoveNodeResponse> nodes = List.of(new MLMcpToolsRemoveNodeResponse(new DiscoveryNode(
-                    "foo0",
-                    "foo0",
-                    new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
-                    Collections.emptyMap(),
-                    Collections.singleton(CLUSTER_MANAGER_ROLE),
-                    Version.CURRENT
-            ), true));
+            List<MLMcpToolsRemoveNodeResponse> nodes = List
+                .of(
+                    new MLMcpToolsRemoveNodeResponse(
+                        new DiscoveryNode(
+                            "foo0",
+                            "foo0",
+                            new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
+                            Collections.emptyMap(),
+                            Collections.singleton(CLUSTER_MANAGER_ROLE),
+                            Version.CURRENT
+                        ),
+                        true
+                    )
+                );
             MLMcpToolsRemoveNodesResponse response = new MLMcpToolsRemoveNodesResponse(ClusterName.DEFAULT, nodes, ImmutableList.of());
             actionListener.onResponse(response);
             return null;
         }).when(client).execute(any(), any(), isA(ActionListener.class));
-        transportMcpToolsRemoveAction = new TransportMcpToolsRemoveAction(transportService, actionFilters, clusterService, threadPool, client, xContentRegistry, nodeFilter, mcpToolsHelper);
+        transportMcpToolsRemoveAction = new TransportMcpToolsRemoveAction(
+            transportService,
+            actionFilters,
+            clusterService,
+            threadPool,
+            client,
+            xContentRegistry,
+            nodeFilter,
+            mcpToolsHelper
+        );
     }
 
     public void test_doExecute_success() {
@@ -143,15 +159,27 @@ public class TransportMcpToolsRemoveActionTests extends OpenSearchTestCase {
         Settings settings = Settings.builder().put(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED.getKey(), false).build();
         when(this.clusterService.getSettings()).thenReturn(settings);
         when(this.clusterService.getClusterSettings())
-                .thenReturn(new ClusterSettings(settings, Set.of(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED)));
-        TransportMcpToolsRemoveAction mcpToolsRemoveAction = new TransportMcpToolsRemoveAction(transportService, actionFilters, clusterService, threadPool, client, xContentRegistry, nodeFilter, mcpToolsHelper);
+            .thenReturn(new ClusterSettings(settings, Set.of(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED)));
+        TransportMcpToolsRemoveAction mcpToolsRemoveAction = new TransportMcpToolsRemoveAction(
+            transportService,
+            actionFilters,
+            clusterService,
+            threadPool,
+            client,
+            xContentRegistry,
+            nodeFilter,
+            mcpToolsHelper
+        );
         MLMcpToolsRemoveNodesRequest nodesRequest = mock(MLMcpToolsRemoveNodesRequest.class);
         List<String> mcpTools = getRemoveMcpTool();
         when(nodesRequest.getMcpTools()).thenReturn(mcpTools);
         mcpToolsRemoveAction.doExecute(task, nodesRequest, listener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
-        assertEquals("The MCP server is not enabled. To enable, please update the setting plugins.ml_commons.mcp_server_enabled", argumentCaptor.getValue().getMessage());
+        assertEquals(
+            "The MCP server is not enabled. To enable, please update the setting plugins.ml_commons.mcp_server_enabled",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 
     public void test_doExecute_clientThreadContextException() {
@@ -208,7 +236,10 @@ public class TransportMcpToolsRemoveActionTests extends OpenSearchTestCase {
         transportMcpToolsRemoveAction.doExecute(task, nodesRequest, listener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
-        assertEquals("Unable to remove tools as these tools: [SearchIndexTool] are not found in system index", argumentCaptor.getValue().getMessage());
+        assertEquals(
+            "Unable to remove tools as these tools: [SearchIndexTool] are not found in system index",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 
     public void test_doExecute_bulkIndexAllFailed() {
@@ -218,7 +249,11 @@ public class TransportMcpToolsRemoveActionTests extends OpenSearchTestCase {
             BulkItemResponse[] responses = new BulkItemResponse[1];
             BulkItemResponse bulkItemResponse = mock(BulkItemResponse.class);
             when(bulkItemResponse.isFailed()).thenReturn(true);
-            BulkItemResponse.Failure failure = new BulkItemResponse.Failure("mock_index", "ListIndexTool", new RuntimeException("Network issue"));
+            BulkItemResponse.Failure failure = new BulkItemResponse.Failure(
+                "mock_index",
+                "ListIndexTool",
+                new RuntimeException("Network issue")
+            );
             when(bulkItemResponse.getFailure()).thenReturn(failure);
             when(bulkItemResponse.getId()).thenReturn("ListIndexTool");
             responses[0] = bulkItemResponse;
@@ -233,7 +268,10 @@ public class TransportMcpToolsRemoveActionTests extends OpenSearchTestCase {
         transportMcpToolsRemoveAction.doExecute(task, nodesRequest, listener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
-        assertEquals("Failed to remove tool: ListIndexTool from index with error: java.lang.RuntimeException: Network issue", argumentCaptor.getValue().getMessage());
+        assertEquals(
+            "Failed to remove tool: ListIndexTool from index with error: java.lang.RuntimeException: Network issue",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 
     public void test_doExecute_bulkIndexPartialFailed() {
@@ -244,7 +282,11 @@ public class TransportMcpToolsRemoveActionTests extends OpenSearchTestCase {
 
             BulkItemResponse failedItem = mock(BulkItemResponse.class);
             when(failedItem.isFailed()).thenReturn(true);
-            BulkItemResponse.Failure failure = new BulkItemResponse.Failure("mock_index", "SearchIndexTool", new RuntimeException("Network issue"));
+            BulkItemResponse.Failure failure = new BulkItemResponse.Failure(
+                "mock_index",
+                "SearchIndexTool",
+                new RuntimeException("Network issue")
+            );
             when(failedItem.getFailure()).thenReturn(failure);
             when(failedItem.getId()).thenReturn("SearchIndexTool");
 
@@ -268,13 +310,17 @@ public class TransportMcpToolsRemoveActionTests extends OpenSearchTestCase {
         transportMcpToolsRemoveAction.doExecute(task, nodesRequest, listener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
-        assertEquals("Failed to remove tool: SearchIndexTool from index with error: java.lang.RuntimeException: Network issue", argumentCaptor.getValue().getMessage());
+        assertEquals(
+            "Failed to remove tool: SearchIndexTool from index with error: java.lang.RuntimeException: Network issue",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 
     public void test_doExecute_removeOnNodeHasFailure() {
         doAnswer(invocationOnMock -> {
             ActionListener<MLMcpToolsRemoveNodesResponse> actionListener = invocationOnMock.getArgument(2);
-            List<FailedNodeException> failures = List.of(new FailedNodeException("mockNodeId", "Network issue", new RuntimeException("Network issue")));
+            List<FailedNodeException> failures = List
+                .of(new FailedNodeException("mockNodeId", "Network issue", new RuntimeException("Network issue")));
             MLMcpToolsRemoveNodesResponse response = new MLMcpToolsRemoveNodesResponse(ClusterName.DEFAULT, ImmutableList.of(), failures);
             actionListener.onResponse(response);
             return null;
@@ -285,7 +331,10 @@ public class TransportMcpToolsRemoveActionTests extends OpenSearchTestCase {
         transportMcpToolsRemoveAction.doExecute(task, nodesRequest, listener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
-        assertEquals("Tools: [ListIndexTool] are removed successfully in index but failed to remove from mcp server in memory with error: Network issue", argumentCaptor.getValue().getMessage());
+        assertEquals(
+            "Tools: [ListIndexTool] are removed successfully in index but failed to remove from mcp server in memory with error: Network issue",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 
     public void test_doExecute_removeOnNodeException() {
@@ -300,23 +349,20 @@ public class TransportMcpToolsRemoveActionTests extends OpenSearchTestCase {
         transportMcpToolsRemoveAction.doExecute(task, nodesRequest, listener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argumentCaptor.capture());
-        assertEquals("Tools are removed successfully in index but failed to remove from mcp server memory with error: Serialization failure", argumentCaptor.getValue().getMessage());
+        assertEquals(
+            "Tools are removed successfully in index but failed to remove from mcp server memory with error: Serialization failure",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 
     private List<String> getRemoveMcpTool() {
-       List<String> toolNames = new ArrayList<>();
-       toolNames.add("ListIndexTool");
-       return toolNames;
+        List<String> toolNames = new ArrayList<>();
+        toolNames.add("ListIndexTool");
+        return toolNames;
     }
 
     private List<RegisterMcpTool> getRegisterMcpTools() {
-        RegisterMcpTool listIndexTool = new RegisterMcpTool(
-                "ListIndexTool",
-                "ListIndexTool",
-                "",
-                Map.of(),
-                Map.of(), null, null
-        );
+        RegisterMcpTool listIndexTool = new RegisterMcpTool("ListIndexTool", "ListIndexTool", "", Map.of(), Map.of(), null, null);
         listIndexTool.setVersion(1L);
         return List.of(listIndexTool);
     }

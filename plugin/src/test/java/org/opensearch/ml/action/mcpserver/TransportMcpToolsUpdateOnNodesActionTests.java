@@ -14,7 +14,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-import com.google.common.collect.ImmutableMap;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -43,6 +42,8 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
+
+import com.google.common.collect.ImmutableMap;
 
 public class TransportMcpToolsUpdateOnNodesActionTests extends OpenSearchTestCase {
 
@@ -84,32 +85,28 @@ public class TransportMcpToolsUpdateOnNodesActionTests extends OpenSearchTestCas
         when(clusterService.localNode().getId()).thenReturn("local-node");
         when(toolFactoryWrapper.getToolsFactories()).thenReturn(toolFactories);
         action = new TransportMcpToolsUpdateOnNodesAction(
-                transportService,
-                mock(ActionFilters.class),
-                clusterService,
-                threadPool,
-                client,
-                xContentRegistry,
-                toolFactoryWrapper,
-                mcpToolsHelper
+            transportService,
+            mock(ActionFilters.class),
+            clusterService,
+            threadPool,
+            client,
+            xContentRegistry,
+            toolFactoryWrapper,
+            mcpToolsHelper
         );
     }
 
     @Test
     public void testNewResponse() {
         MLMcpToolsUpdateNodesRequest nodesRequest = new MLMcpToolsUpdateNodesRequest(
-                new String[]{"node1", "node2"},
-                List.of(createTestTool())
+            new String[] { "node1", "node2" },
+            List.of(createTestTool())
         );
 
         DiscoveryNode node1 = createDiscoveryNode("node1");
 
-        List<MLMcpToolsUpdateNodeResponse> responses = List.of(
-                new MLMcpToolsUpdateNodeResponse(node1, true)
-        );
-        List<FailedNodeException> failures = List.of(
-                new FailedNodeException("node2", "Update failed", new Exception())
-        );
+        List<MLMcpToolsUpdateNodeResponse> responses = List.of(new MLMcpToolsUpdateNodeResponse(node1, true));
+        List<FailedNodeException> failures = List.of(new FailedNodeException("node2", "Update failed", new Exception()));
 
         MLMcpToolsUpdateNodesResponse response = action.newResponse(nodesRequest, responses, failures);
         assertEquals(1, response.getNodes().size());
@@ -119,10 +116,7 @@ public class TransportMcpToolsUpdateOnNodesActionTests extends OpenSearchTestCas
 
     @Test
     public void testNewNodeRequest() {
-        MLMcpToolsUpdateNodesRequest nodesRequest = new MLMcpToolsUpdateNodesRequest(
-                new String[]{"node1"},
-                List.of(createTestTool())
-        );
+        MLMcpToolsUpdateNodesRequest nodesRequest = new MLMcpToolsUpdateNodesRequest(new String[] { "node1" }, List.of(createTestTool()));
 
         MLMcpToolsUpdateNodeRequest nodeRequest = action.newNodeRequest(nodesRequest);
         assertEquals(1, nodeRequest.getMcpTools().size());
@@ -146,9 +140,7 @@ public class TransportMcpToolsUpdateOnNodesActionTests extends OpenSearchTestCas
     public void testNodeOperationSuccess() {
         McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.put("SearchIndexTool", 1L);
 
-        MLMcpToolsUpdateNodeRequest request = new MLMcpToolsUpdateNodeRequest(
-                List.of(createTestTool(2L))
-        );
+        MLMcpToolsUpdateNodeRequest request = new MLMcpToolsUpdateNodeRequest(List.of(createTestTool(2L)));
 
         MLMcpToolsUpdateNodeResponse response = action.nodeOperation(request);
         assertTrue(response.getUpdated());
@@ -159,17 +151,16 @@ public class TransportMcpToolsUpdateOnNodesActionTests extends OpenSearchTestCas
     public void testNodeOperationException() {
         McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.put("IndexMappingTool", 1L);
         UpdateMcpTool updateMcpTool = new UpdateMcpTool(
-                "IndexMappingTool",
-                "Updated index mapping tool",
-                Map.of("parameters", "{}"),
-                Map.of("attributes", "{}"),
-                null, null
+            "IndexMappingTool",
+            "Updated index mapping tool",
+            Map.of("parameters", "{}"),
+            Map.of("attributes", "{}"),
+            null,
+            null
         );
         updateMcpTool.setType("IndexMappingTool");
         updateMcpTool.setVersion(2L);
-        MLMcpToolsUpdateNodeRequest request = new MLMcpToolsUpdateNodeRequest(
-                List.of(updateMcpTool)
-        );
+        MLMcpToolsUpdateNodeRequest request = new MLMcpToolsUpdateNodeRequest(List.of(updateMcpTool));
         exceptionRule.expect(FailedNodeException.class);
         exceptionRule.expectMessage("Failed to find tool factory for tool type: IndexMappingTool");
         action.nodeOperation(request);
@@ -181,11 +172,12 @@ public class TransportMcpToolsUpdateOnNodesActionTests extends OpenSearchTestCas
 
     private UpdateMcpTool createTestTool(long version) {
         UpdateMcpTool updateMcpTool = new UpdateMcpTool(
-                "SearchIndexTool",
-                "Updated search tool",
-                Map.of("parameters", "{}"),
-                Map.of("attributes", "{}"),
-               null, null
+            "SearchIndexTool",
+            "Updated search tool",
+            Map.of("parameters", "{}"),
+            Map.of("attributes", "{}"),
+            null,
+            null
         );
         updateMcpTool.setType("SearchIndexTool");
         updateMcpTool.setVersion(version);
@@ -194,12 +186,12 @@ public class TransportMcpToolsUpdateOnNodesActionTests extends OpenSearchTestCas
 
     private DiscoveryNode createDiscoveryNode(String nodeId) {
         return new DiscoveryNode(
-                nodeId,
-                nodeId,
-                new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
-                Collections.emptyMap(),
-                Collections.singleton(CLUSTER_MANAGER_ROLE),
-                Version.CURRENT
+            nodeId,
+            nodeId,
+            new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
+            Collections.emptyMap(),
+            Collections.singleton(CLUSTER_MANAGER_ROLE),
+            Version.CURRENT
         );
     }
 }

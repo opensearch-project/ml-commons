@@ -3,7 +3,6 @@ package org.opensearch.ml.common.transport.mcpserver.responses.list;
 import java.io.IOException;
 import java.util.List;
 
-import lombok.Getter;
 import org.opensearch.core.action.ActionResponse;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -11,6 +10,8 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.transport.mcpserver.requests.register.RegisterMcpTool;
+
+import lombok.Getter;
 
 @Getter
 public class MLMcpToolsListResponse extends ActionResponse implements ToXContentObject {
