@@ -6,10 +6,6 @@
 package org.opensearch.ml.common.connector;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.connector.MLPostProcessFunction.DEFAULT_EMBEDDING;
-import static org.opensearch.ml.common.connector.MLPostProcessFunction.DEFAULT_RERANK;
-import static org.opensearch.ml.common.connector.MLPreProcessFunction.TEXT_DOCS_TO_DEFAULT_EMBEDDING_INPUT;
-import static org.opensearch.ml.common.connector.MLPreProcessFunction.TEXT_SIMILARITY_TO_DEFAULT_INPUT;
 
 import java.io.IOException;
 import java.util.HashSet;
@@ -19,6 +15,8 @@ import java.util.Map;
 import java.util.Set;
 
 import org.apache.commons.text.StringSubstitutor;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -45,9 +43,11 @@ public class ConnectorAction implements ToXContentObject, Writeable {
     public static final String COHERE = "cohere";
     public static final String BEDROCK = "bedrock";
     public static final String SAGEMAKER = "sagemaker";
+    public static final String SAGEMAKER_PRE_POST_FUNC_TEXT = "default";
     public static final List<String> SUPPORTED_REMOTE_SERVERS_FOR_DEFAULT_ACTION_TYPES = List.of(SAGEMAKER, OPENAI, BEDROCK, COHERE);
 
     private static final String INBUILT_FUNC_PREFIX = "connector.";
+    private static final Logger logger = LogManager.getLogger(ConnectorAction.class);
 
     private ActionType actionType;
     private String method;
@@ -210,16 +210,12 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
         String endPoint = substitutor.replace(url);
         String remoteServer = getRemoteServerFromURL(endPoint);
-        if (isInBuiltProcessFunction(preProcessFunction)) {
-            validatePreProcessFunctions(remoteServer);
-        }
-        if (isInBuiltProcessFunction(postProcessFunction)) {
-            validatePostProcessFunctions(remoteServer);
-        }
+        validateProcessFunctions(remoteServer, preProcessFunction);
+        validateProcessFunctions(remoteServer, postProcessFunction);
     }
 
     /**
-     * To get the remote server name from ULR
+     * To get the remote server name from url
      *
      * @param url - remote server url
      * @return - returns the corresponding remote server name for url, if server is not in the pre-defined list,
@@ -229,70 +225,38 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         return SUPPORTED_REMOTE_SERVERS_FOR_DEFAULT_ACTION_TYPES.stream().filter(url::contains).findFirst().orElse("");
     }
 
+    private void validateProcessFunctions(String remoteServer, String processFunction) {
+        if (isInBuiltProcessFunction(processFunction)) {
+            switch (remoteServer) {
+                case OPENAI:
+                    if (!processFunction.contains(OPENAI)) {
+                        logger.warn(invalidProcessFuncWarnText(OPENAI));
+                    }
+                    break;
+                case COHERE:
+                    if (!processFunction.contains(COHERE)) {
+                        logger.warn(invalidProcessFuncWarnText(COHERE));
+                    }
+                    break;
+                case BEDROCK:
+                    if (!processFunction.contains(BEDROCK)) {
+                        logger.warn(invalidProcessFuncWarnText(BEDROCK));
+                    }
+                    break;
+                case SAGEMAKER:
+                    if (!processFunction.contains(SAGEMAKER_PRE_POST_FUNC_TEXT)) {
+                        logger.warn(invalidProcessFuncWarnText(SAGEMAKER));
+                    }
+            }
+        }
+    }
+
     private boolean isInBuiltProcessFunction(String processFunction) {
         return (processFunction != null && processFunction.startsWith(INBUILT_FUNC_PREFIX));
     }
 
-    private void validatePreProcessFunctions(String remoteServer) {
-        switch (remoteServer) {
-            case OPENAI:
-                if (!preProcessFunction.contains(OPENAI)) {
-                    throw new IllegalArgumentException(invalidProcessFuncExcText(OPENAI, "PreProcessFunction"));
-                }
-                break;
-            case COHERE:
-                if (!preProcessFunction.contains(COHERE)) {
-                    throw new IllegalArgumentException(invalidProcessFuncExcText(COHERE, "PreProcessFunction"));
-                }
-                break;
-            case BEDROCK:
-                if (!preProcessFunction.contains(BEDROCK)) {
-                    throw new IllegalArgumentException(invalidProcessFuncExcText(BEDROCK, "PreProcessFunction"));
-                }
-                break;
-            case SAGEMAKER:
-                if (!(TEXT_DOCS_TO_DEFAULT_EMBEDDING_INPUT.equals(preProcessFunction)
-                    || TEXT_SIMILARITY_TO_DEFAULT_INPUT.equals(preProcessFunction))) {
-                    throw new IllegalArgumentException(
-                        "LLM service is "
-                            + SAGEMAKER
-                            + ", so PreProcessFunction should be "
-                            + TEXT_DOCS_TO_DEFAULT_EMBEDDING_INPUT
-                            + " or "
-                            + TEXT_SIMILARITY_TO_DEFAULT_INPUT
-                    );
-                }
-        }
-    }
-
-    private void validatePostProcessFunctions(String remoteServer) {
-        switch (remoteServer) {
-            case OPENAI:
-                if (!postProcessFunction.contains(OPENAI)) {
-                    throw new IllegalArgumentException(invalidProcessFuncExcText(OPENAI, "PostProcessFunction"));
-                }
-                break;
-            case COHERE:
-                if (!postProcessFunction.contains(COHERE)) {
-                    throw new IllegalArgumentException(invalidProcessFuncExcText(COHERE, "PostProcessFunction"));
-                }
-                break;
-            case BEDROCK:
-                if (!postProcessFunction.contains(BEDROCK)) {
-                    throw new IllegalArgumentException(invalidProcessFuncExcText(BEDROCK, "PostProcessFunction"));
-                }
-                break;
-            case SAGEMAKER:
-                if (!(DEFAULT_EMBEDDING.equals(postProcessFunction) || DEFAULT_RERANK.equals(postProcessFunction))) {
-                    throw new IllegalArgumentException(
-                        "LLM service is " + SAGEMAKER + ", so PostProcessFunction should be " + DEFAULT_EMBEDDING + " or " + DEFAULT_RERANK
-                    );
-                }
-        }
-    }
-
-    private String invalidProcessFuncExcText(String remoteServer, String func) {
-        return "LLM service is " + remoteServer + ", so " + func + " should be " + remoteServer + " " + func;
+    private String invalidProcessFuncWarnText(String remoteServer) {
+        return "LLM service is " + remoteServer + ", so PrePostProcessFunction should be corresponding to " + remoteServer;
     }
 
     public enum ActionType {
