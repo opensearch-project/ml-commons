@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.breaker;
 
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_DISK_FREE_SPACE_THRESHOLD;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_DISK_FREE_SPACE_THRESHOLD;
 
 import java.io.File;
 import java.security.AccessController;

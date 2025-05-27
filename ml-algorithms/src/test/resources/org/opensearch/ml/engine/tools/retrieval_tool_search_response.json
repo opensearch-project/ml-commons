@@ -29,6 +29,14 @@
         "_source": {
           "passage_text": "the price of the api is 2$ per invocation"
         }
+      },
+      {
+        "_index": "hybrid-index",
+        "_id": "3",
+        "_score": 0.9,
+        "_source": {
+          "passage_text": null
+        }
       }
     ]
   }

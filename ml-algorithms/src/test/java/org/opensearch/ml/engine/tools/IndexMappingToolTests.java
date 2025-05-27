@@ -12,6 +12,8 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.TOOL_INPUT_SCHEMA_FIELD;
+import static org.opensearch.ml.engine.tools.IndexMappingTool.STRICT_FIELD;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -186,5 +188,18 @@ public class IndexMappingToolTests {
         assertTrue(tool.validate(indexParams));
         assertFalse(tool.validate(otherParams));
         assertFalse(tool.validate(emptyParams));
+    }
+
+    @Test
+    public void test_getDefaultAttributes() {
+        Map<String, Object> attributes = IndexMappingTool.Factory.getInstance().create(Collections.emptyMap()).getAttributes();
+        assertEquals(
+            "{\"type\":\"object\",\"properties\":{\"index\":{\"type\":\"array\","
+                + "\"description\":\"OpenSearch index name list, separated by comma. "
+                + "for example: [\\\"index1\\\", \\\"index2\\\"]\",\"items\":{\"type\":\"string\"}}},\"required\":[\"index\"],"
+                + "\"additionalProperties\":false}",
+            attributes.get(TOOL_INPUT_SCHEMA_FIELD)
+        );
+        assertEquals(true, attributes.get(STRICT_FIELD));
     }
 }

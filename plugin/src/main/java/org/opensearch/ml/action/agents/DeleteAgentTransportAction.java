@@ -28,9 +28,9 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.agent.MLAgentDeleteAction;
 import org.opensearch.ml.common.transport.agent.MLAgentDeleteRequest;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.DeleteDataObjectRequest;
@@ -109,7 +109,7 @@ public class DeleteAgentTransportAction extends HandledTransportAction<ActionReq
                     }
                 } else {
                     try {
-                        GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
+                        GetResponse gr = r.getResponse();
                         assert gr != null;
                         if (gr.isExists()) {
                             try (
@@ -186,7 +186,7 @@ public class DeleteAgentTransportAction extends HandledTransportAction<ActionReq
             actionListener.onFailure(cause);
         } else {
             try {
-                DeleteResponse deleteResponse = DeleteResponse.fromXContent(response.parser());
+                DeleteResponse deleteResponse = response.deleteResponse();
                 log.info("Agent deletion result: {}, agent id: {}", deleteResponse.getResult(), response.id());
                 actionListener.onResponse(deleteResponse);
             } catch (Exception e) {

@@ -54,6 +54,9 @@ public class VisualizationsTool implements Tool {
     private String name = NAME;
     @Getter
     @Setter
+    private Map<String, Object> attributes;
+    @Getter
+    @Setter
     private String type = TYPE;
     @Getter
     private final String version = VERSION;

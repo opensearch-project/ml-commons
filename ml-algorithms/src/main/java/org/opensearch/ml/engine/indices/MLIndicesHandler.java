@@ -84,6 +84,10 @@ public class MLIndicesHandler {
         initMLIndexIfAbsent(MLIndex.CONTROLLER, listener);
     }
 
+    public void initMLMCPSessionManagementIndex(ActionListener<Boolean> listener) {
+        initMLIndexIfAbsent(MLIndex.MCP_SESSION_MANAGEMENT, listener);
+    }
+
     public void initMLAgentIndex(ActionListener<Boolean> listener) {
         initMLIndexIfAbsent(MLIndex.AGENT, listener);
     }

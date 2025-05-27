@@ -44,6 +44,9 @@ public class MLModelTool implements WithModelTool {
     @Setter
     @Getter
     private String name = TYPE;
+    @Getter
+    @Setter
+    private Map<String, Object> attributes;
     @VisibleForTesting
     static String DEFAULT_DESCRIPTION = "Use this tool to run any model.";
     @Getter

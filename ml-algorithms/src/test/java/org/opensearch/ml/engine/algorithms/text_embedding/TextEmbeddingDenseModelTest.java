@@ -119,7 +119,12 @@ public class TextEmbeddingDenseModelTest {
         params.put(MODEL_HELPER, modelHelper);
         params.put(MODEL_ZIP_FILE, new File(getClass().getResource("traced_small_model.zip").toURI()));
         params.put(ML_ENGINE, mlEngine);
-        TextEmbeddingModelConfig modelConfig = this.modelConfig.toBuilder().embeddingDimension(768).build();
+        TextEmbeddingModelConfig modelConfig = this.modelConfig
+            .builder()
+            .modelType("bert")
+            .embeddingDimension(768)
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .build();
         MLModel smallModel = model.toBuilder().modelConfig(modelConfig).build();
         textEmbeddingDenseModel.initModel(smallModel, params, encryptor);
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.TEXT_EMBEDDING).inputDataset(inputDataSet).build();
@@ -223,8 +228,9 @@ public class TextEmbeddingDenseModelTest {
         params.put(MODEL_ZIP_FILE, new File(getClass().getResource(modelFile).toURI()));
         params.put(ML_ENGINE, mlEngine);
         TextEmbeddingModelConfig onnxModelConfig = modelConfig
-            .toBuilder()
+            .builder()
             .frameworkType(HUGGINGFACE_TRANSFORMERS)
+            .embeddingDimension(dimension)
             .modelType(modelType)
             .poolingMode(poolingMode)
             .normalizeResult(normalizeResult)
@@ -255,8 +261,10 @@ public class TextEmbeddingDenseModelTest {
         params.put(ML_ENGINE, mlEngine);
 
         TextEmbeddingModelConfig asymmetricModelConfig = this.modelConfig
-            .toBuilder()
+            .builder()
+            .modelType("bert")
             .embeddingDimension(768)
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
             .queryPrefix("query >> ")
             .passagePrefix("passage >> ")
             .build();
@@ -294,7 +302,12 @@ public class TextEmbeddingDenseModelTest {
         ModelTensorOutput asymmetricQueryEmbeddings = (ModelTensorOutput) textEmbeddingDenseModel.predict(asymmetricMlInputQueries);
         ModelTensorOutput asymmetricPassageEmbeddings = (ModelTensorOutput) textEmbeddingDenseModel.predict(asymmetricMlInputPassages);
 
-        TextEmbeddingModelConfig symmetricModelConfig = this.modelConfig.toBuilder().embeddingDimension(768).build();
+        TextEmbeddingModelConfig symmetricModelConfig = this.modelConfig
+            .builder()
+            .modelType("bert")
+            .embeddingDimension(768)
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .build();
         MLModel smallModel = model.toBuilder().modelConfig(symmetricModelConfig).build();
         textEmbeddingDenseModel.initModel(smallModel, params, encryptor);
         MLInput symmetricMlInputQueries = MLInput
@@ -381,8 +394,10 @@ public class TextEmbeddingDenseModelTest {
         params.put(ML_ENGINE, mlEngine);
 
         TextEmbeddingModelConfig asymmetricModelConfig = this.modelConfig
-            .toBuilder()
+            .builder()
+            .modelType("bert")
             .embeddingDimension(768)
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
             .queryPrefix("query >> ")
             .build();
         MLModel asymmetricSmallModel = model.toBuilder().modelConfig(asymmetricModelConfig).build();
@@ -407,7 +422,12 @@ public class TextEmbeddingDenseModelTest {
         ModelTensorOutput asymmetricQueryEmbeddings = (ModelTensorOutput) textEmbeddingDenseModel.predict(asymmetricMlInputQueries);
         ModelTensorOutput asymmetricPassageEmbeddings = (ModelTensorOutput) textEmbeddingDenseModel.predict(asymmetricMlInputPassages);
 
-        TextEmbeddingModelConfig symmetricModelConfig = this.modelConfig.toBuilder().embeddingDimension(768).build();
+        TextEmbeddingModelConfig symmetricModelConfig = this.modelConfig
+            .builder()
+            .modelType("bert")
+            .embeddingDimension(768)
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .build();
         MLModel smallModel = model.toBuilder().modelConfig(symmetricModelConfig).build();
         textEmbeddingDenseModel.initModel(smallModel, params, encryptor);
         MLInput symmetricMlInputQueries = MLInput
@@ -457,8 +477,10 @@ public class TextEmbeddingDenseModelTest {
         params.put(ML_ENGINE, mlEngine);
 
         TextEmbeddingModelConfig asymmetricModelConfig = this.modelConfig
-            .toBuilder()
+            .builder()
+            .modelType("bert")
             .embeddingDimension(768)
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
             .queryPrefix("query >> ")
             .passagePrefix("passage >>")
             .build();
@@ -498,7 +520,12 @@ public class TextEmbeddingDenseModelTest {
         params.put(MODEL_ZIP_FILE, new File(getClass().getResource("traced_small_model.zip").toURI()));
         params.put(ML_ENGINE, mlEngine);
 
-        TextEmbeddingModelConfig symmetricModelConfig = this.modelConfig.toBuilder().embeddingDimension(768).build();
+        TextEmbeddingModelConfig symmetricModelConfig = this.modelConfig
+            .builder()
+            .modelType("bert")
+            .embeddingDimension(768)
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .build();
         MLModel symmetricSmallModel = model.toBuilder().modelConfig(symmetricModelConfig).build();
         textEmbeddingDenseModel.initModel(symmetricSmallModel, params, encryptor);
 

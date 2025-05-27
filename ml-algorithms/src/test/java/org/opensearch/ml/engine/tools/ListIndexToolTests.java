@@ -1,11 +1,14 @@
 package org.opensearch.ml.engine.tools;
 
+import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.engine.tools.SearchIndexTool.INPUT_SCHEMA_FIELD;
+import static org.opensearch.ml.engine.tools.SearchIndexTool.STRICT_FIELD;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -99,6 +102,20 @@ public class ListIndexToolTests {
     public void test_getType() {
         Tool tool = ListIndexTool.Factory.getInstance().create(Collections.emptyMap());
         assert (tool.getType().equals("ListIndexTool"));
+    }
+
+    @Test
+    public void test_getDefaultAttributes() {
+        Map<String, Object> attributes = ListIndexTool.Factory.getInstance().create(Collections.emptyMap()).getAttributes();
+        assertEquals(
+            "{\"type\":\"object\",\"properties\":"
+                + "{\"indices\":{\"type\":\"array\",\"items\": {\"type\": \"string\"},"
+                + "\"description\":\"OpenSearch index name list, separated by comma. "
+                + "for example: [\\\"index1\\\", \\\"index2\\\"], use empty array [] to list all indices in the cluster\"}},"
+                + "\"additionalProperties\":false}",
+            attributes.get(INPUT_SCHEMA_FIELD)
+        );
+        assertEquals(false, attributes.get(STRICT_FIELD));
     }
 
     @Test
@@ -292,11 +309,7 @@ public class ListIndexToolTests {
     public void test_getDefaultDescription() {
         Tool.Factory<ListIndexTool> factory = ListIndexTool.Factory.getInstance();
         System.out.println(factory.getDefaultDescription());
-        assert (factory
-            .getDefaultDescription()
-            .equals(
-                "This tool gets index information from the OpenSearch cluster. It takes 2 optional arguments named `index` which is a comma-delimited list of one or more indices to get information from (default is an empty list meaning all indices), and `local` which means whether to return information from the local node only instead of the cluster manager node (default is false). The tool returns the indices information, including `health`, `status`, `index`, `uuid`, `pri`, `rep`, `docs.count`, `docs.deleted`, `store.size`, `pri.store. size `, `pri.store.size`, `pri.store`."
-            ));
+        assert (factory.getDefaultDescription().equals(ListIndexTool.DEFAULT_DESCRIPTION));
     }
 
     @Test

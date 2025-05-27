@@ -11,6 +11,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_PRIMARY_TERM;
 import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_SEQ_NO;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 
@@ -34,19 +35,20 @@ import org.opensearch.transport.client.Client;
 public class MockHelper {
 
     public static void mock_client_get_NotExist(Client client) {
+        GetResult getResult = new GetResult(
+            "fake_index",
+            "fake_id",
+            UNASSIGNED_SEQ_NO,
+            UNASSIGNED_PRIMARY_TERM,
+            -1L,
+            false,
+            null,
+            null,
+            null
+        );
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
-            GetResponse response = mock(GetResponse.class);
-            when(response.isExists()).thenReturn(false);
-            listener.onResponse(null);
-            return null;
-        }).when(client).get(any(), any());
-    }
-
-    public static void mock_client_get_NullResponse(Client client) {
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(null);
+            listener.onResponse(new GetResponse(getResult));
             return null;
         }).when(client).get(any(), any());
     }

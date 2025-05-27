@@ -35,7 +35,7 @@ public class MLRegisterAgentRequestTest {
             .name("test_agent")
             .appType("test_app")
             .type("flow")
-            .tools(Arrays.asList(MLToolSpec.builder().type("CatIndexTool").build()))
+            .tools(Arrays.asList(MLToolSpec.builder().type("ListIndexTool").build()))
             .build();
     }
 

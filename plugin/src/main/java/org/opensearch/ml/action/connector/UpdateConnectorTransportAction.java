@@ -7,9 +7,8 @@ package org.opensearch.ml.action.connector;
 
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 
-import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -34,13 +33,13 @@ import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorRequest;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -177,7 +176,8 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
         sdkClient.searchDataObjectAsync(searchDataObjectRequest).whenComplete((sr, st) -> {
             if (sr != null) {
                 try {
-                    SearchResponse searchResponse = SearchResponse.fromXContent(sr.parser());
+                    SearchResponse searchResponse = sr.searchResponse();
+                    // Parsing failure would cause NPE on next line
                     SearchHit[] searchHits = searchResponse.getHits().getHits();
                     if (searchHits.length == 0) {
                         sdkClient.updateDataObjectAsync(updateDataObjectRequest).whenComplete((r, throwable) -> {
@@ -227,9 +227,8 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
             updateListener.onFailure(cause);
         } else {
             try {
-                UpdateResponse updateResponse = r.parser() == null ? null : UpdateResponse.fromXContent(r.parser());
-                updateListener.onResponse(updateResponse);
-            } catch (IOException e) {
+                updateListener.onResponse(r.updateResponse());
+            } catch (Exception e) {
                 updateListener.onFailure(e);
             }
         }

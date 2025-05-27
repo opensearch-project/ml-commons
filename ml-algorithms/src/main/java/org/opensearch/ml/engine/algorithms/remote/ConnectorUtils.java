@@ -18,6 +18,7 @@ import static org.opensearch.ml.common.connector.MLPreProcessFunction.PROCESS_RE
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.common.utils.StringUtils.processTextDoc;
 import static org.opensearch.ml.common.utils.StringUtils.processTextDocs;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.NO_ESCAPE_PARAMS;
 import static org.opensearch.ml.engine.utils.ScriptUtils.executePostProcessFunction;
 
 import java.io.IOException;
@@ -26,9 +27,11 @@ import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 
 import org.apache.commons.lang3.StringUtils;
@@ -165,6 +168,14 @@ public class ConnectorUtils {
 
     public static void escapeRemoteInferenceInputData(RemoteInferenceInputDataSet inputData) {
         Map<String, String> newParameters = new HashMap<>();
+        String noEscapeParams = inputData.getParameters().get(NO_ESCAPE_PARAMS);
+        Set<String> noEscapParamSet = new HashSet<>();
+        if (noEscapeParams != null && !noEscapeParams.isEmpty()) {
+            String[] keys = noEscapeParams.split(",");
+            for (String key : keys) {
+                noEscapParamSet.add(key.trim());
+            }
+        }
         if (inputData.getParameters() != null) {
             inputData.getParameters().forEach((key, value) -> {
                 if (value == null) {
@@ -172,8 +183,10 @@ public class ConnectorUtils {
                 } else if (org.opensearch.ml.common.utils.StringUtils.isJson(value)) {
                     // no need to escape if it's already valid json
                     newParameters.put(key, value);
-                } else {
+                } else if (!noEscapParamSet.contains(key)) {
                     newParameters.put(key, escapeJson(value));
+                } else {
+                    newParameters.put(key, value);
                 }
             });
             inputData.setParameters(newParameters);

@@ -50,9 +50,11 @@ import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.memory.Message;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
+import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.transport.client.Client;
 
 import lombok.Data;
@@ -72,6 +74,8 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
     private NamedXContentRegistry xContentRegistry;
     private Map<String, Tool.Factory> toolFactories;
     private Map<String, Memory.Factory> memoryFactoryMap;
+    private SdkClient sdkClient;
+    private Encryptor encryptor;
 
     public MLConversationalFlowAgentRunner(
         Client client,
@@ -79,7 +83,9 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         ClusterService clusterService,
         NamedXContentRegistry xContentRegistry,
         Map<String, Tool.Factory> toolFactories,
-        Map<String, Memory.Factory> memoryFactoryMap
+        Map<String, Memory.Factory> memoryFactoryMap,
+        SdkClient sdkClient,
+        Encryptor encryptor
     ) {
         this.client = client;
         this.settings = settings;
@@ -87,6 +93,8 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         this.xContentRegistry = xContentRegistry;
         this.toolFactories = toolFactories;
         this.memoryFactoryMap = memoryFactoryMap;
+        this.sdkClient = sdkClient;
+        this.encryptor = encryptor;
     }
 
     @Override

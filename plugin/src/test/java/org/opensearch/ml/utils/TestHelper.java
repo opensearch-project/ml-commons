@@ -12,7 +12,7 @@ import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE
 import static org.opensearch.cluster.node.DiscoveryNodeRole.DATA_ROLE;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.INGEST_ROLE;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.REMOTE_CLUSTER_CLIENT_ROLE;
-import static org.opensearch.cluster.node.DiscoveryNodeRole.SEARCH_ROLE;
+import static org.opensearch.cluster.node.DiscoveryNodeRole.WARM_ROLE;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
@@ -105,7 +105,7 @@ public class TestHelper {
 
     public static SortedSet<DiscoveryNodeRole> ALL_ROLES = Collections
         .unmodifiableSortedSet(
-            new TreeSet<>(Arrays.asList(DATA_ROLE, INGEST_ROLE, CLUSTER_MANAGER_ROLE, REMOTE_CLUSTER_CLIENT_ROLE, SEARCH_ROLE, ML_ROLE))
+            new TreeSet<>(Arrays.asList(DATA_ROLE, INGEST_ROLE, CLUSTER_MANAGER_ROLE, REMOTE_CLUSTER_CLIENT_ROLE, WARM_ROLE, ML_ROLE))
         );
 
     public static XContentParser parser(String xc) throws IOException {
@@ -199,6 +199,17 @@ public class TestHelper {
     public static String httpEntityToString(HttpEntity entity) throws IOException {
         InputStream inputStream = entity.getContent();
         BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, "iso-8859-1"));
+        StringBuilder sb = new StringBuilder();
+        String line = null;
+        while ((line = reader.readLine()) != null) {
+            sb.append(line + "\n");
+        }
+        return sb.toString();
+    }
+
+    public static String httpEntityToString(HttpEntity entity, String charsetName) throws IOException {
+        InputStream inputStream = entity.getContent();
+        BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, charsetName));
         StringBuilder sb = new StringBuilder();
         String line = null;
         while ((line = reader.readLine()) != null) {
@@ -385,7 +396,7 @@ public class TestHelper {
         params.put(PARAMETER_AGENT_ID, "test_agent_id");
         final String requestContent = "{\"name\":\"Test_Agent_For_RAG\",\"type\":\"flow\","
             + "\"description\":\"this is a test agent\",\"app_type\":\"my app\","
-            + "\"tools\":[{\"type\":\"CatIndexTool\",\"name\":\"CatIndexTool\","
+            + "\"tools\":[{\"type\":\"ListIndexTool\",\"name\":\"ListIndexTool\","
             + "\"description\":\"Use this tool to get OpenSearch index information: "
             + "(health, status, index, uuid, primary count, replica count, docs.count, docs.deleted, "
             + "store.size, primary.store.size).\",\"include_output_in_agent_response\":true}]}";
