@@ -200,9 +200,9 @@ public class ConnectorAction implements ToXContentObject, Writeable {
 
     /**
      * Validates whether pre and post process functions corresponding to the same llm service or not.
-     * There are specific pre and post process functions defined for each end llm services, so if you are
-     * configuring the pre-built functions it has to be from the corresponding list. This method throws
-     * IllegalArgumentException exception if it is configured wrongly.
+     * There are specific pre and post process functions defined for each llm services, so if you are
+     * configuring the pre-built functions it has to be from the corresponding list. This method
+     * adds a warning in the log if it is configured wrongly.
      *
      * @param parameters - connector parameters
      */
