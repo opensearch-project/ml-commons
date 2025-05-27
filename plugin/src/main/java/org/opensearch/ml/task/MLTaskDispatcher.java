@@ -5,8 +5,8 @@
 
 package org.opensearch.ml.task;
 
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_ML_TASK_PER_NODE;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TASK_DISPATCH_POLICY;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_ML_TASK_PER_NODE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TASK_DISPATCH_POLICY;
 
 import java.util.List;
 import java.util.Optional;
@@ -171,7 +171,7 @@ public class MLTaskDispatcher {
                 "No eligible node found to execute this request. It's best practice to"
                     + " provision ML nodes to serve your models. You can disable this setting to serve the model on your data"
                     + " node for development purposes by disabling the \"plugins.ml_commons.only_run_on_ml_node\" "
-                    + "configuration using the _cluster/setting api"
+                    + "configuration using the _cluster/settings api"
             );
         }
         dispatchTaskWithRoundRobin(eligibleNodes, listener);

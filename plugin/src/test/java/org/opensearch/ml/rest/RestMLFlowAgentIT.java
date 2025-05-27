@@ -29,16 +29,16 @@ public class RestMLFlowAgentIT extends MLCommonsRestTestCase {
         deleteIndexWithAdminClient(irisIndex);
     }
 
-    public void testAgentCatIndexTool() throws IOException {
-        // Register agent with CatIndexTool.
-        Response response = registerAgentWithCatIndexTool();
+    public void testAgentListIndexTool() throws IOException {
+        // Register agent with ListIndexTool.
+        Response response = registerAgentWithListIndexTool();
         Map responseMap = parseResponseToMap(response);
         String agentId = (String) responseMap.get("agent_id");
         assertNotNull(agentId);
         assertEquals(20, agentId.length());
 
         // Execute agent.
-        response = executeAgentCatIndexTool(agentId);
+        response = executeAgentListIndexTool(agentId);
         responseMap = parseResponseToMap(response);
         List responseList = (List) responseMap.get("inference_results");
         responseMap = (Map) responseList.get(0);
@@ -71,15 +71,15 @@ public class RestMLFlowAgentIT extends MLCommonsRestTestCase {
         assertTrue(result.contains("\"_source\":{\"petal_length_in_cm\""));
     }
 
-    public static Response registerAgentWithCatIndexTool() throws IOException {
+    public static Response registerAgentWithListIndexTool() throws IOException {
         String registerAgentEntity = "{\n"
             + "  \"name\": \"Test_Agent_For_CatIndex_tool\",\n"
             + "  \"type\": \"flow\",\n"
-            + "  \"description\": \"this is a test agent for the CatIndexTool\",\n"
+            + "  \"description\": \"this is a test agent for the ListIndexTool\",\n"
             + "  \"tools\": [\n"
             + "      {\n"
-            + "      \"type\": \"CatIndexTool\",\n"
-            + "      \"name\": \"DemoCatIndexTool\",\n"
+            + "      \"type\": \"ListIndexTool\",\n"
+            + "      \"name\": \"DemoListIndexTool\",\n"
             + "      \"parameters\": {\n"
             + "        \"input\": \"${parameters.question}\"\n"
             + "      }\n"
@@ -105,7 +105,7 @@ public class RestMLFlowAgentIT extends MLCommonsRestTestCase {
             .makeRequest(client(), "POST", "/_plugins/_ml/agents/_register", null, TestHelper.toHttpEntity(registerAgentEntity), null);
     }
 
-    public static Response executeAgentCatIndexTool(String agentId) throws IOException {
+    public static Response executeAgentListIndexTool(String agentId) throws IOException {
         String question = "\"How many indices do I have?\"";
         return executeAgent(agentId, Map.of("question", question));
     }

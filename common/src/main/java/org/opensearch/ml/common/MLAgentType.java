@@ -10,7 +10,8 @@ import java.util.Locale;
 public enum MLAgentType {
     FLOW,
     CONVERSATIONAL,
-    CONVERSATIONAL_FLOW;
+    CONVERSATIONAL_FLOW,
+    PLAN_EXECUTE_AND_REFLECT;
 
     public static MLAgentType from(String value) {
         if (value == null) {

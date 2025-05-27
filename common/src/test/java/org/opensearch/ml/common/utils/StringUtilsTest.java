@@ -7,6 +7,7 @@ package org.opensearch.ml.common.utils;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -32,6 +33,7 @@ import org.apache.commons.text.StringSubstitutor;
 import org.junit.Assert;
 import org.junit.Test;
 import org.opensearch.OpenSearchParseException;
+import org.opensearch.action.ActionRequestValidationException;
 
 import com.jayway.jsonpath.JsonPath;
 
@@ -75,7 +77,7 @@ public class StringUtilsTest {
     public void toUTF8() {
         String rawString = "\uD83D\uDE00\uD83D\uDE0D\uD83D\uDE1C";
         String utf8 = StringUtils.toUTF8(rawString);
-        Assert.assertNotNull(utf8);
+        assertNotNull(utf8);
     }
 
     @Test
@@ -749,4 +751,111 @@ public class StringUtilsTest {
         String json2 = "{\"key1\": \"foo\"}";
         assertThrows(OpenSearchParseException.class, () -> StringUtils.validateSchema(schema, json2));
     }
+
+    @Test
+    public void testIsSafeText_ValidInputs() {
+        assertTrue(StringUtils.isSafeText("Model-Name_1.0"));
+        assertTrue(StringUtils.isSafeText("This is a description:"));
+        assertTrue(StringUtils.isSafeText("Name_with-dots.and:colons"));
+    }
+
+    @Test
+    public void testValidateFields_AllValid() {
+        Map<String, FieldDescriptor> fields = Map
+            .of("Field1", new FieldDescriptor("Valid Name 1", true), "Field2", new FieldDescriptor("Another_Valid-Field.Name:Here", true));
+        assertNull(StringUtils.validateFields(fields));
+    }
+
+    @Test
+    public void testValidateFields_OptionalFieldsValidWhenBlank() {
+        Map<String, FieldDescriptor> fields = Map
+            .of(
+                "OptionalField1",
+                new FieldDescriptor("", false),
+                "OptionalField2",
+                new FieldDescriptor("   ", false),
+                "OptionalField3",
+                new FieldDescriptor(null, false)
+            );
+        assertNull(StringUtils.validateFields(fields));
+    }
+
+    @Test
+    public void testValidateFields_OptionalFieldInvalidPattern() {
+        Map<String, FieldDescriptor> fields = Map.of("OptionalField1", new FieldDescriptor("Bad@Value$", false));
+        ActionRequestValidationException exception = StringUtils.validateFields(fields);
+        assertNotNull(exception);
+        assertTrue(exception.getMessage().contains("OptionalField1"));
+    }
+
+    @Test
+    public void testIsSafeText_AdvancedValidInputs() {
+        // Testing all allowed characters
+        assertTrue(StringUtils.isSafeText("Hello World"));  // spaces
+        assertTrue(StringUtils.isSafeText("Hello.World"));  // period
+        assertTrue(StringUtils.isSafeText("Hello,World"));  // comma
+        assertTrue(StringUtils.isSafeText("Hello!World"));  // exclamation
+        assertTrue(StringUtils.isSafeText("Hello?World"));  // question mark
+        assertTrue(StringUtils.isSafeText("Hello(World)")); // parentheses
+        assertTrue(StringUtils.isSafeText("Hello:World"));  // colon
+        assertTrue(StringUtils.isSafeText("Hello@World"));  // at sign
+        assertTrue(StringUtils.isSafeText("Hello-World"));  // hyphen
+        assertTrue(StringUtils.isSafeText("Hello_World"));  // underscore
+        assertTrue(StringUtils.isSafeText("Hello'World")); // single quote
+        assertTrue(StringUtils.isSafeText("Hello\"World")); // double quote
+    }
+
+    @Test
+    public void testIsSafeText_AdvancedInvalidInputs() {
+        // Testing specifically excluded characters
+        assertFalse(StringUtils.isSafeText("Hello<World"));  // less than
+        assertFalse(StringUtils.isSafeText("Hello>World"));  // greater than
+        assertTrue(StringUtils.isSafeText("Hello/World"));  // forward slash
+        assertFalse(StringUtils.isSafeText("Hello\\World")); // backslash
+        assertFalse(StringUtils.isSafeText("Hello&World"));  // ampersand
+        assertFalse(StringUtils.isSafeText("Hello+World"));  // plus
+        assertFalse(StringUtils.isSafeText("Hello=World"));  // equals
+        assertFalse(StringUtils.isSafeText("Hello;World"));  // semicolon
+        assertFalse(StringUtils.isSafeText("Hello|World"));  // pipe
+        assertFalse(StringUtils.isSafeText("Hello*World"));  // asterisk
+    }
+
+    @Test
+    public void testValidateFields_RequiredFields_MissingOrInvalid() {
+        Map<String, FieldDescriptor> fields = new HashMap<>();
+        fields.put("RequiredField1", new FieldDescriptor("", true));
+        fields.put("RequiredField2", new FieldDescriptor("   ", true));
+        fields.put("RequiredField3", new FieldDescriptor("Bad@#Char$", true));
+        fields.put("RequiredField4", new FieldDescriptor(null, true));
+
+        ActionRequestValidationException exception = StringUtils.validateFields(fields);
+        assertNotNull(exception);
+        String message = exception.getMessage();
+        assertTrue(message.contains("RequiredField1"));
+        assertTrue(message.contains("RequiredField2"));
+        assertTrue(message.contains("RequiredField3"));
+        assertTrue(message.contains("RequiredField4"));
+    }
+
+    @Test
+    public void testValidateFields_EmptyMap() {
+        Map<String, FieldDescriptor> fields = new HashMap<>();
+        assertNull(StringUtils.validateFields(fields));
+    }
+
+    @Test
+    public void testValidateFields_UnicodeLettersAndNumbers() {
+        Map<String, FieldDescriptor> fields = Map
+            .of("field1", new FieldDescriptor("Hello世界123", true), "field2", new FieldDescriptor("Café42", true));
+        assertNull(StringUtils.validateFields(fields));
+    }
+
+    @Test
+    public void testValidateFields_InvalidCharacterSet() {
+        Map<String, FieldDescriptor> fields = Map.of("Field1", new FieldDescriptor("Bad#Value$With^Weird*Chars", true));
+        ActionRequestValidationException exception = StringUtils.validateFields(fields);
+        assertNotNull(exception);
+        assertTrue(exception.getMessage().contains("Field1"));
+    }
+
 }

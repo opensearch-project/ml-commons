@@ -4,6 +4,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
+import static org.opensearch.ml.common.utils.StringUtils.SAFE_INPUT_DESCRIPTION;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -113,5 +114,39 @@ public class MLUpdateModelGroupRequestTest {
             }
         };
         MLUpdateModelGroupRequest.fromActionRequest(actionRequest);
+    }
+
+    @Test
+    public void validateWithUnsafeModelGroupName() {
+        MLUpdateModelGroupInput unsafeInput = MLUpdateModelGroupInput
+            .builder()
+            .modelGroupID("modelGroupId")
+            .name("<script>bad</script>")  // unsafe input
+            .description("safe description")
+            .backendRoles(Arrays.asList("IT"))
+            .modelAccessMode(AccessMode.RESTRICTED)
+            .isAddAllBackendRoles(true)
+            .build();
+
+        MLUpdateModelGroupRequest request = MLUpdateModelGroupRequest.builder().updateModelGroupInput(unsafeInput).build();
+        ActionRequestValidationException exception = request.validate();
+        assertEquals("Validation Failed: 1: Model group name " + SAFE_INPUT_DESCRIPTION + ";", exception.getMessage());
+    }
+
+    @Test
+    public void validateWithUnsafeModelGroupDescription() {
+        MLUpdateModelGroupInput unsafeInput = MLUpdateModelGroupInput
+            .builder()
+            .modelGroupID("modelGroupId")
+            .name("safeName")
+            .description("<script>bad</script>")  // unsafe input
+            .backendRoles(Arrays.asList("IT"))
+            .modelAccessMode(AccessMode.RESTRICTED)
+            .isAddAllBackendRoles(true)
+            .build();
+
+        MLUpdateModelGroupRequest request = MLUpdateModelGroupRequest.builder().updateModelGroupInput(unsafeInput).build();
+        ActionRequestValidationException exception = request.validate();
+        assertEquals("Validation Failed: 1: Model group description " + SAFE_INPUT_DESCRIPTION + ";", exception.getMessage());
     }
 }

@@ -16,11 +16,11 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_STOP_WORDS_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
-import static org.opensearch.ml.settings.MLCommonsSettings.REMOTE_METADATA_ENDPOINT;
-import static org.opensearch.ml.settings.MLCommonsSettings.REMOTE_METADATA_REGION;
-import static org.opensearch.ml.settings.MLCommonsSettings.REMOTE_METADATA_SERVICE_NAME;
-import static org.opensearch.ml.settings.MLCommonsSettings.REMOTE_METADATA_TYPE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.REMOTE_METADATA_ENDPOINT;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.REMOTE_METADATA_REGION;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.REMOTE_METADATA_SERVICE_NAME;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.REMOTE_METADATA_TYPE;
 import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_ENDPOINT_KEY;
 import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_REGION_KEY;
 import static org.opensearch.remote.metadata.common.CommonValue.REMOTE_METADATA_SERVICE_NAME_KEY;
@@ -39,6 +39,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
+import org.apache.lucene.analysis.Analyzer;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.cluster.metadata.IndexNameExpressionResolver;
 import org.opensearch.cluster.node.DiscoveryNodes;
@@ -54,7 +55,13 @@ import org.opensearch.core.common.io.stream.NamedWriteableRegistry;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.env.Environment;
 import org.opensearch.env.NodeEnvironment;
+import org.opensearch.index.analysis.AnalyzerProvider;
+import org.opensearch.index.analysis.PreBuiltAnalyzerProviderFactory;
+import org.opensearch.index.analysis.PreConfiguredTokenizer;
+import org.opensearch.index.analysis.TokenizerFactory;
 import org.opensearch.indices.SystemIndexDescriptor;
+import org.opensearch.indices.analysis.AnalysisModule;
+import org.opensearch.indices.analysis.PreBuiltCacheFactory;
 import org.opensearch.ml.action.agents.DeleteAgentTransportAction;
 import org.opensearch.ml.action.agents.GetAgentTransportAction;
 import org.opensearch.ml.action.agents.TransportRegisterAgentAction;
@@ -78,6 +85,10 @@ import org.opensearch.ml.action.deploy.TransportDeployModelOnNodeAction;
 import org.opensearch.ml.action.execute.TransportExecuteTaskAction;
 import org.opensearch.ml.action.forward.TransportForwardAction;
 import org.opensearch.ml.action.handler.MLSearchHandler;
+import org.opensearch.ml.action.mcpserver.TransportMcpMessageAction;
+import org.opensearch.ml.action.mcpserver.TransportMcpMessageDispatchedAction;
+import org.opensearch.ml.action.mcpserver.TransportMcpToolsRegisterOnNodesAction;
+import org.opensearch.ml.action.mcpserver.TransportMcpToolsRemoveOnNodesAction;
 import org.opensearch.ml.action.model_group.DeleteModelGroupTransportAction;
 import org.opensearch.ml.action.model_group.GetModelGroupTransportAction;
 import org.opensearch.ml.action.model_group.SearchModelGroupTransportAction;
@@ -125,6 +136,8 @@ import org.opensearch.ml.common.input.parameter.regression.LogisticRegressionPar
 import org.opensearch.ml.common.input.parameter.sample.SampleAlgoParams;
 import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
+import org.opensearch.ml.common.settings.MLCommonsSettings;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.spi.MLCommonsExtension;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
@@ -151,6 +164,10 @@ import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelOnNodeAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.forward.MLForwardAction;
+import org.opensearch.ml.common.transport.mcpserver.action.MLMcpMessageAction;
+import org.opensearch.ml.common.transport.mcpserver.action.MLMcpMessageDispatchAction;
+import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRegisterOnNodesAction;
+import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRemoveOnNodesAction;
 import org.opensearch.ml.common.transport.model.MLModelDeleteAction;
 import org.opensearch.ml.common.transport.model.MLModelGetAction;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
@@ -183,6 +200,11 @@ import org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor;
 import org.opensearch.ml.engine.algorithms.anomalylocalization.AnomalyLocalizerImpl;
 import org.opensearch.ml.engine.algorithms.metrics_correlation.MetricsCorrelation;
 import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
+import org.opensearch.ml.engine.analysis.DJLUtils;
+import org.opensearch.ml.engine.analysis.HFModelAnalyzer;
+import org.opensearch.ml.engine.analysis.HFModelAnalyzerProvider;
+import org.opensearch.ml.engine.analysis.HFModelTokenizer;
+import org.opensearch.ml.engine.analysis.HFModelTokenizerFactory;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
@@ -190,10 +212,11 @@ import org.opensearch.ml.engine.indices.MLInputDatasetHandler;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
 import org.opensearch.ml.engine.tools.AgentTool;
-import org.opensearch.ml.engine.tools.CatIndexTool;
 import org.opensearch.ml.engine.tools.ConnectorTool;
 import org.opensearch.ml.engine.tools.IndexMappingTool;
+import org.opensearch.ml.engine.tools.ListIndexTool;
 import org.opensearch.ml.engine.tools.MLModelTool;
+import org.opensearch.ml.engine.tools.McpSseTool;
 import org.opensearch.ml.engine.tools.SearchIndexTool;
 import org.opensearch.ml.engine.tools.VisualizationsTool;
 import org.opensearch.ml.engine.utils.AgentModelsSearcher;
@@ -233,7 +256,6 @@ import org.opensearch.ml.processor.MLInferenceIngestProcessor;
 import org.opensearch.ml.processor.MLInferenceSearchRequestProcessor;
 import org.opensearch.ml.processor.MLInferenceSearchResponseProcessor;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableList;
-import org.opensearch.ml.rest.RestMLBatchIngestAction;
 import org.opensearch.ml.rest.RestMLCancelBatchJobAction;
 import org.opensearch.ml.rest.RestMLCreateConnectorAction;
 import org.opensearch.ml.rest.RestMLCreateControllerAction;
@@ -286,9 +308,11 @@ import org.opensearch.ml.rest.RestMemorySearchConversationsAction;
 import org.opensearch.ml.rest.RestMemorySearchInteractionsAction;
 import org.opensearch.ml.rest.RestMemoryUpdateConversationAction;
 import org.opensearch.ml.rest.RestMemoryUpdateInteractionAction;
+import org.opensearch.ml.rest.mcpserver.RestMLRegisterMcpToolsAction;
+import org.opensearch.ml.rest.mcpserver.RestMLRemoveMcpToolsAction;
+import org.opensearch.ml.rest.mcpserver.RestMcpConnectionMessageStreamingAction;
+import org.opensearch.ml.rest.mcpserver.ToolFactoryWrapper;
 import org.opensearch.ml.searchext.MLInferenceRequestParametersExtBuilder;
-import org.opensearch.ml.settings.MLCommonsSettings;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.stats.MLClusterLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStat;
@@ -307,6 +331,7 @@ import org.opensearch.ml.utils.IndexUtils;
 import org.opensearch.monitor.jvm.JvmService;
 import org.opensearch.monitor.os.OsService;
 import org.opensearch.plugins.ActionPlugin;
+import org.opensearch.plugins.AnalysisPlugin;
 import org.opensearch.plugins.ExtensiblePlugin;
 import org.opensearch.plugins.IngestPlugin;
 import org.opensearch.plugins.Plugin;
@@ -339,6 +364,7 @@ import lombok.SneakyThrows;
 public class MachineLearningPlugin extends Plugin
     implements
         ActionPlugin,
+        AnalysisPlugin,
         SearchPlugin,
         SearchPipelinePlugin,
         ExtensiblePlugin,
@@ -468,7 +494,11 @@ public class MachineLearningPlugin extends Plugin
                 new ActionHandler<>(MLGetToolAction.INSTANCE, GetToolTransportAction.class),
                 new ActionHandler<>(MLConfigGetAction.INSTANCE, GetConfigTransportAction.class),
                 new ActionHandler<>(MLBatchIngestionAction.INSTANCE, TransportBatchIngestionAction.class),
-                new ActionHandler<>(MLCancelBatchJobAction.INSTANCE, CancelBatchJobTransportAction.class)
+                new ActionHandler<>(MLCancelBatchJobAction.INSTANCE, CancelBatchJobTransportAction.class),
+                new ActionHandler<>(MLMcpToolsRegisterOnNodesAction.INSTANCE, TransportMcpToolsRegisterOnNodesAction.class),
+                new ActionHandler<>(MLMcpToolsRemoveOnNodesAction.INSTANCE, TransportMcpToolsRemoveOnNodesAction.class),
+                new ActionHandler<>(MLMcpMessageAction.INSTANCE, TransportMcpMessageAction.class),
+                new ActionHandler<>(MLMcpMessageDispatchAction.INSTANCE, TransportMcpMessageDispatchedAction.class)
             );
     }
 
@@ -527,6 +557,7 @@ public class MachineLearningPlugin extends Plugin
         nodeHelper = new DiscoveryNodeHelper(clusterService, settings);
         modelCacheHelper = new MLModelCacheHelper(clusterService, settings);
         cmHandler = new OpenSearchConversationalMemoryHandler(client, clusterService);
+        DJLUtils.setMlEngine(mlEngine);
 
         JvmService jvmService = new JvmService(environment.settings());
         OsService osService = new OsService(environment.settings());
@@ -643,16 +674,18 @@ public class MachineLearningPlugin extends Plugin
         toolFactories = new HashMap<>();
 
         MLModelTool.Factory.getInstance().init(client);
+        McpSseTool.Factory.getInstance().init();
         AgentTool.Factory.getInstance().init(client);
-        CatIndexTool.Factory.getInstance().init(client, clusterService);
+        ListIndexTool.Factory.getInstance().init(client, clusterService);
         IndexMappingTool.Factory.getInstance().init(client);
         SearchIndexTool.Factory.getInstance().init(client, xContentRegistry);
         VisualizationsTool.Factory.getInstance().init(client);
         ConnectorTool.Factory.getInstance().init(client);
 
         toolFactories.put(MLModelTool.TYPE, MLModelTool.Factory.getInstance());
+        toolFactories.put(McpSseTool.TYPE, McpSseTool.Factory.getInstance());
         toolFactories.put(AgentTool.TYPE, AgentTool.Factory.getInstance());
-        toolFactories.put(CatIndexTool.TYPE, CatIndexTool.Factory.getInstance());
+        toolFactories.put(ListIndexTool.TYPE, ListIndexTool.Factory.getInstance());
         toolFactories.put(IndexMappingTool.TYPE, IndexMappingTool.Factory.getInstance());
         toolFactories.put(SearchIndexTool.TYPE, SearchIndexTool.Factory.getInstance());
         toolFactories.put(VisualizationsTool.TYPE, VisualizationsTool.Factory.getInstance());
@@ -661,6 +694,8 @@ public class MachineLearningPlugin extends Plugin
         if (externalToolFactories != null) {
             toolFactories.putAll(externalToolFactories);
         }
+
+        ToolFactoryWrapper toolFactoryWrapper = new ToolFactoryWrapper(toolFactories);
 
         agentModelsSearcher = new AgentModelsSearcher(toolFactories);
 
@@ -678,7 +713,8 @@ public class MachineLearningPlugin extends Plugin
             xContentRegistry,
             toolFactories,
             memoryFactoryMap,
-            mlFeatureEnabledSetting.isMultiTenancyEnabled()
+            mlFeatureEnabledSetting.isMultiTenancyEnabled(),
+            encryptor
         );
         MLEngineClassLoader.register(FunctionName.LOCAL_SAMPLE_CALCULATOR, localSampleCalculator);
         MLEngineClassLoader.register(FunctionName.AGENT, agentExecutor);
@@ -753,7 +789,8 @@ public class MachineLearningPlugin extends Plugin
                 mlCircuitBreakerService,
                 mlModelAutoRedeployer,
                 cmHandler,
-                sdkClient
+                sdkClient,
+                toolFactoryWrapper
             );
     }
 
@@ -828,8 +865,12 @@ public class MachineLearningPlugin extends Plugin
         RestMLListToolsAction restMLListToolsAction = new RestMLListToolsAction(toolFactories);
         RestMLGetToolAction restMLGetToolAction = new RestMLGetToolAction(toolFactories);
         RestMLGetConfigAction restMLGetConfigAction = new RestMLGetConfigAction(mlFeatureEnabledSetting);
-        RestMLBatchIngestAction restMLBatchIngestAction = new RestMLBatchIngestAction();
         RestMLCancelBatchJobAction restMLCancelBatchJobAction = new RestMLCancelBatchJobAction();
+        RestMcpConnectionMessageStreamingAction restMcpConnectionMessageStreamingAction = new RestMcpConnectionMessageStreamingAction(
+            clusterService
+        );
+        RestMLRegisterMcpToolsAction restMLRegisterMcpToolsAction = new RestMLRegisterMcpToolsAction(toolFactories, clusterService);
+        RestMLRemoveMcpToolsAction restMLRemoveMcpToolsAction = new RestMLRemoveMcpToolsAction(clusterService);
         return ImmutableList
             .of(
                 restMLStatsAction,
@@ -883,8 +924,10 @@ public class MachineLearningPlugin extends Plugin
                 restMLListToolsAction,
                 restMLGetToolAction,
                 restMLGetConfigAction,
-                restMLBatchIngestAction,
-                restMLCancelBatchJobAction
+                restMLCancelBatchJobAction,
+                restMcpConnectionMessageStreamingAction,
+                restMLRegisterMcpToolsAction,
+                restMLRemoveMcpToolsAction
             );
     }
 
@@ -1053,7 +1096,9 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.REMOTE_METADATA_TYPE,
                 MLCommonsSettings.REMOTE_METADATA_ENDPOINT,
                 MLCommonsSettings.REMOTE_METADATA_REGION,
-                MLCommonsSettings.REMOTE_METADATA_SERVICE_NAME
+                MLCommonsSettings.REMOTE_METADATA_SERVICE_NAME,
+                MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED,
+                MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED
             );
         return settings;
     }
@@ -1173,5 +1218,53 @@ public class MachineLearningPlugin extends Plugin
         systemIndexDescriptors.add(new SystemIndexDescriptor(ML_MEMORY_MESSAGE_INDEX, "ML Commons Memory Message Index"));
         systemIndexDescriptors.add(new SystemIndexDescriptor(ML_STOP_WORDS_INDEX, "ML Commons Stop Words Index"));
         return systemIndexDescriptors;
+    }
+
+    @Override
+    public Map<String, AnalysisModule.AnalysisProvider<TokenizerFactory>> getTokenizers() {
+        return Map.of(HFModelTokenizer.NAME, HFModelTokenizerFactory::new);
+    }
+
+    @Override
+    public List<PreConfiguredTokenizer> getPreConfiguredTokenizers() {
+        List<PreConfiguredTokenizer> tokenizers = new ArrayList<>();
+        tokenizers
+            .add(PreConfiguredTokenizer.singleton(HFModelTokenizerFactory.DEFAULT_TOKENIZER_NAME, HFModelTokenizerFactory::createDefault));
+        tokenizers
+            .add(
+                PreConfiguredTokenizer
+                    .singleton(
+                        HFModelTokenizerFactory.DEFAULT_MULTILINGUAL_TOKENIZER_NAME,
+                        HFModelTokenizerFactory::createDefaultMultilingual
+                    )
+            );
+        return tokenizers;
+    }
+
+    @Override
+    public Map<String, AnalysisModule.AnalysisProvider<AnalyzerProvider<? extends Analyzer>>> getAnalyzers() {
+        return Map.of(HFModelTokenizer.NAME, HFModelAnalyzerProvider::new);
+    }
+
+    @Override
+    public List<PreBuiltAnalyzerProviderFactory> getPreBuiltAnalyzerProviderFactories() {
+        List<PreBuiltAnalyzerProviderFactory> factories = new ArrayList<>();
+        factories
+            .add(
+                new PreBuiltAnalyzerProviderFactory(
+                    HFModelTokenizerFactory.DEFAULT_TOKENIZER_NAME,
+                    PreBuiltCacheFactory.CachingStrategy.ONE,
+                    () -> new HFModelAnalyzer(HFModelTokenizerFactory::createDefault)
+                )
+            );
+        factories
+            .add(
+                new PreBuiltAnalyzerProviderFactory(
+                    HFModelTokenizerFactory.DEFAULT_MULTILINGUAL_TOKENIZER_NAME,
+                    PreBuiltCacheFactory.CachingStrategy.ONE,
+                    () -> new HFModelAnalyzer(HFModelTokenizerFactory::createDefaultMultilingual)
+                )
+            );
+        return factories;
     }
 }

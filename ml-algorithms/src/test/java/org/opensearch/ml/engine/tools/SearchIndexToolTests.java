@@ -14,6 +14,8 @@ import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
+import static org.opensearch.ml.engine.tools.SearchIndexTool.INPUT_SCHEMA_FIELD;
+import static org.opensearch.ml.engine.tools.SearchIndexTool.STRICT_FIELD;
 
 import java.io.InputStream;
 import java.util.Collections;
@@ -72,6 +74,23 @@ public class SearchIndexToolTests {
         String type = mockedSearchIndexTool.getType();
         assertFalse(Strings.isNullOrEmpty(type));
         assertEquals("SearchIndexTool", type);
+    }
+
+    @Test
+    @SneakyThrows
+    public void testDefaultAttributes() {
+        Map<String, Object> attributes = mockedSearchIndexTool.getAttributes();
+        assertEquals(
+            "{\"type\":\"object\",\"properties\":"
+                + "{\"index\":{\"type\":\"string\",\"description\":\"OpenSearch index name. for example: index1\"},"
+                + "\"query\":{\"type\":\"object\",\"description\":\"OpenSearch search index query. "
+                + "You need to get index mapping to write correct search query. It must be a valid OpenSearch query. "
+                + "Valid value:\\n{\\\"query\\\":{\\\"match\\\":{\\\"population_description\\\":\\\"seattle 2023 population\\\"}},\\\"size\\\":2,\\\"_source\\\":\\\"population_description\\\"}"
+                + "\\nInvalid value: \\n{\\\"match\\\":{\\\"population_description\\\":\\\"seattle 2023 population\\\"}}\\nThe value is invalid because the match not wrapped by \\\"query\\\".\","
+                + "\"additionalProperties\":false}},\"required\":[\"index\",\"query\"],\"additionalProperties\":false}",
+            attributes.get(INPUT_SCHEMA_FIELD)
+        );
+        assertEquals(false, attributes.get(STRICT_FIELD));
     }
 
     @Test

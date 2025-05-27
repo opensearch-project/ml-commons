@@ -304,7 +304,7 @@ public class MLTaskManager {
                             listener.onFailure(cause);
                         } else {
                             try {
-                                IndexResponse indexResponse = IndexResponse.fromXContent(r.parser());
+                                IndexResponse indexResponse = r.indexResponse();
                                 log.info("Task creation result: {}, Task id: {}", indexResponse.getResult(), indexResponse.getId());
                                 listener.onResponse(indexResponse);
                             } catch (Exception e) {
@@ -505,9 +505,8 @@ public class MLTaskManager {
             updateListener.onFailure(cause);
         } else {
             try {
-                UpdateResponse updateResponse = r.parser() == null ? null : UpdateResponse.fromXContent(r.parser());
-                updateListener.onResponse(updateResponse);
-            } catch (IOException e) {
+                updateListener.onResponse(r.updateResponse());
+            } catch (Exception e) {
                 updateListener.onFailure(e);
             }
         }

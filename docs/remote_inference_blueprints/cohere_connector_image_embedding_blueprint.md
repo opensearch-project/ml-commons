@@ -31,7 +31,7 @@ See above for all the values the `parameters > model` parameter can take.
 ```json
 POST /_plugins/_ml/connectors/_create
 {
-  "name": "Cohere Embed Model",
+  "name": "Cohere Image Embed Model",
   "description": "The connector to Cohere's public embed API",
   "version": "1",
   "protocol": "http",

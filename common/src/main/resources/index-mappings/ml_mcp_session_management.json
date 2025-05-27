@@ -1,0 +1,21 @@
+{
+  "_meta": {
+    "schema_version": 1
+  },
+  "properties": {
+    "node_id": {
+      "type": "keyword"
+    },
+    "status": {
+      "type": "keyword"
+    },
+    "create_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "last_updated_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    }
+  }
+}

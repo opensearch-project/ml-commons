@@ -626,29 +626,37 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
                                             ignoreMissing,
                                             fullResponsePath
                                         );
-                                        Object modelOutputValuePerDoc;
-                                        if (modelOutputValue instanceof List
-                                            && ((List) modelOutputValue).size() == hitCountInPredictions.get(mappingIndex)) {
-                                            Object valuePerDoc = ((List) modelOutputValue)
-                                                .get(MapUtils.getCounter(writeOutputMapDocCounter, mappingIndex, modelOutputFieldName));
-                                            modelOutputValuePerDoc = valuePerDoc;
-                                        } else {
-                                            modelOutputValuePerDoc = modelOutputValue;
-                                        }
                                         // writing to search response extension
                                         if (newDocumentFieldName.startsWith(EXTENSION_PREFIX)) {
                                             Map<String, Object> params = ((MLInferenceSearchResponse) response).getParams();
                                             String paramsName = newDocumentFieldName.replaceFirst(EXTENSION_PREFIX + ".", "");
 
                                             if (params != null) {
-                                                params.put(paramsName, modelOutputValuePerDoc);
+                                                params.put(paramsName, modelOutputValue);
                                                 ((MLInferenceSearchResponse) response).setParams(params);
                                             } else {
                                                 Map<String, Object> newParams = new HashMap<>();
-                                                newParams.put(paramsName, modelOutputValuePerDoc);
+                                                newParams.put(paramsName, modelOutputValue);
                                                 ((MLInferenceSearchResponse) response).setParams(newParams);
                                             }
                                         } else {
+                                            Object modelOutputValuePerDoc;
+                                            if (hitCountInPredictions.containsKey(mappingIndex)) {
+                                                if (modelOutputValue instanceof List
+                                                    && ((List) modelOutputValue).size() == hitCountInPredictions.get(mappingIndex)
+                                                    && !oneToOne) {
+                                                    Object valuePerDoc = ((List) modelOutputValue)
+                                                        .get(
+                                                            MapUtils
+                                                                .getCounter(writeOutputMapDocCounter, mappingIndex, modelOutputFieldName)
+                                                        );
+                                                    modelOutputValuePerDoc = valuePerDoc;
+                                                } else {
+                                                    modelOutputValuePerDoc = modelOutputValue;
+                                                }
+                                            } else {
+                                                modelOutputValuePerDoc = modelOutputValue;
+                                            }
                                             // writing to search response hits
                                             if (sourceAsMap.containsKey(newDocumentFieldName)) {
                                                 if (override) {
@@ -902,12 +910,15 @@ public class MLInferenceSearchResponseProcessor extends AbstractProcessor implem
                         + ". Please reduce the size of input_map or optional_input_map or increase max_prediction_tasks."
                 );
             }
-            if (combinedOutputMaps != null && combinedInputMaps != null && combinedOutputMaps.size() != combinedInputMaps.size()) {
+
+            if (!CollectionUtils.isEmpty(combinedOutputMaps)
+                && !CollectionUtils.isEmpty(combinedInputMaps)
+                && combinedOutputMaps.size() != combinedInputMaps.size()) {
                 throw new IllegalArgumentException(
                     "when output_maps/optional_output_maps and input_maps/optional_input_maps are provided, their length needs to match. The input is in length of "
                         + combinedInputMaps.size()
                         + ", while output_maps is in the length of "
-                        + combinedInputMaps.size()
+                        + combinedOutputMaps.size()
                         + ". Please adjust mappings."
                 );
             }

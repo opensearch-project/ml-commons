@@ -28,9 +28,9 @@ import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
+import org.opensearch.ml.common.model.BaseModelConfig;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
-import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
 @RunWith(MockitoJUnitRunner.class)
@@ -72,12 +72,10 @@ public class MLForwardRequestTest {
             .parameters(KMeansParams.builder().centroids(1).build())
             .inputDataset(DataFrameInputDataset.builder().dataFrame(dataFrame).build())
             .build();
-        MLModelConfig config = TextEmbeddingModelConfig
-            .builder()
+        MLModelConfig config = BaseModelConfig
+            .baseModelConfigBuilder()
             .modelType("testModelType")
             .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
-            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
-            .embeddingDimension(100)
             .build();
         registerModelInput = MLRegisterModelInput
             .builder()

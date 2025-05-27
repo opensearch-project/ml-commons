@@ -36,13 +36,13 @@ import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.exception.MLValidationException;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupAction;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupInput;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupRequest;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
@@ -131,7 +131,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
                     }
                 } else {
                     try {
-                        GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
+                        GetResponse gr = r.getResponse();
                         if (gr != null && gr.isExists()) {
                             try (
                                 XContentParser parser = jsonXContent

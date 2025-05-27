@@ -10,6 +10,7 @@ import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import static org.opensearch.ml.common.utils.StringUtils.SAFE_INPUT_DESCRIPTION;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -182,6 +183,36 @@ public class MLUpdateConnectorRequestTests {
 
         assertEquals("tenant-1", parsedRequest.getUpdateContent().getTenantId());
         assertEquals(connectorId, parsedRequest.getConnectorId());
+    }
+
+    @Test
+    public void validate_Exception_UnsafeConnectorName() {
+        MLCreateConnectorInput unsafeInput = MLCreateConnectorInput
+            .builder()
+            .name("<script>bad</script>")  // Unsafe name
+            .description("safe description")
+            .updateConnector(true)
+            .build();
+
+        MLUpdateConnectorRequest request = MLUpdateConnectorRequest.builder().connectorId("connectorId").updateContent(unsafeInput).build();
+
+        ActionRequestValidationException exception = request.validate();
+        assertEquals("Validation Failed: 1: Model connector name " + SAFE_INPUT_DESCRIPTION + ";", exception.getMessage());
+    }
+
+    @Test
+    public void validate_Exception_UnsafeConnectorDescription() {
+        MLCreateConnectorInput unsafeInput = MLCreateConnectorInput
+            .builder()
+            .name("safeName")
+            .description("<script>bad</script>")  // Unsafe description
+            .updateConnector(true)
+            .build();
+
+        MLUpdateConnectorRequest request = MLUpdateConnectorRequest.builder().connectorId("connectorId").updateContent(unsafeInput).build();
+
+        ActionRequestValidationException exception = request.validate();
+        assertEquals("Validation Failed: 1: Model connector description " + SAFE_INPUT_DESCRIPTION + ";", exception.getMessage());
     }
 
 }

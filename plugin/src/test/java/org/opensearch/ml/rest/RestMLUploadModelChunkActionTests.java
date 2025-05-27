@@ -8,7 +8,7 @@ package org.opensearch.ml.rest;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_LOCAL_FILE_UPLOAD;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ALLOW_LOCAL_FILE_UPLOAD;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.util.HashMap;

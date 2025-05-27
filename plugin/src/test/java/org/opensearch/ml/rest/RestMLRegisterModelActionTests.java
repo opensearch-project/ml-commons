@@ -12,7 +12,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
 import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLExceptionUtils.REMOTE_INFERENCE_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
@@ -36,12 +36,12 @@ import org.opensearch.core.common.Strings;
 import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
+import org.opensearch.ml.common.model.BaseModelConfig;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model.MLModelGetResponse;
 import org.opensearch.ml.common.transport.register.MLRegisterModelAction;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
@@ -139,8 +139,7 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
         assertEquals("test_model", registerModelInput.getModelName());
         assertEquals("1", registerModelInput.getVersion());
         assertEquals("TORCH_SCRIPT", registerModelInput.getModelFormat().toString());
-        assertEquals(null, ((TextEmbeddingModelConfig) registerModelInput.getModelConfig()).getQueryPrefix());
-        assertEquals(null, ((TextEmbeddingModelConfig) registerModelInput.getModelConfig()).getPassagePrefix());
+        assertEquals(null, ((BaseModelConfig) registerModelInput.getModelConfig()).getAdditionalConfig());
     }
 
     public void testRegisterAsymmetricModelRequest() throws Exception {
@@ -152,8 +151,7 @@ public class RestMLRegisterModelActionTests extends OpenSearchTestCase {
         assertEquals("test_model", registerModelInput.getModelName());
         assertEquals("1", registerModelInput.getVersion());
         assertEquals("TORCH_SCRIPT", registerModelInput.getModelFormat().toString());
-        assertEquals("query: ", ((TextEmbeddingModelConfig) registerModelInput.getModelConfig()).getQueryPrefix());
-        assertEquals("passage: ", ((TextEmbeddingModelConfig) registerModelInput.getModelConfig()).getPassagePrefix());
+        assertEquals(null, ((BaseModelConfig) registerModelInput.getModelConfig()).getAdditionalConfig());
     }
 
     public void testRegisterModelRequestRemoteInferenceDisabled() throws Exception {
