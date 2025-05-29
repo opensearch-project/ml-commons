@@ -9,12 +9,14 @@ import lombok.Getter;
 
 @Getter
 public enum AdoptionMetric {
-    MODEL_COUNT("Number of models created"),
-    CONNECTOR_COUNT("Number of connectors created");
+    MODEL_COUNT("Number of models created", MetricType.COUNTER),
+    CONNECTOR_COUNT("Number of connectors created", MetricType.COUNTER);
 
     private final String description;
+    private final MetricType type;
 
-    AdoptionMetric(String description) {
+    AdoptionMetric(String description, MetricType type) {
         this.description = description;
+        this.type = type;
     }
 }

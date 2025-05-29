@@ -7,6 +7,7 @@ package org.opensearch.ml.stats.otel.counters;
 
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.stats.otel.metrics.AdoptionMetric;
+import org.opensearch.ml.stats.otel.metrics.MetricType;
 import org.opensearch.telemetry.metrics.MetricsRegistry;
 
 public class MLAdoptionMetricsCounter extends AbstractMLMetricsCounter<AdoptionMetric> {
@@ -35,5 +36,10 @@ public class MLAdoptionMetricsCounter extends AbstractMLMetricsCounter<AdoptionM
     @Override
     protected String getMetricDescription(AdoptionMetric metric) {
         return metric.getDescription();
+    }
+
+    @Override
+    protected MetricType getMetricType(AdoptionMetric metric) {
+        return metric.getType();
     }
 }
