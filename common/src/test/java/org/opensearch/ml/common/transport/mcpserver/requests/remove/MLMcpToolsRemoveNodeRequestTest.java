@@ -55,7 +55,7 @@ public class MLMcpToolsRemoveNodeRequestTest {
 
     @Test
     public void testNullToolsList() throws IOException {
-        MLMcpToolsRemoveNodeRequest request = MLMcpToolsRemoveNodeRequest.builder().tools(null).build();
+        MLMcpToolsRemoveNodeRequest request = MLMcpToolsRemoveNodeRequest.builder().mcpTools(null).build();
         BytesStreamOutput output = new BytesStreamOutput();
         request.writeTo(output);
 

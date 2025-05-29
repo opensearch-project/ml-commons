@@ -9,17 +9,19 @@ import java.util.Map;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.CommonValue;
-import org.opensearch.ml.common.transport.mcpserver.requests.BaseMcpTool;
+import org.opensearch.ml.common.transport.mcpserver.requests.McpToolBaseInput;
 
-public class UpdateMcpTool extends BaseMcpTool {
-    public UpdateMcpTool(StreamInput streamInput) throws IOException {
+public class McpToolUpdateInput extends McpToolBaseInput {
+    public static final String NAME_NOT_SHOWN_EXCEPTION_MESSAGE = "name field required";
+
+    public McpToolUpdateInput(StreamInput streamInput) throws IOException {
         super(streamInput);
         if (super.getName() == null) {
             throw new IllegalArgumentException(NAME_NOT_SHOWN_EXCEPTION_MESSAGE);
         }
     }
 
-    public UpdateMcpTool(
+    public McpToolUpdateInput(
         String name,
         String description,
         Map<String, Object> parameters,
@@ -33,7 +35,7 @@ public class UpdateMcpTool extends BaseMcpTool {
         }
     }
 
-    public static UpdateMcpTool parse(XContentParser parser) throws IOException {
+    public static McpToolUpdateInput parse(XContentParser parser) throws IOException {
         String name = null;
         String description = null;
         Map<String, Object> params = null;
@@ -69,6 +71,6 @@ public class UpdateMcpTool extends BaseMcpTool {
                     break;
             }
         }
-        return new UpdateMcpTool(name, description, params, attributes, createdTime, lastUpdateTime);
+        return new McpToolUpdateInput(name, description, params, attributes, createdTime, lastUpdateTime);
     }
 }

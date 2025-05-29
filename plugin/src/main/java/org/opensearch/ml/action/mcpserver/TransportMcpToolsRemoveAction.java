@@ -30,7 +30,7 @@ import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRemoveAction;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRemoveOnNodesAction;
 import org.opensearch.ml.common.transport.mcpserver.requests.message.MLMcpMessageRequest;
-import org.opensearch.ml.common.transport.mcpserver.requests.register.RegisterMcpTool;
+import org.opensearch.ml.common.transport.mcpserver.requests.register.McpToolRegisterInput;
 import org.opensearch.ml.common.transport.mcpserver.requests.remove.MLMcpToolsRemoveNodesRequest;
 import org.opensearch.ml.common.transport.mcpserver.responses.remove.MLMcpToolsRemoveNodesResponse;
 import org.opensearch.tasks.Task;
@@ -85,10 +85,10 @@ public class TransportMcpToolsRemoveAction extends HandledTransportAction<Action
         MLMcpToolsRemoveNodesRequest removeToolsOnNodesRequest = (MLMcpToolsRemoveNodesRequest) request;
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<MLMcpToolsRemoveNodesResponse> restoreListener = ActionListener.runBefore(listener, context::restore);
-            ActionListener<List<RegisterMcpTool>> searchResultListener = ActionListener.wrap(searchResult -> {
+            ActionListener<List<McpToolRegisterInput>> searchResultListener = ActionListener.wrap(searchResult -> {
                 if (!searchResult.isEmpty()) {
                     // Tools search found results.
-                    List<String> foundTools = searchResult.stream().map(RegisterMcpTool::getName).toList();
+                    List<String> foundTools = searchResult.stream().map(McpToolRegisterInput::getName).toList();
                     foundTools.forEach(x -> removeToolsOnNodesRequest.getMcpTools().remove(x));
                     if (!removeToolsOnNodesRequest.getMcpTools().isEmpty()) {
                         // There are tools not found, do not proceed.

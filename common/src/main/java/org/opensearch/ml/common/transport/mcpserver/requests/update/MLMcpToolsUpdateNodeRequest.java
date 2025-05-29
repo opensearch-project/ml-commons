@@ -24,11 +24,11 @@ import lombok.Data;
 
 @Data
 public class MLMcpToolsUpdateNodeRequest extends ActionRequest {
-    private List<UpdateMcpTool> mcpTools;
+    private List<McpToolUpdateInput> mcpTools;
 
     public MLMcpToolsUpdateNodeRequest(StreamInput in) throws IOException {
         super(in);
-        this.mcpTools = in.readList(UpdateMcpTool::new);
+        this.mcpTools = in.readList(McpToolUpdateInput::new);
     }
 
     @Override
@@ -37,7 +37,7 @@ public class MLMcpToolsUpdateNodeRequest extends ActionRequest {
     }
 
     @Builder
-    public MLMcpToolsUpdateNodeRequest(List<UpdateMcpTool> mcpTools) {
+    public MLMcpToolsUpdateNodeRequest(List<McpToolUpdateInput> mcpTools) {
         this.mcpTools = mcpTools;
     }
 

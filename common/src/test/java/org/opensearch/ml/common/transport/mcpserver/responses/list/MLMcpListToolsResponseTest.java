@@ -20,17 +20,17 @@ import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.ml.common.transport.mcpserver.requests.register.RegisterMcpTool;
+import org.opensearch.ml.common.transport.mcpserver.requests.register.McpToolRegisterInput;
 
 public class MLMcpListToolsResponseTest {
 
-    private List<RegisterMcpTool> sampleTools;
+    private List<McpToolRegisterInput> sampleTools;
 
     @Before
     public void setUp() {
         sampleTools = List
             .of(
-                new RegisterMcpTool(
+                new McpToolRegisterInput(
                     "weather_api",
                     "weather_tool",
                     "Real-time weather data fetcher",
@@ -39,7 +39,7 @@ public class MLMcpListToolsResponseTest {
                     null,
                     null
                 ),
-                new RegisterMcpTool(
+                new McpToolRegisterInput(
                     "stock_api",
                     "stock_tool",
                     "Stock market analyzer",

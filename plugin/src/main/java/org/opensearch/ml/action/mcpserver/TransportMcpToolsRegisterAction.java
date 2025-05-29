@@ -38,9 +38,9 @@ import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRegisterAction;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRegisterOnNodesAction;
-import org.opensearch.ml.common.transport.mcpserver.requests.BaseMcpTool;
+import org.opensearch.ml.common.transport.mcpserver.requests.McpToolBaseInput;
 import org.opensearch.ml.common.transport.mcpserver.requests.register.MLMcpToolsRegisterNodesRequest;
-import org.opensearch.ml.common.transport.mcpserver.requests.register.RegisterMcpTool;
+import org.opensearch.ml.common.transport.mcpserver.requests.register.McpToolRegisterInput;
 import org.opensearch.ml.common.transport.mcpserver.responses.register.MLMcpToolsRegisterNodesResponse;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.tasks.Task;
@@ -99,16 +99,16 @@ public class TransportMcpToolsRegisterAction extends HandledTransportAction<Acti
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<MLMcpToolsRegisterNodesResponse> restoreListener = ActionListener.runBefore(listener, context::restore);
             ActionListener<Boolean> initIndexListener = ActionListener.wrap(created -> {
-                ActionListener<List<RegisterMcpTool>> searchResultListener = ActionListener.wrap(searchResult -> {
+                ActionListener<List<McpToolRegisterInput>> searchResultListener = ActionListener.wrap(searchResult -> {
                     if (!searchResult.isEmpty()) {
                         Set<String> registerToolNames = registerNodesRequest
                             .getMcpTools()
                             .stream()
-                            .map(RegisterMcpTool::getName)
+                            .map(McpToolRegisterInput::getName)
                             .collect(Collectors.toSet());
                         List<String> existingTools = searchResult
                             .stream()
-                            .map(RegisterMcpTool::getName)
+                            .map(McpToolRegisterInput::getName)
                             .filter(registerToolNames::contains)
                             .toList();
                         String exceptionMessage = String
@@ -124,7 +124,7 @@ public class TransportMcpToolsRegisterAction extends HandledTransportAction<Acti
                 });
                 mcpToolsHelper
                     .searchToolsWithVersion(
-                        registerNodesRequest.getMcpTools().stream().map(RegisterMcpTool::getName).toList(),
+                        registerNodesRequest.getMcpTools().stream().map(McpToolRegisterInput::getName).toList(),
                         searchResultListener
                     );
             }, e -> {
@@ -156,7 +156,11 @@ public class TransportMcpToolsRegisterAction extends HandledTransportAction<Acti
                     registerMcpToolsOnNodes(
                         new StringBuilder(),
                         updateVersion(registerNodesRequest, bulkResponse),
-                        registerNodesRequest.getMcpTools().stream().map(RegisterMcpTool::getName).collect(Collectors.toUnmodifiableSet()),
+                        registerNodesRequest
+                            .getMcpTools()
+                            .stream()
+                            .map(McpToolRegisterInput::getName)
+                            .collect(Collectors.toUnmodifiableSet()),
                         restoreListener
                     );
                 } else {
@@ -205,17 +209,17 @@ public class TransportMcpToolsRegisterAction extends HandledTransportAction<Acti
             });
 
             BulkRequest bulkRequest = new BulkRequest();
-            for (RegisterMcpTool mcpTool : registerNodesRequest.getMcpTools()) {
+            for (McpToolRegisterInput mcpTool : registerNodesRequest.getMcpTools()) {
                 IndexRequest indexRequest = new IndexRequest(MLIndex.MCP_TOOLS.getIndexName());
                 // Set opType to create to avoid race condition when creating tools with same name.
                 indexRequest.opType(DocWriteRequest.OpType.CREATE);
                 indexRequest.id(mcpTool.getName());
                 Map<String, Object> source = new HashMap<>();
-                source.put(BaseMcpTool.NAME_FIELD, mcpTool.getName());
-                source.put(BaseMcpTool.TYPE_FIELD, mcpTool.getType());
-                source.put(BaseMcpTool.PARAMS_FIELD, mcpTool.getParameters());
-                source.put(BaseMcpTool.ATTRIBUTES_FIELD, mcpTool.getAttributes());
-                source.put(BaseMcpTool.DESCRIPTION_FIELD, mcpTool.getDescription());
+                source.put(McpToolBaseInput.NAME_FIELD, mcpTool.getName());
+                source.put(McpToolBaseInput.TYPE_FIELD, mcpTool.getType());
+                source.put(McpToolBaseInput.PARAMS_FIELD, mcpTool.getParameters());
+                source.put(McpToolBaseInput.ATTRIBUTES_FIELD, mcpTool.getAttributes());
+                source.put(McpToolBaseInput.DESCRIPTION_FIELD, mcpTool.getDescription());
                 source.put(CommonValue.CREATE_TIME_FIELD, Instant.now().toEpochMilli());
                 indexRequest.source(source);
                 bulkRequest.add(indexRequest);

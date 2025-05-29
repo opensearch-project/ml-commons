@@ -18,10 +18,10 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsUpdateOnNodesAction;
-import org.opensearch.ml.common.transport.mcpserver.requests.BaseMcpTool;
+import org.opensearch.ml.common.transport.mcpserver.requests.McpToolBaseInput;
 import org.opensearch.ml.common.transport.mcpserver.requests.update.MLMcpToolsUpdateNodeRequest;
 import org.opensearch.ml.common.transport.mcpserver.requests.update.MLMcpToolsUpdateNodesRequest;
-import org.opensearch.ml.common.transport.mcpserver.requests.update.UpdateMcpTool;
+import org.opensearch.ml.common.transport.mcpserver.requests.update.McpToolUpdateInput;
 import org.opensearch.ml.common.transport.mcpserver.responses.update.MLMcpToolsUpdateNodeResponse;
 import org.opensearch.ml.common.transport.mcpserver.responses.update.MLMcpToolsUpdateNodesResponse;
 import org.opensearch.ml.rest.mcpserver.ToolFactoryWrapper;
@@ -109,7 +109,7 @@ public class TransportMcpToolsUpdateOnNodesAction extends
      * @param mcpTools
      * @return
      */
-    private MLMcpToolsUpdateNodeResponse updateToolsOnNode(List<UpdateMcpTool> mcpTools) {
+    private MLMcpToolsUpdateNodeResponse updateToolsOnNode(List<McpToolUpdateInput> mcpTools) {
         AtomicReference<Throwable> exception = new AtomicReference<>();
         Flux.fromStream(mcpTools.stream()).flatMap(tool -> {
             McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.remove(tool.getName());
@@ -122,7 +122,7 @@ public class TransportMcpToolsUpdateOnNodesAction extends
             log
                 .error(
                     "Failed to Update tools: {} in MCP server memory on node: {}",
-                    mcpTools.stream().map(BaseMcpTool::getName).toList(),
+                    mcpTools.stream().map(McpToolBaseInput::getName).toList(),
                     clusterService.localNode().getId()
                 );
             exception.set(e);

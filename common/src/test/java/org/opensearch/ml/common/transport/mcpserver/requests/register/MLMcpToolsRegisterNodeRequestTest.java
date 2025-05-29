@@ -26,13 +26,13 @@ import org.opensearch.transport.TransportRequest;
 
 public class MLMcpToolsRegisterNodeRequestTest {
 
-    private List<RegisterMcpTool> sampleTools;
+    private List<McpToolRegisterInput> sampleTools;
 
     @Before
     public void setUp() {
         sampleTools = Collections
             .singletonList(
-                new RegisterMcpTool(
+                new McpToolRegisterInput(
                     "test_tool",
                     "test_tool",
                     "Sample tool",
@@ -101,7 +101,7 @@ public class MLMcpToolsRegisterNodeRequestTest {
 
     @Test
     public void testEmptyToolsHandling() throws IOException {
-        List<RegisterMcpTool> emptyTools = Collections.emptyList();
+        List<McpToolRegisterInput> emptyTools = Collections.emptyList();
         MLMcpToolsRegisterNodeRequest request = new MLMcpToolsRegisterNodeRequest(emptyTools);
 
         BytesStreamOutput output = new BytesStreamOutput();

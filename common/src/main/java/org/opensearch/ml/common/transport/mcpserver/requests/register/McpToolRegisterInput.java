@@ -16,7 +16,7 @@ import java.util.Map;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.CommonValue;
-import org.opensearch.ml.common.transport.mcpserver.requests.BaseMcpTool;
+import org.opensearch.ml.common.transport.mcpserver.requests.McpToolBaseInput;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -25,15 +25,17 @@ import lombok.extern.log4j.Log4j2;
  * description, parameters, and schema.
  */
 @Log4j2
-public class RegisterMcpTool extends BaseMcpTool {
-    public RegisterMcpTool(StreamInput streamInput) throws IOException {
+public class McpToolRegisterInput extends McpToolBaseInput {
+    public static final String TYPE_NOT_SHOWN_EXCEPTION_MESSAGE = "type field required";
+
+    public McpToolRegisterInput(StreamInput streamInput) throws IOException {
         super(streamInput);
         if (super.getType() == null) {
             throw new IllegalArgumentException(TYPE_NOT_SHOWN_EXCEPTION_MESSAGE);
         }
     }
 
-    public RegisterMcpTool(
+    public McpToolRegisterInput(
         String name,
         String type,
         String description,
@@ -46,9 +48,10 @@ public class RegisterMcpTool extends BaseMcpTool {
         if (type == null) {
             throw new IllegalArgumentException(TYPE_NOT_SHOWN_EXCEPTION_MESSAGE);
         }
+
     }
 
-    public static RegisterMcpTool parse(XContentParser parser) throws IOException {
+    public static McpToolRegisterInput parse(XContentParser parser) throws IOException {
         String type = null;
         String name = null;
         String description = null;
@@ -88,6 +91,6 @@ public class RegisterMcpTool extends BaseMcpTool {
                     break;
             }
         }
-        return new RegisterMcpTool(name, type, description, params, attributes, createdTime, lastUpdateTime);
+        return new McpToolRegisterInput(name, type, description, params, attributes, createdTime, lastUpdateTime);
     }
 }

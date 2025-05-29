@@ -32,7 +32,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.mcpserver.requests.register.MLMcpToolsRegisterNodeRequest;
 import org.opensearch.ml.common.transport.mcpserver.requests.register.MLMcpToolsRegisterNodesRequest;
-import org.opensearch.ml.common.transport.mcpserver.requests.register.RegisterMcpTool;
+import org.opensearch.ml.common.transport.mcpserver.requests.register.McpToolRegisterInput;
 import org.opensearch.ml.common.transport.mcpserver.responses.register.MLMcpToolsRegisterNodeResponse;
 import org.opensearch.ml.common.transport.mcpserver.responses.register.MLMcpToolsRegisterNodesResponse;
 import org.opensearch.ml.engine.tools.AgentTool;
@@ -95,8 +95,8 @@ public class TransportMcpToolsRegisterOnNodesActionTests extends OpenSearchTestC
 
     @Test
     public void testNewResponse() {
-        List<RegisterMcpTool> mcpTools = List
-            .of(new RegisterMcpTool("ListIndexTool", "ListIndexTool", "ListIndexTool", Map.of(), Map.of(), null, null));
+        List<McpToolRegisterInput> mcpTools = List
+            .of(new McpToolRegisterInput("ListIndexTool", "ListIndexTool", "ListIndexTool", Map.of(), Map.of(), null, null));
         MLMcpToolsRegisterNodesRequest nodesRequest = new MLMcpToolsRegisterNodesRequest(new String[] { "node1", "node2" }, mcpTools);
         DiscoveryNode discoveryNode1 = mock(DiscoveryNode.class);
         when(discoveryNode1.getId()).thenReturn("node1");
@@ -113,8 +113,8 @@ public class TransportMcpToolsRegisterOnNodesActionTests extends OpenSearchTestC
 
     @Test
     public void testNewNodeRequest() {
-        List<RegisterMcpTool> mcpTools = List
-            .of(new RegisterMcpTool("ListIndexTool", "ListIndexTool", "ListIndexTool", Map.of(), Map.of(), null, null));
+        List<McpToolRegisterInput> mcpTools = List
+            .of(new McpToolRegisterInput("ListIndexTool", "ListIndexTool", "ListIndexTool", Map.of(), Map.of(), null, null));
         MLMcpToolsRegisterNodesRequest nodesRequest = new MLMcpToolsRegisterNodesRequest(new String[] { "node1", "node2" }, mcpTools);
         MLMcpToolsRegisterNodeRequest nodeRequest = action.newNodeRequest(nodesRequest);
         assertEquals(nodesRequest.getMcpTools(), nodeRequest.getMcpTools());
@@ -139,7 +139,7 @@ public class TransportMcpToolsRegisterOnNodesActionTests extends OpenSearchTestC
 
     @Test
     public void testNodeOperation() {
-        List<RegisterMcpTool> mcpTools = List.of(getRegisterMcpTool());
+        List<McpToolRegisterInput> mcpTools = List.of(getRegisterMcpTool());
         McpAsyncServerHolder.getMcpAsyncServerInstance().removeTool("ListIndexTool").subscribe();
         MLMcpToolsRegisterNodeRequest request = new MLMcpToolsRegisterNodeRequest(mcpTools);
         MLMcpToolsRegisterNodeResponse response = action.nodeOperation(request);
@@ -148,7 +148,8 @@ public class TransportMcpToolsRegisterOnNodesActionTests extends OpenSearchTestC
 
     @Test(expected = FailedNodeException.class)
     public void testNodeOperation_OnError() {
-        List<RegisterMcpTool> mcpTools = List.of(new RegisterMcpTool("AgentTool", "AgentTool", "test agent tool", null, null, null, null));
+        List<McpToolRegisterInput> mcpTools = List
+            .of(new McpToolRegisterInput("AgentTool", "AgentTool", "test agent tool", null, null, null, null));
         McpServerFeatures.AsyncToolSpecification specification = mcpToolsHelper.createToolSpecification(mcpTools.get(0));
         McpAsyncServerHolder.getMcpAsyncServerInstance().addTool(specification).subscribe();
         MLMcpToolsRegisterNodeRequest request = new MLMcpToolsRegisterNodeRequest(mcpTools);
@@ -156,8 +157,8 @@ public class TransportMcpToolsRegisterOnNodesActionTests extends OpenSearchTestC
         action.nodeOperation(request);
     }
 
-    private RegisterMcpTool getRegisterMcpTool() {
-        RegisterMcpTool registerMcpTool = new RegisterMcpTool(
+    private McpToolRegisterInput getRegisterMcpTool() {
+        McpToolRegisterInput registerMcpTool = new McpToolRegisterInput(
             "ListIndexTool",
             "ListIndexTool",
             "OpenSearch index name list, separated by comma. for example: [\\\"index1\\\", \\\"index2\\\"], use empty array [] to list all indices in the cluster",

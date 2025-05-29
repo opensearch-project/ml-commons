@@ -38,9 +38,9 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
-import org.opensearch.ml.common.transport.mcpserver.requests.register.RegisterMcpTool;
+import org.opensearch.ml.common.transport.mcpserver.requests.register.McpToolRegisterInput;
 import org.opensearch.ml.common.transport.mcpserver.requests.update.MLMcpToolsUpdateNodesRequest;
-import org.opensearch.ml.common.transport.mcpserver.requests.update.UpdateMcpTool;
+import org.opensearch.ml.common.transport.mcpserver.requests.update.McpToolUpdateInput;
 import org.opensearch.ml.common.transport.mcpserver.responses.update.MLMcpToolsUpdateNodeResponse;
 import org.opensearch.ml.common.transport.mcpserver.responses.update.MLMcpToolsUpdateNodesResponse;
 import org.opensearch.ml.utils.TestHelper;
@@ -192,7 +192,7 @@ public class TransportMcpToolsUpdateActionTests extends OpenSearchTestCase {
 
     @Test
     public void test_doExecute_partialToolsNotExist() throws IOException {
-        UpdateMcpTool tool1 = new UpdateMcpTool(
+        McpToolUpdateInput tool1 = new McpToolUpdateInput(
             "ListIndexTool",
             "Updated tool",
             Map.of("threshold", "80%"),
@@ -200,7 +200,7 @@ public class TransportMcpToolsUpdateActionTests extends OpenSearchTestCase {
             null,
             null
         );
-        UpdateMcpTool tool2 = new UpdateMcpTool(
+        McpToolUpdateInput tool2 = new McpToolUpdateInput(
             "SearchIndexTool",
             "Updated tool",
             Map.of("threshold", "80%"),
@@ -285,8 +285,8 @@ public class TransportMcpToolsUpdateActionTests extends OpenSearchTestCase {
     }
 
     private MLMcpToolsUpdateNodesRequest createTestRequest() {
-        UpdateMcpTool tool = new UpdateMcpTool("ListIndexTool", null, null, null, null, null);
-        List<UpdateMcpTool> tools = new ArrayList<>();
+        McpToolUpdateInput tool = new McpToolUpdateInput("ListIndexTool", null, null, null, null, null);
+        List<McpToolUpdateInput> tools = new ArrayList<>();
         tools.add(tool);
         return new MLMcpToolsUpdateNodesRequest(new String[] { "mockNodeId" }, tools);
     }
@@ -308,8 +308,8 @@ public class TransportMcpToolsUpdateActionTests extends OpenSearchTestCase {
         }).when(mcpToolsHelper).searchToolsWithPrimaryTermAndSeqNo(any(), any());
     }
 
-    private RegisterMcpTool getRegisterMcpTool() {
-        RegisterMcpTool registerMcpTool = new RegisterMcpTool(
+    private McpToolRegisterInput getRegisterMcpTool() {
+        McpToolRegisterInput registerMcpTool = new McpToolRegisterInput(
             "ListIndexTool",
             "ListIndexTool",
             "OpenSearch index name list, separated by comma. for example: [\\\"index1\\\", \\\"index2\\\"], use empty array [] to list all indices in the cluster",

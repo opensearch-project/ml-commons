@@ -33,7 +33,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.mcpserver.requests.update.MLMcpToolsUpdateNodeRequest;
 import org.opensearch.ml.common.transport.mcpserver.requests.update.MLMcpToolsUpdateNodesRequest;
-import org.opensearch.ml.common.transport.mcpserver.requests.update.UpdateMcpTool;
+import org.opensearch.ml.common.transport.mcpserver.requests.update.McpToolUpdateInput;
 import org.opensearch.ml.common.transport.mcpserver.responses.update.MLMcpToolsUpdateNodeResponse;
 import org.opensearch.ml.common.transport.mcpserver.responses.update.MLMcpToolsUpdateNodesResponse;
 import org.opensearch.ml.engine.tools.SearchIndexTool;
@@ -150,7 +150,7 @@ public class TransportMcpToolsUpdateOnNodesActionTests extends OpenSearchTestCas
     @Test
     public void testNodeOperationException() {
         McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.put("IndexMappingTool", 1L);
-        UpdateMcpTool updateMcpTool = new UpdateMcpTool(
+        McpToolUpdateInput updateMcpTool = new McpToolUpdateInput(
             "IndexMappingTool",
             "Updated index mapping tool",
             Map.of("parameters", "{}"),
@@ -166,12 +166,12 @@ public class TransportMcpToolsUpdateOnNodesActionTests extends OpenSearchTestCas
         action.nodeOperation(request);
     }
 
-    private UpdateMcpTool createTestTool() {
+    private McpToolUpdateInput createTestTool() {
         return createTestTool(2L);
     }
 
-    private UpdateMcpTool createTestTool(long version) {
-        UpdateMcpTool updateMcpTool = new UpdateMcpTool(
+    private McpToolUpdateInput createTestTool(long version) {
+        McpToolUpdateInput updateMcpTool = new McpToolUpdateInput(
             "SearchIndexTool",
             "Updated search tool",
             Map.of("parameters", "{}"),

@@ -32,14 +32,14 @@ import org.opensearch.search.SearchModule;
 
 public class MLMcpToolsRegisterNodesRequestTest {
 
-    private List<RegisterMcpTool> sampleTools;
+    private List<McpToolRegisterInput> sampleTools;
     private final String[] nodeIds = { "node1", "node2" };
 
     @Before
     public void setup() {
         sampleTools = List
             .of(
-                new RegisterMcpTool(
+                new McpToolRegisterInput(
                     null,
                     "metric_analyzer",
                     "System monitoring tool",

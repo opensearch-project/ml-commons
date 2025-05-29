@@ -32,7 +32,7 @@ import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.spi.tools.Tool;
-import org.opensearch.ml.common.transport.mcpserver.requests.register.RegisterMcpTool;
+import org.opensearch.ml.common.transport.mcpserver.requests.register.McpToolRegisterInput;
 import org.opensearch.ml.common.transport.mcpserver.requests.remove.MLMcpToolsRemoveNodeRequest;
 import org.opensearch.ml.common.transport.mcpserver.requests.remove.MLMcpToolsRemoveNodesRequest;
 import org.opensearch.ml.common.transport.mcpserver.responses.remove.MLMcpToolsRemoveNodeResponse;
@@ -152,8 +152,8 @@ public class TransportMcpToolsRemoveOnNodesActionTests extends OpenSearchTestCas
         assertEquals(true, response.getDeleted());
     }
 
-    private RegisterMcpTool getRegisterMcpTool() {
-        RegisterMcpTool registerMcpTool = new RegisterMcpTool(
+    private McpToolRegisterInput getRegisterMcpTool() {
+        McpToolRegisterInput registerMcpTool = new McpToolRegisterInput(
             "ListIndexTool",
             "ListIndexTool",
             "OpenSearch index name list, separated by comma. for example: [\\\"index1\\\", \\\"index2\\\"], use empty array [] to list all indices in the cluster",
