@@ -618,6 +618,29 @@ public class TestHelper {
         return request;
     }
 
+    public static RestRequest getUpdatePromptRestRequest(String tenantId) {
+        Map<String, List<String>> headers = new HashMap<>();
+        Map<String, String> params = new HashMap<>();
+        if (tenantId != null) {
+            headers.put(Constants.TENANT_ID_HEADER, Collections.singletonList(tenantId));
+        }
+        params.put("prompt_id", "test_prompt_id");
+
+        final String requestcontent = "{\n"
+            + "  \"name\": \"update_prompt\",\n"
+            + "  \"prompt\": {\n"
+            + "     \"system\": \"update system prompt\",\n"
+            + "     \"user\": \"update user prompt\"\n"
+            + "  }\n"
+            + "}";
+        RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
+            .withHeaders(headers)
+            .withContent(new BytesArray(requestcontent), XContentType.JSON)
+            .withParams(params)
+            .build();
+        return request;
+    }
+
     public static void verifyParsedCreatePromptInput(MLCreatePromptInput mlCreatePromptInput) {
         assertEquals("test_prompt", mlCreatePromptInput.getName());
         assertEquals("This is a test prompt", mlCreatePromptInput.getDescription());

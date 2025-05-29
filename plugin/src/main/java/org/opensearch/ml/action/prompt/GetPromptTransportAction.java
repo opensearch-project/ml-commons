@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.prompt;
 
 import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX;
+import static org.opensearch.ml.prompt.MLPromptManager.handleFailure;
 
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
@@ -91,20 +92,8 @@ public class GetPromptTransportAction extends HandledTransportAction<MLPromptGet
                 ActionListener
                     .wrap(
                         mlPrompt -> actionListener.onResponse(MLPromptGetResponse.builder().mlPrompt(mlPrompt).build()),
-                        e -> handleFailure(e, promptId, actionListener)
+                        e -> handleFailure(e, promptId, actionListener, "Failed to get MLPrompt")
                     )
             );
-    }
-
-    /**
-     * Notify the listener of the failure exception. while fetching the prompt object from the system index
-     *
-     * @param e The failure exception
-     * @param promptId The prompt id
-     * @param actionListener ActionListener to be notified of the response
-     */
-    private void handleFailure(Exception e, String promptId, ActionListener<MLPromptGetResponse> actionListener) {
-        log.error("Failed to get ML Prompt {}", promptId, e);
-        actionListener.onFailure(e);
     }
 }

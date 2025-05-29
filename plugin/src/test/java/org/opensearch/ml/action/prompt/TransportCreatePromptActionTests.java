@@ -33,11 +33,13 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.prompt.MLCreatePromptInput;
 import org.opensearch.ml.common.transport.prompt.MLCreatePromptRequest;
 import org.opensearch.ml.common.transport.prompt.MLCreatePromptResponse;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
+import org.opensearch.ml.prompt.MLPromptManager;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.tasks.Task;
@@ -181,5 +183,49 @@ public class TransportCreatePromptActionTests extends OpenSearchTestCase {
                 "You don't have permission to access this resource",
                 argumentCaptor.getValue().getMessage()
         );
+    }
+
+    @Test
+    public void testDoExecute_tags_size_restriction_fail() {
+        List<String> tags = Collections.nCopies(MLPromptManager.MAX_NUMBER_OF_TAGS + 1, "tag");
+        mlCreatePromptRequest.getMlCreatePromptInput().setTags(tags);
+
+        transportCreatePromptAction.doExecute(task, mlCreatePromptRequest, actionListener);
+
+        ArgumentCaptor<IllegalArgumentException> argumentCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Number of tags must not exceed 20 and length of each tag must not exceed 35", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testDoExecute_tag_length_restriction_fail() {
+        List<String> tags = Collections.singletonList("a".repeat(MLPromptManager.MAX_LENGTH_OF_TAG + 1));
+        mlCreatePromptRequest.getMlCreatePromptInput().setTags(tags);
+
+        transportCreatePromptAction.doExecute(task, mlCreatePromptRequest, actionListener);
+
+        ArgumentCaptor<IllegalArgumentException> argumentCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Number of tags must not exceed 20 and length of each tag must not exceed 35", argumentCaptor.getValue().getMessage());
+    }
+
+    public void testDoExecute_fail_withIndexNotFoundException() {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLPromptIndex(isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new IndexNotFoundException("Index not found"));
+            return null;
+        }).when(client).index(any(IndexRequest.class), isA(ActionListener.class));
+
+        transportCreatePromptAction.doExecute(task, mlCreatePromptRequest, actionListener);
+
+        ArgumentCaptor<OpenSearchStatusException> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Failed to find prompt with the provided prompt id: null", argumentCaptor.getValue().getMessage());
     }
 }

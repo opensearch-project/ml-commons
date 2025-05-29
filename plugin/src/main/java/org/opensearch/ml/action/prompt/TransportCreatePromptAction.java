@@ -6,6 +6,8 @@
 package org.opensearch.ml.action.prompt;
 
 import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX;
+import static org.opensearch.ml.prompt.MLPromptManager.handleFailure;
+import static org.opensearch.ml.prompt.MLPromptManager.validateTags;
 
 import java.time.Instant;
 
@@ -82,7 +84,14 @@ public class TransportCreatePromptAction extends HandledTransportAction<MLCreate
     @Override
     protected void doExecute(Task task, MLCreatePromptRequest mlCreatePromptRequest, ActionListener<MLCreatePromptResponse> listener) {
         MLCreatePromptInput mlCreatePromptInput = mlCreatePromptRequest.getMlCreatePromptInput();
-
+        if (mlCreatePromptInput.getTags() != null && !validateTags(mlCreatePromptInput.getTags())) {
+            handleFailure(
+                new IllegalArgumentException("Number of tags must not exceed 20 and length of each tag must not exceed 35"),
+                null,
+                listener,
+                "Tags Exceeds max number of tags or max length of tag"
+            );
+        }
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, mlCreatePromptInput.getTenantId(), listener)) {
             return;
         }
@@ -103,7 +112,7 @@ public class TransportCreatePromptAction extends HandledTransportAction<MLCreate
 
             indexPrompt(mlPrompt, listener);
         } catch (Exception e) {
-            handleFailure(e, listener, "Failed to create a MLPrompt");
+            handleFailure(e, null, listener, "Failed to create a MLPrompt");
         }
     }
 
@@ -119,7 +128,7 @@ public class TransportCreatePromptAction extends HandledTransportAction<MLCreate
         mlIndicesHandler.initMLPromptIndex(ActionListener.wrap(indexCreated -> {
             if (!indexCreated) {
                 Exception exception = new RuntimeException("No response to create ML Prompt Index");
-                handleFailure(exception, listener, "Failed to create a system index for prompt");
+                handleFailure(exception, null, listener, "Failed to create a system index for prompt");
                 return;
             }
 
@@ -130,7 +139,7 @@ public class TransportCreatePromptAction extends HandledTransportAction<MLCreate
                     handlePromptPutResponse(putResponse, throwable, listener);
                 });
             }
-        }, e -> { handleFailure(e, listener, "Failed to init ML prompt index"); }));
+        }, e -> { handleFailure(e, null, listener, "Failed to init ML prompt index"); }));
     }
 
     /**
@@ -162,25 +171,14 @@ public class TransportCreatePromptAction extends HandledTransportAction<MLCreate
     ) {
         if (putResponse == null || throwable != null) {
             Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-            handleFailure(cause, listener, "Prompt Put Response cannot be null");
+            handleFailure(cause, null, listener, "Prompt Put Response cannot be null");
         }
         try {
             IndexResponse indexResponse = IndexResponse.fromXContent(putResponse.parser());
             log.info("Prompt creation result: {}, prompt id: {}", indexResponse.getResult(), indexResponse.getId());
             listener.onResponse(new MLCreatePromptResponse(indexResponse.getId()));
         } catch (Exception e) {
-            handleFailure(e, listener, "Failed to parse PutDataObjectResponse into Index Response from xContent");
+            handleFailure(e, null, listener, "Failed to parse PutDataObjectResponse into Index Response from xContent");
         }
-    }
-
-    /**
-     * Notify the listener of the failure exception.
-     *
-     * @param cause The failure exception
-     * @param listener ActionListener to be notified of the response
-     */
-    private void handleFailure(Exception cause, ActionListener<MLCreatePromptResponse> listener, String likelyCause) {
-        log.error("Failed to create a prompt: {}", likelyCause, cause);
-        listener.onFailure(cause);
     }
 }
