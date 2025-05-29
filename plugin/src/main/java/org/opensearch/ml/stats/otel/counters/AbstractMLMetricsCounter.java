@@ -88,5 +88,6 @@ public abstract class AbstractMLMetricsCounter<T extends Enum<T>> {
     }
 
     protected abstract String getMetricDescription(T metric);
+
     protected abstract MetricType getMetricType(T metric);
 }

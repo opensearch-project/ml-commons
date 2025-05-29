@@ -394,16 +394,13 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
             if (model != null) {
                 if (model.getConnector() == null && model.getConnectorId() != null) {
                     mlModelManager.getConnector(model.getConnectorId(), model.getTenantId(), ActionListener.wrap(connector -> {
-                        MLOperationalMetricsCounter.getInstance().incrementCounter(
-                            OperationalMetric.MODEL_PREDICT_COUNT,
-                            model.getTags(connector)
-                        );
+                        MLOperationalMetricsCounter
+                            .getInstance()
+                            .incrementCounter(OperationalMetric.MODEL_PREDICT_COUNT, model.getTags(connector));
 
-                        MLOperationalMetricsCounter.getInstance().recordHistogram(
-                            OperationalMetric.MODEL_PREDICT_LATENCY,
-                            durationInMs,
-                            model.getTags(connector)
-                        );
+                        MLOperationalMetricsCounter
+                            .getInstance()
+                            .recordHistogram(OperationalMetric.MODEL_PREDICT_LATENCY, durationInMs, model.getTags(connector));
 
                         internalListener.onResponse(output);
                     }, e -> {
@@ -413,15 +410,10 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     return;
                 }
 
-                MLOperationalMetricsCounter.getInstance().incrementCounter(
-                    OperationalMetric.MODEL_PREDICT_COUNT,
-                    model.getTags()
-                );
-                MLOperationalMetricsCounter.getInstance().recordHistogram(
-                    OperationalMetric.MODEL_PREDICT_LATENCY,
-                    durationInMs,
-                    model.getTags()
-                );
+                MLOperationalMetricsCounter.getInstance().incrementCounter(OperationalMetric.MODEL_PREDICT_COUNT, model.getTags());
+                MLOperationalMetricsCounter
+                    .getInstance()
+                    .recordHistogram(OperationalMetric.MODEL_PREDICT_LATENCY, durationInMs, model.getTags());
 
                 internalListener.onResponse(output);
             } else {
@@ -517,7 +509,8 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                         predictor.asyncPredict(mlInput, trackPredictDurationListener); // with listener
                     } else {
                         long startTime = System.nanoTime();
-                        MLOutput output = mlModelManager.trackPredictDuration(modelId, () -> predictor.predict(mlInput)); // without listener
+                        MLOutput output = mlModelManager.trackPredictDuration(modelId, () -> predictor.predict(mlInput)); // without
+                                                                                                                          // listener
                         if (output instanceof MLPredictionOutput) {
                             ((MLPredictionOutput) output).setStatus(MLTaskState.COMPLETED.name());
                         }
