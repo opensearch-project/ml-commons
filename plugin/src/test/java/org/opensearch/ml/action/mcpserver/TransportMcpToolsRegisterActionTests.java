@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package org.opensearch.ml.action.mcpserver;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -37,7 +42,7 @@ import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.mcpserver.requests.register.MLMcpToolsRegisterNodesRequest;
-import org.opensearch.ml.common.transport.mcpserver.requests.register.RegisterMcpTool;
+import org.opensearch.ml.common.transport.mcpserver.requests.register.McpToolRegisterInput;
 import org.opensearch.ml.common.transport.mcpserver.responses.register.MLMcpToolsRegisterNodeResponse;
 import org.opensearch.ml.common.transport.mcpserver.responses.register.MLMcpToolsRegisterNodesResponse;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
@@ -99,7 +104,7 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
             return null;
         }).when(mlIndicesHandler).initMLMcpToolsIndex(isA(ActionListener.class));
         doAnswer(invocationOnMock -> {
-            ActionListener<List<RegisterMcpTool>> actionListener = invocationOnMock.getArgument(1);
+            ActionListener<List<McpToolRegisterInput>> actionListener = invocationOnMock.getArgument(1);
             actionListener.onResponse(List.of());
             return null;
         }).when(mcpToolsHelper).searchToolsWithVersion(isA(List.class), isA(ActionListener.class));
@@ -153,7 +158,7 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
 
     public void test_doExecute_success() {
         MLMcpToolsRegisterNodesRequest nodesRequest = mock(MLMcpToolsRegisterNodesRequest.class);
-        List<RegisterMcpTool> mcpTools = List.of(getRegisterMcpTool());
+        List<McpToolRegisterInput> mcpTools = List.of(getRegisterMcpTool());
         when(nodesRequest.getMcpTools()).thenReturn(mcpTools);
         transportMcpToolsRegisterAction.doExecute(task, nodesRequest, listener);
         ArgumentCaptor<MLMcpToolsRegisterNodesResponse> argumentCaptor = ArgumentCaptor.forClass(MLMcpToolsRegisterNodesResponse.class);
@@ -178,7 +183,7 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
             mcpToolsHelper
         );
         MLMcpToolsRegisterNodesRequest nodesRequest = mock(MLMcpToolsRegisterNodesRequest.class);
-        List<RegisterMcpTool> mcpTools = List.of(getRegisterMcpTool());
+        List<McpToolRegisterInput> mcpTools = List.of(getRegisterMcpTool());
         when(nodesRequest.getMcpTools()).thenReturn(mcpTools);
         transportMcpToolsRegisterAction.doExecute(task, nodesRequest, listener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -192,7 +197,7 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
     public void test_doExecute_clientThreadContextException() {
         when(client.threadPool()).thenThrow(new RuntimeException("unexpected error"));
         MLMcpToolsRegisterNodesRequest nodesRequest = mock(MLMcpToolsRegisterNodesRequest.class);
-        List<RegisterMcpTool> mcpTools = List.of(getRegisterMcpTool());
+        List<McpToolRegisterInput> mcpTools = List.of(getRegisterMcpTool());
         when(nodesRequest.getMcpTools()).thenReturn(mcpTools);
         transportMcpToolsRegisterAction.doExecute(task, nodesRequest, listener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -207,7 +212,7 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
             return null;
         }).when(mlIndicesHandler).initMLMcpToolsIndex(isA(ActionListener.class));
         MLMcpToolsRegisterNodesRequest nodesRequest = mock(MLMcpToolsRegisterNodesRequest.class);
-        List<RegisterMcpTool> mcpTools = List.of(getRegisterMcpTool());
+        List<McpToolRegisterInput> mcpTools = List.of(getRegisterMcpTool());
         when(nodesRequest.getMcpTools()).thenReturn(mcpTools);
         transportMcpToolsRegisterAction.doExecute(task, nodesRequest, listener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -217,12 +222,12 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
 
     public void test_doExecute_failedToSearchIndex() {
         doAnswer(invocationOnMock -> {
-            ActionListener<List<RegisterMcpTool>> actionListener = invocationOnMock.getArgument(1);
+            ActionListener<List<McpToolRegisterInput>> actionListener = invocationOnMock.getArgument(1);
             actionListener.onFailure(new RuntimeException("Network issue"));
             return null;
         }).when(mcpToolsHelper).searchToolsWithVersion(isA(List.class), isA(ActionListener.class));
         MLMcpToolsRegisterNodesRequest nodesRequest = mock(MLMcpToolsRegisterNodesRequest.class);
-        List<RegisterMcpTool> mcpTools = List.of(getRegisterMcpTool());
+        List<McpToolRegisterInput> mcpTools = List.of(getRegisterMcpTool());
         when(nodesRequest.getMcpTools()).thenReturn(mcpTools);
         transportMcpToolsRegisterAction.doExecute(task, nodesRequest, listener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -232,12 +237,12 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
 
     public void test_doExecute_toolExists() {
         doAnswer(invocationOnMock -> {
-            ActionListener<List<RegisterMcpTool>> actionListener = invocationOnMock.getArgument(1);
+            ActionListener<List<McpToolRegisterInput>> actionListener = invocationOnMock.getArgument(1);
             actionListener.onResponse(List.of(getRegisterMcpTool()));
             return null;
         }).when(mcpToolsHelper).searchToolsWithVersion(isA(List.class), isA(ActionListener.class));
         MLMcpToolsRegisterNodesRequest nodesRequest = mock(MLMcpToolsRegisterNodesRequest.class);
-        List<RegisterMcpTool> mcpTools = List.of(getRegisterMcpTool());
+        List<McpToolRegisterInput> mcpTools = List.of(getRegisterMcpTool());
         when(nodesRequest.getMcpTools()).thenReturn(mcpTools);
         transportMcpToolsRegisterAction.doExecute(task, nodesRequest, listener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -266,7 +271,7 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).bulk(any(), isA(ActionListener.class));
         MLMcpToolsRegisterNodesRequest nodesRequest = mock(MLMcpToolsRegisterNodesRequest.class);
-        List<RegisterMcpTool> mcpTools = new ArrayList<>();
+        List<McpToolRegisterInput> mcpTools = new ArrayList<>();
         mcpTools.add(getRegisterMcpTool());
         when(nodesRequest.getMcpTools()).thenReturn(mcpTools);
         transportMcpToolsRegisterAction.doExecute(task, nodesRequest, listener);
@@ -309,7 +314,7 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).bulk(any(), isA(ActionListener.class));
         MLMcpToolsRegisterNodesRequest nodesRequest = mock(MLMcpToolsRegisterNodesRequest.class);
-        List<RegisterMcpTool> mcpTools = new ArrayList<>();
+        List<McpToolRegisterInput> mcpTools = new ArrayList<>();
         mcpTools.add(getRegisterMcpTool());
         when(nodesRequest.getMcpTools()).thenReturn(mcpTools);
         transportMcpToolsRegisterAction.doExecute(task, nodesRequest, listener);
@@ -335,7 +340,7 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(), isA(ActionListener.class));
         MLMcpToolsRegisterNodesRequest nodesRequest = mock(MLMcpToolsRegisterNodesRequest.class);
-        List<RegisterMcpTool> mcpTools = new ArrayList<>();
+        List<McpToolRegisterInput> mcpTools = new ArrayList<>();
         mcpTools.add(getRegisterMcpTool());
         when(nodesRequest.getMcpTools()).thenReturn(mcpTools);
         transportMcpToolsRegisterAction.doExecute(task, nodesRequest, listener);
@@ -354,7 +359,7 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
             return null;
         }).when(client).execute(any(), any(), isA(ActionListener.class));
         MLMcpToolsRegisterNodesRequest nodesRequest = mock(MLMcpToolsRegisterNodesRequest.class);
-        List<RegisterMcpTool> mcpTools = new ArrayList<>();
+        List<McpToolRegisterInput> mcpTools = new ArrayList<>();
         mcpTools.add(getRegisterMcpTool());
         when(nodesRequest.getMcpTools()).thenReturn(mcpTools);
         transportMcpToolsRegisterAction.doExecute(task, nodesRequest, listener);
@@ -366,8 +371,8 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
         );
     }
 
-    private RegisterMcpTool getRegisterMcpTool() {
-        RegisterMcpTool registerMcpTool = new RegisterMcpTool(
+    private McpToolRegisterInput getRegisterMcpTool() {
+        McpToolRegisterInput registerMcpTool = new McpToolRegisterInput(
             "ListIndexTool",
             "ListIndexTool",
             "OpenSearch index name list, separated by comma. for example: [\\\"index1\\\", \\\"index2\\\"], use empty array [] to list all indices in the cluster",

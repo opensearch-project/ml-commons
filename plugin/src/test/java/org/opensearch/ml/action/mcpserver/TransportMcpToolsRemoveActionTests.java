@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package org.opensearch.ml.action.mcpserver;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -36,7 +41,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.spi.tools.Tool;
-import org.opensearch.ml.common.transport.mcpserver.requests.register.RegisterMcpTool;
+import org.opensearch.ml.common.transport.mcpserver.requests.register.McpToolRegisterInput;
 import org.opensearch.ml.common.transport.mcpserver.requests.remove.MLMcpToolsRemoveNodesRequest;
 import org.opensearch.ml.common.transport.mcpserver.responses.remove.MLMcpToolsRemoveNodeResponse;
 import org.opensearch.ml.common.transport.mcpserver.responses.remove.MLMcpToolsRemoveNodesResponse;
@@ -94,7 +99,7 @@ public class TransportMcpToolsRemoveActionTests extends OpenSearchTestCase {
         TestHelper.mockClientStashContext(client, settings);
         when(toolFactoryWrapper.getToolsFactories()).thenReturn(toolFactories);
         doAnswer(invocationOnMock -> {
-            ActionListener<List<RegisterMcpTool>> actionListener = invocationOnMock.getArgument(1);
+            ActionListener<List<McpToolRegisterInput>> actionListener = invocationOnMock.getArgument(1);
             actionListener.onResponse(getRegisterMcpTools());
             return null;
         }).when(mcpToolsHelper).searchToolsWithVersion(isA(List.class), isA(ActionListener.class));
@@ -210,7 +215,7 @@ public class TransportMcpToolsRemoveActionTests extends OpenSearchTestCase {
 
     public void test_doExecute_allToolsNotExists() {
         doAnswer(invocationOnMock -> {
-            ActionListener<List<RegisterMcpTool>> actionListener = invocationOnMock.getArgument(1);
+            ActionListener<List<McpToolRegisterInput>> actionListener = invocationOnMock.getArgument(1);
             actionListener.onResponse(List.of());
             return null;
         }).when(mcpToolsHelper).searchToolsWithVersion(isA(List.class), isA(ActionListener.class));
@@ -225,7 +230,7 @@ public class TransportMcpToolsRemoveActionTests extends OpenSearchTestCase {
 
     public void test_doExecute_partialToolsNotExists() {
         doAnswer(invocationOnMock -> {
-            ActionListener<List<RegisterMcpTool>> actionListener = invocationOnMock.getArgument(1);
+            ActionListener<List<McpToolRegisterInput>> actionListener = invocationOnMock.getArgument(1);
             actionListener.onResponse(getRegisterMcpTools());
             return null;
         }).when(mcpToolsHelper).searchToolsWithVersion(isA(List.class), isA(ActionListener.class));
@@ -361,8 +366,8 @@ public class TransportMcpToolsRemoveActionTests extends OpenSearchTestCase {
         return toolNames;
     }
 
-    private List<RegisterMcpTool> getRegisterMcpTools() {
-        RegisterMcpTool listIndexTool = new RegisterMcpTool("ListIndexTool", "ListIndexTool", "", Map.of(), Map.of(), null, null);
+    private List<McpToolRegisterInput> getRegisterMcpTools() {
+        McpToolRegisterInput listIndexTool = new McpToolRegisterInput("ListIndexTool", "ListIndexTool", "", Map.of(), Map.of(), null, null);
         listIndexTool.setVersion(1L);
         return List.of(listIndexTool);
     }

@@ -46,10 +46,10 @@ import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsUpdateAction;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsUpdateOnNodesAction;
-import org.opensearch.ml.common.transport.mcpserver.requests.BaseMcpTool;
-import org.opensearch.ml.common.transport.mcpserver.requests.register.RegisterMcpTool;
+import org.opensearch.ml.common.transport.mcpserver.requests.McpToolBaseInput;
+import org.opensearch.ml.common.transport.mcpserver.requests.register.McpToolRegisterInput;
 import org.opensearch.ml.common.transport.mcpserver.requests.update.MLMcpToolsUpdateNodesRequest;
-import org.opensearch.ml.common.transport.mcpserver.requests.update.UpdateMcpTool;
+import org.opensearch.ml.common.transport.mcpserver.requests.update.McpToolUpdateInput;
 import org.opensearch.ml.common.transport.mcpserver.responses.update.MLMcpToolsUpdateNodesResponse;
 import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
@@ -120,7 +120,7 @@ public class TransportMcpToolsUpdateAction extends HandledTransportAction<Action
                                 .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, x.getSourceAsString())
                         ) {
                             ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                            RegisterMcpTool registerMcpTool = RegisterMcpTool.parse(parser);
+                            McpToolRegisterInput registerMcpTool = McpToolRegisterInput.parse(parser);
                             updateToolSet.remove(registerMcpTool.getName());
                             SearchedMcpToolWrapper updateMcpToolWrapper = new SearchedMcpToolWrapper.SearchedMcpToolWrapperBuilder()
                                 .seqNo(x.getSeqNo())
@@ -150,7 +150,7 @@ public class TransportMcpToolsUpdateAction extends HandledTransportAction<Action
             });
             mcpToolsHelper
                 .searchToolsWithPrimaryTermAndSeqNo(
-                    updateNodesRequest.getMcpTools().stream().map(UpdateMcpTool::getName).toList(),
+                    updateNodesRequest.getMcpTools().stream().map(McpToolUpdateInput::getName).toList(),
                     searchResultListener
                 );
         } catch (Exception e) {
@@ -178,7 +178,7 @@ public class TransportMcpToolsUpdateAction extends HandledTransportAction<Action
                     updateMcpToolsOnNodes(
                         new StringBuilder(),
                         mergeDocFields(updateNodesRequest, searchedMcpToolWrappers, bulkResponse),
-                        updateNodesRequest.getMcpTools().stream().map(UpdateMcpTool::getName).collect(Collectors.toUnmodifiableSet()),
+                        updateNodesRequest.getMcpTools().stream().map(McpToolUpdateInput::getName).collect(Collectors.toUnmodifiableSet()),
                         restoreListener
                     );
                 } else {
@@ -231,17 +231,17 @@ public class TransportMcpToolsUpdateAction extends HandledTransportAction<Action
                 .stream()
                 .collect(Collectors.toMap(x -> x.getMcpTool().getName(), x -> x));
             BulkRequest bulkRequest = new BulkRequest();
-            for (UpdateMcpTool mcpTool : updateNodesRequest.getMcpTools()) {
+            for (McpToolUpdateInput mcpTool : updateNodesRequest.getMcpTools()) {
                 UpdateRequest updateRequest = new UpdateRequest(MLIndex.MCP_TOOLS.getIndexName(), mcpTool.getName());
                 updateRequest.setIfSeqNo(searchedMcpToolWrapperMap.get(mcpTool.getName()).getSeqNo());
                 updateRequest.setIfPrimaryTerm(searchedMcpToolWrapperMap.get(mcpTool.getName()).getPrimaryTerm());
                 Map<String, Object> source = new HashMap<>();
                 if (mcpTool.getDescription() != null)
-                    source.put(BaseMcpTool.DESCRIPTION_FIELD, mcpTool.getDescription());
+                    source.put(McpToolBaseInput.DESCRIPTION_FIELD, mcpTool.getDescription());
                 if (mcpTool.getParameters() != null)
-                    source.put(BaseMcpTool.PARAMS_FIELD, mcpTool.getParameters());
+                    source.put(McpToolBaseInput.PARAMS_FIELD, mcpTool.getParameters());
                 if (mcpTool.getAttributes() != null)
-                    source.put(BaseMcpTool.ATTRIBUTES_FIELD, mcpTool.getAttributes());
+                    source.put(McpToolBaseInput.ATTRIBUTES_FIELD, mcpTool.getAttributes());
                 source.put(CommonValue.LAST_UPDATE_TIME_FIELD, Instant.now().toEpochMilli());
                 updateRequest.doc(source);
                 bulkRequest.add(updateRequest);
@@ -259,7 +259,7 @@ public class TransportMcpToolsUpdateAction extends HandledTransportAction<Action
         List<SearchedMcpToolWrapper> updateMcpToolWrappers,
         BulkResponse bulkResponse
     ) {
-        Map<String, RegisterMcpTool> mcpToolsMap = updateMcpToolWrappers
+        Map<String, McpToolRegisterInput> mcpToolsMap = updateMcpToolWrappers
             .stream()
             .collect(Collectors.toMap(x -> x.getMcpTool().getName(), SearchedMcpToolWrapper::getMcpTool));
         Map<String, Long> versions = Arrays
@@ -267,7 +267,7 @@ public class TransportMcpToolsUpdateAction extends HandledTransportAction<Action
             .filter(x -> !x.isFailed())
             .collect(Collectors.toMap(BulkItemResponse::getId, x -> x.getResponse().getVersion()));
         updateNodesRequest.getMcpTools().forEach(x -> {
-            RegisterMcpTool registerMcpTool = mcpToolsMap.get(x.getName());
+            McpToolRegisterInput registerMcpTool = mcpToolsMap.get(x.getName());
             x.setType(registerMcpTool.getType());
             if (x.getAttributes() == null) {
                 x.setAttributes(registerMcpTool.getAttributes());
@@ -340,7 +340,7 @@ public class TransportMcpToolsUpdateAction extends HandledTransportAction<Action
     @Builder
     @Data
     private static class SearchedMcpToolWrapper {
-        private RegisterMcpTool mcpTool;
+        private McpToolRegisterInput mcpTool;
         private Long primaryTerm;
         private Long seqNo;
         private Long version;

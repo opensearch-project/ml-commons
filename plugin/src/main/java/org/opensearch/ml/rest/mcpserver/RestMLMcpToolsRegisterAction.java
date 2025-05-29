@@ -26,7 +26,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRegisterAction;
 import org.opensearch.ml.common.transport.mcpserver.requests.register.MLMcpToolsRegisterNodesRequest;
-import org.opensearch.ml.common.transport.mcpserver.requests.register.RegisterMcpTool;
+import org.opensearch.ml.common.transport.mcpserver.requests.register.McpToolRegisterInput;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
@@ -85,7 +85,7 @@ public class RestMLMcpToolsRegisterAction extends BaseRestHandler {
         }
         String duplicateName = null;
         Set<String> uniqueName = new HashSet<>();
-        for (RegisterMcpTool mcpTool : registerNodesRequest.getMcpTools()) {
+        for (McpToolRegisterInput mcpTool : registerNodesRequest.getMcpTools()) {
             if (uniqueName.contains(mcpTool.getName())) {
                 duplicateName = mcpTool.getName();
                 break;
@@ -102,7 +102,7 @@ public class RestMLMcpToolsRegisterAction extends BaseRestHandler {
             .getMcpTools()
 
             .stream()
-            .map(RegisterMcpTool::getType)
+            .map(McpToolRegisterInput::getType)
             .filter(type -> !buildInToolNames.contains(type))
             .collect(Collectors.toSet());
         if (!unrecognizedTools.isEmpty()) {

@@ -30,12 +30,12 @@ import org.opensearch.search.SearchModule;
 
 public class MLMcpToolsUpdateNodesRequestTest {
 
-    private List<UpdateMcpTool> sampleTools;
+    private List<McpToolUpdateInput> sampleTools;
     private final String[] nodeIds = { "nodeA", "nodeB" };
 
     @Before
     public void setup() {
-        UpdateMcpTool updateMcpTool = new UpdateMcpTool(
+        McpToolUpdateInput updateMcpTool = new McpToolUpdateInput(
             "updated_tool",
             "Updated description",
             Collections.singletonMap("parameters", "value"),
@@ -71,7 +71,7 @@ public class MLMcpToolsUpdateNodesRequestTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void testStreamSerializationWithEmptyName() throws IOException {
-        UpdateMcpTool updateMcpTool = new UpdateMcpTool(
+        McpToolUpdateInput updateMcpTool = new McpToolUpdateInput(
             null,
             "Updated description",
             Collections.singletonMap("parameters", "value"),

@@ -29,11 +29,11 @@ import org.opensearch.transport.TransportRequest;
 
 public class MLMcpToolsUpdateNodeRequestTest {
 
-    private List<UpdateMcpTool> sampleTools;
+    private List<McpToolUpdateInput> sampleTools;
 
     @Before
     public void setUp() {
-        UpdateMcpTool updateMcpTool = new UpdateMcpTool(
+        McpToolUpdateInput updateMcpTool = new McpToolUpdateInput(
             "updated_tool",
             "Updated description",
             Collections.singletonMap("parameters", "value"),
@@ -103,7 +103,7 @@ public class MLMcpToolsUpdateNodeRequestTest {
 
     @Test
     public void testEmptyToolsHandling() throws IOException {
-        List<UpdateMcpTool> emptyTools = Collections.emptyList();
+        List<McpToolUpdateInput> emptyTools = Collections.emptyList();
         MLMcpToolsUpdateNodeRequest request = new MLMcpToolsUpdateNodeRequest(emptyTools);
 
         BytesStreamOutput output = new BytesStreamOutput();
