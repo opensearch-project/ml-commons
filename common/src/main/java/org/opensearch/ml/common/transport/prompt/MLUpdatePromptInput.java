@@ -71,6 +71,7 @@ public class MLUpdatePromptInput implements ToXContentObject, Writeable {
         String tenantId,
         Instant lastUpdateTime
     ) {
+        // TODO: I will include unique name restriction check in my model execution
         this.name = name;
         this.description = description;
         this.version = version;
@@ -163,7 +164,6 @@ public class MLUpdatePromptInput implements ToXContentObject, Writeable {
         Map<String, String> prompt = null;
         List<String> tags = null;
         String tenantId = null;
-        Instant lastUpdateTime = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -204,7 +204,6 @@ public class MLUpdatePromptInput implements ToXContentObject, Writeable {
             .prompt(prompt)
             .tags(tags)
             .tenantId(tenantId)
-            .lastUpdateTime(lastUpdateTime)
             .build();
     }
 }

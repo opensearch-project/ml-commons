@@ -6,6 +6,8 @@
 package org.opensearch.ml.action.prompt;
 
 import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX;
+import static org.opensearch.ml.prompt.MLPromptManager.handleFailure;
+import static org.opensearch.ml.prompt.MLPromptManager.validateTags;
 
 import java.time.Instant;
 
@@ -78,6 +80,15 @@ public class UpdatePromptTransportAction extends HandledTransportAction<MLUpdate
         MLUpdatePromptInput mlUpdatePromptInput = mlUpdatePromptRequest.getMlUpdatePromptInput();
         String promptId = mlUpdatePromptRequest.getPromptId();
         String tenantId = mlUpdatePromptInput.getTenantId();
+        if (mlUpdatePromptInput.getTags() != null && !validateTags(mlUpdatePromptInput.getTags())) {
+            handleFailure(
+                new IllegalArgumentException("Number of tags must not exceed 20 and length of each tag must not exceed 35"),
+                promptId,
+                actionListener,
+                "Tags Exceeds max number of tags or max length of tag"
+            );
+            return;
+        }
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
             return;
         }
@@ -166,18 +177,5 @@ public class UpdatePromptTransportAction extends HandledTransportAction<MLUpdate
         }
         UpdateResponse updateResponse = updateDataObjectResponse.updateResponse();
         listener.onResponse(updateResponse);
-    }
-
-    /**
-     * Notify the listener of the failure exception. while fetching the prompt object from the system index
-     *
-     * @param exception The failure exception
-     * @param promptId The prompt id
-     * @param listener ActionListener to be notified of the response
-     * @param likelyCause the likely cause message of failure
-     */
-    private void handleFailure(Exception exception, String promptId, ActionListener<UpdateResponse> listener, String likelyCause) {
-        log.error(likelyCause, promptId, exception);
-        listener.onFailure(exception);
     }
 }

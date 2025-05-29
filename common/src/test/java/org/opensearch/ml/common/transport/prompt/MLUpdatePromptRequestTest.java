@@ -76,6 +76,14 @@ public class MLUpdatePromptRequestTest {
     }
 
     @Test
+    public void validateWithNullPromptInputAndNullPromptIdException() {
+        MLUpdatePromptRequest mlUpdatePromptRequest = MLUpdatePromptRequest.builder().build();
+        ActionRequestValidationException exception = mlUpdatePromptRequest.validate();
+        Assert
+            .assertEquals("Validation Failed: 1: ML prompt id can't be null;2: Update Prompt Input can't be null;", exception.getMessage());
+    }
+
+    @Test
     public void fromActionRequestWithUpdatePromptRequestSuccess() {
         MLUpdatePromptRequest parsedRequest = MLUpdatePromptRequest.fromActionRequest(mlUpdatePromptRequest);
         Assert.assertSame(parsedRequest, mlUpdatePromptRequest);

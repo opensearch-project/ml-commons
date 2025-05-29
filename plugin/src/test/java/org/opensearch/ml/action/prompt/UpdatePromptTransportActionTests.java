@@ -15,6 +15,7 @@ import static org.mockito.Mockito.when;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.junit.Before;
@@ -148,6 +149,55 @@ public class UpdatePromptTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void testDoExecute_tags_size_restriction_fail() {
+        MLPrompt mlPrompt = createMLPrompt();
+        doAnswer(invocation -> {
+            ActionListener<MLPrompt> listener = invocation.getArgument(2);
+            listener.onResponse(mlPrompt);
+            return null;
+        }).when(mlPromptManager).getPromptAsync(getDataObjectRequestArgumentCaptor.capture(), any(), any());
+        List<String> tags = Collections.nCopies(MLPromptManager.MAX_NUMBER_OF_TAGS + 1, "tag");
+        mlUpdatePromptInput.setTags(tags);
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new IllegalArgumentException("Number of tags must not exceed 20 and length of each tag must not exceed 35"));
+            return null;
+        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+
+        updatePromptTransportAction.doExecute(task, mlUpdatePromptRequest, actionListener);
+
+        ArgumentCaptor<IllegalArgumentException> argumentCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Number of tags must not exceed 20 and length of each tag must not exceed 35", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testDoExecute_tag_length_restriction_fail() {
+        MLPrompt mlPrompt = createMLPrompt();
+        doAnswer(invocation -> {
+            ActionListener<MLPrompt> listener = invocation.getArgument(2);
+            listener.onResponse(mlPrompt);
+            return null;
+        }).when(mlPromptManager).getPromptAsync(getDataObjectRequestArgumentCaptor.capture(), any(), any());
+
+        List<String> tags = Collections.singletonList("a".repeat(MLPromptManager.MAX_LENGTH_OF_TAG + 1));
+        mlUpdatePromptInput.setTags(tags);
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new IllegalArgumentException("Number of tags must not exceed 20 and length of each tag must not exceed 35"));
+            return null;
+        }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
+
+        updatePromptTransportAction.doExecute(task, mlUpdatePromptRequest, actionListener);
+
+        ArgumentCaptor<IllegalArgumentException> argumentCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Number of tags must not exceed 20 and length of each tag must not exceed 35", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
     public void testDoExecute_multi_tenancy_fail() throws InterruptedException {
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
 
@@ -176,7 +226,7 @@ public class UpdatePromptTransportActionTests extends OpenSearchTestCase {
 
         ArgumentCaptor<OpenSearchStatusException> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Failed to update data object in index .plugins-ml-prompt", argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to find prompt with the provided prompt id: prompt_id", argumentCaptor.getValue().getMessage());
     }
 
     private MLPrompt createMLPrompt() {

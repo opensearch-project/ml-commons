@@ -8,6 +8,7 @@ package org.opensearch.ml.prompt;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
+import java.util.List;
 import java.util.Objects;
 
 import org.opensearch.ExceptionsHelper;
@@ -16,6 +17,7 @@ import org.opensearch.action.get.GetResponse;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.action.ActionResponse;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
@@ -35,6 +37,9 @@ import lombok.extern.log4j.Log4j2;
  */
 @Log4j2
 public class MLPromptManager {
+    public static final int MAX_NUMBER_OF_TAGS = 20;
+    public static final int MAX_LENGTH_OF_TAG = 35;
+
     private final Client client;
     private final SdkClient sdkClient;
 
@@ -75,11 +80,10 @@ public class MLPromptManager {
     ) {
         if (throwable != null) {
             Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-            handleFailure(cause, promptId, listener, "Failed to get ML prompt {}");
+            listener.onFailure(cause);
             return;
         }
         processResponse(getAsyncResponse, promptId, listener);
-
     }
 
     /**
@@ -89,7 +93,12 @@ public class MLPromptManager {
      * @param promptId the prompt id of prompts that needed to be retrieved
      * @param listener the listener to be notified when the throwable is handled
      */
-    private void handleFailure(Exception exception, String promptId, ActionListener<MLPrompt> listener, String likelyCause) {
+    public static <T extends ActionResponse> void handleFailure(
+        Exception exception,
+        String promptId,
+        ActionListener<T> listener,
+        String likelyCause
+    ) {
         if (ExceptionsHelper.unwrap(exception, IndexNotFoundException.class) != null) {
             log.error("Failed to get prompt index", exception);
             listener
@@ -119,7 +128,17 @@ public class MLPromptManager {
             MLPrompt mlPrompt = MLPrompt.parse(parser);
             listener.onResponse(mlPrompt);
         } catch (Exception e) {
-            handleFailure(e, promptId, listener, "Failed to parse GetDataObjectResponse for prompt {}");
+            listener.onFailure(e);
         }
+    }
+
+    /**
+     * Checks if the tags exceed max number of tags or max length of tag.
+     *
+     * @param tags tags passed in via MLCreatePromptInput or MLUpdatePromptInput
+     * @return true if the tags are valid, false otherwise
+     */
+    public static boolean validateTags(List<String> tags) {
+        return tags.size() <= MAX_NUMBER_OF_TAGS && tags.stream().allMatch(tag -> tag.length() <= MAX_LENGTH_OF_TAG);
     }
 }
