@@ -6,6 +6,7 @@
 package org.opensearch.ml.stats.otel.counters;
 
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.stats.otel.metrics.MetricType;
 import org.opensearch.ml.stats.otel.metrics.OperationalMetric;
 import org.opensearch.telemetry.metrics.MetricsRegistry;
 
@@ -40,5 +41,10 @@ public class MLOperationalMetricsCounter extends AbstractMLMetricsCounter<Operat
     @Override
     protected String getMetricDescription(OperationalMetric metric) {
         return metric.getDescription();
+    }
+
+    @Override
+    protected MetricType getMetricType(OperationalMetric metric) {
+        return metric.getType();
     }
 }

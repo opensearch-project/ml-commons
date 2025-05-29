@@ -73,6 +73,8 @@ import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
+import org.opensearch.ml.stats.otel.counters.MLOperationalMetricsCounter;
+import org.opensearch.ml.stats.otel.metrics.OperationalMetric;
 import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportResponseHandler;
@@ -381,6 +383,56 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         runPredict(modelId, tenantId, mlTask, mlInput, functionName, actionName, internalListener);
     }
 
+    private void recordPredictMetrics(
+        String modelId,
+        double durationInMs,
+        MLTaskResponse output,
+        ActionListener<MLTaskResponse> internalListener
+    ) {
+        // todo: store tags in cache and fetch from cache
+        mlModelManager.getModel(modelId, ActionListener.wrap(model -> {
+            if (model != null) {
+                if (model.getConnector() == null && model.getConnectorId() != null) {
+                    mlModelManager.getConnector(model.getConnectorId(), model.getTenantId(), ActionListener.wrap(connector -> {
+                        MLOperationalMetricsCounter.getInstance().incrementCounter(
+                            OperationalMetric.MODEL_PREDICT_COUNT,
+                            model.getTags(connector)
+                        );
+
+                        MLOperationalMetricsCounter.getInstance().recordHistogram(
+                            OperationalMetric.MODEL_PREDICT_LATENCY,
+                            durationInMs,
+                            model.getTags(connector)
+                        );
+
+                        internalListener.onResponse(output);
+                    }, e -> {
+                        log.error("Failed to get connector for latency metrics", e);
+                        internalListener.onResponse(output);
+                    }));
+                    return;
+                }
+
+                MLOperationalMetricsCounter.getInstance().incrementCounter(
+                    OperationalMetric.MODEL_PREDICT_COUNT,
+                    model.getTags()
+                );
+                MLOperationalMetricsCounter.getInstance().recordHistogram(
+                    OperationalMetric.MODEL_PREDICT_LATENCY,
+                    durationInMs,
+                    model.getTags()
+                );
+
+                internalListener.onResponse(output);
+            } else {
+                internalListener.onResponse(output);
+            }
+        }, e -> {
+            log.error("Failed to get model for latency metrics", e);
+            internalListener.onResponse(output);
+        }));
+    }
+
     private void runPredict(
         String modelId,
         String tenantId,
@@ -401,7 +453,6 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                     if (mlInput.getAlgorithm() == FunctionName.REMOTE) {
                         long startTime = System.nanoTime();
                         ActionListener<MLTaskResponse> trackPredictDurationListener = ActionListener.wrap(output -> {
-
                             if (output.getOutput() instanceof ModelTensorOutput) {
                                 validateOutputSchema(modelId, (ModelTensorOutput) output.getOutput());
                             }
@@ -459,14 +510,14 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                                 }
                             } else {
                                 handleAsyncMLTaskComplete(mlTask);
-                                mlModelManager.trackPredictDuration(modelId, startTime);
-                                internalListener.onResponse(output);
+                                double durationInMs = (System.nanoTime() - startTime) / 1_000_000.0;
+                                recordPredictMetrics(modelId, durationInMs, output, internalListener);
                             }
                         }, e -> handlePredictFailure(mlTask, internalListener, e, false, modelId, actionName));
                         predictor.asyncPredict(mlInput, trackPredictDurationListener); // with listener
                     } else {
-                        MLOutput output = mlModelManager.trackPredictDuration(modelId, () -> predictor.predict(mlInput)); // without
-                                                                                                                          // listener
+                        long startTime = System.nanoTime();
+                        MLOutput output = mlModelManager.trackPredictDuration(modelId, () -> predictor.predict(mlInput)); // without listener
                         if (output instanceof MLPredictionOutput) {
                             ((MLPredictionOutput) output).setStatus(MLTaskState.COMPLETED.name());
                         }
@@ -475,7 +526,8 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                         }
                         // Once prediction complete, reduce ML_EXECUTING_TASK_COUNT and update task state
                         handleAsyncMLTaskComplete(mlTask);
-                        internalListener.onResponse(new MLTaskResponse(output));
+                        double durationInMs = (System.nanoTime() - startTime) / 1_000_000.0;
+                        recordPredictMetrics(modelId, durationInMs, new MLTaskResponse(output), internalListener);
                     }
                     return;
                 } catch (Exception e) {

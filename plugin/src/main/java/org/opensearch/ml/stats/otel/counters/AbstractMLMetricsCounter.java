@@ -10,7 +10,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.stats.otel.metrics.MetricType;
 import org.opensearch.telemetry.metrics.Counter;
+import org.opensearch.telemetry.metrics.Histogram;
 import org.opensearch.telemetry.metrics.MetricsRegistry;
 import org.opensearch.telemetry.metrics.tags.Tags;
 
@@ -27,6 +29,7 @@ public abstract class AbstractMLMetricsCounter<T extends Enum<T>> {
     protected final String clusterName;
     protected final MetricsRegistry metricsRegistry;
     protected final Map<T, Counter> metricCounterMap;
+    protected final Map<T, Histogram> metricHistogramMap;
 
     protected AbstractMLMetricsCounter(
         String clusterName,
@@ -37,8 +40,15 @@ public abstract class AbstractMLMetricsCounter<T extends Enum<T>> {
         this.clusterName = clusterName;
         this.metricsRegistry = metricsRegistry;
         this.metricCounterMap = new ConcurrentHashMap<>();
+        this.metricHistogramMap = new ConcurrentHashMap<>();
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-        Stream.of(metricClass.getEnumConstants()).forEach(metric -> metricCounterMap.computeIfAbsent(metric, this::createMetricCounter));
+        Stream.of(metricClass.getEnumConstants()).forEach(metric -> {
+            if (getMetricType(metric) == MetricType.COUNTER) {
+                metricCounterMap.computeIfAbsent(metric, this::createMetricCounter);
+            } else if (getMetricType(metric) == MetricType.HISTOGRAM) {
+                metricHistogramMap.computeIfAbsent(metric, this::createMetricHistogram);
+            }
+        });
     }
 
     public void incrementCounter(T metric) {
@@ -55,9 +65,28 @@ public abstract class AbstractMLMetricsCounter<T extends Enum<T>> {
         counter.add(1, metricsTags);
     }
 
+    public void recordHistogram(T metric, double value) {
+        recordHistogram(metric, value, null);
+    }
+
+    public void recordHistogram(T metric, double value, Tags customTags) {
+        if (!mlFeatureEnabledSetting.isMetricCollectionEnabled()) {
+            return;
+        }
+
+        Histogram histogram = metricHistogramMap.computeIfAbsent(metric, this::createMetricHistogram);
+        Tags metricsTags = (customTags == null ? Tags.create() : customTags).addTag(CLUSTER_NAME_TAG, clusterName);
+        histogram.record(value, metricsTags);
+    }
+
     private Counter createMetricCounter(T metric) {
         return metricsRegistry.createCounter(PREFIX + metric.name(), getMetricDescription(metric), UNIT);
     }
 
+    private Histogram createMetricHistogram(T metric) {
+        return metricsRegistry.createHistogram(PREFIX + metric.name(), getMetricDescription(metric), UNIT);
+    }
+
     protected abstract String getMetricDescription(T metric);
+    protected abstract MetricType getMetricType(T metric);
 }

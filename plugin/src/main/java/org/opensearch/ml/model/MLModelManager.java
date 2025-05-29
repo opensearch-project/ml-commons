@@ -141,6 +141,8 @@ import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
+import org.opensearch.ml.stats.otel.counters.MLOperationalMetricsCounter;
+import org.opensearch.ml.stats.otel.metrics.OperationalMetric;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.MLExceptionUtils;
 import org.opensearch.ml.utils.MLNodeUtils;
