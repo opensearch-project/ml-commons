@@ -21,7 +21,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsListAction;
-import org.opensearch.ml.common.transport.mcpserver.requests.register.RegisterMcpTool;
+import org.opensearch.ml.common.transport.mcpserver.requests.register.McpToolRegisterInput;
 import org.opensearch.ml.common.transport.mcpserver.responses.list.MLMcpToolsListResponse;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
@@ -68,7 +68,7 @@ public class TransportMcpToolsListAction extends HandledTransportAction<ActionRe
             listener.onFailure(new OpenSearchException(ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE));
             return;
         }
-        ActionListener<List<RegisterMcpTool>> searchListener = ActionListener
+        ActionListener<List<McpToolRegisterInput>> searchListener = ActionListener
             .wrap(r -> { listener.onResponse(new MLMcpToolsListResponse(r)); }, e -> {
                 log.error("Failed to list MCP tools", e);
                 listener.onFailure(e);

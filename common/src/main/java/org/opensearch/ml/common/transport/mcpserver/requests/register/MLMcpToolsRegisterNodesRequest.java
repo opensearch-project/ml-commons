@@ -33,14 +33,14 @@ import lombok.EqualsAndHashCode;
 @Data
 @EqualsAndHashCode(callSuper = false)
 public class MLMcpToolsRegisterNodesRequest extends BaseNodesRequest<MLMcpToolsRegisterNodesRequest> {
-    private List<RegisterMcpTool> mcpTools;
+    private List<McpToolRegisterInput> mcpTools;
 
     public MLMcpToolsRegisterNodesRequest(StreamInput in) throws IOException {
         super(in);
-        this.mcpTools = in.readList(RegisterMcpTool::new);
+        this.mcpTools = in.readList(McpToolRegisterInput::new);
     }
 
-    public MLMcpToolsRegisterNodesRequest(String[] nodeIds, List<RegisterMcpTool> mcpTools) {
+    public MLMcpToolsRegisterNodesRequest(String[] nodeIds, List<McpToolRegisterInput> mcpTools) {
         super(nodeIds);
         this.mcpTools = mcpTools;
     }
@@ -51,7 +51,7 @@ public class MLMcpToolsRegisterNodesRequest extends BaseNodesRequest<MLMcpToolsR
     }
 
     public static MLMcpToolsRegisterNodesRequest parse(XContentParser parser, String[] allNodeIds) throws IOException {
-        List<RegisterMcpTool> mcpTools = null;
+        List<McpToolRegisterInput> mcpTools = null;
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
             String fieldName = parser.currentName();
@@ -61,7 +61,7 @@ public class MLMcpToolsRegisterNodesRequest extends BaseNodesRequest<MLMcpToolsR
                 mcpTools = new ArrayList<>();
                 ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
                 while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
-                    mcpTools.add(RegisterMcpTool.parse(parser));
+                    mcpTools.add(McpToolRegisterInput.parse(parser));
                 }
             } else {
                 parser.skipChildren();

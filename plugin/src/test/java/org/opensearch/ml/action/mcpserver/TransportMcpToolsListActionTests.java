@@ -1,3 +1,8 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 package org.opensearch.ml.action.mcpserver;
 
 import static org.mockito.ArgumentMatchers.isA;
@@ -24,7 +29,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.spi.tools.Tool;
-import org.opensearch.ml.common.transport.mcpserver.requests.register.RegisterMcpTool;
+import org.opensearch.ml.common.transport.mcpserver.requests.register.McpToolRegisterInput;
 import org.opensearch.ml.common.transport.mcpserver.responses.list.MLMcpToolsListResponse;
 import org.opensearch.ml.engine.tools.ListIndexTool;
 import org.opensearch.ml.rest.mcpserver.ToolFactoryWrapper;
@@ -76,7 +81,7 @@ public class TransportMcpToolsListActionTests extends OpenSearchTestCase {
         TestHelper.mockClientStashContext(client, settings);
         when(toolFactoryWrapper.getToolsFactories()).thenReturn(toolFactories);
         doAnswer(invocationOnMock -> {
-            ActionListener<List<RegisterMcpTool>> actionListener = invocationOnMock.getArgument(0);
+            ActionListener<List<McpToolRegisterInput>> actionListener = invocationOnMock.getArgument(0);
             actionListener.onResponse(getRegisterMcpTools());
             return null;
         }).when(mcpToolsHelper).searchAllTools(isA(ActionListener.class));
@@ -123,7 +128,7 @@ public class TransportMcpToolsListActionTests extends OpenSearchTestCase {
 
     public void test_doExecute_exception() {
         doAnswer(invocationOnMock -> {
-            ActionListener<List<RegisterMcpTool>> actionListener = invocationOnMock.getArgument(0);
+            ActionListener<List<McpToolRegisterInput>> actionListener = invocationOnMock.getArgument(0);
             actionListener.onFailure(new RuntimeException("Network issue"));
             return null;
         }).when(mcpToolsHelper).searchAllTools(isA(ActionListener.class));
@@ -134,8 +139,8 @@ public class TransportMcpToolsListActionTests extends OpenSearchTestCase {
         assertEquals("Network issue", argumentCaptor.getValue().getMessage());
     }
 
-    private List<RegisterMcpTool> getRegisterMcpTools() {
-        RegisterMcpTool listIndexTool = new RegisterMcpTool("ListIndexTool", "ListIndexTool", "", Map.of(), Map.of(), null, null);
+    private List<McpToolRegisterInput> getRegisterMcpTools() {
+        McpToolRegisterInput listIndexTool = new McpToolRegisterInput("ListIndexTool", "ListIndexTool", "", Map.of(), Map.of(), null, null);
         listIndexTool.setVersion(1L);
         return List.of(listIndexTool);
     }

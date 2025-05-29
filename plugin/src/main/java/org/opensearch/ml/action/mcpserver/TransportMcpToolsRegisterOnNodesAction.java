@@ -20,7 +20,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRegisterOnNodesAction;
 import org.opensearch.ml.common.transport.mcpserver.requests.register.MLMcpToolsRegisterNodeRequest;
 import org.opensearch.ml.common.transport.mcpserver.requests.register.MLMcpToolsRegisterNodesRequest;
-import org.opensearch.ml.common.transport.mcpserver.requests.register.RegisterMcpTool;
+import org.opensearch.ml.common.transport.mcpserver.requests.register.McpToolRegisterInput;
 import org.opensearch.ml.common.transport.mcpserver.responses.register.MLMcpToolsRegisterNodeResponse;
 import org.opensearch.ml.common.transport.mcpserver.responses.register.MLMcpToolsRegisterNodesResponse;
 import org.opensearch.ml.rest.mcpserver.ToolFactoryWrapper;
@@ -108,7 +108,7 @@ public class TransportMcpToolsRegisterOnNodesAction extends
      * @param mcpTools
      * @return
      */
-    private MLMcpToolsRegisterNodeResponse registerToolsOnNode(List<RegisterMcpTool> mcpTools) {
+    private MLMcpToolsRegisterNodeResponse registerToolsOnNode(List<McpToolRegisterInput> mcpTools) {
         AtomicReference<Throwable> exception = new AtomicReference<>();
         Flux.fromStream(mcpTools.stream()).flatMap(tool -> {
             if (!McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.containsKey(tool.getName())) {
@@ -123,7 +123,7 @@ public class TransportMcpToolsRegisterOnNodesAction extends
             log
                 .error(
                     "Failed to register tool: {} in MCP server memory on node: {}",
-                    mcpTools.stream().map(RegisterMcpTool::getName).toList(),
+                    mcpTools.stream().map(McpToolRegisterInput::getName).toList(),
                     clusterService.localNode().getId()
                 );
             exception.set(e);

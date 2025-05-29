@@ -35,8 +35,8 @@ import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.spi.tools.Tool;
-import org.opensearch.ml.common.transport.mcpserver.requests.BaseMcpTool;
-import org.opensearch.ml.common.transport.mcpserver.requests.register.RegisterMcpTool;
+import org.opensearch.ml.common.transport.mcpserver.requests.McpToolBaseInput;
+import org.opensearch.ml.common.transport.mcpserver.requests.register.McpToolRegisterInput;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.rest.mcpserver.ToolFactoryWrapper;
 import org.opensearch.search.builder.SearchSourceBuilder;
@@ -69,7 +69,7 @@ public class McpToolsHelper {
     public void autoLoadAllMcpTools(ActionListener<Boolean> listener) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<Boolean> restoreListener = ActionListener.runBefore(listener, context::restore);
-            ActionListener<Map<String, Tuple<RegisterMcpTool, Long>>> searchListener = ActionListener.wrap(r -> {
+            ActionListener<Map<String, Tuple<McpToolRegisterInput, Long>>> searchListener = ActionListener.wrap(r -> {
                 r.forEach((key, value) -> {
                     if (!McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.containsKey(key)) {
                         McpAsyncServerHolder
@@ -108,7 +108,7 @@ public class McpToolsHelper {
             .schedule(() -> autoLoadAllMcpTools(listener), TimeValue.timeValueSeconds(SYNC_MCP_TOOLS_JOB_INTERVAL), GENERAL_THREAD_POOL);
     }
 
-    public McpServerFeatures.AsyncToolSpecification createToolSpecification(BaseMcpTool tool) {
+    public McpServerFeatures.AsyncToolSpecification createToolSpecification(McpToolBaseInput tool) {
         String toolName = Optional.ofNullable(tool.getName()).orElse(tool.getType());
         Tool.Factory factory = toolFactoryWrapper.getToolsFactories().get(tool.getType());
         if (factory == null) {
@@ -136,7 +136,7 @@ public class McpToolsHelper {
         );
     }
 
-    public void searchToolsWithVersion(List<String> toolNames, ActionListener<List<RegisterMcpTool>> listener) {
+    public void searchToolsWithVersion(List<String> toolNames, ActionListener<List<McpToolRegisterInput>> listener) {
         ActionListener<SearchResponse> actionListener = createSearchResponseListener(listener);
         SearchRequest searchRequest = buildSearchRequest(toolNames);
         searchRequest.source().version(true);
@@ -161,16 +161,16 @@ public class McpToolsHelper {
         return searchRequest;
     }
 
-    public void searchAllToolsWithVersion(ActionListener<Map<String, Tuple<RegisterMcpTool, Long>>> listener) {
+    public void searchAllToolsWithVersion(ActionListener<Map<String, Tuple<McpToolRegisterInput, Long>>> listener) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<Map<String, Tuple<RegisterMcpTool, Long>>> restoreListener = ActionListener
+            ActionListener<Map<String, Tuple<McpToolRegisterInput, Long>>> restoreListener = ActionListener
                 .runBefore(listener, context::restore);
             ActionListener<SearchResponse> actionListener = ActionListener.wrap(r -> {
-                Map<String, Tuple<RegisterMcpTool, Long>> mcpTools = new HashMap<>();
+                Map<String, Tuple<McpToolRegisterInput, Long>> mcpTools = new HashMap<>();
                 Arrays.stream(Objects.requireNonNull(r.getHits().getHits())).forEach(x -> {
                     long version = x.getVersion();
                     try {
-                        RegisterMcpTool mcpTool = parseMcpTool(x.getSourceAsString());
+                        McpToolRegisterInput mcpTool = parseMcpTool(x.getSourceAsString());
                         mcpTools.put(mcpTool.getName(), Tuple.tuple(mcpTool, version));
                     } catch (IOException e) {
                         restoreListener.onFailure(e);
@@ -189,14 +189,14 @@ public class McpToolsHelper {
         }
     }
 
-    public void searchAllTools(ActionListener<List<RegisterMcpTool>> listener) {
+    public void searchAllTools(ActionListener<List<McpToolRegisterInput>> listener) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<List<RegisterMcpTool>> restoreListener = ActionListener.runBefore(listener, context::restore);
+            ActionListener<List<McpToolRegisterInput>> restoreListener = ActionListener.runBefore(listener, context::restore);
             ActionListener<SearchResponse> actionListener = ActionListener.wrap(r -> {
-                List<RegisterMcpTool> mcpTools = new ArrayList<>();
+                List<McpToolRegisterInput> mcpTools = new ArrayList<>();
                 Arrays.stream(Objects.requireNonNull(r.getHits().getHits())).forEach(x -> {
                     try {
-                        RegisterMcpTool mcpTool = parseMcpTool(x.getSourceAsString());
+                        McpToolRegisterInput mcpTool = parseMcpTool(x.getSourceAsString());
                         mcpTools.add(mcpTool);
                     } catch (IOException e) {
                         listener.onFailure(e);
@@ -229,12 +229,12 @@ public class McpToolsHelper {
         return searchRequest;
     }
 
-    private ActionListener<SearchResponse> createSearchResponseListener(ActionListener<List<RegisterMcpTool>> listener) {
+    private ActionListener<SearchResponse> createSearchResponseListener(ActionListener<List<McpToolRegisterInput>> listener) {
         return ActionListener.wrap(r -> {
-            List<RegisterMcpTool> mcpTools = new ArrayList<>();
+            List<McpToolRegisterInput> mcpTools = new ArrayList<>();
             Arrays.stream(Objects.requireNonNull(r.getHits().getHits())).forEach(x -> {
                 try {
-                    RegisterMcpTool mcpTool = parseMcpTool(x.getSourceAsString());
+                    McpToolRegisterInput mcpTool = parseMcpTool(x.getSourceAsString());
                     mcpTools.add(mcpTool);
                 } catch (IOException e) {
                     listener.onFailure(e);
@@ -248,10 +248,10 @@ public class McpToolsHelper {
         });
     }
 
-    private RegisterMcpTool parseMcpTool(String input) throws IOException {
+    private McpToolRegisterInput parseMcpTool(String input) throws IOException {
         try (XContentParser parser = jsonXContent.createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, input)) {
             ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-            return RegisterMcpTool.parse(parser);
+            return McpToolRegisterInput.parse(parser);
         } catch (IOException e) {
             log.error("Failed to parse mcp tools configuration");
             throw e;

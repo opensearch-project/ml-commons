@@ -37,7 +37,7 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.spi.tools.Tool;
-import org.opensearch.ml.common.transport.mcpserver.requests.register.RegisterMcpTool;
+import org.opensearch.ml.common.transport.mcpserver.requests.register.McpToolRegisterInput;
 import org.opensearch.ml.engine.tools.ListIndexTool;
 import org.opensearch.ml.rest.mcpserver.ToolFactoryWrapper;
 import org.opensearch.ml.utils.TestHelper;
@@ -122,7 +122,7 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
     }
 
     public void test_searchToolsWithVersion_success() {
-        ActionListener<List<RegisterMcpTool>> actionListener = mock(ActionListener.class);
+        ActionListener<List<McpToolRegisterInput>> actionListener = mock(ActionListener.class);
         mcpToolsHelper.searchToolsWithVersion(Arrays.asList("ListIndexTool"), actionListener);
         ArgumentCaptor<List> argumentCaptor = ArgumentCaptor.forClass(List.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
@@ -130,7 +130,7 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
     }
 
     public void test_searchToolsWithVersion_searchException() {
-        ActionListener<List<RegisterMcpTool>> actionListener = mock(ActionListener.class);
+        ActionListener<List<McpToolRegisterInput>> actionListener = mock(ActionListener.class);
         doAnswer(invocationOnMock -> {
             ActionListener<SearchResponse> listener = invocationOnMock.getArgument(1);
             listener.onFailure(new OpenSearchException("Network issue"));
@@ -144,7 +144,7 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
 
     public void test_searchAllToolsWithVersion_clientException() {
         when(client.threadPool()).thenThrow(new RuntimeException("unexpected error"));
-        ActionListener<Map<String, Tuple<RegisterMcpTool, Long>>> actionListener = mock(ActionListener.class);
+        ActionListener<Map<String, Tuple<McpToolRegisterInput, Long>>> actionListener = mock(ActionListener.class);
         mcpToolsHelper.searchAllToolsWithVersion(actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -153,7 +153,7 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
 
     public void test_searchAllTools_clientException() {
         when(client.threadPool()).thenThrow(new RuntimeException("unexpected error"));
-        ActionListener<List<RegisterMcpTool>> actionListener = mock(ActionListener.class);
+        ActionListener<List<McpToolRegisterInput>> actionListener = mock(ActionListener.class);
         mcpToolsHelper.searchAllTools(actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
@@ -192,15 +192,15 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
     }
 
     public void test_searchAllToolsWithVersion_success() {
-        ActionListener<Map<String, Tuple<RegisterMcpTool, Long>>> actionListener = mock(ActionListener.class);
+        ActionListener<Map<String, Tuple<McpToolRegisterInput, Long>>> actionListener = mock(ActionListener.class);
         mcpToolsHelper.searchAllToolsWithVersion(actionListener);
-        ArgumentCaptor<Map<String, Tuple<RegisterMcpTool, Long>>> argumentCaptor = ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<Map<String, Tuple<McpToolRegisterInput, Long>>> argumentCaptor = ArgumentCaptor.forClass(Map.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
         assertEquals(1, argumentCaptor.getValue().size());
     }
 
     public void test_searchAllToolsWithVersion_searchException() {
-        ActionListener<Map<String, Tuple<RegisterMcpTool, Long>>> actionListener = mock(ActionListener.class);
+        ActionListener<Map<String, Tuple<McpToolRegisterInput, Long>>> actionListener = mock(ActionListener.class);
         doAnswer(invocationOnMock -> {
             ActionListener<SearchResponse> listener = invocationOnMock.getArgument(1);
             listener.onFailure(new OpenSearchException("Network issue"));
@@ -213,15 +213,15 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
     }
 
     public void test_searchAllTools_success() {
-        ActionListener<List<RegisterMcpTool>> actionListener = mock(ActionListener.class);
+        ActionListener<List<McpToolRegisterInput>> actionListener = mock(ActionListener.class);
         mcpToolsHelper.searchAllTools(actionListener);
-        ArgumentCaptor<List<RegisterMcpTool>> argumentCaptor = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<List<McpToolRegisterInput>> argumentCaptor = ArgumentCaptor.forClass(List.class);
         verify(actionListener).onResponse(argumentCaptor.capture());
         assertEquals(1, argumentCaptor.getValue().size());
     }
 
     public void test_searchAllTools_searchException() {
-        ActionListener<List<RegisterMcpTool>> actionListener = mock(ActionListener.class);
+        ActionListener<List<McpToolRegisterInput>> actionListener = mock(ActionListener.class);
         doAnswer(invocationOnMock -> {
             ActionListener<SearchResponse> listener = invocationOnMock.getArgument(1);
             listener.onFailure(new OpenSearchException("Network issue"));
@@ -233,8 +233,8 @@ public class McpToolsHelperTests extends OpenSearchTestCase {
         assertEquals("Failed to search mcp tools index with error: Network issue", argumentCaptor.getValue().getMessage());
     }
 
-    private RegisterMcpTool getRegisterMcpTool() {
-        RegisterMcpTool registerMcpTool = new RegisterMcpTool(
+    private McpToolRegisterInput getRegisterMcpTool() {
+        McpToolRegisterInput registerMcpTool = new McpToolRegisterInput(
             "ListIndexTool",
             "ListIndexTool",
             "OpenSearch index name list, separated by comma. for example: [\\\"index1\\\", \\\"index2\\\"], use empty array [] to list all indices in the cluster",

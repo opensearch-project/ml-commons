@@ -27,7 +27,7 @@ import lombok.extern.log4j.Log4j2;
  */
 @Log4j2
 @Data
-public class BaseMcpTool implements ToXContentObject, Writeable {
+public class McpToolBaseInput implements ToXContentObject, Writeable {
     public static final String TOOL = "tool";
     public static final String TYPE_FIELD = "type";
     public static final String NAME_FIELD = "name";
@@ -42,10 +42,8 @@ public class BaseMcpTool implements ToXContentObject, Writeable {
     private Map<String, Object> attributes;
     private Instant createdTime;
     private Instant lastUpdatedTime;
-    public static final String TYPE_NOT_SHOWN_EXCEPTION_MESSAGE = "type field required";
-    public static final String NAME_NOT_SHOWN_EXCEPTION_MESSAGE = "name field required";
 
-    public BaseMcpTool(StreamInput streamInput) throws IOException {
+    public McpToolBaseInput(StreamInput streamInput) throws IOException {
         type = streamInput.readString();
         name = streamInput.readOptionalString();
         description = streamInput.readOptionalString();
@@ -60,7 +58,7 @@ public class BaseMcpTool implements ToXContentObject, Writeable {
         version = streamInput.readOptionalLong();
     }
 
-    public BaseMcpTool(
+    public McpToolBaseInput(
         String name,
         String type,
         String description,
