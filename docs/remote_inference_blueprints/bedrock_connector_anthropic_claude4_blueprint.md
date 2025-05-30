@@ -1,8 +1,10 @@
-# Bedrock connector blueprint example for Claude 3.7 model
+# Bedrock connector blueprint example for Claude 4 models
 
-Anthropic's Claude 3.7 Sonnet model is now available on Amazon Bedrock. For more details, check out this [blog](https://aws.amazon.com/blogs/aws/anthropics-claude-3-7-sonnet-the-first-hybrid-reasoning-model-is-now-available-in-amazon-bedrock/).
+Anthropic's Claude 4 models are now available on Amazon Bedrock. For more details, check out this [blog](https://www.aboutamazon.com/news/aws/anthropic-claude-4-opus-sonnet-amazon-bedrock).
 
-Claude 3.7 is Anthropic's first hybrid reasoning model, supporting two modes: standard and extended thinking. This doc covers both modes.
+Similar to Claude 3.7 Sonnet, Claude 4 offers both standard mode and [extended thinking mode](https://www.anthropic.com/news/visible-extended-thinking). Extended thinking mode directs the model to think more deeply about trickier questions by creating `thinking` content blocks for its internal reasoning. This also provides transparency into Claude's thought process before it delivers a final answer.
+
+This blueprint will cover both the standard mode and the extended thinking mode.
 
 ## 1. Add connector endpoint to trusted URLs:
 
@@ -20,18 +22,20 @@ PUT /_cluster/settings
 ```
 
 ## 2. Standard mode
+
+If you would like to use the extended thinking mode, skip to [section 3](#section3).
 ### 2.1 Create connector
 
 If you are using self-managed Opensearch, you should supply AWS credentials:
 
 Note:
-1. User needs to use [inference profile](https://docs.aws.amazon.com/bedrock/latest/userguide/inference-profiles-support.html) for invocation of this model. We can see the profile ID for Claude 3.7 is `us.anthropic.claude-3-7-sonnet-20250219-v1:0` for three available US regions `us-east-1`, `us-east-2`, `us-west-2`.
+1. Users need to use an [inference profile](https://docs.aws.amazon.com/bedrock/latest/userguide/inference-profiles-support.html) to invoke this model. The profile IDs for Claude Sonnet 4 and Claude Opus 4 are `us.anthropic.claude-sonnet-4-20250514-v1:0` and `us.anthropic.claude-opus-4-20250514-v1:0` respectively, for three available US regions `us-east-1`, `us-east-2` and `us-west-2`.
 
 ```json
 POST /_plugins/_ml/connectors/_create
 {
-    "name": "Amazon Bedrock claude v3.7",
-    "description": "Test connector for Amazon Bedrock claude v3.7",
+    "name": "Amazon Bedrock claude v4",
+    "description": "Test connector for Amazon Bedrock claude v4",
     "version": 1,
     "protocol": "aws_sigv4",
     "credential": {
@@ -45,7 +49,7 @@ POST /_plugins/_ml/connectors/_create
         "max_tokens": 8000,
         "temperature": 1,
         "anthropic_version": "bedrock-2023-05-31",
-        "model": "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
+        "model": "us.anthropic.claude-sonnet-4-20250514-v1:0"
     },
     "actions": [
         {
@@ -61,14 +65,14 @@ POST /_plugins/_ml/connectors/_create
 }
 ```
 
-If using the AWS Opensearch Service, you can provide an IAM role arn that allows access to the bedrock service.
+If using AWS Opensearch Service, you can provide an IAM role arn that allows access to the bedrock service.
 Refer to this [AWS doc](https://docs.aws.amazon.com/opensearch-service/latest/developerguide/ml-amazon-connector.html)
 
 ```json
 POST /_plugins/_ml/connectors/_create
 {
-    "name": "Amazon Bedrock claude v3.7",
-    "description": "Test connector for Amazon Bedrock claude v3.7",
+    "name": "Amazon Bedrock claude v4",
+    "description": "Test connector for Amazon Bedrock claude v4",
     "version": 1,
     "protocol": "aws_sigv4",
     "credential": {
@@ -80,7 +84,7 @@ POST /_plugins/_ml/connectors/_create
         "max_tokens": 8000,
         "temperature": 1,
         "anthropic_version": "bedrock-2023-05-31",
-        "model": "us.anthropic.claude-3-7-sonnet-20250219-v1:0"
+        "model": "us.anthropic.claude-sonnet-4-20250514-v1:0"
     },
     "actions": [
         {
@@ -99,7 +103,7 @@ POST /_plugins/_ml/connectors/_create
 Sample response:
 ```json
 {
-  "connector_id": "fa5tP5UBX2k07okSp89B"
+    "connector_id":"5kxp_5YBIvu8EdWRQuez"
 }
 ```
 
@@ -108,26 +112,26 @@ Sample response:
 ```json
 POST /_plugins/_ml/models/_register?deploy=true
 {
-    "name": "anthropic.claude-v3.7",
+    "name": "anthropic.claude-v4",
     "function_name": "remote",
-    "description": "claude v3.7 model",
-    "connector_id": "fa5tP5UBX2k07okSp89B"
+    "description": "claude v4 model",
+    "connector_id": "5kxp_5YBIvu8EdWRQuez"
 }
 ```
 
 Sample response:
 ```json
 {
-  "task_id": "fq5uP5UBX2k07okSFM__",
-  "status": "CREATED",
-  "model_id": "f65uP5UBX2k07okSFc8P"
+    "task_id":"6kxq_5YBIvu8EdWRwedJ",
+    "status":"CREATED",
+    "model_id":"7Exq_5YBIvu8EdWRwefI"
 }
 ```
 
 ### 2.3 Test model inference
 
 ```json
-POST /_plugins/_ml/models/f65uP5UBX2k07okSFc8P/_predict
+POST /_plugins/_ml/models/7Exq_5YBIvu8EdWRwefI/_predict
 {
   "parameters": {
     "messages": [
@@ -148,50 +152,44 @@ POST /_plugins/_ml/models/f65uP5UBX2k07okSFc8P/_predict
 Sample response:
 ```json
 {
-  "inference_results": [
-    {
-      "output": [
-        {
-          "name": "response",
-          "dataAsMap": {
-            "id": "msg_bdrk_012spGFGr4CcD1PWb2TSfYut",
-            "type": "message",
-            "role": "assistant",
-            "model": "claude-3-7-sonnet-20250219",
-            "content": [
-              {
-                "type": "text",
-                "text": "Hello! It's nice to meet you. How can I help you today?"
-              }
-            ],
-            "stop_reason": "end_turn",
-            "stop_sequence": null,
-            "usage": {
-              "input_tokens": 9.0,
-              "cache_creation_input_tokens": 0.0,
-              "cache_read_input_tokens": 0.0,
-              "output_tokens": 19.0
+    "inference_results": [{
+        "output": [{
+            "name": "response",
+            "dataAsMap": {
+                "id": "msg_bdrk_017wv2bnUmKroe7C48MHdu32",
+                "type": "message",
+                "role": "assistant",
+                "model": "claude-sonnet-4-20250514",
+                "content": [{
+                    "type": "text",
+                    "text": "Hello! Nice to meet you. How are you doing today? Is there anything I can help you with?"
+                }],
+                "stop_reason": "end_turn",
+                "stop_sequence": null,
+                "usage": {
+                    "input_tokens": 9.0,
+                    "cache_creation_input_tokens": 0.0,
+                    "cache_read_input_tokens": 0.0,
+                    "output_tokens": 25.0
+                }
             }
-          }
-        }
-      ],
-      "status_code": 200
-    }
-  ]
+        }],
+        "status_code": 200
+    }]
 }
 ```
 
-## 3. Extended thinking mode
+## <a id="section3"></a>3. Extended thinking mode
 
-Extended thinking mode allows Claude 3.7 to perform more in-depth reasoning before providing a response.
+Extended thinking mode allows Claude 4 to perform more in-depth reasoning before providing a response. Note that `budget_tokens` can be specified in parameters, which determines the number of tokens Claude can use for its internal reasoning process. See Claude [documentation](https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking#how-to-use-extended-thinking) for more details.
 
 ### 3.1 Create connector
 
 ```json
 POST /_plugins/_ml/connectors/_create
 {
-    "name": "Amazon Bedrock claude v3.7",
-    "description": "Test connector for Amazon Bedrock claude v3.7",
+    "name": "Amazon Bedrock claude v4",
+    "description": "Test connector for Amazon Bedrock claude v4",
     "version": 1,
     "protocol": "aws_sigv4",
     "credential": {
@@ -205,7 +203,7 @@ POST /_plugins/_ml/connectors/_create
         "max_tokens": 8000,
         "temperature": 1,
         "anthropic_version": "bedrock-2023-05-31",
-        "model": "us.anthropic.claude-3-7-sonnet-20250219-v1:0",
+        "model": "us.anthropic.claude-sonnet-4-20250514-v1:0",
         "budget_tokens": 1024
     },
     "actions": [
@@ -228,8 +226,8 @@ Refer to this [AWS doc](https://docs.aws.amazon.com/opensearch-service/latest/de
 ```json
 POST /_plugins/_ml/connectors/_create
 {
-    "name": "Amazon Bedrock claude v3.7",
-    "description": "Test connector for Amazon Bedrock claude v3.7",
+    "name": "Amazon Bedrock claude v4",
+    "description": "Test connector for Amazon Bedrock claude v4",
     "version": 1,
     "protocol": "aws_sigv4",
     "credential": {
@@ -241,7 +239,7 @@ POST /_plugins/_ml/connectors/_create
         "max_tokens": 8000,
         "temperature": 1,
         "anthropic_version": "bedrock-2023-05-31",
-        "model": "us.anthropic.claude-3-7-sonnet-20250219-v1:0",
+        "model": "us.anthropic.claude-sonnet-4-20250514-v1:0",
         "budget_tokens": 1024
     },
     "actions": [
@@ -261,7 +259,7 @@ POST /_plugins/_ml/connectors/_create
 Sample response:
 ```json
 {
-  "connector_id": "1652P5UBX2k07okSys_J"
+    "connector_id":"DEx5_5YBIvu8EdWRTOiq"
 }
 ```
 
@@ -270,26 +268,26 @@ Sample response:
 ```json
 POST /_plugins/_ml/models/_register?deploy=true
 {
-    "name": "anthropic.claude-v3.7",
+    "name": "anthropic.claude-v4",
     "function_name": "remote",
-    "description": "claude v3.7 model",
-    "connector_id": "1652P5UBX2k07okSys_J"
+    "description": "claude v4 model with extended thinking",
+    "connector_id": "DEx5_5YBIvu8EdWRTOiq"
 }
 ```
 
 Sample response:
 ```json
 {
-  "task_id": "5K53P5UBX2k07okSXc-7",
-  "status": "CREATED",
-  "model_id": "5a53P5UBX2k07okSXc_M"
+    "task_id":"DUx6_5YBIvu8EdWRLuj1",
+    "status":"CREATED",
+    "model_id":"Dkx6_5YBIvu8EdWRL-gO"
 }
 ```
 
 ### 3.3 Test model inference
 
 ```json
-POST /_plugins/_ml/models/5a53P5UBX2k07okSXc_M/_predict
+POST /_plugins/_ml/models/Dkx6_5YBIvu8EdWRL-gO/_predict
 {
   "parameters": {
     "messages": [
@@ -310,40 +308,33 @@ POST /_plugins/_ml/models/5a53P5UBX2k07okSXc_M/_predict
 Sample response:
 ```json
 {
-  "inference_results": [
-    {
-      "output": [
-        {
-          "name": "response",
-          "dataAsMap": {
-            "id": "msg_bdrk_01TqgZsyqsxhNGAGVjRjCP6N",
-            "type": "message",
-            "role": "assistant",
-            "model": "claude-3-7-sonnet-20250219",
-            "content": [
-              {
-                "type": "thinking",
-                "thinking": "This is a simple greeting phrase \"hello world\" which is often the first program someone writes when learning a new programming language. The person could be:\n1. Simply greeting me casually\n2. Making a reference to programming\n3. Testing if I'm working\n\nI'll respond with a friendly greeting that acknowledges the \"hello world\" phrase and its connection to programming culture, while being conversational.",
-                "signature": "<THOUGHT_SIGNATURE>"
-              },
-              {
-                "type": "text",
-                "text": "Hello! It's nice to meet you. \"Hello world\" is such a classic phrase - it's often the first program many people write when learning to code! How are you doing today? Is there something I can help you with?"
-              }
-            ],
-            "stop_reason": "end_turn",
-            "stop_sequence": null,
-            "usage": {
-              "input_tokens": 37.0,
-              "cache_creation_input_tokens": 0.0,
-              "cache_read_input_tokens": 0.0,
-              "output_tokens": 143.0
+    "inference_results": [{
+        "output": [{
+            "name": "response",
+            "dataAsMap": {
+                "id": "msg_bdrk_0117MNj2HVP7dXmeDGeCSQaL",
+                "type": "message",
+                "role": "assistant",
+                "model": "claude-sonnet-4-20250514",
+                "content": [{
+                    "type": "thinking",
+                    "thinking": "The user has sent me a simple \"hello world\" message. This is a classic, friendly greeting that's often used as a first program or test message in programming and casual conversation. I should respond in a warm, welcoming way.",
+                    "signature": "<THOUGHT_SIGNATURE>"
+                }, {
+                    "type": "text",
+                    "text": "Hello! It's nice to meet you. How are you doing today? Is there anything I can help you with?"
+                }],
+                "stop_reason": "end_turn",
+                "stop_sequence": null,
+                "usage": {
+                    "input_tokens": 37.0,
+                    "cache_creation_input_tokens": 0.0,
+                    "cache_read_input_tokens": 0.0,
+                    "output_tokens": 84.0
+                }
             }
-          }
-        }
-      ],
-      "status_code": 200
-    }
-  ]
+        }],
+        "status_code": 200
+    }]
 }
 ```
