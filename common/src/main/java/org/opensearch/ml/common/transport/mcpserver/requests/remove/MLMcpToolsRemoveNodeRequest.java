@@ -17,26 +17,26 @@ import lombok.Data;
 
 @Data
 public class MLMcpToolsRemoveNodeRequest extends TransportRequest {
-    private List<String> tools;
+    private List<String> mcpTools;
 
     public MLMcpToolsRemoveNodeRequest(StreamInput in) throws IOException {
         super(in);
         if (in.readBoolean()) {
-            this.tools = in.readList(StreamInput::readString);
+            this.mcpTools = in.readList(StreamInput::readString);
         }
     }
 
     @Builder
-    public MLMcpToolsRemoveNodeRequest(List<String> tools) {
-        this.tools = tools;
+    public MLMcpToolsRemoveNodeRequest(List<String> mcpTools) {
+        this.mcpTools = mcpTools;
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        if (tools != null) {
+        if (mcpTools != null) {
             out.writeBoolean(true);
-            out.writeStringArray(tools.toArray(new String[0]));
+            out.writeStringArray(mcpTools.toArray(new String[0]));
         } else {
             out.writeBoolean(false);
         }

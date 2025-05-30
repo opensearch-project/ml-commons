@@ -48,12 +48,12 @@ public class MLMcpRemoveNodesResponseTest {
 
     @Test
     public void testMultiNodeSerialization() throws IOException {
-        MLMcpRemoveNodesResponse original = getTestResponse();
+        MLMcpToolsRemoveNodesResponse original = getTestResponse();
 
         BytesStreamOutput output = new BytesStreamOutput();
         original.writeTo(output);
 
-        MLMcpRemoveNodesResponse deserialized = new MLMcpRemoveNodesResponse(output.bytes().streamInput());
+        MLMcpToolsRemoveNodesResponse deserialized = new MLMcpToolsRemoveNodesResponse(output.bytes().streamInput());
 
         assertEquals(2, deserialized.getNodes().size());
         assertEquals(1, deserialized.failures().size());
@@ -62,9 +62,9 @@ public class MLMcpRemoveNodesResponseTest {
     @Test
     public void testResponseJsonStructure() throws IOException {
         XContentBuilder builder = XContentFactory.jsonBuilder();
-        MLMcpRemoveNodesResponse response = new MLMcpRemoveNodesResponse(
+        MLMcpToolsRemoveNodesResponse response = new MLMcpToolsRemoveNodesResponse(
             new ClusterName("test-cluster"),
-            Arrays.asList(new MLMcpRemoveNodeResponse(node1, true), new MLMcpRemoveNodeResponse(node2, false)),
+            Arrays.asList(new MLMcpToolsRemoveNodeResponse(node1, true), new MLMcpToolsRemoveNodeResponse(node2, false)),
             Collections.singletonList(new FailedNodeException("node-3", "Not found", new IllegalArgumentException("Not found")))
         );
 
@@ -79,7 +79,7 @@ public class MLMcpRemoveNodesResponseTest {
 
     @Test
     public void testEmptyResponseHandling() throws IOException {
-        MLMcpRemoveNodesResponse response = new MLMcpRemoveNodesResponse(
+        MLMcpToolsRemoveNodesResponse response = new MLMcpToolsRemoveNodesResponse(
             new ClusterName("empty-cluster"),
             Collections.emptyList(),
             Collections.emptyList()
@@ -88,24 +88,24 @@ public class MLMcpRemoveNodesResponseTest {
         BytesStreamOutput output = new BytesStreamOutput();
         response.writeTo(output);
 
-        MLMcpRemoveNodesResponse deserialized = new MLMcpRemoveNodesResponse(output.bytes().streamInput());
+        MLMcpToolsRemoveNodesResponse deserialized = new MLMcpToolsRemoveNodesResponse(output.bytes().streamInput());
         assertTrue(deserialized.getNodes().isEmpty());
         assertTrue(deserialized.failures().isEmpty());
     }
 
-    private MLMcpRemoveNodesResponse getTestResponse() {
-        List<MLMcpRemoveNodeResponse> nodes = Arrays
-            .asList(new MLMcpRemoveNodeResponse(node1, true), new MLMcpRemoveNodeResponse(node2, false));
+    private MLMcpToolsRemoveNodesResponse getTestResponse() {
+        List<MLMcpToolsRemoveNodeResponse> nodes = Arrays
+            .asList(new MLMcpToolsRemoveNodeResponse(node1, true), new MLMcpToolsRemoveNodeResponse(node2, false));
 
         List<FailedNodeException> failures = Collections
             .singletonList(new FailedNodeException("node-3", "Connection timeout", new IOException("Connection timeout")));
 
-        return new MLMcpRemoveNodesResponse(new ClusterName("test-cluster"), nodes, failures);
+        return new MLMcpToolsRemoveNodesResponse(new ClusterName("test-cluster"), nodes, failures);
     }
 
     @Test
     public void testMixedStatusResponse() throws IOException {
-        MLMcpRemoveNodesResponse response = getTestResponse();
+        MLMcpToolsRemoveNodesResponse response = getTestResponse();
         XContentBuilder builder = XContentFactory.jsonBuilder();
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
         String json = builder.toString();

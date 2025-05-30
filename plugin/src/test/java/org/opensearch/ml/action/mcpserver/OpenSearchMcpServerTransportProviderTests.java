@@ -18,6 +18,7 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.rest.StreamingRestChannel;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.transport.client.node.NodeClient;
@@ -35,15 +36,21 @@ public class OpenSearchMcpServerTransportProviderTests extends OpenSearchTestCas
     @Mock
     StreamingRestChannel channel = mock(StreamingRestChannel.class);
 
-    private final OpenSearchMcpServerTransportProvider provider = new OpenSearchMcpServerTransportProvider(new ObjectMapper());
+    private OpenSearchMcpServerTransportProvider provider;
 
-    OpenSearchMcpServerTransportProvider.OpenSearchMcpSessionTransport transport = provider.new OpenSearchMcpSessionTransport(channel);
+    OpenSearchMcpServerTransportProvider.OpenSearchMcpSessionTransport transport;
 
     @Mock
     private McpServerSession.Factory factory;
 
     @Mock
     private McpServerSession mcpServerSession;
+
+    @Mock
+    private MLIndicesHandler mlIndicesHandler;
+
+    @Mock
+    McpToolsHelper mcpToolsHelper;
 
     @Mock
     private NodeClient client;
@@ -54,11 +61,19 @@ public class OpenSearchMcpServerTransportProviderTests extends OpenSearchTestCas
     public void setUp() throws Exception {
         super.setUp();
         MockitoAnnotations.openMocks(this);
+        provider = new OpenSearchMcpServerTransportProvider(mlIndicesHandler, mcpToolsHelper, new ObjectMapper());
+        transport = provider.new OpenSearchMcpSessionTransport(channel);
         provider.setSessionFactory(factory);
         when(factory.create(any())).thenReturn(mcpServerSession);
         when(mcpServerSession.getId()).thenReturn("mockId");
         when(mcpServerSession.handle(any())).thenReturn(Mono.empty());
         when(mcpServerSession.sendNotification(any(), any())).thenReturn(Mono.empty());
+        doAnswer(invocationOnMock -> {
+            ActionListener<Boolean> listener = invocationOnMock.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLMcpSessionManagementIndex(isA(ActionListener.class));
+
         doAnswer(invocationOnMock -> {
             ActionListener<IndexResponse> listener = invocationOnMock.getArgument(1);
             IndexResponse response = mock(IndexResponse.class);
@@ -67,6 +82,12 @@ public class OpenSearchMcpServerTransportProviderTests extends OpenSearchTestCas
             listener.onResponse(response);
             return null;
         }).when(client).index(any(), isA(ActionListener.class));
+
+        doAnswer(invocationOnMock -> {
+            ActionListener<Boolean> listener = invocationOnMock.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mcpToolsHelper).autoLoadAllMcpTools(isA(ActionListener.class));
     }
 
     @Test

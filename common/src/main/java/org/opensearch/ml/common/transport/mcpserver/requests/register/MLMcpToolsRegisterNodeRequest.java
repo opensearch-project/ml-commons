@@ -9,6 +9,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.List;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
@@ -23,11 +24,11 @@ import lombok.Data;
 
 @Data
 public class MLMcpToolsRegisterNodeRequest extends ActionRequest {
-    private McpTools mcpTools;
+    private List<McpToolRegisterInput> mcpTools;
 
     public MLMcpToolsRegisterNodeRequest(StreamInput in) throws IOException {
         super(in);
-        this.mcpTools = new McpTools(in);
+        this.mcpTools = in.readList(McpToolRegisterInput::new);
     }
 
     @Override
@@ -36,14 +37,14 @@ public class MLMcpToolsRegisterNodeRequest extends ActionRequest {
     }
 
     @Builder
-    public MLMcpToolsRegisterNodeRequest(McpTools mcpTools) {
+    public MLMcpToolsRegisterNodeRequest(List<McpToolRegisterInput> mcpTools) {
         this.mcpTools = mcpTools;
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        mcpTools.writeTo(out);
+        out.writeList(mcpTools);
     }
 
     public static MLMcpToolsRegisterNodeRequest fromActionRequest(TransportRequest actionRequest) {
