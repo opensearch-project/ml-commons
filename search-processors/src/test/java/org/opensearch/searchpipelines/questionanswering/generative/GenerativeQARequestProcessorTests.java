@@ -18,54 +18,63 @@
 package org.opensearch.searchpipelines.questionanswering.generative;
 
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.function.BooleanSupplier;
 
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.search.pipeline.Processor;
 import org.opensearch.search.pipeline.SearchRequestProcessor;
 import org.opensearch.test.OpenSearchTestCase;
 
 public class GenerativeQARequestProcessorTests extends OpenSearchTestCase {
 
-    private BooleanSupplier alwaysOn = () -> true;
-
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
+
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
+    @Before
+    public void setup() {
+        MockitoAnnotations.openMocks(this);
+        when(mlFeatureEnabledSetting.isRagSearchPipelineEnabled()).thenReturn(true);
+    }
 
     public void testProcessorFactory() throws Exception {
 
         Map<String, Object> config = new HashMap<>();
         config.put("model_id", "foo");
-        SearchRequestProcessor processor = new GenerativeQARequestProcessor.Factory(alwaysOn)
+        SearchRequestProcessor processor = new GenerativeQARequestProcessor.Factory(mlFeatureEnabledSetting)
             .create(null, "tag", "desc", true, config, null);
         assertTrue(processor instanceof GenerativeQARequestProcessor);
     }
 
     public void testProcessRequest() throws Exception {
-        GenerativeQARequestProcessor processor = new GenerativeQARequestProcessor("tag", "desc", false, "foo", alwaysOn);
+        GenerativeQARequestProcessor processor = new GenerativeQARequestProcessor("tag", "desc", false, "foo", mlFeatureEnabledSetting);
         SearchRequest request = new SearchRequest();
         SearchRequest processed = processor.processRequest(request);
         assertEquals(request, processed);
     }
 
     public void testGetType() {
-        GenerativeQARequestProcessor processor = new GenerativeQARequestProcessor("tag", "desc", false, "foo", alwaysOn);
+        GenerativeQARequestProcessor processor = new GenerativeQARequestProcessor("tag", "desc", false, "foo", mlFeatureEnabledSetting);
         assertEquals(GenerativeQAProcessorConstants.REQUEST_PROCESSOR_TYPE, processor.getType());
     }
-
-    // Only to be used for the following test case.
-    private boolean featureFlag001 = false;
 
     public void testProcessorFeatureFlagOffOnOff() throws Exception {
         Map<String, Object> config = new HashMap<>();
         config.put("model_id", "foo");
-        Processor.Factory factory = new GenerativeQARequestProcessor.Factory(() -> featureFlag001);
+        when(mlFeatureEnabledSetting.isRagSearchPipelineEnabled()).thenReturn(false);
+        Processor.Factory factory = new GenerativeQARequestProcessor.Factory(mlFeatureEnabledSetting);
         boolean firstExceptionThrown = false;
         try {
             factory.create(null, "tag", "desc", true, config, null);
@@ -74,9 +83,11 @@ public class GenerativeQARequestProcessorTests extends OpenSearchTestCase {
             firstExceptionThrown = true;
         }
         assertTrue(firstExceptionThrown);
-        featureFlag001 = true;
+
+        when(mlFeatureEnabledSetting.isRagSearchPipelineEnabled()).thenReturn(true);
         GenerativeQARequestProcessor processor = (GenerativeQARequestProcessor) factory.create(null, "tag", "desc", true, config, null);
-        featureFlag001 = false;
+
+        when(mlFeatureEnabledSetting.isRagSearchPipelineEnabled()).thenReturn(false);
         boolean secondExceptionThrown = false;
         try {
             processor.processRequest(mock(SearchRequest.class));
