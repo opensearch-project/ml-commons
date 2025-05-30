@@ -46,7 +46,9 @@ public class MLCreateConnectorRequest extends ActionRequest {
             return addValidationError("ML Connector input can't be null", null);
         }
         Map<String, FieldDescriptor> fieldsToValidate = new HashMap<>();
-        fieldsToValidate.put("Model connector name", new FieldDescriptor(mlCreateConnectorInput.getName(), true));
+
+        fieldsToValidate
+            .put("Model connector name", new FieldDescriptor(mlCreateConnectorInput.getName(), !mlCreateConnectorInput.isDryRun()));
         fieldsToValidate.put("Model connector description", new FieldDescriptor(mlCreateConnectorInput.getDescription(), false));
 
         return validateFields(fieldsToValidate);
