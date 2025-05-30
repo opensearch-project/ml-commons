@@ -16,7 +16,6 @@ import java.time.Duration;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.logging.log4j.Logger;
 import org.opensearch.common.collect.Tuple;
@@ -63,8 +62,6 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
     @Setter
     @Getter
     private MLGuard mlGuard;
-    @Setter
-    private volatile AtomicBoolean connectorPrivateIpEnabled;
 
     private SdkAsyncHttpClient httpClient;
 
@@ -139,6 +136,7 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
         String protocol = url.getProtocol();
         String host = url.getHost();
         int port = url.getPort();
+        connectorPrivateIpEnabled.set(isConnectorPrivateIpEnabled());
         MLHttpClientFactory.validate(protocol, host, port, connectorPrivateIpEnabled);
     }
 }
