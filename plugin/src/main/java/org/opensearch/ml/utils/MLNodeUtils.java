@@ -91,13 +91,18 @@ public class MLNodeUtils {
     }
 
     /**
-     * This method processes the input JSON string and replaces the string values of the parameters with JSON objects if the string is a valid JSON.
+     * This method processes the input JSON string and replaces the string values of the parameters with JSON objects if the string is a valid JSON, unless the schema defines the value as a string.
      * @param inputJson The input JSON string
+     * @param schemaJson The schema matching the input JSON string
      * @return The processed JSON string
      */
-    public static String processRemoteInferenceInputDataSetParametersValue(String inputJson) throws IOException {
+    public static String processRemoteInferenceInputDataSetParametersValue(String inputJson, String schemaJson) throws IOException {
         ObjectMapper mapper = new ObjectMapper();
         JsonNode rootNode = mapper.readTree(inputJson);
+        JsonNode schemaNode = mapper.readTree(schemaJson);
+
+        // Get the schema properties for parameters if they exist
+        JsonNode parametersSchema = schemaNode.path("properties").path("parameters").path("properties");
 
         if (rootNode.has("parameters") && rootNode.get("parameters").isObject()) {
             ObjectNode parametersNode = (ObjectNode) rootNode.get("parameters");
@@ -106,21 +111,23 @@ public class MLNodeUtils {
                 String key = entry.getKey();
                 JsonNode value = entry.getValue();
 
-                if (value.isTextual()) {
-                    String textValue = value.asText();
+                if (value.isTextual() && !isStringTypeInSchema(parametersSchema, key)) {
                     try {
-                        // Try to parse the string as JSON
-                        JsonNode parsedValue = mapper.readTree(textValue);
-                        // If successful, replace the string with the parsed JSON
+                        JsonNode parsedValue = mapper.readTree(value.asText());
                         parametersNode.set(key, parsedValue);
                     } catch (IOException e) {
-                        // If parsing fails, it's not a valid JSON string, so keep it as is
+                        // If parsing fails, keep it as is
                         parametersNode.set(key, value);
                     }
                 }
             });
         }
         return mapper.writeValueAsString(rootNode);
+    }
+
+    private static boolean isStringTypeInSchema(JsonNode schema, String fieldName) {
+        JsonNode typeNode = schema.path(fieldName).path("type");
+        return typeNode.isTextual() && typeNode.asText().equals("string");
     }
 
     public static void checkOpenCircuitBreaker(MLCircuitBreakerService mlCircuitBreakerService, MLStats mlStats) {
