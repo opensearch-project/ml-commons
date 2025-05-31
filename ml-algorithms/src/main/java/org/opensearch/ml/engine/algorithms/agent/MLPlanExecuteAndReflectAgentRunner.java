@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
+import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTask.TASK_ID_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD;
@@ -44,6 +45,7 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
@@ -450,6 +452,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     String taskId = allParams.get(TASK_ID_FIELD);
                     if (taskId != null && !taskUpdated) {
                         Map<String, Object> finalUpdate = new HashMap<>();
+                        finalUpdate.put(STATE_FIELD, MLTaskState.RUNNING);
                         finalUpdate.put(RESPONSE_FIELD, taskUpdates);
                         updateMLTaskDirectly(taskId, finalUpdate, client, ActionListener.wrap(updateResponse -> {
                             log.info("Updated task {} with executor memory ID", taskId);

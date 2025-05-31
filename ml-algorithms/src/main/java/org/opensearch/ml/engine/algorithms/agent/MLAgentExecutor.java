@@ -400,8 +400,14 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             Map<String, Object> agentResponse = new HashMap<>();
             if (memoryId != null && !memoryId.isEmpty()) {
                 agentResponse.put(MEMORY_ID, memoryId);
-                mlTask.setResponse(agentResponse);
             }
+
+            String parentInteractionId = inputDataSet.getParameters().get(PARENT_INTERACTION_ID);
+            if (parentInteractionId != null && !parentInteractionId.isEmpty()) {
+                agentResponse.put(PARENT_INTERACTION_ID, parentInteractionId);
+            }
+            mlTask.setResponse(agentResponse);
+
             indexMLTask(mlTask, ActionListener.wrap(indexResponse -> {
                 String taskId = indexResponse.getId();
                 mlTask.setTaskId(taskId);
