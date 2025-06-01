@@ -6,6 +6,9 @@
 package org.opensearch.ml.action.prediction;
 
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE;
+import static org.opensearch.ml.prompt.MLPromptManager.PARAMETERS_MESSAGES_FIELD;
+import static org.opensearch.ml.prompt.MLPromptManager.PARAMETERS_PROMPT_FIELD;
+import static org.opensearch.ml.prompt.MLPromptManager.PARAMETERS_PROMPT_PARAMETERS_FIELD;
 import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
 
 import org.opensearch.OpenSearchStatusException;
@@ -25,6 +28,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -34,6 +38,7 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.prompt.MLPromptManager;
 import org.opensearch.ml.task.MLPredictTaskRunner;
 import org.opensearch.ml.task.MLTaskRunner;
 import org.opensearch.ml.utils.MLNodeUtils;
@@ -47,6 +52,9 @@ import org.opensearch.transport.client.Client;
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.log4j.Log4j2;
+
+import java.util.HashMap;
+import java.util.Map;
 
 @Log4j2
 @FieldDefaults(level = AccessLevel.PRIVATE)
@@ -66,6 +74,8 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
 
     ModelAccessControlHelper modelAccessControlHelper;
 
+    MLPromptManager mlPromptManager;
+
     private volatile boolean enableAutomaticDeployment;
 
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
@@ -82,6 +92,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         NamedXContentRegistry xContentRegistry,
         MLModelManager mlModelManager,
         ModelAccessControlHelper modelAccessControlHelper,
+        MLPromptManager mlPromptManager,
         MLFeatureEnabledSetting mlFeatureEnabledSetting,
         Settings settings
     ) {
@@ -95,6 +106,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         this.xContentRegistry = xContentRegistry;
         this.mlModelManager = mlModelManager;
         this.modelAccessControlHelper = modelAccessControlHelper;
+        this.mlPromptManager = mlPromptManager;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         enableAutomaticDeployment = ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE.get(settings);
         clusterService
@@ -175,11 +187,11 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                                                     );
                                             } else {
                                                 validateInputSchema(modelId, mlPredictionTaskRequest.getMlInput());
-                                                executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
+                                                checkIfPullPromptExists(mlPredictionTaskRequest, wrappedListener, modelId);
                                             }
                                         } else {
                                             validateInputSchema(modelId, mlPredictionTaskRequest.getMlInput());
-                                            executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
+                                            checkIfPullPromptExists(mlPredictionTaskRequest, wrappedListener, modelId);
                                         }
                                     }
                                 }
@@ -223,6 +235,33 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                 // For multi-node cluster, the function name is null in cache, so should always get model first.
                 mlModelManager.getModel(modelId, tenantId, modelActionListener);
             }
+        }
+    }
+
+    private void checkIfPullPromptExists(
+            MLPredictionTaskRequest mlPredictionTaskRequest,
+            ActionListener<MLTaskResponse> wrappedListener,
+            String modelId
+    ) {
+        Map<String, String> inputParameters = new HashMap<>();
+        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) mlPredictionTaskRequest.getMlInput().getInputDataset();
+        inputParameters = inputDataSet.getParameters();
+        // prompt or messages
+        String promptType = inputParameters.containsKey(PARAMETERS_MESSAGES_FIELD) ? PARAMETERS_MESSAGES_FIELD :
+                (inputParameters.containsKey(PARAMETERS_PROMPT_FIELD) ? PARAMETERS_PROMPT_FIELD : null);
+        if (inputParameters.containsKey(PARAMETERS_PROMPT_PARAMETERS_FIELD) && promptType != null) {
+            mlPromptManager.buildInputParameters(
+                    promptType,
+                    inputParameters,
+                    mlPredictionTaskRequest.getTenantId(),
+                    ActionListener.wrap(inputParametersAfter -> {
+                        inputDataSet.setParameters(inputParametersAfter);
+                        mlPredictionTaskRequest.getMlInput().setInputDataset(inputDataSet);
+                    }, e -> wrappedListener.onFailure(e))
+            );
+            executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
+        } else {
+            executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
         }
     }
 

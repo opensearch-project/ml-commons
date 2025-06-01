@@ -7,22 +7,34 @@ package org.opensearch.ml.prompt;
 
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
+import lombok.Data;
+import lombok.Builder;
+import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.action.ActionResponse;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.core.xcontent.DeprecationHandler;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContent;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.prompt.MLPrompt;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -43,6 +55,13 @@ public class MLPromptManager {
         + MAX_NUMBER_OF_TAGS
         + " and length of each tag must not exceed "
         + MAX_LENGTH_OF_TAG);
+
+    public static final String ROLE_PARAMETER = "role";
+    public static final String CONTENT_PARAMETER = "content";
+
+    public static final String PARAMETERS_PROMPT_FIELD = "prompt";
+    public static final String PARAMETERS_MESSAGES_FIELD = "messages";
+    public static final String PARAMETERS_PROMPT_PARAMETERS_FIELD = "prompt_parameters";
 
     private final Client client;
     private final SdkClient sdkClient;
@@ -144,5 +163,287 @@ public class MLPromptManager {
      */
     public static boolean validateTags(List<String> tags) {
         return tags.size() <= MAX_NUMBER_OF_TAGS && tags.stream().allMatch(tag -> tag.length() <= MAX_LENGTH_OF_TAG);
+    }
+
+    /**
+     *  Builds a new map containing modified request body after pull_prompt is invoked
+     *
+     * @param promptType type of prompt, either prompt or messages
+     * @param inputParameters a map containing full request body received during predict
+     * @param tenantId tenant id
+     * @param listener the listener to notified with new map containing modified request body
+     */
+    public void buildInputParameters(
+            String promptType,
+            Map<String, String> inputParameters,
+            String tenantId,
+            ActionListener<Map<String, String>> listener
+    ) {
+        try {
+            Map<String, String> parameters = new HashMap<>();
+            String prompt = inputParameters.get(promptType);
+            String JsonStrPromptParameters = inputParameters.get(PARAMETERS_PROMPT_PARAMETERS_FIELD);
+            PromptParameters promptParam = PromptParameters.buildPromptParameters(JsonStrPromptParameters);
+            switch (promptType) {
+                case PARAMETERS_PROMPT_FIELD:
+                    String promptId = prompt.split("\\(")[1].split("\\)")[0];
+                    String key = prompt.split("\\.")[1];
+                    parameters.put(PARAMETERS_PROMPT_FIELD, pullPrompt(promptId, key, promptParam, tenantId));
+                    break;
+                case PARAMETERS_MESSAGES_FIELD:
+                    Messages messages = Messages.buildMessages(prompt);
+                    for (Message message : messages.messages) {
+                        if (!message.getKey().equals(message.getRole())) {
+                            throw new IllegalArgumentException("Specified key does not match the provided role");
+                        }
+                        String content = pullPrompt(message.getPromptId(), message.getKey(), promptParam, tenantId);
+                        message.setContent(content);
+                    }
+                    parameters.put(PARAMETERS_MESSAGES_FIELD, Messages.toJsonString(messages));
+                    break;
+                default:
+                    log.error("Wrong prompt type is provided: {}, should provide either prompt or messages", promptType);
+                    throw new IllegalArgumentException("Wrong prompt type is provided: " + promptType + ", should provide either prompt or messages");
+            }
+            listener.onResponse(parameters);
+        } catch (Exception e) {
+            log.error("Failed to build a new Input Parameters: ", e);
+            listener.onFailure(e);
+        }
+    }
+
+    /**
+     * Fetches the ML Prompt based on prompt id, then replace the content with the retrieved content from prompt
+     * template based on the specified key.
+     *
+     * @param promptId prompt id
+     * @param key key for the user-defined content
+     * @param promptParameters prompt parameters
+     * @param tenantId tenant id
+     * @return the user-defined content
+     * @throws IllegalArgumentException if
+     *      1. fails to replace all the placeholder variables.
+     *      2. the specified key is not defined in the prompt template.
+     *      3. Failed to build a prompt or messages instance
+     *      3. Incorrect pull_prompt(prompt_id).<key> syntax is provided
+     *      4. Provided role does not match specified key during predict
+     * @throws OpenSearchStatusException if the ML Prompt is not found
+     */
+    public String pullPrompt(String promptId, String key, PromptParameters promptParameters, String tenantId) throws IOException{
+        GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
+                .builder()
+                .index(ML_PROMPT_INDEX)
+                .id(promptId)
+                .tenantId(tenantId)
+                .build();
+        try {
+            // fetch prompt first based on prompt id
+            MLPrompt mlPrompt = getPrompt(getDataObjectRequest);
+            Map<String, String> promptField = mlPrompt.getPrompt();
+            // check if the specified key is defined in the prompt
+            if (!promptField.containsKey(key)) {
+                throw new IllegalArgumentException("Content for specified key is not defined in ML Prompt: " + promptId);
+            }
+            // retrieve the user-defined content during prompt creation
+            String content = promptField.get(key);
+            // populate the placeholder variable with user input, if needed
+            if (!promptParameters.isEmpty() && content.contains("${prompt_parameters.")) {
+                StringSubstitutor substitutor = new StringSubstitutor(promptParameters.getParameters(promptId), "${prompt_parameters.", "}");
+                content = substitutor.replace(content);
+            }
+            // this checks if all the required input values are provided by users.
+            if (content.contains("${prompt_parameters.")) {
+                throw new IllegalArgumentException("Failed to replace all the placeholders for prompt: " + promptId);
+            }
+            return content;
+        } catch (Exception e) {
+            if (e instanceof IllegalArgumentException) {
+                throw e;
+            }
+            throw new OpenSearchStatusException("Failed to find a ML Prompt with prompt id: " + promptId, RestStatus.NOT_FOUND);
+        }
+    }
+
+    /**
+     * Retrieve ML Prompt synchronously
+     *
+     * @param getDataObjectRequest GetDataObjectRequest that is being sent to retrieve a prompt
+     */
+    public MLPrompt getPrompt(
+            GetDataObjectRequest getDataObjectRequest
+    ) throws IOException {
+        GetDataObjectResponse getPromptResponse = sdkClient.getDataObject(getDataObjectRequest);
+        try (
+                XContentParser parser = XContentType.JSON
+                        .xContent()
+                        .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, getPromptResponse.getResponse().getSourceAsString())
+        ) {
+            ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+            return MLPrompt.parse(parser);
+        } catch (Exception ex) {
+            log.error("Failed to parse ML Prompt");
+            throw ex;
+        }
+    }
+
+    /**
+     * A class that represents a list of messages.
+     */
+    static class Messages {
+        private List<Message> messages;
+
+        @Builder(toBuilder = true)
+        public Messages(List<Message> messages) {
+            this.messages = messages;
+        }
+
+        // convert into json format string
+        public static String toJsonString(Messages messages) {
+            List<Map<String, String>> jsonString = new ArrayList<>();
+            for (Message message : messages.messages) {
+                Map<String, String> messageMap = new HashMap<>();
+                messageMap.put(ROLE_PARAMETER, message.getRole());
+                messageMap.put(CONTENT_PARAMETER, message.getContent());
+                jsonString.add(messageMap);
+            }
+            return StringUtils.toJson(jsonString);
+        }
+
+        public int size() {
+            return this.messages.size();
+        }
+
+        // initialize a Messages instance from json format input string
+        public static Messages buildMessages(String input) throws IOException{
+            List<Message> messages = new ArrayList<>();
+            XContent xContent = XContentType.JSON.xContent();
+            try (
+                    XContentParser parser = xContent
+                            .createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.THROW_UNSUPPORTED_OPERATION, input)
+            ) {
+                ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.nextToken(), parser);
+                while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                    messages.add(Message.buildMessage(parser));
+                }
+            } catch (Exception ex) {
+                if (ex instanceof IndexNotFoundException) {
+                    throw new IllegalArgumentException("Forgot to provide a key. Provide a correct pull_prompt syntax: pull_prompt(prompt_id).<key>");
+                }
+                log.error("Failed to build Messages");
+                throw ex;
+            }
+            return Messages.builder().messages(messages).build();
+        }
+    }
+
+    /**
+     * A class that represents a message.
+     *
+     */
+    @Data
+    static class Message {
+        /*
+            e.g. input before parsing:
+            {
+                "role": "user",
+                "content": "pull_prompt(prompt_id).<key>"
+            }
+
+            After parsing:
+
+            this.role = user
+            this.content = pull_prompt(prompt_id).<key>
+            this.promptId = prompt_id
+            this.key = <key>
+         */
+        private String role;
+        private String content;
+        private String promptId;
+        private String key;
+
+        public Message(String role, String content) {
+            this.role = role;
+            this.content = content;
+            this.promptId = this.content.split("\\(")[1].split("\\)")[0];
+            this.key = this.content.split("\\.")[1];
+        }
+
+        public static Message buildMessage(XContentParser parser) throws IOException{
+            String role = null;
+            String content = null;
+
+            ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
+            while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
+                String fieldName = parser.currentName();
+                parser.nextToken();
+                switch(fieldName) {
+                    case ROLE_PARAMETER:
+                        role = parser.text();
+                        break;
+                    case CONTENT_PARAMETER:
+                        content = parser.text();
+                        // check if the correct pull_prompt syntax is provided
+                        if (!content.contains("pull_prompt")) {
+                            throw new IllegalArgumentException("You typed " + content.split("\\(")[0] + ". \n Provide Correct pull_prompt syntax: pull_prompt(prompt_id).<key>");
+                        }
+                        break;
+                    default:
+                        parser.skipChildren();
+                        break;
+                }
+            }
+            return new Message(role, content);
+        }
+    }
+
+    /**
+     * A class that represents prompt parameters.
+     */
+    static class PromptParameters {
+        /*
+            e.g. input before parsing:
+            {
+                "prompt_id":
+                {
+                    "name": "jeff"
+                }
+            }
+
+            After parsing:
+
+            this.parameters = Map.of("name", "jeff")
+         */
+        private final Map<String, Map<String, String>> parameters;
+
+        @Builder(toBuilder = true)
+        public PromptParameters(Map<String, Map<String, String>> parameters) {
+            this.parameters = parameters;
+        }
+
+        public Map<String, String> getParameters(String promptId) {
+            return this.parameters.get(promptId);
+        }
+
+        public boolean isEmpty() {
+            return this.parameters.isEmpty();
+        }
+
+        public static PromptParameters buildPromptParameters(String input) throws IOException {
+            Map<String, Map<String, String>> promptParam = new HashMap<>();
+            XContent xContent = XContentType.JSON.xContent();
+            try (
+                    XContentParser parser = xContent
+                            .createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.THROW_UNSUPPORTED_OPERATION, input)
+            ) {
+                ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
+                    String promptId = parser.currentName();
+                    parser.nextToken();
+                    Map<String, String> parameter = StringUtils.getParameterMap(parser.map());
+                    promptParam.put(promptId, parameter);
+                }
+            }
+            return PromptParameters.builder().parameters(promptParam).build();
+        }
     }
 }

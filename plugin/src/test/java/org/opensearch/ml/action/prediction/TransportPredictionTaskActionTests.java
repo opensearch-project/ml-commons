@@ -54,6 +54,7 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.prompt.MLPromptManager;
 import org.opensearch.ml.task.MLPredictTaskRunner;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
@@ -113,6 +114,9 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
 
     private MLInput mlInput;
 
+    @Mock
+    private MLPromptManager mlPromptManager;
+
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
@@ -155,6 +159,7 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
                 xContentRegistry,
                 mlModelManager,
                 modelAccessControlHelper,
+                mlPromptManager,
                 mlFeatureEnabledSetting,
                 settings
             )
