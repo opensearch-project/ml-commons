@@ -11,6 +11,8 @@ import static org.opensearch.ml.prompt.MLPromptManager.PARAMETERS_PROMPT_FIELD;
 import static org.opensearch.ml.prompt.MLPromptManager.PARAMETERS_PROMPT_PARAMETERS_FIELD;
 import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
 
+import java.util.Map;
+
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
@@ -52,9 +54,6 @@ import org.opensearch.transport.client.Client;
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.log4j.Log4j2;
-
-import java.util.HashMap;
-import java.util.Map;
 
 @Log4j2
 @FieldDefaults(level = AccessLevel.PRIVATE)
@@ -238,19 +237,20 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         }
     }
 
-    private void checkIfPullPromptExists(
-            MLPredictionTaskRequest mlPredictionTaskRequest,
-            ActionListener<MLTaskResponse> wrappedListener,
-            String modelId
+    public void checkIfPullPromptExists(
+        MLPredictionTaskRequest mlPredictionTaskRequest,
+        ActionListener<MLTaskResponse> wrappedListener,
+        String modelId
     ) {
-        Map<String, String> inputParameters = new HashMap<>();
         RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) mlPredictionTaskRequest.getMlInput().getInputDataset();
-        inputParameters = inputDataSet.getParameters();
+        Map<String, String> inputParameters = inputDataSet.getParameters();
         // prompt or messages
-        String promptType = inputParameters.containsKey(PARAMETERS_MESSAGES_FIELD) ? PARAMETERS_MESSAGES_FIELD :
-                (inputParameters.containsKey(PARAMETERS_PROMPT_FIELD) ? PARAMETERS_PROMPT_FIELD : null);
+        String promptType = inputParameters.containsKey(PARAMETERS_MESSAGES_FIELD)
+            ? PARAMETERS_MESSAGES_FIELD
+            : (inputParameters.containsKey(PARAMETERS_PROMPT_FIELD) ? PARAMETERS_PROMPT_FIELD : null);
         if (inputParameters.containsKey(PARAMETERS_PROMPT_PARAMETERS_FIELD) && promptType != null) {
-            mlPromptManager.buildInputParameters(
+            mlPromptManager
+                .buildInputParameters(
                     promptType,
                     inputParameters,
                     mlPredictionTaskRequest.getTenantId(),
@@ -258,7 +258,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                         inputDataSet.setParameters(inputParametersAfter);
                         mlPredictionTaskRequest.getMlInput().setInputDataset(inputDataSet);
                     }, e -> wrappedListener.onFailure(e))
-            );
+                );
             executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
         } else {
             executePredict(mlPredictionTaskRequest, wrappedListener, modelId);

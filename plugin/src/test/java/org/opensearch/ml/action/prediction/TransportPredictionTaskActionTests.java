@@ -20,6 +20,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 
+import javax.swing.*;
+
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -88,6 +90,9 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
 
     @Mock
     private ActionListener<MLTaskResponse> actionListener;
+
+    @Mock
+    private ActionListener<Map<String, String>> buildInputParamtersListener;
 
     @Mock
     private MLModel model;
@@ -321,5 +326,61 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
             );
         when(modelCacheHelper.getModelInterface(any())).thenReturn(modelInterface);
         transportPredictionTaskAction.validateInputSchema("testId", mlInput);
+    }
+
+    @Test
+    public void testCheckIfPullPromptExistsSuccessWithMessages() {
+        Map<String, String> inputParametersAfter = Map
+            .of("messages", "[{\"role\":\"system\",\"content\":\"test system prompt\"},{\"role\":\"user\",\"content\":\"This is test\"}]");
+        doAnswer(invocation -> {
+            ActionListener<Map<String, String>> listener = invocation.getArgument(3);
+            listener.onResponse(inputParametersAfter);
+            return invocation.getArgument(1);
+        }).when(mlPromptManager).buildInputParameters(any(), any(), any(), any());
+
+        RemoteInferenceInputDataSet remoteInferenceInputDataSet = RemoteInferenceInputDataSet
+            .builder()
+            .parameters(
+                Map
+                    .of(
+                        "messages",
+                        "[{\"role\":\"system\",\"content\":\"pull_prompt(prompt_id).system\"},"
+                            + "{\"role\":\"user\",\"content\":\"pull_prompt(prompt_id).user!\"}]",
+                        "prompt_parameters",
+                        "{\"prompt_id\":{\"variable\":\"value\"}}"
+                    )
+            )
+            .build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(remoteInferenceInputDataSet).build();
+
+        mlPredictionTaskRequest = MLPredictionTaskRequest.builder().modelId("test_id").mlInput(mlInput).build();
+        transportPredictionTaskAction
+            .checkIfPullPromptExists(mlPredictionTaskRequest, actionListener, mlPredictionTaskRequest.getModelId());
+
+        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) mlPredictionTaskRequest.getMlInput().getInputDataset();
+        assertEquals(inputParametersAfter.get("messages"), inputDataSet.getParameters().get("messages"));
+    }
+
+    @Test
+    public void testCheckIfPullPromptExistsSuccessWithPrompt() {
+        Map<String, String> inputParametersAfter = Map.of("prompt", "This is test");
+        doAnswer(invocation -> {
+            ActionListener<Map<String, String>> listener = invocation.getArgument(3);
+            listener.onResponse(inputParametersAfter);
+            return invocation.getArgument(1);
+        }).when(mlPromptManager).buildInputParameters(any(), any(), any(), any());
+
+        RemoteInferenceInputDataSet remoteInferenceInputDataSet = RemoteInferenceInputDataSet
+            .builder()
+            .parameters(Map.of("prompt", "pull_prompt(prompt_id).user", "prompt_parameters", "{\"prompt_id\":{\"variable\":\"value\"}}"))
+            .build();
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(remoteInferenceInputDataSet).build();
+
+        mlPredictionTaskRequest = MLPredictionTaskRequest.builder().modelId("test_id").mlInput(mlInput).build();
+        transportPredictionTaskAction
+            .checkIfPullPromptExists(mlPredictionTaskRequest, actionListener, mlPredictionTaskRequest.getModelId());
+
+        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) mlPredictionTaskRequest.getMlInput().getInputDataset();
+        assertEquals(inputParametersAfter.get("prompt"), inputDataSet.getParameters().get("prompt"));
     }
 }
