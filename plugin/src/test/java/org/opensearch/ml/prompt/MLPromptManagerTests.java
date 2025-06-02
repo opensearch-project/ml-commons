@@ -7,6 +7,7 @@ package org.opensearch.ml.prompt;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -18,8 +19,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import javax.swing.*;
-
+import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -27,6 +27,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
@@ -39,9 +40,12 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.prompt.MLPrompt;
+import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
+import org.opensearch.search.SearchHit;
+import org.opensearch.search.SearchHits;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
@@ -73,6 +77,9 @@ public class MLPromptManagerTests extends OpenSearchTestCase {
 
     @Mock
     ActionListener<Map<String, String>> getInputParameterListener;
+
+    @Mock
+    ActionListener<SearchResponse> searchResponseActionListener;
 
     private MLPromptManager mlPromptManager;
 
@@ -329,6 +336,42 @@ public class MLPromptManagerTests extends OpenSearchTestCase {
         assertEquals("You typed ull_prompt. Provide Correct pull_prompt syntax: pull_prompt(prompt_id).<key>", exception.getMessage());
     }
 
+    @Test
+    public void testUniquePromptNameValidationWithNameAlreadyExists() throws IOException {
+        SearchResponse searchResponse = createSearchResponse(1);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), any());
+
+        mlPromptManager.validateUniquePromptName("unique name", "tenant_id", searchResponseActionListener);
+
+        ArgumentCaptor<SearchResponse> argumentCaptor = ArgumentCaptor.forClass(SearchResponse.class);
+        verify(searchResponseActionListener).onResponse(argumentCaptor.capture());
+        assertNotNull(argumentCaptor.getValue());
+        assertNotNull(argumentCaptor.getValue().getHits().getTotalHits());
+        assertTrue(argumentCaptor.getValue().getHits().getTotalHits().value() != 0);
+    }
+
+    @Test
+    public void testUniquePromptNameValidationWithUniqueName() throws IOException {
+        SearchResponse searchResponse = createSearchResponse(0);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), any());
+
+        mlPromptManager.validateUniquePromptName("unique name", "tenant_id", searchResponseActionListener);
+
+        ArgumentCaptor<SearchResponse> argumentCaptor = ArgumentCaptor.forClass(SearchResponse.class);
+        verify(searchResponseActionListener).onResponse(argumentCaptor.capture());
+        assertNotNull(argumentCaptor.getValue());
+        assertNotNull(argumentCaptor.getValue().getHits().getTotalHits());
+        assertEquals(0, argumentCaptor.getValue().getHits().getTotalHits().value());
+    }
+
     private GetResponse createGetResponse(String user, String system) {
         Map<String, String> prompt = new HashMap<>();
         prompt.put("user", user);
@@ -343,5 +386,21 @@ public class MLPromptManagerTests extends OpenSearchTestCase {
         BytesReference bytesReference = BytesReference.bytes(content);
         GetResult getResult = new GetResult(ML_PROMPT_INDEX, "111", 111l, 111l, 111l, true, bytesReference, null, null);
         return new GetResponse(getResult);
+    }
+
+    private SearchResponse createSearchResponse(long totalHits) throws IOException {
+        SearchResponse searchResponse = mock(SearchResponse.class);
+        String promptContent = "{\n"
+            + "                    \"_id\": \"prompt_id\",\n"
+            + "                    \"name\": \"Test Prompt\",\n"
+            + "                    \"description\": \"This is an example description\",\n"
+            + "                    \"version\": 1,\n"
+            + "                    \"created_time\": 1684981986069,\n"
+            + "                    \"last_updated_time\": 1684981986069\n"
+            + "                }";
+        SearchHit prompt = SearchHit.fromXContent(TestHelper.parser(promptContent));
+        SearchHits hits = new SearchHits(new SearchHit[] { prompt }, new TotalHits(totalHits, TotalHits.Relation.EQUAL_TO), Float.NaN);
+        when(searchResponse.getHits()).thenReturn(hits);
+        return searchResponse;
     }
 }

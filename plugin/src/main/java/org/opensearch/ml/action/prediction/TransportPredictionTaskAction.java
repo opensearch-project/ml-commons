@@ -11,6 +11,7 @@ import static org.opensearch.ml.prompt.MLPromptManager.PARAMETERS_PROMPT_FIELD;
 import static org.opensearch.ml.prompt.MLPromptManager.PARAMETERS_PROMPT_PARAMETERS_FIELD;
 import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
 
+import java.util.HashMap;
 import java.util.Map;
 
 import org.opensearch.OpenSearchStatusException;
@@ -30,6 +31,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.input.MLInput;
@@ -242,8 +244,10 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         ActionListener<MLTaskResponse> wrappedListener,
         String modelId
     ) {
-        RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) mlPredictionTaskRequest.getMlInput().getInputDataset();
-        Map<String, String> inputParameters = inputDataSet.getParameters();
+        MLInputDataset inputDataset = mlPredictionTaskRequest.getMlInput().getInputDataset();
+        Map<String, String> inputParameters = inputDataset instanceof RemoteInferenceInputDataSet
+            ? ((RemoteInferenceInputDataSet) inputDataset).getParameters()
+            : new HashMap<>();
         // prompt or messages
         String promptType = inputParameters.containsKey(PARAMETERS_MESSAGES_FIELD)
             ? PARAMETERS_MESSAGES_FIELD
@@ -255,8 +259,8 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                     inputParameters,
                     mlPredictionTaskRequest.getTenantId(),
                     ActionListener.wrap(inputParametersAfter -> {
-                        inputDataSet.setParameters(inputParametersAfter);
-                        mlPredictionTaskRequest.getMlInput().setInputDataset(inputDataSet);
+                        ((RemoteInferenceInputDataSet) inputDataset).setParameters(inputParametersAfter);
+                        mlPredictionTaskRequest.getMlInput().setInputDataset(((RemoteInferenceInputDataSet) inputDataset));
                     }, e -> wrappedListener.onFailure(e))
                 );
             executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
