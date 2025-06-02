@@ -12,6 +12,8 @@ import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Map;
 
+import lombok.Setter;
+import org.opensearch.arrow.spi.StreamManager;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
@@ -26,9 +28,12 @@ import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.engine.encryptor.Encryptor;
+import org.opensearch.threadpool.ThreadPool;
 
 import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.log4j.Log4j2;
+import org.opensearch.threadpool.ThreadPool;
 
 /**
  * This is the interface to all ml algorithms.
@@ -49,6 +54,11 @@ public class MLEngine {
     private final Path mlModelsCachePath;
 
     private Encryptor encryptor;
+
+    @Setter
+    private StreamManager streamManager;
+    @Setter
+    private ThreadPool threadPool;
 
     public MLEngine(Path opensearchDataFolder, Encryptor encryptor) {
         this.mlCachePath = opensearchDataFolder.resolve("ml_cache");
@@ -146,7 +156,7 @@ public class MLEngine {
 
     public Predictable deploy(MLModel mlModel, Map<String, Object> params) {
         Predictable predictable = MLEngineClassLoader.initInstance(mlModel.getAlgorithm(), null, MLAlgoParams.class);
-        predictable.initModel(mlModel, params, encryptor);
+        predictable.initModel(mlModel, params, encryptor, streamManager, threadPool);
         return predictable;
     }
 
