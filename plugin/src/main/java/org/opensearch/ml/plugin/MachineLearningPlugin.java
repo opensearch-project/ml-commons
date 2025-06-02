@@ -38,12 +38,12 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 
 import org.apache.lucene.analysis.Analyzer;
 import org.opensearch.action.ActionRequest;
+import org.opensearch.arrow.spi.StreamManager;
 import org.opensearch.cluster.metadata.IndexNameExpressionResolver;
 import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.cluster.service.ClusterService;
@@ -299,6 +299,7 @@ import org.opensearch.ml.rest.RestMLGetTaskAction;
 import org.opensearch.ml.rest.RestMLGetToolAction;
 import org.opensearch.ml.rest.RestMLListToolsAction;
 import org.opensearch.ml.rest.RestMLPredictionAction;
+import org.opensearch.ml.rest.RestMLPredictionStreamingAction;
 import org.opensearch.ml.rest.RestMLProfileAction;
 import org.opensearch.ml.rest.RestMLRegisterAgentAction;
 import org.opensearch.ml.rest.RestMLRegisterModelAction;
@@ -335,6 +336,8 @@ import org.opensearch.ml.rest.mcpserver.RestMLMcpToolsListAction;
 import org.opensearch.ml.rest.mcpserver.RestMLMcpToolsRegisterAction;
 import org.opensearch.ml.rest.mcpserver.RestMLMcpToolsRemoveAction;
 import org.opensearch.ml.rest.mcpserver.RestMLMcpToolsUpdateAction;
+import org.opensearch.ml.rest.mcpserver.RestMLRegisterMcpToolsAction;
+import org.opensearch.ml.rest.mcpserver.RestMLRemoveMcpToolsAction;
 import org.opensearch.ml.rest.mcpserver.RestMcpConnectionMessageStreamingAction;
 import org.opensearch.ml.rest.mcpserver.ToolFactoryWrapper;
 import org.opensearch.ml.searchext.MLInferenceRequestParametersExtBuilder;
@@ -364,6 +367,7 @@ import org.opensearch.plugins.IngestPlugin;
 import org.opensearch.plugins.Plugin;
 import org.opensearch.plugins.SearchPipelinePlugin;
 import org.opensearch.plugins.SearchPlugin;
+import org.opensearch.plugins.StreamManagerPlugin;
 import org.opensearch.plugins.SystemIndexPlugin;
 import org.opensearch.plugins.TelemetryAwarePlugin;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -389,6 +393,7 @@ import org.opensearch.watcher.ResourceWatcherService;
 
 import com.google.common.annotations.VisibleForTesting;
 
+import lombok.Data;
 import lombok.SneakyThrows;
 
 public class MachineLearningPlugin extends Plugin
@@ -401,7 +406,8 @@ public class MachineLearningPlugin extends Plugin
         IngestPlugin,
         SystemIndexPlugin,
         TelemetryAwarePlugin,
-        JobSchedulerExtension {
+        JobSchedulerExtension,
+        StreamManagerPlugin {
     public static final String ML_THREAD_POOL_PREFIX = "thread_pool.ml_commons.";
     public static final String GENERAL_THREAD_POOL = "opensearch_ml_general";
     public static final String SDK_CLIENT_THREAD_POOL = "opensearch_ml_sdkclient";
@@ -412,6 +418,7 @@ public class MachineLearningPlugin extends Plugin
     public static final String INGEST_THREAD_POOL = "opensearch_ml_ingest";
     public static final String REGISTER_THREAD_POOL = "opensearch_ml_register";
     public static final String DEPLOY_THREAD_POOL = "opensearch_ml_deploy";
+    public static final String STREAM_PREDICT_THREAD_POOL = "opensearch_ml_predict_stream";
     public static final String ML_BASE_URI = "/_plugins/_ml";
 
     public static final String ML_COMMONS_JOBS_TYPE = "opensearch_ml_commons_jobs";
@@ -433,11 +440,11 @@ public class MachineLearningPlugin extends Plugin
 
     private MLModelChunkUploader mlModelChunkUploader;
     private MLEngine mlEngine;
+    private StreamManagerWrapper streamManagerWrapper;
 
     private Client client;
     private ClusterService clusterService;
     private ThreadPool threadPool;
-    private Set<String> indicesToListen;
 
     public static final String ML_ROLE_NAME = "ml";
     private NamedXContentRegistry xContentRegistry;
@@ -458,6 +465,7 @@ public class MachineLearningPlugin extends Plugin
     private ScriptService scriptService;
     private Encryptor encryptor;
     private McpToolsHelper mcpToolsHelper;
+    private StreamManager streamManager;
 
     public MachineLearningPlugin() {}
 
@@ -593,6 +601,7 @@ public class MachineLearningPlugin extends Plugin
         encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
 
         mlEngine = new MLEngine(dataPath, encryptor);
+        streamManagerWrapper = new StreamManagerWrapper();
         nodeHelper = new DiscoveryNodeHelper(clusterService, settings);
         modelCacheHelper = new MLModelCacheHelper(clusterService, settings);
         cmHandler = new OpenSearchConversationalMemoryHandler(client, clusterService);
@@ -853,6 +862,11 @@ public class MachineLearningPlugin extends Plugin
         RestMLTrainingAction restMLTrainingAction = new RestMLTrainingAction();
         RestMLTrainAndPredictAction restMLTrainAndPredictAction = new RestMLTrainAndPredictAction();
         RestMLPredictionAction restMLPredictionAction = new RestMLPredictionAction(mlModelManager, mlFeatureEnabledSetting);
+        RestMLPredictionStreamingAction restMLPredictionStreamingAction = new RestMLPredictionStreamingAction(
+            mlModelManager,
+            mlFeatureEnabledSetting,
+            streamManagerWrapper
+        );
         RestMLExecuteAction restMLExecuteAction = new RestMLExecuteAction(mlFeatureEnabledSetting);
         RestMLGetModelAction restMLGetModelAction = new RestMLGetModelAction(mlFeatureEnabledSetting);
         RestMLDeleteModelAction restMLDeleteModelAction = new RestMLDeleteModelAction(mlFeatureEnabledSetting);
@@ -929,6 +943,7 @@ public class MachineLearningPlugin extends Plugin
                 restMLStatsAction,
                 restMLTrainingAction,
                 restMLPredictionAction,
+                restMLPredictionStreamingAction,
                 restMLExecuteAction,
                 restMLTrainAndPredictAction,
                 restMLGetModelAction,
@@ -1063,6 +1078,14 @@ public class MachineLearningPlugin extends Plugin
             ML_THREAD_POOL_PREFIX + INGEST_THREAD_POOL,
             false
         );
+        FixedExecutorBuilder streamPredictThreadPool = new FixedExecutorBuilder(
+            settings,
+            STREAM_PREDICT_THREAD_POOL,
+            OpenSearchExecutors.allocatedProcessors(settings) * 4,
+            10000,
+            ML_THREAD_POOL_PREFIX + STREAM_PREDICT_THREAD_POOL,
+            false
+        );
 
         return ImmutableList
             .of(
@@ -1074,7 +1097,8 @@ public class MachineLearningPlugin extends Plugin
                 predictThreadPool,
                 remotePredictThreadPool,
                 batchIngestThreadPool,
-                sdkClientThreadPool
+                sdkClientThreadPool,
+                streamPredictThreadPool
             );
     }
 
@@ -1347,4 +1371,17 @@ public class MachineLearningPlugin extends Plugin
     public ScheduledJobParser getJobParser() {
         return (parser, id, jobDocVersion) -> MLJobParameter.parse(parser);
     }
+
+    public void onStreamManagerInitialized(StreamManager streamManager) {
+        this.streamManager = streamManager;
+        mlEngine.setStreamManager(streamManager);
+        mlEngine.setThreadPool(threadPool);
+        streamManagerWrapper.setStreamManager(streamManager);
+    }
+
+    @Data
+    public static class StreamManagerWrapper {
+        private StreamManager streamManager;
+    }
+
 }

@@ -170,4 +170,16 @@ public class McpConnectorExecutor extends AbstractConnectorExecutor {
     ) {
         throw new UnsupportedOperationException("Not implemented.");
     }
+
+    @Override
+    public void invokeRemoteServiceStream(
+        String action,
+        MLInput mlInput,
+        Map<String, String> parameters,
+        String payload,
+        ExecutionContext executionContext,
+        ActionListener<Tuple<Integer, ModelTensors>> actionListener
+    ) {
+        return;
+    }
 }
