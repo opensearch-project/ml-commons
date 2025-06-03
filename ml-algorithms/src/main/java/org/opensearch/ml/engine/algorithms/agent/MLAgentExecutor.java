@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.CancellationException;
 
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchException;
@@ -481,7 +482,12 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             agentResponse.put(ERROR_MESSAGE, ex.getMessage());
 
             updatedTask.put(RESPONSE_FIELD, agentResponse);
-            updatedTask.put(STATE_FIELD, MLTaskState.FAILED);
+            if (ex instanceof CancellationException) {
+                updatedTask.put(STATE_FIELD, MLTaskState.CANCELLED);
+            } else {
+                updatedTask.put(STATE_FIELD, MLTaskState.FAILED);
+            }
+
             mlTask.setResponse(agentResponse);
 
             updateMLTaskDirectly(

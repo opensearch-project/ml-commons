@@ -141,7 +141,11 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
                             cancelAgentTask(taskId, mlTask.getState(), actionListener);
                         } else {
                             actionListener
-                                .onFailure(new IllegalArgumentException("The task ID you provided does not have any associated batch job or agent execution."));
+                                .onFailure(
+                                    new IllegalArgumentException(
+                                        "The task ID you provided does not have any associated batch job or agent execution."
+                                    )
+                                );
                         }
                     } catch (Exception e) {
                         log.error("Failed to parse ml task {}", r.getId(), e);
@@ -166,30 +170,33 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
 
     private void cancelAgentTask(String taskId, MLTaskState state, ActionListener<MLCancelBatchJobResponse> actionListener) {
         if (MLTaskManager.TASK_DONE_STATES.contains(state)) {
-            actionListener.onFailure(new MLValidationException(
-                    String.format("Task %s cannot be cancelled as it is in a final state: %s.", taskId, state)));
+            actionListener
+                .onFailure(
+                    new MLValidationException(String.format("Task %s cannot be cancelled as it is in a final state: %s.", taskId, state))
+                );
             return;
         }
 
-        mlTaskManager.updateMLTaskDirectly(taskId, Map.of(MLTask.STATE_FIELD, MLTaskState.CANCELLING), new ActionListener<UpdateResponse>() {
-            @Override
-            public void onResponse(UpdateResponse updateResponse) {
-                if (updateResponse.getResult() == UpdateResponse.Result.UPDATED) {
-                    actionListener.onResponse(new MLCancelBatchJobResponse(RestStatus.OK));
-                    return;
+        mlTaskManager
+            .updateMLTaskDirectly(taskId, Map.of(MLTask.STATE_FIELD, MLTaskState.CANCELLING), new ActionListener<UpdateResponse>() {
+                @Override
+                public void onResponse(UpdateResponse updateResponse) {
+                    if (updateResponse.getResult() == UpdateResponse.Result.UPDATED) {
+                        actionListener.onResponse(new MLCancelBatchJobResponse(RestStatus.OK));
+                        return;
+                    }
+
+                    String errorMessage = String.format("Failed to cancel task %s: %s", taskId, updateResponse.getResult());
+                    log.error(errorMessage);
+                    actionListener.onFailure(new RuntimeException(errorMessage));
                 }
 
-                String errorMessage = String.format("Failed to cancel task %s: %s", taskId, updateResponse.getResult());
-                log.error(errorMessage);
-                actionListener.onFailure(new RuntimeException(errorMessage));
-            }
-
-            @Override
-            public void onFailure(Exception e) {
-                log.error("Failed to cancel task: {}", taskId);
-                actionListener.onFailure(e);
-            }
-        });
+                @Override
+                public void onFailure(Exception e) {
+                    log.error("Failed to cancel task: {}", taskId);
+                    actionListener.onFailure(e);
+                }
+            });
     }
 
     private void processRemoteBatchPrediction(MLTask mlTask, ActionListener<MLCancelBatchJobResponse> actionListener) {
