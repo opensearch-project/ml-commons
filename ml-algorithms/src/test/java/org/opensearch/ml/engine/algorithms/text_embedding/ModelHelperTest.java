@@ -207,7 +207,7 @@ public class ModelHelperTest {
         MLRegisterModelInput registerModelInput = MLRegisterModelInput
             .builder()
             .modelName("huggingface/sentence-transformers/all-mpnet-base-v2")
-            .version("1.0.1")
+            .version("1.0.2")
             .modelGroupId("mockGroupId")
             .modelFormat(modelFormat)
             .deployModel(false)
@@ -223,7 +223,7 @@ public class ModelHelperTest {
         MLRegisterModelInput registerModelInput = MLRegisterModelInput
             .builder()
             .modelName("huggingface/sentence-transformers/all-mpnet-base-v2")
-            .version("1.0.1")
+            .version("1.0.2")
             .modelGroupId("mockGroupId")
             .modelFormat(modelFormat)
             .deployModel(false)
