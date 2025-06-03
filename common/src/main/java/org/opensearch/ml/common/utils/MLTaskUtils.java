@@ -36,28 +36,27 @@ public class MLTaskUtils {
         Client client,
         ActionListener<UpdateResponse> listener
     ) {
-        try {
-            if (updatedFields == null || updatedFields.isEmpty()) {
-                listener.onFailure(new IllegalArgumentException("Updated fields is null or empty"));
-                return;
-            }
-            UpdateRequest updateRequest = new UpdateRequest(ML_TASK_INDEX, taskId);
-            Map<String, Object> updatedContent = new HashMap<>(updatedFields);
-            updatedContent.put(LAST_UPDATE_TIME_FIELD, Instant.now().toEpochMilli());
-            updateRequest.doc(updatedContent);
-            updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-            if (updatedFields.containsKey(STATE_FIELD) && TASK_DONE_STATES.contains(updatedFields.containsKey(STATE_FIELD))) {
-                updateRequest.retryOnConflict(3);
-            }
-            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                client.update(updateRequest, ActionListener.runBefore(listener, context::restore));
-            } catch (Exception e) {
-                listener.onFailure(e);
-            }
+        if (updatedFields == null || updatedFields.isEmpty()) {
+            listener.onFailure(new IllegalArgumentException("Updated fields is null or empty"));
+            return;
+        }
+
+        UpdateRequest updateRequest = new UpdateRequest(ML_TASK_INDEX, taskId);
+
+        Map<String, Object> updatedContent = new HashMap<>(updatedFields);
+        updatedContent.put(LAST_UPDATE_TIME_FIELD, Instant.now().toEpochMilli());
+        updateRequest.doc(updatedContent);
+        updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+
+        if (updatedFields.containsKey(STATE_FIELD) && TASK_DONE_STATES.contains(updatedFields.containsKey(STATE_FIELD))) {
+            updateRequest.retryOnConflict(3);
+        }
+
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            client.update(updateRequest, ActionListener.runBefore(listener, context::restore));
         } catch (Exception e) {
             log.error("Failed to update ML task {}", taskId, e);
             listener.onFailure(e);
         }
     }
-
 }
