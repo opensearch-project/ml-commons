@@ -24,6 +24,7 @@ import org.opensearch.action.ActionRequest;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
+import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -36,6 +37,7 @@ import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
+import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
@@ -132,11 +134,14 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
                             && !mlFeatureEnabledSetting.isOfflineBatchInferenceEnabled()) {
                             throw new IllegalStateException(BATCH_INFERENCE_DISABLED_ERR_MSG);
                         }
+
                         if (mlTask.getTaskType() == MLTaskType.BATCH_PREDICTION && mlTask.getFunctionName() == FunctionName.REMOTE) {
                             processRemoteBatchPrediction(mlTask, actionListener);
+                        } else if (mlTask.getTaskType() == MLTaskType.AGENT_EXECUTION && mlTask.getFunctionName() == FunctionName.AGENT) {
+                            cancelAgentTask(taskId, mlTask.getState(), actionListener);
                         } else {
                             actionListener
-                                .onFailure(new IllegalArgumentException("The task ID you provided does not have any associated batch job"));
+                                .onFailure(new IllegalArgumentException("The task ID you provided does not have any associated batch job or agent execution."));
                         }
                     } catch (Exception e) {
                         log.error("Failed to parse ml task {}", r.getId(), e);
@@ -157,6 +162,34 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
             log.error("Failed to get ML task {}", taskId, e);
             actionListener.onFailure(e);
         }
+    }
+
+    private void cancelAgentTask(String taskId, MLTaskState state, ActionListener<MLCancelBatchJobResponse> actionListener) {
+        if (MLTaskManager.TASK_DONE_STATES.contains(state)) {
+            actionListener.onFailure(new MLValidationException(
+                    String.format("Task %s cannot be cancelled as it is in a final state: %s.", taskId, state)));
+            return;
+        }
+
+        mlTaskManager.updateMLTaskDirectly(taskId, Map.of(MLTask.STATE_FIELD, MLTaskState.CANCELLING), new ActionListener<UpdateResponse>() {
+            @Override
+            public void onResponse(UpdateResponse updateResponse) {
+                if (updateResponse.getResult() == UpdateResponse.Result.UPDATED) {
+                    actionListener.onResponse(new MLCancelBatchJobResponse(RestStatus.OK));
+                    return;
+                }
+
+                String errorMessage = String.format("Failed to cancel task %s: %s", taskId, updateResponse.getResult());
+                log.error(errorMessage);
+                actionListener.onFailure(new RuntimeException(errorMessage));
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                log.error("Failed to cancel task: {}", taskId);
+                actionListener.onFailure(e);
+            }
+        });
     }
 
     private void processRemoteBatchPrediction(MLTask mlTask, ActionListener<MLCancelBatchJobResponse> actionListener) {
