@@ -7,8 +7,10 @@ package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.apache.commons.text.StringEscapeUtils.escapeJson;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.common.MLTask.TASK_ID_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getToolName;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.isTaskMarkedForCancel;
 
 import java.io.IOException;
 import java.security.AccessController;
@@ -17,6 +19,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.commons.text.StringSubstitutor;
@@ -102,6 +105,12 @@ public class MLFlowAgentRunner implements MLAgentRunner {
         String parentInteractionId = params.get(MLAgentExecutor.PARENT_INTERACTION_ID);
 
         for (int i = 0; i <= toolSpecs.size(); i++) {
+            String taskId = params.get(TASK_ID_FIELD);
+            if (isTaskMarkedForCancel(taskId, client)) {
+                listener.onFailure(new CancellationException(String.format("Agent execution cancelled for task: %s", taskId)));
+                return;
+            }
+
             if (i == 0) {
                 MLToolSpec toolSpec = toolSpecs.get(i);
                 Tool tool = createTool(toolSpec, mlAgent.getTenantId());

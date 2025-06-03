@@ -19,6 +19,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.cleanUpResour
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTools;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMcpToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.isTaskMarkedForCancel;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.MAX_ITERATION;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.saveTraceData;
@@ -65,9 +66,6 @@ import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
-import org.opensearch.ml.common.transport.task.MLTaskGetAction;
-import org.opensearch.ml.common.transport.task.MLTaskGetRequest;
-import org.opensearch.ml.common.transport.task.MLTaskGetResponse;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
@@ -414,13 +412,9 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
                 // check if task has been marked to cancel
                 String taskId = allParams.get(TASK_ID_FIELD);
-                if (taskId != null && !taskId.isEmpty()) {
-                    MLTaskGetRequest taskGetRequest = MLTaskGetRequest.builder().taskId(taskId).build();
-                    MLTaskGetResponse taskResponse = client.execute(MLTaskGetAction.INSTANCE, taskGetRequest).actionGet();
-                    if (taskResponse.getMlTask().getState().equals(MLTaskState.CANCELLING)) {
-                        finalListener.onFailure(new CancellationException(String.format("Agent execution cancelled for task: %s", taskId)));
-                        return;
-                    }
+                if (isTaskMarkedForCancel(taskId, client)) {
+                    finalListener.onFailure(new CancellationException(String.format("Agent execution cancelled for task: %s", taskId)));
+                    return;
                 }
 
                 client.execute(MLExecuteTaskAction.INSTANCE, executeRequest, ActionListener.wrap(executeResponse -> {

@@ -64,6 +64,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.connector.Connector;
@@ -71,6 +72,9 @@ import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.common.transport.task.MLTaskGetAction;
+import org.opensearch.ml.common.transport.task.MLTaskGetRequest;
+import org.opensearch.ml.common.transport.task.MLTaskGetResponse;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.algorithms.remote.McpConnectorExecutor;
@@ -930,5 +934,15 @@ public class AgentUtils {
                 ((McpSseTool) tool).getMcpSyncClient().closeGracefully();
             }
         }
+    }
+
+    public static boolean isTaskMarkedForCancel(String taskId, Client client) {
+        if (taskId != null && !taskId.isEmpty()) {
+            MLTaskGetRequest taskGetRequest = MLTaskGetRequest.builder().taskId(taskId).build();
+            MLTaskGetResponse taskResponse = client.execute(MLTaskGetAction.INSTANCE, taskGetRequest).actionGet();
+            return taskResponse.getMlTask().getState().equals(MLTaskState.CANCELLING);
+        }
+
+        return false;
     }
 }
