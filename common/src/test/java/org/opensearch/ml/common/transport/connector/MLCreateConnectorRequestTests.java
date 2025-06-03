@@ -258,15 +258,12 @@ public class MLCreateConnectorRequestTests {
         String exceptionMessage = invalidException.getMessage();
         assertTrue(
             "Error message should contain name validation failure",
-            exceptionMessage
-                .contains("Model connector name can only contain letters, numbers, whitespace, and basic punctuation (.,!?():@-_'\");")
+            exceptionMessage.contains("Model connector name " + SAFE_INPUT_DESCRIPTION + ";")
         );
+
         assertTrue(
             "Error message should contain description validation failure",
-            exceptionMessage
-                .contains(
-                    "Model connector description can only contain letters, numbers, whitespace, and basic punctuation (.,!?():@-_'\");"
-                )
+            exceptionMessage.contains("Model connector description " + SAFE_INPUT_DESCRIPTION + ";")
         );
     }
 
