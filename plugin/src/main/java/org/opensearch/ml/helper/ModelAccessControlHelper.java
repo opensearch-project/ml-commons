@@ -174,7 +174,7 @@ public class ModelAccessControlHelper {
         Settings settings,
         ActionListener<Boolean> listener
     ) {
-        if (modelGroupId == null || (!mlFeatureEnabledSetting.isMultiTenancyEnabled())) {
+        if (modelGroupId == null) {
             listener.onResponse(true);
             return;
         }
@@ -196,7 +196,7 @@ public class ModelAccessControlHelper {
             }, listener::onFailure));
             return;
         }
-        if (isAdmin(user) || !isSecurityEnabledAndModelAccessControlEnabled(user)) {
+        if (!mlFeatureEnabledSetting.isMultiTenancyEnabled() && (isAdmin(user) || !isSecurityEnabledAndModelAccessControlEnabled(user))) {
             listener.onResponse(true);
             return;
         }
@@ -390,9 +390,7 @@ public class ModelAccessControlHelper {
                 // User has no access → return nothing
                 searchSourceBuilder.query(QueryBuilders.boolQuery().mustNot(QueryBuilders.matchAllQuery()));
             } else {
-                // Restrict search strictly to these _ids
-                // TODO check if this should be replaced with model_group_ids: MLModelGroup.MODEL_GROUP_ID_FIELD
-
+                // Restrict search strictly to these ids
                 searchSourceBuilder.query(QueryBuilders.termsQuery(MLModelGroup.MODEL_GROUP_ID_FIELD + ".keyword", modelGroupIds));
             }
         }, failure -> {
