@@ -1,3 +1,7 @@
+/*
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
+ */
 package org.opensearch.ml.common.utils;
 
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
