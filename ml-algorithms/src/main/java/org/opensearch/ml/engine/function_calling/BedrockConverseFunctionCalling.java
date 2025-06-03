@@ -118,7 +118,7 @@ public class BedrockConverseFunctionCalling implements FunctionCalling {
             if (toolResult.containsKey(TOOL_ERROR)) {
                 result.setStatus("error");
             }
-            toolMessage.getContent().add(result);
+            toolMessage.getContent().add(Map.of("toolResult", result));
         }
 
         return List.of(toolMessage);

@@ -17,6 +17,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.PROMPT_SUFFIX
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.RESPONSE_FORMAT_INSTRUCTION;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALL_ID;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_RESPONSE;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_RESULT;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.VERBOSE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.cleanUpResource;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.constructToolParams;
@@ -72,6 +73,7 @@ import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.function_calling.FunctionCalling;
 import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
+import org.opensearch.ml.engine.function_calling.LLMMessage;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.engine.tools.MLModelTool;
@@ -406,7 +408,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             actionInput,
                             toolParams,
                             interactions,
-                            toolCallId
+                            toolCallId,
+                            functionCalling
                         );
                     } else {
                         String res = String.format(Locale.ROOT, "Failed to run the tool %s which is unsupported.", action);
@@ -571,20 +574,29 @@ public class MLChatAgentRunner implements MLAgentRunner {
         String actionInput,
         Map<String, String> toolParams,
         List<String> interactions,
-        String toolCallId
+        String toolCallId,
+        FunctionCalling functionCalling
     ) {
         if (tools.get(action).validate(toolParams)) {
             try {
                 String finalAction = action;
                 ActionListener<Object> toolListener = ActionListener.wrap(r -> {
-                    interactions
-                        .add(
-                            substitute(
-                                tmpParameters.get(INTERACTION_TEMPLATE_TOOL_RESPONSE),
-                                Map.of(TOOL_CALL_ID, toolCallId, "tool_response", processTextDoc(StringUtils.toJson(r))),
-                                INTERACTIONS_PREFIX
-                            )
-                        );
+                    if (functionCalling != null) {
+                        List<Map<String, Object>> toolResults = List.of(Map.of(TOOL_CALL_ID, toolCallId, TOOL_RESULT, Map.of("text", r)));
+                        List<LLMMessage> llmMessages = functionCalling.supply(toolResults);
+                        // TODO: support multiple tool calls at the same time so that multiple LLMMessages can be generated here
+                        LLMMessage firstMessage = llmMessages.getFirst();
+                        interactions.add(StringUtils.toJson(Map.of("role", firstMessage.getRole(), "content", firstMessage.getContent())));
+                    } else {
+                        interactions
+                            .add(
+                                substitute(
+                                    tmpParameters.get(INTERACTION_TEMPLATE_TOOL_RESPONSE),
+                                    Map.of(TOOL_CALL_ID, toolCallId, "tool_response", processTextDoc(StringUtils.toJson(r))),
+                                    INTERACTIONS_PREFIX
+                                )
+                            );
+                    }
                     nextStepListener.onResponse(r);
                 }, e -> {
                     interactions
