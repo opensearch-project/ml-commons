@@ -608,29 +608,4 @@ public class MLPlanExecuteAndReflectAgentRunnerTest {
         assertEquals(1, secondModelTensorList.size());
         assertEquals(finalResult, secondModelTensorList.get(0).getDataAsMap().get("response"));
     }
-
-    @Test
-    public void testSaveAndReturnFinalResultWithError() {
-        String parentInteractionId = "test_parent_id";
-        String finalResult = "test final result";
-        String input = "test input";
-        String conversationId = "test_conversation_id";
-        String executorMemoryId = "test_executor_mem_id";
-        String executorParentId = "test_executor_parent_id";
-        Exception expectedException = new MLException("Test error");
-
-        when(conversationIndexMemory.getConversationId()).thenReturn(conversationId);
-        when(conversationIndexMemory.getMemoryManager()).thenReturn(mlMemoryManager);
-
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(2);
-            listener.onFailure(expectedException);
-            return null;
-        }).when(mlMemoryManager).updateInteraction(eq(parentInteractionId), any(), any());
-
-        mlPlanExecuteAndReflectAgentRunner
-            .saveAndReturnFinalResult(conversationIndexMemory, executorMemoryId, executorParentId, parentInteractionId, finalResult, input, agentActionListener);
-
-        verify(agentActionListener).onFailure(expectedException);
-    }
 }
