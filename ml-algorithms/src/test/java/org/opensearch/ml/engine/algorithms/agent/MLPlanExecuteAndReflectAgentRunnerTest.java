@@ -7,17 +7,20 @@ package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,7 +31,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.opensearch.action.StepListener;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
@@ -40,6 +42,7 @@ import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.conversation.Interaction;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -55,9 +58,10 @@ import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
-import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.transport.client.Client;
+
+import com.google.common.collect.ImmutableMap;
 
 public class MLPlanExecuteAndReflectAgentRunnerTest {
     public static final String FIRST_TOOL = "firstTool";
@@ -99,18 +103,18 @@ public class MLPlanExecuteAndReflectAgentRunnerTest {
     @Mock
     private UpdateResponse updateResponse;
     @Mock
-    private MLExecuteTaskResponse mlExecuteTaskResponse;
-    @Mock
     private MLTaskResponse mlTaskResponse;
+    @Mock
+    private MLExecuteTaskResponse mlExecuteTaskResponse;
 
     @Captor
     private ArgumentCaptor<Object> objectCaptor;
+
     @Captor
     private ArgumentCaptor<ActionListener<ConversationIndexMemory>> memoryFactoryCapture;
+
     @Captor
     private ArgumentCaptor<ActionListener<List<Interaction>>> memoryInteractionCapture;
-    @Captor
-    private ArgumentCaptor<Map<String, String>> toolParamsCapture;
 
     private MLMemorySpec mlMemorySpec;
 
@@ -121,15 +125,15 @@ public class MLPlanExecuteAndReflectAgentRunnerTest {
         settings = Settings.builder().build();
         toolFactories = ImmutableMap.of(FIRST_TOOL, firstToolFactory, SECOND_TOOL, secondToolFactory);
 
-        // Setup memory
+        // memory
         mlMemorySpec = new MLMemorySpec(ConversationIndexMemory.TYPE, "uuid", 10);
         when(memoryMap.get(anyString())).thenReturn(memoryFactory);
-        when(conversationIndexMemory.getConversationId()).thenReturn("conversation_id");
+        when(conversationIndexMemory.getConversationId()).thenReturn("test_memory_id");
         when(conversationIndexMemory.getMemoryManager()).thenReturn(mlMemoryManager);
         when(createInteractionResponse.getId()).thenReturn("create_interaction_id");
         when(updateResponse.getId()).thenReturn("update_interaction_id");
 
-        // Setup memory factory
+        // memory factory
         doAnswer(invocation -> {
             ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
             listener.onResponse(conversationIndexMemory);
@@ -139,7 +143,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest {
         // Setup conversation index memory
         doAnswer(invocation -> {
             ActionListener<List<Interaction>> listener = invocation.getArgument(0);
-            listener.onResponse(generateInteractions(2));
+            listener.onResponse(generateInteractions());
             return null;
         }).when(conversationIndexMemory).getMessages(memoryInteractionCapture.capture(), anyInt());
 
@@ -174,17 +178,13 @@ public class MLPlanExecuteAndReflectAgentRunnerTest {
 
     @Test
     public void testBasicExecution() {
-        // Create MLAgent with tools and parameters
-        Map<String, String> agentParams = new HashMap<>();
-        agentParams.put("system_prompt", "You are a helpful assistant");
-        agentParams.put("max_steps", "10");
-        
-        MLAgent mlAgent = createMLAgentWithTools(agentParams);
+        MLAgent mlAgent = createMLAgentWithTools();
 
         // Setup LLM response for planning phase
         doAnswer(invocation -> {
             ActionListener<Object> listener = invocation.getArgument(2);
-            ModelTensor modelTensor = ModelTensor.builder()
+            ModelTensor modelTensor = ModelTensor
+                .builder()
                 .dataAsMap(ImmutableMap.of("response", "{\"steps\":[\"step1\"], \"result\":\"final result\"}"))
                 .build();
             ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
@@ -197,9 +197,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest {
         // Setup tool execution response
         doAnswer(invocation -> {
             ActionListener<Object> listener = invocation.getArgument(1);
-            ModelTensor modelTensor = ModelTensor.builder()
-                .dataAsMap(ImmutableMap.of("response", "tool execution result"))
-                .build();
+            ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "tool execution result")).build();
             ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
             ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
             when(mlExecuteTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
@@ -217,6 +215,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest {
         // Run the agent
         Map<String, String> params = new HashMap<>();
         params.put("question", "test question");
+        params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "parent_interaction_test_id");
         mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
 
         // Verify the response
@@ -224,22 +223,40 @@ public class MLPlanExecuteAndReflectAgentRunnerTest {
         Object response = objectCaptor.getValue();
         assertTrue(response instanceof ModelTensorOutput);
         ModelTensorOutput modelTensorOutput = (ModelTensorOutput) response;
-        assertNotNull(modelTensorOutput);
+
+        List<ModelTensors> mlModelOutputs = modelTensorOutput.getMlModelOutputs();
+        assertEquals(2, mlModelOutputs.size());
+
+        ModelTensors firstModelTensors = mlModelOutputs.get(0);
+        List<ModelTensor> firstModelTensorList = firstModelTensors.getMlModelTensors();
+        assertEquals(2, firstModelTensorList.size());
+
+        ModelTensor memoryIdTensor = firstModelTensorList.get(0);
+        assertEquals("memory_id", memoryIdTensor.getName());
+        assertEquals("test_memory_id", memoryIdTensor.getResult());
+
+        ModelTensor parentInteractionModelTensor = firstModelTensorList.get(1);
+        assertEquals("parent_interaction_id", parentInteractionModelTensor.getName());
+        assertEquals("test_parent_interaction_id", parentInteractionModelTensor.getResult());
+
+        ModelTensors secondModelTensors = mlModelOutputs.get(1);
+        List<ModelTensor> secondModelTensorList = secondModelTensors.getMlModelTensors();
+        assertEquals(1, secondModelTensorList.size());
+
+        ModelTensor responseTensor = secondModelTensorList.get(0);
+        assertEquals("response", responseTensor.getName());
+        assertEquals("final result", responseTensor.getDataAsMap().get("response"));
     }
 
     @Test
     public void testExecutionWithHistory() {
-        // Create MLAgent with tools and parameters
-        Map<String, String> agentParams = new HashMap<>();
-        agentParams.put("system_prompt", "You are a helpful assistant");
-        agentParams.put("max_steps", "10");
-        
-        MLAgent mlAgent = createMLAgentWithTools(agentParams);
+        MLAgent mlAgent = createMLAgentWithTools();
 
         // Setup LLM response for planning phase
         doAnswer(invocation -> {
             ActionListener<Object> listener = invocation.getArgument(2);
-            ModelTensor modelTensor = ModelTensor.builder()
+            ModelTensor modelTensor = ModelTensor
+                .builder()
                 .dataAsMap(ImmutableMap.of("response", "{\"steps\":[\"step1\"], \"result\":\"final result\"}"))
                 .build();
             ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
@@ -252,9 +269,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest {
         // Setup tool execution response
         doAnswer(invocation -> {
             ActionListener<Object> listener = invocation.getArgument(1);
-            ModelTensor modelTensor = ModelTensor.builder()
-                .dataAsMap(ImmutableMap.of("response", "tool execution result"))
-                .build();
+            ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "tool execution result")).build();
             ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
             ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
             when(mlExecuteTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
@@ -273,6 +288,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest {
         Map<String, String> params = new HashMap<>();
         params.put("question", "test question");
         params.put("memory_id", "test_memory_id");
+        params.put("parent_interaction_id", "test_parent_interaction_id");
         mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
 
         // Verify the response
@@ -280,22 +296,39 @@ public class MLPlanExecuteAndReflectAgentRunnerTest {
         Object response = objectCaptor.getValue();
         assertTrue(response instanceof ModelTensorOutput);
         ModelTensorOutput modelTensorOutput = (ModelTensorOutput) response;
-        assertNotNull(modelTensorOutput);
+
+        List<ModelTensors> mlModelOutputs = modelTensorOutput.getMlModelOutputs();
+        assertEquals(2, mlModelOutputs.size());
+
+        ModelTensors firstModelTensors = mlModelOutputs.get(0);
+        List<ModelTensor> firstModelTensorList = firstModelTensors.getMlModelTensors();
+        assertEquals(2, firstModelTensorList.size());
+
+        ModelTensor memoryIdTensor = firstModelTensorList.get(0);
+        assertEquals("memory_id", memoryIdTensor.getName());
+        assertEquals("test_memory_id", memoryIdTensor.getResult());
+
+        ModelTensor parentInteractionModelTensor = firstModelTensorList.get(1);
+        assertEquals("parent_interaction_id", parentInteractionModelTensor.getName());
+        assertEquals("test_parent_interaction_id", parentInteractionModelTensor.getResult());
+
+        ModelTensors secondModelTensors = mlModelOutputs.get(1);
+        List<ModelTensor> secondModelTensorList = secondModelTensors.getMlModelTensors();
+        assertEquals(1, secondModelTensorList.size());
+
+        ModelTensor responseTensor = secondModelTensorList.get(0);
+        assertEquals("response", responseTensor.getName());
+        assertEquals("final result", responseTensor.getDataAsMap().get("response"));
     }
 
     @Test
     public void testExecutionWithMaxSteps() {
-        // Create MLAgent with tools and parameters
-        Map<String, String> agentParams = new HashMap<>();
-        agentParams.put("system_prompt", "You are a helpful assistant");
-        agentParams.put("max_steps", "10");
-        
-        MLAgent mlAgent = createMLAgentWithTools(agentParams);
+        MLAgent mlAgent = createMLAgentWithTools();
 
-        // Setup LLM response for planning phase
         doAnswer(invocation -> {
             ActionListener<Object> listener = invocation.getArgument(2);
-            ModelTensor modelTensor = ModelTensor.builder()
+            ModelTensor modelTensor = ModelTensor
+                .builder()
                 .dataAsMap(ImmutableMap.of("response", "{\"steps\":[\"step1\", \"step2\", \"step3\"], \"result\":\"\"}"))
                 .build();
             ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
@@ -305,12 +338,9 @@ public class MLPlanExecuteAndReflectAgentRunnerTest {
             return null;
         }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(MLPredictionTaskRequest.class), any());
 
-        // Setup tool execution response
         doAnswer(invocation -> {
             ActionListener<Object> listener = invocation.getArgument(2);
-            ModelTensor modelTensor = ModelTensor.builder()
-                .dataAsMap(ImmutableMap.of("response", "tool execution result"))
-                .build();
+            ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "tool execution result")).build();
             ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
             ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
             when(mlExecuteTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
@@ -318,29 +348,53 @@ public class MLPlanExecuteAndReflectAgentRunnerTest {
             return null;
         }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(MLExecuteTaskRequest.class), any());
 
-        // Setup memory manager update response
         doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(2);
             listener.onResponse(updateResponse);
             return null;
         }).when(mlMemoryManager).updateInteraction(any(), any(), any());
 
-        // Run the agent with max steps
         Map<String, String> params = new HashMap<>();
         params.put("question", "test question");
         params.put("max_steps", "2");
+        params.put("parent_interaction_id", "test_parent_interaction_id");
         mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
 
-        // Verify the response
         verify(agentActionListener).onResponse(objectCaptor.capture());
         Object response = objectCaptor.getValue();
         assertTrue(response instanceof ModelTensorOutput);
         ModelTensorOutput modelTensorOutput = (ModelTensorOutput) response;
-        assertNotNull(modelTensorOutput);
+
+        List<ModelTensors> mlModelOutputs = modelTensorOutput.getMlModelOutputs();
+        assertEquals(2, mlModelOutputs.size());
+
+        ModelTensors firstModelTensors = mlModelOutputs.get(0);
+        List<ModelTensor> firstModelTensorList = firstModelTensors.getMlModelTensors();
+        assertEquals(2, firstModelTensorList.size());
+
+        ModelTensor memoryIdTensor = firstModelTensorList.get(0);
+        assertEquals("memory_id", memoryIdTensor.getName());
+        assertEquals("test_memory_id", memoryIdTensor.getResult());
+
+        ModelTensor parentInteractionModelTensor = firstModelTensorList.get(1);
+        assertEquals("parent_interaction_id", parentInteractionModelTensor.getName());
+        assertEquals("test_parent_interaction_id", parentInteractionModelTensor.getResult());
+
+        ModelTensors secondModelTensors = mlModelOutputs.get(1);
+        List<ModelTensor> secondModelTensorList = secondModelTensors.getMlModelTensors();
+        assertEquals(1, secondModelTensorList.size());
+
+        ModelTensor responseTensor = secondModelTensorList.get(0);
+        assertEquals("response", responseTensor.getName());
+        assertEquals(
+            "Max Steps Limit Reached. Use memory_id with same task to restart. \n"
+                + " Last executed step: step1, \n"
+                + " Last executed step result: tool execution result",
+            responseTensor.getDataAsMap().get("response")
+        );
     }
 
-    // Helper methods
-    private MLAgent createMLAgentWithTools(Map<String, String> parameters) {
+    private MLAgent createMLAgentWithTools() {
         LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
         MLToolSpec firstToolSpec = MLToolSpec
             .builder()
@@ -348,6 +402,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest {
             .type(FIRST_TOOL)
             .parameters(ImmutableMap.of("key1", "value1", "key2", "value2"))
             .build();
+
         return MLAgent
             .builder()
             .name("TestAgent")
@@ -355,119 +410,227 @@ public class MLPlanExecuteAndReflectAgentRunnerTest {
             .tools(Arrays.asList(firstToolSpec))
             .memory(mlMemorySpec)
             .llm(llmSpec)
-            .parameters(parameters)
+            .parameters(Collections.emptyMap())
             .build();
     }
 
-    private List<Interaction> generateInteractions(int size) {
-        return Arrays.asList(
-            Interaction.builder().id("interaction-1").input("input-1").response("response-1").build(),
-            Interaction.builder().id("interaction-2").input("input-2").response("response-2").build()
+    private List<Interaction> generateInteractions() {
+        return Arrays
+            .asList(
+                Interaction.builder().id("interaction-1").input("input-1").response("response-1").build(),
+                Interaction.builder().id("interaction-2").input("input-2").response("response-2").build()
+            );
+    }
+
+    @Test
+    public void testSetupPromptParameters() {
+        Map<String, String> testParams = new HashMap<>();
+        testParams.put(MLPlanExecuteAndReflectAgentRunner.QUESTION_FIELD, "test question");
+        testParams.put(MLPlanExecuteAndReflectAgentRunner.SYSTEM_PROMPT_FIELD, "custom system prompt");
+
+        mlPlanExecuteAndReflectAgentRunner.setupPromptParameters(testParams);
+
+        assertEquals("test question", testParams.get(MLPlanExecuteAndReflectAgentRunner.USER_PROMPT_FIELD));
+        assertTrue(testParams.get(MLPlanExecuteAndReflectAgentRunner.SYSTEM_PROMPT_FIELD).contains("custom system prompt"));
+        assertTrue(testParams.get(MLPlanExecuteAndReflectAgentRunner.SYSTEM_PROMPT_FIELD).contains("Always respond in JSON format"));
+        assertNotNull(testParams.get(MLPlanExecuteAndReflectAgentRunner.PLANNER_PROMPT_FIELD));
+        assertNotNull(testParams.get(MLPlanExecuteAndReflectAgentRunner.REFLECT_PROMPT_FIELD));
+        assertEquals(
+            PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT,
+            testParams.get(MLPlanExecuteAndReflectAgentRunner.PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT_FIELD)
         );
     }
 
-    /**
-     * Test the run method with an unsupported LLM interface.
-     * This test verifies that the method throws an MLException when an unsupported LLM interface is provided.
-     */
-    @Test(expected = org.opensearch.ml.common.exception.MLException.class)
-    public void testRunWithUnsupportedLLMInterface() {
-        Map<String, String> parameters = new HashMap<>();
-        parameters.put("llm_interface", "unsupported_interface");
-        MLAgent mlAgent = createMLAgentWithTools(parameters);
-
-        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, new HashMap<>(), agentActionListener);
+    @Test
+    public void testUsePlannerPromptTemplate() {
+        Map<String, String> testParams = new HashMap<>();
+        mlPlanExecuteAndReflectAgentRunner.usePlannerPromptTemplate(testParams);
+        assertNotNull(testParams.get(MLPlanExecuteAndReflectAgentRunner.PROMPT_TEMPLATE_FIELD));
+        assertNotNull(testParams.get(MLPlanExecuteAndReflectAgentRunner.PROMPT_FIELD));
     }
 
-    /**
-     * Testcase 1 for @Override public void run(MLAgent mlAgent, Map<String, String> apiParams, ActionListener<Object> listener)
-     * Path constraints: (Strings.isNullOrEmpty(response)), (!completedSteps.isEmpty())
-     */
     @Test
-    public void test_run_1() {
-        // Create MLAgent with necessary parameters
-        Map<String, String> parameters = new HashMap<>();
-        parameters.put("memory_id", "test_memory_id");
-        parameters.put("question", "test_question");
-        MLAgent mlAgent = createMLAgentWithTools(parameters);
-
-        // Mock the behavior to satisfy the path constraints
-        when(conversationIndexMemory.getMessages(any(), anyInt())).thenAnswer(invocation -> {
-            ActionListener<List<Interaction>> listener = invocation.getArgument(0);
-            List<Interaction> interactions = Arrays.asList(
-                Interaction.builder().id("interaction-1").input("input-1").response("").build(),
-                Interaction.builder().id("interaction-2").input("input-2").response("response-2").build()
-            );
-            listener.onResponse(interactions);
-            return null;
-        });
-
-        // Execute the method under test
-        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, parameters, agentActionListener);
-
-        // Verify that the memory factory was called with the correct parameters
-        verify(memoryFactory).create(eq("test_question"), eq("test_memory_id"), any(), any());
-
-        // Verify that the conversation index memory's getMessages method was called
-        verify(conversationIndexMemory).getMessages(any(), eq(10));
-
-        // Additional verifications can be added here based on the expected behavior
-        // For example, you might want to verify that certain methods were called on the client
-        // or that the agentActionListener was invoked with the expected result
+    public void testUseReflectPromptTemplate() {
+        Map<String, String> testParams = new HashMap<>();
+        mlPlanExecuteAndReflectAgentRunner.useReflectPromptTemplate(testParams);
+        assertNotNull(testParams.get(MLPlanExecuteAndReflectAgentRunner.PROMPT_TEMPLATE_FIELD));
+        assertNotNull(testParams.get(MLPlanExecuteAndReflectAgentRunner.PROMPT_FIELD));
     }
 
-    /**
-     * Testcase 2 for @Override public void run(MLAgent mlAgent, Map<String, String> apiParams, ActionListener<Object> listener)
-     * Path constraints: !((Strings.isNullOrEmpty(response))), (!completedSteps.isEmpty())
-     */
     @Test
-    public void test_run_2() {
-        // Setup
-        MLAgent mlAgent = createMLAgentWithTools(new HashMap<>());
-        Map<String, String> apiParams = new HashMap<>();
-        apiParams.put("question", "Test question");
-
-        // Mock behavior to satisfy path constraints
-        when(conversationIndexMemory.getMessages(any(), anyInt())).thenAnswer(invocation -> {
-            ActionListener<List<Interaction>> listener = invocation.getArgument(0);
-            listener.onResponse(Arrays.asList(
-                Interaction.builder().id("interaction-1").input("input-1").response("response-1").build(),
-                Interaction.builder().id("interaction-2").input("input-2").response("response-2").build()
-            ));
-            return null;
-        });
-
-        // Execute
-        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, apiParams, agentActionListener);
-
-        // Verify
-        verify(conversationIndexMemory).getMessages(any(), eq(10));
-        // Add more verifications as needed to ensure the correct path is taken
+    public void testUsePlannerWithHistoryPromptTemplate() {
+        Map<String, String> testParams = new HashMap<>();
+        mlPlanExecuteAndReflectAgentRunner.usePlannerWithHistoryPromptTemplate(testParams);
+        assertNotNull(testParams.get(MLPlanExecuteAndReflectAgentRunner.PROMPT_TEMPLATE_FIELD));
+        assertNotNull(testParams.get(MLPlanExecuteAndReflectAgentRunner.PROMPT_FIELD));
     }
 
-    /**
-    * Testcase 3 for @Override public void run(MLAgent mlAgent, Map<String, String> apiParams, ActionListener<Object> listener)
-    * Path constraints: (Strings.isNullOrEmpty(response)), !((!completedSteps.isEmpty()))
-    */
     @Test
-    public void test_run_3() {
-        // Setup
-        MLAgent mlAgent = createMLAgentWithTools(new HashMap<>());
-        Map<String, String> apiParams = new HashMap<>();
-        apiParams.put("QUESTION_FIELD", "Test question");
+    public void testPopulatePrompt() {
+        Map<String, String> testParams = new HashMap<>();
+        testParams.put(MLPlanExecuteAndReflectAgentRunner.PROMPT_TEMPLATE_FIELD, "Hello ${parameters.name}!");
+        testParams.put("name", "World");
 
-        // Mock conversation index memory to return empty interactions
+        mlPlanExecuteAndReflectAgentRunner.populatePrompt(testParams);
+
+        assertEquals("Hello World!", testParams.get(MLPlanExecuteAndReflectAgentRunner.PROMPT_FIELD));
+    }
+
+    @Test
+    public void testParseLLMOutput() {
+        Map<String, String> allParams = new HashMap<>();
+        ModelTensor modelTensor = ModelTensor
+            .builder()
+            .dataAsMap(
+                Map.of(MLPlanExecuteAndReflectAgentRunner.RESPONSE_FIELD, "{\"steps\":[\"step1\",\"step2\"],\"result\":\"final result\"}")
+            )
+            .build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        ModelTensorOutput modelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        Map<String, String> result = mlPlanExecuteAndReflectAgentRunner.parseLLMOutput(allParams, modelTensorOutput);
+
+        assertEquals("step1, step2", result.get(MLPlanExecuteAndReflectAgentRunner.STEPS_FIELD));
+        assertEquals("final result", result.get(MLPlanExecuteAndReflectAgentRunner.RESULT_FIELD));
+
+        modelTensor = ModelTensor.builder().dataAsMap(Map.of(MLPlanExecuteAndReflectAgentRunner.RESPONSE_FIELD, "random response")).build();
+        modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        final ModelTensorOutput modelTensorOutput2 = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        assertThrows(IllegalStateException.class, () -> mlPlanExecuteAndReflectAgentRunner.parseLLMOutput(allParams, modelTensorOutput2));
+
+        modelTensor = ModelTensor
+            .builder()
+            .dataAsMap(Map.of(MLPlanExecuteAndReflectAgentRunner.RESPONSE_FIELD, "{ \"random\": \"random response\"}"))
+            .build();
+        modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+        final ModelTensorOutput modelTensorOutput3 = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> mlPlanExecuteAndReflectAgentRunner.parseLLMOutput(allParams, modelTensorOutput3)
+        );
+    }
+
+    @Test
+    public void testExtractJsonFromMarkdown() {
+        String markdown = "```json\n{\"key\":\"value\"}\n```";
+        String result = mlPlanExecuteAndReflectAgentRunner.extractJsonFromMarkdown(markdown);
+        assertEquals("{\"key\":\"value\"}", result);
+    }
+
+    @Test
+    public void testAddToolsToPrompt() {
+        Map<String, String> testParams = new HashMap<>();
+        Map<String, Tool> tools = new HashMap<>();
+        Tool tool1 = mock(Tool.class);
+        when(tool1.getName()).thenReturn("tool1");
+        when(tool1.getDescription()).thenReturn("description1");
+        tools.put("tool1", tool1);
+
+        mlPlanExecuteAndReflectAgentRunner.addToolsToPrompt(tools, testParams);
+
+        assertEquals(
+            "In this environment, you have access to the below tools: \n- tool1: description1\n\n",
+            testParams.get(MLPlanExecuteAndReflectAgentRunner.DEFAULT_PROMPT_TOOLS_FIELD)
+        );
+    }
+
+    @Test
+    public void testAddSteps() {
+        Map<String, String> testParams = new HashMap<>();
+        List<String> steps = Arrays.asList("step1", "step2");
+        String field = "test_field";
+
+        mlPlanExecuteAndReflectAgentRunner.addSteps(steps, testParams, field);
+
+        assertEquals("step1, step2", testParams.get(field));
+    }
+
+    @Test
+    public void testCreateModelTensors() {
+        String sessionId = "test_session";
+        String parentInteractionId = "test_parent";
+        String executorMemoryId = "test_executor_mem_id";
+        String executorParentId = "test_executor_parent_id";
+
+        List<ModelTensors> result = MLPlanExecuteAndReflectAgentRunner.createModelTensors(sessionId, parentInteractionId, executorMemoryId, executorParentId);
+
+        assertNotNull(result);
+        assertEquals(1, result.size());
+        ModelTensors tensors = result.get(0);
+        assertEquals(4, tensors.getMlModelTensors().size());
+        assertEquals(sessionId, tensors.getMlModelTensors().get(0).getResult());
+        assertEquals(parentInteractionId, tensors.getMlModelTensors().get(1).getResult());
+        assertEquals(executorMemoryId, tensors.getMlModelTensors().get(2).getResult());
+        assertEquals(executorParentId, tensors.getMlModelTensors().get(3).getResult());
+    }
+
+    @Test
+    public void testSaveAndReturnFinalResult() {
+        String parentInteractionId = "test_parent_id";
+        String finalResult = "test final result";
+        String input = "test input";
+        String conversationId = "test_conversation_id";
+        String executorMemoryId = "test_executor_mem_id";
+        String executorParentId = "test_executor_parent_id";
+
+        when(conversationIndexMemory.getConversationId()).thenReturn(conversationId);
+        when(conversationIndexMemory.getMemoryManager()).thenReturn(mlMemoryManager);
+
         doAnswer(invocation -> {
-            ActionListener<List<Interaction>> listener = invocation.getArgument(0);
-            listener.onResponse(Arrays.asList());
+            ActionListener<UpdateResponse> listener = invocation.getArgument(2);
+            listener.onResponse(updateResponse);
             return null;
-        }).when(conversationIndexMemory).getMessages(any(), anyInt());
+        }).when(mlMemoryManager).updateInteraction(eq(parentInteractionId), any(), any());
 
-        // Execute
-        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, apiParams, agentActionListener);
+        mlPlanExecuteAndReflectAgentRunner
+            .saveAndReturnFinalResult(conversationIndexMemory, parentInteractionId, executorMemoryId, executorParentId, finalResult, input, agentActionListener);
 
-        // Verify
-        verify(memoryFactory).create(any(), any(), any(), any());
-        verify(conversationIndexMemory).getMessages(any(), eq(10));
+        verify(agentActionListener).onResponse(objectCaptor.capture());
+        Object response = objectCaptor.getValue();
+        assertTrue(response instanceof ModelTensorOutput);
+        ModelTensorOutput modelTensorOutput = (ModelTensorOutput) response;
+
+        List<ModelTensors> mlModelOutputs = modelTensorOutput.getMlModelOutputs();
+        assertEquals(2, mlModelOutputs.size());
+
+        ModelTensors firstModelTensors = mlModelOutputs.get(0);
+        List<ModelTensor> firstModelTensorList = firstModelTensors.getMlModelTensors();
+        assertEquals(4, firstModelTensorList.size());
+        assertEquals(conversationId, firstModelTensorList.get(0).getResult());
+        assertEquals(parentInteractionId, firstModelTensorList.get(1).getResult());
+        assertEquals(executorMemoryId, firstModelTensorList.get(2).getResult());
+        assertEquals(executorParentId, firstModelTensorList.get(3).getResult());
+
+        ModelTensors secondModelTensors = mlModelOutputs.get(1);
+        List<ModelTensor> secondModelTensorList = secondModelTensors.getMlModelTensors();
+        assertEquals(1, secondModelTensorList.size());
+        assertEquals(finalResult, secondModelTensorList.get(0).getDataAsMap().get("response"));
+    }
+
+    @Test
+    public void testSaveAndReturnFinalResultWithError() {
+        String parentInteractionId = "test_parent_id";
+        String finalResult = "test final result";
+        String input = "test input";
+        String conversationId = "test_conversation_id";
+        String executorMemoryId = "test_executor_mem_id";
+        String executorParentId = "test_executor_parent_id";
+        Exception expectedException = new MLException("Test error");
+
+        when(conversationIndexMemory.getConversationId()).thenReturn(conversationId);
+        when(conversationIndexMemory.getMemoryManager()).thenReturn(mlMemoryManager);
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(2);
+            listener.onFailure(expectedException);
+            return null;
+        }).when(mlMemoryManager).updateInteraction(eq(parentInteractionId), any(), any());
+
+        mlPlanExecuteAndReflectAgentRunner
+            .saveAndReturnFinalResult(conversationIndexMemory, executorMemoryId, executorParentId, parentInteractionId, finalResult, input, agentActionListener);
+
+        verify(agentActionListener).onFailure(expectedException);
     }
 }

@@ -66,6 +66,7 @@ import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.transport.client.Client;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.jayway.jsonpath.JsonPath;
 
 import joptsimple.internal.Strings;
@@ -154,7 +155,8 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         this.plannerWithHistoryPromptTemplate = DEFAULT_PLANNER_WITH_HISTORY_PROMPT_TEMPLATE;
     }
 
-    private void setupPromptParameters(Map<String, String> params) {
+    @VisibleForTesting
+    void setupPromptParameters(Map<String, String> params) {
         // populated depending on whether LLM is asked to plan or re-evaluate
         // removed here, so that error is thrown in case this field is not populated
         params.remove(PROMPT_FIELD);
@@ -203,22 +205,26 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         }
     }
 
-    private void usePlannerPromptTemplate(Map<String, String> params) {
+    @VisibleForTesting
+    void usePlannerPromptTemplate(Map<String, String> params) {
         params.put(PROMPT_TEMPLATE_FIELD, this.plannerPromptTemplate);
         populatePrompt(params);
     }
 
-    private void useReflectPromptTemplate(Map<String, String> params) {
+    @VisibleForTesting
+    void useReflectPromptTemplate(Map<String, String> params) {
         params.put(PROMPT_TEMPLATE_FIELD, this.reflectPromptTemplate);
         populatePrompt(params);
     }
 
-    private void usePlannerWithHistoryPromptTemplate(Map<String, String> params) {
+    @VisibleForTesting
+    void usePlannerWithHistoryPromptTemplate(Map<String, String> params) {
         params.put(PROMPT_TEMPLATE_FIELD, this.plannerWithHistoryPromptTemplate);
         populatePrompt(params);
     }
 
-    private void populatePrompt(Map<String, String> allParams) {
+    @VisibleForTesting
+    void populatePrompt(Map<String, String> allParams) {
         String promptTemplate = allParams.get(PROMPT_TEMPLATE_FIELD);
         StringSubstitutor promptSubstitutor = new StringSubstitutor(allParams, "${parameters.", "}");
         String prompt = promptSubstitutor.replace(promptTemplate);
@@ -475,7 +481,8 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         client.execute(MLPredictionTaskAction.INSTANCE, request, planListener);
     }
 
-    private Map<String, String> parseLLMOutput(Map<String, String> allParams, ModelTensorOutput modelTensorOutput) {
+    @VisibleForTesting
+    Map<String, String> parseLLMOutput(Map<String, String> allParams, ModelTensorOutput modelTensorOutput) {
         Map<String, String> modelOutput = new HashMap<>();
         Map<String, ?> dataAsMap = modelTensorOutput.getMlModelOutputs().getFirst().getMlModelTensors().getFirst().getDataAsMap();
         String llmResponse;
@@ -513,7 +520,8 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         return modelOutput;
     }
 
-    private String extractJsonFromMarkdown(String response) {
+    @VisibleForTesting
+    String extractJsonFromMarkdown(String response) {
         response = response.trim();
         if (response.contains("```json")) {
             response = response.substring(response.indexOf("```json") + "```json".length());
@@ -530,7 +538,8 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         return response;
     }
 
-    private void addToolsToPrompt(Map<String, Tool> tools, Map<String, String> allParams) {
+    @VisibleForTesting
+    void addToolsToPrompt(Map<String, Tool> tools, Map<String, String> allParams) {
         StringBuilder toolsPrompt = new StringBuilder("In this environment, you have access to the below tools: \n");
         for (Map.Entry<String, Tool> entry : tools.entrySet()) {
             String toolName = entry.getKey();
@@ -543,11 +552,13 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         cleanUpResource(tools);
     }
 
-    private void addSteps(List<String> steps, Map<String, String> allParams, String field) {
+    @VisibleForTesting
+    void addSteps(List<String> steps, Map<String, String> allParams, String field) {
         allParams.put(field, String.join(", ", steps));
     }
 
-    private void saveAndReturnFinalResult(
+    @VisibleForTesting
+    void saveAndReturnFinalResult(
         ConversationIndexMemory memory,
         String parentInteractionId,
         String reactAgentMemoryId,
@@ -586,7 +597,8 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         }));
     }
 
-    private static List<ModelTensors> createModelTensors(
+    @VisibleForTesting
+    static List<ModelTensors> createModelTensors(
         String sessionId,
         String parentInteractionId,
         String reactAgentMemoryId,
