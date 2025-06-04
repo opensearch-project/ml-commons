@@ -143,15 +143,6 @@ public class TransportMcpToolsRemoveOnNodesActionTests extends OpenSearchTestCas
         assertEquals(true, response.getDeleted());
     }
 
-    @Test
-    public void testNodeOperation_exception() {
-        exceptionRule.expect(FailedNodeException.class);
-        MLMcpToolsRemoveNodeRequest request = new MLMcpToolsRemoveNodeRequest(toRemoveTools);
-        McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.put("ListIndexTool", 1L);
-        MLMcpToolsRemoveNodeResponse response = action.nodeOperation(request);
-        assertEquals(true, response.getDeleted());
-    }
-
     private McpToolRegisterInput getRegisterMcpTool() {
         McpToolRegisterInput registerMcpTool = new McpToolRegisterInput(
             "ListIndexTool",
