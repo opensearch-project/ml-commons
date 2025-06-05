@@ -320,6 +320,8 @@ public class MLPlanExecuteAndReflectAgentRunnerTest {
         assertEquals("final result", responseTensor.getDataAsMap().get("response"));
     }
 
+    // ToDo: add test case for when max steps is reached
+
     private MLAgent createMLAgentWithTools() {
         LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
         MLToolSpec firstToolSpec = MLToolSpec
