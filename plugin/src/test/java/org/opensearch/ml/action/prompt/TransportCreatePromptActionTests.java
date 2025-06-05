@@ -12,6 +12,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX;
+import static org.opensearch.ml.prompt.MLPromptManager.TAG_RESTRICTION_ERR_MESSAGE;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -194,7 +195,7 @@ public class TransportCreatePromptActionTests extends OpenSearchTestCase {
 
         ArgumentCaptor<IllegalArgumentException> argumentCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Number of tags must not exceed 20 and length of each tag must not exceed 35", argumentCaptor.getValue().getMessage());
+        assertEquals(TAG_RESTRICTION_ERR_MESSAGE, argumentCaptor.getValue().getMessage());
     }
 
     @Test
@@ -206,7 +207,7 @@ public class TransportCreatePromptActionTests extends OpenSearchTestCase {
 
         ArgumentCaptor<IllegalArgumentException> argumentCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Number of tags must not exceed 20 and length of each tag must not exceed 35", argumentCaptor.getValue().getMessage());
+        assertEquals(TAG_RESTRICTION_ERR_MESSAGE, argumentCaptor.getValue().getMessage());
     }
 
     public void testDoExecute_fail_withIndexNotFoundException() {

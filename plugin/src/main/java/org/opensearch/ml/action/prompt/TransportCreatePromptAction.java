@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.prompt;
 
 import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX;
+import static org.opensearch.ml.prompt.MLPromptManager.TAG_RESTRICTION_ERR_MESSAGE;
 import static org.opensearch.ml.prompt.MLPromptManager.handleFailure;
 import static org.opensearch.ml.prompt.MLPromptManager.validateTags;
 
@@ -86,7 +87,7 @@ public class TransportCreatePromptAction extends HandledTransportAction<MLCreate
         MLCreatePromptInput mlCreatePromptInput = mlCreatePromptRequest.getMlCreatePromptInput();
         if (mlCreatePromptInput.getTags() != null && !validateTags(mlCreatePromptInput.getTags())) {
             handleFailure(
-                new IllegalArgumentException("Number of tags must not exceed 20 and length of each tag must not exceed 35"),
+                new IllegalArgumentException(TAG_RESTRICTION_ERR_MESSAGE),
                 null,
                 listener,
                 "Tags Exceeds max number of tags or max length of tag"

@@ -11,6 +11,7 @@ import static org.mockito.Mockito.isA;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.prompt.MLPromptManager.TAG_RESTRICTION_ERR_MESSAGE;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -161,7 +162,7 @@ public class UpdatePromptTransportActionTests extends OpenSearchTestCase {
 
         doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onFailure(new IllegalArgumentException("Number of tags must not exceed 20 and length of each tag must not exceed 35"));
+            listener.onFailure(new IllegalArgumentException(TAG_RESTRICTION_ERR_MESSAGE));
             return null;
         }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
 
@@ -169,7 +170,7 @@ public class UpdatePromptTransportActionTests extends OpenSearchTestCase {
 
         ArgumentCaptor<IllegalArgumentException> argumentCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Number of tags must not exceed 20 and length of each tag must not exceed 35", argumentCaptor.getValue().getMessage());
+        assertEquals(TAG_RESTRICTION_ERR_MESSAGE, argumentCaptor.getValue().getMessage());
     }
 
     @Test
@@ -186,7 +187,7 @@ public class UpdatePromptTransportActionTests extends OpenSearchTestCase {
 
         doAnswer(invocation -> {
             ActionListener<UpdateResponse> listener = invocation.getArgument(1);
-            listener.onFailure(new IllegalArgumentException("Number of tags must not exceed 20 and length of each tag must not exceed 35"));
+            listener.onFailure(new IllegalArgumentException(TAG_RESTRICTION_ERR_MESSAGE));
             return null;
         }).when(client).update(any(UpdateRequest.class), isA(ActionListener.class));
 
@@ -194,7 +195,7 @@ public class UpdatePromptTransportActionTests extends OpenSearchTestCase {
 
         ArgumentCaptor<IllegalArgumentException> argumentCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Number of tags must not exceed 20 and length of each tag must not exceed 35", argumentCaptor.getValue().getMessage());
+        assertEquals(TAG_RESTRICTION_ERR_MESSAGE, argumentCaptor.getValue().getMessage());
     }
 
     @Test

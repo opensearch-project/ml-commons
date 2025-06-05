@@ -39,6 +39,10 @@ import lombok.extern.log4j.Log4j2;
 public class MLPromptManager {
     public static final int MAX_NUMBER_OF_TAGS = 20;
     public static final int MAX_LENGTH_OF_TAG = 35;
+    public static final String TAG_RESTRICTION_ERR_MESSAGE = ("Number of tags must not exceed "
+        + MAX_NUMBER_OF_TAGS
+        + " and length of each tag must not exceed "
+        + MAX_LENGTH_OF_TAG);
 
     private final Client client;
     private final SdkClient sdkClient;

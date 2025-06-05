@@ -146,7 +146,7 @@ public class MLPromptManagerTests extends OpenSearchTestCase {
     public void testHandleFailureWithIndexNotFoundException() {
         MLPromptManager
             .handleFailure(
-                new IndexNotFoundException("Index not found"),
+                new IndexNotFoundException("Failed to get data object from index .plugins-ml-prompt"),
                 "prompt_id",
                 getResponseActionListener,
                 "Failed to get prompt index"
