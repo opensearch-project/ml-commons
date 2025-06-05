@@ -9,24 +9,29 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTOR_ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_PATH;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_TOOL_USE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_GEN_INPUT;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_EXCLUDE_PATH;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_FILTER;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.PROMPT_PREFIX;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.PROMPT_SUFFIX;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOLS;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALLS_PATH;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALLS_TOOL_INPUT;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALLS_TOOL_NAME;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALL_ID;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALL_ID_PATH;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_FILTERS_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_TEMPLATE;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.ACTION;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.ACTION_INPUT;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_HISTORY;
@@ -80,6 +85,8 @@ import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
+
+import com.google.gson.JsonSyntaxException;
 
 public class AgentUtilsTest extends MLStaticMockBase {
 
@@ -1197,6 +1204,48 @@ public class AgentUtilsTest extends MLStaticMockBase {
         Assert.assertTrue(output3.get(FINAL_ANSWER).contains("This is a test response"));
     }
 
+    @Test
+    public void testAddToolsToFunctionCalling() {
+        Map<String, Tool> tools = new HashMap<>();
+        tools.put("Tool1", tool1);
+        tools.put("Tool2", tool2);
+
+        when(tool1.getName()).thenReturn("Tool1");
+        when(tool1.getDescription()).thenReturn("Description of Tool1");
+        when(tool1.getAttributes()).thenReturn(Map.of("param1", "value1"));
+
+        when(tool2.getName()).thenReturn("Tool2");
+        when(tool2.getDescription()).thenReturn("Description of Tool2");
+        when(tool2.getAttributes()).thenReturn(Map.of("param2", "value2"));
+
+        Map<String, String> parameters = new HashMap<>();
+        String toolTemplate = "{\"name\": \"${tool.name}\", \"description\": \"${tool.description}\"}";
+        parameters.put(TOOL_TEMPLATE, toolTemplate);
+
+        List<String> inputTools = Arrays.asList("Tool1", "Tool2");
+        String prompt = "test prompt";
+
+        String expectedTool1 = "{\"name\": \"Tool1\", \"description\": \"Description of Tool1\"}";
+        String expectedTool2 = "{\"name\": \"Tool2\", \"description\": \"Description of Tool2\"}";
+        String expectedTools = expectedTool1 + ", " + expectedTool2;
+
+        AgentUtils.addToolsToFunctionCalling(tools, parameters, inputTools, prompt);
+
+        assertEquals(expectedTools, parameters.get(TOOLS));
+    }
+
+    @Test
+    public void testAddToolsToFunctionCalling_ToolNotRegistered() {
+        Map<String, Tool> tools = new HashMap<>();
+        tools.put("Tool1", tool1);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(TOOL_TEMPLATE, "template");
+        List<String> inputTools = Arrays.asList("Tool1", "UnregisteredTool");
+        String prompt = "test prompt";
+
+        assertThrows(IllegalArgumentException.class, () -> AgentUtils.addToolsToFunctionCalling(tools, parameters, inputTools, prompt));
+    }
+
     private static MLToolSpec buildTool(String name) {
         return MLToolSpec.builder().type(McpSseTool.TYPE).name(name).description("mock").build();
     }
@@ -1361,5 +1410,199 @@ public class AgentUtilsTest extends MLStaticMockBase {
         String action = "tool1";
         Map<String, String> toolParams = AgentUtils.constructToolParams(tools, toolSpecMap, question, lastActionInput, action, actionInput);
         verify.accept(toolParams);
+    }
+
+    @Test
+    public void testParseLLMOutput_WithExcludePath() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(LLM_RESPONSE_EXCLUDE_PATH, "[\"$.exclude_field\"]");
+
+        Map<String, Object> dataAsMap = new HashMap<>();
+        dataAsMap.put("exclude_field", "should be excluded");
+        dataAsMap.put("keep_field", "should be kept");
+
+        ModelTensorOutput modelTensorOutput = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(dataAsMap).build()))
+                            .build()
+                    )
+            )
+            .build();
+
+        Map<String, String> output = AgentUtils.parseLLMOutput(parameters, modelTensorOutput, null, Set.of(), new ArrayList<>());
+
+        Assert.assertTrue(output.containsKey(THOUGHT_RESPONSE));
+        Assert.assertFalse(output.get(THOUGHT_RESPONSE).contains("exclude_field"));
+        Assert.assertTrue(output.get(THOUGHT_RESPONSE).contains("keep_field"));
+    }
+
+    @Test
+    public void testParseLLMOutput_EmptyDataAsMap() {
+        Map<String, Object> dataAsMap = new HashMap<>();
+        ModelTensorOutput modelTensorOutput = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(dataAsMap).build()))
+                            .build()
+                    )
+            )
+            .build();
+
+        Map<String, String> output = AgentUtils.parseLLMOutput(new HashMap<>(), modelTensorOutput, null, Set.of(), new ArrayList<>());
+
+        Assert.assertTrue(output.containsKey(THOUGHT_RESPONSE));
+        Assert.assertEquals("{}", output.get(THOUGHT_RESPONSE));
+    }
+
+    @Test
+    public void testParseLLMOutput_ToolUse() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(TOOL_CALLS_PATH, "$.tool_calls");
+        parameters.put(TOOL_CALLS_TOOL_NAME, "name");
+        parameters.put(TOOL_CALLS_TOOL_INPUT, "input");
+        parameters.put(TOOL_CALL_ID_PATH, "id");
+        parameters.put(LLM_RESPONSE_FILTER, "$.response");
+        parameters.put(LLM_FINISH_REASON_PATH, "$.finish_reason");
+        parameters.put(LLM_FINISH_REASON_TOOL_USE, "tool_use");
+
+        Map<String, Object> dataAsMap = new HashMap<>();
+        dataAsMap.put("tool_calls", List.of(Map.of("name", "test_tool", "input", "test_input", "id", "test_id")));
+        dataAsMap.put("response", "test response");
+        dataAsMap.put("finish_reason", "tool_use");
+
+        ModelTensorOutput modelTensorOutput = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(dataAsMap).build()))
+                            .build()
+                    )
+            )
+            .build();
+
+        Map<String, String> output = AgentUtils.parseLLMOutput(parameters, modelTensorOutput, null, Set.of("test_tool"), new ArrayList<>());
+
+        Assert.assertEquals("test_tool", output.get(ACTION));
+        Assert.assertEquals("test_input", output.get(ACTION_INPUT));
+        Assert.assertEquals("test_id", output.get(TOOL_CALL_ID));
+    }
+
+    @Test
+    public void testRemoveJsonPath_WithStringPaths() {
+        Map<String, Object> json = new HashMap<>();
+        json.put("field1", "value1");
+        json.put("field2", "value2");
+        json.put("nested", Map.of("field3", "value3"));
+        String excludePaths = "[\"$.field1\", \"$.nested.field3\"]";
+        Map<String, ?> result = AgentUtils.removeJsonPath(json, excludePaths, false);
+        Assert.assertFalse(result.containsKey("field1"));
+        Assert.assertTrue(result.containsKey("field2"));
+        Assert.assertTrue(result.containsKey("nested"));
+        Assert.assertFalse(((Map<?, ?>) result.get("nested")).containsKey("field3"));
+    }
+
+    @Test
+    public void testRemoveJsonPath_WithListPaths() {
+        Map<String, Object> json = new HashMap<>();
+        json.put("field1", "value1");
+        json.put("field2", "value2");
+        json.put("nested", Map.of("field3", "value3"));
+        List<String> excludePaths = java.util.Arrays.asList("$.field1", "$.nested.field3");
+        Map<String, ?> result = AgentUtils.removeJsonPath(json, excludePaths, false);
+        Assert.assertFalse(result.containsKey("field1"));
+        Assert.assertTrue(result.containsKey("field2"));
+        Assert.assertTrue(result.containsKey("nested"));
+        Assert.assertFalse(((Map<?, ?>) result.get("nested")).containsKey("field3"));
+    }
+
+    @Test
+    public void testRemoveJsonPath_InPlace() {
+        Map<String, Object> json = new HashMap<>();
+        json.put("field1", "value1");
+        json.put("field2", "value2");
+        json.put("nested", new HashMap<>(Map.of("field3", "value3")));
+        List<String> excludePaths = java.util.Arrays.asList("$.field1", "$.nested.field3");
+        Map<String, ?> result = AgentUtils.removeJsonPath(json, excludePaths, true);
+        Assert.assertFalse(json.containsKey("field1"));
+        Assert.assertTrue(json.containsKey("field2"));
+        Assert.assertTrue(json.containsKey("nested"));
+        Assert.assertFalse(((Map<?, ?>) json.get("nested")).containsKey("field3"));
+        Assert.assertSame(json, result);
+    }
+
+    @Test
+    public void testRemoveJsonPath_WithInvalidJsonPaths() {
+        Map<String, Object> json = new HashMap<>();
+        json.put("field1", "value1");
+        String invalidJsonPaths = "invalid json";
+        Assert.assertThrows(JsonSyntaxException.class, () -> AgentUtils.removeJsonPath(json, invalidJsonPaths, false));
+    }
+
+    @Test
+    public void testSubstitute() {
+        String template = "Hello ${parameters.name}! Welcome to ${parameters.place}.";
+        Map<String, String> params = new HashMap<>();
+        params.put("name", "AI");
+        params.put("place", "OpenSearch");
+        String prefix = "${parameters.";
+
+        String result = AgentUtils.substitute(template, params, prefix);
+
+        Assert.assertEquals("Hello AI! Welcome to OpenSearch.", result);
+    }
+
+    @Test
+    public void testCreateTool_Success() {
+        Map<String, Tool.Factory> toolFactories = new HashMap<>();
+        Tool.Factory factory = mock(Tool.Factory.class);
+        Tool mockTool = mock(Tool.class);
+        when(factory.create(any())).thenReturn(mockTool);
+        toolFactories.put("test_tool", factory);
+
+        MLToolSpec toolSpec = MLToolSpec
+            .builder()
+            .type("test_tool")
+            .name("TestTool")
+            .description("Original description")
+            .parameters(Map.of("param1", "value1"))
+            .runtimeResources(Map.of("resource1", "value2"))
+            .build();
+
+        Map<String, String> params = new HashMap<>();
+        params.put("TestTool.param2", "value3");
+        params.put("TestTool.description", "Custom description");
+
+        AgentUtils.createTool(toolFactories, params, toolSpec, "test_tenant");
+
+        verify(factory).create(argThat(toolParamsMap -> {
+            Map<String, Object> toolParams = (Map<String, Object>) toolParamsMap;
+            return toolParams.get("param1").equals("value1")
+                && toolParams.get("param2").equals("value3")
+                && toolParams.get("resource1").equals("value2")
+                && toolParams.get(TENANT_ID_FIELD).equals("test_tenant");
+        }));
+
+        verify(mockTool).setName("TestTool");
+        verify(mockTool).setDescription("Custom description");
+    }
+
+    @Test
+    public void testCreateTool_ToolNotFound() {
+        Map<String, Tool.Factory> toolFactories = new HashMap<>();
+        MLToolSpec toolSpec = MLToolSpec.builder().type("non_existent_tool").name("TestTool").build();
+
+        assertThrows(IllegalArgumentException.class, () -> AgentUtils.createTool(toolFactories, new HashMap<>(), toolSpec, "test_tenant"));
     }
 }
