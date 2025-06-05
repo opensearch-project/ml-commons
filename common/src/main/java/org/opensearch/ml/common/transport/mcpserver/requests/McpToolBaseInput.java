@@ -22,7 +22,7 @@ import lombok.Data;
 import lombok.extern.log4j.Log4j2;
 
 /**
- *  This class represents a tool that can be registered with OpenSearch. It contains information about the tool's name,
+ *  This class represents a tool that can be registered/update in OpenSearch. It contains information about the tool's name,
  * description, parameters, and schema.
  */
 @Log4j2
@@ -97,13 +97,7 @@ public class McpToolBaseInput implements ToXContentObject, Writeable {
 
         streamOutput.writeOptionalInstant(createdTime);
         streamOutput.writeOptionalInstant(lastUpdatedTime);
-
-        if (version != null) {
-            streamOutput.writeBoolean(true);
-            streamOutput.writeLong(version);
-        } else {
-            streamOutput.writeBoolean(false);
-        }
+        streamOutput.writeOptionalLong(version);
     }
 
     @Override

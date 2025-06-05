@@ -13,6 +13,7 @@ import java.util.List;
 
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
+import org.opensearch.action.support.nodes.TransportNodesAction;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -22,6 +23,12 @@ import org.opensearch.transport.TransportRequest;
 import lombok.Builder;
 import lombok.Data;
 
+/**
+ * This class extends {@link ActionRequest} and is used to register tools on nodes in the cluster.
+ * It's used by {@link TransportNodesAction } which is used to send requests to multiple nodes in the cluster,
+ * the {@link ActionRequest } contains only the actual requests that will be sent to the nodes.
+ * The {@link MLMcpToolsRegisterNodesRequest} is an encapsulation of this class and node ids.
+ */
 @Data
 public class MLMcpToolsRegisterNodeRequest extends ActionRequest {
     private List<McpToolRegisterInput> mcpTools;
