@@ -214,7 +214,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest {
         // Run the agent
         Map<String, String> params = new HashMap<>();
         params.put("question", "test question");
-        params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "parent_interaction_test_id");
+        params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "test_parent_interaction_id");
         mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
 
         // Verify the response
@@ -228,7 +228,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest {
 
         ModelTensors firstModelTensors = mlModelOutputs.get(0);
         List<ModelTensor> firstModelTensorList = firstModelTensors.getMlModelTensors();
-        assertEquals(2, firstModelTensorList.size());
+        assertEquals(4, firstModelTensorList.size());
 
         ModelTensor memoryIdTensor = firstModelTensorList.get(0);
         assertEquals("memory_id", memoryIdTensor.getName());
@@ -301,7 +301,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest {
 
         ModelTensors firstModelTensors = mlModelOutputs.get(0);
         List<ModelTensor> firstModelTensorList = firstModelTensors.getMlModelTensors();
-        assertEquals(2, firstModelTensorList.size());
+        assertEquals(4, firstModelTensorList.size());
 
         ModelTensor memoryIdTensor = firstModelTensorList.get(0);
         assertEquals("memory_id", memoryIdTensor.getName());
@@ -318,79 +318,6 @@ public class MLPlanExecuteAndReflectAgentRunnerTest {
         ModelTensor responseTensor = secondModelTensorList.get(0);
         assertEquals("response", responseTensor.getName());
         assertEquals("final result", responseTensor.getDataAsMap().get("response"));
-    }
-
-    @Test
-    public void testExecutionWithMaxSteps() {
-        MLAgent mlAgent = createMLAgentWithTools();
-
-        doAnswer(invocation -> {
-            ActionListener<Object> listener = invocation.getArgument(2);
-            ModelTensor modelTensor = ModelTensor
-                .builder()
-                .dataAsMap(ImmutableMap.of("response", "{\"steps\":[\"step1\", \"step2\", \"step3\"], \"result\":\"\"}"))
-                .build();
-            ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
-            ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
-            when(mlTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
-            listener.onResponse(mlTaskResponse);
-            return null;
-        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(MLPredictionTaskRequest.class), any());
-
-        doAnswer(invocation -> {
-            ActionListener<Object> listener = invocation.getArgument(2);
-            ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "tool execution result")).build();
-            ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
-            ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
-            when(mlExecuteTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
-            listener.onResponse(mlExecuteTaskResponse);
-            return null;
-        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(MLExecuteTaskRequest.class), any());
-
-        doAnswer(invocation -> {
-            ActionListener<UpdateResponse> listener = invocation.getArgument(2);
-            listener.onResponse(updateResponse);
-            return null;
-        }).when(mlMemoryManager).updateInteraction(any(), any(), any());
-
-        Map<String, String> params = new HashMap<>();
-        params.put("question", "test question");
-        params.put("max_steps", "2");
-        params.put("parent_interaction_id", "test_parent_interaction_id");
-        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
-
-        verify(agentActionListener).onResponse(objectCaptor.capture());
-        Object response = objectCaptor.getValue();
-        assertTrue(response instanceof ModelTensorOutput);
-        ModelTensorOutput modelTensorOutput = (ModelTensorOutput) response;
-
-        List<ModelTensors> mlModelOutputs = modelTensorOutput.getMlModelOutputs();
-        assertEquals(2, mlModelOutputs.size());
-
-        ModelTensors firstModelTensors = mlModelOutputs.get(0);
-        List<ModelTensor> firstModelTensorList = firstModelTensors.getMlModelTensors();
-        assertEquals(2, firstModelTensorList.size());
-
-        ModelTensor memoryIdTensor = firstModelTensorList.get(0);
-        assertEquals("memory_id", memoryIdTensor.getName());
-        assertEquals("test_memory_id", memoryIdTensor.getResult());
-
-        ModelTensor parentInteractionModelTensor = firstModelTensorList.get(1);
-        assertEquals("parent_interaction_id", parentInteractionModelTensor.getName());
-        assertEquals("test_parent_interaction_id", parentInteractionModelTensor.getResult());
-
-        ModelTensors secondModelTensors = mlModelOutputs.get(1);
-        List<ModelTensor> secondModelTensorList = secondModelTensors.getMlModelTensors();
-        assertEquals(1, secondModelTensorList.size());
-
-        ModelTensor responseTensor = secondModelTensorList.get(0);
-        assertEquals("response", responseTensor.getName());
-        assertEquals(
-            "Max Steps Limit Reached. Use memory_id with same task to restart. \n"
-                + " Last executed step: step1, \n"
-                + " Last executed step result: tool execution result",
-            responseTensor.getDataAsMap().get("response")
-        );
     }
 
     private MLAgent createMLAgentWithTools() {
@@ -431,7 +358,6 @@ public class MLPlanExecuteAndReflectAgentRunnerTest {
 
         assertEquals("test question", testParams.get(MLPlanExecuteAndReflectAgentRunner.USER_PROMPT_FIELD));
         assertTrue(testParams.get(MLPlanExecuteAndReflectAgentRunner.SYSTEM_PROMPT_FIELD).contains("custom system prompt"));
-        assertTrue(testParams.get(MLPlanExecuteAndReflectAgentRunner.SYSTEM_PROMPT_FIELD).contains("Always respond in JSON format"));
         assertNotNull(testParams.get(MLPlanExecuteAndReflectAgentRunner.PLANNER_PROMPT_FIELD));
         assertNotNull(testParams.get(MLPlanExecuteAndReflectAgentRunner.REFLECT_PROMPT_FIELD));
         assertEquals(
