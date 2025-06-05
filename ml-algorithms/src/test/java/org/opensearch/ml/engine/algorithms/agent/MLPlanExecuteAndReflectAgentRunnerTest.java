@@ -31,6 +31,7 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.cluster.service.ClusterService;
@@ -38,6 +39,7 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.MLAgentType;
+import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
@@ -54,18 +56,16 @@ import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.common.utils.MLTaskUtils;
+import org.opensearch.ml.engine.MLStaticMockBase;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.transport.client.Client;
-import org.opensearch.ml.common.MLTaskState;
 
 import com.google.common.collect.ImmutableMap;
-import org.opensearch.ml.engine.MLStaticMockBase;
-import org.opensearch.ml.common.utils.MLTaskUtils;
-import org.mockito.MockedStatic;
 
 public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
     public static final String FIRST_TOOL = "firstTool";
@@ -558,7 +558,8 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         AtomicInteger callCount = new AtomicInteger(0);
 
         try (MockedStatic<MLTaskUtils> mlTaskUtilsMockedStatic = mockStatic(MLTaskUtils.class)) {
-            mlTaskUtilsMockedStatic.when(() -> MLTaskUtils.updateMLTaskDirectly(anyString(), any(), any(), any()))
+            mlTaskUtilsMockedStatic
+                .when(() -> MLTaskUtils.updateMLTaskDirectly(anyString(), any(), any(), any()))
                 .thenAnswer(invocation -> {
                     ActionListener<UpdateResponse> listener = invocation.getArgument(3);
                     listener.onResponse(updateResponse);
@@ -589,10 +590,25 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
 
             doAnswer(invocation -> {
                 ActionListener<Object> listener = invocation.getArgument(2);
-                ModelTensor memoryIdTensor = ModelTensor.builder().name(MLAgentExecutor.MEMORY_ID).result("test_executor_memory_id").build();
-                ModelTensor parentIdTensor = ModelTensor.builder().name(MLAgentExecutor.PARENT_INTERACTION_ID).result("test_executor_parent_id").build();
-                ModelTensor responseTensor = ModelTensor.builder().name("response").dataAsMap(ImmutableMap.of("response", "tool execution result")).build();
-                ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(memoryIdTensor, parentIdTensor, responseTensor)).build();
+                ModelTensor memoryIdTensor = ModelTensor
+                    .builder()
+                    .name(MLAgentExecutor.MEMORY_ID)
+                    .result("test_executor_memory_id")
+                    .build();
+                ModelTensor parentIdTensor = ModelTensor
+                    .builder()
+                    .name(MLAgentExecutor.PARENT_INTERACTION_ID)
+                    .result("test_executor_parent_id")
+                    .build();
+                ModelTensor responseTensor = ModelTensor
+                    .builder()
+                    .name("response")
+                    .dataAsMap(ImmutableMap.of("response", "tool execution result"))
+                    .build();
+                ModelTensors modelTensors = ModelTensors
+                    .builder()
+                    .mlModelTensors(Arrays.asList(memoryIdTensor, parentIdTensor, responseTensor))
+                    .build();
                 ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
                 when(mlExecuteTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
                 listener.onResponse(mlExecuteTaskResponse);
@@ -614,7 +630,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
 
             Map<String, Object> taskUpdates = mlPlanExecuteAndReflectAgentRunner.getTaskUpdates();
             assertEquals(MLTaskState.RUNNING, taskUpdates.get("state"));
-            
+
             Map<String, Object> response = (Map<String, Object>) taskUpdates.get("response");
             assertEquals("test_executor_memory_id", response.get("executor_agent_memory_id"));
             assertEquals("test_executor_parent_id", response.get("executor_agent_parent_interaction_id"));
