@@ -20,6 +20,7 @@ import java.util.List;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.action.support.nodes.BaseNodesRequest;
+import org.opensearch.action.support.nodes.TransportNodesAction;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -30,6 +31,12 @@ import org.opensearch.core.xcontent.XContentParser;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
+/**
+ * This class extends {@link BaseNodesRequest} and is used to register tools on nodes in the cluster.
+ * It's used by {@link TransportNodesAction }  which is used to send requests to multiple nodes in the cluster,
+ * the {@link BaseNodesRequest } contains both node ids and the actual requests that will be sent to the nodes.
+ * The {@link MLMcpToolsRegisterNodeRequest} is the actual request that will be sent to the nodes.
+ */
 @Data
 @EqualsAndHashCode(callSuper = false)
 public class MLMcpToolsRegisterNodesRequest extends BaseNodesRequest<MLMcpToolsRegisterNodesRequest> {
