@@ -386,4 +386,53 @@ public class ConnectorUtilsTest {
         );
         assertNull(result.getRequestBody());
     }
+
+    @Test
+    public void testEscapeRemoteInferenceInputData_WithSpecialCharacters() {
+        Map<String, String> params = new HashMap<>();
+        params.put("key1", "hello \"world\" \n \t");
+        params.put("key2", "test value");
+
+        RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+        ConnectorUtils.escapeRemoteInferenceInputData(inputData);
+
+        assertEquals("hello \\\"world\\\" \\n \\t", inputData.getParameters().get("key1"));
+        assertEquals("test value", inputData.getParameters().get("key2"));
+    }
+
+    @Test
+    public void testEscapeRemoteInferenceInputData_WithJsonValues() {
+        Map<String, String> params = new HashMap<>();
+        params.put("key1", "{\"name\": \"test\", \"value\": 123}");
+        params.put("key2", "[\"item1\", \"item2\"]");
+
+        RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+        ConnectorUtils.escapeRemoteInferenceInputData(inputData);
+
+        assertEquals("{\"name\": \"test\", \"value\": 123}", inputData.getParameters().get("key1"));
+        assertEquals("[\"item1\", \"item2\"]", inputData.getParameters().get("key2"));
+    }
+
+    @Test
+    public void testEscapeRemoteInferenceInputData_WithNoEscapeParams() {
+        Map<String, String> params = new HashMap<>();
+        String inputKey1 = "hello \"world\"";
+        String inputKey3 = "special \"chars\"";
+        params.put("key1", inputKey1);
+        params.put("key2", "test value");
+        params.put("key3", inputKey3);
+        params.put("NO_ESCAPE_PARAMS", "key1,key3");
+
+        RemoteInferenceInputDataSet inputData = RemoteInferenceInputDataSet.builder().parameters(params).build();
+
+        ConnectorUtils.escapeRemoteInferenceInputData(inputData);
+
+        String expectedKey1 = "hello \\\"world\\\"";
+        String expectedKey3 = "special \\\"chars\\\"";
+        assertEquals(expectedKey1, inputData.getParameters().get("key1"));
+        assertEquals("test value", inputData.getParameters().get("key2"));
+        assertEquals(expectedKey3, inputData.getParameters().get("key3"));
+    }
 }
