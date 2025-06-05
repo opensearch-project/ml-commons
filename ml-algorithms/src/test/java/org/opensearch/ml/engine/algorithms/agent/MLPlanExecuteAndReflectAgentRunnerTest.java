@@ -42,7 +42,6 @@ import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.conversation.Interaction;
-import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -554,7 +553,8 @@ public class MLPlanExecuteAndReflectAgentRunnerTest {
         String executorMemoryId = "test_executor_mem_id";
         String executorParentId = "test_executor_parent_id";
 
-        List<ModelTensors> result = MLPlanExecuteAndReflectAgentRunner.createModelTensors(sessionId, parentInteractionId, executorMemoryId, executorParentId);
+        List<ModelTensors> result = MLPlanExecuteAndReflectAgentRunner
+            .createModelTensors(sessionId, parentInteractionId, executorMemoryId, executorParentId);
 
         assertNotNull(result);
         assertEquals(1, result.size());
@@ -585,7 +585,15 @@ public class MLPlanExecuteAndReflectAgentRunnerTest {
         }).when(mlMemoryManager).updateInteraction(eq(parentInteractionId), any(), any());
 
         mlPlanExecuteAndReflectAgentRunner
-            .saveAndReturnFinalResult(conversationIndexMemory, parentInteractionId, executorMemoryId, executorParentId, finalResult, input, agentActionListener);
+            .saveAndReturnFinalResult(
+                conversationIndexMemory,
+                parentInteractionId,
+                executorMemoryId,
+                executorParentId,
+                finalResult,
+                input,
+                agentActionListener
+            );
 
         verify(agentActionListener).onResponse(objectCaptor.capture());
         Object response = objectCaptor.getValue();
