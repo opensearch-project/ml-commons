@@ -89,6 +89,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     private Encryptor encryptor;
     // flag to track if task has been updated with executor memory ids or not
     private boolean taskUpdated = false;
+    private final Map<String, Object> taskUpdates = new HashMap<>();
 
     // prompts
     private String plannerPrompt;
@@ -445,22 +446,21 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         allParams.put(EXECUTOR_AGENT_PARENT_INTERACTION_ID_FIELD, reActParentInteractionId);
                     }
 
-                    Map<String, Object> taskUpdates = new HashMap<>();
+                    Map<String, Object> memoryUpdates = new HashMap<>();
                     if (allParams.containsKey(EXECUTOR_AGENT_MEMORY_ID_FIELD)) {
-                        taskUpdates.put(EXECUTOR_AGENT_MEMORY_ID_FIELD, allParams.get(EXECUTOR_AGENT_MEMORY_ID_FIELD));
+                        memoryUpdates.put(EXECUTOR_AGENT_MEMORY_ID_FIELD, allParams.get(EXECUTOR_AGENT_MEMORY_ID_FIELD));
                     }
 
                     if (allParams.containsKey(EXECUTOR_AGENT_PARENT_INTERACTION_ID_FIELD)) {
-                        taskUpdates
+                        memoryUpdates
                             .put(EXECUTOR_AGENT_PARENT_INTERACTION_ID_FIELD, allParams.get(EXECUTOR_AGENT_PARENT_INTERACTION_ID_FIELD));
                     }
 
                     String taskId = allParams.get(TASK_ID_FIELD);
                     if (taskId != null && !taskUpdated) {
-                        Map<String, Object> finalUpdate = new HashMap<>();
-                        finalUpdate.put(STATE_FIELD, MLTaskState.RUNNING);
-                        finalUpdate.put(RESPONSE_FIELD, taskUpdates);
-                        updateMLTaskDirectly(taskId, finalUpdate, client, ActionListener.wrap(updateResponse -> {
+                        taskUpdates.put(STATE_FIELD, MLTaskState.RUNNING);
+                        taskUpdates.put(RESPONSE_FIELD, memoryUpdates);
+                        updateMLTaskDirectly(taskId, taskUpdates, client, ActionListener.wrap(updateResponse -> {
                             log.info("Updated task {} with executor memory ID", taskId);
                             taskUpdated = true;
                         }, e -> log.error("Failed to update task {} with executor memory ID", taskId, e)));
@@ -652,5 +652,10 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     .build()
             );
         return modelTensors;
+    }
+
+    @VisibleForTesting
+    Map<String, Object> getTaskUpdates() {
+        return taskUpdates;
     }
 }
