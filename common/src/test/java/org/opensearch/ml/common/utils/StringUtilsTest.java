@@ -754,16 +754,16 @@ public class StringUtilsTest {
 
     @Test
     public void testIsSafeText_ValidInputs() {
-        assertTrue(StringUtils.isSafeText("Model-Name_1.0"));
-        assertTrue(StringUtils.isSafeText("This is a description:"));
-        assertTrue(StringUtils.isSafeText("Name_with-dots.and:colons"));
+        assertTrue(Validator.isSafeText("Model-Name_1.0"));
+        assertTrue(Validator.isSafeText("This is a description:"));
+        assertTrue(Validator.isSafeText("Name_with-dots.and:colons"));
     }
 
     @Test
     public void testValidateFields_AllValid() {
         Map<String, FieldDescriptor> fields = Map
             .of("Field1", new FieldDescriptor("Valid Name 1", true), "Field2", new FieldDescriptor("Another_Valid-Field.Name:Here", true));
-        assertNull(StringUtils.validateFields(fields));
+        assertNull(Validator.validateFields(fields));
     }
 
     @Test
@@ -777,13 +777,13 @@ public class StringUtilsTest {
                 "OptionalField3",
                 new FieldDescriptor(null, false)
             );
-        assertNull(StringUtils.validateFields(fields));
+        assertNull(Validator.validateFields(fields));
     }
 
     @Test
     public void testValidateFields_OptionalFieldInvalidPattern() {
         Map<String, FieldDescriptor> fields = Map.of("OptionalField1", new FieldDescriptor("Bad@Value$", false));
-        ActionRequestValidationException exception = StringUtils.validateFields(fields);
+        ActionRequestValidationException exception = Validator.validateFields(fields);
         assertNotNull(exception);
         assertTrue(exception.getMessage().contains("OptionalField1"));
     }
@@ -791,33 +791,33 @@ public class StringUtilsTest {
     @Test
     public void testIsSafeText_AdvancedValidInputs() {
         // Testing all allowed characters
-        assertTrue(StringUtils.isSafeText("Hello World"));  // spaces
-        assertTrue(StringUtils.isSafeText("Hello.World"));  // period
-        assertTrue(StringUtils.isSafeText("Hello,World"));  // comma
-        assertTrue(StringUtils.isSafeText("Hello!World"));  // exclamation
-        assertTrue(StringUtils.isSafeText("Hello?World"));  // question mark
-        assertTrue(StringUtils.isSafeText("Hello(World)")); // parentheses
-        assertTrue(StringUtils.isSafeText("Hello:World"));  // colon
-        assertTrue(StringUtils.isSafeText("Hello@World"));  // at sign
-        assertTrue(StringUtils.isSafeText("Hello-World"));  // hyphen
-        assertTrue(StringUtils.isSafeText("Hello_World"));  // underscore
-        assertTrue(StringUtils.isSafeText("Hello'World")); // single quote
-        assertTrue(StringUtils.isSafeText("Hello\"World")); // double quote
+        assertTrue(Validator.isSafeText("Hello World"));  // spaces
+        assertTrue(Validator.isSafeText("Hello.World"));  // period
+        assertTrue(Validator.isSafeText("Hello,World"));  // comma
+        assertTrue(Validator.isSafeText("Hello!World"));  // exclamation
+        assertTrue(Validator.isSafeText("Hello?World"));  // question mark
+        assertTrue(Validator.isSafeText("Hello(World)")); // parentheses
+        assertTrue(Validator.isSafeText("Hello:World"));  // colon
+        assertTrue(Validator.isSafeText("Hello@World"));  // at sign
+        assertTrue(Validator.isSafeText("Hello-World"));  // hyphen
+        assertTrue(Validator.isSafeText("Hello_World"));  // underscore
+        assertTrue(Validator.isSafeText("Hello'World")); // single quote
+        assertTrue(Validator.isSafeText("Hello\"World")); // double quote
     }
 
     @Test
     public void testIsSafeText_AdvancedInvalidInputs() {
         // Testing specifically excluded characters
-        assertFalse(StringUtils.isSafeText("Hello<World"));  // less than
-        assertFalse(StringUtils.isSafeText("Hello>World"));  // greater than
-        assertTrue(StringUtils.isSafeText("Hello/World"));  // forward slash
-        assertFalse(StringUtils.isSafeText("Hello\\World")); // backslash
-        assertFalse(StringUtils.isSafeText("Hello&World"));  // ampersand
-        assertFalse(StringUtils.isSafeText("Hello+World"));  // plus
-        assertFalse(StringUtils.isSafeText("Hello=World"));  // equals
-        assertFalse(StringUtils.isSafeText("Hello;World"));  // semicolon
-        assertFalse(StringUtils.isSafeText("Hello|World"));  // pipe
-        assertFalse(StringUtils.isSafeText("Hello*World"));  // asterisk
+        assertFalse(Validator.isSafeText("Hello<World"));  // less than
+        assertFalse(Validator.isSafeText("Hello>World"));  // greater than
+        assertTrue(Validator.isSafeText("Hello/World"));  // forward slash
+        assertFalse(Validator.isSafeText("Hello\\World")); // backslash
+        assertFalse(Validator.isSafeText("Hello&World"));  // ampersand
+        assertFalse(Validator.isSafeText("Hello+World"));  // plus
+        assertFalse(Validator.isSafeText("Hello=World"));  // equals
+        assertFalse(Validator.isSafeText("Hello;World"));  // semicolon
+        assertFalse(Validator.isSafeText("Hello|World"));  // pipe
+        assertFalse(Validator.isSafeText("Hello*World"));  // asterisk
     }
 
     @Test
@@ -828,7 +828,7 @@ public class StringUtilsTest {
         fields.put("RequiredField3", new FieldDescriptor("Bad@#Char$", true));
         fields.put("RequiredField4", new FieldDescriptor(null, true));
 
-        ActionRequestValidationException exception = StringUtils.validateFields(fields);
+        ActionRequestValidationException exception = Validator.validateFields(fields);
         assertNotNull(exception);
         String message = exception.getMessage();
         assertTrue(message.contains("RequiredField1"));
@@ -840,20 +840,20 @@ public class StringUtilsTest {
     @Test
     public void testValidateFields_EmptyMap() {
         Map<String, FieldDescriptor> fields = new HashMap<>();
-        assertNull(StringUtils.validateFields(fields));
+        assertNull(Validator.validateFields(fields));
     }
 
     @Test
     public void testValidateFields_UnicodeLettersAndNumbers() {
         Map<String, FieldDescriptor> fields = Map
             .of("field1", new FieldDescriptor("Hello世界123", true), "field2", new FieldDescriptor("Café42", true));
-        assertNull(StringUtils.validateFields(fields));
+        assertNull(Validator.validateFields(fields));
     }
 
     @Test
     public void testValidateFields_InvalidCharacterSet() {
         Map<String, FieldDescriptor> fields = Map.of("Field1", new FieldDescriptor("Bad#Value$With^Weird*Chars", true));
-        ActionRequestValidationException exception = StringUtils.validateFields(fields);
+        ActionRequestValidationException exception = Validator.validateFields(fields);
         assertNotNull(exception);
         assertTrue(exception.getMessage().contains("Field1"));
     }
