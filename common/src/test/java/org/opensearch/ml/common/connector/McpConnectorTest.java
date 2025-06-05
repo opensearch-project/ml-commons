@@ -44,7 +44,7 @@ public class McpConnectorTest {
     BiFunction<String, String, String> decryptFunction;
 
     String TEST_CONNECTOR_JSON_STRING =
-        "{\"name\":\"test_mcp_connector_name\",\"version\":\"1\",\"description\":\"this is a test mcp connector\",\"protocol\":\"mcp_sse\",\"credential\":{\"key\":\"test_key_value\"},\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\",\"client_config\":{\"max_connection\":30,\"connection_timeout\":30000,\"read_timeout\":30000,\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"},\"url\":\"https://test.com\",\"headers\":{\"api_key\":\"${credential.key}\"}}";
+        "{\"name\":\"test_mcp_connector_name\",\"version\":\"1\",\"description\":\"this is a test mcp connector\",\"protocol\":\"mcp_sse\",\"credential\":{\"key\":\"test_key_value\"},\"backend_roles\":[\"role1\",\"role2\"],\"access\":\"public\",\"client_config\":{\"max_connection\":30,\"connection_timeout\":30000,\"read_timeout\":30000,\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"},\"url\":\"https://test.com\",\"headers\":{\"api_key\":\"${credential.key}\"},\"parameters\":{\"customSseEndpoint\":\"/custom/sse\"}}";
 
     @Before
     public void setUp() {
@@ -100,6 +100,7 @@ public class McpConnectorTest {
         Assert.assertEquals("mcp_sse", connector.getProtocol());
         Assert.assertEquals(AccessMode.PUBLIC, connector.getAccess());
         Assert.assertEquals("https://test.com", connector.getUrl());
+        Assert.assertEquals("/custom/sse", connector.getParameters().get("customSseEndpoint"));
         connector.decrypt(PREDICT.name(), decryptFunction, null);
         Map<String, String> decryptedCredential = connector.getDecryptedCredential();
         Assert.assertEquals(1, decryptedCredential.size());
@@ -197,6 +198,8 @@ public class McpConnectorTest {
         Map<String, String> updatedHeaders = new HashMap<>();
         updatedHeaders.put("new_header", "new_header_value");
         updatedHeaders.put("updated_api_key", "${credential.new_key}"); // Referencing new credential key
+        Map<String, String> updatedParameters = new HashMap<>();
+        updatedParameters.put("customSseEndpoint", "/updated/sse");
 
         MLCreateConnectorInput updateInput = MLCreateConnectorInput
             .builder()
@@ -209,6 +212,7 @@ public class McpConnectorTest {
             .connectorClientConfig(updatedClientConfig)
             .url(updatedUrl)
             .headers(updatedHeaders)
+            .parameters(updatedParameters)
             .protocol(MCP_SSE)
             .build();
 
@@ -220,6 +224,7 @@ public class McpConnectorTest {
         Assert.assertEquals(updatedDescription, connector.getDescription());
         Assert.assertEquals(updatedVersion, connector.getVersion());
         Assert.assertEquals(MCP_SSE, connector.getProtocol()); // Should not change if not provided
+        Assert.assertEquals(updatedParameters, connector.getParameters());
         Assert.assertEquals(updatedBackendRoles, connector.getBackendRoles());
         Assert.assertEquals(updatedAccessMode, connector.getAccess());
         Assert.assertEquals(updatedClientConfig, connector.getConnectorClientConfig());
@@ -254,6 +259,9 @@ public class McpConnectorTest {
         Map<String, String> headers = new HashMap<>();
         headers.put("api_key", "${credential.key}");
 
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("customSseEndpoint", "/custom/sse");
+
         ConnectorClientConfig clientConfig = new ConnectorClientConfig(30, 30000, 30000, 10, 10, -1, RetryBackoffPolicy.CONSTANT);
 
         return McpConnector
@@ -268,6 +276,7 @@ public class McpConnectorTest {
             .connectorClientConfig(clientConfig)
             .url("https://test.com")
             .headers(headers)
+            .parameters(parameters)
             .build();
     }
 }
