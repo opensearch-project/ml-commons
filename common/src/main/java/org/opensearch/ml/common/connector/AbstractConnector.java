@@ -37,7 +37,6 @@ public abstract class AbstractConnector implements Connector {
     public static final String DESCRIPTION_FIELD = "description";
     public static final String PROTOCOL_FIELD = "protocol";
     public static final String ACTIONS_FIELD = "actions";
-    public static final String CREDENTIAL_FIELD = "credential";
     public static final String PARAMETERS_FIELD = "parameters";
     public static final String CREATED_TIME_FIELD = "created_time";
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";

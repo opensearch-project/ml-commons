@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.remote;
 
+import static org.opensearch.ml.common.CommonValue.MCP_DEFAULT_SSE_ENDPOINT;
 import static org.opensearch.ml.common.CommonValue.MCP_SYNC_CLIENT;
 import static org.opensearch.ml.common.CommonValue.MCP_TOOLS_FIELD;
 import static org.opensearch.ml.common.CommonValue.MCP_TOOL_DESCRIPTION_FIELD;
@@ -73,6 +74,9 @@ public class McpConnectorExecutor extends AbstractConnectorExecutor {
 
     public List<MLToolSpec> getMcpToolSpecs() {
         String mcpServerUrl = connector.getUrl();
+        String sseEndpoint = connector.getParameters() != null && connector.getParameters().containsKey("customSseEndpoint")
+            ? connector.getParameters().get("customSseEndpoint")
+            : MCP_DEFAULT_SSE_ENDPOINT;
         if (mcpServerUrl == null) {
             return Collections.emptyList();
         }
@@ -88,9 +92,14 @@ public class McpConnectorExecutor extends AbstractConnectorExecutor {
             };
 
             // Create transport
-            McpClientTransport transport = HttpClientSseClientTransport.builder(mcpServerUrl).customizeClient(clientBuilder -> {
-                clientBuilder.connectTimeout(connectionTimeout);
-            }).customizeRequest(headerConfig).build();
+            McpClientTransport transport = HttpClientSseClientTransport
+                .builder(mcpServerUrl)
+                .sseEndpoint(sseEndpoint)
+                .customizeClient(clientBuilder -> {
+                    clientBuilder.connectTimeout(connectionTimeout);
+                })
+                .customizeRequest(headerConfig)
+                .build();
 
             // Create and initialize client
             McpSyncClient client = McpClient
