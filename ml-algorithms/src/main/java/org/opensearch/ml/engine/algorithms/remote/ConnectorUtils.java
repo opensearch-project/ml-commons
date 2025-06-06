@@ -8,6 +8,10 @@ package org.opensearch.ml.engine.algorithms.remote;
 import static org.apache.commons.text.StringEscapeUtils.escapeJson;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.BATCH_PREDICT;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.CANCEL_BATCH_PREDICT;
+import static org.opensearch.ml.common.connector.ConnectorAction.BEDROCK;
+import static org.opensearch.ml.common.connector.ConnectorAction.COHERE;
+import static org.opensearch.ml.common.connector.ConnectorAction.OPENAI;
+import static org.opensearch.ml.common.connector.ConnectorAction.SAGEMAKER;
 import static org.opensearch.ml.common.connector.HttpConnector.RESPONSE_FILTER_FIELD;
 import static org.opensearch.ml.common.connector.MLPreProcessFunction.CONVERT_INPUT_TO_JSON_STRING;
 import static org.opensearch.ml.common.connector.MLPreProcessFunction.PROCESS_REMOTE_INFERENCE_INPUT;
@@ -66,9 +70,6 @@ public class ConnectorUtils {
 
     private static final Aws4Signer signer;
     public static final String SKIP_VALIDATE_MISSING_PARAMETERS = "skip_validating_missing_parameters";
-
-    public static final List<String> SUPPORTED_REMOTE_SERVERS_FOR_DEFAULT_ACTION_TYPES = List
-        .of("sagemaker", "openai", "bedrock", "cohere");
 
     static {
         signer = Aws4Signer.create();
@@ -363,19 +364,19 @@ public class ConnectorUtils {
         String requestBody = null;
         String url = "";
 
-        switch (getRemoteServerFromURL(predictEndpoint)) {
-            case "sagemaker":
+        switch (ConnectorAction.getRemoteServerFromURL(predictEndpoint)) {
+            case SAGEMAKER:
                 url = isCancelAction
                     ? predictEndpoint.replace("CreateTransformJob", "StopTransformJob")
                     : predictEndpoint.replace("CreateTransformJob", "DescribeTransformJob");
                 requestBody = "{ \"TransformJobName\" : \"${parameters.TransformJobName}\"}";
                 break;
-            case "openai":
-            case "cohere":
+            case OPENAI:
+            case COHERE:
                 url = isCancelAction ? predictEndpoint + "/${parameters.id}/cancel" : predictEndpoint + "/${parameters.id}";
                 method = isCancelAction ? "POST" : "GET";
                 break;
-            case "bedrock":
+            case BEDROCK:
                 url = isCancelAction
                     ? predictEndpoint + "/${parameters.processedJobArn}/stop"
                     : predictEndpoint + "/${parameters.processedJobArn}";
@@ -396,9 +397,5 @@ public class ConnectorUtils {
             .requestBody(requestBody)
             .headers(batchPredictAction.get().getHeaders())
             .build();
-    }
-
-    public static String getRemoteServerFromURL(String url) {
-        return SUPPORTED_REMOTE_SERVERS_FOR_DEFAULT_ACTION_TYPES.stream().filter(url::contains).findFirst().orElse("");
     }
 }
