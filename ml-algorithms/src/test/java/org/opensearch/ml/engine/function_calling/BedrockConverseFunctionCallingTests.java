@@ -52,7 +52,7 @@ public class BedrockConverseFunctionCallingTests {
     public void configure() {
         Map<String, String> parameters = new HashMap<>();
         functionCalling.configure(parameters);
-        Assert.assertEquals(2, parameters.size());
+        Assert.assertEquals(14, parameters.size());
         Assert.assertEquals(BEDROCK_CONVERSE_TOOL_TEMPLATE, parameters.get("tool_template"));
     }
 
@@ -75,7 +75,10 @@ public class BedrockConverseFunctionCallingTests {
         BedrockMessage message = (BedrockMessage) messages.get(0);
         Assert.assertEquals("user", message.getRole());
         Assert.assertEquals(1, message.getContent().size());
-        BedrockConverseFunctionCalling.ToolResult result = (BedrockConverseFunctionCalling.ToolResult) message.getContent().get(0);
+        Map<String, BedrockConverseFunctionCalling.ToolResult> contentMap = (Map<String, BedrockConverseFunctionCalling.ToolResult>) message
+            .getContent()
+            .get(0);
+        BedrockConverseFunctionCalling.ToolResult result = contentMap.get("toolResult");
         Assert.assertEquals("test_tool_call_id", result.getToolUseId());
         Assert.assertEquals("test result for bedrock converse", result.getContent().get(0));
     }
