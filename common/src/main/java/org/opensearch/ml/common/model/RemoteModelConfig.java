@@ -18,18 +18,21 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.FunctionName;
 
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Configuration class for remote models. This class extends BaseModelConfig
+ * and provides specific configuration parameters for remote models.
+ */
 @Setter
 @Getter
-public class TextEmbeddingModelConfig extends BaseModelConfig {
-    public static final String PARSE_FIELD_NAME = FunctionName.TEXT_EMBEDDING.name();
+public class RemoteModelConfig extends BaseModelConfig {
+    public static final String PARSE_FIELD_NAME = "remote";
     public static final NamedXContentRegistry.Entry XCONTENT_REGISTRY = new NamedXContentRegistry.Entry(
-        TextEmbeddingModelConfig.class,
+        RemoteModelConfig.class,
         new ParseField(PARSE_FIELD_NAME),
         it -> parse(it)
     );
@@ -39,82 +42,44 @@ public class TextEmbeddingModelConfig extends BaseModelConfig {
     public static final String POOLING_MODE_FIELD = "pooling_mode";
     public static final String NORMALIZE_RESULT_FIELD = "normalize_result";
     public static final String MODEL_MAX_LENGTH_FIELD = "model_max_length";
-    public static final String QUERY_PREFIX = "query_prefix";
-    public static final String PASSAGE_PREFIX = "passage_prefix";
 
     private final Integer embeddingDimension;
     private final FrameworkType frameworkType;
     private final PoolingMode poolingMode;
     private final boolean normalizeResult;
     private final Integer modelMaxLength;
-    private final String queryPrefix;
-    private final String passagePrefix;
-
-    public TextEmbeddingModelConfig(
-        String modelType,
-        Integer embeddingDimension,
-        FrameworkType frameworkType,
-        String allConfig,
-        Map<String, Object> additionalConfig,
-        PoolingMode poolingMode,
-        boolean normalizeResult,
-        Integer modelMaxLength
-    ) {
-        this(
-            modelType,
-            embeddingDimension,
-            frameworkType,
-            allConfig,
-            additionalConfig,
-            poolingMode,
-            normalizeResult,
-            modelMaxLength,
-            null,
-            null
-        );
-    }
 
     @Builder(toBuilder = true)
-    public TextEmbeddingModelConfig(
+    public RemoteModelConfig(
         String modelType,
         Integer embeddingDimension,
         FrameworkType frameworkType,
         String allConfig,
-        Map<String, Object> additionalConfig,
         PoolingMode poolingMode,
         boolean normalizeResult,
         Integer modelMaxLength,
-        String queryPrefix,
-        String passagePrefix
+        Map<String, Object> additionalConfig
     ) {
         super(modelType, allConfig, additionalConfig);
-        if (embeddingDimension == null) {
-            throw new IllegalArgumentException("embedding dimension is null");
-        }
-        if (frameworkType == null) {
-            throw new IllegalArgumentException("framework type is null");
-        }
-        validateNoDuplicateKeys(allConfig, additionalConfig);
         this.embeddingDimension = embeddingDimension;
         this.frameworkType = frameworkType;
         this.poolingMode = poolingMode;
         this.normalizeResult = normalizeResult;
         this.modelMaxLength = modelMaxLength;
-        this.queryPrefix = queryPrefix;
-        this.passagePrefix = passagePrefix;
+
+        validateNoDuplicateKeys(allConfig, additionalConfig);
+        validateTextEmbeddingConfig();
     }
 
-    public static TextEmbeddingModelConfig parse(XContentParser parser) throws IOException {
+    public static RemoteModelConfig parse(XContentParser parser) throws IOException {
         String modelType = null;
         Integer embeddingDimension = null;
         FrameworkType frameworkType = null;
         String allConfig = null;
-        Map<String, Object> additionalConfig = null;
         PoolingMode poolingMode = null;
         boolean normalizeResult = false;
         Integer modelMaxLength = null;
-        String queryPrefix = null;
-        String passagePrefix = null;
+        Map<String, Object> additionalConfig = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -134,9 +99,6 @@ public class TextEmbeddingModelConfig extends BaseModelConfig {
                 case ALL_CONFIG_FIELD:
                     allConfig = parser.text();
                     break;
-                case ADDITIONAL_CONFIG_FIELD:
-                    additionalConfig = parser.map();
-                    break;
                 case POOLING_MODE_FIELD:
                     poolingMode = PoolingMode.from(parser.text().toUpperCase(Locale.ROOT));
                     break;
@@ -146,28 +108,23 @@ public class TextEmbeddingModelConfig extends BaseModelConfig {
                 case MODEL_MAX_LENGTH_FIELD:
                     modelMaxLength = parser.intValue();
                     break;
-                case QUERY_PREFIX:
-                    queryPrefix = parser.text();
-                    break;
-                case PASSAGE_PREFIX:
-                    passagePrefix = parser.text();
+                case ADDITIONAL_CONFIG_FIELD:
+                    additionalConfig = parser.map();
                     break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
-        return new TextEmbeddingModelConfig(
+        return new RemoteModelConfig(
             modelType,
             embeddingDimension,
             frameworkType,
             allConfig,
-            additionalConfig,
             poolingMode,
             normalizeResult,
             modelMaxLength,
-            queryPrefix,
-            passagePrefix
+            additionalConfig
         );
     }
 
@@ -176,10 +133,14 @@ public class TextEmbeddingModelConfig extends BaseModelConfig {
         return PARSE_FIELD_NAME;
     }
 
-    public TextEmbeddingModelConfig(StreamInput in) throws IOException {
+    public RemoteModelConfig(StreamInput in) throws IOException {
         super(in);
-        embeddingDimension = in.readInt();
-        frameworkType = in.readEnum(FrameworkType.class);
+        embeddingDimension = in.readOptionalInt();
+        if (in.readBoolean()) {
+            frameworkType = in.readEnum(FrameworkType.class);
+        } else {
+            frameworkType = null;
+        }
         if (in.readBoolean()) {
             poolingMode = in.readEnum(PoolingMode.class);
         } else {
@@ -187,15 +148,18 @@ public class TextEmbeddingModelConfig extends BaseModelConfig {
         }
         normalizeResult = in.readBoolean();
         modelMaxLength = in.readOptionalInt();
-        queryPrefix = in.readOptionalString();
-        passagePrefix = in.readOptionalString();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        out.writeInt(embeddingDimension);
-        out.writeEnum(frameworkType);
+        out.writeOptionalInt(embeddingDimension);
+        if (frameworkType != null) {
+            out.writeBoolean(true);
+            out.writeEnum(frameworkType);
+        } else {
+            out.writeBoolean(false);
+        }
         if (poolingMode != null) {
             out.writeBoolean(true);
             out.writeEnum(poolingMode);
@@ -204,8 +168,6 @@ public class TextEmbeddingModelConfig extends BaseModelConfig {
         }
         out.writeBoolean(normalizeResult);
         out.writeOptionalInt(modelMaxLength);
-        out.writeOptionalString(queryPrefix);
-        out.writeOptionalString(passagePrefix);
     }
 
     @Override
@@ -223,23 +185,17 @@ public class TextEmbeddingModelConfig extends BaseModelConfig {
         if (allConfig != null) {
             builder.field(ALL_CONFIG_FIELD, allConfig);
         }
-        if (additionalConfig != null) {
-            builder.field(ADDITIONAL_CONFIG_FIELD, additionalConfig);
-        }
-        if (modelMaxLength != null) {
-            builder.field(MODEL_MAX_LENGTH_FIELD, modelMaxLength);
-        }
         if (poolingMode != null) {
             builder.field(POOLING_MODE_FIELD, poolingMode);
         }
         if (normalizeResult) {
             builder.field(NORMALIZE_RESULT_FIELD, normalizeResult);
         }
-        if (queryPrefix != null) {
-            builder.field(QUERY_PREFIX, queryPrefix);
+        if (modelMaxLength != null) {
+            builder.field(MODEL_MAX_LENGTH_FIELD, modelMaxLength);
         }
-        if (passagePrefix != null) {
-            builder.field(PASSAGE_PREFIX, passagePrefix);
+        if (additionalConfig != null) {
+            builder.field(ADDITIONAL_CONFIG_FIELD, additionalConfig);
         }
         builder.endObject();
         return builder;
@@ -282,6 +238,20 @@ public class TextEmbeddingModelConfig extends BaseModelConfig {
                 return FrameworkType.valueOf(value.toUpperCase(Locale.ROOT));
             } catch (Exception e) {
                 throw new IllegalArgumentException("Wrong framework type");
+            }
+        }
+    }
+
+    private void validateTextEmbeddingConfig() {
+        if (modelType != null && modelType.equalsIgnoreCase("text_embedding")) {
+            if (embeddingDimension == null) {
+                throw new IllegalArgumentException("Embedding dimension must be provided for remote text embedding model");
+            }
+            if (frameworkType == null) {
+                throw new IllegalArgumentException("Framework type must be provided for remote text embedding model");
+            }
+            if (additionalConfig == null || !additionalConfig.containsKey("space_type")) {
+                throw new IllegalArgumentException("Space type must be provided in additional_config for remote text embedding model");
             }
         }
     }
