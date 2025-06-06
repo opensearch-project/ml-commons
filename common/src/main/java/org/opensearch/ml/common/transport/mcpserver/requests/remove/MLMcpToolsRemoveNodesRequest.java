@@ -7,10 +7,13 @@
 
 package org.opensearch.ml.common.transport.mcpserver.requests.remove;
 
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.opensearch.action.ActionRequest;
@@ -21,26 +24,29 @@ import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.util.CollectionUtils;
+import org.opensearch.core.xcontent.XContentParser;
 
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 @Data
+@EqualsAndHashCode(callSuper = false)
 public class MLMcpToolsRemoveNodesRequest extends BaseNodesRequest<MLMcpToolsRemoveNodesRequest> {
-    private List<String> tools;
+    private List<String> mcpTools;
 
     public MLMcpToolsRemoveNodesRequest(StreamInput in) throws IOException {
         super(in);
-        this.tools = in.readList(StreamInput::readString);
+        this.mcpTools = in.readList(StreamInput::readString);
     }
 
-    public MLMcpToolsRemoveNodesRequest(String[] nodeIds, List<String> tools) {
+    public MLMcpToolsRemoveNodesRequest(String[] nodeIds, List<String> mcpTools) {
         super(nodeIds);
-        this.tools = tools;
+        this.mcpTools = mcpTools;
     }
 
     @Override
     public ActionRequestValidationException validate() {
-        if (CollectionUtils.isEmpty(tools)) {
+        if (CollectionUtils.isEmpty(mcpTools)) {
             ActionRequestValidationException exception = new ActionRequestValidationException();
             exception.addValidationError("remove tools list can not be null");
             return exception;
@@ -50,7 +56,16 @@ public class MLMcpToolsRemoveNodesRequest extends BaseNodesRequest<MLMcpToolsRem
 
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        out.writeStringArray(tools.toArray(new String[0]));
+        out.writeStringArray(mcpTools.toArray(new String[0]));
+    }
+
+    public static MLMcpToolsRemoveNodesRequest parse(XContentParser parser, String[] allNodeIds) throws IOException {
+        List<String> tools = new ArrayList<>();
+        ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.nextToken(), parser);
+        while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+            tools.add(parser.text());
+        }
+        return new MLMcpToolsRemoveNodesRequest(allNodeIds, tools);
     }
 
     public static MLMcpToolsRemoveNodesRequest fromActionRequest(ActionRequest actionRequest) {
