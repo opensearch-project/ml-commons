@@ -97,7 +97,6 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
-            // TODO: Remove this feature flag check once feature is GA, as it will be enabled by default
             validateAndDeleteModelGroup(modelGroupId, tenantId, wrappedListener);
         }
     }
