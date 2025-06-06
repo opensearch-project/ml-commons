@@ -210,8 +210,8 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
         String endPoint = substitutor.replace(url);
         String remoteServer = getRemoteServerFromURL(endPoint);
-        validateProcessFunctions(remoteServer, preProcessFunction);
-        validateProcessFunctions(remoteServer, postProcessFunction);
+        validateProcessFunctions(remoteServer, preProcessFunction, "PreProcessFunction");
+        validateProcessFunctions(remoteServer, postProcessFunction, "PostProcessFunction");
     }
 
     /**
@@ -225,27 +225,27 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         return SUPPORTED_REMOTE_SERVERS_FOR_DEFAULT_ACTION_TYPES.stream().filter(url::contains).findFirst().orElse("");
     }
 
-    private void validateProcessFunctions(String remoteServer, String processFunction) {
+    private void validateProcessFunctions(String remoteServer, String processFunction, String funcNameForWarnText) {
         if (isInBuiltProcessFunction(processFunction)) {
             switch (remoteServer) {
                 case OPENAI:
                     if (!processFunction.contains(OPENAI)) {
-                        logger.warn(invalidProcessFuncWarnText(OPENAI));
+                        logWarningForInvalidProcessFunc(OPENAI, funcNameForWarnText);
                     }
                     break;
                 case COHERE:
                     if (!processFunction.contains(COHERE)) {
-                        logger.warn(invalidProcessFuncWarnText(COHERE));
+                        logWarningForInvalidProcessFunc(COHERE, funcNameForWarnText);
                     }
                     break;
                 case BEDROCK:
                     if (!processFunction.contains(BEDROCK)) {
-                        logger.warn(invalidProcessFuncWarnText(BEDROCK));
+                        logWarningForInvalidProcessFunc(BEDROCK, funcNameForWarnText);
                     }
                     break;
                 case SAGEMAKER:
                     if (!processFunction.contains(SAGEMAKER_PRE_POST_FUNC_TEXT)) {
-                        logger.warn(invalidProcessFuncWarnText(SAGEMAKER));
+                        logWarningForInvalidProcessFunc(SAGEMAKER, funcNameForWarnText);
                     }
             }
         }
@@ -255,8 +255,8 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         return (processFunction != null && processFunction.startsWith(INBUILT_FUNC_PREFIX));
     }
 
-    private String invalidProcessFuncWarnText(String remoteServer) {
-        return "LLM service is " + remoteServer + ", so PrePostProcessFunction should be corresponding to " + remoteServer;
+    private void logWarningForInvalidProcessFunc(String remoteServer, String funcNameForWarnText) {
+        logger.warn("LLM service is " + remoteServer + ", so " + funcNameForWarnText + " should be corresponding to " + remoteServer);
     }
 
     public enum ActionType {

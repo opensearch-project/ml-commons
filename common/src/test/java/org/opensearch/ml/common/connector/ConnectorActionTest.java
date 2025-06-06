@@ -6,8 +6,9 @@
 package org.opensearch.ml.common.connector;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.isValidActionInModelPrediction;
 import static org.opensearch.ml.common.connector.MLPostProcessFunction.BEDROCK_BATCH_JOB_ARN;
 import static org.opensearch.ml.common.connector.MLPostProcessFunction.BEDROCK_EMBEDDING;
@@ -28,10 +29,23 @@ import static org.opensearch.ml.common.connector.MLPreProcessFunction.TEXT_SIMIL
 import static org.opensearch.ml.common.connector.MLPreProcessFunction.TEXT_SIMILARITY_TO_DEFAULT_INPUT;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
+import org.apache.logging.log4j.Level;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.core.LogEvent;
+import org.apache.logging.log4j.core.LoggerContext;
+import org.apache.logging.log4j.core.appender.AbstractAppender;
+import org.apache.logging.log4j.core.config.LoggerConfig;
+import org.apache.logging.log4j.core.layout.PatternLayout;
+import org.junit.After;
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.Settings;
@@ -56,6 +70,27 @@ public class ConnectorActionTest {
     private static final String BEDROCK_URL = "https://bedrock-runtime.us-east-1.amazonaws.com/model/amazon.titan-embed-text-v1/invoke";
     private static final String SAGEMAKER_URL =
         "https://runtime.sagemaker.us-west-2.amazonaws.com/endpoints/lmi-model-2023-06-24-01-35-32-275/invocations";
+    private static final Logger logger = LogManager.getLogger(ConnectorActionTest.class);
+    private static TestLogAppender testAppender;
+
+    @BeforeClass
+    public static void setUpClass() {
+        testAppender = new TestLogAppender("TestAppender");
+        LoggerContext context = (LoggerContext) LogManager.getContext(false);
+        LoggerConfig loggerConfig = context.getConfiguration().getLoggerConfig(logger.getName());
+        loggerConfig.addAppender(testAppender, Level.WARN, null);
+        context.updateLoggers();
+    }
+
+    @After
+    public void tearDown() {
+        testAppender.clear();
+    }
+
+    @AfterClass
+    public static void tearDownClass() {
+        testAppender.stop();
+    }
 
     @Test
     public void constructor_NullActionType() {
@@ -89,6 +124,7 @@ public class ConnectorActionTest {
     public void testValidatePrePostProcessFunctionsWithNullPreProcessFunctionSuccess() {
         ConnectorAction action = new ConnectorAction(TEST_ACTION_TYPE, TEST_METHOD_HTTP, OPENAI_URL, null, TEST_REQUEST_BODY, null, null);
         action.validatePrePostProcessFunctions(Map.of());
+        assertFalse(testAppender.getLogEvents().stream().anyMatch(event -> event.getLevel() == Level.WARN));
     }
 
     @Test
@@ -105,6 +141,7 @@ public class ConnectorActionTest {
             null
         );
         action.validatePrePostProcessFunctions(null);
+        assertFalse(testAppender.getLogEvents().stream().anyMatch(event -> event.getLevel() == Level.WARN));
     }
 
     @Test
@@ -119,12 +156,12 @@ public class ConnectorActionTest {
             OPENAI_EMBEDDING
         );
         action.validatePrePostProcessFunctions(Map.of("endpoint", "api.openai.com"));
+        assertFalse(testAppender.getLogEvents().stream().anyMatch(event -> event.getLevel() == Level.WARN));
     }
 
     @Test
-    public void testValidatePrePostProcessFunctionsWithOpenAIConnectorWrongInBuiltPrePostProcessFunction() {
-        // Testing with wrong PreProcessFunction
-        ConnectorAction action1 = new ConnectorAction(
+    public void testValidatePrePostProcessFunctionsWithOpenAIConnectorWrongInBuiltPreProcessFunction() {
+        ConnectorAction action = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
             OPENAI_URL,
@@ -133,10 +170,23 @@ public class ConnectorActionTest {
             TEXT_DOCS_TO_BEDROCK_EMBEDDING_INPUT,
             OPENAI_EMBEDDING
         );
-        action1.validatePrePostProcessFunctions(Map.of());
+        action.validatePrePostProcessFunctions(Map.of());
+        boolean isWarningLogged = testAppender
+            .getLogEvents()
+            .stream()
+            .anyMatch(
+                event -> event.getLevel() == Level.WARN
+                    && event
+                        .getMessage()
+                        .getFormattedMessage()
+                        .contains("LLM service is openai, so PreProcessFunction should be corresponding to openai")
+            );
+        assertTrue(isWarningLogged);
+    }
 
-        // Testing with wrong PostProcessFunction
-        ConnectorAction action2 = new ConnectorAction(
+    @Test
+    public void testValidatePrePostProcessFunctionsWithOpenAIConnectorWrongInBuiltPostProcessFunction() {
+        ConnectorAction action = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
             OPENAI_URL,
@@ -145,7 +195,18 @@ public class ConnectorActionTest {
             TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT,
             COHERE_EMBEDDING
         );
-        action2.validatePrePostProcessFunctions(Map.of());
+        action.validatePrePostProcessFunctions(Map.of());
+        boolean isWarningLogged = testAppender
+            .getLogEvents()
+            .stream()
+            .anyMatch(
+                event -> event.getLevel() == Level.WARN
+                    && event
+                        .getMessage()
+                        .getFormattedMessage()
+                        .contains("LLM service is openai, so PostProcessFunction should be corresponding to openai")
+            );
+        assertTrue(isWarningLogged);
     }
 
     @Test
@@ -160,6 +221,8 @@ public class ConnectorActionTest {
             COHERE_EMBEDDING
         );
         action.validatePrePostProcessFunctions(Map.of());
+        assertFalse(testAppender.getLogEvents().stream().anyMatch(event -> event.getLevel() == Level.WARN));
+
         action = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
@@ -170,6 +233,8 @@ public class ConnectorActionTest {
             COHERE_EMBEDDING
         );
         action.validatePrePostProcessFunctions(Map.of());
+        assertFalse(testAppender.getLogEvents().stream().anyMatch(event -> event.getLevel() == Level.WARN));
+
         action = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
@@ -180,13 +245,12 @@ public class ConnectorActionTest {
             COHERE_RERANK
         );
         action.validatePrePostProcessFunctions(Map.of());
-        assertNotNull(action);
+        assertFalse(testAppender.getLogEvents().stream().anyMatch(event -> event.getLevel() == Level.WARN));
     }
 
     @Test
-    public void testValidatePrePostProcessFunctionsWithCohereConnectorWrongInBuiltPrePostProcessFunction() {
-        // Testing with wrong PreProcessFunction
-        ConnectorAction action1 = new ConnectorAction(
+    public void testValidatePrePostProcessFunctionsWithCohereConnectorWrongInBuiltPreProcessFunction() {
+        ConnectorAction action = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
             COHERE_URL,
@@ -195,10 +259,23 @@ public class ConnectorActionTest {
             TEXT_DOCS_TO_BEDROCK_EMBEDDING_INPUT,
             COHERE_EMBEDDING
         );
-        action1.validatePrePostProcessFunctions(Map.of());
+        action.validatePrePostProcessFunctions(Map.of());
+        boolean isWarningLogged = testAppender
+            .getLogEvents()
+            .stream()
+            .anyMatch(
+                event -> event.getLevel() == Level.WARN
+                    && event
+                        .getMessage()
+                        .getFormattedMessage()
+                        .contains("LLM service is cohere, so PreProcessFunction should be corresponding to cohere")
+            );
+        assertTrue(isWarningLogged);
+    }
 
-        // Testing with wrong PostProcessFunction
-        ConnectorAction action2 = new ConnectorAction(
+    @Test
+    public void testValidatePrePostProcessFunctionsWithCohereConnectorWrongInBuiltPostProcessFunction() {
+        ConnectorAction action = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
             COHERE_URL,
@@ -207,7 +284,18 @@ public class ConnectorActionTest {
             TEXT_DOCS_TO_COHERE_EMBEDDING_INPUT,
             OPENAI_EMBEDDING
         );
-        action2.validatePrePostProcessFunctions(Map.of());
+        action.validatePrePostProcessFunctions(Map.of());
+        boolean isWarningLogged = testAppender
+            .getLogEvents()
+            .stream()
+            .anyMatch(
+                event -> event.getLevel() == Level.WARN
+                    && event
+                        .getMessage()
+                        .getFormattedMessage()
+                        .contains("LLM service is cohere, so PostProcessFunction should be corresponding to cohere")
+            );
+        assertTrue(isWarningLogged);
     }
 
     @Test
@@ -222,6 +310,8 @@ public class ConnectorActionTest {
             BEDROCK_EMBEDDING
         );
         action.validatePrePostProcessFunctions(Map.of());
+        assertFalse(testAppender.getLogEvents().stream().anyMatch(event -> event.getLevel() == Level.WARN));
+
         action = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
@@ -232,6 +322,8 @@ public class ConnectorActionTest {
             BEDROCK_BATCH_JOB_ARN
         );
         action.validatePrePostProcessFunctions(Map.of());
+        assertFalse(testAppender.getLogEvents().stream().anyMatch(event -> event.getLevel() == Level.WARN));
+
         action = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
@@ -242,12 +334,12 @@ public class ConnectorActionTest {
             BEDROCK_RERANK
         );
         action.validatePrePostProcessFunctions(Map.of());
+        assertFalse(testAppender.getLogEvents().stream().anyMatch(event -> event.getLevel() == Level.WARN));
     }
 
     @Test
-    public void testValidatePrePostProcessFunctionsWithBedrockConnectorWrongInBuiltPrePostProcessFunction() {
-        // Testing with wrong PreProcessFunction
-        ConnectorAction action1 = new ConnectorAction(
+    public void testValidatePrePostProcessFunctionsWithBedrockConnectorWrongInBuiltPreProcessFunction() {
+        ConnectorAction action = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
             BEDROCK_URL,
@@ -256,10 +348,23 @@ public class ConnectorActionTest {
             TEXT_DOCS_TO_COHERE_EMBEDDING_INPUT,
             BEDROCK_EMBEDDING
         );
-        action1.validatePrePostProcessFunctions(Map.of());
+        action.validatePrePostProcessFunctions(Map.of());
+        boolean isWarningLogged = testAppender
+            .getLogEvents()
+            .stream()
+            .anyMatch(
+                event -> event.getLevel() == Level.WARN
+                    && event
+                        .getMessage()
+                        .getFormattedMessage()
+                        .contains("LLM service is bedrock, so PreProcessFunction should be corresponding to bedrock")
+            );
+        assertTrue(isWarningLogged);
+    }
 
-        // Testing with wrong PostProcessFunction
-        ConnectorAction action2 = new ConnectorAction(
+    @Test
+    public void testValidatePrePostProcessFunctionsWithBedrockConnectorWrongInBuiltPostProcessFunction() {
+        ConnectorAction action = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
             BEDROCK_URL,
@@ -268,7 +373,18 @@ public class ConnectorActionTest {
             TEXT_IMAGE_TO_BEDROCK_EMBEDDING_INPUT,
             COHERE_EMBEDDING
         );
-        action2.validatePrePostProcessFunctions(Map.of());
+        action.validatePrePostProcessFunctions(Map.of());
+        boolean isWarningLogged = testAppender
+            .getLogEvents()
+            .stream()
+            .anyMatch(
+                event -> event.getLevel() == Level.WARN
+                    && event
+                        .getMessage()
+                        .getFormattedMessage()
+                        .contains("LLM service is bedrock, so PostProcessFunction should be corresponding to bedrock")
+            );
+        assertTrue(isWarningLogged);
     }
 
     @Test
@@ -283,6 +399,8 @@ public class ConnectorActionTest {
             DEFAULT_EMBEDDING
         );
         action.validatePrePostProcessFunctions(Map.of());
+        assertFalse(testAppender.getLogEvents().stream().anyMatch(event -> event.getLevel() == Level.WARN));
+
         action = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
@@ -293,12 +411,12 @@ public class ConnectorActionTest {
             DEFAULT_RERANK
         );
         action.validatePrePostProcessFunctions(Map.of());
+        assertFalse(testAppender.getLogEvents().stream().anyMatch(event -> event.getLevel() == Level.WARN));
     }
 
     @Test
-    public void testValidatePrePostProcessFunctionsWithSagemakerConnectorWrongInBuiltPrePostProcessFunction() {
-        // Testing with wrong PreProcessFunction
-        ConnectorAction action1 = new ConnectorAction(
+    public void testValidatePrePostProcessFunctionsWithSagemakerConnectorWrongInBuiltPreProcessFunction() {
+        ConnectorAction action = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
             SAGEMAKER_URL,
@@ -307,10 +425,23 @@ public class ConnectorActionTest {
             TEXT_DOCS_TO_COHERE_EMBEDDING_INPUT,
             DEFAULT_EMBEDDING
         );
-        action1.validatePrePostProcessFunctions(Map.of());
+        action.validatePrePostProcessFunctions(Map.of());
+        boolean isWarningLogged = testAppender
+            .getLogEvents()
+            .stream()
+            .anyMatch(
+                event -> event.getLevel() == Level.WARN
+                    && event
+                        .getMessage()
+                        .getFormattedMessage()
+                        .contains("LLM service is sagemaker, so PreProcessFunction should be corresponding to sagemaker")
+            );
+        assertTrue(isWarningLogged);
+    }
 
-        // Testing with wrong PostProcessFunction
-        ConnectorAction action2 = new ConnectorAction(
+    @Test
+    public void testValidatePrePostProcessFunctionsWithSagemakerConnectorWrongInBuiltPostProcessFunction() {
+        ConnectorAction action = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
             SAGEMAKER_URL,
@@ -319,7 +450,18 @@ public class ConnectorActionTest {
             TEXT_DOCS_TO_DEFAULT_EMBEDDING_INPUT,
             BEDROCK_EMBEDDING
         );
-        action2.validatePrePostProcessFunctions(Map.of());
+        action.validatePrePostProcessFunctions(Map.of());
+        boolean isWarningLogged = testAppender
+            .getLogEvents()
+            .stream()
+            .anyMatch(
+                event -> event.getLevel() == Level.WARN
+                    && event
+                        .getMessage()
+                        .getFormattedMessage()
+                        .contains("LLM service is sagemaker, so PostProcessFunction should be corresponding to sagemaker")
+            );
+        assertTrue(isWarningLogged);
     }
 
     @Test
@@ -429,5 +571,31 @@ public class ConnectorActionTest {
     public void test_invalidActionInModelPrediction() {
         ConnectorAction.ActionType actionType = ConnectorAction.ActionType.from("execute");
         assertEquals(isValidActionInModelPrediction(actionType), false);
+    }
+
+    /**
+     * Log appender class to check the logs printed or not
+     */
+    static class TestLogAppender extends AbstractAppender {
+
+        private final List<LogEvent> logEvents = new ArrayList<>();
+
+        public TestLogAppender(String name) {
+            super(name, null, PatternLayout.createDefaultLayout(), false);
+            start();
+        }
+
+        @Override
+        public void append(LogEvent event) {
+            logEvents.add(event.toImmutable());
+        }
+
+        public List<LogEvent> getLogEvents() {
+            return logEvents;
+        }
+
+        public void clear() {
+            logEvents.clear();
+        }
     }
 }
