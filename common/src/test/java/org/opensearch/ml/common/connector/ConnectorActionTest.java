@@ -145,7 +145,7 @@ public class ConnectorActionTest {
     }
 
     @Test
-    public void testValidatePrePostProcessFunctionsWithOpenAIConnectorCorrectInBuiltPrePostProcessFunctionAndParamsSuccess() {
+    public void testValidatePrePostProcessFunctionsWithOpenAIConnectorCorrectInBuiltPrePostProcessFunctionSuccess() {
         ConnectorAction action = new ConnectorAction(
             TEST_ACTION_TYPE,
             TEST_METHOD_HTTP,
