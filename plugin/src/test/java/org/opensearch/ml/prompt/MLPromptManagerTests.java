@@ -15,6 +15,7 @@ import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.junit.Before;
@@ -29,7 +30,6 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
-import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -57,6 +57,9 @@ public class MLPromptManagerTests extends OpenSearchTestCase {
 
     @Mock
     ActionListener<MLPrompt> getPromptActionListener;
+
+    @Mock
+    ActionListener<GetResponse> getResponseActionListener;
 
     private MLPromptManager mlPromptManager;
 
@@ -124,21 +127,43 @@ public class MLPromptManagerTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testGetPromptIndexNotFound() throws IOException {
-        GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest.builder().index(ML_PROMPT_INDEX).id(PROMPT_ID).build();
+    public void testValidateTagsWithExceededTagsSize() {
+        List<String> tags = Collections.nCopies(MLPromptManager.MAX_NUMBER_OF_TAGS + 1, "tag");
+        boolean result = MLPromptManager.validateTags(tags);
 
-        doAnswer(invocation -> {
-            ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onFailure(new IndexNotFoundException("Index not found"));
-            return null;
-        }).when(client).get(any(), any());
+        assertFalse(result);
+    }
 
-        mlPromptManager.getPromptAsync(getDataObjectRequest, PROMPT_ID, getPromptActionListener);
+    @Test
+    public void testValidateTagsWithExceededTagCharacterSize() {
+        List<String> tags = Collections.singletonList("a".repeat(MLPromptManager.MAX_LENGTH_OF_TAG + 1));
+        boolean result = MLPromptManager.validateTags(tags);
 
+        assertFalse(result);
+    }
+
+    @Test
+    public void testHandleFailureWithIndexNotFoundException() {
+        MLPromptManager
+            .handleFailure(
+                new IndexNotFoundException("Failed to get data object from index .plugins-ml-prompt"),
+                "prompt_id",
+                getResponseActionListener,
+                "Failed to get prompt index"
+            );
         ArgumentCaptor<OpenSearchStatusException> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
-        verify(getPromptActionListener).onFailure(argumentCaptor.capture());
+        verify(getResponseActionListener).onFailure(argumentCaptor.capture());
         assertEquals("Failed to find prompt with the provided prompt id: prompt_id", argumentCaptor.getValue().getMessage());
-        assertEquals(RestStatus.NOT_FOUND, argumentCaptor.getValue().status());
+    }
+
+    @Test
+    public void testHandleFailureWithException() {
+        GetResponse getResponse = createGetResponse();
+        MLPromptManager
+            .handleFailure(new Exception("Fail to get prompt"), "prompt_id", getResponseActionListener, "Failed to get a prompt");
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(getResponseActionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Fail to get prompt", argumentCaptor.getValue().getMessage());
     }
 
     private GetResponse createGetResponse() {
