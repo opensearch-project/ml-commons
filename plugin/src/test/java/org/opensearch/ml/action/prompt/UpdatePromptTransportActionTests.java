@@ -8,6 +8,7 @@ package org.opensearch.ml.action.prompt;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.isA;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -19,6 +20,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -27,6 +29,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.DocWriteResponse;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
@@ -35,6 +38,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.index.Index;
 import org.opensearch.core.index.shard.ShardId;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.prompt.MLPrompt;
@@ -42,9 +46,12 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.prompt.MLUpdatePromptInput;
 import org.opensearch.ml.common.transport.prompt.MLUpdatePromptRequest;
 import org.opensearch.ml.prompt.MLPromptManager;
+import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
+import org.opensearch.search.SearchHit;
+import org.opensearch.search.SearchHits;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
@@ -111,6 +118,13 @@ public class UpdatePromptTransportActionTests extends OpenSearchTestCase {
         testPrompt.put("user", "test updated user prompt");
         mlUpdatePromptInput = MLUpdatePromptInput.builder().name("test_prompt").prompt(testPrompt).build();
         mlUpdatePromptRequest = MLUpdatePromptRequest.builder().promptId("prompt_id").mlUpdatePromptInput(mlUpdatePromptInput).build();
+
+        SearchResponse searchResponse = createSearchResponse(0);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(mlPromptManager).validateUniquePromptName(any(), any(), any());
     }
 
     @Test
@@ -230,10 +244,59 @@ public class UpdatePromptTransportActionTests extends OpenSearchTestCase {
         assertEquals("Failed to find prompt with the provided prompt id: prompt_id", argumentCaptor.getValue().getMessage());
     }
 
+    public void testDoExecute_fail_withPromptNameAlreadyExists() throws IOException {
+        SearchResponse searchResponse = createSearchResponse(1);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(mlPromptManager).validateUniquePromptName(any(), any(), any());
+
+        updatePromptTransportAction.doExecute(task, mlUpdatePromptRequest, actionListener);
+
+        ArgumentCaptor<IllegalArgumentException> argumentCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals(
+            "The name you provided is already being used by another ML Prompt with ID: prompt_id.",
+            argumentCaptor.getValue().getMessage()
+        );
+    }
+
+    public void testDoExecute_fail_searchResponseParsing() throws IOException {
+        SearchResponse searchResponse = createSearchResponse(0);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(2);
+            listener.onFailure(new OpenSearchStatusException("Failed to parse search response", RestStatus.INTERNAL_SERVER_ERROR));
+            return null;
+        }).when(mlPromptManager).validateUniquePromptName(any(), any(), any());
+
+        updatePromptTransportAction.doExecute(task, mlUpdatePromptRequest, actionListener);
+
+        ArgumentCaptor<OpenSearchStatusException> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Failed to parse search response", argumentCaptor.getValue().getMessage());
+    }
+
     private MLPrompt createMLPrompt() {
         Map<String, String> prompt = new HashMap<>();
         prompt.put("user", "test prompt");
         prompt.put("system", "test prompt");
         return MLPrompt.builder().name("test prompt").prompt(prompt).version("1").build();
+    }
+
+    private SearchResponse createSearchResponse(long totalHits) throws IOException {
+        SearchResponse searchResponse = mock(SearchResponse.class);
+        String promptContent = "{\n"
+            + "                    \"_id\": \"prompt_id\",\n"
+            + "                    \"name\": \"Test Prompt\",\n"
+            + "                    \"description\": \"This is an example description\",\n"
+            + "                    \"version\": 1,\n"
+            + "                    \"created_time\": 1684981986069,\n"
+            + "                    \"last_updated_time\": 1684981986069\n"
+            + "                }";
+        SearchHit prompt = SearchHit.fromXContent(TestHelper.parser(promptContent));
+        SearchHits hits = new SearchHits(new SearchHit[] { prompt }, new TotalHits(totalHits, TotalHits.Relation.EQUAL_TO), Float.NaN);
+        when(searchResponse.getHits()).thenReturn(hits);
+        return searchResponse;
     }
 }

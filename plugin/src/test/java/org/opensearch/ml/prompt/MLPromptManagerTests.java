@@ -7,6 +7,7 @@ package org.opensearch.ml.prompt;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -18,6 +19,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.lucene.search.TotalHits;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -25,26 +27,38 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.prompt.MLPrompt;
+import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
+import org.opensearch.search.SearchHit;
+import org.opensearch.search.SearchHits;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
 public class MLPromptManagerTests extends OpenSearchTestCase {
     private static final String PROMPT_ID = "prompt_id";
+
+    private final String expectedInputStrWithMessages = "[{\"role\": \"system\", \"content\": \"pull_prompt(prompt_id).system\"},"
+        + "{\"role\": \"user\", \"content\": \"pull_prompt(prompt_id).user\"}]";
+
+    private final String expectedInputStrWithPrompt = "pull_prompt(prompt_id).user";
+
+    private final String expectedInputStrWithPromptParameters = "{\"prompt_id\": {\"variable\": \"test\"}}";
 
     @Mock
     private Client client;
@@ -61,6 +75,12 @@ public class MLPromptManagerTests extends OpenSearchTestCase {
     @Mock
     ActionListener<GetResponse> getResponseActionListener;
 
+    @Mock
+    ActionListener<Map<String, String>> getInputParameterListener;
+
+    @Mock
+    ActionListener<SearchResponse> searchResponseActionListener;
+
     private MLPromptManager mlPromptManager;
 
     @Mock
@@ -76,7 +96,7 @@ public class MLPromptManagerTests extends OpenSearchTestCase {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         mlPromptManager = spy(new MLPromptManager(client, sdkClient));
 
-        getResponse = createGetResponse();
+        getResponse = createGetResponse("test prompt", "test prompt");
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
             listener.onResponse(getResponse);
@@ -93,13 +113,7 @@ public class MLPromptManagerTests extends OpenSearchTestCase {
     @Test
     public void testGetPrompt_success() throws IOException {
         GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest.builder().index(ML_PROMPT_INDEX).id(PROMPT_ID).build();
-        mlPromptManager
-            .getPromptAsync(
-                getDataObjectRequest,
-                PROMPT_ID,
-                getPromptActionListener
-
-            );
+        mlPromptManager.getPromptAsync(getDataObjectRequest, PROMPT_ID, getPromptActionListener);
 
         ArgumentCaptor<MLPrompt> argumentCaptor = ArgumentCaptor.forClass(MLPrompt.class);
         verify(getPromptActionListener).onResponse(argumentCaptor.capture());
@@ -158,7 +172,7 @@ public class MLPromptManagerTests extends OpenSearchTestCase {
 
     @Test
     public void testHandleFailureWithException() {
-        GetResponse getResponse = createGetResponse();
+        GetResponse getResponse = createGetResponse("test prompt", "test prompt");
         MLPromptManager
             .handleFailure(new Exception("Fail to get prompt"), "prompt_id", getResponseActionListener, "Failed to get a prompt");
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -166,10 +180,202 @@ public class MLPromptManagerTests extends OpenSearchTestCase {
         assertEquals("Fail to get prompt", argumentCaptor.getValue().getMessage());
     }
 
-    private GetResponse createGetResponse() {
+    @Test
+    public void testBuildInputParametersWithMessagesSuccess() throws IOException {
+        getResponse = createGetResponse("This is ${prompt_parameters.variable}", "test system prompt");
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        Map<String, String> inputParameters = Map
+            .of("messages", expectedInputStrWithMessages, "prompt_parameters", expectedInputStrWithPromptParameters);
+        mlPromptManager.buildInputParameters("messages", inputParameters, "tenant_id", getInputParameterListener);
+        String expectedOutputStr =
+            "[{\"role\":\"system\",\"content\":\"test system prompt\"},{\"role\":\"user\",\"content\":\"This is test\"}]";
+
+        ArgumentCaptor<Map<String, String>> argumentCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(getInputParameterListener).onResponse(argumentCaptor.capture());
+        Map<String, String> capturedInputParameter = argumentCaptor.getValue();
+        assertEquals(expectedOutputStr, capturedInputParameter.get("messages"));
+    }
+
+    @Test
+    public void testBuildInputParametersWithPromptSuccess() throws IOException {
+        getResponse = createGetResponse("This is ${prompt_parameters.variable}", "test system prompt");
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        Map<String, String> inputParameters = Map
+            .of("prompt", expectedInputStrWithPrompt, "prompt_parameters", expectedInputStrWithPromptParameters);
+        mlPromptManager.buildInputParameters("prompt", inputParameters, "tenant_id", getInputParameterListener);
+        String expectedOutputStr = "This is test";
+
+        ArgumentCaptor<Map<String, String>> argumentCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(getInputParameterListener).onResponse(argumentCaptor.capture());
+        Map<String, String> capturedInputParameter = argumentCaptor.getValue();
+        assertEquals(expectedOutputStr, capturedInputParameter.get("prompt"));
+    }
+
+    @Test
+    public void testBuildInputParametersFailWithWrongPromptTypeInput() {
+        String IncorrectPromptType = "wrongPrompt";
+
+        Map<String, String> inputParameters = Map
+            .of(IncorrectPromptType, expectedInputStrWithPrompt, "prompt_parameters", expectedInputStrWithPromptParameters);
+        mlPromptManager.buildInputParameters(IncorrectPromptType, inputParameters, "tenant_id", getInputParameterListener);
+
+        ArgumentCaptor<IllegalArgumentException> argumentCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        verify(getInputParameterListener).onFailure(argumentCaptor.capture());
+        IllegalArgumentException exception = argumentCaptor.getValue();
+        assertEquals("Wrong prompt type is provided: wrongPrompt, should provide either prompt or messages", exception.getMessage());
+    }
+
+    @Test
+    public void testBuildInputParametersFailWithKeyMissMatching() {
+        String exampleInput = "[{\"role\": \"system\", \"content\": \"pull_prompt(prompt_id).user\"},"
+            + "{\"role\": \"user\", \"content\": \"pull_prompt(prompt_id).user\"}]";
+
+        Map<String, String> inputParameters = Map.of("messages", exampleInput, "prompt_parameters", expectedInputStrWithPromptParameters);
+        mlPromptManager.buildInputParameters("messages", inputParameters, "tenant_id", getInputParameterListener);
+
+        ArgumentCaptor<IllegalArgumentException> argumentCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        verify(getInputParameterListener).onFailure(argumentCaptor.capture());
+        IllegalArgumentException exception = argumentCaptor.getValue();
+        assertEquals("Specified key does not match the provided role", exception.getMessage());
+    }
+
+    @Test
+    public void testBuildInputParametersFailWithKeyNotExist() {
+        getResponse = createGetResponse("This is ${prompt_parameters.variable}", "test system prompt");
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        String exampleInput = "[{\"role\": \"system\", \"content\": \"pull_prompt(prompt_id).system\"},"
+            + "{\"role\": \"user\", \"content\": \"pull_prompt(prompt_id).user\"},"
+            + "{\"role\": \"developer\", \"content\": \"pull_prompt(prompt_id).developer\"}]";
+
+        Map<String, String> inputParameters = Map.of("messages", exampleInput, "prompt_parameters", expectedInputStrWithPromptParameters);
+        mlPromptManager.buildInputParameters("messages", inputParameters, "tenant_id", getInputParameterListener);
+
+        ArgumentCaptor<IllegalArgumentException> argumentCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        verify(getInputParameterListener).onFailure(argumentCaptor.capture());
+        IllegalArgumentException exception = argumentCaptor.getValue();
+        assertEquals("Content for specified key is not defined in ML Prompt: prompt_id", exception.getMessage());
+    }
+
+    @Test
+    public void testBuildInputParametersFailWithRemainingPlaceholderVariables() {
+        getResponse = createGetResponse("This is ${prompt_parameters.variable}", "test system prompt");
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        String examplePromptParameters = "{\"prompt_id\": {\"unknownVariable\": \"test\"}}";
+        Map<String, String> inputParameters = Map.of("prompt", expectedInputStrWithPrompt, "prompt_parameters", examplePromptParameters);
+        mlPromptManager.buildInputParameters("prompt", inputParameters, "tenant_id", getInputParameterListener);
+
+        ArgumentCaptor<IllegalArgumentException> argumentCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        verify(getInputParameterListener).onFailure(argumentCaptor.capture());
+        IllegalArgumentException exception = argumentCaptor.getValue();
+        assertEquals("Failed to replace all the placeholders for prompt: prompt_id", exception.getMessage());
+    }
+
+    @Test
+    public void testBuildInputParametersFailWithPromptNotFound() {
+        getResponse = createGetResponse("This is ${prompt_parameters.variable}", "test system prompt");
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new IndexNotFoundException("Failed to find ML Prompt"));
+            return null;
+        }).when(client).get(any(), any());
+
+        Map<String, String> inputParameters = Map
+            .of("prompt", expectedInputStrWithPrompt, "prompt_parameters", expectedInputStrWithPromptParameters);
+        mlPromptManager.buildInputParameters("prompt", inputParameters, "tenant_id", getInputParameterListener);
+
+        ArgumentCaptor<OpenSearchStatusException> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
+        verify(getInputParameterListener).onFailure(argumentCaptor.capture());
+        OpenSearchStatusException exception = argumentCaptor.getValue();
+        assertEquals("Failed to find a ML Prompt with prompt id: prompt_id", exception.getMessage());
+        assertEquals(RestStatus.NOT_FOUND, exception.status());
+    }
+
+    @Test
+    public void testBuildInputParametersFailWithIncorrectPullPromptSyntax1() {
+        String exampleInput = "[{\"role\": \"user\", \"content\": \"pull_prompt(prompt_id)\"}]";
+
+        Map<String, String> inputParameters = Map.of("messages", exampleInput, "prompt_parameters", expectedInputStrWithPromptParameters);
+        mlPromptManager.buildInputParameters("messages", inputParameters, "tenant_id", getInputParameterListener);
+
+        ArgumentCaptor<IllegalArgumentException> argumentCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        verify(getInputParameterListener).onFailure(argumentCaptor.capture());
+        IllegalArgumentException exception = argumentCaptor.getValue();
+        assertEquals("Forgot to provide a key. Provide a correct pull_prompt syntax: pull_prompt(prompt_id).<key>", exception.getMessage());
+    }
+
+    @Test
+    public void testBuildInputParametersFailWithIncorrectPullPromptSyntax2() {
+        String exampleInput = "[{\"role\": \"user\", \"content\": \"ull_prompt(prompt_id).user\"}]";
+
+        Map<String, String> inputParameters = Map.of("messages", exampleInput, "prompt_parameters", expectedInputStrWithPromptParameters);
+        mlPromptManager.buildInputParameters("messages", inputParameters, "tenant_id", getInputParameterListener);
+
+        ArgumentCaptor<IllegalArgumentException> argumentCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        verify(getInputParameterListener).onFailure(argumentCaptor.capture());
+        IllegalArgumentException exception = argumentCaptor.getValue();
+        assertEquals("You typed ull_prompt. Provide Correct pull_prompt syntax: pull_prompt(prompt_id).<key>", exception.getMessage());
+    }
+
+    @Test
+    public void testUniquePromptNameValidationWithNameAlreadyExists() throws IOException {
+        SearchResponse searchResponse = createSearchResponse(1);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), any());
+
+        mlPromptManager.validateUniquePromptName("unique name", "tenant_id", searchResponseActionListener);
+
+        ArgumentCaptor<SearchResponse> argumentCaptor = ArgumentCaptor.forClass(SearchResponse.class);
+        verify(searchResponseActionListener).onResponse(argumentCaptor.capture());
+        assertNotNull(argumentCaptor.getValue());
+        assertNotNull(argumentCaptor.getValue().getHits().getTotalHits());
+        assertTrue(argumentCaptor.getValue().getHits().getTotalHits().value() != 0);
+    }
+
+    @Test
+    public void testUniquePromptNameValidationWithUniqueName() throws IOException {
+        SearchResponse searchResponse = createSearchResponse(0);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), any());
+
+        mlPromptManager.validateUniquePromptName("unique name", "tenant_id", searchResponseActionListener);
+
+        ArgumentCaptor<SearchResponse> argumentCaptor = ArgumentCaptor.forClass(SearchResponse.class);
+        verify(searchResponseActionListener).onResponse(argumentCaptor.capture());
+        assertNotNull(argumentCaptor.getValue());
+        assertNotNull(argumentCaptor.getValue().getHits().getTotalHits());
+        assertEquals(0, argumentCaptor.getValue().getHits().getTotalHits().value());
+    }
+
+    private GetResponse createGetResponse(String user, String system) {
         Map<String, String> prompt = new HashMap<>();
-        prompt.put("user", "test prompt");
-        prompt.put("system", "test prompt");
+        prompt.put("user", user);
+        prompt.put("system", system);
         MLPrompt mlPrompt = MLPrompt.builder().name("test prompt").prompt(prompt).build();
         XContentBuilder content;
         try {
@@ -180,5 +386,21 @@ public class MLPromptManagerTests extends OpenSearchTestCase {
         BytesReference bytesReference = BytesReference.bytes(content);
         GetResult getResult = new GetResult(ML_PROMPT_INDEX, "111", 111l, 111l, 111l, true, bytesReference, null, null);
         return new GetResponse(getResult);
+    }
+
+    private SearchResponse createSearchResponse(long totalHits) throws IOException {
+        SearchResponse searchResponse = mock(SearchResponse.class);
+        String promptContent = "{\n"
+            + "                    \"_id\": \"prompt_id\",\n"
+            + "                    \"name\": \"Test Prompt\",\n"
+            + "                    \"description\": \"This is an example description\",\n"
+            + "                    \"version\": 1,\n"
+            + "                    \"created_time\": 1684981986069,\n"
+            + "                    \"last_updated_time\": 1684981986069\n"
+            + "                }";
+        SearchHit prompt = SearchHit.fromXContent(TestHelper.parser(promptContent));
+        SearchHits hits = new SearchHits(new SearchHit[] { prompt }, new TotalHits(totalHits, TotalHits.Relation.EQUAL_TO), Float.NaN);
+        when(searchResponse.getHits()).thenReturn(hits);
+        return searchResponse;
     }
 }
