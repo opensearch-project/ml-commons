@@ -24,12 +24,14 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.cluster.service.ClusterService;
@@ -37,6 +39,7 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.MLAgentType;
+import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
@@ -53,6 +56,8 @@ import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.common.utils.MLTaskUtils;
+import org.opensearch.ml.engine.MLStaticMockBase;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
@@ -62,7 +67,7 @@ import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableMap;
 
-public class MLPlanExecuteAndReflectAgentRunnerTest {
+public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
     public static final String FIRST_TOOL = "firstTool";
     public static final String SECOND_TOOL = "secondTool";
 
@@ -543,5 +548,94 @@ public class MLPlanExecuteAndReflectAgentRunnerTest {
         List<ModelTensor> secondModelTensorList = secondModelTensors.getMlModelTensors();
         assertEquals(1, secondModelTensorList.size());
         assertEquals(finalResult, secondModelTensorList.get(0).getDataAsMap().get("response"));
+    }
+
+    @Test
+    public void testUpdateTaskWithExecutorAgentInfo() {
+        MLAgent mlAgent = createMLAgentWithTools();
+        String taskId = "test-task-id";
+        // to ensure second call to prediction returns a result
+        AtomicInteger callCount = new AtomicInteger(0);
+
+        try (MockedStatic<MLTaskUtils> mlTaskUtilsMockedStatic = mockStatic(MLTaskUtils.class)) {
+            mlTaskUtilsMockedStatic
+                .when(() -> MLTaskUtils.updateMLTaskDirectly(anyString(), any(), any(), any()))
+                .thenAnswer(invocation -> {
+                    ActionListener<UpdateResponse> listener = invocation.getArgument(3);
+                    listener.onResponse(updateResponse);
+                    return null;
+                });
+
+            doAnswer(invocation -> {
+                ActionListener<Object> listener = invocation.getArgument(2);
+                ModelTensor modelTensor;
+                if (callCount.getAndIncrement() == 0) {
+                    modelTensor = ModelTensor
+                        .builder()
+                        .dataAsMap(ImmutableMap.of("response", "{\"steps\":[\"step1\", \"step2\"], \"result\":\"\"}"))
+                        .build();
+                } else {
+                    modelTensor = ModelTensor
+                        .builder()
+                        .dataAsMap(ImmutableMap.of("response", "{\"steps\":[\"step1\", \"step2\"], \"result\":\"final result\"}"))
+                        .build();
+                }
+
+                ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+                ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+                when(mlTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
+                listener.onResponse(mlTaskResponse);
+                return null;
+            }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(MLPredictionTaskRequest.class), any());
+
+            doAnswer(invocation -> {
+                ActionListener<Object> listener = invocation.getArgument(2);
+                ModelTensor memoryIdTensor = ModelTensor
+                    .builder()
+                    .name(MLAgentExecutor.MEMORY_ID)
+                    .result("test_executor_memory_id")
+                    .build();
+                ModelTensor parentIdTensor = ModelTensor
+                    .builder()
+                    .name(MLAgentExecutor.PARENT_INTERACTION_ID)
+                    .result("test_executor_parent_id")
+                    .build();
+                ModelTensor responseTensor = ModelTensor
+                    .builder()
+                    .name("response")
+                    .dataAsMap(ImmutableMap.of("response", "tool execution result"))
+                    .build();
+                ModelTensors modelTensors = ModelTensors
+                    .builder()
+                    .mlModelTensors(Arrays.asList(memoryIdTensor, parentIdTensor, responseTensor))
+                    .build();
+                ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+                when(mlExecuteTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
+                listener.onResponse(mlExecuteTaskResponse);
+                return null;
+            }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(MLExecuteTaskRequest.class), any());
+
+            doAnswer(invocation -> {
+                ActionListener<UpdateResponse> listener = invocation.getArgument(2);
+                listener.onResponse(updateResponse);
+                return null;
+            }).when(mlMemoryManager).updateInteraction(any(), any(), any());
+
+            Map<String, String> params = new HashMap<>();
+            params.put("question", "test question");
+            params.put("memory_id", "test_memory_id");
+            params.put("parent_interaction_id", "test_parent_interaction_id");
+            params.put("task_id", taskId);
+            mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
+
+            Map<String, Object> taskUpdates = mlPlanExecuteAndReflectAgentRunner.getTaskUpdates();
+            assertEquals(MLTaskState.RUNNING, taskUpdates.get("state"));
+
+            Map<String, Object> response = (Map<String, Object>) taskUpdates.get("response");
+            assertEquals("test_executor_memory_id", response.get("executor_agent_memory_id"));
+            assertEquals("test_executor_parent_id", response.get("executor_agent_parent_interaction_id"));
+
+            mlTaskUtilsMockedStatic.verify(() -> MLTaskUtils.updateMLTaskDirectly(eq(taskId), eq(taskUpdates), eq(client), any()));
+        }
     }
 }

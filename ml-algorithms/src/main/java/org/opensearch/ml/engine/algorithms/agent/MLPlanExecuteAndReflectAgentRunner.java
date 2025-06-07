@@ -5,8 +5,11 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
+import static org.opensearch.ml.common.MLTask.STATE_FIELD;
+import static org.opensearch.ml.common.MLTask.TASK_ID_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD;
+import static org.opensearch.ml.common.utils.MLTaskUtils.updateMLTaskDirectly;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE_DEEPSEEK_R1;
@@ -42,6 +45,7 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
@@ -83,6 +87,9 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     private final Map<String, Memory.Factory> memoryFactoryMap;
     private SdkClient sdkClient;
     private Encryptor encryptor;
+    // flag to track if task has been updated with executor memory ids or not
+    private boolean taskUpdated = false;
+    private final Map<String, Object> taskUpdates = new HashMap<>();
 
     // prompts
     private String plannerPrompt;
@@ -439,6 +446,26 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         allParams.put(EXECUTOR_AGENT_PARENT_INTERACTION_ID_FIELD, reActParentInteractionId);
                     }
 
+                    Map<String, Object> memoryUpdates = new HashMap<>();
+                    if (allParams.containsKey(EXECUTOR_AGENT_MEMORY_ID_FIELD)) {
+                        memoryUpdates.put(EXECUTOR_AGENT_MEMORY_ID_FIELD, allParams.get(EXECUTOR_AGENT_MEMORY_ID_FIELD));
+                    }
+
+                    if (allParams.containsKey(EXECUTOR_AGENT_PARENT_INTERACTION_ID_FIELD)) {
+                        memoryUpdates
+                            .put(EXECUTOR_AGENT_PARENT_INTERACTION_ID_FIELD, allParams.get(EXECUTOR_AGENT_PARENT_INTERACTION_ID_FIELD));
+                    }
+
+                    String taskId = allParams.get(TASK_ID_FIELD);
+                    if (taskId != null && !taskUpdated) {
+                        taskUpdates.put(STATE_FIELD, MLTaskState.RUNNING);
+                        taskUpdates.put(RESPONSE_FIELD, memoryUpdates);
+                        updateMLTaskDirectly(taskId, taskUpdates, client, ActionListener.wrap(updateResponse -> {
+                            log.info("Updated task {} with executor memory ID", taskId);
+                            taskUpdated = true;
+                        }, e -> log.error("Failed to update task {} with executor memory ID", taskId, e)));
+                    }
+
                     completedSteps.add(String.format("\nStep: %s\n", stepToExecute));
                     completedSteps.add(String.format("\nStep Result: %s\n", results.get(STEP_RESULT_FIELD)));
 
@@ -625,5 +652,10 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     .build()
             );
         return modelTensors;
+    }
+
+    @VisibleForTesting
+    Map<String, Object> getTaskUpdates() {
+        return taskUpdates;
     }
 }
