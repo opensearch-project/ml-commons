@@ -91,6 +91,9 @@ public class TransportCreatePromptActionTests extends OpenSearchTestCase {
 
     private MLCreatePromptInput mlCreatePromptInput;
 
+    @Mock
+    private MLPromptManager mlPromptManager;
+
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
@@ -99,7 +102,15 @@ public class TransportCreatePromptActionTests extends OpenSearchTestCase {
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
         indexResponse = new IndexResponse(new ShardId(ML_PROMPT_INDEX, "_na_", 0), PROMPT_ID, 1, 0, 2, true);
         transportCreatePromptAction = spy(
-            new TransportCreatePromptAction(transportService, actionFilters, mlIndicesHandler, client, sdkClient, mlFeatureEnabledSetting)
+            new TransportCreatePromptAction(
+                transportService,
+                actionFilters,
+                mlIndicesHandler,
+                client,
+                sdkClient,
+                mlPromptManager,
+                mlFeatureEnabledSetting
+            )
         );
         threadContext = new ThreadContext(Settings.EMPTY);
         when(client.threadPool()).thenReturn(threadPool);
@@ -128,6 +139,7 @@ public class TransportCreatePromptActionTests extends OpenSearchTestCase {
             mlIndicesHandler,
             client,
             sdkClient,
+            mlPromptManager,
             mlFeatureEnabledSetting
         );
         assertNotNull(transportCreatePromptAction);

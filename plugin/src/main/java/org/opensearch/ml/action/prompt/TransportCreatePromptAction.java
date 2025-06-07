@@ -25,11 +25,13 @@ import org.opensearch.ml.common.transport.prompt.MLCreatePromptInput;
 import org.opensearch.ml.common.transport.prompt.MLCreatePromptRequest;
 import org.opensearch.ml.common.transport.prompt.MLCreatePromptResponse;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
+import org.opensearch.ml.prompt.MLPromptManager;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.PutDataObjectRequest;
 import org.opensearch.remote.metadata.client.PutDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
+import org.opensearch.search.SearchHit;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -46,6 +48,7 @@ public class TransportCreatePromptAction extends HandledTransportAction<MLCreate
     private final MLIndicesHandler mlIndicesHandler;
     private final Client client;
     private final SdkClient sdkClient;
+    private final MLPromptManager mlPromptManager;
 
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
@@ -56,12 +59,14 @@ public class TransportCreatePromptAction extends HandledTransportAction<MLCreate
         MLIndicesHandler mlIndicesHandler,
         Client client,
         SdkClient sdkClient,
+        MLPromptManager mlPromptManager,
         MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLCreatePromptAction.NAME, transportService, actionFilters, MLCreatePromptRequest::new);
         this.mlIndicesHandler = mlIndicesHandler;
         this.client = client;
         this.sdkClient = sdkClient;
+        this.mlPromptManager = mlPromptManager;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
@@ -98,20 +103,43 @@ public class TransportCreatePromptAction extends HandledTransportAction<MLCreate
         }
 
         try {
-            String version = mlCreatePromptInput.getVersion();
-            MLPrompt mlPrompt = MLPrompt
-                .builder()
-                .name(mlCreatePromptInput.getName())
-                .description(mlCreatePromptInput.getDescription())
-                .version(version == null ? INITIAL_VERSION : version)
-                .prompt(mlCreatePromptInput.getPrompt())
-                .tags(mlCreatePromptInput.getTags())
-                .tenantId(mlCreatePromptInput.getTenantId())
-                .createTime(Instant.now())
-                .lastUpdateTime(Instant.now())
-                .build();
+            mlPromptManager
+                .validateUniquePromptName(
+                    mlCreatePromptInput.getName(),
+                    mlCreatePromptInput.getTenantId(),
+                    ActionListener.wrap(searchResponse -> {
+                        if (searchResponse != null
+                            && searchResponse.getHits().getTotalHits() != null
+                            && searchResponse.getHits().getTotalHits().value() != 0) {
+                            SearchHit hit = searchResponse.getHits().getAt(0);
+                            String id = hit.getId();
+                            listener
+                                .onFailure(
+                                    new IllegalArgumentException(
+                                        "The name you provided is already being used by another ML Prompt with ID: " + id + "."
+                                    )
+                                );
+                        } else {
+                            String version = mlCreatePromptInput.getVersion();
+                            MLPrompt mlPrompt = MLPrompt
+                                .builder()
+                                .name(mlCreatePromptInput.getName())
+                                .description(mlCreatePromptInput.getDescription())
+                                .version(version == null ? INITIAL_VERSION : version)
+                                .prompt(mlCreatePromptInput.getPrompt())
+                                .tags(mlCreatePromptInput.getTags())
+                                .tenantId(mlCreatePromptInput.getTenantId())
+                                .createTime(Instant.now())
+                                .lastUpdateTime(Instant.now())
+                                .build();
 
-            indexPrompt(mlPrompt, listener);
+                            indexPrompt(mlPrompt, listener);
+                        }
+                    }, e -> {
+                        log.error("Failed to search ML Prompt Index", e);
+                        listener.onFailure(e);
+                    })
+                );
         } catch (Exception e) {
             handleFailure(e, null, listener, "Failed to create a MLPrompt");
         }

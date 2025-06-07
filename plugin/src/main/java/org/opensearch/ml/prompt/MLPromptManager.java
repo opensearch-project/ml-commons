@@ -20,6 +20,8 @@ import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetResponse;
+import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentType;
@@ -31,12 +33,17 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContent;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.index.query.BoolQueryBuilder;
+import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.common.prompt.MLPrompt;
+import org.opensearch.ml.common.transport.prompt.MLCreatePromptInput;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
+import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.transport.client.Client;
 
 import lombok.Builder;
@@ -82,7 +89,7 @@ public class MLPromptManager {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             sdkClient.getDataObjectAsync(getDataObjectRequest).whenComplete((getAsyncResponse, throwable) -> {
                 context.restore();
-                handleAsyncResponse(getAsyncResponse, throwable, promptId, listener);
+                handleAsyncResponse(getAsyncResponse, throwable, listener);
             });
         }
     }
@@ -92,15 +99,9 @@ public class MLPromptManager {
      *
      * @param getAsyncResponse the get prompt async response
      * @param throwable the throwable from the get prompt async response
-     * @param promptId the prompt id of prompts that needed to be retrieved
      * @param listener the listener to be notified when the get prompt async response is handled
      */
-    private void handleAsyncResponse(
-        GetDataObjectResponse getAsyncResponse,
-        Throwable throwable,
-        String promptId,
-        ActionListener<MLPrompt> listener
-    ) {
+    private void handleAsyncResponse(GetDataObjectResponse getAsyncResponse, Throwable throwable, ActionListener<MLPrompt> listener) {
         if (throwable != null) {
             Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
             listener.onFailure(cause);
@@ -164,6 +165,50 @@ public class MLPromptManager {
         return tags.size() <= MAX_NUMBER_OF_TAGS && tags.stream().allMatch(tag -> tag.length() <= MAX_LENGTH_OF_TAG);
     }
 
+    public void validateUniquePromptName(String name, String tenantId, ActionListener<SearchResponse> listener) {
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            BoolQueryBuilder query = new BoolQueryBuilder();
+            query.filter(new TermQueryBuilder(MLCreatePromptInput.PROMPT_NAME_FIELD + ".keyword", name));
+
+            SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(query);
+            SearchRequest searchRequest = new SearchRequest(ML_PROMPT_INDEX).source(searchSourceBuilder);
+
+            SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
+                .builder()
+                .indices(searchRequest.indices())
+                .searchSourceBuilder(searchRequest.source())
+                .tenantId(tenantId)
+                .build();
+
+            sdkClient.searchDataObjectAsync(searchDataObjectRequest).whenComplete((r, throwable) -> {
+                if (throwable != null) {
+                    Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                    if (ExceptionsHelper.unwrap(throwable, IndexNotFoundException.class) != null) {
+                        log.debug("ML Prompt index does not exist");
+                        listener.onResponse(null);
+                    } else {
+                        log.error("Failed to search ML Prompt index", cause);
+                        listener.onFailure(cause);
+                    }
+                } else {
+                    try {
+                        SearchResponse searchResponse = r.searchResponse();
+                        // Parsing failure would cause NPE on next line
+                        log.info("ML Prompt search complete: {}", searchResponse.getHits().getTotalHits());
+                        listener.onResponse(searchResponse);
+                    } catch (Exception e) {
+                        log.error("Failed to parse search response", e);
+                        listener
+                            .onFailure(new OpenSearchStatusException("Failed to parse search response", RestStatus.INTERNAL_SERVER_ERROR));
+                    }
+                }
+            });
+        } catch (Exception e) {
+            log.error("Failed to search ML Prompt index", e);
+            listener.onFailure(e);
+        }
+    }
+
     /**
      *  Builds a new map containing modified request body after pull_prompt is invoked
      *
@@ -179,7 +224,6 @@ public class MLPromptManager {
         ActionListener<Map<String, String>> listener
     ) {
         try {
-            Map<String, String> parameters = new HashMap<>();
             String prompt = inputParameters.get(promptType);
             String JsonStrPromptParameters = inputParameters.get(PARAMETERS_PROMPT_PARAMETERS_FIELD);
             PromptParameters promptParam = PromptParameters.buildPromptParameters(JsonStrPromptParameters);
@@ -187,7 +231,7 @@ public class MLPromptManager {
                 case PARAMETERS_PROMPT_FIELD:
                     String promptId = prompt.split("\\(")[1].split("\\)")[0];
                     String key = prompt.split("\\.")[1];
-                    parameters.put(PARAMETERS_PROMPT_FIELD, pullPrompt(promptId, key, promptParam, tenantId));
+                    inputParameters.put(PARAMETERS_PROMPT_FIELD, pullPrompt(promptId, key, promptParam, tenantId));
                     break;
                 case PARAMETERS_MESSAGES_FIELD:
                     Messages messages = Messages.buildMessages(prompt);
@@ -198,7 +242,7 @@ public class MLPromptManager {
                         String content = pullPrompt(message.getPromptId(), message.getKey(), promptParam, tenantId);
                         message.setContent(content);
                     }
-                    parameters.put(PARAMETERS_MESSAGES_FIELD, Messages.toJsonString(messages));
+                    inputParameters.put(PARAMETERS_MESSAGES_FIELD, Messages.toJsonString(messages));
                     break;
                 default:
                     log.error("Wrong prompt type is provided: {}, should provide either prompt or messages", promptType);
@@ -206,7 +250,7 @@ public class MLPromptManager {
                         "Wrong prompt type is provided: " + promptType + ", should provide either prompt or messages"
                     );
             }
-            listener.onResponse(parameters);
+            listener.onResponse(inputParameters);
         } catch (Exception exception) {
             if (exception instanceof ArrayIndexOutOfBoundsException) {
                 exception = new IllegalArgumentException(

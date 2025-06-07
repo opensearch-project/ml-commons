@@ -30,6 +30,7 @@ import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.UpdateDataObjectRequest;
 import org.opensearch.remote.metadata.client.UpdateDataObjectResponse;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
+import org.opensearch.search.SearchHit;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -93,22 +94,40 @@ public class UpdatePromptTransportAction extends HandledTransportAction<MLUpdate
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
             return;
         }
-        GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
-            .builder()
-            .index(ML_PROMPT_INDEX)
-            .id(promptId)
-            .tenantId(tenantId)
-            .build();
-        mlPromptManager
-            .getPromptAsync(
-                getDataObjectRequest,
-                promptId,
-                ActionListener
-                    .wrap(
-                        mlPrompt -> handleGetPrompt(mlPrompt, mlUpdatePromptInput, promptId, tenantId, actionListener),
-                        e -> handleFailure(e, promptId, actionListener, "Failed to get ML Prompt {}")
-                    )
-            );
+        mlPromptManager.validateUniquePromptName(mlUpdatePromptInput.getName(), tenantId, ActionListener.wrap(searchResponse -> {
+            if (searchResponse != null
+                && searchResponse.getHits().getTotalHits() != null
+                && searchResponse.getHits().getTotalHits().value() != 0) {
+                SearchHit hit = searchResponse.getHits().getAt(0);
+                String id = hit.getId();
+                actionListener
+                    .onFailure(
+                        new IllegalArgumentException(
+                            "The name you provided is already being used by another ML Prompt with ID: " + id + "."
+                        )
+                    );
+            } else {
+                GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
+                    .builder()
+                    .index(ML_PROMPT_INDEX)
+                    .id(promptId)
+                    .tenantId(tenantId)
+                    .build();
+                mlPromptManager
+                    .getPromptAsync(
+                        getDataObjectRequest,
+                        promptId,
+                        ActionListener
+                            .wrap(
+                                mlPrompt -> handleGetPrompt(mlPrompt, mlUpdatePromptInput, promptId, tenantId, actionListener),
+                                e -> handleFailure(e, promptId, actionListener, "Failed to get ML Prompt {}")
+                            )
+                    );
+            }
+        }, e -> {
+            log.error("Failed to search ML Prompt Index", e);
+            actionListener.onFailure(e);
+        }));
     }
 
     /**
