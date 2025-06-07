@@ -224,6 +224,9 @@ public class MLPromptManager {
         ActionListener<Map<String, String>> listener
     ) {
         try {
+            Map<String, String> parameters = new HashMap<>();
+            parameters.putAll(inputParameters);
+            parameters.remove(PARAMETERS_PROMPT_PARAMETERS_FIELD);
             String prompt = inputParameters.get(promptType);
             String JsonStrPromptParameters = inputParameters.get(PARAMETERS_PROMPT_PARAMETERS_FIELD);
             PromptParameters promptParam = PromptParameters.buildPromptParameters(JsonStrPromptParameters);
@@ -231,7 +234,7 @@ public class MLPromptManager {
                 case PARAMETERS_PROMPT_FIELD:
                     String promptId = prompt.split("\\(")[1].split("\\)")[0];
                     String key = prompt.split("\\.")[1];
-                    inputParameters.put(PARAMETERS_PROMPT_FIELD, pullPrompt(promptId, key, promptParam, tenantId));
+                    parameters.put(PARAMETERS_PROMPT_FIELD, pullPrompt(promptId, key, promptParam, tenantId));
                     break;
                 case PARAMETERS_MESSAGES_FIELD:
                     Messages messages = Messages.buildMessages(prompt);
@@ -242,7 +245,7 @@ public class MLPromptManager {
                         String content = pullPrompt(message.getPromptId(), message.getKey(), promptParam, tenantId);
                         message.setContent(content);
                     }
-                    inputParameters.put(PARAMETERS_MESSAGES_FIELD, Messages.toJsonString(messages));
+                    parameters.put(PARAMETERS_MESSAGES_FIELD, Messages.toJsonString(messages));
                     break;
                 default:
                     log.error("Wrong prompt type is provided: {}, should provide either prompt or messages", promptType);
@@ -250,7 +253,7 @@ public class MLPromptManager {
                         "Wrong prompt type is provided: " + promptType + ", should provide either prompt or messages"
                     );
             }
-            listener.onResponse(inputParameters);
+            listener.onResponse(parameters);
         } catch (Exception exception) {
             if (exception instanceof ArrayIndexOutOfBoundsException) {
                 exception = new IllegalArgumentException(
