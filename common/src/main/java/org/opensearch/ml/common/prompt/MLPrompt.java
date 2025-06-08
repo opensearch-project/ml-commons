@@ -284,4 +284,32 @@ public class MLPrompt implements ToXContentObject, Writeable {
                 .lastUpdateTime(lastUpdateTime)
                 .build();
     }
+
+    public void encrypt(String promptManagementType, BiFunction<String, String, String> function, String tenantId) {
+        if (promptManagementType.equalsIgnoreCase(LANGFUSE)) {
+            PromptExtraConfig promptExtraConfig = this.getPromptExtraConfig();
+            String publicKey = promptExtraConfig.getPublicKey();
+            String accessKey = this.getPromptExtraConfig().getAccessKey();
+
+            promptExtraConfig.setPublicKey(function.apply(publicKey, tenantId));
+            promptExtraConfig.setAccessKey(function.apply(accessKey, tenantId));
+
+            this.setPromptExtraConfig(promptExtraConfig);
+        }
+        // add other prompt management client case here, if needed
+    }
+
+    public void decrypt(String promptManagementType, BiFunction<String, String, String> function, String tenantId) {
+        if (promptManagementType.equalsIgnoreCase(LANGFUSE)) {
+            PromptExtraConfig promptExtraConfig = this.getPromptExtraConfig();
+            String publicKey = promptExtraConfig.getPublicKey();
+            String accessKey = this.getPromptExtraConfig().getAccessKey();
+
+            promptExtraConfig.setPublicKey(function.apply(publicKey, tenantId));
+            promptExtraConfig.setAccessKey(function.apply(accessKey, tenantId));
+
+            this.setPromptExtraConfig(promptExtraConfig);
+        }
+        // add other prompt management client case here, if needed
+    }
 }

@@ -6,13 +6,15 @@
 package org.opensearch.ml.action.prompt;
 
 import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX;
+import static org.opensearch.ml.common.prompt.MLPrompt.MLPROMPT;
+import static org.opensearch.ml.prompt.AbstractPromptManagement.init;
 import static org.opensearch.ml.prompt.MLPromptManager.MLPromptNameAlreadyExists;
 import static org.opensearch.ml.prompt.MLPromptManager.TAG_RESTRICTION_ERR_MESSAGE;
 import static org.opensearch.ml.prompt.MLPromptManager.UNIQUE_NAME_ERR_MESSAGE;
 import static org.opensearch.ml.prompt.MLPromptManager.handleFailure;
 import static org.opensearch.ml.prompt.MLPromptManager.validateTags;
 
-import java.time.Instant;
+import java.util.Objects;
 
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchResponse;
@@ -22,12 +24,15 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.prompt.MLPrompt;
+import org.opensearch.ml.common.prompt.PromptExtraConfig;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.prompt.MLCreatePromptAction;
 import org.opensearch.ml.common.transport.prompt.MLCreatePromptInput;
 import org.opensearch.ml.common.transport.prompt.MLCreatePromptRequest;
 import org.opensearch.ml.common.transport.prompt.MLCreatePromptResponse;
+import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
+import org.opensearch.ml.prompt.AbstractPromptManagement;
 import org.opensearch.ml.prompt.MLPromptManager;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.PutDataObjectRequest;
@@ -47,10 +52,10 @@ import lombok.extern.log4j.Log4j2;
  */
 @Log4j2
 public class TransportCreatePromptAction extends HandledTransportAction<MLCreatePromptRequest, MLCreatePromptResponse> {
-    private static final String INITIAL_VERSION = "1";
     private final MLIndicesHandler mlIndicesHandler;
     private final Client client;
     private final SdkClient sdkClient;
+    private final MLEngine mlEngine;
     private final MLPromptManager mlPromptManager;
 
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
@@ -62,6 +67,7 @@ public class TransportCreatePromptAction extends HandledTransportAction<MLCreate
         MLIndicesHandler mlIndicesHandler,
         Client client,
         SdkClient sdkClient,
+        MLEngine mlEngine,
         MLPromptManager mlPromptManager,
         MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
@@ -69,6 +75,7 @@ public class TransportCreatePromptAction extends HandledTransportAction<MLCreate
         this.mlIndicesHandler = mlIndicesHandler;
         this.client = client;
         this.sdkClient = sdkClient;
+        this.mlEngine = mlEngine;
         this.mlPromptManager = mlPromptManager;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
@@ -119,19 +126,18 @@ public class TransportCreatePromptAction extends HandledTransportAction<MLCreate
                     );
                 return;
             }
-            String version = mlCreatePromptInput.getVersion();
-            MLPrompt mlPrompt = MLPrompt
-                .builder()
-                .name(mlCreatePromptInput.getName())
-                .description(mlCreatePromptInput.getDescription())
-                .version(version == null ? INITIAL_VERSION : version)
-                .prompt(mlCreatePromptInput.getPrompt())
-                .tags(mlCreatePromptInput.getTags())
-                .tenantId(mlCreatePromptInput.getTenantId())
-                .createTime(Instant.now())
-                .lastUpdateTime(Instant.now())
-                .build();
+            // set prompt management type to default MLPROMPT if not provided
+            if (mlCreatePromptInput.getPromptManagementType() == null) {
+                mlCreatePromptInput.setPromptManagementType(MLPROMPT);
+            }
+            PromptExtraConfig extraConfig = mlCreatePromptInput.getPromptExtraConfig();
+            String promptManagementType = mlCreatePromptInput.getPromptManagementType();
+            AbstractPromptManagement promptManagement = init(promptManagementType, extraConfig);
 
+            MLPrompt mlPrompt = promptManagement.createPrompt(mlCreatePromptInput);
+            mlPrompt.encrypt(promptManagementType, mlEngine::encrypt, mlCreatePromptInput.getTenantId());
+
+            Objects.requireNonNull(mlPrompt, "MLPrompt cannot be null");
             indexPrompt(mlPrompt, listener);
         } catch (Exception e) {
             handleFailure(e, null, listener, "Failed to create a MLPrompt");

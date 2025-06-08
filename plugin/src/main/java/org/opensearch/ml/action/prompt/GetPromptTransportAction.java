@@ -6,6 +6,7 @@
 package org.opensearch.ml.action.prompt;
 
 import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX;
+import static org.opensearch.ml.prompt.AbstractPromptManagement.init;
 import static org.opensearch.ml.prompt.MLPromptManager.handleFailure;
 
 import org.opensearch.action.support.ActionFilters;
@@ -17,6 +18,8 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.prompt.MLPromptGetAction;
 import org.opensearch.ml.common.transport.prompt.MLPromptGetRequest;
 import org.opensearch.ml.common.transport.prompt.MLPromptGetResponse;
+import org.opensearch.ml.engine.encryptor.EncryptorImpl;
+import org.opensearch.ml.prompt.AbstractPromptManagement;
 import org.opensearch.ml.prompt.MLPromptManager;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
@@ -39,6 +42,7 @@ import lombok.extern.log4j.Log4j2;
 public class GetPromptTransportAction extends HandledTransportAction<MLPromptGetRequest, MLPromptGetResponse> {
     Client client;
     SdkClient sdkClient;
+    EncryptorImpl encryptor;
     MLPromptManager mlPromptManager;
 
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
@@ -49,12 +53,14 @@ public class GetPromptTransportAction extends HandledTransportAction<MLPromptGet
         ActionFilters actionFilters,
         Client client,
         SdkClient sdkClient,
+        EncryptorImpl encryptor,
         MLFeatureEnabledSetting mlFeatureEnabledSetting,
         MLPromptManager mlPromptManager
     ) {
         super(MLPromptGetAction.NAME, transportService, actionFilters, MLPromptGetRequest::new);
         this.client = client;
         this.sdkClient = sdkClient;
+        this.encryptor = encryptor;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         this.mlPromptManager = mlPromptManager;
     }
@@ -85,15 +91,16 @@ public class GetPromptTransportAction extends HandledTransportAction<MLPromptGet
             .fetchSourceContext(fetchSourceContext)
             .build();
 
-        mlPromptManager
-            .getPromptAsync(
-                getDataObjectRequest,
-                promptId,
-                ActionListener
-                    .wrap(
-                        mlPrompt -> actionListener.onResponse(MLPromptGetResponse.builder().mlPrompt(mlPrompt).build()),
-                        e -> handleFailure(e, promptId, actionListener, "Failed to get MLPrompt")
-                    )
-            );
+        mlPromptManager.getPromptAsync(getDataObjectRequest, promptId, ActionListener.wrap(mlPrompt -> {
+            try {
+                mlPrompt.decrypt(mlPrompt.getPromptManagementType(), encryptor::decrypt, tenantId);
+                AbstractPromptManagement promptManagement = init(mlPrompt.getPromptManagementType(), mlPrompt.getPromptExtraConfig());
+                promptManagement.getPrompt(mlPrompt);
+                actionListener.onResponse(MLPromptGetResponse.builder().mlPrompt(mlPrompt).build());
+            } catch (Exception e) {
+                log.error("Failed to process " + mlPrompt.getPromptManagementType() + " Prompt");
+                actionListener.onFailure(e);
+            }
+        }, e -> handleFailure(e, promptId, actionListener, "Failed to get MLPrompt")));
     }
 }
