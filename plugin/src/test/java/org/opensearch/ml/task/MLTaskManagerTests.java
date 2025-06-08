@@ -402,7 +402,7 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
             UpdateRequest request = invocation.getArgument(0);
             // Verify retry policy is set for task done state
             assertEquals(3, request.retryOnConflict());
-            
+
             ShardId shardId = new ShardId(new Index(ML_TASK_INDEX, "_na_"), 0);
             UpdateResponse response = new UpdateResponse(shardId, "task_id", 1, 1, 1, DocWriteResponse.Result.CREATED);
             actionListener.onResponse(response);

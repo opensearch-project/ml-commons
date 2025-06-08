@@ -106,7 +106,7 @@ public class MLTaskUtilsTests {
             UpdateRequest request = invocation.getArgument(0);
             // Verify retry policy is set for task done state
             assert request.retryOnConflict() == 3;
-            
+
             ShardId shardId = new ShardId(new Index(ML_TASK_INDEX, "_na_"), 0);
             UpdateResponse response = new UpdateResponse(shardId, "task_id", 1, 1, 1, DocWriteResponse.Result.CREATED);
             actionListener.onResponse(response);
