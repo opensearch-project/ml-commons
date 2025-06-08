@@ -30,14 +30,36 @@ public class MLTaskUtils {
     public static final ImmutableSet<MLTaskState> TASK_DONE_STATES = ImmutableSet
         .of(MLTaskState.COMPLETED, MLTaskState.COMPLETED_WITH_ERROR, MLTaskState.FAILED, MLTaskState.CANCELLED);
 
+    /**
+     * Updates an ML task document directly in the ML task index.
+     * This method performs validation on the input parameters and updates the task with the provided fields.
+     * It automatically adds a timestamp for the last update time.
+     * For tasks that are being marked as done (completed, failed, etc.), it enables retry on conflict.
+     *
+     * @param taskId The ID of the ML task to update
+     * @param updatedFields Map containing the fields to update in the ML task document
+     * @param client The OpenSearch client to use for the update operation
+     * @param listener ActionListener to handle the response or failure of the update operation
+     * @throws IllegalArgumentException if taskId is null/empty, updatedFields is null/empty, or if the state field contains an invalid MLTaskState
+     */
     public static void updateMLTaskDirectly(
         String taskId,
         Map<String, Object> updatedFields,
         Client client,
         ActionListener<UpdateResponse> listener
     ) {
+        if (taskId == null || taskId.isEmpty()) {
+            listener.onFailure(new IllegalArgumentException("Task ID is null or empty"));
+            return;
+        }
+
         if (updatedFields == null || updatedFields.isEmpty()) {
             listener.onFailure(new IllegalArgumentException("Updated fields is null or empty"));
+            return;
+        }
+
+        if (updatedFields.containsKey(STATE_FIELD) && !(updatedFields.get(STATE_FIELD) instanceof MLTaskState)) {
+            listener.onFailure(new IllegalArgumentException("Invalid task state"));
             return;
         }
 
@@ -47,8 +69,7 @@ public class MLTaskUtils {
         updatedContent.put(LAST_UPDATE_TIME_FIELD, Instant.now().toEpochMilli());
         updateRequest.doc(updatedContent);
         updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-
-        if (updatedFields.containsKey(STATE_FIELD) && TASK_DONE_STATES.contains(updatedFields.containsKey(STATE_FIELD))) {
+        if (updatedFields.containsKey(STATE_FIELD) && TASK_DONE_STATES.contains((MLTaskState) updatedFields.get(STATE_FIELD))) {
             updateRequest.retryOnConflict(3);
         }
 

@@ -27,6 +27,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.index.Index;
 import org.opensearch.core.index.shard.ShardId;
+import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
@@ -61,12 +62,51 @@ public class MLTaskUtilsTests {
     }
 
     @Test
+    public void testUpdateMLTaskDirectly_NullTaskId() {
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+        MLTaskUtils.updateMLTaskDirectly(null, new HashMap<>(), client, listener);
+        verify(listener).onFailure(any(IllegalArgumentException.class));
+    }
+
+    @Test
     public void testUpdateMLTaskDirectly_Success() {
         Map<String, Object> updatedFields = new HashMap<>();
         updatedFields.put("field1", "value1");
 
         doAnswer(invocation -> {
             ActionListener<UpdateResponse> actionListener = invocation.getArgument(1);
+            ShardId shardId = new ShardId(new Index(ML_TASK_INDEX, "_na_"), 0);
+            UpdateResponse response = new UpdateResponse(shardId, "task_id", 1, 1, 1, DocWriteResponse.Result.CREATED);
+            actionListener.onResponse(response);
+            return null;
+        }).when(client).update(any(UpdateRequest.class), any());
+
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+        MLTaskUtils.updateMLTaskDirectly("task_id", updatedFields, client, listener);
+        verify(listener).onResponse(any(UpdateResponse.class));
+    }
+
+    @Test
+    public void testUpdateMLTaskDirectly_InvalidStateType() {
+        Map<String, Object> updatedFields = new HashMap<>();
+        updatedFields.put("state", "INVALID_STATE");
+
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+        MLTaskUtils.updateMLTaskDirectly("task_id", updatedFields, client, listener);
+        verify(listener).onFailure(any(IllegalArgumentException.class));
+    }
+
+    @Test
+    public void testUpdateMLTaskDirectly_TaskDoneState() {
+        Map<String, Object> updatedFields = new HashMap<>();
+        updatedFields.put("state", MLTaskState.COMPLETED);
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> actionListener = invocation.getArgument(1);
+            UpdateRequest request = invocation.getArgument(0);
+            // Verify retry policy is set for task done state
+            assert request.retryOnConflict() == 3;
+            
             ShardId shardId = new ShardId(new Index(ML_TASK_INDEX, "_na_"), 0);
             UpdateResponse response = new UpdateResponse(shardId, "task_id", 1, 1, 1, DocWriteResponse.Result.CREATED);
             actionListener.onResponse(response);

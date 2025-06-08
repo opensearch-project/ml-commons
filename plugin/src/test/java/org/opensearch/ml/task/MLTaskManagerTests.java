@@ -23,6 +23,7 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 
@@ -375,5 +376,41 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
         mlTaskManager.startTaskPollingJob();
 
         verify(client).index(any(), any());
+    }
+
+    public void testUpdateMLTaskDirectly_NullTaskId() {
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+        mlTaskManager.updateMLTaskDirectly(null, new HashMap<>(), listener);
+        verify(listener).onFailure(any(IllegalArgumentException.class));
+    }
+
+    public void testUpdateMLTaskDirectly_InvalidStateType() {
+        Map<String, Object> updatedFields = new HashMap<>();
+        updatedFields.put("state", "INVALID_STATE");
+
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+        mlTaskManager.updateMLTaskDirectly("task_id", updatedFields, listener);
+        verify(listener).onFailure(any(IllegalArgumentException.class));
+    }
+
+    public void testUpdateMLTaskDirectly_TaskDoneState() {
+        Map<String, Object> updatedFields = new HashMap<>();
+        updatedFields.put("state", MLTaskState.COMPLETED);
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> actionListener = invocation.getArgument(1);
+            UpdateRequest request = invocation.getArgument(0);
+            // Verify retry policy is set for task done state
+            assertEquals(3, request.retryOnConflict());
+            
+            ShardId shardId = new ShardId(new Index(ML_TASK_INDEX, "_na_"), 0);
+            UpdateResponse response = new UpdateResponse(shardId, "task_id", 1, 1, 1, DocWriteResponse.Result.CREATED);
+            actionListener.onResponse(response);
+            return null;
+        }).when(client).update(any(UpdateRequest.class), any());
+
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+        mlTaskManager.updateMLTaskDirectly("task_id", updatedFields, listener);
+        verify(listener).onResponse(any(UpdateResponse.class));
     }
 }
