@@ -32,6 +32,7 @@ import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.xcontent.MediaType;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.tools.ListIndexTool;
 import org.opensearch.rest.RestRequest;
@@ -79,6 +80,9 @@ public class RestMLMcpToolsRegisterActionTests extends OpenSearchTestCase {
     private Map<String, Tool.Factory> toolFactories = new HashMap<>();
     private DiscoveryNode discoveryNode = mock(DiscoveryNode.class);
 
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
@@ -92,7 +96,8 @@ public class RestMLMcpToolsRegisterActionTests extends OpenSearchTestCase {
         Settings settings = Settings.builder().put(ML_COMMONS_MCP_SERVER_ENABLED.getKey(), true).build();
         when(clusterService.getSettings()).thenReturn(settings);
         when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MCP_SERVER_ENABLED)));
-        restMLRegisterMcpToolsAction = new RestMLMcpToolsRegisterAction(toolFactories, clusterService);
+        restMLRegisterMcpToolsAction = new RestMLMcpToolsRegisterAction(toolFactories, clusterService, mlFeatureEnabledSetting);
+        when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(true);
     }
 
     @Test

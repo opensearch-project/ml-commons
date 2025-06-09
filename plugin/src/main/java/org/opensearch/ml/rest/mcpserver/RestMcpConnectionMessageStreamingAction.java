@@ -9,7 +9,6 @@ package org.opensearch.ml.rest.mcpserver;
 
 import static org.opensearch.ml.common.CommonValue.MCP_SESSION_MANAGEMENT_INDEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED;
 import static org.opensearch.rest.RestRequest.Method.GET;
 import static org.opensearch.rest.RestRequest.Method.POST;
 
@@ -34,6 +33,7 @@ import org.opensearch.core.common.bytes.CompositeBytesReference;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.http.HttpChunk;
 import org.opensearch.ml.action.mcpserver.McpAsyncServerHolder;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpMessageAction;
 import org.opensearch.ml.common.transport.mcpserver.requests.message.MLMcpMessageRequest;
 import org.opensearch.rest.BaseRestHandler;
@@ -63,12 +63,11 @@ public class RestMcpConnectionMessageStreamingAction extends BaseRestHandler {
 
     private final ClusterService clusterService;
 
-    private volatile boolean mcpServerEnabled;
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
-    public RestMcpConnectionMessageStreamingAction(ClusterService clusterService) {
+    public RestMcpConnectionMessageStreamingAction(ClusterService clusterService, MLFeatureEnabledSetting mlFeatureEnabledSetting) {
         this.clusterService = clusterService;
-        mcpServerEnabled = ML_COMMONS_MCP_SERVER_ENABLED.get(clusterService.getSettings());
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MCP_SERVER_ENABLED, it -> mcpServerEnabled = it);
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
@@ -83,7 +82,7 @@ public class RestMcpConnectionMessageStreamingAction extends BaseRestHandler {
 
     @Override
     public RestChannelConsumer prepareRequest(final RestRequest request, final NodeClient client) {
-        if (!mcpServerEnabled) {
+        if (!mlFeatureEnabledSetting.isMcpServerEnabled()) {
             throw new OpenSearchException(ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE);
         }
         String path = request.path();

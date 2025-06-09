@@ -76,6 +76,7 @@ public class McpToolsHelper {
                             .getMcpAsyncServerInstance()
                             .addTool(createToolSpecification(value.v1()))
                             .doOnSuccess(y -> McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.put(key, value.v2()))
+                            .doOnError(x -> log.error("Failed to auto load tool: {}", value.v1().getName(), x))
                             .subscribe();
                     } else if (McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.get(key) < value.v2()) {
                         McpAsyncServerHolder.getMcpAsyncServerInstance().removeTool(key).onErrorResume(e -> Mono.empty()).subscribe();
@@ -83,6 +84,7 @@ public class McpToolsHelper {
                             .getMcpAsyncServerInstance()
                             .addTool(createToolSpecification(value.v1()))
                             .doOnSuccess(x -> McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.put(key, value.v2()))
+                            .doOnError(x -> log.error("Failed to auto load tool: {}", value.v1().getName(), x))
                             .subscribe();
                     }
                 });
@@ -102,7 +104,7 @@ public class McpToolsHelper {
     public void startSyncMcpToolsJob() {
         ActionListener<Boolean> listener = ActionListener
             .wrap(r -> { log.debug("Auto reload mcp tools schedule job run successfully!"); }, e -> {
-                log.error(e.getMessage());
+                log.error(e.getMessage(), e);
             });
         threadPool
             .schedule(() -> autoLoadAllMcpTools(listener), TimeValue.timeValueSeconds(SYNC_MCP_TOOLS_JOB_INTERVAL), GENERAL_THREAD_POOL);
@@ -253,7 +255,7 @@ public class McpToolsHelper {
             ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
             return McpToolRegisterInput.parse(parser);
         } catch (IOException e) {
-            log.error("Failed to parse mcp tools configuration");
+            log.error("Failed to parse mcp tools configuration: {}", input);
             throw e;
         }
     }

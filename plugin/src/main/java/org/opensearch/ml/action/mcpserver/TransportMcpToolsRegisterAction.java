@@ -6,7 +6,6 @@
 package org.opensearch.ml.action.mcpserver;
 
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED;
 
 import java.time.Instant;
 import java.util.Arrays;
@@ -36,6 +35,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLIndex;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRegisterAction;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRegisterOnNodesAction;
 import org.opensearch.ml.common.transport.mcpserver.requests.McpToolBaseInput;
@@ -60,7 +60,7 @@ public class TransportMcpToolsRegisterAction extends HandledTransportAction<Acti
 
     NamedXContentRegistry xContentRegistry;
     DiscoveryNodeHelper nodeFilter;
-    private volatile boolean mcpServerEnabled;
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
     private final MLIndicesHandler mlIndicesHandler;
     private final McpToolsHelper mcpToolsHelper;
 
@@ -74,7 +74,8 @@ public class TransportMcpToolsRegisterAction extends HandledTransportAction<Acti
         NamedXContentRegistry xContentRegistry,
         DiscoveryNodeHelper nodeFilter,
         MLIndicesHandler mlIndicesHandler,
-        McpToolsHelper mcpToolsHelper
+        McpToolsHelper mcpToolsHelper,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLMcpToolsRegisterAction.NAME, transportService, actionFilters, MLMcpToolsRegisterNodesRequest::new);
         this.transportService = transportService;
@@ -85,13 +86,12 @@ public class TransportMcpToolsRegisterAction extends HandledTransportAction<Acti
         this.nodeFilter = nodeFilter;
         this.mlIndicesHandler = mlIndicesHandler;
         this.mcpToolsHelper = mcpToolsHelper;
-        mcpServerEnabled = ML_COMMONS_MCP_SERVER_ENABLED.get(clusterService.getSettings());
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MCP_SERVER_ENABLED, it -> mcpServerEnabled = it);
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLMcpToolsRegisterNodesResponse> listener) {
-        if (!mcpServerEnabled) {
+        if (!mlFeatureEnabledSetting.isMcpServerEnabled()) {
             listener.onFailure(new OpenSearchException(ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE));
             return;
         }

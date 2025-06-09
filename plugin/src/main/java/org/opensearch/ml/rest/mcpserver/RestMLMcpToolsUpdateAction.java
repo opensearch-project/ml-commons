@@ -6,7 +6,6 @@
 package org.opensearch.ml.rest.mcpserver;
 
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 
 import java.io.IOException;
@@ -18,6 +17,7 @@ import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.annotation.ExperimentalApi;
 import org.opensearch.core.common.util.CollectionUtils;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsUpdateAction;
 import org.opensearch.ml.common.transport.mcpserver.requests.update.MLMcpToolsUpdateNodesRequest;
 import org.opensearch.rest.BaseRestHandler;
@@ -33,16 +33,15 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class RestMLMcpToolsUpdateAction extends BaseRestHandler {
     private static final String ML_UPDATE_MCP_TOOLS_ACTION = "ml_mcp_tools_update_action";
-    private volatile boolean mcpServerEnabled;
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
     private final ClusterService clusterService;
 
     /**
      * Constructor
      */
-    public RestMLMcpToolsUpdateAction(ClusterService clusterService) {
+    public RestMLMcpToolsUpdateAction(ClusterService clusterService, MLFeatureEnabledSetting mlFeatureEnabledSetting) {
         this.clusterService = clusterService;
-        mcpServerEnabled = ML_COMMONS_MCP_SERVER_ENABLED.get(clusterService.getSettings());
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MCP_SERVER_ENABLED, it -> mcpServerEnabled = it);
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
@@ -57,7 +56,7 @@ public class RestMLMcpToolsUpdateAction extends BaseRestHandler {
 
     @Override
     public RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
-        if (!mcpServerEnabled) {
+        if (!mlFeatureEnabledSetting.isMcpServerEnabled()) {
             throw new OpenSearchException(ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE);
         }
         MLMcpToolsUpdateNodesRequest updateNodesRequest = getRequest(request);

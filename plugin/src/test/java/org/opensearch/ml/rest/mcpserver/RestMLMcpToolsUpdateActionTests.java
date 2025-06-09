@@ -33,7 +33,7 @@ import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.xcontent.MediaType;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.ml.common.settings.MLCommonsSettings;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.tools.ListIndexTool;
 import org.opensearch.rest.RestRequest;
@@ -77,6 +77,8 @@ public class RestMLMcpToolsUpdateActionTests extends OpenSearchTestCase {
 
     @Mock(answer = RETURNS_DEEP_STUBS)
     private ClusterService clusterService;
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     private Map<String, Tool.Factory> toolFactories = new HashMap<>();
     private DiscoveryNode discoveryNode = mock(DiscoveryNode.class);
@@ -94,18 +96,16 @@ public class RestMLMcpToolsUpdateActionTests extends OpenSearchTestCase {
         Settings settings = Settings.builder().put(ML_COMMONS_MCP_SERVER_ENABLED.getKey(), true).build();
         when(clusterService.getSettings()).thenReturn(settings);
         when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MCP_SERVER_ENABLED)));
-        restMLMcpToolsUpdateAction = new RestMLMcpToolsUpdateAction(clusterService);
+        restMLMcpToolsUpdateAction = new RestMLMcpToolsUpdateAction(clusterService, mlFeatureEnabledSetting);
+        when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(true);
     }
 
     public void test_doExecute_featureFlagDisabled() throws IOException {
         exceptionRule.expect(OpenSearchException.class);
         exceptionRule
             .expectMessage("The MCP server is not enabled. To enable, please update the setting plugins.ml_commons.mcp_server_enabled");
-        Settings settings = Settings.builder().put(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED.getKey(), false).build();
-        when(this.clusterService.getSettings()).thenReturn(settings);
-        when(this.clusterService.getClusterSettings())
-            .thenReturn(new ClusterSettings(settings, Set.of(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED)));
-        RestMLMcpToolsUpdateAction restMLMcpToolsUpdateAction = new RestMLMcpToolsUpdateAction(clusterService);
+        when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(false);
+        RestMLMcpToolsUpdateAction restMLMcpToolsUpdateAction = new RestMLMcpToolsUpdateAction(clusterService, mlFeatureEnabledSetting);
         BytesReference bytesReference = BytesReference.fromByteBuffer(ByteBuffer.wrap(updateToolRequest.getBytes(StandardCharsets.UTF_8)));
         RestRequest restRequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withContent(bytesReference, MediaType.fromMediaType(XContentType.JSON.mediaType()))

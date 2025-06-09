@@ -6,7 +6,6 @@
 package org.opensearch.ml.action.mcpserver;
 
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED;
 import static org.opensearch.threadpool.ThreadPool.Names.SAME;
 
 import java.io.IOException;
@@ -22,6 +21,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpMessageAction;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpMessageDispatchAction;
 import org.opensearch.ml.common.transport.mcpserver.requests.message.MLMcpMessageRequest;
@@ -43,7 +43,7 @@ public class TransportMcpMessageAction extends HandledTransportAction<ActionRequ
     Client client;
 
     NamedXContentRegistry xContentRegistry;
-    private volatile boolean mcpServerEnabled;
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Inject
     public TransportMcpMessageAction(
@@ -52,7 +52,8 @@ public class TransportMcpMessageAction extends HandledTransportAction<ActionRequ
         ClusterService clusterService,
         ThreadPool threadPool,
         Client client,
-        NamedXContentRegistry xContentRegistry
+        NamedXContentRegistry xContentRegistry,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLMcpMessageAction.NAME, transportService, actionFilters, MLMcpMessageRequest::new);
         this.transportService = transportService;
@@ -60,13 +61,12 @@ public class TransportMcpMessageAction extends HandledTransportAction<ActionRequ
         this.threadPool = threadPool;
         this.client = client;
         this.xContentRegistry = xContentRegistry;
-        mcpServerEnabled = ML_COMMONS_MCP_SERVER_ENABLED.get(clusterService.getSettings());
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MCP_SERVER_ENABLED, it -> mcpServerEnabled = it);
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<AcknowledgedResponse> listener) {
-        if (!mcpServerEnabled) {
+        if (!mlFeatureEnabledSetting.isMcpServerEnabled()) {
             listener.onFailure(new OpenSearchException(ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE));
             return;
         }

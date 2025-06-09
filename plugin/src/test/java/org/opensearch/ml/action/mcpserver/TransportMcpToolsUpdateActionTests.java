@@ -38,6 +38,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.mcpserver.requests.register.McpToolRegisterInput;
 import org.opensearch.ml.common.transport.mcpserver.requests.update.MLMcpToolsUpdateNodesRequest;
 import org.opensearch.ml.common.transport.mcpserver.requests.update.McpToolUpdateInput;
@@ -72,6 +73,8 @@ public class TransportMcpToolsUpdateActionTests extends OpenSearchTestCase {
     private Task task;
     @Mock
     private ActionListener<MLMcpToolsUpdateNodesResponse> listener;
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     private TransportMcpToolsUpdateAction action;
 
@@ -114,8 +117,10 @@ public class TransportMcpToolsUpdateActionTests extends OpenSearchTestCase {
             client,
             xContentRegistry,
             nodeFilter,
-            mcpToolsHelper
+            mcpToolsHelper,
+            mlFeatureEnabledSetting
         );
+        when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(true);
     }
 
     @Test
@@ -133,8 +138,7 @@ public class TransportMcpToolsUpdateActionTests extends OpenSearchTestCase {
 
     @Test
     public void testFeatureDisabled() {
-        Settings disabledSettings = Settings.builder().put("plugins.ml_commons.mcp_server_enabled", false).build();
-        when(clusterService.getSettings()).thenReturn(disabledSettings);
+        when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(false);
         TransportMcpToolsUpdateAction action = new TransportMcpToolsUpdateAction(
             transportService,
             mock(ActionFilters.class),
@@ -143,7 +147,8 @@ public class TransportMcpToolsUpdateActionTests extends OpenSearchTestCase {
             client,
             xContentRegistry,
             nodeFilter,
-            mcpToolsHelper
+            mcpToolsHelper,
+                mlFeatureEnabledSetting
         );
         action.doExecute(task, mock(MLMcpToolsUpdateNodesRequest.class), listener);
 

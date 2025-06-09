@@ -28,6 +28,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.mcpserver.requests.register.McpToolRegisterInput;
 import org.opensearch.ml.common.transport.mcpserver.responses.list.MLMcpToolsListResponse;
@@ -66,6 +67,8 @@ public class TransportMcpToolsListActionTests extends OpenSearchTestCase {
     private Task task;
     @Mock
     private ActionListener<MLMcpToolsListResponse> listener;
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     private McpToolsHelper mcpToolsHelper = spy(new McpToolsHelper(client, threadPool, toolFactoryWrapper));
 
@@ -91,8 +94,10 @@ public class TransportMcpToolsListActionTests extends OpenSearchTestCase {
             actionFilters,
             xContentRegistry,
             nodeFilter,
-            mcpToolsHelper
+            mcpToolsHelper,
+            mlFeatureEnabledSetting
         );
+        when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(true);
     }
 
     public void test_doExecute_success() {
@@ -104,17 +109,15 @@ public class TransportMcpToolsListActionTests extends OpenSearchTestCase {
     }
 
     public void test_doExecute_featureFlagDisabled() {
-        Settings settings = Settings.builder().put(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED.getKey(), false).build();
-        when(this.clusterService.getSettings()).thenReturn(settings);
-        when(this.clusterService.getClusterSettings())
-            .thenReturn(new ClusterSettings(settings, Set.of(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED)));
+        when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(false);
         TransportMcpToolsListAction mcpToolsRemoveAction = new TransportMcpToolsListAction(
             transportService,
             clusterService,
             actionFilters,
             xContentRegistry,
             nodeFilter,
-            mcpToolsHelper
+            mcpToolsHelper,
+                mlFeatureEnabledSetting
         );
         ActionRequest nodesRequest = mock(ActionRequest.class);
         mcpToolsRemoveAction.doExecute(task, nodesRequest, listener);

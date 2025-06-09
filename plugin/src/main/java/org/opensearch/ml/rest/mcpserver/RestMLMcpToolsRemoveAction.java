@@ -6,7 +6,6 @@
 package org.opensearch.ml.rest.mcpserver;
 
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 
 import java.io.IOException;
@@ -18,6 +17,7 @@ import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.annotation.ExperimentalApi;
 import org.opensearch.core.common.util.CollectionUtils;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRemoveAction;
 import org.opensearch.ml.common.transport.mcpserver.requests.remove.MLMcpToolsRemoveNodesRequest;
 import org.opensearch.rest.BaseRestHandler;
@@ -41,12 +41,11 @@ public class RestMLMcpToolsRemoveAction extends BaseRestHandler {
     private final ClusterService clusterService;
     private final String REMOVE_PATH = String.format(Locale.ROOT, "%s/mcp/tools/_remove", ML_BASE_URI);
 
-    private volatile boolean mcpServerEnabled;
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
-    public RestMLMcpToolsRemoveAction(ClusterService clusterService) {
+    public RestMLMcpToolsRemoveAction(ClusterService clusterService, MLFeatureEnabledSetting mlFeatureEnabledSetting) {
         this.clusterService = clusterService;
-        mcpServerEnabled = ML_COMMONS_MCP_SERVER_ENABLED.get(clusterService.getSettings());
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MCP_SERVER_ENABLED, it -> mcpServerEnabled = it);
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
@@ -61,7 +60,7 @@ public class RestMLMcpToolsRemoveAction extends BaseRestHandler {
 
     @Override
     public RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
-        if (!mcpServerEnabled) {
+        if (!mlFeatureEnabledSetting.isMcpServerEnabled()) {
             throw new OpenSearchException(ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE);
         }
         MLMcpToolsRemoveNodesRequest removeNodesRequest = getRequest(request);

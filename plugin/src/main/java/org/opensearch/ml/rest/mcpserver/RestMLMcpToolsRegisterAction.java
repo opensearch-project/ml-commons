@@ -6,7 +6,6 @@
 package org.opensearch.ml.rest.mcpserver;
 
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 
 import java.io.IOException;
@@ -23,6 +22,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.annotation.ExperimentalApi;
 import org.opensearch.core.common.util.CollectionUtils;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsRegisterAction;
 import org.opensearch.ml.common.transport.mcpserver.requests.register.MLMcpToolsRegisterNodesRequest;
@@ -50,16 +50,19 @@ public class RestMLMcpToolsRegisterAction extends BaseRestHandler {
     private static final String ML_REGISTER_MCP_TOOLS_ACTION = "ml_register_mcp_tools_action";
     private final Map<String, Tool.Factory> toolFactories;
     private ClusterService clusterService;
-    private volatile boolean mcpServerEnabled;
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     /**
      * Constructor
      */
-    public RestMLMcpToolsRegisterAction(Map<String, Tool.Factory> toolFactories, ClusterService clusterService) {
+    public RestMLMcpToolsRegisterAction(
+        Map<String, Tool.Factory> toolFactories,
+        ClusterService clusterService,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
+    ) {
         this.toolFactories = toolFactories;
         this.clusterService = clusterService;
-        mcpServerEnabled = ML_COMMONS_MCP_SERVER_ENABLED.get(clusterService.getSettings());
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MCP_SERVER_ENABLED, it -> mcpServerEnabled = it);
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
@@ -74,7 +77,7 @@ public class RestMLMcpToolsRegisterAction extends BaseRestHandler {
 
     @Override
     public RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
-        if (!mcpServerEnabled) {
+        if (!mlFeatureEnabledSetting.isMcpServerEnabled()) {
             throw new OpenSearchException(ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE);
         }
         ActionRequestValidationException exception = new ActionRequestValidationException();

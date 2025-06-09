@@ -40,6 +40,7 @@ import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.mcpserver.requests.register.MLMcpToolsRegisterNodesRequest;
 import org.opensearch.ml.common.transport.mcpserver.requests.register.McpToolRegisterInput;
@@ -84,6 +85,8 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
     private Task task;
     @Mock
     private ActionListener<MLMcpToolsRegisterNodesResponse> listener;
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     private McpToolsHelper mcpToolsHelper = spy(new McpToolsHelper(client, threadPool, toolFactoryWrapper));
 
@@ -152,8 +155,10 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
             xContentRegistry,
             nodeFilter,
             mlIndicesHandler,
-            mcpToolsHelper
+            mcpToolsHelper,
+            mlFeatureEnabledSetting
         );
+        when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(true);
     }
 
     public void test_doExecute_success() {
@@ -167,10 +172,7 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
     }
 
     public void test_doExecute_featureFlagDisabled() {
-        Settings settings = Settings.builder().put(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED.getKey(), false).build();
-        when(this.clusterService.getSettings()).thenReturn(settings);
-        when(this.clusterService.getClusterSettings())
-            .thenReturn(new ClusterSettings(settings, Set.of(MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED)));
+        when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(false);
         TransportMcpToolsRegisterAction transportMcpToolsRegisterAction = new TransportMcpToolsRegisterAction(
             transportService,
             actionFilters,
@@ -180,7 +182,8 @@ public class TransportMcpToolsRegisterActionTests extends OpenSearchTestCase {
             xContentRegistry,
             nodeFilter,
             mlIndicesHandler,
-            mcpToolsHelper
+            mcpToolsHelper,
+                mlFeatureEnabledSetting
         );
         MLMcpToolsRegisterNodesRequest nodesRequest = mock(MLMcpToolsRegisterNodesRequest.class);
         List<McpToolRegisterInput> mcpTools = List.of(getRegisterMcpTool());

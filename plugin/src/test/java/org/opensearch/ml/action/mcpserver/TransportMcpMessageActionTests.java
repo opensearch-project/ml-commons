@@ -27,6 +27,7 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.mcpserver.requests.message.MLMcpMessageRequest;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
@@ -58,6 +59,8 @@ public class TransportMcpMessageActionTests extends OpenSearchTestCase {
 
     @Mock
     private ActionListener<AcknowledgedResponse> listener;
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Before
     public void setUp() throws Exception {
@@ -75,8 +78,10 @@ public class TransportMcpMessageActionTests extends OpenSearchTestCase {
             clusterService,
             threadPool,
             client,
-            xContentRegistry
+            xContentRegistry,
+            mlFeatureEnabledSetting
         );
+        when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(true);
     }
 
     public void test_doExecute_successful() {
