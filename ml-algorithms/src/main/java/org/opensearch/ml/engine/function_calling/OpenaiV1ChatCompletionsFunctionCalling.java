@@ -106,7 +106,8 @@ public class OpenaiV1ChatCompletionsFunctionCalling implements FunctionCalling {
                 continue;
             }
             toolMessage.setToolCallId(toolUseId);
-            toolMessage.setContent((String) toolResult.get(TOOL_RESULT));
+            Map toolResultMap = (Map) toolResult.get(TOOL_RESULT);
+            toolMessage.setContent((String) toolResultMap.get("text"));
             messages.add(toolMessage);
         }
 

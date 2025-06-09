@@ -585,8 +585,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         List<Map<String, Object>> toolResults = List.of(Map.of(TOOL_CALL_ID, toolCallId, TOOL_RESULT, Map.of("text", r)));
                         List<LLMMessage> llmMessages = functionCalling.supply(toolResults);
                         // TODO: support multiple tool calls at the same time so that multiple LLMMessages can be generated here
-                        LLMMessage firstMessage = llmMessages.getFirst();
-                        interactions.add(StringUtils.toJson(Map.of("role", firstMessage.getRole(), "content", firstMessage.getContent())));
+                        interactions.add(llmMessages.getFirst().getResponse());
                     } else {
                         interactions
                             .add(
