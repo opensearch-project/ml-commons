@@ -54,6 +54,7 @@ public class IndexMappingToolTests {
     private GetIndexResponse getIndexResponse;
 
     private Map<String, String> indexParams;
+    private Map<String, String> indexParamsWithRawIndexName;
     private Map<String, String> otherParams;
     private Map<String, String> emptyParams;
 
@@ -67,6 +68,7 @@ public class IndexMappingToolTests {
         IndexMappingTool.Factory.getInstance().init(client);
 
         indexParams = Map.of("index", "[\"foo\"]");
+        indexParamsWithRawIndexName = Map.of("index", "foo");
         otherParams = Map.of("other", "[\"bar\"]");
         emptyParams = Collections.emptyMap();
     }
@@ -168,6 +170,68 @@ public class IndexMappingToolTests {
         assertTrue(
             responseList
                 .contains("mappings={year={full_name=year, mapping={year={type=text}}}, age={full_name=age, mapping={age={type=integer}}}}")
+        );
+
+        assertTrue(responseList.contains("settings:"));
+        assertTrue(responseList.contains("test.boolean.setting=false"));
+        assertTrue(responseList.contains("test.int.setting=123"));
+    }
+
+    @Test
+    public void testRunWithRawIndexNameInput() throws Exception {
+        String indexName = "foo";
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<ActionListener<GetIndexResponse>> actionListenerCaptor = ArgumentCaptor.forClass(ActionListener.class);
+        doNothing().when(indicesAdminClient).getIndex(any(), actionListenerCaptor.capture());
+
+        when(getIndexResponse.indices()).thenReturn(new String[] { indexName });
+        Settings settings = Settings.builder().put("test.boolean.setting", false).put("test.int.setting", 123).build();
+        when(getIndexResponse.settings()).thenReturn(Map.of(indexName, settings));
+        String source = """
+                {
+                    "foo": {
+                        "mappings": {
+                            "year": {
+                                "full_name": "year",
+                                "mapping": {
+                                    "year": {
+                                        "type": "text"
+                                    }
+                                }
+                            },
+                            "age": {
+                                "full_name": "age",
+                                "mapping": {
+                                    "age": {
+                                        "type": "integer"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }""";
+        MappingMetadata mapping = new MappingMetadata(indexName, XContentHelper.convertToMap(JsonXContent.jsonXContent, source, true));
+        when(getIndexResponse.mappings()).thenReturn(Map.of(indexName, mapping));
+
+        // Now make the call
+        Tool tool = IndexMappingTool.Factory.getInstance().create(Collections.emptyMap());
+        final CompletableFuture<String> future = new CompletableFuture<>();
+        ActionListener<String> listener = ActionListener.wrap(r -> { future.complete(r); }, e -> { future.completeExceptionally(e); });
+
+        tool.run(indexParamsWithRawIndexName, listener);
+        actionListenerCaptor.getValue().onResponse(getIndexResponse);
+
+        future.orTimeout(10, TimeUnit.SECONDS).join();
+        String response = future.get();
+        List<String> responseList = Arrays.asList(response.trim().split("\\n"));
+
+        assertTrue(responseList.contains("index: foo"));
+
+        assertTrue(responseList.contains("mappings:"));
+        assertTrue(
+                responseList
+                        .contains("mappings={year={full_name=year, mapping={year={type=text}}}, age={full_name=age, mapping={age={type=integer}}}}")
         );
 
         assertTrue(responseList.contains("settings:"));
