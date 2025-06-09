@@ -69,6 +69,13 @@ public class MLTaskUtilsTests {
     }
 
     @Test
+    public void testUpdateMLTaskDirectly_EmptyTaskId() {
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+        MLTaskUtils.updateMLTaskDirectly("", new HashMap<>(), client, listener);
+        verify(listener).onFailure(any(IllegalArgumentException.class));
+    }
+
+    @Test
     public void testUpdateMLTaskDirectly_Success() {
         Map<String, Object> updatedFields = new HashMap<>();
         updatedFields.put("field1", "value1");
@@ -116,5 +123,21 @@ public class MLTaskUtilsTests {
         ActionListener<UpdateResponse> listener = mock(ActionListener.class);
         MLTaskUtils.updateMLTaskDirectly("task_id", updatedFields, client, listener);
         verify(listener).onResponse(any(UpdateResponse.class));
+    }
+
+    @Test
+    public void testUpdateMLTaskDirectly_ClientException() {
+        Map<String, Object> updatedFields = new HashMap<>();
+        updatedFields.put("field1", "value1");
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> actionListener = invocation.getArgument(1);
+            actionListener.onFailure(new RuntimeException("Test exception"));
+            return null;
+        }).when(client).update(any(UpdateRequest.class), any());
+
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+        MLTaskUtils.updateMLTaskDirectly("task_id", updatedFields, client, listener);
+        verify(listener).onFailure(any(RuntimeException.class));
     }
 }
