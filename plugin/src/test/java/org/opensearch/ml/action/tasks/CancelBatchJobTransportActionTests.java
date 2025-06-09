@@ -32,6 +32,7 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
+import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.metadata.Metadata;
 import org.opensearch.cluster.service.ClusterService;
@@ -48,6 +49,7 @@ import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
+import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
@@ -68,9 +70,6 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
-import org.opensearch.action.update.UpdateResponse;
-import org.opensearch.ml.common.MLTaskState;
-import org.opensearch.ml.common.exception.MLValidationException;
 
 public class CancelBatchJobTransportActionTests extends OpenSearchTestCase {
     @Mock

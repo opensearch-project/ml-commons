@@ -66,6 +66,7 @@ import org.opensearch.script.ScriptService;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
+
 import com.google.common.annotations.VisibleForTesting;
 
 import lombok.extern.log4j.Log4j2;
