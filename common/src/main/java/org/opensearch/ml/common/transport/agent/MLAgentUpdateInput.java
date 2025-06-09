@@ -12,8 +12,11 @@ import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 
 import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -79,6 +82,7 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
         this.appType = appType;
         this.lastUpdateTime = lastUpdateTime;
         this.tenantId = tenantId;
+        validate();
     }
 
     public MLAgentUpdateInput(StreamInput in) throws IOException {
@@ -248,15 +252,37 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
             .type(originalAgent.getType())
             .createdTime(originalAgent.getCreatedTime())
             .isHidden(originalAgent.getIsHidden())
-            .name(name)
-            .description(description)
-            .llm(llm)
-            .tools(tools)
-            .parameters(parameters)
-            .memory(memory)
+            .name(name == null ? originalAgent.getName() : name)
+            .description(description == null ? originalAgent.getDescription() : description)
+            .llm(llm == null ? originalAgent.getLlm() : llm)
+            .tools(tools == null ? originalAgent.getTools() : tools)
+            .parameters(parameters == null ? originalAgent.getParameters() : parameters)
+            .memory(memory == null ? originalAgent.getMemory() : memory)
             .lastUpdateTime(lastUpdateTime)
             .appType(appType)
             .tenantId(tenantId)
             .build();
+    }
+
+    private void validate() {
+        if (name != null && (name.isBlank() || name.length() > MLAgent.AGENT_NAME_MAX_LENGTH)) {
+            throw new IllegalArgumentException(
+                String.format("Agent name cannot be empty or exceed max length of %d characters", MLAgent.AGENT_NAME_MAX_LENGTH)
+            );
+        }
+        if (memory != null && !memory.getType().equals("conversation_index")) {
+            throw new IllegalArgumentException(String.format("Invalid memory type: %s", memory.getType()));
+        }
+        if (tools != null) {
+            Set<String> toolNames = new HashSet<>();
+            for (MLToolSpec toolSpec : tools) {
+                String toolName = Optional.ofNullable(toolSpec.getName()).orElse(toolSpec.getType());
+                if (toolNames.contains(toolName)) {
+                    throw new IllegalArgumentException("Duplicate tool defined: " + toolName);
+                } else {
+                    toolNames.add(toolName);
+                }
+            }
+        }
     }
 }

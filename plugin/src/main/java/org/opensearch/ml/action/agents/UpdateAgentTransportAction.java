@@ -107,7 +107,10 @@ public class UpdateAgentTransportAction extends HandledTransportAction<ActionReq
                 } else {
                     try {
                         GetResponse getResponse = r.getResponse();
-                        assert getResponse != null : "Failed to get Agent";
+                        if (getResponse == null || !getResponse.isExists()) {
+                            wrappedListener
+                                .onFailure(new OpenSearchStatusException("Failed to get agent with ID " + agentId, RestStatus.NOT_FOUND));
+                        }
                         XContentParser parser = JsonXContent.jsonXContent
                             .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, getResponse.getSourceAsString());
                         XContentParserUtils.ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
@@ -126,6 +129,8 @@ public class UpdateAgentTransportAction extends HandledTransportAction<ActionReq
                             } else {
                                 updateAgent(agentId, mlAgentUpdateInput, retrievedAgent, wrappedListener);
                             }
+                        } else {
+                            log.error("Failed to validate tenant for Agent ID {}", agentId);
                         }
                     } catch (Exception e) {
                         log.error("Failed to get ML agent {}", agentId);
@@ -163,7 +168,6 @@ public class UpdateAgentTransportAction extends HandledTransportAction<ActionReq
             } else {
                 try {
                     UpdateResponse updateResponse = r.updateResponse();
-                    assert updateResponse != null : "Failed to update Agent";
                     if (updateResponse.getResult() == DocWriteResponse.Result.UPDATED) {
                         log.info("Successfully updated ML agent {}", agentId);
                         wrappedListener.onResponse(updateResponse);
