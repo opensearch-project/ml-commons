@@ -68,6 +68,9 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
+import org.opensearch.action.update.UpdateResponse;
+import org.opensearch.ml.common.MLTaskState;
+import org.opensearch.ml.common.exception.MLValidationException;
 
 public class CancelBatchJobTransportActionTests extends OpenSearchTestCase {
     @Mock
@@ -344,5 +347,26 @@ public class CancelBatchJobTransportActionTests extends OpenSearchTestCase {
         GetResult getResult = new GetResult("indexName", "111", 111l, 111l, 111l, true, bytesReference, null, null);
         GetResponse getResponse = new GetResponse(getResult);
         return getResponse;
+    }
+
+    public void testCancelAgentTask_TaskInFinalState() {
+        cancelBatchJobTransportAction.cancelAgentTask("test_id", MLTaskState.COMPLETED, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Task test_id cannot be cancelled as it is in a final state: COMPLETED.", argumentCaptor.getValue().getMessage());
+    }
+
+    public void testCancelAgentTask_Success() {
+        UpdateResponse updateResponse = mock(UpdateResponse.class);
+        when(updateResponse.getResult()).thenReturn(UpdateResponse.Result.UPDATED);
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(2);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(mlTaskManager).updateMLTaskDirectly(eq("test_id"), eq(Map.of(MLTask.STATE_FIELD, MLTaskState.CANCELLING)), any());
+
+        cancelBatchJobTransportAction.cancelAgentTask("test_id", MLTaskState.RUNNING, actionListener);
+        verify(actionListener).onResponse(any(MLCancelBatchJobResponse.class));
     }
 }

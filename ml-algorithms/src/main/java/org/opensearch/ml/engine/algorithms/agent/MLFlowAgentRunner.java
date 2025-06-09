@@ -8,9 +8,9 @@ package org.opensearch.ml.engine.algorithms.agent;
 import static org.apache.commons.text.StringEscapeUtils.escapeJson;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.MLTask.TASK_ID_FIELD;
+import static org.opensearch.ml.common.utils.MLTaskUtils.isTaskMarkedForCancel;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getToolName;
-import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.isTaskMarkedForCancel;
 
 import java.io.IOException;
 import java.security.AccessController;

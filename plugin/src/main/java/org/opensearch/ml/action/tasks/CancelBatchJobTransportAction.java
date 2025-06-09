@@ -66,6 +66,7 @@ import org.opensearch.script.ScriptService;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
+import com.google.common.annotations.VisibleForTesting;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -168,7 +169,8 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
         }
     }
 
-    private void cancelAgentTask(String taskId, MLTaskState state, ActionListener<MLCancelBatchJobResponse> actionListener) {
+    @VisibleForTesting
+    void cancelAgentTask(String taskId, MLTaskState state, ActionListener<MLCancelBatchJobResponse> actionListener) {
         if (MLTaskManager.TASK_DONE_STATES.contains(state)) {
             actionListener
                 .onFailure(

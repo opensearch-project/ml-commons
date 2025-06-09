@@ -14,7 +14,11 @@ import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 
 import java.util.HashMap;
 import java.util.Map;
-
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -28,6 +32,14 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.index.Index;
 import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.ml.common.MLTaskState;
+import org.opensearch.common.action.ActionFuture;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.ml.common.MLTask;
+import org.opensearch.ml.common.MLTaskState;
+import org.opensearch.ml.common.transport.task.MLTaskGetAction;
+import org.opensearch.ml.common.transport.task.MLTaskGetRequest;
+import org.opensearch.ml.common.transport.task.MLTaskGetResponse;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
@@ -139,5 +151,35 @@ public class MLTaskUtilsTests {
         ActionListener<UpdateResponse> listener = mock(ActionListener.class);
         MLTaskUtils.updateMLTaskDirectly("task_id", updatedFields, client, listener);
         verify(listener).onFailure(any(RuntimeException.class));
+    }
+
+    @Test
+    public void testIsTaskMarkedForCancel() {
+        String taskId = "testTaskId";
+        MLTask mlTask = mock(MLTask.class);
+        when(mlTask.getState()).thenReturn(MLTaskState.CANCELLING);
+        MLTaskGetResponse mlTaskGetResponse = mock(MLTaskGetResponse.class);
+        when(mlTaskGetResponse.getMlTask()).thenReturn(mlTask);
+
+        ActionFuture<MLTaskGetResponse> actionFuture = mock(ActionFuture.class);
+        when(actionFuture.actionGet()).thenReturn(mlTaskGetResponse);
+        when(client.execute(any(MLTaskGetAction.class), any(MLTaskGetRequest.class))).thenReturn(actionFuture);
+
+        assertTrue(MLTaskUtils.isTaskMarkedForCancel(taskId, client));
+    }
+
+    @Test
+    public void testIsTaskNotMarkedForCancel() {
+        String taskId = "testTaskId";
+        MLTask mlTask = mock(MLTask.class);
+        when(mlTask.getState()).thenReturn(MLTaskState.RUNNING);
+        MLTaskGetResponse mlTaskGetResponse = mock(MLTaskGetResponse.class);
+        when(mlTaskGetResponse.getMlTask()).thenReturn(mlTask);
+
+        ActionFuture<MLTaskGetResponse> actionFuture = mock(ActionFuture.class);
+        when(actionFuture.actionGet()).thenReturn(mlTaskGetResponse);
+        when(client.execute(any(MLTaskGetAction.class), any(MLTaskGetRequest.class))).thenReturn(actionFuture);
+
+        assertFalse(MLTaskUtils.isTaskMarkedForCancel(taskId, client));
     }
 }

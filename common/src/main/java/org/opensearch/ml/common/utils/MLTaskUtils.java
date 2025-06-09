@@ -18,6 +18,9 @@ import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.MLTaskState;
+import org.opensearch.ml.common.transport.task.MLTaskGetAction;
+import org.opensearch.ml.common.transport.task.MLTaskGetRequest;
+import org.opensearch.ml.common.transport.task.MLTaskGetResponse;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableSet;
@@ -79,5 +82,15 @@ public class MLTaskUtils {
             log.error("Failed to update ML task {}", taskId, e);
             listener.onFailure(e);
         }
+    }
+
+    public static boolean isTaskMarkedForCancel(String taskId, Client client) {
+        if (taskId != null && !taskId.isEmpty()) {
+            MLTaskGetRequest taskGetRequest = MLTaskGetRequest.builder().taskId(taskId).build();
+            MLTaskGetResponse taskResponse = client.execute(MLTaskGetAction.INSTANCE, taskGetRequest).actionGet();
+            return taskResponse.getMlTask().getState().equals(MLTaskState.CANCELLING);
+        }
+
+        return false;
     }
 }
