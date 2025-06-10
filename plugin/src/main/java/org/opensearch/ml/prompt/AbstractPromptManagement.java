@@ -17,6 +17,8 @@ import org.opensearch.ml.common.transport.prompt.MLCreatePromptInput;
 import org.opensearch.ml.common.transport.prompt.MLImportPromptInput;
 
 import lombok.Getter;
+import org.opensearch.ml.common.transport.prompt.MLUpdatePromptInput;
+import org.opensearch.remote.metadata.client.UpdateDataObjectRequest;
 
 @Getter
 public abstract class AbstractPromptManagement implements ToXContentObject {
@@ -37,4 +39,6 @@ public abstract class AbstractPromptManagement implements ToXContentObject {
     public abstract void getPrompt(MLPrompt mlPrompt);
 
     public abstract List<MLPrompt> importPrompts(MLImportPromptInput mlImportPromptInput);
+
+    public abstract UpdateDataObjectRequest updatePrompt(MLUpdatePromptInput mlUpdatePromptInput, MLPrompt mlPrompt);
 }

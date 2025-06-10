@@ -7,8 +7,9 @@ package org.opensearch.ml.prompt;
 
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.action.prompt.ImportPromptTransportAction.DEFAULT_LIMIT;
+import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX;
 import static org.opensearch.ml.common.prompt.MLPrompt.LANGFUSE;
+import static org.opensearch.ml.common.prompt.MLPrompt.MLPROMPT;
 import static org.opensearch.ml.prompt.MLPromptManagement.INITIAL_VERSION;
 
 import java.io.IOException;
@@ -20,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -46,6 +48,9 @@ import com.langfuse.client.resources.prompts.types.TextPrompt;
 
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
+import org.opensearch.ml.common.transport.prompt.MLUpdatePromptInput;
+import org.opensearch.remote.metadata.client.GetDataObjectRequest;
+import org.opensearch.remote.metadata.client.UpdateDataObjectRequest;
 
 @Log4j2
 @Getter
@@ -54,6 +59,7 @@ public class LangfusePromptManagement extends AbstractPromptManagement {
     public static final String ACCESS_KEY_FIELD = "access_key";
     public static final String LANGFUSE_URL = "https://us.cloud.langfuse.com";
     public static final String USER_ROLE = "user";
+    public static final String DEFAULT_LIMIT = "20";
 
     public final String TEXT_PROMPT = "text";
     public final String CHAT_PROMPT = "chat";
@@ -274,16 +280,23 @@ public class LangfusePromptManagement extends AbstractPromptManagement {
         return message;
     }
 
+    @Override
     public List<MLPrompt> importPrompts(MLImportPromptInput mlImportPromptInput) {
-        String limit = mlImportPromptInput.getLimit();
-        if (limit == null) {
-            limit = DEFAULT_LIMIT;
-        }
+        String name = mlImportPromptInput.getName();
+        String limit = mlImportPromptInput.getLimit() == null ? DEFAULT_LIMIT : mlImportPromptInput.getLimit();
 
         try {
+            if (name != null) {
+                MLPrompt mlPrompt = MLPrompt.builder().name(name).promptManagementType(LANGFUSE).build();
+                getPrompt(mlPrompt);
+                mlPrompt.setPromptExtraConfig(PromptExtraConfig.builder().accessKey(this.accessKey).publicKey(this.publicKey).build());
+                return List.of(mlPrompt);
+            }
+
             PromptMetaListResponse promptMetaListResponse = langfuseClient
-                .prompts()
-                .list(ListPromptsMetaRequest.builder().limit(Integer.parseInt(limit)).build());
+                    .prompts()
+                    .list(ListPromptsMetaRequest.builder().limit(Integer.parseInt(limit)).build());
+
             List<PromptMeta> promptMetas = promptMetaListResponse.getData();
             List<MLPrompt> mlPromptList = new ArrayList<>();
 
@@ -315,5 +328,38 @@ public class LangfusePromptManagement extends AbstractPromptManagement {
                 RestStatus.INTERNAL_SERVER_ERROR
             );
         }
+    }
+
+    @Override
+    public UpdateDataObjectRequest updatePrompt(MLUpdatePromptInput mlUpdatePromptInput, MLPrompt mlPrompt) {
+        getPrompt(mlPrompt);
+        MLCreatePromptInput updateContent = MLCreatePromptInput
+                .builder()
+                .name(mlPrompt.getName())
+                .tags(mlPrompt.getTags())
+                .prompt(mlPrompt.getPrompt())
+                .promptExtraConfig(mlPrompt.getPromptExtraConfig())
+                .build();
+
+        // Langfuse does not allow users to change prompt's name
+        if (mlUpdatePromptInput.getTags() != null) {
+            updateContent.setTags(mlUpdatePromptInput.getTags());
+        }
+        if (mlUpdatePromptInput.getPrompt() != null) {
+            updateContent.setPrompt(mlUpdatePromptInput.getPrompt());
+        }
+        if (mlUpdatePromptInput.getExtraConfig() != null && mlUpdatePromptInput.getExtraConfig().getLabels() != null) {
+            updateContent.getPromptExtraConfig().setLabels(mlUpdatePromptInput.getExtraConfig().getLabels());
+        }
+
+        createPrompt(updateContent);
+        MLUpdatePromptInput input = MLUpdatePromptInput.builder().build();
+        return UpdateDataObjectRequest
+            .builder()
+            .index(ML_PROMPT_INDEX)
+            .id(mlPrompt.getPromptId())
+            .tenantId(mlUpdatePromptInput.getTenantId())
+            .dataObject(input)
+            .build();
     }
 }

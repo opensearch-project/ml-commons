@@ -23,19 +23,27 @@ import lombok.NonNull;
 
 @Data
 public class MLImportPromptInput implements ToXContentObject, Writeable {
+    public static final String NAME = "name";
+    public static final String PROMPT_MANAGEMENT_TYPE = "prompt_management_type";
     public static final String PUBLIC_KEY = "public_key";
     public static final String ACCESS_KEY = "access_key";
     public static final String LIMIT = "limit";
 
+    private String name;
+    private String promptManagementType;
     private String publicKey;
     private String accessKey;
     private String limit;
     private String tenantId;
 
     @Builder(toBuilder = true)
-    public MLImportPromptInput(@NonNull String publicKey, @NonNull String accessKey, String limit, String tenantId) {
+    public MLImportPromptInput(String name, @NonNull String promptManagementType, @NonNull String publicKey, @NonNull String accessKey, String limit, String tenantId) {
+        Objects.requireNonNull(promptManagementType, "must specify prompt management type");
         Objects.requireNonNull(publicKey, "public key can not be null");
         Objects.requireNonNull(accessKey, "access key can not be null");
+        this.name = name;
+        this.promptManagementType = promptManagementType;
+        this.promptManagementType = promptManagementType;
         this.publicKey = publicKey;
         this.accessKey = accessKey;
         this.limit = limit;
@@ -43,6 +51,8 @@ public class MLImportPromptInput implements ToXContentObject, Writeable {
     }
 
     public MLImportPromptInput(StreamInput input) throws IOException {
+        this.name = input.readOptionalString();
+        this.promptManagementType = input.readOptionalString();
         this.publicKey = input.readOptionalString();
         this.publicKey = input.readOptionalString();
         this.limit = input.readOptionalString();
@@ -50,6 +60,8 @@ public class MLImportPromptInput implements ToXContentObject, Writeable {
     }
 
     public void writeTo(StreamOutput output) throws IOException {
+        output.writeOptionalString(name);
+        output.writeOptionalString(promptManagementType);
         output.writeOptionalString(publicKey);
         output.writeOptionalString(accessKey);
         output.writeOptionalString(limit);
@@ -57,6 +69,8 @@ public class MLImportPromptInput implements ToXContentObject, Writeable {
     }
 
     public static MLImportPromptInput parse(XContentParser parser) throws IOException {
+        String name = null;
+        String promptManagementType = null;
         String publicKey = null;
         String accessKey = null;
         String limit = null;
@@ -66,6 +80,12 @@ public class MLImportPromptInput implements ToXContentObject, Writeable {
             String fieldName = parser.currentName();
             parser.nextToken();
             switch (fieldName) {
+                case NAME:
+                    name = parser.text();
+                    break;
+                case PROMPT_MANAGEMENT_TYPE:
+                    promptManagementType = parser.text();
+                    break;
                 case PUBLIC_KEY:
                     publicKey = parser.text();
                     break;
@@ -83,12 +103,26 @@ public class MLImportPromptInput implements ToXContentObject, Writeable {
                     break;
             }
         }
-        return MLImportPromptInput.builder().publicKey(publicKey).accessKey(accessKey).limit(limit).tenantId(tenantId).build();
+        return MLImportPromptInput
+                .builder()
+                .name(name)
+                .promptManagementType(promptManagementType)
+                .publicKey(publicKey)
+                .accessKey(accessKey)
+                .limit(limit)
+                .tenantId(tenantId)
+                .build();
     }
 
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
+        if (name != null) {
+            builder.field(NAME, name);
+        }
+        if (promptManagementType != null) {
+            builder.field(PROMPT_MANAGEMENT_TYPE, promptManagementType);
+        }
         if (publicKey != null) {
             builder.field(PUBLIC_KEY, publicKey);
         }

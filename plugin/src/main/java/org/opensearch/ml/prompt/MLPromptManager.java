@@ -25,6 +25,7 @@ import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.common.collect.Tuple;
+import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentType;
@@ -48,6 +49,8 @@ import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
 import org.opensearch.remote.metadata.client.SearchDataObjectResponse;
+import org.opensearch.remote.metadata.client.UpdateDataObjectRequest;
+import org.opensearch.remote.metadata.client.UpdateDataObjectResponse;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.transport.client.Client;
@@ -458,6 +461,45 @@ public class MLPromptManager {
                 "Failed to parse ML Prompt data in Json format into MLPrompt due to following cause:  + ex.getMessage()"
             );
         }
+    }
+
+    /**
+     * Updates the prompt based on the update contents and replace the old prompt with updated prompt from the index
+     *
+     * @param updateDataObjectRequest the updateRequest that needs to be handled
+     * @param promptId The prompt ID of a prompt that needs to be updated
+     * @param listener a listener to be notified of the response
+     */
+    public void updatePromptIndex(UpdateDataObjectRequest updateDataObjectRequest, String promptId, ActionListener<UpdateResponse> listener) {
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            sdkClient.updateDataObjectAsync(updateDataObjectRequest).whenComplete((updateDataObjectResponse, throwable) -> {
+                context.restore();
+                handleUpdateResponse(updateDataObjectResponse, throwable, promptId, listener);
+            });
+        }
+    }
+
+    /**
+     * Handles the response from the update prompt request. If the response is successful, notify the listener
+     * with the UpdateResponse. Otherwise, notify the failure exception to the listener.
+     *
+     * @param updateDataObjectResponse The response from the update prompt request
+     * @param throwable The exception that occurred during the update prompt request
+     * @param listener The listener to be notified of the response
+     */
+    private void handleUpdateResponse(
+            UpdateDataObjectResponse updateDataObjectResponse,
+            Throwable throwable,
+            String promptId,
+            ActionListener<UpdateResponse> listener
+    ) {
+        if (throwable != null) {
+            Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+            handleFailure(cause, promptId, listener, "Failed to update ML prompt {}");
+            return;
+        }
+        UpdateResponse updateResponse = updateDataObjectResponse.updateResponse();
+        listener.onResponse(updateResponse);
     }
 
     /**
