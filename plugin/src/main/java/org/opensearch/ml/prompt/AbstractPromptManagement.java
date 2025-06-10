@@ -8,17 +8,18 @@ package org.opensearch.ml.prompt;
 import static org.opensearch.ml.common.prompt.MLPrompt.LANGFUSE;
 import static org.opensearch.ml.common.prompt.MLPrompt.MLPROMPT;
 
+import java.util.List;
+
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.ml.common.prompt.MLPrompt;
 import org.opensearch.ml.common.prompt.PromptExtraConfig;
 import org.opensearch.ml.common.transport.prompt.MLCreatePromptInput;
+import org.opensearch.ml.common.transport.prompt.MLImportPromptInput;
 
 import lombok.Getter;
 
 @Getter
 public abstract class AbstractPromptManagement implements ToXContentObject {
-    public static final String PROMPT_ID_FIELD = "prompt_id";
-
     public static AbstractPromptManagement init(String promptManagementType, PromptExtraConfig extraConfig) {
         // add additional case for new prompt management client below, if needed
         switch (promptManagementType.toUpperCase()) {
@@ -34,4 +35,6 @@ public abstract class AbstractPromptManagement implements ToXContentObject {
     public abstract MLPrompt createPrompt(MLCreatePromptInput mlCreatePromptInput);
 
     public abstract void getPrompt(MLPrompt mlPrompt);
+
+    public abstract List<MLPrompt> importPrompts(MLImportPromptInput mlImportPromptInput);
 }

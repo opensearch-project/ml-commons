@@ -65,14 +65,14 @@ public class MLCreatePromptInput implements ToXContentObject, Writeable {
      */
     @Builder(toBuilder = true)
     public MLCreatePromptInput(
-            String name,
-            String description,
-            String version,
-            Map<String, String> prompt,
-            String promptManagementType,
-            List<String> tags,
-            String tenantId,
-            PromptExtraConfig promptExtraConfig
+        String name,
+        String description,
+        String version,
+        Map<String, String> prompt,
+        String promptManagementType,
+        List<String> tags,
+        String tenantId,
+        PromptExtraConfig promptExtraConfig
     ) {
         if (name == null) {
             throw new IllegalArgumentException("MLPrompt name field is null");
@@ -196,16 +196,16 @@ public class MLCreatePromptInput implements ToXContentObject, Writeable {
             }
         }
         return MLCreatePromptInput
-                .builder()
-                .name(name)
-                .description(description)
-                .version(version)
-                .prompt(prompt)
-                .promptManagementType(promptManagementType)
-                .tags(tags)
-                .tenantId(tenantId)
-                .promptExtraConfig(promptExtraConfig)
-                .build();
+            .builder()
+            .name(name)
+            .description(description)
+            .version(version)
+            .prompt(prompt)
+            .promptManagementType(promptManagementType)
+            .tags(tags)
+            .tenantId(tenantId)
+            .promptExtraConfig(promptExtraConfig)
+            .build();
     }
 
     /**

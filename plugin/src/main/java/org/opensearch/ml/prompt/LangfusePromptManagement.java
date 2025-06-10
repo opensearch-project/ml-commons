@@ -7,6 +7,9 @@ package org.opensearch.ml.prompt;
 
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.action.prompt.ImportPromptTransportAction.DEFAULT_LIMIT;
+import static org.opensearch.ml.common.prompt.MLPrompt.LANGFUSE;
+import static org.opensearch.ml.prompt.MLPromptManagement.INITIAL_VERSION;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -15,7 +18,6 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
@@ -26,20 +28,27 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.prompt.MLPrompt;
 import org.opensearch.ml.common.prompt.PromptExtraConfig;
 import org.opensearch.ml.common.transport.prompt.MLCreatePromptInput;
+import org.opensearch.ml.common.transport.prompt.MLImportPromptInput;
 
 import com.langfuse.client.LangfuseClient;
 import com.langfuse.client.core.LangfuseClientApiException;
+import com.langfuse.client.resources.prompts.requests.GetPromptRequest;
+import com.langfuse.client.resources.prompts.requests.ListPromptsMetaRequest;
 import com.langfuse.client.resources.prompts.types.ChatMessage;
 import com.langfuse.client.resources.prompts.types.ChatPrompt;
 import com.langfuse.client.resources.prompts.types.CreateChatPromptRequest;
 import com.langfuse.client.resources.prompts.types.CreatePromptRequest;
 import com.langfuse.client.resources.prompts.types.CreateTextPromptRequest;
 import com.langfuse.client.resources.prompts.types.Prompt;
+import com.langfuse.client.resources.prompts.types.PromptMeta;
+import com.langfuse.client.resources.prompts.types.PromptMetaListResponse;
 import com.langfuse.client.resources.prompts.types.TextPrompt;
 
+import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
+@Getter
 public class LangfusePromptManagement extends AbstractPromptManagement {
     public static final String PUBLIC_KEY_FIELD = "public_key";
     public static final String ACCESS_KEY_FIELD = "access_key";
@@ -95,11 +104,11 @@ public class LangfusePromptManagement extends AbstractPromptManagement {
             // we only need to store the fields that are necessary to retrieve this prompt later -> name, prompt management type, encrypted
             // credentials
             return MLPrompt
-                    .builder()
-                    .name(mlCreatePromptInput.getName())
-                    .promptManagementType(mlCreatePromptInput.getPromptManagementType())
-                    .promptExtraConfig(PromptExtraConfig.builder().publicKey(publicKey).accessKey(accessKey).build())
-                    .build();
+                .builder()
+                .name(mlCreatePromptInput.getName())
+                .promptManagementType(mlCreatePromptInput.getPromptManagementType())
+                .promptExtraConfig(PromptExtraConfig.builder().publicKey(publicKey).accessKey(accessKey).build())
+                .build();
         } catch (Exception e) {
             String errorMessage = e.getMessage();
             if (e instanceof LangfuseClientApiException) {
@@ -112,12 +121,12 @@ public class LangfusePromptManagement extends AbstractPromptManagement {
 
     private CreatePromptRequest buildTextPromptRequest(MLCreatePromptInput mlCreatePromptInput, PromptExtraConfig promptExtraConfig) {
         CreateTextPromptRequest textRequest = CreateTextPromptRequest
-                .builder()
-                .name(mlCreatePromptInput.getName())
-                .prompt(mlCreatePromptInput.getPrompt().get(USER_ROLE))
-                .labels(promptExtraConfig.getLabels())
-                .tags(mlCreatePromptInput.getTags())
-                .build();
+            .builder()
+            .name(mlCreatePromptInput.getName())
+            .prompt(mlCreatePromptInput.getPrompt().get(USER_ROLE))
+            .labels(promptExtraConfig.getLabels())
+            .tags(mlCreatePromptInput.getTags())
+            .build();
 
         return CreatePromptRequest.text(textRequest);
     }
@@ -132,12 +141,12 @@ public class LangfusePromptManagement extends AbstractPromptManagement {
         }
 
         CreateChatPromptRequest chatRequest = CreateChatPromptRequest
-                .builder()
-                .name(mlCreatePromptInput.getName())
-                .prompt(langfusePromptTemplate)
-                .labels(promptExtraConfig.getLabels())
-                .tags(mlCreatePromptInput.getTags())
-                .build();
+            .builder()
+            .name(mlCreatePromptInput.getName())
+            .prompt(langfusePromptTemplate)
+            .labels(promptExtraConfig.getLabels())
+            .tags(mlCreatePromptInput.getTags())
+            .build();
 
         return CreatePromptRequest.chat(chatRequest);
     }
@@ -160,11 +169,15 @@ public class LangfusePromptManagement extends AbstractPromptManagement {
         mlPrompt.setPromptExtraConfig(null); // won't include credentials in response body
         try {
             Prompt langfusePrompt = langfuseClient.prompts().get(mlPrompt.getName());
+            Prompt promptWithInitialVersion = langfuseClient
+                .prompts()
+                .get(mlPrompt.getName(), GetPromptRequest.builder().version(Integer.parseInt(INITIAL_VERSION)).build());
+
             // check if the fetched langfuse prompt is text or chat prompt
             if (langfusePrompt.isText() && langfusePrompt.getText().isPresent()) {
-                buildMLPromptFromTextPrompt(langfusePrompt.getText().get(), mlPrompt);
+                buildMLPromptFromTextPrompt(langfusePrompt.getText().get(), mlPrompt, promptWithInitialVersion.getText().get());
             } else if (langfusePrompt.isChat() && langfusePrompt.getChat().isPresent()) {
-                buildMLPromptFromChatPrompt(langfusePrompt.getChat().get(), mlPrompt);
+                buildMLPromptFromChatPrompt(langfusePrompt.getChat().get(), mlPrompt, promptWithInitialVersion.getChat().get());
             } else {
                 log.error("Error when fetching the Langfuse Prompt");
                 throw new OpenSearchStatusException("Failed to get a Langfuse Prompt", RestStatus.INTERNAL_SERVER_ERROR);
@@ -179,7 +192,7 @@ public class LangfusePromptManagement extends AbstractPromptManagement {
         }
     }
 
-    private void buildMLPromptFromTextPrompt(TextPrompt textPrompt, MLPrompt mlPrompt) {
+    private void buildMLPromptFromTextPrompt(TextPrompt textPrompt, MLPrompt mlPrompt, TextPrompt promptWithInitialVersion) {
         mlPrompt.setVersion(String.valueOf(textPrompt.getVersion()));
         mlPrompt.setPrompt(Map.of(USER_ROLE, textPrompt.getPrompt()));
         mlPrompt.setTags(!textPrompt.getTags().isEmpty() ? textPrompt.getTags() : null);
@@ -187,10 +200,12 @@ public class LangfusePromptManagement extends AbstractPromptManagement {
         PromptExtraConfig promptExtraConfig = PromptExtraConfig.builder().type(TEXT_PROMPT).labels(textPrompt.getLabels()).build();
         mlPrompt.setPromptExtraConfig(promptExtraConfig);
 
+        // get initial created Time set when initial version prompt is created
+        setTimeInstants(promptWithInitialVersion.toString(), mlPrompt);
         setTimeInstants(textPrompt.toString(), mlPrompt);
     }
 
-    private void buildMLPromptFromChatPrompt(ChatPrompt chatPrompt, MLPrompt mlPrompt) {
+    private void buildMLPromptFromChatPrompt(ChatPrompt chatPrompt, MLPrompt mlPrompt, ChatPrompt promptWithInitialVersion) {
         mlPrompt.setVersion(String.valueOf(chatPrompt.getVersion()));
         mlPrompt.setTags(chatPrompt.getTags());
 
@@ -208,23 +223,30 @@ public class LangfusePromptManagement extends AbstractPromptManagement {
         }
         mlPrompt.setPrompt(mlPromptTemplate);
 
+        // get initial created Time set when initial version prompt is created
+        setTimeInstants(promptWithInitialVersion.toString(), mlPrompt);
         setTimeInstants(chatPrompt.toString(), mlPrompt);
     }
 
-    private void setTimeInstants(String fetchSurce, MLPrompt mlPrompt) {
+    private void setTimeInstants(String fetchSource, MLPrompt mlPrompt) {
+        int version = 0;
         String createdTime = null;
         String lastUpdatedTime = null;
 
         try (
-                XContentParser parser = jsonXContent.createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, fetchSurce)
+            XContentParser parser = jsonXContent.createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, fetchSource)
         ) {
             ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
             while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
                 String fieldName = parser.currentName();
                 parser.nextToken();
                 switch (fieldName) {
+                    case "version":
+                        version = parser.intValue();
                     case "createdAt":
-                        createdTime = parser.text();
+                        if (version == Integer.parseInt(INITIAL_VERSION)) {
+                            createdTime = parser.text();
+                        }
                         break;
                     case "updatedAt":
                         lastUpdatedTime = parser.text();
@@ -237,9 +259,9 @@ public class LangfusePromptManagement extends AbstractPromptManagement {
         } catch (Exception e) {
             throw new OpenSearchStatusException("Failed to parse Langfuse Prompt into MLPrompt", RestStatus.INTERNAL_SERVER_ERROR);
         }
-        Objects.requireNonNull(createdTime, "Failed to parse Create Time");
-        Objects.requireNonNull(lastUpdatedTime, "Failed to parse Last Updated Time");
-        mlPrompt.setCreateTime(Instant.parse(createdTime));
+        if (createdTime != null) {
+            mlPrompt.setCreateTime(Instant.parse(createdTime));
+        }
         mlPrompt.setLastUpdateTime(Instant.parse(lastUpdatedTime));
     }
 
@@ -250,5 +272,48 @@ public class LangfusePromptManagement extends AbstractPromptManagement {
             message = ((LinkedHashMap<?, ?>) errorBody).get("message").toString();
         }
         return message;
+    }
+
+    public List<MLPrompt> importPrompts(MLImportPromptInput mlImportPromptInput) {
+        String limit = mlImportPromptInput.getLimit();
+        if (limit == null) {
+            limit = DEFAULT_LIMIT;
+        }
+
+        try {
+            PromptMetaListResponse promptMetaListResponse = langfuseClient
+                .prompts()
+                .list(ListPromptsMetaRequest.builder().limit(Integer.parseInt(limit)).build());
+            List<PromptMeta> promptMetas = promptMetaListResponse.getData();
+            List<MLPrompt> mlPromptList = new ArrayList<>();
+
+            // There is no langfuse prompts created in the provided environment
+            if (promptMetas.isEmpty()) {
+                log.info("No langfuse prompt is found");
+                return mlPromptList;
+            }
+
+            for (PromptMeta promptMeta : promptMetas) {
+                MLPrompt mlPrompt = MLPrompt.builder().name(promptMeta.getName()).promptManagementType(LANGFUSE).build();
+                getPrompt(mlPrompt);
+                PromptExtraConfig config = mlPrompt.getPromptExtraConfig();
+                config.setAccessKey(this.accessKey);
+                config.setPublicKey(this.publicKey);
+                mlPrompt.setPromptExtraConfig(config);
+
+                mlPromptList.add(mlPrompt);
+            }
+            return mlPromptList;
+        } catch (Exception e) {
+            String errorMessage = e.getMessage();
+            if (e instanceof LangfuseClientApiException) {
+                errorMessage = getLangfuseClientExceptionMessage((LangfuseClientApiException) e);
+            }
+            log.error("Failed to import a Langfuse prompt", e);
+            throw new OpenSearchStatusException(
+                "Failed to import Langfuse Prompts into ML Prompt Index: " + errorMessage,
+                RestStatus.INTERNAL_SERVER_ERROR
+            );
+        }
     }
 }

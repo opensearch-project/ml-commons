@@ -102,7 +102,15 @@ public class GetPromptTransportActionTests extends OpenSearchTestCase {
         when(getResponse.getSourceAsString()).thenReturn("{}");
 
         getPromptTransportAction = spy(
-            new GetPromptTransportAction(transportService, actionFilters, client, sdkClient, encryptor, mlFeatureEnabledSetting, mlPromptManager)
+            new GetPromptTransportAction(
+                transportService,
+                actionFilters,
+                client,
+                sdkClient,
+                encryptor,
+                mlFeatureEnabledSetting,
+                mlPromptManager
+            )
         );
 
         threadContext = new ThreadContext(Settings.EMPTY);

@@ -104,6 +104,7 @@ import org.opensearch.ml.action.profile.MLProfileAction;
 import org.opensearch.ml.action.profile.MLProfileTransportAction;
 import org.opensearch.ml.action.prompt.DeletePromptTransportAction;
 import org.opensearch.ml.action.prompt.GetPromptTransportAction;
+import org.opensearch.ml.action.prompt.ImportPromptTransportAction;
 import org.opensearch.ml.action.prompt.SearchPromptTransportAction;
 import org.opensearch.ml.action.prompt.TransportCreatePromptAction;
 import org.opensearch.ml.action.prompt.UpdatePromptTransportAction;
@@ -185,6 +186,7 @@ import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupAction
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prompt.MLCreatePromptAction;
+import org.opensearch.ml.common.transport.prompt.MLImportPromptAction;
 import org.opensearch.ml.common.transport.prompt.MLPromptDeleteAction;
 import org.opensearch.ml.common.transport.prompt.MLPromptGetAction;
 import org.opensearch.ml.common.transport.prompt.MLPromptSearchAction;
@@ -290,6 +292,7 @@ import org.opensearch.ml.rest.RestMLGetModelGroupAction;
 import org.opensearch.ml.rest.RestMLGetPromptAction;
 import org.opensearch.ml.rest.RestMLGetTaskAction;
 import org.opensearch.ml.rest.RestMLGetToolAction;
+import org.opensearch.ml.rest.RestMLImportPromptAction;
 import org.opensearch.ml.rest.RestMLListToolsAction;
 import org.opensearch.ml.rest.RestMLPredictionAction;
 import org.opensearch.ml.rest.RestMLProfileAction;
@@ -489,6 +492,7 @@ public class MachineLearningPlugin extends Plugin
                 new ActionHandler<>(MLPromptGetAction.INSTANCE, GetPromptTransportAction.class),
                 new ActionHandler<>(MLPromptDeleteAction.INSTANCE, DeletePromptTransportAction.class),
                 new ActionHandler<>(MLUpdatePromptAction.INSTANCE, UpdatePromptTransportAction.class),
+                new ActionHandler<>(MLImportPromptAction.INSTANCE, ImportPromptTransportAction.class),
                 new ActionHandler<>(MLPromptSearchAction.INSTANCE, SearchPromptTransportAction.class),
                 new ActionHandler<>(CreateConversationAction.INSTANCE, CreateConversationTransportAction.class),
                 new ActionHandler<>(GetConversationsAction.INSTANCE, GetConversationsTransportAction.class),
@@ -870,6 +874,7 @@ public class MachineLearningPlugin extends Plugin
         RestMLGetPromptAction restMLGetPromptAction = new RestMLGetPromptAction(mlFeatureEnabledSetting);
         RestMLSearchPromptAction restMLSearchPromptAction = new RestMLSearchPromptAction(mlFeatureEnabledSetting);
         RestMLUpdatePromptAction restMLUpdatePromptAction = new RestMLUpdatePromptAction(mlFeatureEnabledSetting);
+        RestMLImportPromptAction restMLImportPromptAction = new RestMLImportPromptAction(mlFeatureEnabledSetting);
         RestMLDeletePromptAction restMLDeletePromptAction = new RestMLDeletePromptAction(mlFeatureEnabledSetting);
         RestMemoryCreateConversationAction restCreateConversationAction = new RestMemoryCreateConversationAction();
         RestMemoryGetConversationsAction restListConversationsAction = new RestMemoryGetConversationsAction();
@@ -937,6 +942,7 @@ public class MachineLearningPlugin extends Plugin
                 restMLSearchPromptAction,
                 restMLDeletePromptAction,
                 restMLUpdatePromptAction,
+                restMLImportPromptAction,
                 restCreateConversationAction,
                 restListConversationsAction,
                 restCreateInteractionAction,

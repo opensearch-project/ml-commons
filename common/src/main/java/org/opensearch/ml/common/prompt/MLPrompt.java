@@ -78,17 +78,17 @@ public class MLPrompt implements ToXContentObject, Writeable {
      */
     @Builder(toBuilder = true)
     public MLPrompt(
-            String promptId,
-            String name,
-            String description,
-            String version,
-            Map<String, String> prompt,
-            String promptManagementType,
-            List<String> tags,
-            PromptExtraConfig promptExtraConfig,
-            String tenantId,
-            Instant createTime,
-            Instant lastUpdateTime
+        String promptId,
+        String name,
+        String description,
+        String version,
+        Map<String, String> prompt,
+        String promptManagementType,
+        List<String> tags,
+        PromptExtraConfig promptExtraConfig,
+        String tenantId,
+        Instant createTime,
+        Instant lastUpdateTime
     ) {
         this.promptId = promptId;
         this.name = name;
@@ -270,19 +270,19 @@ public class MLPrompt implements ToXContentObject, Writeable {
             }
         }
         return MLPrompt
-                .builder()
-                .promptId(promptId)
-                .name(name)
-                .description(description)
-                .version(version)
-                .prompt(prompt)
-                .promptManagementType(promptManagementType)
-                .tags(tags)
-                .promptExtraConfig(promptExtraConfig)
-                .tenantId(tenantId)
-                .createTime(createTime)
-                .lastUpdateTime(lastUpdateTime)
-                .build();
+            .builder()
+            .promptId(promptId)
+            .name(name)
+            .description(description)
+            .version(version)
+            .prompt(prompt)
+            .promptManagementType(promptManagementType)
+            .tags(tags)
+            .promptExtraConfig(promptExtraConfig)
+            .tenantId(tenantId)
+            .createTime(createTime)
+            .lastUpdateTime(lastUpdateTime)
+            .build();
     }
 
     public void encrypt(String promptManagementType, BiFunction<String, String, String> function, String tenantId) {
