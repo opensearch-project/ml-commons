@@ -24,6 +24,7 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchException;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
@@ -32,6 +33,7 @@ import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.xcontent.MediaType;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.tools.ListIndexTool;
 import org.opensearch.rest.RestRequest;
@@ -41,16 +43,16 @@ import org.opensearch.transport.client.node.NodeClient;
 
 import com.google.common.collect.ImmutableMap;
 
-public class RestMLRegisterMcpToolsActionTests extends OpenSearchTestCase {
+public class RestMLMcpToolsUpdateActionTests extends OpenSearchTestCase {
 
-    private RestMLRegisterMcpToolsAction restMLRegisterMcpToolsAction;
+    private RestMLMcpToolsUpdateAction restMLMcpToolsUpdateAction;
 
-    private final String registerToolRequest =
+    private final String updateToolRequest =
         """
             {
                 "tools": [
                     {
-                        "type": "ListIndexTool",
+                        "name": "ListIndexTool",
                         "description": "This is my first list index tool",
                         "parameters": {},
                         "attributes": {
@@ -75,6 +77,8 @@ public class RestMLRegisterMcpToolsActionTests extends OpenSearchTestCase {
 
     @Mock(answer = RETURNS_DEEP_STUBS)
     private ClusterService clusterService;
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     private Map<String, Tool.Factory> toolFactories = new HashMap<>();
     private DiscoveryNode discoveryNode = mock(DiscoveryNode.class);
@@ -92,17 +96,30 @@ public class RestMLRegisterMcpToolsActionTests extends OpenSearchTestCase {
         Settings settings = Settings.builder().put(ML_COMMONS_MCP_SERVER_ENABLED.getKey(), true).build();
         when(clusterService.getSettings()).thenReturn(settings);
         when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MCP_SERVER_ENABLED)));
-        restMLRegisterMcpToolsAction = new RestMLRegisterMcpToolsAction(toolFactories, clusterService);
+        restMLMcpToolsUpdateAction = new RestMLMcpToolsUpdateAction(clusterService, mlFeatureEnabledSetting);
+        when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(true);
+    }
+
+    public void test_doExecute_featureFlagDisabled() throws IOException {
+        exceptionRule.expect(OpenSearchException.class);
+        exceptionRule
+            .expectMessage("The MCP server is not enabled. To enable, please update the setting plugins.ml_commons.mcp_server_enabled");
+        when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(false);
+        RestMLMcpToolsUpdateAction restMLMcpToolsUpdateAction = new RestMLMcpToolsUpdateAction(clusterService, mlFeatureEnabledSetting);
+        BytesReference bytesReference = BytesReference.fromByteBuffer(ByteBuffer.wrap(updateToolRequest.getBytes(StandardCharsets.UTF_8)));
+        RestRequest restRequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withContent(bytesReference, MediaType.fromMediaType(XContentType.JSON.mediaType()))
+            .build();
+        restMLMcpToolsUpdateAction.prepareRequest(restRequest, mock(NodeClient.class));
     }
 
     @Test
     public void test_prepareRequest_successful() throws IOException {
-        BytesReference bytesReference = BytesReference
-            .fromByteBuffer(ByteBuffer.wrap(registerToolRequest.getBytes(StandardCharsets.UTF_8)));
+        BytesReference bytesReference = BytesReference.fromByteBuffer(ByteBuffer.wrap(updateToolRequest.getBytes(StandardCharsets.UTF_8)));
         RestRequest restRequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withContent(bytesReference, MediaType.fromMediaType(XContentType.JSON.mediaType()))
             .build();
-        restMLRegisterMcpToolsAction.prepareRequest(restRequest, mock(NodeClient.class));
+        restMLMcpToolsUpdateAction.prepareRequest(restRequest, mock(NodeClient.class));
     }
 
     @Test
@@ -118,63 +135,18 @@ public class RestMLRegisterMcpToolsActionTests extends OpenSearchTestCase {
         RestRequest restRequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withContent(bytesReference, MediaType.fromMediaType(XContentType.JSON.mediaType()))
             .build();
-        restMLRegisterMcpToolsAction.prepareRequest(restRequest, mock(NodeClient.class));
-    }
-
-    @Test
-    public void test_prepareRequest_hasUnrecognizedTool() throws IOException {
-        exceptionRule.expect(IllegalArgumentException.class);
-        String unrecognizedTool =
-            """
-                {
-                    "tools": [
-                        {
-                            "name": "PPLTool",
-                            "description": "Use this tool to transfer natural language to generate PPL and execute PPL to query inside. Use this tool after you know the index name, otherwise, call IndexRoutingTool first. The input parameters are: {index:IndexName, question:UserQuestion}",
-                            "parameters": {
-                                "model_type": "FINETUNE",
-                                "model_id": "${your_model_id}"
-                            },
-                            "attributes": {
-                                "input_schema": {
-                                    "type": "object",
-                                    "properties": {
-                                        "parameters": {
-                                            "type": "object",
-                                            "question": {
-                                                "type": "string"
-                                            },
-                                            "index": {
-                                                "type": "string"
-                                            }
-                                        }
-                                    },
-                                    "required": [
-                                        "question",
-                                        "index"
-                                    ]
-                                }
-                            }
-                        }
-                    ]
-                }
-                """;
-        BytesReference bytesReference = BytesReference.fromByteBuffer(ByteBuffer.wrap(unrecognizedTool.getBytes(StandardCharsets.UTF_8)));
-        RestRequest restRequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
-            .withContent(bytesReference, MediaType.fromMediaType(XContentType.JSON.mediaType()))
-            .build();
-        restMLRegisterMcpToolsAction.prepareRequest(restRequest, mock(NodeClient.class));
+        restMLMcpToolsUpdateAction.prepareRequest(restRequest, mock(NodeClient.class));
     }
 
     @Test
     public void test_getName() {
-        assertEquals("ml_register_mcp_tools_action", restMLRegisterMcpToolsAction.getName());
+        assertEquals("ml_mcp_tools_update_action", restMLMcpToolsUpdateAction.getName());
     }
 
     @Test
     public void test_routes() {
-        Set<String> expectedRoutes = Set.of("POST /_plugins/_ml/mcp/tools/_register");
-        Set<String> routes = restMLRegisterMcpToolsAction
+        Set<String> expectedRoutes = Set.of("POST /_plugins/_ml/mcp/tools/_update");
+        Set<String> routes = restMLMcpToolsUpdateAction
             .routes()
             .stream()
             .map(r -> r.getMethod().name() + " " + r.getPath())

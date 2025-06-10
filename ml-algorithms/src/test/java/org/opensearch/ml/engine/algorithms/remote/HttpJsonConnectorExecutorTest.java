@@ -90,6 +90,8 @@ public class HttpJsonConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .build();
         HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
+        AtomicBoolean privateIpEnabled = new AtomicBoolean(false);
+        executor.setConnectorPrivateIpEnabled(privateIpEnabled);
         executor
             .invokeRemoteService(
                 PREDICT.name(),
@@ -134,8 +136,27 @@ public class HttpJsonConnectorExecutorTest {
                 actionListener
             );
         Mockito.verify(actionListener, never()).onFailure(any());
+    }
 
-        privateIpEnabled.set(false);
+    @Test
+    public void invokeRemoteService_DisabledPrivateIpAddress() {
+        ConnectorAction predictAction = ConnectorAction
+            .builder()
+            .actionType(PREDICT)
+            .method("POST")
+            .url("http://127.0.0.1/mock")
+            .requestBody("{\"input\": \"${parameters.input}\"}")
+            .build();
+        Connector connector = HttpConnector
+            .builder()
+            .name("test connector")
+            .version("1")
+            .protocol("http")
+            .actions(Arrays.asList(predictAction))
+            .build();
+        HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
+        AtomicBoolean privateIpEnabled = new AtomicBoolean(false);
+        executor.setConnectorPrivateIpEnabled(privateIpEnabled);
         executor
             .invokeRemoteService(
                 PREDICT.name(),
@@ -168,6 +189,8 @@ public class HttpJsonConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .build();
         HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
+        AtomicBoolean privateIpEnabled = new AtomicBoolean(false);
+        executor.setConnectorPrivateIpEnabled(privateIpEnabled);
         executor.invokeRemoteService(PREDICT.name(), createMLInput(), new HashMap<>(), null, new ExecutionContext(0), actionListener);
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(IllegalArgumentException.class);
         Mockito.verify(actionListener, times(1)).onFailure(captor.capture());
