@@ -35,34 +35,34 @@ public class MLMcpRemoveNodeResponseTest {
 
     @Test
     public void testSerialization() throws IOException {
-        MLMcpRemoveNodeResponse original = new MLMcpRemoveNodeResponse(node, true);
+        MLMcpToolsRemoveNodeResponse original = new MLMcpToolsRemoveNodeResponse(node, true);
 
         BytesStreamOutput output = new BytesStreamOutput();
         original.writeTo(output);
 
-        MLMcpRemoveNodeResponse deserialized = new MLMcpRemoveNodeResponse(output.bytes().streamInput());
+        MLMcpToolsRemoveNodeResponse deserialized = new MLMcpToolsRemoveNodeResponse(output.bytes().streamInput());
 
         assertEquals(node.getId(), deserialized.getNode().getId());
         assertTrue(deserialized.getDeleted());
 
-        MLMcpRemoveNodeResponse originalFalse = new MLMcpRemoveNodeResponse(node, false);
+        MLMcpToolsRemoveNodeResponse originalFalse = new MLMcpToolsRemoveNodeResponse(node, false);
         output = new BytesStreamOutput();
         originalFalse.writeTo(output);
 
-        MLMcpRemoveNodeResponse deserializedFalse = new MLMcpRemoveNodeResponse(output.bytes().streamInput());
+        MLMcpToolsRemoveNodeResponse deserializedFalse = new MLMcpToolsRemoveNodeResponse(output.bytes().streamInput());
         assertFalse(deserializedFalse.getDeleted());
     }
 
     @Test
     public void testXContentGeneration() throws IOException {
-        MLMcpRemoveNodeResponse response = new MLMcpRemoveNodeResponse(node, true);
+        MLMcpToolsRemoveNodeResponse response = new MLMcpToolsRemoveNodeResponse(node, true);
         XContentBuilder builder = XContentFactory.jsonBuilder();
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
 
         String json = builder.toString();
         assertTrue(json.contains("\"deleted\":true"));
 
-        MLMcpRemoveNodeResponse responseFalse = new MLMcpRemoveNodeResponse(node, false);
+        MLMcpToolsRemoveNodeResponse responseFalse = new MLMcpToolsRemoveNodeResponse(node, false);
         builder = XContentFactory.jsonBuilder();
         responseFalse.toXContent(builder, ToXContent.EMPTY_PARAMS);
         json = builder.toString();
@@ -71,12 +71,12 @@ public class MLMcpRemoveNodeResponseTest {
 
     @Test
     public void testReadResponse() throws IOException {
-        MLMcpRemoveNodeResponse original = new MLMcpRemoveNodeResponse(node, true);
+        MLMcpToolsRemoveNodeResponse original = new MLMcpToolsRemoveNodeResponse(node, true);
 
         BytesStreamOutput output = new BytesStreamOutput();
         original.writeTo(output);
 
-        MLMcpRemoveNodeResponse deserialized = MLMcpRemoveNodeResponse.readResponse(output.bytes().streamInput());
+        MLMcpToolsRemoveNodeResponse deserialized = MLMcpToolsRemoveNodeResponse.readResponse(output.bytes().streamInput());
 
         assertEquals(node.getId(), deserialized.getNode().getId());
         assertTrue(deserialized.getDeleted());
