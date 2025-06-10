@@ -154,7 +154,11 @@ public class MLEngine {
 
     public Predictable deploy(MLModel mlModel, Map<String, Object> params) {
         Predictable predictable = MLEngineClassLoader.initInstance(mlModel.getAlgorithm(), null, MLAlgoParams.class);
-        predictable.initModel(mlModel, params, encryptor, streamManager, threadPool);
+        if (mlModel.getAlgorithm() == FunctionName.REMOTE) {
+            predictable.initModel(mlModel, params, encryptor, streamManager, threadPool);
+        } else {
+            predictable.initModel(mlModel, params, encryptor);
+        }
         return predictable;
     }
 
