@@ -76,7 +76,13 @@ public class OpenaiV1ChatCompletionsFunctionCallingTests {
     @Test
     public void supply() {
         List<LLMMessage> messages = functionCalling
-            .supply(List.of(ImmutableMap.of(TOOL_CALL_ID, "test_tool_call_id", TOOL_RESULT, "test result for openai v1")));
+            .supply(
+                List
+                    .of(
+                        ImmutableMap
+                            .of(TOOL_CALL_ID, "test_tool_call_id", TOOL_RESULT, ImmutableMap.of("text", "test result for openai v1"))
+                    )
+            );
         Assert.assertEquals(1, messages.size());
         OpenaiMessage message = (OpenaiMessage) messages.get(0);
         Assert.assertEquals("tool", message.getRole());

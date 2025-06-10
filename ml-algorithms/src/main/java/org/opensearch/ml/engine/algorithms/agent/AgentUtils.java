@@ -130,6 +130,7 @@ public class AgentUtils {
     public static final String LLM_FINISH_REASON_TOOL_USE = "llm_finish_reason_tool_use";
     public static final String TOOL_FILTERS_FIELD = "tool_filters";
 
+    // For function calling, do not escape the below params in connector by default
     public static final String DEFAULT_NO_ESCAPE_PARAMS = "_chat_history,_tools,_interactions,tool_configs";
 
     public static String addExamplesToPrompt(Map<String, String> parameters, String prompt) {
@@ -337,7 +338,6 @@ public class AgentUtils {
             String llmFinishReasonPath = parameters.get(LLM_FINISH_REASON_PATH);
             String llmFinishReason = "";
             if (llmFinishReasonPath.startsWith("_llm_response.")) {// TODO: support _llm_response for all other places
-                // FIXME: the below will fail sometimes with "com.google.gson.stream.MalformedJsonException"
                 Map<String, Object> llmResponse = StringUtils.fromJson(response.toString(), RESPONSE_FIELD);
                 llmFinishReason = JsonPath.read(llmResponse, llmFinishReasonPath.substring("_llm_response.".length()));
             } else {
