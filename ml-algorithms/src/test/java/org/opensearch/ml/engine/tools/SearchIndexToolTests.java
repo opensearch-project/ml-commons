@@ -95,8 +95,21 @@ public class SearchIndexToolTests {
 
     @Test
     @SneakyThrows
-    public void testValidate() {
+    public void testValidateWithInputKey() {
         Map<String, String> parameters = Map.of("input", "{}");
+        assertTrue(mockedSearchIndexTool.validate(parameters));
+    }
+
+    @Test
+    @SneakyThrows
+    public void testValidateWithActualKeys() {
+        Map<String, String> parameters = Map
+            .of(
+                SearchIndexTool.INDEX_FIELD,
+                "test-index",
+                SearchIndexTool.QUERY_FIELD,
+                "{\n" + "    \"query\": {\n" + "        \"match_all\": {}\n" + "    }\n" + "}"
+            );
         assertTrue(mockedSearchIndexTool.validate(parameters));
     }
 
@@ -108,9 +121,23 @@ public class SearchIndexToolTests {
     }
 
     @Test
-    public void testRunWithNormalIndex() {
+    @SneakyThrows
+    public void testValidateWithNullInput() {
+        assertFalse(mockedSearchIndexTool.validate(null));
+    }
+
+    @Test
+    public void testRunWithInputKey() {
         String inputString = "{\"index\": \"test-index\", \"query\": {\"query\": {\"match_all\": {}}}}";
         Map<String, String> parameters = Map.of("input", inputString);
+        mockedSearchIndexTool.run(parameters, null);
+        Mockito.verify(client, times(1)).search(any(), any());
+        Mockito.verify(client, Mockito.never()).execute(any(), any(), any());
+    }
+
+    @Test
+    public void testRunWithActualKeys() {
+        Map<String, String> parameters = Map.of("index", "test-index", "query", "{\"query\": {\"match_all\": {}}}");
         mockedSearchIndexTool.run(parameters, null);
         Mockito.verify(client, times(1)).search(any(), any());
         Mockito.verify(client, Mockito.never()).execute(any(), any(), any());

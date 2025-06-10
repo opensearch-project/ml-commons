@@ -8,8 +8,6 @@ package org.opensearch.ml.engine.tools;
 import static org.opensearch.ml.common.CommonValue.*;
 
 import java.io.IOException;
-import java.security.AccessController;
-import java.security.PrivilegedExceptionAction;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -96,7 +94,12 @@ public class SearchIndexTool implements Tool {
 
     @Override
     public boolean validate(Map<String, String> parameters) {
-        return parameters != null && parameters.containsKey(INPUT_FIELD) && parameters.get(INPUT_FIELD) != null;
+        if (parameters == null || parameters.isEmpty()) {
+            return false;
+        }
+        boolean argumentsFromInput = parameters.containsKey(INPUT_FIELD) && parameters.get(INPUT_FIELD) != null;
+        boolean argumentsFromParameters = parameters.containsKey(INDEX_FIELD) && parameters.containsKey(QUERY_FIELD);
+        return argumentsFromInput || argumentsFromParameters;
     }
 
     private SearchRequest getSearchRequest(String index, String query) throws IOException {
@@ -120,8 +123,16 @@ public class SearchIndexTool implements Tool {
         try {
             String input = parameters.get(INPUT_FIELD);
             JsonObject jsonObject = GSON.fromJson(input, JsonObject.class);
-            String index = Optional.ofNullable(jsonObject).map(x -> x.get(INDEX_FIELD)).map(JsonElement::getAsString).orElse(null);
-            String query = Optional.ofNullable(jsonObject).map(x -> x.get(QUERY_FIELD)).map(JsonElement::toString).orElse(null);
+            String index = Optional
+                .ofNullable(jsonObject)
+                .map(x -> x.get(INDEX_FIELD))
+                .map(JsonElement::getAsString)
+                .orElse(parameters.getOrDefault(INDEX_FIELD, null));
+            String query = Optional
+                .ofNullable(jsonObject)
+                .map(x -> x.get(QUERY_FIELD))
+                .map(JsonElement::toString)
+                .orElse(parameters.getOrDefault(QUERY_FIELD, null));
             if (index == null || query == null) {
                 listener.onFailure(new IllegalArgumentException("SearchIndexTool's two parameter: index and query are required!"));
                 return;
@@ -134,10 +145,8 @@ public class SearchIndexTool implements Tool {
                 if (hits != null && hits.length > 0) {
                     StringBuilder contextBuilder = new StringBuilder();
                     for (SearchHit hit : hits) {
-                        String doc = AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> {
-                            Map<String, Object> docContent = processResponse(hit);
-                            return GSON.toJson(docContent);
-                        });
+                        Map<String, Object> docContent = processResponse(hit);
+                        String doc = GSON.toJson(docContent);
                         contextBuilder.append(doc).append("\n");
                     }
                     listener.onResponse((T) contextBuilder.toString());
