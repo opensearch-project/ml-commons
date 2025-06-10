@@ -30,6 +30,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
 import org.opensearch.ml.common.connector.HttpConnector;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.connector.MLExecuteConnectorRequest;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
@@ -70,6 +71,8 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
     @Mock
     private EncryptorImpl encryptor;
     @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    @Mock
     private HttpConnector connector;
     @Mock
     private Task task;
@@ -109,7 +112,8 @@ public class ExecuteConnectorTransportActionTests extends OpenSearchTestCase {
             scriptService,
             xContentRegistry,
             connectorAccessControlHelper,
-            encryptor
+            encryptor,
+            mlFeatureEnabledSetting
         );
     }
 

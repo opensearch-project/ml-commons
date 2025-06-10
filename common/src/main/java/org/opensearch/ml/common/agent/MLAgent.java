@@ -51,6 +51,8 @@ public class MLAgent implements ToXContentObject, Writeable {
     public static final String APP_TYPE_FIELD = "app_type";
     public static final String IS_HIDDEN_FIELD = "is_hidden";
 
+    public static final int AGENT_NAME_MAX_LENGTH = 128;
+
     private static final Version MINIMAL_SUPPORTED_VERSION_FOR_HIDDEN_AGENT = CommonValue.VERSION_2_13_0;
 
     private String name;
@@ -101,6 +103,11 @@ public class MLAgent implements ToXContentObject, Writeable {
     private void validate() {
         if (name == null) {
             throw new IllegalArgumentException("Agent name can't be null");
+        }
+        if (name.isBlank() || name.length() > AGENT_NAME_MAX_LENGTH) {
+            throw new IllegalArgumentException(
+                String.format("Agent name cannot be empty or exceed max length of %d characters", MLAgent.AGENT_NAME_MAX_LENGTH)
+            );
         }
         validateMLAgentType(type);
         if (type.equalsIgnoreCase(MLAgentType.CONVERSATIONAL.toString()) && llm == null) {
