@@ -546,7 +546,6 @@ public class MLTaskManager {
             return;
         }
 
-        this.taskPollingJobStarted = true;
         String id = "ml_batch_task_polling_job";
         String jobName = "poll_batch_jobs";
         String interval = "1";
@@ -564,11 +563,10 @@ public class MLTaskManager {
             .id(id)
             .source(jobParameter.toXContent(JsonXContent.contentBuilder(), null))
             .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-        client
-            .index(
-                indexRequest,
-                ActionListener
-                    .wrap(r -> log.info("Indexed ml task polling job successfully"), e -> log.error("Failed to index task polling job", e))
-            );
+
+        client.index(indexRequest, ActionListener.wrap(r -> {
+            log.info("Indexed ml task polling job successfully");
+            this.taskPollingJobStarted = true;
+        }, e -> log.error("Failed to index task polling job", e)));
     }
 }
