@@ -25,7 +25,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
-import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.collect.Tuple;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
@@ -45,9 +44,6 @@ public class HttpJsonConnectorExecutorTest {
 
     @Mock
     private ActionListener<Tuple<Integer, ModelTensors>> actionListener;
-
-    @Mock
-    ClusterService clusterService;
 
     @Before
     public void setUp() {
@@ -93,8 +89,8 @@ public class HttpJsonConnectorExecutorTest {
             .protocol("http")
             .actions(Arrays.asList(predictAction))
             .build();
-        AtomicBoolean privateIpEnabled = new AtomicBoolean(false);
         HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
+        AtomicBoolean privateIpEnabled = new AtomicBoolean(false);
         executor.setConnectorPrivateIpEnabled(privateIpEnabled);
         executor
             .invokeRemoteService(
@@ -129,7 +125,6 @@ public class HttpJsonConnectorExecutorTest {
             .build();
         HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
         AtomicBoolean privateIpEnabled = new AtomicBoolean(true);
-        executor.setClusterService(this.clusterService);
         executor.setConnectorPrivateIpEnabled(privateIpEnabled);
         executor
             .invokeRemoteService(
@@ -161,7 +156,6 @@ public class HttpJsonConnectorExecutorTest {
             .build();
         HttpJsonConnectorExecutor executor = new HttpJsonConnectorExecutor(connector);
         AtomicBoolean privateIpEnabled = new AtomicBoolean(false);
-        executor.setClusterService(this.clusterService);
         executor.setConnectorPrivateIpEnabled(privateIpEnabled);
         executor
             .invokeRemoteService(

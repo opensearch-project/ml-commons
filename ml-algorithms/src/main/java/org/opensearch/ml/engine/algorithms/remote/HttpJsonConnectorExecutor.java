@@ -139,7 +139,6 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
         String protocol = url.getProtocol();
         String host = url.getHost();
         int port = url.getPort();
-        connectorPrivateIpEnabled.set(connectorPrivateIpEnabled.get());
         MLHttpClientFactory.validate(protocol, host, port, connectorPrivateIpEnabled);
     }
 }
