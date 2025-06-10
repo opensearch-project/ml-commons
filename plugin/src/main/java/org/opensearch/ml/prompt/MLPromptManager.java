@@ -275,11 +275,13 @@ public class MLPromptManager {
      * @param tenantId tenant id
      * @return the user-defined content
      * @throws IllegalArgumentException if
-     *      1. fails to replace all the placeholder variables.
-     *      2. the specified key is not defined in the prompt template.
-     *      3. Failed to build a prompt or messages instance
-     *      3. Incorrect pull_prompt(prompt_id).<key> syntax is provided
-     *      4. Provided role does not match specified key during predict
+     * <p>
+     *     1. fails to replace all the placeholder variables.
+     *     2. the specified key is not defined in the prompt template.
+     *     3. Failed to build a prompt or messages instance
+     *     4. Incorrect pull_prompt(prompt_id).key syntax is provided
+     *     5. Provided role does not match specified key during predict
+     * </p>
      * @throws OpenSearchStatusException if the ML Prompt is not found
      */
     public String pullPrompt(String promptId, String key, PromptParameters promptParameters, String tenantId) throws IOException {
