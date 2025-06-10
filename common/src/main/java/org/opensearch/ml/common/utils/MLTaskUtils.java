@@ -84,6 +84,14 @@ public class MLTaskUtils {
         }
     }
 
+    /**
+     * Checks if a given ML task is marked for cancellation by querying its current state.
+     * This method verifies if the task's state is set to CANCELLING.
+     *
+     * @param taskId The ID of the ML task to check
+     * @param client The OpenSearch client to use for querying the task state
+     * @return true if the task exists and is in CANCELLING state, false otherwise
+     */
     public static boolean isTaskMarkedForCancel(String taskId, Client client) {
         if (taskId != null && !taskId.isEmpty()) {
             MLTaskGetRequest taskGetRequest = MLTaskGetRequest.builder().taskId(taskId).build();
