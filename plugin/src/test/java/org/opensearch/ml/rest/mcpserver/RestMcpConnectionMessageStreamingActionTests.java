@@ -37,6 +37,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.StreamingRestChannel;
 import org.opensearch.test.OpenSearchTestCase;
@@ -60,6 +61,9 @@ public class RestMcpConnectionMessageStreamingActionTests extends OpenSearchTest
     @Mock(answer = Answers.RETURNS_DEEP_STUBS)
     private ClusterService clusterService;
 
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Before
     public void setUp() throws Exception {
         super.setUp();
@@ -77,7 +81,7 @@ public class RestMcpConnectionMessageStreamingActionTests extends OpenSearchTest
         Settings settings = Settings.builder().put(ML_COMMONS_MCP_SERVER_ENABLED.getKey(), true).build();
         when(clusterService.getSettings()).thenReturn(settings);
         when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MCP_SERVER_ENABLED)));
-        restMcpConnectionMessageStreamingAction = new RestMcpConnectionMessageStreamingAction(clusterService);
+        restMcpConnectionMessageStreamingAction = new RestMcpConnectionMessageStreamingAction(clusterService, mlFeatureEnabledSetting);
         doAnswer(invocationOnMock -> {
             ActionListener<IndexResponse> listener = invocationOnMock.getArgument(1);
             IndexResponse response = mock(IndexResponse.class);
@@ -86,6 +90,7 @@ public class RestMcpConnectionMessageStreamingActionTests extends OpenSearchTest
             listener.onResponse(response);
             return null;
         }).when(client).index(any(), isA(ActionListener.class));
+        when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(true);
     }
 
     @Test

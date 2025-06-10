@@ -35,12 +35,12 @@ public class MLMcpRegisterNodeResponseTest {
 
     @Test
     public void testSerialization() throws IOException {
-        MLMcpRegisterNodeResponse original = new MLMcpRegisterNodeResponse(node, true);
+        MLMcpToolsRegisterNodeResponse original = new MLMcpToolsRegisterNodeResponse(node, true);
 
         BytesStreamOutput output = new BytesStreamOutput();
         original.writeTo(output);
 
-        MLMcpRegisterNodeResponse deserialized = new MLMcpRegisterNodeResponse(output.bytes().streamInput());
+        MLMcpToolsRegisterNodeResponse deserialized = new MLMcpToolsRegisterNodeResponse(output.bytes().streamInput());
 
         assertEquals(node.getId(), deserialized.getNode().getId());
         assertTrue(deserialized.getCreated());
@@ -48,7 +48,7 @@ public class MLMcpRegisterNodeResponseTest {
 
     @Test
     public void testXContentGeneration() throws IOException {
-        MLMcpRegisterNodeResponse response = new MLMcpRegisterNodeResponse(node, true);
+        MLMcpToolsRegisterNodeResponse response = new MLMcpToolsRegisterNodeResponse(node, true);
         XContentBuilder builder = XContentFactory.jsonBuilder();
         response.toXContent(builder, ToXContent.EMPTY_PARAMS);
 
@@ -58,12 +58,12 @@ public class MLMcpRegisterNodeResponseTest {
 
     @Test
     public void testReadResponse() throws IOException {
-        MLMcpRegisterNodeResponse original = new MLMcpRegisterNodeResponse(node, true);
+        MLMcpToolsRegisterNodeResponse original = new MLMcpToolsRegisterNodeResponse(node, true);
 
         BytesStreamOutput output = new BytesStreamOutput();
         original.writeTo(output);
 
-        MLMcpRegisterNodeResponse deserialized = MLMcpRegisterNodeResponse.readResponse(output.bytes().streamInput());
+        MLMcpToolsRegisterNodeResponse deserialized = MLMcpToolsRegisterNodeResponse.readResponse(output.bytes().streamInput());
 
         assertEquals(node.getId(), deserialized.getNode().getId());
         assertTrue(deserialized.getCreated());
