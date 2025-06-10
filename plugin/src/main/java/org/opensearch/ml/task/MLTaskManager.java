@@ -81,6 +81,7 @@ public class MLTaskManager {
     private final ThreadPool threadPool;
     private final MLIndicesHandler mlIndicesHandler;
     private final Map<MLTaskType, AtomicInteger> runningTasksCount;
+    private boolean taskPollingJobStarted;
     public static final ImmutableSet<MLTaskState> TASK_DONE_STATES = ImmutableSet
         .of(MLTaskState.COMPLETED, MLTaskState.COMPLETED_WITH_ERROR, MLTaskState.FAILED, MLTaskState.CANCELLED);
 
@@ -541,6 +542,11 @@ public class MLTaskManager {
     }
 
     public void startTaskPollingJob() throws IOException {
+        if (this.taskPollingJobStarted) {
+            return;
+        }
+
+        this.taskPollingJobStarted = true;
         String id = "ml_batch_task_polling_job";
         String jobName = "poll_batch_jobs";
         String interval = "1";

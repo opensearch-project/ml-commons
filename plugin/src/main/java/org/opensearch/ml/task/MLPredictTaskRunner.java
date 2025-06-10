@@ -6,7 +6,6 @@
 package org.opensearch.ml.task;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.ML_JOBS_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.MLModel.ALGORITHM_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE;
@@ -383,6 +382,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
         runPredict(modelId, tenantId, mlTask, mlInput, functionName, actionName, internalListener);
     }
 
+    // todo: add setting to control this as it can impact predict latency
     private void recordPredictMetrics(
         String modelId,
         double durationInMs,
@@ -476,10 +476,7 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                                                     remoteJob
                                                 );
 
-                                                // todo: logic for starting the job
-                                                if (!clusterService.state().metadata().indices().containsKey(ML_JOBS_INDEX)) {
-                                                    mlTaskManager.startTaskPollingJob();
-                                                }
+                                                mlTaskManager.startTaskPollingJob();
 
                                                 MLTaskResponse predictOutput = MLTaskResponse.builder().output(outputBuilder).build();
                                                 internalListener.onResponse(predictOutput);
@@ -502,13 +499,15 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                                 }
                             } else {
                                 handleAsyncMLTaskComplete(mlTask);
-                                double durationInMs = (System.nanoTime() - startTime) / 1_000_000.0;
-                                recordPredictMetrics(modelId, durationInMs, output, internalListener);
+                                mlModelManager.trackPredictDuration(modelId, startTime);
+                                internalListener.onResponse(output);
+                                // double durationInMs = (System.nanoTime() - startTime) / 1_000_000.0;
+                                // recordPredictMetrics(modelId, durationInMs, output, internalListener);
                             }
                         }, e -> handlePredictFailure(mlTask, internalListener, e, false, modelId, actionName));
                         predictor.asyncPredict(mlInput, trackPredictDurationListener); // with listener
                     } else {
-                        long startTime = System.nanoTime();
+                        // long startTime = System.nanoTime();
                         MLOutput output = mlModelManager.trackPredictDuration(modelId, () -> predictor.predict(mlInput)); // without
                                                                                                                           // listener
                         if (output instanceof MLPredictionOutput) {
@@ -519,8 +518,9 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                         }
                         // Once prediction complete, reduce ML_EXECUTING_TASK_COUNT and update task state
                         handleAsyncMLTaskComplete(mlTask);
-                        double durationInMs = (System.nanoTime() - startTime) / 1_000_000.0;
-                        recordPredictMetrics(modelId, durationInMs, new MLTaskResponse(output), internalListener);
+                        internalListener.onResponse(new MLTaskResponse(output));
+                        // double durationInMs = (System.nanoTime() - startTime) / 1_000_000.0;
+                        // recordPredictMetrics(modelId, durationInMs, new MLTaskResponse(output), internalListener);
                     }
                     return;
                 } catch (Exception e) {
