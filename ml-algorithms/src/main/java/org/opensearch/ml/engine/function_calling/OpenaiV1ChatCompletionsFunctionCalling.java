@@ -5,10 +5,24 @@
 
 package org.opensearch.ml.engine.function_calling;
 
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DEFAULT_NO_ESCAPE_PARAMS;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS_PATH;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_PATH;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_TOOL_USE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_EXCLUDE_PATH;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_FILTER;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.NO_ESCAPE_PARAMS;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALLS_PATH;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALLS_TOOL_INPUT;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALLS_TOOL_NAME;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALL_ID;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALL_ID_PATH;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_RESULT;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_TEMPLATE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.removeJsonPath;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_HISTORY_QUESTION_TEMPLATE;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_HISTORY_RESPONSE_TEMPLATE;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.INTERACTION_TEMPLATE_TOOL_RESPONSE;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -32,7 +46,33 @@ public class OpenaiV1ChatCompletionsFunctionCalling implements FunctionCalling {
 
     @Override
     public void configure(Map<String, String> params) {
-        params.put("tool_template", OPENAI_V1_CHAT_COMPLETION_TEMPLATE);
+        if (!params.containsKey(NO_ESCAPE_PARAMS)) {
+            params.put(NO_ESCAPE_PARAMS, DEFAULT_NO_ESCAPE_PARAMS);
+        }
+        params.put(LLM_RESPONSE_FILTER, "$.choices[0].message.content");
+
+        params.put(TOOL_TEMPLATE, OPENAI_V1_CHAT_COMPLETION_TEMPLATE);
+        params.put(TOOL_CALLS_PATH, "$.choices[0].message.tool_calls");
+        params.put(TOOL_CALLS_TOOL_NAME, "function.name");
+        params.put(TOOL_CALLS_TOOL_INPUT, "function.arguments");
+        params.put(TOOL_CALL_ID_PATH, "id");
+        params.put("tool_configs", ", \"tools\": [${parameters._tools:-}], \"parallel_tool_calls\": false");
+
+        params.put("tool_choice", "auto");
+        params.put("parallel_tool_calls", "false");
+
+        params.put(INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS_PATH, "$.choices[0].message");
+        params
+            .put(
+                INTERACTION_TEMPLATE_TOOL_RESPONSE,
+                "{\"role\":\"tool\",\"tool_call_id\":\"${_interactions.tool_call_id}\",\"content\":\"${_interactions.tool_response}\"}"
+            );
+
+        params.put(CHAT_HISTORY_QUESTION_TEMPLATE, "{\"role\":\"user\",\"content\":\"${_chat_history.message.question}\"}");
+        params.put(CHAT_HISTORY_RESPONSE_TEMPLATE, "{\"role\":\"assistant\",\"content\":\"${_chat_history.message.response}\"}");
+
+        params.put(LLM_FINISH_REASON_PATH, "$.choices[0].finish_reason");
+        params.put(LLM_FINISH_REASON_TOOL_USE, "tool_calls");
     }
 
     @Override
@@ -70,7 +110,8 @@ public class OpenaiV1ChatCompletionsFunctionCalling implements FunctionCalling {
                 continue;
             }
             toolMessage.setToolCallId(toolUseId);
-            toolMessage.setContent((String) toolResult.get(TOOL_RESULT));
+            Map toolResultMap = (Map) toolResult.get(TOOL_RESULT);
+            toolMessage.setContent((String) toolResultMap.get("text"));
             messages.add(toolMessage);
         }
 

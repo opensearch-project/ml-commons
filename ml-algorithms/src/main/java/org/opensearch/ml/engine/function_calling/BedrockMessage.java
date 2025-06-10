@@ -7,6 +7,9 @@ package org.opensearch.ml.engine.function_calling;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+
+import org.opensearch.ml.common.utils.StringUtils;
 
 import lombok.Data;
 
@@ -29,5 +32,9 @@ public class BedrockMessage implements LLMMessage {
         if (content != null) {
             this.content = content;
         }
+    }
+
+    public String getResponse() {
+        return StringUtils.toJson(Map.of("role", role, "content", content));
     }
 }

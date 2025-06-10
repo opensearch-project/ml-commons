@@ -5,6 +5,10 @@
 
 package org.opensearch.ml.engine.function_calling;
 
+import java.util.Map;
+
+import org.opensearch.ml.common.utils.StringUtils;
+
 import lombok.Data;
 
 @Data
@@ -25,5 +29,9 @@ public class OpenaiMessage implements LLMMessage {
     OpenaiMessage(String role, Object content) {
         this.role = role;
         this.content = (String) content;
+    }
+
+    public String getResponse() {
+        return StringUtils.toJson(Map.of("role", role, "tool_call_id", toolCallId, "content", content));
     }
 }

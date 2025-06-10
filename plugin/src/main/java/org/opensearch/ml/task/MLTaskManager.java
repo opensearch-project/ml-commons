@@ -450,18 +450,30 @@ public class MLTaskManager {
 
     public void updateMLTaskDirectly(String taskId, Map<String, Object> updatedFields, ActionListener<UpdateResponse> listener) {
         try {
+            if (taskId == null || taskId.isEmpty()) {
+                listener.onFailure(new IllegalArgumentException("Task ID is null or empty"));
+                return;
+            }
+
             if (updatedFields == null || updatedFields.isEmpty()) {
                 listener.onFailure(new IllegalArgumentException("Updated fields is null or empty"));
                 return;
             }
+
+            if (updatedFields.containsKey(STATE_FIELD) && !(updatedFields.get(STATE_FIELD) instanceof MLTaskState)) {
+                listener.onFailure(new IllegalArgumentException("Invalid task state"));
+                return;
+            }
+
             UpdateRequest updateRequest = new UpdateRequest(ML_TASK_INDEX, taskId);
             Map<String, Object> updatedContent = new HashMap<>(updatedFields);
             updatedContent.put(LAST_UPDATE_TIME_FIELD, Instant.now().toEpochMilli());
             updateRequest.doc(updatedContent);
             updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-            if (updatedFields.containsKey(STATE_FIELD) && TASK_DONE_STATES.contains(updatedFields.containsKey(STATE_FIELD))) {
+            if (updatedFields.containsKey(STATE_FIELD) && TASK_DONE_STATES.contains((MLTaskState) updatedFields.get(STATE_FIELD))) {
                 updateRequest.retryOnConflict(3);
             }
+
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                 client.update(updateRequest, ActionListener.runBefore(listener, context::restore));
             } catch (Exception e) {
