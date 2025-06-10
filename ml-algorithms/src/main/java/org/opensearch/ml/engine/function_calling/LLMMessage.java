@@ -9,4 +9,6 @@ public interface LLMMessage {
     public String getRole();
 
     public Object getContent();
+
+    public String getResponse();
 }

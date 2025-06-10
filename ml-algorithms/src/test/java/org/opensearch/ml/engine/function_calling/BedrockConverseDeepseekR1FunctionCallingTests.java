@@ -53,7 +53,7 @@ public class BedrockConverseDeepseekR1FunctionCallingTests {
     public void configure() {
         Map<String, String> parameters = new HashMap<>();
         functionCalling.configure(parameters);
-        Assert.assertEquals(1, parameters.size());
+        Assert.assertEquals(15, parameters.size());
         Assert.assertEquals(BEDROCK_DEEPSEEK_R1_TOOL_TEMPLATE, parameters.get("tool_template"));
     }
 

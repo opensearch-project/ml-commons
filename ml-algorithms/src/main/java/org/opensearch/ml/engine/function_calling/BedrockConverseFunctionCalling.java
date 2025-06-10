@@ -5,10 +5,24 @@
 
 package org.opensearch.ml.engine.function_calling;
 
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DEFAULT_NO_ESCAPE_PARAMS;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS_PATH;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_PATH;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_TOOL_USE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_EXCLUDE_PATH;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_FILTER;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.NO_ESCAPE_PARAMS;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALLS_PATH;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALLS_TOOL_INPUT;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALLS_TOOL_NAME;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALL_ID;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALL_ID_PATH;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_RESULT;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_TEMPLATE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.removeJsonPath;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_HISTORY_QUESTION_TEMPLATE;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_HISTORY_RESPONSE_TEMPLATE;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.INTERACTION_TEMPLATE_TOOL_RESPONSE;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -35,8 +49,31 @@ public class BedrockConverseFunctionCalling implements FunctionCalling {
 
     @Override
     public void configure(Map<String, String> params) {
-        params.put("tool_template", BEDROCK_CONVERSE_TOOL_TEMPLATE);
+        if (!params.containsKey(NO_ESCAPE_PARAMS)) {
+            params.put(NO_ESCAPE_PARAMS, DEFAULT_NO_ESCAPE_PARAMS);
+        }
+        params.put(LLM_RESPONSE_FILTER, "$.output.message.content[0].text");
+
+        params.put(TOOL_TEMPLATE, BEDROCK_CONVERSE_TOOL_TEMPLATE);
+        params.put(TOOL_CALLS_PATH, "$.output.message.content[*].toolUse");
+        params.put(TOOL_CALLS_TOOL_NAME, "name");
+        params.put(TOOL_CALLS_TOOL_INPUT, "input");
+        params.put(TOOL_CALL_ID_PATH, "toolUseId");
         params.put("tool_configs", ", \"toolConfig\": {\"tools\": [${parameters._tools:-}]}");
+
+        params.put(INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS_PATH, "$.output.message");
+        params
+            .put(
+                INTERACTION_TEMPLATE_TOOL_RESPONSE,
+                "{\"role\":\"user\",\"content\":[{\"toolResult\":{\"toolUseId\":\"${_interactions.tool_call_id}\",\"content\":[{\"text\":\"${_interactions.tool_response}\"}]}}]}"
+            );
+
+        params.put(CHAT_HISTORY_QUESTION_TEMPLATE, "{\"role\":\"user\",\"content\":[{\"text\":\"${_chat_history.message.question}\"}]}");
+        params
+            .put(CHAT_HISTORY_RESPONSE_TEMPLATE, "{\"role\":\"assistant\",\"content\":[{\"text\":\"${_chat_history.message.response}\"}]}");
+
+        params.put(LLM_FINISH_REASON_PATH, "$.stopReason");
+        params.put(LLM_FINISH_REASON_TOOL_USE, "tool_use");
     }
 
     @Override
@@ -78,7 +115,7 @@ public class BedrockConverseFunctionCalling implements FunctionCalling {
             if (toolResult.containsKey(TOOL_ERROR)) {
                 result.setStatus("error");
             }
-            toolMessage.getContent().add(result);
+            toolMessage.getContent().add(Map.of("toolResult", result));
         }
 
         return List.of(toolMessage);
