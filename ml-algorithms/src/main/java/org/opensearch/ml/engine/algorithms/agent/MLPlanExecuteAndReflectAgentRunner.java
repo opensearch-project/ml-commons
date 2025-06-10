@@ -5,8 +5,11 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
+import static org.opensearch.ml.common.MLTask.STATE_FIELD;
+import static org.opensearch.ml.common.MLTask.TASK_ID_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_INPUT_FIELD;
 import static org.opensearch.ml.common.conversation.ConversationalIndexConstants.INTERACTIONS_RESPONSE_FIELD;
+import static org.opensearch.ml.common.utils.MLTaskUtils.updateMLTaskDirectly;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE_DEEPSEEK_R1;
@@ -42,6 +45,7 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
@@ -66,6 +70,7 @@ import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.transport.client.Client;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.jayway.jsonpath.JsonPath;
 
 import joptsimple.internal.Strings;
@@ -82,6 +87,9 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     private final Map<String, Memory.Factory> memoryFactoryMap;
     private SdkClient sdkClient;
     private Encryptor encryptor;
+    // flag to track if task has been updated with executor memory ids or not
+    private boolean taskUpdated = false;
+    private final Map<String, Object> taskUpdates = new HashMap<>();
 
     // prompts
     private String plannerPrompt;
@@ -154,7 +162,8 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         this.plannerWithHistoryPromptTemplate = DEFAULT_PLANNER_WITH_HISTORY_PROMPT_TEMPLATE;
     }
 
-    private void setupPromptParameters(Map<String, String> params) {
+    @VisibleForTesting
+    void setupPromptParameters(Map<String, String> params) {
         // populated depending on whether LLM is asked to plan or re-evaluate
         // removed here, so that error is thrown in case this field is not populated
         params.remove(PROMPT_FIELD);
@@ -203,22 +212,26 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         }
     }
 
-    private void usePlannerPromptTemplate(Map<String, String> params) {
+    @VisibleForTesting
+    void usePlannerPromptTemplate(Map<String, String> params) {
         params.put(PROMPT_TEMPLATE_FIELD, this.plannerPromptTemplate);
         populatePrompt(params);
     }
 
-    private void useReflectPromptTemplate(Map<String, String> params) {
+    @VisibleForTesting
+    void useReflectPromptTemplate(Map<String, String> params) {
         params.put(PROMPT_TEMPLATE_FIELD, this.reflectPromptTemplate);
         populatePrompt(params);
     }
 
-    private void usePlannerWithHistoryPromptTemplate(Map<String, String> params) {
+    @VisibleForTesting
+    void usePlannerWithHistoryPromptTemplate(Map<String, String> params) {
         params.put(PROMPT_TEMPLATE_FIELD, this.plannerWithHistoryPromptTemplate);
         populatePrompt(params);
     }
 
-    private void populatePrompt(Map<String, String> allParams) {
+    @VisibleForTesting
+    void populatePrompt(Map<String, String> allParams) {
         String promptTemplate = allParams.get(PROMPT_TEMPLATE_FIELD);
         StringSubstitutor promptSubstitutor = new StringSubstitutor(allParams, "${parameters.", "}");
         String prompt = promptSubstitutor.replace(promptTemplate);
@@ -433,6 +446,26 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         allParams.put(EXECUTOR_AGENT_PARENT_INTERACTION_ID_FIELD, reActParentInteractionId);
                     }
 
+                    Map<String, Object> memoryUpdates = new HashMap<>();
+                    if (allParams.containsKey(EXECUTOR_AGENT_MEMORY_ID_FIELD)) {
+                        memoryUpdates.put(EXECUTOR_AGENT_MEMORY_ID_FIELD, allParams.get(EXECUTOR_AGENT_MEMORY_ID_FIELD));
+                    }
+
+                    if (allParams.containsKey(EXECUTOR_AGENT_PARENT_INTERACTION_ID_FIELD)) {
+                        memoryUpdates
+                            .put(EXECUTOR_AGENT_PARENT_INTERACTION_ID_FIELD, allParams.get(EXECUTOR_AGENT_PARENT_INTERACTION_ID_FIELD));
+                    }
+
+                    String taskId = allParams.get(TASK_ID_FIELD);
+                    if (taskId != null && !taskUpdated) {
+                        taskUpdates.put(STATE_FIELD, MLTaskState.RUNNING);
+                        taskUpdates.put(RESPONSE_FIELD, memoryUpdates);
+                        updateMLTaskDirectly(taskId, taskUpdates, client, ActionListener.wrap(updateResponse -> {
+                            log.info("Updated task {} with executor memory ID", taskId);
+                            taskUpdated = true;
+                        }, e -> log.error("Failed to update task {} with executor memory ID", taskId, e)));
+                    }
+
                     completedSteps.add(String.format("\nStep: %s\n", stepToExecute));
                     completedSteps.add(String.format("\nStep Result: %s\n", results.get(STEP_RESULT_FIELD)));
 
@@ -475,7 +508,8 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         client.execute(MLPredictionTaskAction.INSTANCE, request, planListener);
     }
 
-    private Map<String, String> parseLLMOutput(Map<String, String> allParams, ModelTensorOutput modelTensorOutput) {
+    @VisibleForTesting
+    Map<String, String> parseLLMOutput(Map<String, String> allParams, ModelTensorOutput modelTensorOutput) {
         Map<String, String> modelOutput = new HashMap<>();
         Map<String, ?> dataAsMap = modelTensorOutput.getMlModelOutputs().getFirst().getMlModelTensors().getFirst().getDataAsMap();
         String llmResponse;
@@ -513,7 +547,8 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         return modelOutput;
     }
 
-    private String extractJsonFromMarkdown(String response) {
+    @VisibleForTesting
+    String extractJsonFromMarkdown(String response) {
         response = response.trim();
         if (response.contains("```json")) {
             response = response.substring(response.indexOf("```json") + "```json".length());
@@ -530,7 +565,8 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         return response;
     }
 
-    private void addToolsToPrompt(Map<String, Tool> tools, Map<String, String> allParams) {
+    @VisibleForTesting
+    void addToolsToPrompt(Map<String, Tool> tools, Map<String, String> allParams) {
         StringBuilder toolsPrompt = new StringBuilder("In this environment, you have access to the below tools: \n");
         for (Map.Entry<String, Tool> entry : tools.entrySet()) {
             String toolName = entry.getKey();
@@ -543,11 +579,13 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         cleanUpResource(tools);
     }
 
-    private void addSteps(List<String> steps, Map<String, String> allParams, String field) {
+    @VisibleForTesting
+    void addSteps(List<String> steps, Map<String, String> allParams, String field) {
         allParams.put(field, String.join(", ", steps));
     }
 
-    private void saveAndReturnFinalResult(
+    @VisibleForTesting
+    void saveAndReturnFinalResult(
         ConversationIndexMemory memory,
         String parentInteractionId,
         String reactAgentMemoryId,
@@ -586,7 +624,8 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         }));
     }
 
-    private static List<ModelTensors> createModelTensors(
+    @VisibleForTesting
+    static List<ModelTensors> createModelTensors(
         String sessionId,
         String parentInteractionId,
         String reactAgentMemoryId,
@@ -613,5 +652,10 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     .build()
             );
         return modelTensors;
+    }
+
+    @VisibleForTesting
+    Map<String, Object> getTaskUpdates() {
+        return taskUpdates;
     }
 }

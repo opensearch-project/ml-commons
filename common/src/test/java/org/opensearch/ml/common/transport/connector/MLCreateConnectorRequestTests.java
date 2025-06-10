@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.transport.connector;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
@@ -267,4 +268,47 @@ public class MLCreateConnectorRequestTests {
         );
     }
 
+    @Test
+    public void validateWithDryRun() {
+        // Test with dry run set to true
+        MLCreateConnectorInput dryRunInput = MLCreateConnectorInput
+            .builder()
+            .name("")  // Empty name, which would normally fail validation
+            .description("Test description")
+            .version("1")
+            .protocol("http")
+            .parameters(Map.of("input", "test"))
+            .credential(Map.of("key", "value"))
+            .actions(List.of())
+            .access(AccessMode.PUBLIC)
+            .backendRoles(Arrays.asList("role1"))
+            .addAllBackendRoles(false)
+            .dryRun(true)  // Set dry run to true
+            .build();
+
+        MLCreateConnectorRequest dryRunRequest = MLCreateConnectorRequest.builder().mlCreateConnectorInput(dryRunInput).build();
+        ActionRequestValidationException dryRunException = dryRunRequest.validate();
+        assertNull("Validation should pass when dry run is true, even with empty name", dryRunException);
+
+        // Test with dry run set to false (default behavior)
+        MLCreateConnectorInput nonDryRunInput = MLCreateConnectorInput
+            .builder()
+            .name("")  // Empty name, which should fail validation
+            .description("Test description")
+            .version("1")
+            .protocol("http")
+            .parameters(Map.of("input", "test"))
+            .credential(Map.of("key", "value"))
+            .actions(List.of())
+            .access(AccessMode.PUBLIC)
+            .backendRoles(Arrays.asList("role1"))
+            .addAllBackendRoles(false)
+            .dryRun(false)  // Set dry run to false
+            .build();
+
+        MLCreateConnectorRequest nonDryRunRequest = MLCreateConnectorRequest.builder().mlCreateConnectorInput(nonDryRunInput).build();
+        ActionRequestValidationException nonDryRunException = nonDryRunRequest.validate();
+        assertNotNull("Validation should fail when dry run is false and name is empty", nonDryRunException);
+        assertTrue(nonDryRunException.getMessage().contains("Model connector name is required"));
+    }
 }

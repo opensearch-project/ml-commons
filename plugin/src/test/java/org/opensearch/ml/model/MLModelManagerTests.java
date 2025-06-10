@@ -1306,6 +1306,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
                     123,
                     TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS,
                     "all config",
+                    null,
                     TextEmbeddingModelConfig.PoolingMode.MEAN,
                     true,
                     512
