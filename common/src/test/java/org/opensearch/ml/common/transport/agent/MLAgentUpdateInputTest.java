@@ -167,7 +167,7 @@ public class MLAgentUpdateInputTest {
     }
 
     @Test
-    public void parseSuccess() throws Exception {
+    public void testParseSuccess() throws Exception {
         String inputStr = """
             {
               "agent_id": "test-agent-id",
@@ -210,7 +210,7 @@ public class MLAgentUpdateInputTest {
     }
 
     @Test
-    public void parseWithInvalidField() throws Exception {
+    public void testParseWithInvalidField() throws Exception {
         String inputStrWithIllegalField = """
             {
               "agent_id": "test-agent-id",
@@ -258,7 +258,7 @@ public class MLAgentUpdateInputTest {
     }
 
     @Test
-    public void readInputStreamSuccessWithNullFields() throws IOException {
+    public void testReadInputStreamSuccessWithNullFields() throws IOException {
         updateAgentInput.setLlm(null);
         updateAgentInput.setTools(null);
         updateAgentInput.setParameters(null);
@@ -273,7 +273,7 @@ public class MLAgentUpdateInputTest {
     }
 
     @Test
-    public void readInputStreamSuccess() throws IOException {
+    public void testReadInputStreamSuccess() throws IOException {
         readInputStream(updateAgentInput, parsedInput -> {
             assertEquals(updateAgentInput.getAgentId(), parsedInput.getAgentId());
             assertEquals(updateAgentInput.getName(), parsedInput.getName());

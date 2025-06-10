@@ -35,7 +35,7 @@ public class MLAgentUpdateRequestTest {
     }
 
     @Test
-    public void constructor_Input() {
+    public void testConstructor_Input() {
         MLAgentUpdateRequest mlAgentUpdateRequest = new MLAgentUpdateRequest(mlAgentUpdateInput);
         assertEquals(mlAgentUpdateInput, mlAgentUpdateRequest.getMlAgentUpdateInput());
 
@@ -44,7 +44,7 @@ public class MLAgentUpdateRequestTest {
     }
 
     @Test
-    public void constructor_NullInput() {
+    public void testConstructor_NullInput() {
         MLAgentUpdateRequest mlAgentUpdateRequest = new MLAgentUpdateRequest((MLAgentUpdateInput) null);
         assertNull(mlAgentUpdateRequest.getMlAgentUpdateInput());
 
@@ -54,7 +54,7 @@ public class MLAgentUpdateRequestTest {
     }
 
     @Test
-    public void writeTo_Success() throws IOException {
+    public void testWriteTo_Success() throws IOException {
         MLAgentUpdateRequest mlAgentUpdateRequest = new MLAgentUpdateRequest(mlAgentUpdateInput);
         BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
         mlAgentUpdateRequest.writeTo(bytesStreamOutput);
@@ -64,7 +64,7 @@ public class MLAgentUpdateRequestTest {
     }
 
     @Test
-    public void fromActionRequest_Success() {
+    public void testFromActionRequest_Success() {
         MLAgentUpdateRequest mlAgentUpdateRequest = new MLAgentUpdateRequest(mlAgentUpdateInput);
         ActionRequest actionRequest = new ActionRequest() {
             @Override
@@ -84,14 +84,14 @@ public class MLAgentUpdateRequestTest {
     }
 
     @Test
-    public void fromActionRequest_Success_MLAgentUpdateRequest() {
+    public void testFromActionRequest_Success_MLAgentUpdateRequest() {
         MLAgentUpdateRequest mlAgentUpdateRequest = new MLAgentUpdateRequest(mlAgentUpdateInput);
         MLAgentUpdateRequest parsedRequest = MLAgentUpdateRequest.fromActionRequest(mlAgentUpdateRequest);
         assertSame(mlAgentUpdateRequest, parsedRequest);
     }
 
     @Test(expected = UncheckedIOException.class)
-    public void fromActionRequest_IOException() {
+    public void testFromActionRequest_IOException() {
         ActionRequest actionRequest = new ActionRequest() {
             @Override
             public ActionRequestValidationException validate() {
