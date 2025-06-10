@@ -177,4 +177,13 @@ public class MLTaskUtilsTests {
 
         assertFalse(MLTaskUtils.isTaskMarkedForCancel(taskId, client));
     }
+
+    @Test
+    public void testEmptyOrNullTask() {
+        String taskId = null;
+        assertFalse(MLTaskUtils.isTaskMarkedForCancel(taskId, client));
+
+        taskId = "";
+        assertFalse(MLTaskUtils.isTaskMarkedForCancel(taskId, client));
+    }
 }
