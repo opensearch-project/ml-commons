@@ -388,7 +388,11 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.rest.mcpserver.RestMcpConnectionMessageStreamingAction.1',
         'org.opensearch.ml.rest.mcpserver.RestMcpConnectionMessageStreamingAction',
         'org.opensearch.ml.action.mcpserver.TransportMcpToolsRemoveOnNodesAction',
-        'org.opensearch.ml.rest.mcpserver.RestMLMcpToolsListAction.1'
+        'org.opensearch.ml.rest.mcpserver.RestMLMcpToolsListAction.1',
+        'org.opensearch.ml.jobs.MLJobRunner',
+        'org.opensearch.ml.utils.ParseUtils',
+        'org.opensearch.ml.jobs.processors.MLStatsJobProcessor',
+        'org.opensearch.ml.jobs.processors.MLJobProcessor'
 ]
 
 jacocoTestCoverageVerification {

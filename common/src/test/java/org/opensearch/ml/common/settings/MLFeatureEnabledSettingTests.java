@@ -40,7 +40,10 @@ public class MLFeatureEnabledSettingTests {
                     MLCommonsSettings.ML_COMMONS_OFFLINE_BATCH_INGESTION_ENABLED,
                     MLCommonsSettings.ML_COMMONS_OFFLINE_BATCH_INFERENCE_ENABLED,
                     MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED,
-                    MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED
+                    MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_METRIC_COLLECTION_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED
                 )
         );
         when(mockClusterService.getClusterSettings()).thenReturn(mockClusterSettings);
@@ -59,6 +62,9 @@ public class MLFeatureEnabledSettingTests {
             .put("plugins.ml_commons.offline_batch_inference_enabled", true)
             .put("plugins.ml_commons.multi_tenancy_enabled", true)
             .put("plugins.ml_commons.mcp_server_enabled", true)
+            .put("plugins.ml_commons.rag_pipeline_feature_enabled", true)
+            .put("plugins.ml_commons.metrics_collection_enabled", true)
+            .put("plugins.ml_commons.metrics_static_collection_enabled", true)
             .build();
 
         MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
@@ -72,6 +78,9 @@ public class MLFeatureEnabledSettingTests {
         assertTrue(setting.isOfflineBatchInferenceEnabled());
         assertTrue(setting.isMultiTenancyEnabled());
         assertTrue(setting.isMcpServerEnabled());
+        assertTrue(setting.isRagSearchPipelineEnabled());
+        assertTrue(setting.isMetricCollectionEnabled());
+        assertTrue(setting.isStaticMetricCollectionEnabled());
     }
 
     @Test
@@ -87,6 +96,9 @@ public class MLFeatureEnabledSettingTests {
             .put("plugins.ml_commons.offline_batch_inference_enabled", false)
             .put("plugins.ml_commons.multi_tenancy_enabled", false)
             .put("plugins.ml_commons.mcp_server_enabled", false)
+            .put("plugins.ml_commons.rag_pipeline_feature_enabled", false)
+            .put("plugins.ml_commons.metrics_collection_enabled", false)
+            .put("plugins.ml_commons.metrics_static_collection_enabled", false)
             .build();
 
         MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
@@ -100,6 +112,9 @@ public class MLFeatureEnabledSettingTests {
         assertFalse(setting.isOfflineBatchInferenceEnabled());
         assertFalse(setting.isMultiTenancyEnabled());
         assertFalse(setting.isMcpServerEnabled());
+        assertFalse(setting.isRagSearchPipelineEnabled());
+        assertFalse(setting.isMetricCollectionEnabled());
+        assertFalse(setting.isStaticMetricCollectionEnabled());
     }
 
     @Test

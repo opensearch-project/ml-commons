@@ -20,8 +20,13 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
+import org.apache.commons.text.StringSubstitutor;
+import org.json.JSONObject;
 import org.opensearch.Version;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -31,6 +36,7 @@ import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.model.BaseModelConfig;
 import org.opensearch.ml.common.model.Guardrails;
@@ -42,12 +48,17 @@ import org.opensearch.ml.common.model.MetricsCorrelationModelConfig;
 import org.opensearch.ml.common.model.QuestionAnsweringModelConfig;
 import org.opensearch.ml.common.model.RemoteModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
+import org.opensearch.telemetry.metrics.tags.Tags;
+
+import com.google.common.annotations.VisibleForTesting;
 
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.extern.log4j.Log4j2;
 
 @Getter
+@Log4j2
 public class MLModel implements ToXContentObject {
     @Deprecated
     public static final String ALGORITHM_FIELD = "algorithm";
@@ -101,6 +112,86 @@ public class MLModel implements ToXContentObject {
     public static final String CONNECTOR_ID_FIELD = "connector_id";
     public static final String GUARDRAILS_FIELD = "guardrails";
     public static final String INTERFACE_FIELD = "interface";
+
+    private static final String TAG_DEPLOYMENT = "deployment";
+    private static final String TAG_REMOTE_DEPLOYMENT_VALUE = "remote";
+    private static final String TAG_PRE_TRAINED_DEPLOYMENT_VALUE = "local:pre_trained";
+    private static final String TAG_CUSTOM_DEPLOYMENT_VALUE = "local:custom";
+    private static final String TAG_ALGORITHM = "algorithm";
+    private static final String TAG_MODEL = "model";
+    private static final String TAG_SERVICE_PROVIDER = "service_provider";
+    private static final String TAG_VALUE_UNKNOWN = "unknown";
+    private static final String TAG_TYPE = "type";
+    private static final String TAG_MODEL_FORMAT = "model_format";
+    private static final String TAG_URL = "url";
+
+    // do not modify -- used to match keywords in endpoints
+    private static final String BEDROCK = "bedrock";
+    private static final String SAGEMAKER = "sagemaker";
+    private static final String AZURE = "azure";
+    private static final String GOOGLE = "google";
+    private static final String OPENAI = "openai";
+    private static final String DEEPSEEK = "deepseek";
+    private static final String COHERE = "cohere";
+    private static final String VERTEXAI = "vertexai";
+    private static final String ALEPH_ALPHA = "aleph-alpha";
+    private static final String COMPREHEND = "comprehend";
+    private static final String TEXTRACT = "textract";
+    private static final String ANTHROPIC = "anthropic";
+    private static final String MISTRAL = "mistral";
+    private static final String X_AI = "x.ai";
+
+    // Maintain order (generic providers -> specific providers)
+    private static final List<String> MODEL_SERVICE_PROVIDER_KEYWORDS = Arrays
+        .asList(
+            BEDROCK,
+            SAGEMAKER,
+            AZURE,
+            GOOGLE,
+            ANTHROPIC,
+            OPENAI,
+            DEEPSEEK,
+            COHERE,
+            VERTEXAI,
+            ALEPH_ALPHA,
+            COMPREHEND,
+            TEXTRACT,
+            MISTRAL,
+            X_AI
+        );
+
+    private static final String LLM_MODEL_TYPE = "llm";
+    private static final String EMBEDDING_MODEL_TYPE = "embedding";
+    private static final String IMAGE_GENERATION_MODEL_TYPE = "image_generation";
+    private static final String SPEECH_AUDIO_MODEL_TYPE = "speech_audio";
+
+    // keywords in model name used to infer type of remote model
+    private static final List<String> LLM_KEYWORDS = Arrays
+        .asList(
+            "gpt",
+            "o3",
+            "o4-mini",
+            "claude",
+            "llama",
+            "mistral",
+            "mixtral",
+            "gemini",
+            "palm",
+            "bard",
+            "j1-",
+            "j2-",
+            "jurassic",
+            "command",
+            "grok",
+            "chat",
+            "llm"
+        );
+
+    private static final List<String> EMBEDDING_KEYWORDS = Arrays.asList("embedding", "embed", "ada", "text-similarity-");
+
+    private static final List<String> IMAGE_GEN_KEYWORDS = Arrays.asList("diffusion", "dall-e", "imagen", "midjourney", "image");
+
+    private static final List<String> SPEECH_AUDIO_KEYWORDS = Arrays.asList("whisper", "audio", "speech");
 
     public static final Set<String> allowedInterfaceFieldKeys = new HashSet<>(Arrays.asList("input", "output"));
 
@@ -755,4 +846,301 @@ public class MLModel implements ToXContentObject {
         return new MLModel(in);
     }
 
+    public Tags getTags() {
+        return getTags(this.connector);
+    }
+
+    /**
+     * Retrieves the appropriate tags for the ML model based on its type and configuration.
+     * The method determines the model type and returns corresponding tags:
+     * - For remote models (when algorithm is REMOTE and connector is provided), returns remote model tags
+     * - For pre-trained models (identified by name starting with "amazon/" or "huggingface/"), returns pre-trained model tags
+     * - For all other cases, returns custom model tags
+     *
+     * @param connector The connector associated with the model, used to identify remote models
+     * @return Tags object containing the appropriate tags for the model type
+     */
+    public Tags getTags(Connector connector) {
+        // if connector is present, model is a remote model
+        if (this.algorithm == FunctionName.REMOTE && connector != null) {
+            return getRemoteModelTags(connector);
+        }
+
+        // pre-trained models follow a specific naming convention, relying on that to identify a pre-trained model
+        if (this.name != null
+            && (this.name.startsWith("amazon/") || this.name.startsWith("huggingface/"))
+            && this.name.split("/").length >= 3) {
+            return getPreTrainedModelTags();
+        }
+
+        return getCustomModelTags();
+    }
+
+    /**
+     * Generates tags for a remote ML model based on its connector configuration.
+     * This method analyzes the connector's predict action URL and request body to identify:
+     * - The service provider (e.g., bedrock, sagemaker, azure, etc.)
+     * - The specific model being used
+     * - The model type (e.g., llm, embedding, image_generation, speech_audio)
+     * 
+     * The method attempts to extract this information in the following order:
+     * 1. From the predict action URL (for service provider and some model identifiers)
+     * 2. From the request body JSON (for model name)
+     * 3. From the connector parameters (as a fallback for model name)
+     * 
+     * If any information cannot be determined, it will be marked as "unknown" in the tags.
+     * 
+     * @param connector The connector associated with the remote model, containing the predict action configuration
+     * @return Tags object containing deployment type, service provider, algorithm, model name, and model type
+     * @throws RuntimeException if there are issues parsing the connector configuration
+     */
+    @VisibleForTesting
+    Tags getRemoteModelTags(Connector connector) {
+        String serviceProvider = TAG_VALUE_UNKNOWN;
+        String model = TAG_VALUE_UNKNOWN;
+        String modelType = TAG_VALUE_UNKNOWN;
+        String url = TAG_VALUE_UNKNOWN;
+
+        Optional<ConnectorAction> predictAction = connector.findAction(ConnectorAction.ActionType.PREDICT.name());
+        if (predictAction.isPresent()) {
+            try {
+                StringSubstitutor stringSubstitutor = new StringSubstitutor(connector.getParameters(), "${parameters.", "}");
+                url = stringSubstitutor.replace(predictAction.get().getUrl()).toLowerCase();
+
+                JSONObject requestBody = null;
+                if (predictAction.get().getRequestBody() != null) {
+                    try {
+                        String body = stringSubstitutor.replace(predictAction.get().getRequestBody());
+                        requestBody = new JSONObject(body);
+                    } catch (Exception e) {
+                        log.error("Failed to parse request body as JSON: {}", e.getMessage());
+                    }
+                }
+
+                serviceProvider = identifyServiceProvider(url);
+                model = identifyModel(serviceProvider, url, requestBody, connector);
+                modelType = identifyModelType(model);
+            } catch (Exception e) {
+                log.warn("Error identifying model provider and model from connector: {}", e.getMessage());
+            }
+        }
+
+        Tags tags = Tags
+            .create()
+            .addTag(TAG_DEPLOYMENT, TAG_REMOTE_DEPLOYMENT_VALUE)
+            .addTag(TAG_SERVICE_PROVIDER, serviceProvider)
+            .addTag(TAG_ALGORITHM, algorithm.name())
+            .addTag(TAG_MODEL, model)
+            .addTag(TAG_TYPE, modelType);
+
+        if ((serviceProvider.equals(TAG_VALUE_UNKNOWN) || model.equals(TAG_VALUE_UNKNOWN)) && !url.equals(TAG_VALUE_UNKNOWN)) {
+            tags.addTag(TAG_URL, url);
+        }
+
+        return tags;
+    }
+
+    @VisibleForTesting
+    /**
+     * Identifies the service provider from a URL by checking against known provider keywords.
+     * The method checks the URL for the presence of provider keywords in the following order:
+     * - bedrock
+     * - sagemaker
+     * - azure
+     * - google
+     * - anthropic
+     * - openai
+     * - deepseek
+     * - cohere
+     * - vertexai
+     * - aleph-alpha
+     * - comprehend
+     * - textract
+     * - mistral
+     * - x.ai
+     * 
+     * If no matching provider keyword is found in the URL,
+     * returns "unknown" as the service provider.
+     * 
+     * @param url The URL to analyze for service provider identification
+     * @return The identified service provider name, or "unknown" if not found
+     */
+    String identifyServiceProvider(String url) {
+        for (String provider : MODEL_SERVICE_PROVIDER_KEYWORDS) {
+            if (url.contains(provider)) {
+                return provider;
+            }
+        }
+
+        return TAG_VALUE_UNKNOWN;
+    }
+
+    /**
+     * Identifies the model name from the connector configuration using multiple strategies.
+     * The method attempts to extract the model name in the following order:
+     * 1. For Bedrock models: Extracts model name from the URL path after '/model/'
+     * 2. From request body JSON: Checks for 'model' or 'ModelName' fields
+     * 3. From connector parameters: Uses the 'model' parameter if available
+     * 
+     * If the model name cannot be determined through any of these methods,
+     * returns "unknown".
+     * 
+     * @param provider The service provider (e.g., bedrock, sagemaker, azure)
+     * @param url The predict action URL from the connector
+     * @param requestBody The JSON request body from the predict action
+     * @param connector The connector containing the model configuration
+     * @return The identified model name, or "unknown" if not found
+     */
+    @VisibleForTesting
+    String identifyModel(String provider, String url, JSONObject requestBody, Connector connector) {
+        try {
+            // bedrock expects model in the url after `/model/`
+            if (provider.equals(BEDROCK)) {
+                Pattern bedrockPattern = Pattern.compile("/model/([^/]+)/");
+                Matcher bedrockMatcher = bedrockPattern.matcher(url);
+                if (bedrockMatcher.find()) {
+                    return bedrockMatcher.group(1);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error extracting model information: {}", e.getMessage());
+        }
+
+        // check if request body has `model` -- typical for OpenAI/Sagemaker
+        if (requestBody != null) {
+            if (requestBody.keySet().contains("model")) {
+                return requestBody.getString("model");
+            }
+
+            if (requestBody.keySet().contains("ModelName")) {
+                return requestBody.getString("ModelName");
+            }
+        }
+
+        // check if parameters has `model` -- recommended via blueprints
+        if (connector.getParameters() != null && connector.getParameters().containsKey("model")) {
+            return connector.getParameters().get("model");
+        }
+
+        return TAG_VALUE_UNKNOWN;
+    }
+
+    private static boolean containsAny(String target, List<String> keywords) {
+        for (String key : keywords) {
+            if (target.contains(key)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Identifies the type of model based on keywords in the model name.
+     * The method checks for specific keywords in the model name to determine its type:
+     * - LLM (Large Language Model): checks for keywords like "gpt", "claude", "llama", etc.
+     * - Embedding: checks for keywords like "embedding", "embed", "ada", etc.
+     * - Image Generation: checks for keywords like "diffusion", "dall-e", "imagen", etc.
+     * - Speech/Audio: checks for keywords like "whisper", "audio", "speech", etc.
+     * 
+     * If no matching keywords are found or if the model name is null/unknown,
+     * returns "unknown" as the model type.
+     * 
+     * @param model The name of the model to identify
+     * @return The identified model type (llm, embedding, image_generation, speech_audio, or unknown)
+     */
+    @VisibleForTesting
+    String identifyModelType(String model) {
+        if (model == null || TAG_VALUE_UNKNOWN.equals(model)) {
+            return TAG_VALUE_UNKNOWN;
+        }
+
+        String modelLower = model.toLowerCase();
+
+        if (containsAny(modelLower, LLM_KEYWORDS)) {
+            return LLM_MODEL_TYPE;
+        }
+
+        if (containsAny(modelLower, EMBEDDING_KEYWORDS)) {
+            return EMBEDDING_MODEL_TYPE;
+        }
+
+        if (containsAny(modelLower, IMAGE_GEN_KEYWORDS)) {
+            return IMAGE_GENERATION_MODEL_TYPE;
+        }
+
+        if (containsAny(modelLower, SPEECH_AUDIO_KEYWORDS)) {
+            return SPEECH_AUDIO_MODEL_TYPE;
+        }
+
+        return TAG_VALUE_UNKNOWN;
+    }
+
+    /**
+     * Generates tags for a pre-trained ML model based on its name and configuration.
+     * This method is specifically designed for models that follow the naming convention
+     * "provider/algorithm/model" (e.g., "amazon/bert/model-name" or "huggingface/bert/model-name").
+     * 
+     * The method extracts the following information:
+     * - Service provider from the first part of the model name
+     * - Algorithm from the model's algorithm field
+     * - Model name from the third part of the model name
+     * - Model type from the model configuration (if available)
+     * - Model format from the model's format field (if available)
+     * 
+     * @return Tags object containing deployment type (pre-trained), service provider,
+     *         algorithm, model name, model type, and model format (if available)
+     */
+    @VisibleForTesting
+    Tags getPreTrainedModelTags() {
+        String modelType = TAG_VALUE_UNKNOWN;
+        if (this.modelConfig != null && this.modelConfig.getModelType() != null) {
+            modelType = this.modelConfig.getModelType();
+        }
+
+        String[] nameParts = this.name.split("/");
+        Tags tags = Tags
+            .create()
+            .addTag(TAG_DEPLOYMENT, TAG_PRE_TRAINED_DEPLOYMENT_VALUE)
+            .addTag(TAG_SERVICE_PROVIDER, nameParts[0])
+            .addTag(TAG_ALGORITHM, this.algorithm.name()) // nameParts[1] is not used
+            .addTag(TAG_MODEL, nameParts[2])
+            .addTag(TAG_TYPE, modelType);
+
+        if (this.modelFormat != null) {
+            tags.addTag(TAG_MODEL_FORMAT, this.modelFormat.name());
+        }
+
+        return tags;
+    }
+
+    /**
+     * Generates tags for a custom ML model based on its configuration.
+     * This method is used for models that do not follow the pre-trained naming convention
+     * (e.g., "model-name" or "model-name/model-name").
+     * 
+     * The method extracts the following information:
+     * - Model type from the model configuration (if available)
+     * - Model format from the model's format field (if available)
+     * 
+     * @return Tags object containing deployment type (custom), algorithm, and model type (if available)
+     */
+    @VisibleForTesting
+    Tags getCustomModelTags() {
+        String modelType = TAG_VALUE_UNKNOWN;
+        if (this.modelConfig != null && this.modelConfig.getModelType() != null) {
+            modelType = this.modelConfig.getModelType();
+        }
+
+        Tags tags = Tags
+            .create()
+            .addTag(TAG_DEPLOYMENT, TAG_CUSTOM_DEPLOYMENT_VALUE)
+            .addTag(TAG_ALGORITHM, this.algorithm.name())
+            .addTag(TAG_TYPE, modelType);
+
+        if (this.modelFormat != null) {
+            tags.addTag(TAG_MODEL_FORMAT, this.modelFormat.name());
+        }
+
+        return tags;
+    }
 }

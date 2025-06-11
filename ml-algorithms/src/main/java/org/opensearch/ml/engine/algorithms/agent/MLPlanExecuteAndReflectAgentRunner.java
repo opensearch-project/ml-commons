@@ -555,6 +555,11 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             if (response.contains("```")) {
                 response = response.substring(0, response.lastIndexOf("```"));
             }
+        } else {
+            // extract content from {} block
+            if (response.contains("{") && response.contains("}")) {
+                response = response.substring(response.indexOf("{"), response.lastIndexOf("}") + 1);
+            }
         }
 
         response = response.trim();
