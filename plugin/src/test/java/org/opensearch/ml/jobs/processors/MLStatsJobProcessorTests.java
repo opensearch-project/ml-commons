@@ -96,7 +96,7 @@ public class MLStatsJobProcessorTests {
         // Reset singletons before each test
         MLAdoptionMetricsCounter.reset();
         MLStatsJobProcessor.reset();
-        
+
         // Initialize MLAdoptionMetricsCounter with proper mocking
         when(mlFeatureEnabledSetting.isMetricCollectionEnabled()).thenReturn(true);
         when(metricsRegistry.createCounter(any(), any(), any())).thenReturn(mockCounter);
@@ -168,7 +168,8 @@ public class MLStatsJobProcessorTests {
 
         doAnswer(invocation -> {
             ActionListener<Object> listener = invocation.getArgument(5);
-            Connector connector = HttpConnector.builder()
+            Connector connector = HttpConnector
+                .builder()
                 .name("test-connector")
                 .description("test description")
                 .version("1.0.0")
@@ -177,26 +178,29 @@ public class MLStatsJobProcessorTests {
                 .build();
             listener.onResponse(connector);
             return null;
-        }).when(connectorAccessControlHelper).getConnector(
-            eq(sdkClient),
-            eq(client),
-            any(ThreadContext.StoredContext.class),
-            any(GetDataObjectRequest.class),
-            eq("test-connector-id"),
-            any(ActionListener.class)
-        );
+        })
+            .when(connectorAccessControlHelper)
+            .getConnector(
+                eq(sdkClient),
+                eq(client),
+                any(ThreadContext.StoredContext.class),
+                any(GetDataObjectRequest.class),
+                eq("test-connector-id"),
+                any(ActionListener.class)
+            );
 
         processor.run();
 
         verify(client, times(1)).search(any(SearchRequest.class), isA(ActionListener.class));
-        verify(connectorAccessControlHelper, times(1)).getConnector(
-            eq(sdkClient),
-            eq(client),
-            any(ThreadContext.StoredContext.class),
-            any(GetDataObjectRequest.class),
-            eq("test-connector-id"),
-            any(ActionListener.class)
-        );
+        verify(connectorAccessControlHelper, times(1))
+            .getConnector(
+                eq(sdkClient),
+                eq(client),
+                any(ThreadContext.StoredContext.class),
+                any(GetDataObjectRequest.class),
+                eq("test-connector-id"),
+                any(ActionListener.class)
+            );
         verify(mockCounter, times(1)).add(eq(1.0), any(Tags.class));
     }
 
@@ -228,26 +232,29 @@ public class MLStatsJobProcessorTests {
             ActionListener<Object> listener = invocation.getArgument(5);
             listener.onFailure(new RuntimeException("Failed to get connector"));
             return null;
-        }).when(connectorAccessControlHelper).getConnector(
-            eq(sdkClient),
-            eq(client),
-            any(ThreadContext.StoredContext.class),
-            any(GetDataObjectRequest.class),
-            eq("test-connector-id"),
-            any(ActionListener.class)
-        );
+        })
+            .when(connectorAccessControlHelper)
+            .getConnector(
+                eq(sdkClient),
+                eq(client),
+                any(ThreadContext.StoredContext.class),
+                any(GetDataObjectRequest.class),
+                eq("test-connector-id"),
+                any(ActionListener.class)
+            );
 
         processor.run();
 
         verify(client, times(1)).search(any(SearchRequest.class), isA(ActionListener.class));
-        verify(connectorAccessControlHelper, times(1)).getConnector(
-            eq(sdkClient),
-            eq(client),
-            any(ThreadContext.StoredContext.class),
-            any(GetDataObjectRequest.class),
-            eq("test-connector-id"),
-            any(ActionListener.class)
-        );
+        verify(connectorAccessControlHelper, times(1))
+            .getConnector(
+                eq(sdkClient),
+                eq(client),
+                any(ThreadContext.StoredContext.class),
+                any(GetDataObjectRequest.class),
+                eq("test-connector-id"),
+                any(ActionListener.class)
+            );
         verify(mockCounter, never()).add(anyDouble(), any(Tags.class));
     }
 
