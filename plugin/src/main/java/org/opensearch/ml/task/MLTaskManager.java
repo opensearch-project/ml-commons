@@ -6,7 +6,6 @@
 package org.opensearch.ml.task;
 
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
-import static org.opensearch.ml.common.CommonValue.TASK_POLLING_JOB_INDEX;
 import static org.opensearch.ml.common.MLTask.LAST_UPDATE_TIME_FIELD;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTask.TASK_TYPE_FIELD;
@@ -45,6 +44,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.jobscheduler.spi.schedule.IntervalSchedule;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
@@ -52,7 +52,8 @@ import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLLimitExceededException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
-import org.opensearch.ml.jobs.MLBatchTaskUpdateJobParameter;
+import org.opensearch.ml.jobs.MLJobParameter;
+import org.opensearch.ml.jobs.MLJobType;
 import org.opensearch.remote.metadata.client.PutDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.UpdateDataObjectRequest;
@@ -80,6 +81,7 @@ public class MLTaskManager {
     private final ThreadPool threadPool;
     private final MLIndicesHandler mlIndicesHandler;
     private final Map<MLTaskType, AtomicInteger> runningTasksCount;
+    private boolean taskPollingJobStarted;
     public static final ImmutableSet<MLTaskState> TASK_DONE_STATES = ImmutableSet
         .of(MLTaskState.COMPLETED, MLTaskState.COMPLETED_WITH_ERROR, MLTaskState.FAILED, MLTaskState.CANCELLED);
 
@@ -540,26 +542,31 @@ public class MLTaskManager {
     }
 
     public void startTaskPollingJob() throws IOException {
+        if (this.taskPollingJobStarted) {
+            return;
+        }
+
         String id = "ml_batch_task_polling_job";
         String jobName = "poll_batch_jobs";
         String interval = "1";
         Long lockDurationSeconds = 20L;
 
-        MLBatchTaskUpdateJobParameter jobParameter = new MLBatchTaskUpdateJobParameter(
+        MLJobParameter jobParameter = new MLJobParameter(
             jobName,
             new IntervalSchedule(Instant.now(), Integer.parseInt(interval), ChronoUnit.MINUTES),
             lockDurationSeconds,
-            null
+            null,
+            MLJobType.BATCH_TASK_UPDATE
         );
         IndexRequest indexRequest = new IndexRequest()
-            .index(TASK_POLLING_JOB_INDEX)
+            .index(CommonValue.ML_JOBS_INDEX)
             .id(id)
             .source(jobParameter.toXContent(JsonXContent.contentBuilder(), null))
             .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
-        client.index(indexRequest, ActionListener.wrap(r -> { log.info("Indexed ml task polling job successfully"); }, e -> {
-            log.error("Failed to index task polling job", e);
-        }));
+        client.index(indexRequest, ActionListener.wrap(r -> {
+            log.info("Indexed ml task polling job successfully");
+            this.taskPollingJobStarted = true;
+        }, e -> log.error("Failed to index task polling job", e)));
     }
-
 }
