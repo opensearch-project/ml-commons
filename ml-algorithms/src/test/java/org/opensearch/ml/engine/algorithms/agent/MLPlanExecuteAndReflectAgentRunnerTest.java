@@ -452,6 +452,13 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
     }
 
     @Test
+    public void testExtractJsonFromMarkdownWithoutJsonPrefix() {
+        String markdown = "This is the json output {\"key\":\"value\"}\n";
+        String result = mlPlanExecuteAndReflectAgentRunner.extractJsonFromMarkdown(markdown);
+        assertEquals("{\"key\":\"value\"}", result);
+    }
+
+    @Test
     public void testAddToolsToPrompt() {
         Map<String, String> testParams = new HashMap<>();
         Map<String, Tool> tools = new HashMap<>();
