@@ -116,10 +116,7 @@ public class UpdatePromptTransportAction extends HandledTransportAction<MLUpdate
                         && searchResponse.getHits().getTotalHits().value() != 0) {
                     SearchHit hit = searchResponse.getHits().getAt(0);
                     String id = hit.getId();
-                    actionListener
-                        .onFailure(
-                            new IllegalArgumentException("The name you provided is already being used by another ML Prompt with ID: " + id + ".")
-                        );
+                    actionListener.onFailure(new IllegalArgumentException(UNIQUE_NAME_ERR_MESSAGE + id));
                 }
             }
             GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest

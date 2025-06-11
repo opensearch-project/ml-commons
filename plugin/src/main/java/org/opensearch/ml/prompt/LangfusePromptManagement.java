@@ -283,6 +283,7 @@ public class LangfusePromptManagement extends AbstractPromptManagement {
     @Override
     public List<MLPrompt> importPrompts(MLImportPromptInput mlImportPromptInput) {
         String name = mlImportPromptInput.getName();
+        String tag = mlImportPromptInput.getTag();
         String limit = mlImportPromptInput.getLimit() == null ? DEFAULT_LIMIT : mlImportPromptInput.getLimit();
 
         try {
@@ -295,7 +296,7 @@ public class LangfusePromptManagement extends AbstractPromptManagement {
 
             PromptMetaListResponse promptMetaListResponse = langfuseClient
                     .prompts()
-                    .list(ListPromptsMetaRequest.builder().limit(Integer.parseInt(limit)).build());
+                    .list(ListPromptsMetaRequest.builder().tag(tag).limit(Integer.parseInt(limit)).build());
 
             List<PromptMeta> promptMetas = promptMetaListResponse.getData();
             List<MLPrompt> mlPromptList = new ArrayList<>();
