@@ -31,9 +31,13 @@ import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesArray;
+import org.opensearch.ml.common.AccessMode;
+import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.stats.otel.counters.MLAdoptionMetricsCounter;
+import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
@@ -89,6 +93,10 @@ public class MLStatsJobProcessorTests {
         when(clusterService.getClusterName()).thenReturn(new ClusterName("test-cluster"));
         when(metadata.indices()).thenReturn(Map.of(ML_MODEL_INDEX, mock(IndexMetadata.class)));
 
+        // Reset singletons before each test
+        MLAdoptionMetricsCounter.reset();
+        MLStatsJobProcessor.reset();
+        
         // Initialize MLAdoptionMetricsCounter with proper mocking
         when(mlFeatureEnabledSetting.isMetricCollectionEnabled()).thenReturn(true);
         when(metricsRegistry.createCounter(any(), any(), any())).thenReturn(mockCounter);
@@ -148,6 +156,101 @@ public class MLStatsJobProcessorTests {
         verify(mockCounter, times(2)).add(eq(1.0), any(Tags.class)); // Count should increase again
     }
 
+    @Test
+    public void testRunWithConnectorId() throws IOException {
+        SearchResponse searchResponse = createModelSearchResponseWithConnectorId();
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(5);
+            Connector connector = HttpConnector.builder()
+                .name("test-connector")
+                .description("test description")
+                .version("1.0.0")
+                .protocol("http")
+                .accessMode(AccessMode.PUBLIC)
+                .build();
+            listener.onResponse(connector);
+            return null;
+        }).when(connectorAccessControlHelper).getConnector(
+            eq(sdkClient),
+            eq(client),
+            any(ThreadContext.StoredContext.class),
+            any(GetDataObjectRequest.class),
+            eq("test-connector-id"),
+            any(ActionListener.class)
+        );
+
+        processor.run();
+
+        verify(client, times(1)).search(any(SearchRequest.class), isA(ActionListener.class));
+        verify(connectorAccessControlHelper, times(1)).getConnector(
+            eq(sdkClient),
+            eq(client),
+            any(ThreadContext.StoredContext.class),
+            any(GetDataObjectRequest.class),
+            eq("test-connector-id"),
+            any(ActionListener.class)
+        );
+        verify(mockCounter, times(1)).add(eq(1.0), any(Tags.class));
+    }
+
+    @Test
+    public void testRunWithSearchFailure() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException("Search failed"));
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        processor.run();
+
+        verify(client, times(1)).search(any(SearchRequest.class), isA(ActionListener.class));
+        verify(mockCounter, never()).add(anyDouble(), any(Tags.class));
+    }
+
+    @Test
+    public void testRunWithConnectorFailure() throws IOException {
+        SearchResponse searchResponse = createModelSearchResponseWithConnectorId();
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(5);
+            listener.onFailure(new RuntimeException("Failed to get connector"));
+            return null;
+        }).when(connectorAccessControlHelper).getConnector(
+            eq(sdkClient),
+            eq(client),
+            any(ThreadContext.StoredContext.class),
+            any(GetDataObjectRequest.class),
+            eq("test-connector-id"),
+            any(ActionListener.class)
+        );
+
+        processor.run();
+
+        verify(client, times(1)).search(any(SearchRequest.class), isA(ActionListener.class));
+        verify(connectorAccessControlHelper, times(1)).getConnector(
+            eq(sdkClient),
+            eq(client),
+            any(ThreadContext.StoredContext.class),
+            any(GetDataObjectRequest.class),
+            eq("test-connector-id"),
+            any(ActionListener.class)
+        );
+        verify(mockCounter, never()).add(anyDouble(), any(Tags.class));
+    }
+
     private SearchResponse createModelSearchResponse() throws IOException {
         SearchResponse searchResponse = mock(SearchResponse.class);
 
@@ -167,6 +270,36 @@ public class MLStatsJobProcessorTests {
             + "    \"model_content_size_in_bytes\": 1000000,\n"
             + "    \"chunk_number\": 1,\n"
             + "    \"total_chunks\": 1\n"
+            + "}";
+
+        SearchHit modelHit = new SearchHit(1);
+        modelHit.sourceRef(new BytesArray(modelContent));
+        SearchHits hits = new SearchHits(new SearchHit[] { modelHit }, new TotalHits(1, TotalHits.Relation.EQUAL_TO), Float.NaN);
+        when(searchResponse.getHits()).thenReturn(hits);
+
+        return searchResponse;
+    }
+
+    private SearchResponse createModelSearchResponseWithConnectorId() throws IOException {
+        SearchResponse searchResponse = mock(SearchResponse.class);
+
+        String modelContent = "{\n"
+            + "    \"algorithm\": \"TEXT_EMBEDDING\",\n"
+            + "    \"model_id\": \"test-model-id\",\n"
+            + "    \"name\": \"Test Model\",\n"
+            + "    \"model_version\": \"1.0.0\",\n"
+            + "    \"model_format\": \"TORCH_SCRIPT\",\n"
+            + "    \"model_state\": \"DEPLOYED\",\n"
+            + "    \"model_content_hash_value\": \"hash123\",\n"
+            + "    \"model_config\": {\n"
+            + "        \"model_type\": \"test\",\n"
+            + "        \"embedding_dimension\": 384,\n"
+            + "        \"framework_type\": \"SENTENCE_TRANSFORMERS\"\n"
+            + "    },\n"
+            + "    \"model_content_size_in_bytes\": 1000000,\n"
+            + "    \"chunk_number\": 1,\n"
+            + "    \"total_chunks\": 1,\n"
+            + "    \"connector_id\": \"test-connector-id\"\n"
             + "}";
 
         SearchHit modelHit = new SearchHit(1);

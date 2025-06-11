@@ -8,6 +8,7 @@ package org.opensearch.ml.jobs.processors;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.*;
+import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 
 import java.io.IOException;
 
@@ -31,6 +32,7 @@ import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
+import org.opensearch.index.IndexNotFoundException;
 
 public class MLBatchTaskUpdateProcessorTests {
 
@@ -48,6 +50,7 @@ public class MLBatchTaskUpdateProcessorTests {
     @Before
     public void setUp() {
         MockitoAnnotations.openMocks(this);
+        MLBatchTaskUpdateProcessor.reset();
         processor = MLBatchTaskUpdateProcessor.getInstance(clusterService, client, threadPool);
     }
 
@@ -80,6 +83,50 @@ public class MLBatchTaskUpdateProcessorTests {
         verify(client, times(1)).execute(eq(MLTaskGetAction.INSTANCE), any(MLTaskGetRequest.class), isA(ActionListener.class));
     }
 
+    @Test
+    public void testRunWithNoPendingTasks() throws IOException {
+        SearchResponse searchResponse = createEmptyTaskSearchResponse();
+
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        processor.run();
+
+        verify(client, times(1)).search(any(SearchRequest.class), isA(ActionListener.class));
+        verify(client, never()).execute(eq(MLTaskGetAction.INSTANCE), any(MLTaskGetRequest.class), isA(ActionListener.class));
+    }
+
+    @Test
+    public void testRunWithIndexNotFoundException() {
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new IndexNotFoundException(ML_TASK_INDEX));
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        processor.run();
+
+        verify(client, times(1)).search(any(SearchRequest.class), isA(ActionListener.class));
+        verify(client, never()).execute(eq(MLTaskGetAction.INSTANCE), any(MLTaskGetRequest.class), isA(ActionListener.class));
+    }
+
+    @Test
+    public void testRunWithGeneralException() {
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException("Test exception"));
+            return null;
+        }).when(client).search(any(SearchRequest.class), isA(ActionListener.class));
+
+        processor.run();
+
+        verify(client, times(1)).search(any(SearchRequest.class), isA(ActionListener.class));
+        verify(client, never()).execute(eq(MLTaskGetAction.INSTANCE), any(MLTaskGetRequest.class), isA(ActionListener.class));
+    }
+
     private SearchResponse createTaskSearchResponse() throws IOException {
         SearchResponse searchResponse = mock(SearchResponse.class);
 
@@ -100,6 +147,13 @@ public class MLBatchTaskUpdateProcessorTests {
         SearchHits hits = new SearchHits(new SearchHit[] { taskHit }, new TotalHits(1, TotalHits.Relation.EQUAL_TO), Float.NaN);
         when(searchResponse.getHits()).thenReturn(hits);
 
+        return searchResponse;
+    }
+
+    private SearchResponse createEmptyTaskSearchResponse() {
+        SearchResponse searchResponse = mock(SearchResponse.class);
+        SearchHits hits = new SearchHits(new SearchHit[0], new TotalHits(0, TotalHits.Relation.EQUAL_TO), Float.NaN);
+        when(searchResponse.getHits()).thenReturn(hits);
         return searchResponse;
     }
 }

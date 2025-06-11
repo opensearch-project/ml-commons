@@ -61,6 +61,13 @@ public class MLStatsJobProcessor extends MLJobProcessor {
         }
     }
 
+    /**
+     * Resets the singleton instance. This method is only for testing purposes.
+     */
+    public static synchronized void reset() {
+        instance = null;
+    }
+
     public MLStatsJobProcessor(
         ClusterService clusterService,
         Client client,
