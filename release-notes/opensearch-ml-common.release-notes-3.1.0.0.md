@@ -5,7 +5,6 @@ Compatible with OpenSearch 3.1.0.0
 ### Enhancements
 * Support persisting MCP tools in system index (#3874)[https://github.com/opensearch-project/ml-commons/pull/3874]
 * [Agent] PlanExecuteReflect: Return memory early to track progress (#3884)[https://github.com/opensearch-project/ml-commons/pull/3884]
-* added blueprint for Bedrock Claude v4 (#3871)[https://github.com/opensearch-project/ml-commons/pull/3871]
 * Add space type mapping for pre-trained embedding models, add new additional_config field and BaseModelConfig class (#3786)[https://github.com/opensearch-project/ml-commons/pull/3786]
 * support customized message endpoint and addressing comments (#3810)[https://github.com/opensearch-project/ml-commons/pull/3810]
 * Add custom SSE endpoint for the MCP Client (#3891)[https://github.com/opensearch-project/ml-commons/pull/3891]
@@ -44,3 +43,4 @@ Compatible with OpenSearch 3.1.0.0
 
 ### Documentation
 * Replace the usage of elasticsearch with OpenSearch in README (#3876)[https://github.com/opensearch-project/ml-commons/pull/3876]
+* added blueprint for Bedrock Claude v4 (#3871)[https://github.com/opensearch-project/ml-commons/pull/3871]
