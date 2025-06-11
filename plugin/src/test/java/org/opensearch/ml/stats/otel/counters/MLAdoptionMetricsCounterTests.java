@@ -13,14 +13,17 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.Arrays;
+
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.stats.otel.metrics.AdoptionMetric;
-import org.opensearch.ml.stats.otel.metrics.OperationalMetric;
+import org.opensearch.ml.stats.otel.metrics.MetricType;
 import org.opensearch.telemetry.metrics.Counter;
+import org.opensearch.telemetry.metrics.Histogram;
 import org.opensearch.telemetry.metrics.MetricsRegistry;
 import org.opensearch.telemetry.metrics.tags.Tags;
 import org.opensearch.test.OpenSearchTestCase;
@@ -35,19 +38,34 @@ public class MLAdoptionMetricsCounterTests extends OpenSearchTestCase {
     public void setup() {
         MockitoAnnotations.openMocks(this);
         when(mlFeatureEnabledSetting.isMetricCollectionEnabled()).thenReturn(true);
+        MLAdoptionMetricsCounter.reset();
+    }
+
+    public void testExceptionThrownForNotInitialized() {
+        IllegalStateException exception = assertThrows(IllegalStateException.class, MLAdoptionMetricsCounter::getInstance);
+        assertEquals("MLAdoptionMetricsCounter is not initialized. Call initialize() first.", exception.getMessage());
     }
 
     public void testSingletonInitializationAndIncrement() {
         Counter mockCounter = mock(Counter.class);
+        Histogram mockHistogram = mock(Histogram.class);
         MetricsRegistry metricsRegistry = mock(MetricsRegistry.class);
         // Stub the createCounter method to return the mockCounter
         when(metricsRegistry.createCounter(any(), any(), any())).thenReturn(mockCounter);
+        when(metricsRegistry.createHistogram(any(), any(), any())).thenReturn(mockHistogram);
 
         MLAdoptionMetricsCounter.initialize(CLUSTER_NAME, metricsRegistry, mlFeatureEnabledSetting);
         MLAdoptionMetricsCounter instance = MLAdoptionMetricsCounter.getInstance();
 
         ArgumentCaptor<String> nameCaptor = ArgumentCaptor.forClass(String.class);
-        verify(metricsRegistry, times(OperationalMetric.values().length)).createCounter(nameCaptor.capture(), any(), eq("1"));
+        verify(
+            metricsRegistry,
+            times((int) Arrays.stream(AdoptionMetric.values()).filter(type -> type.getType() == MetricType.COUNTER).count())
+        ).createCounter(nameCaptor.capture(), any(), eq("1"));
+        verify(
+            metricsRegistry,
+            times((int) Arrays.stream(AdoptionMetric.values()).filter(type -> type.getType() == MetricType.HISTOGRAM).count())
+        ).createHistogram(nameCaptor.capture(), any(), eq("1"));
         assertNotNull(instance);
 
         instance.incrementCounter(AdoptionMetric.MODEL_COUNT);

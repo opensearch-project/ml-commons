@@ -33,6 +33,13 @@ public class MLAdoptionMetricsCounter extends AbstractMLMetricsCounter<AdoptionM
         return instance;
     }
 
+    /**
+     * Resets the singleton instance. This method is only for testing purposes.
+     */
+    public static synchronized void reset() {
+        instance = null;
+    }
+
     @Override
     protected String getMetricDescription(AdoptionMetric metric) {
         return metric.getDescription();

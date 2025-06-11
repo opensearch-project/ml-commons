@@ -49,4 +49,22 @@ public class ParseUtilsTests {
 
         ParseUtils.toInstant(parser);
     }
+
+    @Test(expected = ParsingException.class)
+    public void testToInstant_WithEndArrayToken() throws IOException {
+        XContentParser parser = mock(XContentParser.class);
+        when(parser.currentToken()).thenReturn(Token.END_ARRAY);
+        when(parser.getTokenLocation()).thenReturn(new XContentLocation(1, 1));
+
+        ParseUtils.toInstant(parser);
+    }
+
+    @Test(expected = ParsingException.class)
+    public void testToInstant_WithFieldNameToken() throws IOException {
+        XContentParser parser = mock(XContentParser.class);
+        when(parser.currentToken()).thenReturn(Token.FIELD_NAME);
+        when(parser.getTokenLocation()).thenReturn(new XContentLocation(1, 1));
+
+        ParseUtils.toInstant(parser);
+    }
 }

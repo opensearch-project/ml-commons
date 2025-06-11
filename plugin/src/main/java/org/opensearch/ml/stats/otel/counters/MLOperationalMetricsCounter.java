@@ -38,6 +38,13 @@ public class MLOperationalMetricsCounter extends AbstractMLMetricsCounter<Operat
         return instance;
     }
 
+    /**
+     * Resets the singleton instance. This method is only for testing purposes.
+     */
+    public static synchronized void reset() {
+        instance = null;
+    }
+
     @Override
     protected String getMetricDescription(OperationalMetric metric) {
         return metric.getDescription();

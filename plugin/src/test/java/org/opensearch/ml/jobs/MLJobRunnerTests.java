@@ -69,7 +69,7 @@ public class MLJobRunnerTests {
     }
 
     @Test(expected = IllegalArgumentException.class)
-    public void testRunJobWithUnsupportedJobType() {
+    public void testRunJobWithNullJobType() {
         when(jobParameter.getJobType()).thenReturn(null);
         jobRunner.runJob(jobParameter, jobExecutionContext);
     }
