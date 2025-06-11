@@ -11,6 +11,8 @@ Compatible with OpenSearch 3.1.0.0
 * Add custom SSE endpoint for the MCP Client (#3891)[https://github.com/opensearch-project/ml-commons/pull/3891]
 * Expose Update Agent API (#3820)[https://github.com/opensearch-project/ml-commons/pull/3902]
 * Use function calling for existing LLM interfaces (#3888)[https://github.com/opensearch-project/ml-commons/pull/3888]
+* Add error handling for plan&execute agent (#3845)[https://github.com/opensearch-project/ml-commons/pull/3845]
+* Metrics framework integration with ml-commons (#3661)[https://github.com/opensearch-project/ml-commons/pull/3661]
 
 ### Bug Fixes
 * Fix connector private IP validation when executing agent without remote model (#3862)[https://github.com/opensearch-project/ml-commons/pull/3862]
