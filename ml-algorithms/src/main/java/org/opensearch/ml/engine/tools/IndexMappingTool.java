@@ -95,7 +95,12 @@ public class IndexMappingTool implements Tool {
         try {
             List<String> indexList = new ArrayList<>();
             if (StringUtils.isNotBlank(parameters.get("index"))) {
-                indexList = gson.fromJson(parameters.get("index"), List.class);
+                try {
+                    indexList = gson.fromJson(parameters.get("index"), List.class);
+                } catch (Exception e) {
+                    // sometimes the input comes from LLM is not a json string, it might a single value of index name
+                    indexList.add(parameters.get("index"));
+                }
             }
 
             if (indexList.isEmpty()) {
