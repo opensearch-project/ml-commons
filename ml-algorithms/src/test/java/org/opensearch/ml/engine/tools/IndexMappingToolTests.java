@@ -189,28 +189,28 @@ public class IndexMappingToolTests {
         Settings settings = Settings.builder().put("test.boolean.setting", false).put("test.int.setting", 123).build();
         when(getIndexResponse.settings()).thenReturn(Map.of(indexName, settings));
         String source = """
-                {
-                    "foo": {
-                        "mappings": {
-                            "year": {
-                                "full_name": "year",
-                                "mapping": {
-                                    "year": {
-                                        "type": "text"
-                                    }
+            {
+                "foo": {
+                    "mappings": {
+                        "year": {
+                            "full_name": "year",
+                            "mapping": {
+                                "year": {
+                                    "type": "text"
                                 }
-                            },
-                            "age": {
-                                "full_name": "age",
-                                "mapping": {
-                                    "age": {
-                                        "type": "integer"
-                                    }
+                            }
+                        },
+                        "age": {
+                            "full_name": "age",
+                            "mapping": {
+                                "age": {
+                                    "type": "integer"
                                 }
                             }
                         }
                     }
-                }""";
+                }
+            }""";
         MappingMetadata mapping = new MappingMetadata(indexName, XContentHelper.convertToMap(JsonXContent.jsonXContent, source, true));
         when(getIndexResponse.mappings()).thenReturn(Map.of(indexName, mapping));
 
@@ -230,8 +230,8 @@ public class IndexMappingToolTests {
 
         assertTrue(responseList.contains("mappings:"));
         assertTrue(
-                responseList
-                        .contains("mappings={year={full_name=year, mapping={year={type=text}}}, age={full_name=age, mapping={age={type=integer}}}}")
+            responseList
+                .contains("mappings={year={full_name=year, mapping={year={type=text}}}, age={full_name=age, mapping={age={type=integer}}}}")
         );
 
         assertTrue(responseList.contains("settings:"));

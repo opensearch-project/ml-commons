@@ -458,7 +458,6 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         assertEquals("{\"key\":\"value\"}", result);
     }
 
-
     @Test
     public void testAddToolsToPrompt() {
         Map<String, String> testParams = new HashMap<>();
