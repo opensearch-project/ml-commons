@@ -8,6 +8,8 @@ package org.opensearch.ml.prompt;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX;
+import static org.opensearch.ml.common.prompt.MLPrompt.LANGFUSE;
+import static org.opensearch.ml.prompt.AbstractPromptManagement.init;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -43,6 +45,8 @@ import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.prompt.MLPrompt;
 import org.opensearch.ml.common.transport.prompt.MLCreatePromptInput;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.engine.encryptor.Encryptor;
+import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.utils.MLExceptionUtils;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.GetDataObjectResponse;
@@ -84,10 +88,12 @@ public class MLPromptManager {
 
     private final Client client;
     private final SdkClient sdkClient;
+    private final EncryptorImpl encryptor;
 
-    public MLPromptManager(@NonNull Client client, @NonNull SdkClient sdkClient) {
+    public MLPromptManager(@NonNull Client client, @NonNull SdkClient sdkClient, EncryptorImpl encryptor) {
         this.client = Objects.requireNonNull(client, "Client cannot be null");
         this.sdkClient = Objects.requireNonNull(sdkClient, "SdkClient cannot be null");
+        this.encryptor = encryptor;
     }
 
     /**
@@ -363,6 +369,12 @@ public class MLPromptManager {
                 .build();
             // fetch prompt first based on prompt id
             MLPrompt mlPrompt = getPrompt(getDataObjectRequest);
+            // enables user execute the prompt in external prompt management server that is created via ml commons create, without importing it
+            if (fetchPromptExternally(mlPrompt)) {
+                mlPrompt.decrypt(mlPrompt.getPromptManagementType(), encryptor::decrypt, tenantId);
+                AbstractPromptManagement promptManagement = init(mlPrompt.getPromptManagementType(), mlPrompt.getPromptExtraConfig());
+                promptManagement.getPrompt(mlPrompt);
+            }
             // extract a prompt object from retrieved ML Prompt
             Map<String, String> promptField = mlPrompt.getPrompt();
             // check if the specified key is defined in the prompt
@@ -421,17 +433,26 @@ public class MLPromptManager {
      * @return
      */
     private String populatePlaceholders(String content, PromptParameters promptParameters, String promptRef) {
+        StringSubstitutor substitutor = new StringSubstitutor();
         if (!promptParameters.isEmpty() && content.contains(PROMPT_PARAMETER_PLACEHOLDER)) {
-            StringSubstitutor substitutor = new StringSubstitutor(
+            substitutor = new StringSubstitutor(
                 promptParameters.getParameters(promptRef),
                 PROMPT_PARAMETER_PLACEHOLDER,
                 "}"
             );
             content = substitutor.replace(content);
+        } else if (!promptParameters.isEmpty() && content.contains("{{") && content.contains("}}")) {
+            substitutor = new StringSubstitutor(
+                    promptParameters.getParameters(promptRef),
+                    "{{",
+                    "}}"
+            );
         }
+        content = substitutor.replace(content);
 
         // this checks if all the required input values are provided by users and all the placeholder variables are replaced.
-        if (content.contains(PROMPT_PARAMETER_PLACEHOLDER)) {
+        if (content.contains(PROMPT_PARAMETER_PLACEHOLDER) ||
+                (content.contains("{{") && content.contains("}}"))) {
             throw new InvalidPullPromptSyntaxException("Failed to replace all the placeholders");
         }
         return content;

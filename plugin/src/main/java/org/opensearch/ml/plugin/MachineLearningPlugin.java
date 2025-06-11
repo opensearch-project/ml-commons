@@ -615,7 +615,7 @@ public class MachineLearningPlugin extends Plugin
         this.mlStats = new MLStats(stats);
 
         mlTaskManager = new MLTaskManager(client, sdkClient, threadPool, mlIndicesHandler);
-        mlPromptManager = new MLPromptManager(client, sdkClient);
+        mlPromptManager = new MLPromptManager(client, sdkClient, (EncryptorImpl) encryptor);
         modelHelper = new ModelHelper(mlEngine);
 
         mlInputDatasetHandler = new MLInputDatasetHandler(client);
