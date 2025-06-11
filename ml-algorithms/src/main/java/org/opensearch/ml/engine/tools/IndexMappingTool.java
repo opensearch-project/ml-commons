@@ -98,6 +98,7 @@ public class IndexMappingTool implements Tool {
                 try {
                     indexList = gson.fromJson(parameters.get("index"), List.class);
                 } catch (Exception e) {
+                    // sometimes the input comes from LLM is not a json string, it might a single value of index name
                     indexList.add(parameters.get("index"));
                 }
             }
