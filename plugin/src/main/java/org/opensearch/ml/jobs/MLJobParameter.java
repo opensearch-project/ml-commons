@@ -5,20 +5,26 @@
 
 package org.opensearch.ml.jobs;
 
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+
 import java.io.IOException;
 import java.time.Instant;
 
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.core.xcontent.XContentParserUtils;
 import org.opensearch.jobscheduler.spi.ScheduledJobParameter;
 import org.opensearch.jobscheduler.spi.schedule.Schedule;
+import org.opensearch.jobscheduler.spi.schedule.ScheduleParser;
+import org.opensearch.ml.utils.ParseUtils;
 
-/**
- * A sample job parameter.
- * <p>
- * It adds an additional "indexToWatch" field to {@link ScheduledJobParameter}, which stores the index
- * the job runner will watch.
- */
-public class MLBatchTaskUpdateJobParameter implements ScheduledJobParameter {
+import lombok.Getter;
+import lombok.Setter;
+import lombok.extern.log4j.Log4j2;
+
+@Setter
+@Log4j2
+public class MLJobParameter implements ScheduledJobParameter {
     public static final String NAME_FIELD = "name";
     public static final String ENABLED_FILED = "enabled";
     public static final String LAST_UPDATE_TIME_FIELD = "last_update_time";
@@ -26,9 +32,9 @@ public class MLBatchTaskUpdateJobParameter implements ScheduledJobParameter {
     public static final String SCHEDULE_FIELD = "schedule";
     public static final String ENABLED_TIME_FILED = "enabled_time";
     public static final String ENABLED_TIME_FILED_READABLE = "enabled_time_field";
-    public static final String INDEX_NAME_FIELD = "index_name_to_watch";
     public static final String LOCK_DURATION_SECONDS = "lock_duration_seconds";
     public static final String JITTER = "jitter";
+    public static final String TYPE = "type";
 
     private String jobName;
     private Instant lastUpdateTime;
@@ -38,9 +44,12 @@ public class MLBatchTaskUpdateJobParameter implements ScheduledJobParameter {
     private Long lockDurationSeconds;
     private Double jitter;
 
-    public MLBatchTaskUpdateJobParameter() {}
+    @Getter
+    private MLJobType jobType;
 
-    public MLBatchTaskUpdateJobParameter(String name, Schedule schedule, Long lockDurationSeconds, Double jitter) {
+    public MLJobParameter() {}
+
+    public MLJobParameter(String name, Schedule schedule, Long lockDurationSeconds, Double jitter, MLJobType jobType) {
         this.jobName = name;
         this.schedule = schedule;
         this.lockDurationSeconds = lockDurationSeconds;
@@ -50,6 +59,7 @@ public class MLBatchTaskUpdateJobParameter implements ScheduledJobParameter {
         this.isEnabled = true;
         this.enabledTime = now;
         this.lastUpdateTime = now;
+        this.jobType = jobType;
     }
 
     @Override
@@ -87,32 +97,45 @@ public class MLBatchTaskUpdateJobParameter implements ScheduledJobParameter {
         return jitter;
     }
 
-    public void setJobName(String jobName) {
-        this.jobName = jobName;
-    }
+    public static MLJobParameter parse(XContentParser parser) throws IOException {
+        MLJobParameter jobParameter = new MLJobParameter();
+        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
 
-    public void setLastUpdateTime(Instant lastUpdateTime) {
-        this.lastUpdateTime = lastUpdateTime;
-    }
+        while (!parser.nextToken().equals(XContentParser.Token.END_OBJECT)) {
+            String fieldName = parser.currentName();
+            parser.nextToken();
+            switch (fieldName) {
+                case MLJobParameter.NAME_FIELD:
+                    jobParameter.setJobName(parser.text());
+                    break;
+                case MLJobParameter.ENABLED_FILED:
+                    jobParameter.setEnabled(parser.booleanValue());
+                    break;
+                case MLJobParameter.ENABLED_TIME_FILED:
+                    jobParameter.setEnabledTime(ParseUtils.toInstant(parser));
+                    break;
+                case MLJobParameter.LAST_UPDATE_TIME_FIELD:
+                    jobParameter.setLastUpdateTime(ParseUtils.toInstant(parser));
+                    break;
+                case MLJobParameter.SCHEDULE_FIELD:
+                    jobParameter.setSchedule(ScheduleParser.parse(parser));
+                    break;
+                case MLJobParameter.LOCK_DURATION_SECONDS:
+                    jobParameter.setLockDurationSeconds(parser.longValue());
+                    break;
+                case MLJobParameter.JITTER:
+                    jobParameter.setJitter(parser.doubleValue());
+                    break;
+                case MLJobParameter.TYPE:
+                    String type = parser.text();
+                    jobParameter.setJobType(MLJobType.valueOf(type));
+                    break;
+                default:
+                    XContentParserUtils.throwUnknownToken(parser.currentToken(), parser.getTokenLocation());
+            }
+        }
 
-    public void setEnabledTime(Instant enabledTime) {
-        this.enabledTime = enabledTime;
-    }
-
-    public void setEnabled(boolean enabled) {
-        isEnabled = enabled;
-    }
-
-    public void setSchedule(Schedule schedule) {
-        this.schedule = schedule;
-    }
-
-    public void setLockDurationSeconds(Long lockDurationSeconds) {
-        this.lockDurationSeconds = lockDurationSeconds;
-    }
-
-    public void setJitter(Double jitter) {
-        this.jitter = jitter;
+        return jobParameter;
     }
 
     @Override
@@ -130,6 +153,9 @@ public class MLBatchTaskUpdateJobParameter implements ScheduledJobParameter {
         }
         if (this.jitter != null) {
             builder.field(JITTER, this.jitter);
+        }
+        if (this.jobType != null) {
+            builder.field(TYPE, this.jobType.toString());
         }
         builder.endObject();
         return builder;
