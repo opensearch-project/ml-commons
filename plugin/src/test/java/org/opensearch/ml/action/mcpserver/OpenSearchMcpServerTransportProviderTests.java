@@ -93,9 +93,78 @@ public class OpenSearchMcpServerTransportProviderTests extends OpenSearchTestCas
     @Test
     public void test_handleSseConnection_successful() {
         StepVerifier.create(provider.handleSseConnection(channel, true, nodeId, client)).expectNextMatches(chunk -> {
+            assertFalse(chunk.isLast());
+            chunk.close();
             String data = chunk.content().utf8ToString();
             return data.contains("endpoint");
         }).verifyComplete();
+    }
+
+    @Test
+    public void test_handleSseConnection_initSessionIndexFailed() {
+        doAnswer(invocationOnMock -> {
+            ActionListener<Boolean> listener = invocationOnMock.getArgument(0);
+            listener.onResponse(false);
+            return null;
+        }).when(mlIndicesHandler).initMLMcpSessionManagementIndex(isA(ActionListener.class));
+        StepVerifier.create(provider.handleSseConnection(channel, true, nodeId, client)).expectErrorMatches(e -> {
+            String errMsg = e.getMessage();
+            return errMsg.contains("Failed to create MCP session management index for session");
+        }).verify();
+    }
+
+    @Test
+    public void test_handleSseConnection_initSessionIndexException() {
+        doAnswer(invocationOnMock -> {
+            ActionListener<Boolean> listener = invocationOnMock.getArgument(0);
+            listener.onFailure(new RuntimeException("Failed to create index"));
+            return null;
+        }).when(mlIndicesHandler).initMLMcpSessionManagementIndex(isA(ActionListener.class));
+        StepVerifier.create(provider.handleSseConnection(channel, true, nodeId, client)).expectErrorMatches(e -> {
+            String errMsg = e.getMessage();
+            return errMsg.contains("Failed to create session management index for session");
+        }).verify();
+    }
+
+    @Test
+    public void test_handleSseConnection_indexFailed() {
+        doAnswer(invocationOnMock -> {
+            ActionListener<IndexResponse> listener = invocationOnMock.getArgument(1);
+            IndexResponse response = mock(IndexResponse.class);
+            when(response.status()).thenReturn(RestStatus.BAD_REQUEST);
+            listener.onResponse(response);
+            return null;
+        }).when(client).index(any(), isA(ActionListener.class));
+        StepVerifier.create(provider.handleSseConnection(channel, true, nodeId, client)).expectErrorMatches(e -> {
+            String errMsg = e.getMessage();
+            return errMsg.contains("Failed to create new SSE connection for session");
+        }).verify();
+    }
+
+    @Test
+    public void test_handleSseConnection_indexException() {
+        doAnswer(invocationOnMock -> {
+            ActionListener<IndexResponse> listener = invocationOnMock.getArgument(1);
+            listener.onFailure(new RuntimeException("Failed to index data"));
+            return null;
+        }).when(client).index(any(), isA(ActionListener.class));
+        StepVerifier.create(provider.handleSseConnection(channel, true, nodeId, client)).expectErrorMatches(e -> {
+            String errMsg = e.getMessage();
+            return errMsg.contains("Failed to index data");
+        }).verify();
+    }
+
+    @Test
+    public void test_handleSseConnection_reloadToolsException() {
+        doAnswer(invocationOnMock -> {
+            ActionListener<Boolean> listener = invocationOnMock.getArgument(0);
+            listener.onFailure(new RuntimeException("Failed to search tools"));
+            return null;
+        }).when(mcpToolsHelper).autoLoadAllMcpTools(isA(ActionListener.class));
+        StepVerifier.create(provider.handleSseConnection(channel, true, nodeId, client)).expectErrorMatches(e -> {
+            String errMsg = e.getMessage();
+            return errMsg.contains("Failed to search tools");
+        }).verify();
     }
 
     @Test
@@ -175,6 +244,23 @@ public class OpenSearchMcpServerTransportProviderTests extends OpenSearchTestCas
             """;
         McpSchema.JSONRPCResponse response = new McpSchema.JSONRPCResponse("2.0", "1", message, null);
         StepVerifier.create(transport.sendMessage(response)).verifyComplete();
+    }
+
+    static class UnSerializableObject {
+        public String name = "test";
+
+        public String getName() {
+            throw new RuntimeException("Failed to get field value");
+        }
+    }
+
+    @Test
+    public void test_sendMessage_JsonProcessingException() {
+        McpSchema.JSONRPCResponse response = new McpSchema.JSONRPCResponse("2.0", "1", new UnSerializableObject(), null);
+        StepVerifier.create(transport.sendMessage(response)).expectErrorMatches(e -> {
+            assertTrue(e instanceof RuntimeException);
+            return true;
+        }).verify();
     }
 
     @Test

@@ -11,7 +11,6 @@ import java.util.List;
 
 import org.opensearch.OpenSearchException;
 import org.opensearch.action.ActionRequest;
-import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.cluster.service.ClusterService;
@@ -21,6 +20,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.mcpserver.action.MLMcpToolsListAction;
+import org.opensearch.ml.common.transport.mcpserver.requests.list.MLMcpToolsListRequest;
 import org.opensearch.ml.common.transport.mcpserver.requests.register.McpToolRegisterInput;
 import org.opensearch.ml.common.transport.mcpserver.responses.list.MLMcpToolsListResponse;
 import org.opensearch.tasks.Task;
@@ -48,12 +48,7 @@ public class TransportMcpToolsListAction extends HandledTransportAction<ActionRe
         McpToolsHelper mcpToolsHelper,
         MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
-        super(MLMcpToolsListAction.NAME, transportService, actionFilters, streamInput -> new ActionRequest() {
-            @Override
-            public ActionRequestValidationException validate() {
-                return null;
-            }
-        });
+        super(MLMcpToolsListAction.NAME, transportService, actionFilters, MLMcpToolsListRequest::new);
         this.xContentRegistry = xContentRegistry;
         this.nodeFilter = nodeFilter;
         this.mcpToolsHelper = mcpToolsHelper;

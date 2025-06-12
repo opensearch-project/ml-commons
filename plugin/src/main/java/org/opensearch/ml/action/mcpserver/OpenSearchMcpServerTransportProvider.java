@@ -26,7 +26,7 @@ import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.StreamingRestChannel;
-import org.opensearch.transport.client.node.NodeClient;
+import org.opensearch.transport.client.Client;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -120,7 +120,7 @@ public class OpenSearchMcpServerTransportProvider implements McpServerTransportP
      * Handles new SSE connection requests from clients. Creates a new session for each
      * connection and sets up the SSE event stream.
      */
-    public Mono<HttpChunk> handleSseConnection(StreamingRestChannel channel, boolean appendToBaseUrl, String nodeId, NodeClient client) {
+    public Mono<HttpChunk> handleSseConnection(StreamingRestChannel channel, boolean appendToBaseUrl, String nodeId, Client client) {
         return Mono.create(sink -> {
             OpenSearchMcpSessionTransport sessionTransport = new OpenSearchMcpSessionTransport(channel);
             McpServerSession session = sessionFactory.create(sessionTransport);
@@ -140,7 +140,7 @@ public class OpenSearchMcpServerTransportProvider implements McpServerTransportP
                 }
             }, e -> {
                 log.error("Failed to create session management index for session: {}", sessionId);
-                sink.error(new IllegalStateException("Failed to create session management index for session" + sessionId));
+                sink.error(new IllegalStateException("Failed to create session management index for session: " + sessionId));
             });
             mlIndicesHandler.initMLMcpSessionManagementIndex(initIndexListener);
         });
@@ -151,7 +151,7 @@ public class OpenSearchMcpServerTransportProvider implements McpServerTransportP
         McpServerSession session,
         boolean appendToBaseUrl,
         String nodeId,
-        NodeClient client,
+        Client client,
         StreamingRestChannel channel,
         MonoSink<HttpChunk> sink
     ) {
@@ -160,7 +160,7 @@ public class OpenSearchMcpServerTransportProvider implements McpServerTransportP
                 reloadAllMcpTools(sessionId, session, appendToBaseUrl, channel, sink);
             } else {
                 log.error("Failed to create new SSE connection for session: {}", sessionId);
-                sink.error(new IllegalStateException("Failed to create new SSE connection for session" + sessionId));
+                sink.error(new IllegalStateException("Failed to create new SSE connection for session: " + sessionId));
             }
         }, e -> {
             log.error("Failed to write sessionId into MCP session management index", e);
