@@ -752,7 +752,10 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
         transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_INTERNAL"), actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Connector needs to be updated with inline request", argumentCaptor.getValue().getMessage());
+        assertEquals(
+            "Cannot update connector settings for this model. The model was created with a connector_id and does not have an inline connector.",
+            argumentCaptor.getValue().getMessage()
+        );
     }
 
     @Test

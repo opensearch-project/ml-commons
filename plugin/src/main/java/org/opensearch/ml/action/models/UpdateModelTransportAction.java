@@ -286,7 +286,10 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                     if (connector == null) {
                         wrappedListener
                             .onFailure(
-                                new OpenSearchStatusException("Connector needs to be updated with inline request", RestStatus.BAD_REQUEST)
+                                new OpenSearchStatusException(
+                                    "Cannot update connector settings for this model. The model was created with a connector_id and does not have an inline connector.",
+                                    RestStatus.BAD_REQUEST
+                                )
                             );
                         return;
                     }
