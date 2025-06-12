@@ -7,10 +7,12 @@ package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.apache.commons.text.StringEscapeUtils.escapeJson;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.common.MLTask.TASK_ID_FIELD;
 import static org.opensearch.ml.common.conversation.ActionConstants.ADDITIONAL_INFO_FIELD;
 import static org.opensearch.ml.common.conversation.ActionConstants.AI_RESPONSE_FIELD;
 import static org.opensearch.ml.common.conversation.ActionConstants.MEMORY_ID;
 import static org.opensearch.ml.common.conversation.ActionConstants.PARENT_INTERACTION_ID_FIELD;
+import static org.opensearch.ml.common.utils.MLTaskUtils.isTaskMarkedForCancel;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DISABLE_TRACE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTool;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMessageHistoryLimit;
@@ -26,6 +28,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -181,6 +184,12 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
 
         MLMemorySpec memorySpec = mlAgent.getMemory();
         for (int i = 0; i <= toolSpecs.size(); i++) {
+            String taskId = params.get(TASK_ID_FIELD);
+            if (isTaskMarkedForCancel(taskId, client)) {
+                listener.onFailure(new CancellationException(String.format("Agent execution cancelled for task: %s", taskId)));
+                return;
+            }
+
             if (i == 0) {
                 MLToolSpec toolSpec = toolSpecs.get(i);
                 Tool tool = createTool(toolFactories, params, toolSpec, mlAgent.getTenantId());

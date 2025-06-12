@@ -10,12 +10,14 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.MLTask.TASK_ID_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.MESSAGE_HISTORY_LIMIT;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.LAST_N_INTERACTIONS;
 
@@ -23,6 +25,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CancellationException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -32,6 +35,7 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.mockito.stubbing.Answer;
@@ -55,13 +59,15 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.MLTaskResponse;
+import org.opensearch.ml.common.utils.MLTaskUtils;
+import org.opensearch.ml.engine.MLStaticMockBase;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.transport.client.Client;
 
-public class MLChatAgentRunnerTest {
+public class MLChatAgentRunnerTest extends MLStaticMockBase {
     public static final String FIRST_TOOL = "firstTool";
     public static final String SECOND_TOOL = "secondTool";
     @Mock
@@ -878,6 +884,26 @@ public class MLChatAgentRunnerTest {
         Assert.assertFalse(chatHistory.contains("input-99"));
         Assert.assertEquals(5, messageHistoryLimitCapture.getValue().intValue());
         Assert.assertTrue(toolParamsCapture.getValue().containsKey(MLChatAgentRunner.CHAT_HISTORY));
+    }
+
+    @Test
+    public void testTaskCancellation() {
+        MLAgent mlAgent = createMLAgentWithTools();
+        Map<String, String> params = createAgentParamsWithAction(FIRST_TOOL, "someInput");
+        String taskId = "test-task-id";
+        params.put(TASK_ID_FIELD, taskId);
+
+        try (MockedStatic<MLTaskUtils> mlTaskUtilsMockedStatic = mockStatic(MLTaskUtils.class)) {
+            mlTaskUtilsMockedStatic.when(() -> MLTaskUtils.isTaskMarkedForCancel(taskId, client)).thenReturn(true);
+            mlChatAgentRunner.run(mlAgent, params, agentActionListener);
+            verify(agentActionListener)
+                .onFailure(
+                    argThat(
+                        exception -> exception instanceof CancellationException
+                            && exception.getMessage().equals(String.format("Agent execution cancelled for task: %s", taskId))
+                    )
+                );
+        }
     }
 
     // Helper methods to create MLAgent and parameters
