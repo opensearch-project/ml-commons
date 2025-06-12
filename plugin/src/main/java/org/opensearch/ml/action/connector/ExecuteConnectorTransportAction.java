@@ -18,6 +18,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteRequest;
 import org.opensearch.ml.common.transport.connector.MLExecuteConnectorAction;
@@ -43,6 +44,7 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
 
     ConnectorAccessControlHelper connectorAccessControlHelper;
     EncryptorImpl encryptor;
+    MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Inject
     public ExecuteConnectorTransportAction(
@@ -53,7 +55,8 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
         ScriptService scriptService,
         NamedXContentRegistry xContentRegistry,
         ConnectorAccessControlHelper connectorAccessControlHelper,
-        EncryptorImpl encryptor
+        EncryptorImpl encryptor,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLExecuteConnectorAction.NAME, transportService, actionFilters, MLConnectorDeleteRequest::new);
         this.client = client;
@@ -62,6 +65,7 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
         this.xContentRegistry = xContentRegistry;
         this.connectorAccessControlHelper = connectorAccessControlHelper;
         this.encryptor = encryptor;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
@@ -77,6 +81,7 @@ public class ExecuteConnectorTransportAction extends HandledTransportAction<Acti
                     connector.decrypt(connectorAction, (credential, tenantId) -> encryptor.decrypt(credential, null), null);
                     RemoteConnectorExecutor connectorExecutor = MLEngineClassLoader
                         .initInstance(connector.getProtocol(), connector, Connector.class);
+                    connectorExecutor.setConnectorPrivateIpEnabled(mlFeatureEnabledSetting.isConnectorPrivateIpEnabled());
                     connectorExecutor.setScriptService(scriptService);
                     connectorExecutor.setClusterService(clusterService);
                     connectorExecutor.setClient(client);

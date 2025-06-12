@@ -118,61 +118,94 @@ public class MLNodeUtilsTests extends OpenSearchTestCase {
 
     @Test
     public void testProcessRemoteInferenceInputDataSetParametersValueNoParameters() throws IOException {
+        String schema = "{\"type\": \"object\",\"properties\": {}}";
         String json = "{\"key1\":\"foo\",\"key2\":123,\"key3\":true}";
-        String processedJson = MLNodeUtils.processRemoteInferenceInputDataSetParametersValue(json);
+        String processedJson = MLNodeUtils.processRemoteInferenceInputDataSetParametersValue(json, schema);
         assertEquals(json, processedJson);
     }
 
     @Test
     public void testProcessRemoteInferenceInputDataSetInvalidJson() {
+        String schema = "{\"type\": \"object\",\"properties\": {}}";
         String json = "{\"key1\":\"foo\",\"key2\":123,\"key3\":true,\"parameters\":{\"a\"}}";
-        assertThrows(JsonParseException.class, () -> MLNodeUtils.processRemoteInferenceInputDataSetParametersValue(json));
+        assertThrows(JsonParseException.class, () -> MLNodeUtils.processRemoteInferenceInputDataSetParametersValue(json, schema));
     }
 
     @Test
     public void testProcessRemoteInferenceInputDataSetEmptyParameters() throws IOException {
+        String schema = "{\"type\": \"object\",\"properties\": {\"parameters\": {\"type\": \"object\"}}}";
         String json = "{\"key1\":\"foo\",\"key2\":123,\"key3\":true,\"parameters\":{}}";
-        String processedJson = MLNodeUtils.processRemoteInferenceInputDataSetParametersValue(json);
+        String processedJson = MLNodeUtils.processRemoteInferenceInputDataSetParametersValue(json, schema);
         assertEquals(json, processedJson);
     }
 
     @Test
     public void testProcessRemoteInferenceInputDataSetParametersValueParametersWrongType() throws IOException {
+        String schema = "{\"type\": \"object\",\"properties\": {\"parameters\": {\"type\": \"array\"}}}";
         String json = "{\"key1\":\"foo\",\"key2\":123,\"key3\":true,\"parameters\":[\"Hello\",\"world\"]}";
-        String processedJson = MLNodeUtils.processRemoteInferenceInputDataSetParametersValue(json);
+        String processedJson = MLNodeUtils.processRemoteInferenceInputDataSetParametersValue(json, schema);
         assertEquals(json, processedJson);
     }
 
     @Test
     public void testProcessRemoteInferenceInputDataSetParametersValueWithParametersProcessArray() throws IOException {
+        String schema = "{\"type\": \"object\",\"properties\": {\"parameters\": {\"type\": \"object\",\"properties\": {"
+            + "\"texts\": {\"type\": \"array\",\"items\": {\"type\": \"string\"}}"
+            + "}}}}";
         String json = "{\"key1\":\"foo\",\"key2\":123,\"key3\":true,\"parameters\":{\"texts\":\"[\\\"Hello\\\",\\\"world\\\"]\"}}";
         String expectedJson = "{\"key1\":\"foo\",\"key2\":123,\"key3\":true,\"parameters\":{\"texts\":[\"Hello\",\"world\"]}}";
-        String processedJson = MLNodeUtils.processRemoteInferenceInputDataSetParametersValue(json);
+        String processedJson = MLNodeUtils.processRemoteInferenceInputDataSetParametersValue(json, schema);
         assertEquals(expectedJson, processedJson);
     }
 
     @Test
     public void testProcessRemoteInferenceInputDataSetParametersValueWithParametersProcessObject() throws IOException {
+        String schema = "{\"type\": \"object\",\"properties\": {\"parameters\": {\"type\": \"object\",\"properties\": {"
+            + "\"messages\": {\"type\": \"object\"}"
+            + "}}}}";
         String json =
-            "{\"key1\":\"foo\",\"key2\":123,\"key3\":true,\"parameters\":{\"messages\":\"{\\\"role\\\":\\\"system\\\",\\\"foo\\\":\\\"{\\\\\\\"a\\\\\\\": \\\\\\\"b\\\\\\\"}\\\",\\\"content\\\":{\\\"a\\\":\\\"b\\\"}}\"}}}";
+            "{\"key1\":\"foo\",\"key2\":123,\"key3\":true,\"parameters\":{\"messages\":\"{\\\"role\\\":\\\"system\\\",\\\"foo\\\":\\\"{\\\\\\\"a\\\\\\\": \\\\\\\"b\\\\\\\"}\\\",\\\"content\\\":{\\\"a\\\":\\\"b\\\"}}\"}}";
         String expectedJson =
             "{\"key1\":\"foo\",\"key2\":123,\"key3\":true,\"parameters\":{\"messages\":{\"role\":\"system\",\"foo\":\"{\\\"a\\\": \\\"b\\\"}\",\"content\":{\"a\":\"b\"}}}}";
-        String processedJson = MLNodeUtils.processRemoteInferenceInputDataSetParametersValue(json);
+        String processedJson = MLNodeUtils.processRemoteInferenceInputDataSetParametersValue(json, schema);
         assertEquals(expectedJson, processedJson);
     }
 
     @Test
+    public void testProcessRemoteInferenceInputDataSetParametersValueWithParametersQuotedNumber() throws IOException {
+        String schema = "{\"type\": \"object\",\"properties\": {\"parameters\": {\"type\": \"object\",\"properties\": {"
+            + "\"key1\": {\"type\": \"string\"},"
+            + "\"key2\": {\"type\": \"integer\"},"
+            + "\"key3\": {\"type\": \"boolean\"}"
+            + "}}}}";
+        String json = "{\"key1\":\"foo\",\"key2\":123,\"key3\":true,\"parameters\":{\"key1\":\"123\",\"key2\":123,\"key3\":true}}";
+        String processedJson = MLNodeUtils.processRemoteInferenceInputDataSetParametersValue(json, schema);
+        assertEquals(json, processedJson);
+    }
+
+    @Test
     public void testProcessRemoteInferenceInputDataSetParametersValueWithParametersNoProcess() throws IOException {
+        String schema = "{\"type\": \"object\",\"properties\": {\"parameters\": {\"type\": \"object\",\"properties\": {"
+            + "\"key1\": {\"type\": \"string\"},"
+            + "\"key2\": {\"type\": \"integer\"},"
+            + "\"key3\": {\"type\": \"boolean\"}"
+            + "}}}}";
         String json = "{\"key1\":\"foo\",\"key2\":123,\"key3\":true,\"parameters\":{\"key1\":\"foo\",\"key2\":123,\"key3\":true}}";
-        String processedJson = MLNodeUtils.processRemoteInferenceInputDataSetParametersValue(json);
+        String processedJson = MLNodeUtils.processRemoteInferenceInputDataSetParametersValue(json, schema);
         assertEquals(json, processedJson);
     }
 
     @Test
     public void testProcessRemoteInferenceInputDataSetParametersValueWithParametersInvalidJson() throws IOException {
+        String schema = "{\"type\": \"object\",\"properties\": {\"parameters\": {\"type\": \"object\",\"properties\": {"
+            + "\"key1\": {\"type\": \"string\"},"
+            + "\"key2\": {\"type\": \"integer\"},"
+            + "\"key3\": {\"type\": \"boolean\"},"
+            + "\"texts\": {\"type\": \"array\"}"
+            + "}}}}";
         String json =
             "{\"key1\":\"foo\",\"key2\":123,\"key3\":true,\"parameters\":{\"key1\":\"foo\",\"key2\":123,\"key3\":true,\"texts\":\"[\\\"Hello\\\",\\\"world\\\"\"}}";
-        String processedJson = MLNodeUtils.processRemoteInferenceInputDataSetParametersValue(json);
+        String processedJson = MLNodeUtils.processRemoteInferenceInputDataSetParametersValue(json, schema);
         assertEquals(json, processedJson);
     }
 }

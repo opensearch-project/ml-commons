@@ -11,10 +11,14 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGE
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONTROLLER_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_METRIC_COLLECTION_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_OFFLINE_BATCH_INFERENCE_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_OFFLINE_BATCH_INGESTION_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -40,6 +44,13 @@ public class MLFeatureEnabledSetting {
     // This is to identify if this node is in multi-tenancy or not.
     private volatile Boolean isMultiTenancyEnabled;
 
+    private volatile Boolean isMcpServerEnabled;
+
+    private volatile Boolean isRagSearchPipelineEnabled;
+
+    private volatile Boolean isMetricCollectionEnabled;
+    private volatile Boolean isStaticMetricCollectionEnabled;
+
     private final List<SettingsChangeListener> listeners = new ArrayList<>();
 
     public MLFeatureEnabledSetting(ClusterService clusterService, Settings settings) {
@@ -51,6 +62,10 @@ public class MLFeatureEnabledSetting {
         isBatchIngestionEnabled = ML_COMMONS_OFFLINE_BATCH_INGESTION_ENABLED.get(settings);
         isBatchInferenceEnabled = ML_COMMONS_OFFLINE_BATCH_INFERENCE_ENABLED.get(settings);
         isMultiTenancyEnabled = ML_COMMONS_MULTI_TENANCY_ENABLED.get(settings);
+        isMcpServerEnabled = ML_COMMONS_MCP_SERVER_ENABLED.get(settings);
+        isRagSearchPipelineEnabled = ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED.get(settings);
+        isMetricCollectionEnabled = ML_COMMONS_METRIC_COLLECTION_ENABLED.get(settings);
+        isStaticMetricCollectionEnabled = ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED.get(settings);
 
         clusterService
             .getClusterSettings()
@@ -69,6 +84,16 @@ public class MLFeatureEnabledSetting {
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_OFFLINE_BATCH_INFERENCE_ENABLED, it -> isBatchInferenceEnabled = it);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MCP_SERVER_ENABLED, it -> isMcpServerEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED, it -> isRagSearchPipelineEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_METRIC_COLLECTION_ENABLED, it -> isMetricCollectionEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED, it -> isStaticMetricCollectionEnabled = it);
     }
 
     /**
@@ -131,8 +156,32 @@ public class MLFeatureEnabledSetting {
         return isMultiTenancyEnabled;
     }
 
+    /**
+     * Whether the mcp server feature is enabled. If disabled, MCP server APIs in ml-commons will be blocked.
+     * @return where the MCP server feature is enabled.
+     */
+    public boolean isMcpServerEnabled() {
+        return isMcpServerEnabled;
+    }
+
     public void addListener(SettingsChangeListener listener) {
         listeners.add(listener);
+    }
+
+    /**
+     * Whether the rag search pipeline feature is enabled. If disabled, APIs in ml-commons will block rag search pipeline.
+     * @return whether the feature is enabled.
+     */
+    public boolean isRagSearchPipelineEnabled() {
+        return isRagSearchPipelineEnabled;
+    }
+
+    public boolean isMetricCollectionEnabled() {
+        return isMetricCollectionEnabled;
+    }
+
+    public boolean isStaticMetricCollectionEnabled() {
+        return isStaticMetricCollectionEnabled;
     }
 
     @VisibleForTesting

@@ -18,11 +18,11 @@
 package org.opensearch.searchpipelines.questionanswering.generative;
 
 import java.util.Map;
-import java.util.function.BooleanSupplier;
 
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.ingest.ConfigurationUtils;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.search.pipeline.AbstractProcessor;
 import org.opensearch.search.pipeline.Processor;
 import org.opensearch.search.pipeline.SearchRequestProcessor;
@@ -33,18 +33,18 @@ import org.opensearch.search.pipeline.SearchRequestProcessor;
 public class GenerativeQARequestProcessor extends AbstractProcessor implements SearchRequestProcessor {
 
     private String modelId;
-    private final BooleanSupplier featureFlagSupplier;
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     protected GenerativeQARequestProcessor(
         String tag,
         String description,
         boolean ignoreFailure,
         String modelId,
-        BooleanSupplier supplier
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(tag, description, ignoreFailure);
         this.modelId = modelId;
-        this.featureFlagSupplier = supplier;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
@@ -52,7 +52,7 @@ public class GenerativeQARequestProcessor extends AbstractProcessor implements S
 
         // TODO Use chat history to rephrase the question with full conversation context.
 
-        if (!featureFlagSupplier.getAsBoolean()) {
+        if (!mlFeatureEnabledSetting.isRagSearchPipelineEnabled()) {
             throw new MLException(GenerativeQAProcessorConstants.FEATURE_NOT_ENABLED_ERROR_MSG);
         }
 
@@ -66,10 +66,10 @@ public class GenerativeQARequestProcessor extends AbstractProcessor implements S
 
     public static final class Factory implements Processor.Factory<SearchRequestProcessor> {
 
-        private final BooleanSupplier featureFlagSupplier;
+        private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
-        public Factory(BooleanSupplier supplier) {
-            this.featureFlagSupplier = supplier;
+        public Factory(MLFeatureEnabledSetting mlFeatureEnabledSetting) {
+            this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         }
 
         @Override
@@ -81,7 +81,7 @@ public class GenerativeQARequestProcessor extends AbstractProcessor implements S
             Map<String, Object> config,
             PipelineContext pipelineContext
         ) throws Exception {
-            if (featureFlagSupplier.getAsBoolean()) {
+            if (this.mlFeatureEnabledSetting.isRagSearchPipelineEnabled()) {
                 return new GenerativeQARequestProcessor(
                     tag,
                     description,
@@ -93,7 +93,7 @@ public class GenerativeQARequestProcessor extends AbstractProcessor implements S
                             config,
                             GenerativeQAProcessorConstants.CONFIG_NAME_MODEL_ID
                         ),
-                    this.featureFlagSupplier
+                    this.mlFeatureEnabledSetting
                 );
             } else {
                 throw new MLException(GenerativeQAProcessorConstants.FEATURE_NOT_ENABLED_ERROR_MSG);
