@@ -142,7 +142,7 @@ public class SearchIndexTool implements Tool {
                 }
                 if (jsonObject != null && jsonObject.has(INDEX_FIELD) && jsonObject.has(QUERY_FIELD)) {
                     index = jsonObject.get(INDEX_FIELD).getAsString();
-                    query = jsonObject.get(QUERY_FIELD).getAsString();
+                    query = jsonObject.get(QUERY_FIELD) == null ? null : jsonObject.getAsJsonObject(QUERY_FIELD).toString();
                 } else {
                     index = parameters.get(INDEX_FIELD);
                     query = parameters.get(QUERY_FIELD);
