@@ -7,6 +7,9 @@ package org.opensearch.ml.action.prediction;
 
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE;
 import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
+import static org.opensearch.ml.utils.MLExceptionUtils.REMOTE_INFERENCE_DISABLED_ERR_MSG;
+
+import java.util.Locale;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
@@ -126,9 +129,8 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                     context.restore();
                     modelCacheHelper.setModelInfo(modelId, mlModel);
                     FunctionName functionName = mlModel.getAlgorithm();
-                    if (FunctionName.isDLModel(functionName) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
-                        throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
-                    }
+                    String modelType = functionName.name();
+                    validateModelType(modelType);
                     mlPredictionTaskRequest.getMlInput().setAlgorithm(functionName);
                     modelAccessControlHelper
                         .validateModelGroupAccess(
@@ -271,6 +273,15 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                     RestStatus.BAD_REQUEST
                 );
             }
+        }
+    }
+
+    private void validateModelType(String modelType) {
+        if (FunctionName.REMOTE.name().equals(modelType) && !mlFeatureEnabledSetting.isRemoteInferenceEnabled()) {
+            throw new IllegalStateException(REMOTE_INFERENCE_DISABLED_ERR_MSG);
+        } else if (FunctionName.isDLModel(FunctionName.from(modelType.toUpperCase(Locale.ROOT)))
+            && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
+            throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
         }
     }
 
