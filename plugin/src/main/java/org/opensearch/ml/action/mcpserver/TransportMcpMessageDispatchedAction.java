@@ -5,11 +5,8 @@
 
 package org.opensearch.ml.action.mcpserver;
 
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE;
-
 import java.io.IOException;
 
-import org.opensearch.OpenSearchException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
@@ -71,10 +68,6 @@ public class TransportMcpMessageDispatchedAction extends HandledTransportAction<
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<AcknowledgedResponse> listener) {
-        if (!mlFeatureEnabledSetting.isMcpServerEnabled()) {
-            listener.onFailure(new OpenSearchException(ML_COMMONS_MCP_SERVER_DISABLED_MESSAGE));
-            return;
-        }
         MLMcpMessageRequest mlMcpMessageRequest = MLMcpMessageRequest.fromActionRequest(request);
         final StreamingRestChannel channel = McpAsyncServerHolder.CHANNELS.get(mlMcpMessageRequest.getSessionId());
         Mono
@@ -88,6 +81,7 @@ public class TransportMcpMessageDispatchedAction extends HandledTransportAction<
             })
             .onErrorResume(e -> Mono.fromRunnable(() -> {
                 try {
+                    listener.onResponse(new AcknowledgedResponse(true));
                     channel.sendResponse(new BytesRestResponse(channel, new Exception(e)));
                 } catch (IOException ex) {
                     log.error("Failed to send exception response to client during message handling due to IOException", ex);

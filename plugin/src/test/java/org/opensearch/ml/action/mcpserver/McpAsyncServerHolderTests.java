@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.action.mcpserver;
 
+import java.util.concurrent.atomic.AtomicReference;
+
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
@@ -24,14 +26,16 @@ public class McpAsyncServerHolderTests extends OpenSearchTestCase {
         MockitoAnnotations.openMocks(this);
     }
 
-    private void test_init_success() {
+    public void test_getMcpServerTransportProviderInstance_multiThreading() {
         McpAsyncServerHolder.init(mlIndicesHandler, mcpToolsHelper);
-    }
-
-    public void test_getMcpServerTransportProviderInstance() {
-        McpAsyncServerHolder.init(mlIndicesHandler, mcpToolsHelper);
-        OpenSearchMcpServerTransportProvider provider = McpAsyncServerHolder.getMcpServerTransportProviderInstance();
-        assertNotNull(provider);
+        AtomicReference<OpenSearchMcpServerTransportProvider> providerAtomicReference = new AtomicReference<>();
+        for (int i = 0; i < 10; i++) {
+            new Thread(() -> {
+                OpenSearchMcpServerTransportProvider provider = McpAsyncServerHolder.getMcpServerTransportProviderInstance();
+                providerAtomicReference.compareAndExchange(null, provider);
+                assert providerAtomicReference.get() == provider;
+            }).start();
+        }
     }
 
     public void test_getMcpAsyncServerInstance() {
