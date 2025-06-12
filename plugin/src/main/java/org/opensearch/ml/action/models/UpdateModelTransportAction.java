@@ -283,6 +283,13 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
             if (newConnectorId == null) {
                 if (updateModelInput.getConnector() != null) {
                     Connector connector = mlModel.getConnector();
+                    if (connector == null) {
+                        wrappedListener
+                            .onFailure(
+                                new OpenSearchStatusException("Connector needs to be updated with inline request", RestStatus.BAD_REQUEST)
+                            );
+                        return;
+                    }
                     connector.update(updateModelInput.getConnector(), mlEngine::encrypt);
                     connector.validateConnectorURL(trustedConnectorEndpointsRegex);
                     updateModelInput.setUpdatedConnector(connector);

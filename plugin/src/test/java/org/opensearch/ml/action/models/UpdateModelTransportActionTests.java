@@ -735,6 +735,27 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void testRetryConnectorWhenNotProvidedInRequestBody() {
+        MLModel testUpdateModelCacheModel = prepareMLModel("REMOTE_INTERNAL", MLModelState.DEPLOYED);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(4);
+            listener.onResponse(testUpdateModelCacheModel);
+            return null;
+        }).when(mlModelManager).getModel(eq("test_model_id"), any(), any(), any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<MLUpdateModelCacheNodesResponse> listener = invocation.getArgument(2);
+            listener.onResponse(updateModelCacheNodesResponse);
+            return null;
+        }).when(client).execute(any(), any(), isA(ActionListener.class));
+        testUpdateModelCacheModel.setConnector(null);
+        transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_INTERNAL"), actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Connector needs to be updated with inline request", argumentCaptor.getValue().getMessage());
+    }
+
+    @Test
     public void testUpdateLocalModelWithInternalRemoteInformation() {
         transportUpdateModelAction.doExecute(task, prepareRemoteRequest("REMOTE_INTERNAL"), actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
