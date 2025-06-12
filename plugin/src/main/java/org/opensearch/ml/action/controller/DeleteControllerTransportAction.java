@@ -27,6 +27,7 @@ import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
@@ -55,6 +56,7 @@ import lombok.extern.log4j.Log4j2;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class DeleteControllerTransportAction extends HandledTransportAction<ActionRequest, DeleteResponse> {
     Client client;
+    Settings settings;
     NamedXContentRegistry xContentRegistry;
     ClusterService clusterService;
     MLModelManager mlModelManager;
@@ -67,6 +69,7 @@ public class DeleteControllerTransportAction extends HandledTransportAction<Acti
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
+        Settings settings,
         NamedXContentRegistry xContentRegistry,
         ClusterService clusterService,
         MLModelManager mlModelManager,
@@ -98,7 +101,7 @@ public class DeleteControllerTransportAction extends HandledTransportAction<Acti
             mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
                 Boolean isHidden = mlModel.getIsHidden();
                 modelAccessControlHelper
-                    .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {
+                    .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, settings, ActionListener.wrap(hasPermission -> {
                         if (hasPermission) {
                             mlModelManager
                                 .getController(

@@ -648,7 +648,7 @@ public class MachineLearningPlugin extends Plugin
             mlFeatureEnabledSetting
         );
 
-        mlModelChunkUploader = new MLModelChunkUploader(mlIndicesHandler, client, xContentRegistry, modelAccessControlHelper);
+        mlModelChunkUploader = new MLModelChunkUploader(mlIndicesHandler, client, settings, xContentRegistry, modelAccessControlHelper);
 
         MLTaskDispatcher mlTaskDispatcher = new MLTaskDispatcher(clusterService, client, settings, nodeHelper);
         mlTrainingTaskRunner = new MLTrainingTaskRunner(
@@ -760,7 +760,7 @@ public class MachineLearningPlugin extends Plugin
 
         MetricsCorrelation metricsCorrelation = new MetricsCorrelation(client, settings, clusterService);
         MLEngineClassLoader.register(FunctionName.METRICS_CORRELATION, metricsCorrelation);
-        MLSearchHandler mlSearchHandler = new MLSearchHandler(client, xContentRegistry, modelAccessControlHelper, clusterService);
+        MLSearchHandler mlSearchHandler = new MLSearchHandler(client, xContentRegistry, modelAccessControlHelper, clusterService, settings);
         MLModelAutoReDeployer mlModelAutoRedeployer = new MLModelAutoReDeployer(
             clusterService,
             client,

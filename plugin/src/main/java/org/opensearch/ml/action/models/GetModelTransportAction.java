@@ -141,27 +141,33 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
                                     }
                                 } else {
                                     modelAccessControlHelper
-                                        .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(access -> {
-                                            if (!access) {
-                                                wrappedListener
-                                                    .onFailure(
-                                                        new OpenSearchStatusException(
-                                                            "User doesn't have privilege to perform this operation on this model",
-                                                            RestStatus.FORBIDDEN
-                                                        )
-                                                    );
-                                            } else {
-                                                log.debug("Completed Get Model Request, id:{}", modelId);
-                                                Connector connector = mlModel.getConnector();
-                                                if (connector != null) {
-                                                    connector.removeCredential();
+                                        .validateModelGroupAccess(
+                                            user,
+                                            mlModel.getModelGroupId(),
+                                            client,
+                                            settings,
+                                            ActionListener.wrap(access -> {
+                                                if (!access) {
+                                                    wrappedListener
+                                                        .onFailure(
+                                                            new OpenSearchStatusException(
+                                                                "User doesn't have privilege to perform this operation on this model",
+                                                                RestStatus.FORBIDDEN
+                                                            )
+                                                        );
+                                                } else {
+                                                    log.debug("Completed Get Model Request, id:{}", modelId);
+                                                    Connector connector = mlModel.getConnector();
+                                                    if (connector != null) {
+                                                        connector.removeCredential();
+                                                    }
+                                                    wrappedListener.onResponse(MLModelGetResponse.builder().mlModel(mlModel).build());
                                                 }
-                                                wrappedListener.onResponse(MLModelGetResponse.builder().mlModel(mlModel).build());
-                                            }
-                                        }, e -> {
-                                            log.error("Failed to validate Access for Model Id {}", modelId, e);
-                                            wrappedListener.onFailure(e);
-                                        }));
+                                            }, e -> {
+                                                log.error("Failed to validate Access for Model Id {}", modelId, e);
+                                                wrappedListener.onFailure(e);
+                                            })
+                                        );
                                 }
                             } catch (Exception e) {
                                 log.error("Failed to parse ml model {}", r.id(), e);
