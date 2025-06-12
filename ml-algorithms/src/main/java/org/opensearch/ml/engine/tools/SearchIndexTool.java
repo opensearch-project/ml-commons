@@ -11,7 +11,6 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
@@ -31,8 +30,8 @@ import org.opensearch.transport.client.Client;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonSyntaxException;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -97,9 +96,19 @@ public class SearchIndexTool implements Tool {
         if (parameters == null || parameters.isEmpty()) {
             return false;
         }
-        boolean argumentsFromInput = parameters.containsKey(INPUT_FIELD) && parameters.get(INPUT_FIELD) != null;
-        boolean argumentsFromParameters = parameters.containsKey(INDEX_FIELD) && parameters.containsKey(QUERY_FIELD);
-        return argumentsFromInput || argumentsFromParameters;
+        boolean argumentsFromInput = parameters.containsKey(INPUT_FIELD)
+            && parameters.get(INPUT_FIELD) != null
+            && !parameters.get(INPUT_FIELD).isEmpty();
+        boolean argumentsFromParameters = parameters.containsKey(INDEX_FIELD)
+            && parameters.containsKey(QUERY_FIELD)
+            && !parameters.get(INDEX_FIELD).isEmpty()
+            && !parameters.get(QUERY_FIELD).isEmpty();
+        boolean validRequest = argumentsFromInput || argumentsFromParameters;
+        if (!validRequest) {
+            log.error("SearchIndexTool's two parameter: index and query are required!");
+            return false;
+        }
+        return true;
     }
 
     private SearchRequest getSearchRequest(String index, String query) throws IOException {
@@ -122,17 +131,27 @@ public class SearchIndexTool implements Tool {
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
         try {
             String input = parameters.get(INPUT_FIELD);
-            JsonObject jsonObject = GSON.fromJson(input, JsonObject.class);
-            String index = Optional
-                .ofNullable(jsonObject)
-                .map(x -> x.get(INDEX_FIELD))
-                .map(JsonElement::getAsString)
-                .orElse(parameters.getOrDefault(INDEX_FIELD, null));
-            String query = Optional
-                .ofNullable(jsonObject)
-                .map(x -> x.get(QUERY_FIELD))
-                .map(JsonElement::toString)
-                .orElse(parameters.getOrDefault(QUERY_FIELD, null));
+            String index;
+            String query;
+            if (input != null && !input.isEmpty()) {
+                JsonObject jsonObject = null;
+                try {
+                    jsonObject = GSON.fromJson(input, JsonObject.class);
+                } catch (JsonSyntaxException e) {
+                    log.error("Invalid JSON input: {}", input, e);
+                }
+                if (jsonObject != null && jsonObject.has(INDEX_FIELD) && jsonObject.has(QUERY_FIELD)) {
+                    index = jsonObject.get(INDEX_FIELD).getAsString();
+                    query = jsonObject.get(QUERY_FIELD).getAsString();
+                } else {
+                    index = parameters.get(INDEX_FIELD);
+                    query = parameters.get(QUERY_FIELD);
+                }
+            } else {
+                index = parameters.get(INDEX_FIELD);
+                query = parameters.get(QUERY_FIELD);
+            }
+
             if (index == null || query == null) {
                 listener.onFailure(new IllegalArgumentException("SearchIndexTool's two parameter: index and query are required!"));
                 return;

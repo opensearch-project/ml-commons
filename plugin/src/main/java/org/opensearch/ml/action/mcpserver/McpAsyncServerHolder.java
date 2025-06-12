@@ -58,26 +58,19 @@ public class McpAsyncServerHolder {
 
     public static McpAsyncServer getMcpAsyncServerInstance() {
         if (asyncServer == null) {
-            OpenSearchMcpServerTransportProvider provider = getMcpServerTransportProviderInstance();
             synchronized (McpAsyncServerHolder.class) {
-                if (asyncServer == null) {
-                    asyncServer = createMcpAsyncServer(provider);
-                }
+                getMcpServerTransportProviderInstance();
             }
         }
         return asyncServer;
     }
 
     private static McpAsyncServer createMcpAsyncServer(OpenSearchMcpServerTransportProvider provider) {
-        if (asyncServer == null) {
-            asyncServer = McpServer
-                .async(provider)
-                .capabilities(McpSchema.ServerCapabilities.builder().tools(true).logging().build())
-                .serverInfo("OpenSearch-MCP-Server", "0.1.0")
-                .build();
-
-        }
-        return asyncServer;
+        return McpServer
+            .async(provider)
+            .capabilities(McpSchema.ServerCapabilities.builder().tools(true).logging().build())
+            .serverInfo("OpenSearch-MCP-Server", "0.1.0")
+            .build();
     }
 
 }
