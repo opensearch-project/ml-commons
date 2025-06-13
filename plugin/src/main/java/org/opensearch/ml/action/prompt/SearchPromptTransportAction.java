@@ -69,7 +69,10 @@ public class SearchPromptTransportAction extends HandledTransportAction<MLSearch
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             final ActionListener<SearchResponse> wrappedListener = ActionListener
-                .wrap(actionListener::onResponse, e -> wrapListenerToHandleSearchIndexNotFound(e, actionListener));
+                .runBefore(
+                    ActionListener.wrap(actionListener::onResponse, e -> wrapListenerToHandleSearchIndexNotFound(e, actionListener)),
+                    context::restore
+                );
 
             SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
                 .builder()
