@@ -47,6 +47,8 @@ public class ConnectorAction implements ToXContentObject, Writeable {
     public static final List<String> SUPPORTED_REMOTE_SERVERS_FOR_DEFAULT_ACTION_TYPES = List.of(SAGEMAKER, OPENAI, BEDROCK, COHERE);
 
     private static final String INBUILT_FUNC_PREFIX = "connector.";
+    private static final String PRE_PROCESS_FUNC = "PreProcessFunction";
+    private static final String POST_PROCESS_FUNC = "PostProcessFunction";
     private static final Logger logger = LogManager.getLogger(ConnectorAction.class);
 
     private ActionType actionType;
@@ -199,10 +201,13 @@ public class ConnectorAction implements ToXContentObject, Writeable {
     }
 
     /**
-     * Validates whether pre and post process functions corresponding to the same llm service or not.
-     * There are specific pre and post process functions defined for each llm services, so if you are
-     * configuring the pre-built functions it has to be from the corresponding list. This method
-     * adds a warning in the log if it is configured wrongly.
+     * Checks the compatibility of pre and post-process functions with the selected LLM service.
+     * Each LLM service (eg: Bedrock, OpenAI, SageMaker) has recommended pre and post-process functions
+     * designed for optimal performance. While it's possible to use functions from other services,
+     * it's strongly advised to use the corresponding functions for the best results.
+     * This method logs a warning if non-corresponding functions are detected, but allows the
+     * configuration to proceed. Users should be aware that using mismatched functions may lead
+     * to unexpected behavior or reduced performance, though it won't necessarily cause failures.
      *
      * @param parameters - connector parameters
      */
@@ -210,8 +215,8 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
         String endPoint = substitutor.replace(url);
         String remoteServer = getRemoteServerFromURL(endPoint);
-        validateProcessFunctions(remoteServer, preProcessFunction, "PreProcessFunction");
-        validateProcessFunctions(remoteServer, postProcessFunction, "PostProcessFunction");
+        validateProcessFunctions(remoteServer, preProcessFunction, PRE_PROCESS_FUNC);
+        validateProcessFunctions(remoteServer, postProcessFunction, POST_PROCESS_FUNC);
     }
 
     /**
@@ -256,7 +261,16 @@ public class ConnectorAction implements ToXContentObject, Writeable {
     }
 
     private void logWarningForInvalidProcessFunc(String remoteServer, String funcNameForWarnText) {
-        logger.warn("LLM service is " + remoteServer + ", so " + funcNameForWarnText + " should be corresponding to " + remoteServer);
+        logger
+            .warn(
+                "LLM service is "
+                    + remoteServer
+                    + ", so "
+                    + funcNameForWarnText
+                    + " should be corresponding to "
+                    + remoteServer
+                    + " for better results."
+            );
     }
 
     public enum ActionType {

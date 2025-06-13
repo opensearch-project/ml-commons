@@ -179,7 +179,7 @@ public class ConnectorActionTest {
                     && event
                         .getMessage()
                         .getFormattedMessage()
-                        .contains("LLM service is openai, so PreProcessFunction should be corresponding to openai")
+                        .contains("LLM service is openai, so PreProcessFunction should be corresponding to openai for better results.")
             );
         assertTrue(isWarningLogged);
     }
@@ -204,7 +204,7 @@ public class ConnectorActionTest {
                     && event
                         .getMessage()
                         .getFormattedMessage()
-                        .contains("LLM service is openai, so PostProcessFunction should be corresponding to openai")
+                        .contains("LLM service is openai, so PostProcessFunction should be corresponding to openai for better results.")
             );
         assertTrue(isWarningLogged);
     }
@@ -268,7 +268,7 @@ public class ConnectorActionTest {
                     && event
                         .getMessage()
                         .getFormattedMessage()
-                        .contains("LLM service is cohere, so PreProcessFunction should be corresponding to cohere")
+                        .contains("LLM service is cohere, so PreProcessFunction should be corresponding to cohere for better results.")
             );
         assertTrue(isWarningLogged);
     }
@@ -293,7 +293,7 @@ public class ConnectorActionTest {
                     && event
                         .getMessage()
                         .getFormattedMessage()
-                        .contains("LLM service is cohere, so PostProcessFunction should be corresponding to cohere")
+                        .contains("LLM service is cohere, so PostProcessFunction should be corresponding to cohere for better results.")
             );
         assertTrue(isWarningLogged);
     }
@@ -357,7 +357,7 @@ public class ConnectorActionTest {
                     && event
                         .getMessage()
                         .getFormattedMessage()
-                        .contains("LLM service is bedrock, so PreProcessFunction should be corresponding to bedrock")
+                        .contains("LLM service is bedrock, so PreProcessFunction should be corresponding to bedrock for better results.")
             );
         assertTrue(isWarningLogged);
     }
@@ -382,7 +382,7 @@ public class ConnectorActionTest {
                     && event
                         .getMessage()
                         .getFormattedMessage()
-                        .contains("LLM service is bedrock, so PostProcessFunction should be corresponding to bedrock")
+                        .contains("LLM service is bedrock, so PostProcessFunction should be corresponding to bedrock for better results.")
             );
         assertTrue(isWarningLogged);
     }
@@ -434,7 +434,9 @@ public class ConnectorActionTest {
                     && event
                         .getMessage()
                         .getFormattedMessage()
-                        .contains("LLM service is sagemaker, so PreProcessFunction should be corresponding to sagemaker")
+                        .contains(
+                            "LLM service is sagemaker, so PreProcessFunction should be corresponding to sagemaker for better results."
+                        )
             );
         assertTrue(isWarningLogged);
     }
@@ -459,7 +461,9 @@ public class ConnectorActionTest {
                     && event
                         .getMessage()
                         .getFormattedMessage()
-                        .contains("LLM service is sagemaker, so PostProcessFunction should be corresponding to sagemaker")
+                        .contains(
+                            "LLM service is sagemaker, so PostProcessFunction should be corresponding to sagemaker for better results."
+                        )
             );
         assertTrue(isWarningLogged);
     }
