@@ -20,8 +20,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 
-import javax.swing.*;
-
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;

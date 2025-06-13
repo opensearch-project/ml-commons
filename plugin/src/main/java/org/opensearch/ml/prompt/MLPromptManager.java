@@ -38,10 +38,12 @@ import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.common.prompt.MLPrompt;
 import org.opensearch.ml.common.transport.prompt.MLCreatePromptInput;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.utils.MLExceptionUtils;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
+import org.opensearch.remote.metadata.client.SearchDataObjectResponse;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.transport.client.Client;
@@ -62,6 +64,7 @@ public class MLPromptManager {
         + MAX_NUMBER_OF_TAGS
         + " and length of each tag must not exceed "
         + MAX_LENGTH_OF_TAG);
+    public static final String UNIQUE_NAME_ERR_MESSAGE = ("The name you provided is already being used by another Prompt with ID: ");
 
     public static final String ROLE_PARAMETER = "role";
     public static final String CONTENT_PARAMETER = "content";
@@ -69,6 +72,7 @@ public class MLPromptManager {
     public static final String PARAMETERS_PROMPT_FIELD = "prompt";
     public static final String PARAMETERS_MESSAGES_FIELD = "messages";
     public static final String PARAMETERS_PROMPT_PARAMETERS_FIELD = "prompt_parameters";
+    public static final String PROMPT_PARAMETER_PLACEHOLDER = "${prompt_parameters.";
 
     private final Client client;
     private final SdkClient sdkClient;
@@ -165,7 +169,14 @@ public class MLPromptManager {
         return tags.size() <= MAX_NUMBER_OF_TAGS && tags.stream().allMatch(tag -> tag.length() <= MAX_LENGTH_OF_TAG);
     }
 
-    public void validateUniquePromptName(String name, String tenantId, ActionListener<SearchResponse> listener) {
+    /**
+     * Check if a given name already exists in the prompt system index by using a term query on the name keyword field to
+     * enforce unique naming
+     *
+     * @param name name to search if it already exists
+     * @param tenantId tenant id
+     */
+    public SearchResponse validateUniquePromptName(String name, String tenantId) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             BoolQueryBuilder query = new BoolQueryBuilder();
             query.filter(new TermQueryBuilder(MLCreatePromptInput.PROMPT_NAME_FIELD + ".keyword", name));
@@ -180,33 +191,30 @@ public class MLPromptManager {
                 .tenantId(tenantId)
                 .build();
 
-            sdkClient.searchDataObjectAsync(searchDataObjectRequest).whenComplete((r, throwable) -> {
-                if (throwable != null) {
-                    Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                    if (ExceptionsHelper.unwrap(throwable, IndexNotFoundException.class) != null) {
-                        log.debug("ML Prompt index does not exist");
-                        listener.onResponse(null);
-                    } else {
-                        log.error("Failed to search ML Prompt index", cause);
-                        listener.onFailure(cause);
-                    }
-                } else {
-                    try {
-                        SearchResponse searchResponse = r.searchResponse();
-                        // Parsing failure would cause NPE on next line
-                        log.info("ML Prompt search complete: {}", searchResponse.getHits().getTotalHits());
-                        listener.onResponse(searchResponse);
-                    } catch (Exception e) {
-                        log.error("Failed to parse search response", e);
-                        listener
-                            .onFailure(new OpenSearchStatusException("Failed to parse search response", RestStatus.INTERNAL_SERVER_ERROR));
-                    }
-                }
-            });
+            SearchDataObjectResponse searchDataObjectResponse = sdkClient.searchDataObject(searchDataObjectRequest);
+            SearchResponse searchResponse = searchDataObjectResponse.searchResponse();
+            return searchResponse;
+
         } catch (Exception e) {
+            if (e instanceof IndexNotFoundException || MLExceptionUtils.getRootCause(e) instanceof IndexNotFoundException) {
+                log.debug("ML Prompt index does not exist");
+                return null;
+            }
             log.error("Failed to search ML Prompt index", e);
-            listener.onFailure(e);
+            throw new IllegalArgumentException("Failed to search");
         }
+    }
+
+    /**
+     * Returns the boolean statement whether the name already exists or not based on retrieved Search Response
+     *
+     * @param searchResponse SearchResponse
+     * @return True if the name already exists in the prompt system index, False Otherwise.
+     */
+    public static boolean nameAlreadyExists(SearchResponse searchResponse) {
+        return searchResponse != null
+            && searchResponse.getHits().getTotalHits() != null
+            && searchResponse.getHits().getTotalHits().value() != 0;
     }
 
     /**
@@ -224,8 +232,7 @@ public class MLPromptManager {
         ActionListener<Map<String, String>> listener
     ) {
         try {
-            Map<String, String> parameters = new HashMap<>();
-            parameters.putAll(inputParameters);
+            Map<String, String> parameters = new HashMap<>(inputParameters);
             parameters.remove(PARAMETERS_PROMPT_PARAMETERS_FIELD);
             String prompt = inputParameters.get(promptType);
             String JsonStrPromptParameters = inputParameters.get(PARAMETERS_PROMPT_PARAMETERS_FIELD);
@@ -269,11 +276,10 @@ public class MLPromptManager {
      * Fetches the ML Prompt based on prompt id, then replace the content with the retrieved content from prompt
      * template based on the specified key.
      *
-     * @param promptId prompt id
+     * @param promptRef prompt reference that is used to retrieve a prompt. Either prompt ID or prompt name
      * @param key key for the user-defined content
      * @param promptParameters prompt parameters
      * @param tenantId tenant id
-     * @return the user-defined content
      * @throws IllegalArgumentException if
      * <p>
      *     1. fails to replace all the placeholder variables.
@@ -284,42 +290,53 @@ public class MLPromptManager {
      * </p>
      * @throws OpenSearchStatusException if the ML Prompt is not found
      */
-    public String pullPrompt(String promptId, String key, PromptParameters promptParameters, String tenantId) throws IOException {
-        GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
-            .builder()
-            .index(ML_PROMPT_INDEX)
-            .id(promptId)
-            .tenantId(tenantId)
-            .build();
+    public String pullPrompt(String promptRef, String key, PromptParameters promptParameters, String tenantId) throws IOException {
         try {
+            SearchResponse searchResponse = validateUniquePromptName(promptRef, tenantId);
+            String promptId = promptRef;
+            if (nameAlreadyExists(searchResponse)) {
+                promptId = searchResponse.getHits().getAt(0).getId();
+            }
+            GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
+                .builder()
+                .index(ML_PROMPT_INDEX)
+                .id(promptId)
+                .tenantId(tenantId)
+                .build();
             // fetch prompt first based on prompt id
             MLPrompt mlPrompt = getPrompt(getDataObjectRequest);
             Map<String, String> promptField = mlPrompt.getPrompt();
             // check if the specified key is defined in the prompt
             if (!promptField.containsKey(key)) {
-                throw new IllegalArgumentException("Content for specified key is not defined in ML Prompt: " + promptId);
+                throw new IllegalArgumentException("Content for specified key is not defined in ML Prompt");
             }
             // retrieve the user-defined content during prompt creation
             String content = promptField.get(key);
             // populate the placeholder variable with user input, if needed
-            if (!promptParameters.isEmpty() && content.contains("${prompt_parameters.")) {
+            if (!promptParameters.isEmpty() && content.contains(PROMPT_PARAMETER_PLACEHOLDER)) {
                 StringSubstitutor substitutor = new StringSubstitutor(
-                    promptParameters.getParameters(promptId),
-                    "${prompt_parameters.",
+                    promptParameters.getParameters(promptRef),
+                    PROMPT_PARAMETER_PLACEHOLDER,
                     "}"
                 );
                 content = substitutor.replace(content);
             }
             // this checks if all the required input values are provided by users.
-            if (content.contains("${prompt_parameters.")) {
-                throw new IllegalArgumentException("Failed to replace all the placeholders for prompt: " + promptId);
+            if (content.contains(PROMPT_PARAMETER_PLACEHOLDER)) {
+                throw new IllegalArgumentException("Failed to replace all the placeholders");
             }
             return content;
         } catch (Exception e) {
             if (e instanceof IllegalArgumentException) {
-                throw e;
+                throw new OpenSearchStatusException(
+                    "Failed to process prompt: " + promptRef + " for following reason: " + e.getMessage(),
+                    RestStatus.BAD_REQUEST
+                );
             }
-            throw new OpenSearchStatusException("Failed to find a ML Prompt with prompt id: " + promptId, RestStatus.NOT_FOUND);
+            throw new OpenSearchStatusException(
+                "Failed to find prompt with provided prompt reference: " + promptRef + " for following reason: " + e.getMessage(),
+                RestStatus.NOT_FOUND
+            );
         }
     }
 

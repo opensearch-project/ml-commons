@@ -102,6 +102,13 @@ public class MLPromptManagerTests extends OpenSearchTestCase {
             listener.onResponse(getResponse);
             return null;
         }).when(client).get(any(), any());
+
+        SearchResponse searchResponse = createSearchResponse(0);
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), any());
     }
 
     @Test
@@ -250,7 +257,7 @@ public class MLPromptManagerTests extends OpenSearchTestCase {
     }
 
     @Test
-    public void testBuildInputParametersFailWithKeyNotExist() {
+    public void testBuildInputParametersFailWithKeyNotExist() throws IOException {
         getResponse = createGetResponse("This is ${prompt_parameters.variable}", "test system prompt");
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
@@ -265,14 +272,17 @@ public class MLPromptManagerTests extends OpenSearchTestCase {
         Map<String, String> inputParameters = Map.of("messages", exampleInput, "prompt_parameters", expectedInputStrWithPromptParameters);
         mlPromptManager.buildInputParameters("messages", inputParameters, "tenant_id", getInputParameterListener);
 
-        ArgumentCaptor<IllegalArgumentException> argumentCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        ArgumentCaptor<OpenSearchStatusException> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(getInputParameterListener).onFailure(argumentCaptor.capture());
-        IllegalArgumentException exception = argumentCaptor.getValue();
-        assertEquals("Content for specified key is not defined in ML Prompt: prompt_id", exception.getMessage());
+        OpenSearchStatusException exception = argumentCaptor.getValue();
+        assertEquals(
+            "Failed to process prompt: prompt_id for following reason: Content for specified key is not defined in ML Prompt",
+            exception.getMessage()
+        );
     }
 
     @Test
-    public void testBuildInputParametersFailWithRemainingPlaceholderVariables() {
+    public void testBuildInputParametersFailWithRemainingPlaceholderVariables() throws IOException {
         getResponse = createGetResponse("This is ${prompt_parameters.variable}", "test system prompt");
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
@@ -284,14 +294,17 @@ public class MLPromptManagerTests extends OpenSearchTestCase {
         Map<String, String> inputParameters = Map.of("prompt", expectedInputStrWithPrompt, "prompt_parameters", examplePromptParameters);
         mlPromptManager.buildInputParameters("prompt", inputParameters, "tenant_id", getInputParameterListener);
 
-        ArgumentCaptor<IllegalArgumentException> argumentCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
+        ArgumentCaptor<OpenSearchStatusException> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(getInputParameterListener).onFailure(argumentCaptor.capture());
-        IllegalArgumentException exception = argumentCaptor.getValue();
-        assertEquals("Failed to replace all the placeholders for prompt: prompt_id", exception.getMessage());
+        OpenSearchStatusException exception = argumentCaptor.getValue();
+        assertEquals(
+            "Failed to process prompt: prompt_id for following reason: Failed to replace all the placeholders",
+            exception.getMessage()
+        );
     }
 
     @Test
-    public void testBuildInputParametersFailWithPromptNotFound() {
+    public void testBuildInputParametersFailWithPromptNotFound() throws IOException {
         getResponse = createGetResponse("This is ${prompt_parameters.variable}", "test system prompt");
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
@@ -306,7 +319,10 @@ public class MLPromptManagerTests extends OpenSearchTestCase {
         ArgumentCaptor<OpenSearchStatusException> argumentCaptor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(getInputParameterListener).onFailure(argumentCaptor.capture());
         OpenSearchStatusException exception = argumentCaptor.getValue();
-        assertEquals("Failed to find a ML Prompt with prompt id: prompt_id", exception.getMessage());
+        assertEquals(
+            "Failed to find prompt with provided prompt reference: prompt_id for following reason: Failed to get data object from index .plugins-ml-prompt",
+            exception.getMessage()
+        );
         assertEquals(RestStatus.NOT_FOUND, exception.status());
     }
 
@@ -334,42 +350,6 @@ public class MLPromptManagerTests extends OpenSearchTestCase {
         verify(getInputParameterListener).onFailure(argumentCaptor.capture());
         IllegalArgumentException exception = argumentCaptor.getValue();
         assertEquals("You typed ull_prompt. Provide Correct pull_prompt syntax: pull_prompt(prompt_id).<key>", exception.getMessage());
-    }
-
-    @Test
-    public void testUniquePromptNameValidationWithNameAlreadyExists() throws IOException {
-        SearchResponse searchResponse = createSearchResponse(1);
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
-            listener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(), any());
-
-        mlPromptManager.validateUniquePromptName("unique name", "tenant_id", searchResponseActionListener);
-
-        ArgumentCaptor<SearchResponse> argumentCaptor = ArgumentCaptor.forClass(SearchResponse.class);
-        verify(searchResponseActionListener).onResponse(argumentCaptor.capture());
-        assertNotNull(argumentCaptor.getValue());
-        assertNotNull(argumentCaptor.getValue().getHits().getTotalHits());
-        assertTrue(argumentCaptor.getValue().getHits().getTotalHits().value() != 0);
-    }
-
-    @Test
-    public void testUniquePromptNameValidationWithUniqueName() throws IOException {
-        SearchResponse searchResponse = createSearchResponse(0);
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(1);
-            listener.onResponse(searchResponse);
-            return null;
-        }).when(client).search(any(), any());
-
-        mlPromptManager.validateUniquePromptName("unique name", "tenant_id", searchResponseActionListener);
-
-        ArgumentCaptor<SearchResponse> argumentCaptor = ArgumentCaptor.forClass(SearchResponse.class);
-        verify(searchResponseActionListener).onResponse(argumentCaptor.capture());
-        assertNotNull(argumentCaptor.getValue());
-        assertNotNull(argumentCaptor.getValue().getHits().getTotalHits());
-        assertEquals(0, argumentCaptor.getValue().getHits().getTotalHits().value());
     }
 
     private GetResponse createGetResponse(String user, String system) {

@@ -120,11 +120,7 @@ public class UpdatePromptTransportActionTests extends OpenSearchTestCase {
         mlUpdatePromptRequest = MLUpdatePromptRequest.builder().promptId("prompt_id").mlUpdatePromptInput(mlUpdatePromptInput).build();
 
         SearchResponse searchResponse = createSearchResponse(0);
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(2);
-            listener.onResponse(searchResponse);
-            return null;
-        }).when(mlPromptManager).validateUniquePromptName(any(), any(), any());
+        when(mlPromptManager.validateUniquePromptName(any(), any())).thenReturn(searchResponse);
     }
 
     @Test
@@ -246,29 +242,22 @@ public class UpdatePromptTransportActionTests extends OpenSearchTestCase {
 
     public void testDoExecute_fail_withPromptNameAlreadyExists() throws IOException {
         SearchResponse searchResponse = createSearchResponse(1);
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(2);
-            listener.onResponse(searchResponse);
-            return null;
-        }).when(mlPromptManager).validateUniquePromptName(any(), any(), any());
+        when(mlPromptManager.validateUniquePromptName(any(), any())).thenReturn(searchResponse);
 
         updatePromptTransportAction.doExecute(task, mlUpdatePromptRequest, actionListener);
 
         ArgumentCaptor<IllegalArgumentException> argumentCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "The name you provided is already being used by another ML Prompt with ID: prompt_id.",
+            "The name you provided is already being used by another Prompt with ID: prompt_id",
             argumentCaptor.getValue().getMessage()
         );
     }
 
     public void testDoExecute_fail_searchResponseParsing() throws IOException {
         SearchResponse searchResponse = createSearchResponse(0);
-        doAnswer(invocation -> {
-            ActionListener<SearchResponse> listener = invocation.getArgument(2);
-            listener.onFailure(new OpenSearchStatusException("Failed to parse search response", RestStatus.INTERNAL_SERVER_ERROR));
-            return null;
-        }).when(mlPromptManager).validateUniquePromptName(any(), any(), any());
+        when(mlPromptManager.validateUniquePromptName(any(), any()))
+            .thenThrow(new OpenSearchStatusException("Failed to parse search response", RestStatus.INTERNAL_SERVER_ERROR));
 
         updatePromptTransportAction.doExecute(task, mlUpdatePromptRequest, actionListener);
 
