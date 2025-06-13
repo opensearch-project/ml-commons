@@ -7,6 +7,8 @@ package org.opensearch.ml.action.prompt;
 
 import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX;
 
+import java.util.Objects;
+
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
@@ -68,7 +70,7 @@ public class DeletePromptTransportAction extends HandledTransportAction<MLPrompt
      */
     @Override
     protected void doExecute(Task task, MLPromptDeleteRequest mlPromptDeleteRequest, ActionListener<DeleteResponse> actionListener) {
-        String promptId = mlPromptDeleteRequest.getPromptId();
+        String promptId = Objects.requireNonNull(mlPromptDeleteRequest.getPromptId(), "Prompt ID cannot be null");
         String tenantId = mlPromptDeleteRequest.getTenantId();
 
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
@@ -105,9 +107,9 @@ public class DeletePromptTransportAction extends HandledTransportAction<MLPrompt
     private void executeDeletePrompt(MLPrompt mlPrompt, String promptId, String tenantId, ActionListener<DeleteResponse> listener) {
         DeleteDataObjectRequest deleteDataObjectRequest = DeleteDataObjectRequest.builder().index(ML_PROMPT_INDEX).id(promptId).build();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(listener, context::restore);
             sdkClient.deleteDataObjectAsync(deleteDataObjectRequest).whenComplete((deleteDataObjectResponse, throwable) -> {
-                context.restore();
-                handleDeleteResponse(deleteDataObjectResponse, throwable, promptId, listener);
+                handleDeleteResponse(deleteDataObjectResponse, throwable, promptId, wrappedListener);
             });
         }
     }
