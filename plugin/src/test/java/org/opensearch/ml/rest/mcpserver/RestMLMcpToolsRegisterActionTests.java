@@ -24,6 +24,8 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchException;
+import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
@@ -101,7 +103,73 @@ public class RestMLMcpToolsRegisterActionTests extends OpenSearchTestCase {
     }
 
     @Test
+    public void test_doExecute_featureFlagDisabled() throws IOException {
+        exceptionRule.expect(OpenSearchException.class);
+        exceptionRule
+            .expectMessage("The MCP server is not enabled. To enable, please update the setting plugins.ml_commons.mcp_server_enabled");
+        when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(false);
+        RestMLMcpToolsRegisterAction restMLMcpToolsRegisterAction = new RestMLMcpToolsRegisterAction(
+            toolFactories,
+            clusterService,
+            mlFeatureEnabledSetting
+        );
+        BytesReference bytesReference = BytesReference.fromByteBuffer(ByteBuffer.wrap("".getBytes(StandardCharsets.UTF_8)));
+        RestRequest restRequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withContent(bytesReference, MediaType.fromMediaType(XContentType.JSON.mediaType()))
+            .build();
+        restMLMcpToolsRegisterAction.prepareRequest(restRequest, mock(NodeClient.class));
+    }
+
+    @Test
     public void test_prepareRequest_successful() throws IOException {
+        BytesReference bytesReference = BytesReference
+            .fromByteBuffer(ByteBuffer.wrap(registerToolRequest.getBytes(StandardCharsets.UTF_8)));
+        RestRequest restRequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withContent(bytesReference, MediaType.fromMediaType(XContentType.JSON.mediaType()))
+            .build();
+        restMLRegisterMcpToolsAction.prepareRequest(restRequest, mock(NodeClient.class));
+    }
+
+    @Test
+    public void test_doExecute_withDuplicateToolNames() throws IOException {
+        exceptionRule.expect(ActionRequestValidationException.class);
+        exceptionRule.expectMessage("duplicate tool name: MyListIndexTool found in the request");
+        String registerToolRequest = """
+            {
+                "tools": [
+                    {
+                        "type": "ListIndexTool",
+                        "name": "MyListIndexTool"
+                    },
+                     {
+                        "type": "ListIndexTool",
+                        "name": "MyListIndexTool"
+                    }
+                ]
+            }
+            """;
+        BytesReference bytesReference = BytesReference
+            .fromByteBuffer(ByteBuffer.wrap(registerToolRequest.getBytes(StandardCharsets.UTF_8)));
+        RestRequest restRequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withContent(bytesReference, MediaType.fromMediaType(XContentType.JSON.mediaType()))
+            .build();
+        restMLRegisterMcpToolsAction.prepareRequest(restRequest, mock(NodeClient.class));
+    }
+
+    @Test
+    public void test_doExecute_withUnrecognizedToolName() throws IOException {
+        exceptionRule.expect(ActionRequestValidationException.class);
+        exceptionRule.expectMessage("Validation Failed: 1: Unrecognized tool in request: [NotRealTool]");
+        String registerToolRequest = """
+            {
+                "tools": [
+                    {
+                        "type": "NotRealTool",
+                        "name": "NotRealTool"
+                    }
+                ]
+            }
+            """;
         BytesReference bytesReference = BytesReference
             .fromByteBuffer(ByteBuffer.wrap(registerToolRequest.getBytes(StandardCharsets.UTF_8)));
         RestRequest restRequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)

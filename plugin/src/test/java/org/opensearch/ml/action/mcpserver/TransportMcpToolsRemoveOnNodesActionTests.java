@@ -143,6 +143,15 @@ public class TransportMcpToolsRemoveOnNodesActionTests extends OpenSearchTestCas
         assertEquals(true, response.getDeleted());
     }
 
+    @Test
+    public void testNodeOperation_OnError() {
+        exceptionRule.expect(FailedNodeException.class);
+        exceptionRule.expectMessage("[ListIndexTool] not found on node: localNodeId");
+        MLMcpToolsRemoveNodeRequest request = new MLMcpToolsRemoveNodeRequest(toRemoveTools);
+        McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.put("ListIndexTool", 1L);
+        action.nodeOperation(request);
+    }
+
     private McpToolRegisterInput getRegisterMcpTool() {
         McpToolRegisterInput registerMcpTool = new McpToolRegisterInput(
             "ListIndexTool",
