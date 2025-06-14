@@ -336,7 +336,10 @@ public class MLPromptManagerTests extends OpenSearchTestCase {
         ArgumentCaptor<IllegalArgumentException> argumentCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
         verify(getInputParameterListener).onFailure(argumentCaptor.capture());
         IllegalArgumentException exception = argumentCaptor.getValue();
-        assertEquals("Forgot to provide a key. Provide a correct pull_prompt syntax: pull_prompt(prompt_id).<key>", exception.getMessage());
+        assertEquals(
+            "Invalid pull_prompt syntax is provided: pull_prompt(prompt_id). Expected: pull_prompt(prompt_id).key",
+            exception.getMessage()
+        );
     }
 
     @Test
