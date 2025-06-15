@@ -42,6 +42,7 @@ import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.indices.MLInputDatasetHandler;
+import org.opensearch.ml.prompt.MLPromptManager;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
@@ -76,6 +77,8 @@ public class MLExecuteTaskRunnerTests extends OpenSearchTestCase {
     DiscoveryNodeHelper nodeHelper;
     @Mock
     ClusterApplierService clusterApplierService;
+    @Mock
+    MLPromptManager mlPromptManager;
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -136,7 +139,8 @@ public class MLExecuteTaskRunnerTests extends OpenSearchTestCase {
                 mlTaskDispatcher,
                 mlCircuitBreakerService,
                 nodeHelper,
-                mlEngine
+                mlEngine,
+                mlPromptManager
             )
         );
 
