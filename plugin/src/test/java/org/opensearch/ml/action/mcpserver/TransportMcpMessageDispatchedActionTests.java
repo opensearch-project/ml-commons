@@ -8,6 +8,7 @@ package org.opensearch.ml.action.mcpserver;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -21,6 +22,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Set;
 
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -80,10 +82,6 @@ public class TransportMcpMessageDispatchedActionTests extends OpenSearchTestCase
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
     @Mock
     private ActionListener<AcknowledgedResponse> listener;
-    @Mock
-    private MLIndicesHandler mlIndicesHandler;
-    @Mock
-    private McpToolsHelper mcpToolsHelper;
 
     private final String requestBody = """
         {
@@ -101,6 +99,36 @@ public class TransportMcpMessageDispatchedActionTests extends OpenSearchTestCase
         }
         """;
     private TransportMcpMessageDispatchedAction transportMcpMessageDispatchedAction;
+    private static StreamingRestChannel channel;
+    private static McpServerSession session;
+    private static final String SESSION_ID = "randomGeneratedUUID";
+
+    @BeforeClass
+    public static void classSetUp() {
+        MLIndicesHandler mlIndicesHandler = mock(MLIndicesHandler.class);
+        McpToolsHelper mcpToolsHelper = mock(McpToolsHelper.class);
+        McpAsyncServerHolder.init(mlIndicesHandler, mcpToolsHelper);
+        channel = mock(StreamingRestChannel.class);
+        McpAsyncServerHolder.CHANNELS.put(SESSION_ID, channel);
+        doAnswer(invocationOnMock -> {
+            ActionListener<Boolean> listener = invocationOnMock.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLMcpSessionManagementIndex(isA(ActionListener.class));
+        doAnswer(invocationOnMock -> {
+            ActionListener<Boolean> listener = invocationOnMock.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mcpToolsHelper).autoLoadAllMcpTools(isA(ActionListener.class));
+
+        McpServerSession.Factory sessionFactory = mock(McpServerSession.Factory.class);
+        session = mock(McpServerSession.class);
+        when(session.handle(any())).thenReturn(Mono.empty());
+        when(session.getId()).thenReturn(SESSION_ID);
+        when(session.sendNotification(any(), any())).thenReturn(Mono.empty());
+        when(sessionFactory.create(any(McpServerTransport.class))).thenReturn(session);
+        McpAsyncServerHolder.getMcpServerTransportProviderInstance().setSessionFactory(sessionFactory);
+    }
 
     @Before
     public void setUp() throws Exception {
@@ -123,25 +151,29 @@ public class TransportMcpMessageDispatchedActionTests extends OpenSearchTestCase
             mlFeatureEnabledSetting
         );
         when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(true);
-        McpAsyncServerHolder.init(mlIndicesHandler, mcpToolsHelper);
+        doAnswer(invocationOnMock -> {
+            ActionListener<IndexResponse> listener = invocationOnMock.getArgument(1);
+            IndexResponse response = mock(IndexResponse.class);
+            when(response.status()).thenReturn(RestStatus.CREATED);
+            listener.onResponse(response);
+            return null;
+        }).when(client).index(any(), isA(ActionListener.class));
+        McpAsyncServerHolder.getMcpServerTransportProviderInstance().handleSseConnection(channel, false, "mockNodeId", client).subscribe();
     }
 
     @Test
     public void test_doExecute_successful() {
         MLMcpMessageRequest request = mock(MLMcpMessageRequest.class);
-        String sessionId = "randomGeneratedUUID1";
-        when(request.getSessionId()).thenReturn(sessionId);
+        when(request.getSessionId()).thenReturn(SESSION_ID);
         when(request.getRequestBody()).thenReturn(requestBody);
-        StreamingRestChannel channel = mock(StreamingRestChannel.class);
-        McpAsyncServerHolder.CHANNELS.put("sessionId", channel);
+        when(session.getId()).thenReturn(SESSION_ID);
         BytesReference bytesReference = BytesReference.fromByteBuffer(ByteBuffer.wrap(requestBody.getBytes(StandardCharsets.UTF_8)));
         RestRequest restRequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
-            .withParams(ImmutableMap.of("sessionId", sessionId))
+            .withParams(ImmutableMap.of("sessionId", SESSION_ID))
             .withContent(bytesReference, MediaType.fromMediaType(XContentType.JSON.mediaType()))
             .build();
         when(channel.detailedErrorsEnabled()).thenReturn(false);
         when(channel.request()).thenReturn(restRequest);
-        initMockSession(channel, sessionId);
         transportMcpMessageDispatchedAction.doExecute(mock(Task.class), request, listener);
         verify(listener).onResponse(new AcknowledgedResponse(true));
     }
@@ -149,38 +181,33 @@ public class TransportMcpMessageDispatchedActionTests extends OpenSearchTestCase
     @Test
     public void test_doExecute_failure() throws IOException {
         MLMcpMessageRequest request = mock(MLMcpMessageRequest.class);
-        String sessionId = "randomGeneratedUUID2";
-        when(request.getSessionId()).thenReturn(sessionId);
+        when(session.getId()).thenReturn(SESSION_ID);
+        when(request.getSessionId()).thenReturn(SESSION_ID);
         when(request.getRequestBody()).thenReturn("invalid request body");
-        StreamingRestChannel channel = mock(StreamingRestChannel.class);
-        McpAsyncServerHolder.CHANNELS.put("sessionId", channel);
         BytesReference bytesReference = BytesReference
             .fromByteBuffer(ByteBuffer.wrap("invalid request body".getBytes(StandardCharsets.UTF_8)));
         RestRequest restRequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
-            .withParams(ImmutableMap.of("sessionId", sessionId))
+            .withParams(ImmutableMap.of("sessionId", SESSION_ID))
             .withContent(bytesReference, MediaType.fromMediaType(XContentType.JSON.mediaType()))
             .build();
         when(channel.detailedErrorsEnabled()).thenReturn(false);
         when(channel.request()).thenReturn(restRequest);
         when(channel.newErrorBuilder()).thenReturn(XContentBuilder.builder(XContentType.JSON.xContent()));
-        initMockSession(channel, sessionId);
+        doNothing().when(channel).sendResponse(any());
         transportMcpMessageDispatchedAction.doExecute(mock(Task.class), request, listener);
         verify(listener).onResponse(new AcknowledgedResponse(true));
     }
 
     @Test
     public void test_sendErrorResponse() throws IOException {
-        StreamingRestChannel channel = mock(StreamingRestChannel.class);
-        String sessionId = "randomGeneratedUUID3";
         BytesReference bytesReference = BytesReference.fromByteBuffer(ByteBuffer.wrap(requestBody.getBytes(StandardCharsets.UTF_8)));
         RestRequest restRequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
-            .withParams(ImmutableMap.of("sessionId", sessionId))
+            .withParams(ImmutableMap.of("sessionId", SESSION_ID))
             .withContent(bytesReference, MediaType.fromMediaType(XContentType.JSON.mediaType()))
             .build();
         when(channel.detailedErrorsEnabled()).thenReturn(false);
         when(channel.request()).thenReturn(restRequest);
         when(channel.newErrorBuilder()).thenReturn(XContentBuilder.builder(XContentType.JSON.xContent()));
-        initMockSession(channel, sessionId);
         doThrow(new RuntimeException(new IOException("test exception"))).when(channel).sendResponse(any());
         transportMcpMessageDispatchedAction.sendErrorResponse(listener, channel, new RuntimeException("test exception"));
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -190,30 +217,4 @@ public class TransportMcpMessageDispatchedActionTests extends OpenSearchTestCase
         assertTrue(argumentCaptor.getValue().getCause().getMessage().contains("test exception"));
     }
 
-    private void initMockSession(StreamingRestChannel channel, String sessionId) {
-        McpServerSession.Factory sessionFactory = mock(McpServerSession.Factory.class);
-        McpServerSession session = mock(McpServerSession.class);
-        when(session.handle(any())).thenReturn(Mono.empty());
-        when(session.getId()).thenReturn(sessionId);
-        when(sessionFactory.create(any(McpServerTransport.class))).thenReturn(session);
-        McpAsyncServerHolder.getMcpServerTransportProviderInstance().setSessionFactory(sessionFactory);
-        doAnswer(invocationOnMock -> {
-            ActionListener<Boolean> listener = invocationOnMock.getArgument(0);
-            listener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLMcpSessionManagementIndex(isA(ActionListener.class));
-        doAnswer(invocationOnMock -> {
-            ActionListener<IndexResponse> listener = invocationOnMock.getArgument(1);
-            IndexResponse response = mock(IndexResponse.class);
-            when(response.status()).thenReturn(RestStatus.CREATED);
-            listener.onResponse(response);
-            return null;
-        }).when(client).index(any(), isA(ActionListener.class));
-        doAnswer(invocationOnMock -> {
-            ActionListener<Boolean> listener = invocationOnMock.getArgument(0);
-            listener.onResponse(true);
-            return null;
-        }).when(mcpToolsHelper).autoLoadAllMcpTools(isA(ActionListener.class));
-        McpAsyncServerHolder.getMcpServerTransportProviderInstance().handleSseConnection(channel, false, "mockNodeId", client).subscribe();
-    }
 }

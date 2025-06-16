@@ -46,6 +46,8 @@ import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableMap;
 
+import reactor.core.publisher.Mono;
+
 public class TransportMcpToolsRemoveOnNodesActionTests extends OpenSearchTestCase {
     @Mock
     private TransportService transportService;
@@ -137,10 +139,13 @@ public class TransportMcpToolsRemoveOnNodesActionTests extends OpenSearchTestCas
     @Test
     public void testNodeOperation() {
         MLMcpToolsRemoveNodeRequest request = new MLMcpToolsRemoveNodeRequest(toRemoveTools);
-        McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.put("ListIndexToolForDelete", 1L);
+        McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.put("ListIndexTool", 1L);
         McpAsyncServerHolder
             .getMcpAsyncServerInstance()
-            .addTool(mcpToolsHelper.createToolSpecification(getRegisterMcpTool("ListIndexToolForDelete")))
+            .addTool(mcpToolsHelper.createToolSpecification(getRegisterMcpTool("ListIndexTool")))
+            .onErrorResume(e -> {
+                return Mono.empty();
+            })
             .subscribe();
         MLMcpToolsRemoveNodeResponse response = action.nodeOperation(request);
         assertEquals(true, response.getDeleted());
