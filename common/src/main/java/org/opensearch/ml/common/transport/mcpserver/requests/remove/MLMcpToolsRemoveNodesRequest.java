@@ -14,8 +14,10 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
+import org.apache.commons.lang3.StringUtils;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.action.support.nodes.BaseNodesRequest;
@@ -63,7 +65,8 @@ public class MLMcpToolsRemoveNodesRequest extends BaseNodesRequest<MLMcpToolsRem
         List<String> tools = new ArrayList<>();
         ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.nextToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
-            tools.add(parser.text());
+            String[] toolNames = StringUtils.split(parser.text(), ",");
+            Arrays.stream(toolNames).forEach(x -> tools.add(StringUtils.trim(x)));
         }
         return new MLMcpToolsRemoveNodesRequest(allNodeIds, tools);
     }
