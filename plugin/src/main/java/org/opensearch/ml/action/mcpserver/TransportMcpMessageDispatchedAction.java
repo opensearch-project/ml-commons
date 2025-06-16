@@ -90,7 +90,7 @@ public class TransportMcpMessageDispatchedAction extends HandledTransportAction<
             listener.onResponse(new AcknowledgedResponse(true)); // This is return to coordinator, always set to success.
         } catch (Exception ex) {
             log.error("Failed to send exception response to client during message handling due to IOException", ex);
-            listener.onFailure(new Exception(e));
+            listener.onFailure(new Exception(ex));
         }
     }
 
