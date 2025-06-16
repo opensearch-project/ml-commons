@@ -352,8 +352,7 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(remoteInferenceInputDataSet).build();
 
         mlPredictionTaskRequest = MLPredictionTaskRequest.builder().modelId("test_id").mlInput(mlInput).build();
-        transportPredictionTaskAction
-            .checkIfPullPromptExists(mlPredictionTaskRequest, actionListener, mlPredictionTaskRequest.getModelId());
+        transportPredictionTaskAction.checkIfPullPromptExists(mlPredictionTaskRequest, actionListener);
 
         RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) mlPredictionTaskRequest.getMlInput().getInputDataset();
         assertEquals(inputParametersAfter.get("messages"), inputDataSet.getParameters().get("messages"));
@@ -375,8 +374,7 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(remoteInferenceInputDataSet).build();
 
         mlPredictionTaskRequest = MLPredictionTaskRequest.builder().modelId("test_id").mlInput(mlInput).build();
-        transportPredictionTaskAction
-            .checkIfPullPromptExists(mlPredictionTaskRequest, actionListener, mlPredictionTaskRequest.getModelId());
+        transportPredictionTaskAction.checkIfPullPromptExists(mlPredictionTaskRequest, actionListener);
 
         RemoteInferenceInputDataSet inputDataSet = (RemoteInferenceInputDataSet) mlPredictionTaskRequest.getMlInput().getInputDataset();
         assertEquals(inputParametersAfter.get("prompt"), inputDataSet.getParameters().get("prompt"));

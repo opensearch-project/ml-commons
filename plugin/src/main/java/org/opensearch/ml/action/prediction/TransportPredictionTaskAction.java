@@ -190,12 +190,12 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                                                     );
                                             } else {
                                                 validateInputSchema(modelId, mlPredictionTaskRequest.getMlInput());
-                                                checkIfPullPromptExists(mlPredictionTaskRequest, wrappedListener, modelId);
+                                                checkIfPullPromptExists(mlPredictionTaskRequest, wrappedListener);
                                                 executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
                                             }
                                         } else {
                                             validateInputSchema(modelId, mlPredictionTaskRequest.getMlInput());
-                                            checkIfPullPromptExists(mlPredictionTaskRequest, wrappedListener, modelId);
+                                            checkIfPullPromptExists(mlPredictionTaskRequest, wrappedListener);
                                             executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
                                         }
                                     }
@@ -243,27 +243,23 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         }
     }
 
-    public void checkIfPullPromptExists(
-        MLPredictionTaskRequest mlPredictionTaskRequest,
-        ActionListener<MLTaskResponse> wrappedListener,
-        String modelId
-    ) {
+    public void checkIfPullPromptExists(MLPredictionTaskRequest mlPredictionTaskRequest, ActionListener<MLTaskResponse> wrappedListener) {
         MLInputDataset inputDataset = mlPredictionTaskRequest.getMlInput().getInputDataset();
         Map<String, String> inputParameters = inputDataset instanceof RemoteInferenceInputDataSet
             ? ((RemoteInferenceInputDataSet) inputDataset).getParameters()
             : new HashMap<>();
         // prompt or messages
-        String promptOrMessages = inputParameters.containsKey(PARAMETERS_MESSAGES_FIELD)
+        String promptType = inputParameters.containsKey(PARAMETERS_MESSAGES_FIELD)
             ? PARAMETERS_MESSAGES_FIELD
             : (inputParameters.containsKey(PARAMETERS_PROMPT_FIELD) ? PARAMETERS_PROMPT_FIELD : null);
-        if (!inputParameters.containsKey(PARAMETERS_PROMPT_PARAMETERS_FIELD) || promptOrMessages == null) {
+        if (!inputParameters.containsKey(PARAMETERS_PROMPT_PARAMETERS_FIELD) || promptType == null) {
             return;
         }
         AtomicReference<Map<String, String>> swappedParameter = new AtomicReference<>(inputParameters);
         StepListener<Map<String, String>> buildInputParameterListener = new StepListener<>();
 
         mlPromptManager
-            .buildInputParameters(promptOrMessages, inputParameters, mlPredictionTaskRequest.getTenantId(), buildInputParameterListener);
+            .buildInputParameters(promptType, inputParameters, mlPredictionTaskRequest.getTenantId(), buildInputParameterListener);
         buildInputParameterListener.whenComplete(swappedParameter::set, wrappedListener::onFailure);
 
         ((RemoteInferenceInputDataSet) inputDataset).setParameters(swappedParameter.get());

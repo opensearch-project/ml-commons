@@ -224,13 +224,13 @@ public class MLPromptManager {
     /**
      *  Builds a new map containing modified request body after pull_prompt is invoked
      *
-     * @param promptOrMessages type of prompt, either prompt or messages
+     * @param promptType type of prompt, either prompt or messages
      * @param inputParameters a map containing full request body received during predict
      * @param tenantId tenant id
      * @param listener the listener to notified with new map containing modified request body
      */
     public void buildInputParameters(
-        String promptOrMessages,
+        String promptType,
         Map<String, String> inputParameters,
         String tenantId,
         ActionListener<Map<String, String>> listener
@@ -238,13 +238,13 @@ public class MLPromptManager {
         try {
             Map<String, String> parameters = new HashMap<>(inputParameters);
             parameters.remove(PARAMETERS_PROMPT_PARAMETERS_FIELD);
-            String inputContent = inputParameters.get(promptOrMessages);
+            String inputContent = inputParameters.get(promptType);
             if (inputContent == null || inputContent.trim().isEmpty()) {
                 throw new IllegalArgumentException("Missing required input: Either prompt or messages must be provided");
             }
             String JsonStrPromptParameters = inputParameters.get(PARAMETERS_PROMPT_PARAMETERS_FIELD);
             PromptParameters promptParam = PromptParameters.buildPromptParameters(JsonStrPromptParameters);
-            switch (promptOrMessages) {
+            switch (promptType) {
                 case PARAMETERS_PROMPT_FIELD:
                     handlePromptField(parameters, inputContent, promptParam, tenantId);
                     break;
@@ -252,9 +252,9 @@ public class MLPromptManager {
                     handleMessagesField(parameters, inputContent, promptParam, tenantId);
                     break;
                 default:
-                    log.error("Wrong prompt type is provided: {}, should provide either prompt or messages", promptOrMessages);
+                    log.error("Wrong prompt type is provided: {}, should provide either prompt or messages", promptType);
                     throw new IllegalArgumentException(
-                        "Wrong prompt type is provided: " + promptOrMessages + ", should provide either prompt or messages"
+                        "Wrong prompt type is provided: " + promptType + ", should provide either prompt or messages"
                     );
             }
             listener.onResponse(parameters);
