@@ -128,28 +128,73 @@ public class TransportMcpMessageDispatchedActionTests extends OpenSearchTestCase
     @Test
     public void test_doExecute_successful() {
         MLMcpMessageRequest request = mock(MLMcpMessageRequest.class);
-        when(request.getSessionId()).thenReturn("randomGeneratedUUID");
+        String sessionId = "randomGeneratedUUID1";
+        when(request.getSessionId()).thenReturn(sessionId);
         when(request.getRequestBody()).thenReturn(requestBody);
         StreamingRestChannel channel = mock(StreamingRestChannel.class);
         McpAsyncServerHolder.CHANNELS.put("sessionId", channel);
         BytesReference bytesReference = BytesReference.fromByteBuffer(ByteBuffer.wrap(requestBody.getBytes(StandardCharsets.UTF_8)));
         RestRequest restRequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
-            .withParams(ImmutableMap.of("sessionId", "randomGeneratedUUID"))
+            .withParams(ImmutableMap.of("sessionId", sessionId))
             .withContent(bytesReference, MediaType.fromMediaType(XContentType.JSON.mediaType()))
             .build();
         when(channel.detailedErrorsEnabled()).thenReturn(false);
         when(channel.request()).thenReturn(restRequest);
-        initMockSession(channel);
+        initMockSession(channel, sessionId);
         transportMcpMessageDispatchedAction.doExecute(mock(Task.class), request, listener);
         verify(listener).onResponse(new AcknowledgedResponse(true));
     }
 
-    private void initMockSession(StreamingRestChannel channel) {
+    @Test
+    public void test_doExecute_failure() throws IOException {
+        MLMcpMessageRequest request = mock(MLMcpMessageRequest.class);
+        String sessionId = "randomGeneratedUUID2";
+        when(request.getSessionId()).thenReturn(sessionId);
+        when(request.getRequestBody()).thenReturn("invalid request body");
+        StreamingRestChannel channel = mock(StreamingRestChannel.class);
+        McpAsyncServerHolder.CHANNELS.put("sessionId", channel);
+        BytesReference bytesReference = BytesReference
+            .fromByteBuffer(ByteBuffer.wrap("invalid request body".getBytes(StandardCharsets.UTF_8)));
+        RestRequest restRequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withParams(ImmutableMap.of("sessionId", sessionId))
+            .withContent(bytesReference, MediaType.fromMediaType(XContentType.JSON.mediaType()))
+            .build();
+        when(channel.detailedErrorsEnabled()).thenReturn(false);
+        when(channel.request()).thenReturn(restRequest);
+        when(channel.newErrorBuilder()).thenReturn(XContentBuilder.builder(XContentType.JSON.xContent()));
+        initMockSession(channel, sessionId);
+        transportMcpMessageDispatchedAction.doExecute(mock(Task.class), request, listener);
+        verify(listener).onResponse(new AcknowledgedResponse(true));
+    }
+
+    @Test
+    public void test_sendErrorResponse() throws IOException {
+        StreamingRestChannel channel = mock(StreamingRestChannel.class);
+        String sessionId = "randomGeneratedUUID3";
+        BytesReference bytesReference = BytesReference.fromByteBuffer(ByteBuffer.wrap(requestBody.getBytes(StandardCharsets.UTF_8)));
+        RestRequest restRequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withParams(ImmutableMap.of("sessionId", sessionId))
+            .withContent(bytesReference, MediaType.fromMediaType(XContentType.JSON.mediaType()))
+            .build();
+        when(channel.detailedErrorsEnabled()).thenReturn(false);
+        when(channel.request()).thenReturn(restRequest);
+        when(channel.newErrorBuilder()).thenReturn(XContentBuilder.builder(XContentType.JSON.xContent()));
+        initMockSession(channel, sessionId);
+        doThrow(new RuntimeException(new IOException("test exception"))).when(channel).sendResponse(any());
+        transportMcpMessageDispatchedAction.sendErrorResponse(listener, channel, new RuntimeException("test exception"));
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(argumentCaptor.capture());
+        assertNotNull(argumentCaptor.getValue());
+        assertTrue(argumentCaptor.getValue().getCause() instanceof RuntimeException);
+        assertTrue(argumentCaptor.getValue().getCause().getMessage().contains("test exception"));
+    }
+
+    private void initMockSession(StreamingRestChannel channel, String sessionId) {
         McpAsyncServerHolder.init(mlIndicesHandler, mcpToolsHelper);
         McpServerSession.Factory sessionFactory = mock(McpServerSession.Factory.class);
         McpServerSession session = mock(McpServerSession.class);
         when(session.handle(any())).thenReturn(Mono.empty());
-        when(session.getId()).thenReturn("randomGeneratedUUID");
+        when(session.getId()).thenReturn(sessionId);
         when(sessionFactory.create(any(McpServerTransport.class))).thenReturn(session);
         McpAsyncServerHolder.getMcpServerTransportProviderInstance().setSessionFactory(sessionFactory);
         doAnswer(invocationOnMock -> {
@@ -170,47 +215,5 @@ public class TransportMcpMessageDispatchedActionTests extends OpenSearchTestCase
             return null;
         }).when(mcpToolsHelper).autoLoadAllMcpTools(isA(ActionListener.class));
         McpAsyncServerHolder.getMcpServerTransportProviderInstance().handleSseConnection(channel, false, "mockNodeId", client).subscribe();
-    }
-
-    @Test
-    public void test_doExecute_failure() throws IOException {
-        MLMcpMessageRequest request = mock(MLMcpMessageRequest.class);
-        when(request.getSessionId()).thenReturn("randomGeneratedUUID");
-        when(request.getRequestBody()).thenReturn("invalid request body");
-        StreamingRestChannel channel = mock(StreamingRestChannel.class);
-        McpAsyncServerHolder.CHANNELS.put("sessionId", channel);
-        BytesReference bytesReference = BytesReference
-            .fromByteBuffer(ByteBuffer.wrap("invalid request body".getBytes(StandardCharsets.UTF_8)));
-        RestRequest restRequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
-            .withParams(ImmutableMap.of("sessionId", "randomGeneratedUUID"))
-            .withContent(bytesReference, MediaType.fromMediaType(XContentType.JSON.mediaType()))
-            .build();
-        when(channel.detailedErrorsEnabled()).thenReturn(false);
-        when(channel.request()).thenReturn(restRequest);
-        when(channel.newErrorBuilder()).thenReturn(XContentBuilder.builder(XContentType.JSON.xContent()));
-        initMockSession(channel);
-        transportMcpMessageDispatchedAction.doExecute(mock(Task.class), request, listener);
-        verify(listener).onResponse(new AcknowledgedResponse(true));
-    }
-
-    @Test
-    public void test_sendErrorResponse() throws IOException {
-        StreamingRestChannel channel = mock(StreamingRestChannel.class);
-        BytesReference bytesReference = BytesReference.fromByteBuffer(ByteBuffer.wrap(requestBody.getBytes(StandardCharsets.UTF_8)));
-        RestRequest restRequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
-            .withParams(ImmutableMap.of("sessionId", "randomGeneratedUUID"))
-            .withContent(bytesReference, MediaType.fromMediaType(XContentType.JSON.mediaType()))
-            .build();
-        when(channel.detailedErrorsEnabled()).thenReturn(false);
-        when(channel.request()).thenReturn(restRequest);
-        when(channel.newErrorBuilder()).thenReturn(XContentBuilder.builder(XContentType.JSON.xContent()));
-        initMockSession(channel);
-        doThrow(new RuntimeException(new IOException("test exception"))).when(channel).sendResponse(any());
-        transportMcpMessageDispatchedAction.sendErrorResponse(listener, channel, new RuntimeException("test exception"));
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(listener).onFailure(argumentCaptor.capture());
-        assertNotNull(argumentCaptor.getValue());
-        assertTrue(argumentCaptor.getValue().getCause() instanceof RuntimeException);
-        assertTrue(argumentCaptor.getValue().getCause().getMessage().contains("test exception"));
     }
 }
