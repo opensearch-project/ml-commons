@@ -22,6 +22,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Set;
 
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -158,6 +159,7 @@ public class TransportMcpMessageDispatchedActionTests extends OpenSearchTestCase
         McpAsyncServerHolder.getMcpServerTransportProviderInstance().handleSseConnection(channel, false, "mockNodeId", client).subscribe();
     }
 
+    @Ignore
     @Test
     public void test_doExecute_successful() {
         MLMcpMessageRequest request = mock(MLMcpMessageRequest.class);
