@@ -72,7 +72,7 @@ public class McpToolRegisterInput extends McpToolBaseInput {
                     name = parser.text();
                     break;
                 case DESCRIPTION_FIELD:
-                    description = parser.text();
+                    description = parser.textOrNull();
                     break;
                 case PARAMS_FIELD:
                     params = parser.map();
