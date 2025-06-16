@@ -8,18 +8,21 @@ package org.opensearch.ml.action.mcpserver;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.utils.TestHelper.mockClientStashContext;
 import static org.opensearch.ml.utils.TestHelper.setupTestClusterState;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Set;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.index.IndexResponse;
@@ -34,6 +37,7 @@ import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.MediaType;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -169,7 +173,7 @@ public class TransportMcpMessageDispatchedActionTests extends OpenSearchTestCase
     }
 
     @Test
-    public void test_doExecute_failure() {
+    public void test_doExecute_failure() throws IOException {
         MLMcpMessageRequest request = mock(MLMcpMessageRequest.class);
         when(request.getSessionId()).thenReturn("randomGeneratedUUID");
         when(request.getRequestBody()).thenReturn("invalid request body");
@@ -183,8 +187,30 @@ public class TransportMcpMessageDispatchedActionTests extends OpenSearchTestCase
             .build();
         when(channel.detailedErrorsEnabled()).thenReturn(false);
         when(channel.request()).thenReturn(restRequest);
+        when(channel.newErrorBuilder()).thenReturn(XContentBuilder.builder(XContentType.JSON.xContent()));
         initMockSession(channel);
         transportMcpMessageDispatchedAction.doExecute(mock(Task.class), request, listener);
         verify(listener).onResponse(new AcknowledgedResponse(true));
+    }
+
+    @Test
+    public void test_sendErrorResponse() throws IOException {
+        StreamingRestChannel channel = mock(StreamingRestChannel.class);
+        BytesReference bytesReference = BytesReference.fromByteBuffer(ByteBuffer.wrap(requestBody.getBytes(StandardCharsets.UTF_8)));
+        RestRequest restRequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withParams(ImmutableMap.of("sessionId", "randomGeneratedUUID"))
+            .withContent(bytesReference, MediaType.fromMediaType(XContentType.JSON.mediaType()))
+            .build();
+        when(channel.detailedErrorsEnabled()).thenReturn(false);
+        when(channel.request()).thenReturn(restRequest);
+        when(channel.newErrorBuilder()).thenReturn(XContentBuilder.builder(XContentType.JSON.xContent()));
+        initMockSession(channel);
+        doThrow(new RuntimeException(new IOException("test exception"))).when(channel).sendResponse(any());
+        transportMcpMessageDispatchedAction.sendErrorResponse(listener, channel, new RuntimeException("test exception"));
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(argumentCaptor.capture());
+        assertNotNull(argumentCaptor.getValue());
+        assertTrue(argumentCaptor.getValue().getCause() instanceof RuntimeException);
+        assertTrue(argumentCaptor.getValue().getCause().getMessage().contains("test exception"));
     }
 }

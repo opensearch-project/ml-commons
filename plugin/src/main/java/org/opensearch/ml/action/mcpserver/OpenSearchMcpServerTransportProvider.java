@@ -16,7 +16,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.opensearch.OpenSearchException;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
-import org.opensearch.common.lease.Releasable;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.rest.RestStatus;
@@ -247,11 +246,7 @@ public class OpenSearchMcpServerTransportProvider implements McpServerTransportP
         BytesReference content = BytesReference.fromByteBuffer(ByteBuffer.wrap(result.getBytes(StandardCharsets.UTF_8)));
         return new HttpChunk() {
             @Override
-            public void close() {
-                if (content instanceof Releasable) {
-                    ((Releasable) content).close();
-                }
-            }
+            public void close() {}
 
             @Override
             public boolean isLast() {

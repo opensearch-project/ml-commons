@@ -270,4 +270,9 @@ public class OpenSearchMcpServerTransportProviderTests extends OpenSearchTestCas
         assertEquals("test", unmarshalled);
     }
 
+    @Test
+    public void test_closeGracefully() {
+        StepVerifier.create(transport.closeGracefully()).verifyComplete();
+    }
+
 }

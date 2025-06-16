@@ -5,8 +5,6 @@
 
 package org.opensearch.ml.action.mcpserver;
 
-import java.io.IOException;
-
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
@@ -25,6 +23,8 @@ import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
+
+import com.google.common.annotations.VisibleForTesting;
 
 import lombok.extern.log4j.Log4j2;
 import reactor.core.publisher.Mono;
@@ -79,16 +79,19 @@ public class TransportMcpMessageDispatchedAction extends HandledTransportAction<
             .doOnSuccess(y -> {
                 listener.onResponse(new AcknowledgedResponse(true));
             })
-            .onErrorResume(e -> Mono.fromRunnable(() -> {
-                try {
-                    listener.onResponse(new AcknowledgedResponse(true));
-                    channel.sendResponse(new BytesRestResponse(channel, new Exception(e)));
-                } catch (IOException ex) {
-                    log.error("Failed to send exception response to client during message handling due to IOException", ex);
-                    listener.onFailure(new Exception(e));
-                }
-            }))
+            .onErrorResume(e -> Mono.fromRunnable(() -> sendErrorResponse(listener, channel, e)))
             .subscribe();
+    }
+
+    @VisibleForTesting
+    void sendErrorResponse(ActionListener<AcknowledgedResponse> listener, StreamingRestChannel channel, Throwable e) {
+        try {
+            channel.sendResponse(new BytesRestResponse(channel, new Exception(e)));
+            listener.onResponse(new AcknowledgedResponse(true)); // This is return to coordinator, always set to success.
+        } catch (Exception ex) {
+            log.error("Failed to send exception response to client during message handling due to IOException", ex);
+            listener.onFailure(new Exception(e));
+        }
     }
 
 }
