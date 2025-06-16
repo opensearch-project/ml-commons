@@ -22,7 +22,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.Set;
 
 import org.junit.Before;
-import org.junit.BeforeClass;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -99,36 +98,9 @@ public class TransportMcpMessageDispatchedActionTests extends OpenSearchTestCase
         }
         """;
     private TransportMcpMessageDispatchedAction transportMcpMessageDispatchedAction;
-    private static StreamingRestChannel channel;
-    private static McpServerSession session;
-    private static final String SESSION_ID = "randomGeneratedUUID";
-
-    @BeforeClass
-    public static void classSetUp() {
-        MLIndicesHandler mlIndicesHandler = mock(MLIndicesHandler.class);
-        McpToolsHelper mcpToolsHelper = mock(McpToolsHelper.class);
-        McpAsyncServerHolder.init(mlIndicesHandler, mcpToolsHelper);
-        channel = mock(StreamingRestChannel.class);
-        McpAsyncServerHolder.CHANNELS.put(SESSION_ID, channel);
-        doAnswer(invocationOnMock -> {
-            ActionListener<Boolean> listener = invocationOnMock.getArgument(0);
-            listener.onResponse(true);
-            return null;
-        }).when(mlIndicesHandler).initMLMcpSessionManagementIndex(isA(ActionListener.class));
-        doAnswer(invocationOnMock -> {
-            ActionListener<Boolean> listener = invocationOnMock.getArgument(0);
-            listener.onResponse(true);
-            return null;
-        }).when(mcpToolsHelper).autoLoadAllMcpTools(isA(ActionListener.class));
-
-        McpServerSession.Factory sessionFactory = mock(McpServerSession.Factory.class);
-        session = mock(McpServerSession.class);
-        when(session.handle(any())).thenReturn(Mono.empty());
-        when(session.getId()).thenReturn(SESSION_ID);
-        when(session.sendNotification(any(), any())).thenReturn(Mono.empty());
-        when(sessionFactory.create(any(McpServerTransport.class))).thenReturn(session);
-        McpAsyncServerHolder.getMcpServerTransportProviderInstance().setSessionFactory(sessionFactory);
-    }
+    private StreamingRestChannel channel;
+    private McpServerSession session;
+    private static final String SESSION_ID = "successSessionId";
 
     @Before
     public void setUp() throws Exception {
@@ -151,6 +123,31 @@ public class TransportMcpMessageDispatchedActionTests extends OpenSearchTestCase
             mlFeatureEnabledSetting
         );
         when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(true);
+
+        MLIndicesHandler mlIndicesHandler = mock(MLIndicesHandler.class);
+        McpToolsHelper mcpToolsHelper = mock(McpToolsHelper.class);
+        McpAsyncServerHolder.init(mlIndicesHandler, mcpToolsHelper);
+        channel = mock(StreamingRestChannel.class);
+        McpAsyncServerHolder.CHANNELS.put(SESSION_ID, channel);
+        McpAsyncServerHolder.CHANNELS.put(SESSION_ID, channel);
+        doAnswer(invocationOnMock -> {
+            ActionListener<Boolean> listener = invocationOnMock.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLMcpSessionManagementIndex(isA(ActionListener.class));
+        doAnswer(invocationOnMock -> {
+            ActionListener<Boolean> listener = invocationOnMock.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mcpToolsHelper).autoLoadAllMcpTools(isA(ActionListener.class));
+
+        McpServerSession.Factory sessionFactory = mock(McpServerSession.Factory.class);
+        session = mock(McpServerSession.class);
+        when(session.getId()).thenReturn(SESSION_ID);
+        when(session.handle(any())).thenReturn(Mono.empty());
+        when(session.sendNotification(any(), any())).thenReturn(Mono.empty());
+        when(sessionFactory.create(any(McpServerTransport.class))).thenReturn(session);
+        McpAsyncServerHolder.getMcpServerTransportProviderInstance().setSessionFactory(sessionFactory);
         doAnswer(invocationOnMock -> {
             ActionListener<IndexResponse> listener = invocationOnMock.getArgument(1);
             IndexResponse response = mock(IndexResponse.class);
@@ -166,7 +163,6 @@ public class TransportMcpMessageDispatchedActionTests extends OpenSearchTestCase
         MLMcpMessageRequest request = mock(MLMcpMessageRequest.class);
         when(request.getSessionId()).thenReturn(SESSION_ID);
         when(request.getRequestBody()).thenReturn(requestBody);
-        when(session.getId()).thenReturn(SESSION_ID);
         BytesReference bytesReference = BytesReference.fromByteBuffer(ByteBuffer.wrap(requestBody.getBytes(StandardCharsets.UTF_8)));
         RestRequest restRequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
             .withParams(ImmutableMap.of("sessionId", SESSION_ID))
