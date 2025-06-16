@@ -120,7 +120,7 @@ public class UpdatePromptTransportActionTests extends OpenSearchTestCase {
         mlUpdatePromptRequest = MLUpdatePromptRequest.builder().promptId("prompt_id").mlUpdatePromptInput(mlUpdatePromptInput).build();
 
         SearchResponse searchResponse = createSearchResponse(0);
-        when(mlPromptManager.validateUniquePromptName(any(), any())).thenReturn(searchResponse);
+        when(mlPromptManager.searchPromptByName(any(), any())).thenReturn(searchResponse);
     }
 
     @Test
@@ -242,21 +242,21 @@ public class UpdatePromptTransportActionTests extends OpenSearchTestCase {
 
     public void testDoExecute_fail_withPromptNameAlreadyExists() throws IOException {
         SearchResponse searchResponse = createSearchResponse(1);
-        when(mlPromptManager.validateUniquePromptName(any(), any())).thenReturn(searchResponse);
+        when(mlPromptManager.searchPromptByName(any(), any())).thenReturn(searchResponse);
 
         updatePromptTransportAction.doExecute(task, mlUpdatePromptRequest, actionListener);
 
         ArgumentCaptor<IllegalArgumentException> argumentCaptor = ArgumentCaptor.forClass(IllegalArgumentException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals(
-            "The name you provided is already being used by another Prompt with ID: prompt_id",
+            "The name you provided is already being used by another Prompt with ID: prompt_id . The conflicting name you provided: test_prompt",
             argumentCaptor.getValue().getMessage()
         );
     }
 
     public void testDoExecute_fail_searchResponseParsing() throws IOException {
         SearchResponse searchResponse = createSearchResponse(0);
-        when(mlPromptManager.validateUniquePromptName(any(), any()))
+        when(mlPromptManager.searchPromptByName(any(), any()))
             .thenThrow(new OpenSearchStatusException("Failed to parse search response", RestStatus.INTERNAL_SERVER_ERROR));
 
         updatePromptTransportAction.doExecute(task, mlUpdatePromptRequest, actionListener);

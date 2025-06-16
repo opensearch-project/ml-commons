@@ -24,6 +24,7 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
+import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentType;
@@ -164,7 +165,7 @@ public class MLPromptManager {
     }
 
     /**
-     * Checks if the tags exceed max number of tags or max length of tag.
+     *
      *
      * @param tags tags passed in via MLCreatePromptInput or MLUpdatePromptInput
      * @return true if the tags are valid, false otherwise
@@ -174,13 +175,13 @@ public class MLPromptManager {
     }
 
     /**
-     * Check if a given name already exists in the prompt system index by using a term query on the name keyword field to
-     * enforce unique naming
+     * Searches the prompt index for prompts that exactly match the given name, using the name field.
      *
-     * @param name name to search if it already exists
+     * @param name The prompt name to search for
      * @param tenantId tenant id
+     * @return SearchResponse containing any matching prompts, or an exception if the search fails.
      */
-    public SearchResponse validateUniquePromptName(String name, String tenantId) {
+    public SearchResponse searchPromptByName(String name, String tenantId) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             BoolQueryBuilder query = new BoolQueryBuilder();
             query.filter(new TermQueryBuilder(MLCreatePromptInput.PROMPT_NAME_FIELD + ".keyword", name));
@@ -214,7 +215,7 @@ public class MLPromptManager {
      * @param searchResponse SearchResponse
      * @return True if the name already exists in the prompt system index, False Otherwise.
      */
-    public static boolean nameAlreadyExists(SearchResponse searchResponse) {
+    public static boolean MLPromptNameAlreadyExists(SearchResponse searchResponse) {
         return searchResponse != null
             && searchResponse.getHits().getTotalHits() != null
             && searchResponse.getHits().getTotalHits().value() != 0;
@@ -223,13 +224,13 @@ public class MLPromptManager {
     /**
      *  Builds a new map containing modified request body after pull_prompt is invoked
      *
-     * @param promptType type of prompt, either prompt or messages
+     * @param promptOrMessages type of prompt, either prompt or messages
      * @param inputParameters a map containing full request body received during predict
      * @param tenantId tenant id
      * @param listener the listener to notified with new map containing modified request body
      */
     public void buildInputParameters(
-        String promptType,
+        String promptOrMessages,
         Map<String, String> inputParameters,
         String tenantId,
         ActionListener<Map<String, String>> listener
@@ -237,13 +238,13 @@ public class MLPromptManager {
         try {
             Map<String, String> parameters = new HashMap<>(inputParameters);
             parameters.remove(PARAMETERS_PROMPT_PARAMETERS_FIELD);
-            String inputContent = inputParameters.get(promptType);
+            String inputContent = inputParameters.get(promptOrMessages);
             if (inputContent == null || inputContent.trim().isEmpty()) {
                 throw new IllegalArgumentException("Missing required input: Either prompt or messages must be provided");
             }
             String JsonStrPromptParameters = inputParameters.get(PARAMETERS_PROMPT_PARAMETERS_FIELD);
             PromptParameters promptParam = PromptParameters.buildPromptParameters(JsonStrPromptParameters);
-            switch (promptType) {
+            switch (promptOrMessages) {
                 case PARAMETERS_PROMPT_FIELD:
                     handlePromptField(parameters, inputContent, promptParam, tenantId);
                     break;
@@ -251,9 +252,9 @@ public class MLPromptManager {
                     handleMessagesField(parameters, inputContent, promptParam, tenantId);
                     break;
                 default:
-                    log.error("Wrong prompt type is provided: {}, should provide either prompt or messages", promptType);
+                    log.error("Wrong prompt type is provided: {}, should provide either prompt or messages", promptOrMessages);
                     throw new IllegalArgumentException(
-                        "Wrong prompt type is provided: " + promptType + ", should provide either prompt or messages"
+                        "Wrong prompt type is provided: " + promptOrMessages + ", should provide either prompt or messages"
                     );
             }
             listener.onResponse(parameters);
@@ -273,9 +274,9 @@ public class MLPromptManager {
      */
     private void handlePromptField(Map<String, String> parameters, String promptContent, PromptParameters promptParam, String tenantId)
         throws IOException {
-        List<String> IDAndKey = validatePullPromptSyntax(promptContent);
-        String promptId = IDAndKey.getFirst();
-        String key = IDAndKey.getLast();
+        Tuple<String, String> IDAndKey = validatePullPromptSyntax(promptContent);
+        String promptId = IDAndKey.v1();
+        String key = IDAndKey.v2();
         PromptResult promptResult = pullPrompt(promptId, key, promptParam, tenantId);
         parameters.put(PARAMETERS_PROMPT_FIELD, promptResult.getContent());
     }
@@ -308,7 +309,7 @@ public class MLPromptManager {
      * @return List that contains prompt reference and key
      * @throws InvalidPullPromptSyntaxException if invalid syntax is provided
      */
-    private static List<String> validatePullPromptSyntax(String input) {
+    private static Tuple<String, String> validatePullPromptSyntax(String input) {
         if (input != null && input.contains("pull_prompt(")) {
             String pullPromptRegex = "pull_prompt\\(([^)]+)\\)\\.(.+)";
 
@@ -323,7 +324,7 @@ public class MLPromptManager {
             String promptId = matcher.group(1);
             String key = matcher.group(2);
 
-            return List.of(promptId, key);
+            return new Tuple<String, String>(promptId, key);
         }
         throw new InvalidPullPromptSyntaxException(
             "Invalid pull_prompt syntax is provided: " + input + ". Expected: pull_prompt(prompt_id).key"
@@ -399,10 +400,10 @@ public class MLPromptManager {
      * @return prompt id after prompt reference is successfully resolved from name to id
      */
     private String resolvePromptID(String promptRef, String tenantId) {
-        SearchResponse searchResponse = validateUniquePromptName(promptRef, tenantId);
+        SearchResponse searchResponse = searchPromptByName(promptRef, tenantId);
         String promptId = promptRef;
         // resolves prompt reference to an prompt id from prompt name
-        if (nameAlreadyExists(searchResponse)) {
+        if (MLPromptNameAlreadyExists(searchResponse)) {
             promptId = searchResponse.getHits().getAt(0).getId();
         }
         return promptId;
@@ -481,11 +482,7 @@ public class MLPromptManager {
                 jsonString.append("{");
                 jsonString.append("\"" + ROLE_PARAMETER + "\":\"").append(message.getRole()).append("\",");
                 jsonString.append("\"" + CONTENT_PARAMETER + "\":\"").append(message.getContent()).append("\"");
-                if (i == totalMessages - 1) {
-                    jsonString.append("}");
-                } else {
-                    jsonString.append("},");
-                }
+                jsonString.append(i == totalMessages - 1 ? "}" : "},");
             }
             jsonString.append("]");
             return jsonString.toString();
@@ -545,9 +542,9 @@ public class MLPromptManager {
             this.role = Objects.requireNonNull(role, "Missing message role field. Expecting either user or system role");
             this.content = Objects
                 .requireNonNull(content, "Missing message content field. Expecting message content based on provided role");
-            List<String> IDAndKey = validatePullPromptSyntax(this.content);
-            this.promptId = IDAndKey.getFirst();
-            this.key = IDAndKey.getLast();
+            Tuple<String, String> IDAndKey = validatePullPromptSyntax(this.content);
+            this.promptId = IDAndKey.v1();
+            this.key = IDAndKey.v2();
         }
 
         public static Message buildMessage(XContentParser parser) throws IOException {

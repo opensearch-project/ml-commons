@@ -13,9 +13,11 @@ import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
+import org.opensearch.action.StepListener;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.cluster.service.ClusterService;
@@ -189,10 +191,12 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                                             } else {
                                                 validateInputSchema(modelId, mlPredictionTaskRequest.getMlInput());
                                                 checkIfPullPromptExists(mlPredictionTaskRequest, wrappedListener, modelId);
+                                                executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
                                             }
                                         } else {
                                             validateInputSchema(modelId, mlPredictionTaskRequest.getMlInput());
                                             checkIfPullPromptExists(mlPredictionTaskRequest, wrappedListener, modelId);
+                                            executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
                                         }
                                     }
                                 }
@@ -249,24 +253,21 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
             ? ((RemoteInferenceInputDataSet) inputDataset).getParameters()
             : new HashMap<>();
         // prompt or messages
-        String promptType = inputParameters.containsKey(PARAMETERS_MESSAGES_FIELD)
+        String promptOrMessages = inputParameters.containsKey(PARAMETERS_MESSAGES_FIELD)
             ? PARAMETERS_MESSAGES_FIELD
             : (inputParameters.containsKey(PARAMETERS_PROMPT_FIELD) ? PARAMETERS_PROMPT_FIELD : null);
-        if (inputParameters.containsKey(PARAMETERS_PROMPT_PARAMETERS_FIELD) && promptType != null) {
-            mlPromptManager
-                .buildInputParameters(
-                    promptType,
-                    inputParameters,
-                    mlPredictionTaskRequest.getTenantId(),
-                    ActionListener.wrap(inputParametersAfter -> {
-                        ((RemoteInferenceInputDataSet) inputDataset).setParameters(inputParametersAfter);
-                        mlPredictionTaskRequest.getMlInput().setInputDataset(((RemoteInferenceInputDataSet) inputDataset));
-                    }, e -> wrappedListener.onFailure(e))
-                );
-            executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
-        } else {
-            executePredict(mlPredictionTaskRequest, wrappedListener, modelId);
+        if (!inputParameters.containsKey(PARAMETERS_PROMPT_PARAMETERS_FIELD) || promptOrMessages == null) {
+            return;
         }
+        AtomicReference<Map<String, String>> swappedParameter = new AtomicReference<>(inputParameters);
+        StepListener<Map<String, String>> buildInputParameterListener = new StepListener<>();
+
+        mlPromptManager
+            .buildInputParameters(promptOrMessages, inputParameters, mlPredictionTaskRequest.getTenantId(), buildInputParameterListener);
+        buildInputParameterListener.whenComplete(swappedParameter::set, wrappedListener::onFailure);
+
+        ((RemoteInferenceInputDataSet) inputDataset).setParameters(swappedParameter.get());
+        mlPredictionTaskRequest.getMlInput().setInputDataset(((RemoteInferenceInputDataSet) inputDataset));
     }
 
     private void executePredict(

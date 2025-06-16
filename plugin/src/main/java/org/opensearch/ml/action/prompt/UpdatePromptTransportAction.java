@@ -6,10 +6,10 @@
 package org.opensearch.ml.action.prompt;
 
 import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX;
+import static org.opensearch.ml.prompt.MLPromptManager.MLPromptNameAlreadyExists;
 import static org.opensearch.ml.prompt.MLPromptManager.TAG_RESTRICTION_ERR_MESSAGE;
 import static org.opensearch.ml.prompt.MLPromptManager.UNIQUE_NAME_ERR_MESSAGE;
 import static org.opensearch.ml.prompt.MLPromptManager.handleFailure;
-import static org.opensearch.ml.prompt.MLPromptManager.nameAlreadyExists;
 import static org.opensearch.ml.prompt.MLPromptManager.validateTags;
 
 import java.time.Instant;
@@ -99,11 +99,16 @@ public class UpdatePromptTransportAction extends HandledTransportAction<MLUpdate
         }
         try {
             SearchResponse searchResponse = mlPromptManager
-                .validateUniquePromptName(mlUpdatePromptInput.getName(), mlUpdatePromptInput.getTenantId());
-            if (nameAlreadyExists(searchResponse)) {
+                .searchPromptByName(mlUpdatePromptInput.getName(), mlUpdatePromptInput.getTenantId());
+            if (MLPromptNameAlreadyExists(searchResponse)) {
                 SearchHit hit = searchResponse.getHits().getAt(0);
                 String id = hit.getId();
-                actionListener.onFailure(new IllegalArgumentException(UNIQUE_NAME_ERR_MESSAGE + id));
+                actionListener
+                    .onFailure(
+                        new IllegalArgumentException(
+                            UNIQUE_NAME_ERR_MESSAGE + id + " . The conflicting name you provided: " + mlUpdatePromptInput.getName()
+                        )
+                    );
                 return;
             }
             GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
