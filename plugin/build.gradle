@@ -377,6 +377,7 @@ List<String> jacocoExclusions = [
         'org.opensearch.ml.action.agents.TransportRegisterAgentAction',
         'org.opensearch.ml.rest.mcpserver.RestMcpConnectionMessageStreamingAction.1',
         'org.opensearch.ml.rest.mcpserver.RestMcpConnectionMessageStreamingAction',
+        'org.opensearch.ml.action.mcpserver.TransportMcpMessageDispatchedAction',
         'org.opensearch.ml.jobs.MLJobRunner',
         'org.opensearch.ml.utils.ParseUtils',
         'org.opensearch.ml.jobs.processors.MLStatsJobProcessor',
