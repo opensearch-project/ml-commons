@@ -47,7 +47,7 @@ public class RestMcpToolsRemoveActionIT extends MLCommonsRestTestCase {
         assertEquals(200, response.getStatusLine().getStatusCode());
     }
 
-    public void testRegisterMcpTools() throws IOException {
+    public void testRemoveMcpTools() throws IOException {
         String registerRequestBody =
             """
                  {
@@ -55,7 +55,7 @@ public class RestMcpToolsRemoveActionIT extends MLCommonsRestTestCase {
                         {
                             "name": "ListIndexTool1",
                             "type": "ListIndexTool",
-                            "description": "initial description"
+                            "description": "initial description",
                             "attributes": {
                                 "input_schema": {
                                     "type": "object",
@@ -75,7 +75,7 @@ public class RestMcpToolsRemoveActionIT extends MLCommonsRestTestCase {
                         {
                             "name": "ListIndexTool2",
                             "type": "ListIndexTool",
-                            "description": "initial description"
+                            "description": "initial description",
                             "attributes": {
                                 "input_schema": {
                                     "type": "object",
@@ -109,12 +109,12 @@ public class RestMcpToolsRemoveActionIT extends MLCommonsRestTestCase {
             ]
             """;
         Response removeResponse = TestHelper
-            .makeRequest(client(), "POST", "/_plugins/_ml/mcp/tools/_update", null, removeRequestBody, null);
+            .makeRequest(client(), "POST", "/_plugins/_ml/mcp/tools/_remove", null, removeRequestBody, null);
         assert (removeResponse != null);
         assert (TestHelper.restStatus(removeResponse) == RestStatus.OK);
         HttpEntity removeResponseEntity = removeResponse.getEntity();
         String removeResString = TestHelper.httpEntityToString(removeResponseEntity);
-        assertTrue(removeResString.contains("updated"));
+        assertTrue(removeResString.contains("removed"));
 
         Response listResponse = TestHelper.makeRequest(client(), "GET", "/_plugins/_ml/mcp/tools/_list", null, "", null);
         assert (listResponse != null);

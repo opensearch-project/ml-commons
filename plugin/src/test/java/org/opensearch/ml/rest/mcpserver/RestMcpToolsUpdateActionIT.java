@@ -47,7 +47,42 @@ public class RestMcpToolsUpdateActionIT extends MLCommonsRestTestCase {
         assertEquals(200, response.getStatusLine().getStatusCode());
     }
 
-    public void testRegisterMcpTools() throws IOException {
+    public void testUpdateMcpTools() throws IOException {
+        String registerReqBody =
+            """
+                {
+                    "tools": [
+                        {
+                            "name": "ListIndexTool",
+                            "type": "ListIndexTool",
+                            "description": "initial description",
+                            "attributes": {
+                                "input_schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "indices": {
+                                            "type": "array",
+                                            "items": {
+                                                "type": "string"
+                                            },
+                                            "description": "OpenSearch index name list, separated by comma. for example: [\\"index1\\", \\"index2\\"], use empty array [] to list all indices in the cluster"
+                                        }
+                                    },
+                                    "additionalProperties": false
+                                }
+                            }
+                        }
+                    ]
+                }
+                """;
+        Response registerResponse = TestHelper
+            .makeRequest(client(), "POST", "/_plugins/_ml/mcp/tools/_register", null, registerReqBody, null);
+        assert (registerResponse != null);
+        assert (TestHelper.restStatus(registerResponse) == RestStatus.OK);
+        HttpEntity registerResponseEntity = registerResponse.getEntity();
+        String registerResString = TestHelper.httpEntityToString(registerResponseEntity);
+        assertTrue(registerResString.contains("created"));
+
         String requestBody =
             """
                 {
@@ -55,7 +90,7 @@ public class RestMcpToolsUpdateActionIT extends MLCommonsRestTestCase {
                         {
                             "name": "ListIndexTool",
                             "type": "ListIndexTool",
-                            "description": "updated description"
+                            "description": "updated description",
                             "attributes": {
                                 "input_schema": {
                                     "type": "object",

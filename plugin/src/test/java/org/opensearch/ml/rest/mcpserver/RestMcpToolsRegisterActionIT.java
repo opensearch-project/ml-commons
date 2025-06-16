@@ -55,7 +55,7 @@ public class RestMcpToolsRegisterActionIT extends MLCommonsRestTestCase {
                         {
                             "name": "ListIndexTool",
                             "type": "ListIndexTool",
-                            "description": "initial description"
+                            "description": "initial description",
                             "attributes": {
                                 "input_schema": {
                                     "type": "object",
