@@ -137,8 +137,11 @@ public class TransportMcpToolsRemoveOnNodesActionTests extends OpenSearchTestCas
     @Test
     public void testNodeOperation() {
         MLMcpToolsRemoveNodeRequest request = new MLMcpToolsRemoveNodeRequest(toRemoveTools);
-        McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.put("ListIndexTool", 1L);
-        McpAsyncServerHolder.getMcpAsyncServerInstance().addTool(mcpToolsHelper.createToolSpecification(getRegisterMcpTool())).subscribe();
+        McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.put("ListIndexToolForDelete", 1L);
+        McpAsyncServerHolder
+            .getMcpAsyncServerInstance()
+            .addTool(mcpToolsHelper.createToolSpecification(getRegisterMcpTool("ListIndexToolForDelete")))
+            .subscribe();
         MLMcpToolsRemoveNodeResponse response = action.nodeOperation(request);
         assertEquals(true, response.getDeleted());
     }
@@ -152,9 +155,9 @@ public class TransportMcpToolsRemoveOnNodesActionTests extends OpenSearchTestCas
         action.nodeOperation(request);
     }
 
-    private McpToolRegisterInput getRegisterMcpTool() {
+    private McpToolRegisterInput getRegisterMcpTool(String toolName) {
         McpToolRegisterInput registerMcpTool = new McpToolRegisterInput(
-            "ListIndexTool",
+            toolName,
             "ListIndexTool",
             "OpenSearch index name list, separated by comma. for example: [\\\"index1\\\", \\\"index2\\\"], use empty array [] to list all indices in the cluster",
             Map.of(),

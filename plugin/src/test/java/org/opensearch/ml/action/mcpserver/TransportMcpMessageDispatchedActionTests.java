@@ -123,6 +123,7 @@ public class TransportMcpMessageDispatchedActionTests extends OpenSearchTestCase
             mlFeatureEnabledSetting
         );
         when(mlFeatureEnabledSetting.isMcpServerEnabled()).thenReturn(true);
+        McpAsyncServerHolder.init(mlIndicesHandler, mcpToolsHelper);
     }
 
     @Test
@@ -190,7 +191,6 @@ public class TransportMcpMessageDispatchedActionTests extends OpenSearchTestCase
     }
 
     private void initMockSession(StreamingRestChannel channel, String sessionId) {
-        McpAsyncServerHolder.init(mlIndicesHandler, mcpToolsHelper);
         McpServerSession.Factory sessionFactory = mock(McpServerSession.Factory.class);
         McpServerSession session = mock(McpServerSession.class);
         when(session.handle(any())).thenReturn(Mono.empty());
