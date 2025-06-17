@@ -19,6 +19,7 @@ import static org.opensearch.ml.engine.tools.SearchIndexTool.STRICT_FIELD;
 
 import java.io.InputStream;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -111,6 +112,15 @@ public class SearchIndexToolTests {
                 "{\n" + "    \"query\": {\n" + "        \"match_all\": {}\n" + "    }\n" + "}"
             );
         assertTrue(mockedSearchIndexTool.validate(parameters));
+    }
+
+    @Test
+    @SneakyThrows
+    public void testValidateWithActualKeysAndNullValues() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(SearchIndexTool.INDEX_FIELD, null);
+        parameters.put(SearchIndexTool.QUERY_FIELD, null);
+        assertFalse(mockedSearchIndexTool.validate(parameters));
     }
 
     @Test
