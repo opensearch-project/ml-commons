@@ -18,6 +18,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Future;
 import java.util.function.BiFunction;
 
 import org.junit.Assert;
@@ -39,13 +41,13 @@ public class AwsConnectorTest {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
-    BiFunction<String, String, String> encryptFunction;
-    BiFunction<String, String, String> decryptFunction;
+    BiFunction<String, String, Future<String>> encryptFunction;
+    BiFunction<String, String, Future<String>> decryptFunction;;
 
     @Before
     public void setUp() {
-        encryptFunction = (s, v) -> "encrypted: " + s.toLowerCase(Locale.ROOT);
-        decryptFunction = (s, v) -> "decrypted: " + s.toUpperCase(Locale.ROOT);
+        encryptFunction = (s, v) -> CompletableFuture.supplyAsync(() -> "encrypted: " + s.toLowerCase(Locale.ROOT));
+        decryptFunction = (s, v) -> CompletableFuture.supplyAsync(() -> "decrypted: " + s.toUpperCase(Locale.ROOT));
     }
 
     @Test

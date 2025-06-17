@@ -16,6 +16,7 @@ import static org.mockito.Mockito.when;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 import org.junit.Assert;
 import org.junit.Before;
@@ -65,7 +66,7 @@ public class RemoteModelTest extends MLStaticMockBase {
         remoteModel = new RemoteModel();
 
         encryptor = mock(Encryptor.class);
-        when(encryptor.decrypt(any(), any())).thenReturn("test_api_key");
+        when(encryptor.decrypt(any(), any())).thenReturn(CompletableFuture.supplyAsync(() -> "test_api_key"));
     }
 
     @Test

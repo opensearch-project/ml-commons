@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.engine.encryptor;
 
+import java.util.concurrent.Future;
+
 public interface Encryptor {
 
     /**
@@ -14,7 +16,7 @@ public interface Encryptor {
      * @param tenantId id of the tenant
      * @return String encryptedText.
      */
-    String encrypt(String plainText, String tenantId);
+    Future<String> encrypt(String plainText, String tenantId);
 
     /**
      * Takes encryptedText and returns plain text.
@@ -23,7 +25,7 @@ public interface Encryptor {
      * @param tenantId id of the tenant
      * @return String plainText.
      */
-    String decrypt(String encryptedText, String tenantId);
+    Future<String> decrypt(String encryptedText, String tenantId);
 
     /**
      * Set up the masterKey for dynamic updating
