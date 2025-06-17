@@ -390,9 +390,7 @@ import org.opensearch.watcher.ResourceWatcherService;
 import com.google.common.annotations.VisibleForTesting;
 
 import lombok.SneakyThrows;
-import lombok.extern.log4j.Log4j2;
 
-@Log4j2
 public class MachineLearningPlugin extends Plugin
     implements
         ActionPlugin,
