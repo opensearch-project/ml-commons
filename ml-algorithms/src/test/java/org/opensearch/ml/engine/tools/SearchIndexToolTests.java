@@ -14,6 +14,7 @@ import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.opensearch.ml.engine.tools.SearchIndexTool.INPUT_SCHEMA_FIELD;
 import static org.opensearch.ml.engine.tools.SearchIndexTool.STRICT_FIELD;
 
@@ -26,6 +27,7 @@ import java.util.concurrent.CompletableFuture;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.common.settings.Settings;
@@ -151,6 +153,20 @@ public class SearchIndexToolTests {
         mockedSearchIndexTool.run(parameters, null);
         Mockito.verify(client, times(1)).search(any(), any());
         Mockito.verify(client, Mockito.never()).execute(any(), any(), any());
+    }
+
+    @Test
+    @SneakyThrows
+    public void testRunWithInputKeyInvalidJson() {
+        ActionListener<String> listener = mock(ActionListener.class);
+        Map<String, String> parameters = Map.of("input", "Invalid json");
+        mockedSearchIndexTool.run(parameters, listener);
+        ArgumentCaptor<Exception> argument = ArgumentCaptor.forClass(Exception.class);
+        verify(listener).onFailure(argument.capture());
+        assertEquals(
+            "SearchIndexTool's two parameters: index and query are required and should in valid format!",
+            argument.getValue().getMessage()
+        );
     }
 
     @Test

@@ -31,6 +31,7 @@ import org.opensearch.transport.client.Client;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonSyntaxException;
 
@@ -97,9 +98,7 @@ public class SearchIndexTool implements Tool {
         if (parameters == null || parameters.isEmpty()) {
             return false;
         }
-        boolean argumentsFromInput = parameters.containsKey(INPUT_FIELD)
-            && parameters.get(INPUT_FIELD) != null
-            && !parameters.get(INPUT_FIELD).isEmpty();
+        boolean argumentsFromInput = parameters.containsKey(INPUT_FIELD) && !StringUtils.isEmpty(parameters.get(INPUT_FIELD));
         boolean argumentsFromParameters = parameters.containsKey(INDEX_FIELD)
             && parameters.containsKey(QUERY_FIELD)
             && !StringUtils.isEmpty(parameters.get(INDEX_FIELD))
@@ -132,31 +131,36 @@ public class SearchIndexTool implements Tool {
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
         try {
             String input = parameters.get(INPUT_FIELD);
-            String index;
-            String query;
+            String index = null;
+            String query = null;
             if (input != null && !input.isEmpty()) {
-                JsonObject jsonObject = null;
                 try {
-                    jsonObject = GSON.fromJson(input, JsonObject.class);
+                    JsonObject jsonObject = GSON.fromJson(input, JsonObject.class);
+                    if (jsonObject != null && jsonObject.has(INDEX_FIELD) && jsonObject.has(QUERY_FIELD)) {
+                        index = jsonObject.get(INDEX_FIELD).getAsString();
+                        JsonElement queryElement = jsonObject.get(QUERY_FIELD);
+                        query = queryElement == null ? null : queryElement.toString();
+                    }
                 } catch (JsonSyntaxException e) {
                     log.error("Invalid JSON input: {}", input, e);
                 }
-                if (jsonObject != null && jsonObject.has(INDEX_FIELD) && jsonObject.has(QUERY_FIELD)) {
-                    index = jsonObject.get(INDEX_FIELD).getAsString();
-                    query = jsonObject.get(QUERY_FIELD) == null ? null : jsonObject.get(QUERY_FIELD).toString();
-                } else {
-                    index = parameters.get(INDEX_FIELD);
-                    query = parameters.get(QUERY_FIELD);
-                }
-            } else {
+            }
+            if (StringUtils.isEmpty(index)) {
                 index = parameters.get(INDEX_FIELD);
+            }
+            if (StringUtils.isEmpty(query)) {
                 query = parameters.get(QUERY_FIELD);
             }
-
-            if (index == null || query == null) {
-                listener.onFailure(new IllegalArgumentException("SearchIndexTool's two parameter: index and query are required!"));
+            if (StringUtils.isEmpty(index) || StringUtils.isEmpty(query)) {
+                listener
+                    .onFailure(
+                        new IllegalArgumentException(
+                            "SearchIndexTool's two parameters: index and query are required and should in valid format!"
+                        )
+                    );
                 return;
             }
+
             SearchRequest searchRequest = getSearchRequest(index, query);
 
             ActionListener<SearchResponse> actionListener = ActionListener.<SearchResponse>wrap(r -> {
