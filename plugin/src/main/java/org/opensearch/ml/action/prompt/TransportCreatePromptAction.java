@@ -6,13 +6,16 @@
 package org.opensearch.ml.action.prompt;
 
 import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX;
+import static org.opensearch.ml.prompt.MLPromptManager.MLPromptNameAlreadyExists;
 import static org.opensearch.ml.prompt.MLPromptManager.TAG_RESTRICTION_ERR_MESSAGE;
+import static org.opensearch.ml.prompt.MLPromptManager.UNIQUE_NAME_ERR_MESSAGE;
 import static org.opensearch.ml.prompt.MLPromptManager.handleFailure;
 import static org.opensearch.ml.prompt.MLPromptManager.validateTags;
 
 import java.time.Instant;
 
 import org.opensearch.action.index.IndexResponse;
+import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.common.inject.Inject;
@@ -25,11 +28,13 @@ import org.opensearch.ml.common.transport.prompt.MLCreatePromptInput;
 import org.opensearch.ml.common.transport.prompt.MLCreatePromptRequest;
 import org.opensearch.ml.common.transport.prompt.MLCreatePromptResponse;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
+import org.opensearch.ml.prompt.MLPromptManager;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.PutDataObjectRequest;
 import org.opensearch.remote.metadata.client.PutDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
+import org.opensearch.search.SearchHit;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -46,6 +51,7 @@ public class TransportCreatePromptAction extends HandledTransportAction<MLCreate
     private final MLIndicesHandler mlIndicesHandler;
     private final Client client;
     private final SdkClient sdkClient;
+    private final MLPromptManager mlPromptManager;
 
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
@@ -56,12 +62,14 @@ public class TransportCreatePromptAction extends HandledTransportAction<MLCreate
         MLIndicesHandler mlIndicesHandler,
         Client client,
         SdkClient sdkClient,
+        MLPromptManager mlPromptManager,
         MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLCreatePromptAction.NAME, transportService, actionFilters, MLCreatePromptRequest::new);
         this.mlIndicesHandler = mlIndicesHandler;
         this.client = client;
         this.sdkClient = sdkClient;
+        this.mlPromptManager = mlPromptManager;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
@@ -98,6 +106,19 @@ public class TransportCreatePromptAction extends HandledTransportAction<MLCreate
         }
 
         try {
+            SearchResponse searchResponse = mlPromptManager
+                .searchPromptByName(mlCreatePromptInput.getName(), mlCreatePromptInput.getTenantId());
+            if (MLPromptNameAlreadyExists(searchResponse)) {
+                SearchHit hit = searchResponse.getHits().getAt(0);
+                String id = hit.getId();
+                listener
+                    .onFailure(
+                        new IllegalArgumentException(
+                            UNIQUE_NAME_ERR_MESSAGE + id + " . The conflicting name you provided: " + mlCreatePromptInput.getName()
+                        )
+                    );
+                return;
+            }
             String version = mlCreatePromptInput.getVersion();
             MLPrompt mlPrompt = MLPrompt
                 .builder()
