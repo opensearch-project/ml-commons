@@ -275,4 +275,9 @@ public class OpenSearchMcpServerTransportProviderTests extends OpenSearchTestCas
         StepVerifier.create(transport.closeGracefully()).verifyComplete();
     }
 
+    @Test
+    public void test_handleErrorResult() {
+        transport.handleErrorResult(new RuntimeException("runtime error"));
+    }
+
 }
