@@ -30,6 +30,7 @@ import org.opensearch.transport.client.Client;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableMap;
 
 import io.modelcontextprotocol.spec.McpError;
@@ -278,14 +279,17 @@ public class OpenSearchMcpServerTransportProvider implements McpServerTransportP
             return Mono.fromSupplier(() -> writeValueAsString(message)).doOnNext(jsonText -> {
                 HttpChunk event = createHttpChunk(MESSAGE_EVENT_TYPE, jsonText);
                 streamingRestChannel.sendChunk(event);
-            }).doOnError(e -> {
-                Throwable exception = Exceptions.unwrap(e);
-                try {
-                    streamingRestChannel.sendResponse(new BytesRestResponse(streamingRestChannel, new IllegalStateException(exception)));
-                } catch (IOException ex) {
-                    log.error("Failed to send error response during sending message", ex);
-                }
-            }).then();
+            }).doOnError(this::handleErrorResult).then();
+        }
+
+        @VisibleForTesting
+        void handleErrorResult(Throwable e) {
+            Throwable exception = Exceptions.unwrap(e);
+            try {
+                streamingRestChannel.sendResponse(new BytesRestResponse(streamingRestChannel, new IllegalStateException(exception)));
+            } catch (Exception ex) {
+                log.error("Failed to send error response during sending message", ex);
+            }
         }
 
         @Override
