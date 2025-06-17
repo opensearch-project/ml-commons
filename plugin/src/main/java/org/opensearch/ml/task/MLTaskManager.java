@@ -566,44 +566,56 @@ public class MLTaskManager {
                     .source(jobParameter.toXContent(JsonXContent.contentBuilder(), null))
                     .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
-                client.index(indexRequest, ActionListener.wrap(r -> {
-                    log.info("Indexed ml task polling job successfully");
-                    this.taskPollingJobStarted = true;
-                }, e -> log.error("Failed to index task polling job", e)));
+                try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                    client.index(indexRequest, ActionListener.runBefore(ActionListener.wrap(r -> {
+                        log.info("Indexed ml task polling job successfully");
+                        this.taskPollingJobStarted = true;
+                    }, e -> log.error("Failed to index task polling job", e)), context::restore));
+                }
             }
         }, e -> log.error("Failed to initialize ML jobs index", e)));
     }
 
     public void startStatsCollectorJob() {
-        try {
-            int intervalInMinutes = 5;
-            Long lockDurationSeconds = 60L;
+        mlIndicesHandler.initMLJobsIndex(ActionListener.wrap(success -> {
+            if (success) {
+                try {
+                    int intervalInMinutes = 5;
+                    Long lockDurationSeconds = 60L;
 
-            MLJobParameter jobParameter = new MLJobParameter(
-                MLJobType.STATS_COLLECTOR.name(),
-                new IntervalSchedule(Instant.now(), intervalInMinutes, ChronoUnit.MINUTES),
-                lockDurationSeconds,
-                null,
-                MLJobType.STATS_COLLECTOR
-            );
+                    MLJobParameter jobParameter = new MLJobParameter(
+                        MLJobType.STATS_COLLECTOR.name(),
+                        new IntervalSchedule(Instant.now(), intervalInMinutes, ChronoUnit.MINUTES),
+                        lockDurationSeconds,
+                        null,
+                        MLJobType.STATS_COLLECTOR
+                    );
 
-            IndexRequest indexRequest = new IndexRequest()
-                .index(CommonValue.ML_JOBS_INDEX)
-                .id(MLJobType.STATS_COLLECTOR.name())
-                .source(jobParameter.toXContent(JsonXContent.contentBuilder(), null))
-                .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+                    IndexRequest indexRequest = new IndexRequest()
+                        .index(CommonValue.ML_JOBS_INDEX)
+                        .id(MLJobType.STATS_COLLECTOR.name())
+                        .source(jobParameter.toXContent(JsonXContent.contentBuilder(), null))
+                        .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
-            client
-                .index(
-                    indexRequest,
-                    ActionListener
-                        .wrap(
-                            r -> log.info("Indexed ml stats collection job successfully"),
-                            e -> log.error("Failed to index stats collection job", e)
-                        )
-                );
-        } catch (IOException e) {
-            log.error("Failed to index stats collection job", e);
-        }
+                    try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                        client
+                            .index(
+                                indexRequest,
+                                ActionListener
+                                    .runBefore(
+                                        ActionListener
+                                            .wrap(
+                                                r -> log.info("Indexed ml stats collection job successfully"),
+                                                e -> log.error("Failed to index stats collection job", e)
+                                            ),
+                                        context::restore
+                                    )
+                            );
+                    }
+                } catch (IOException e) {
+                    log.error("Failed to index stats collection job", e);
+                }
+            }
+        }, e -> log.error("Failed to initialize ML jobs index", e)));
     }
 }

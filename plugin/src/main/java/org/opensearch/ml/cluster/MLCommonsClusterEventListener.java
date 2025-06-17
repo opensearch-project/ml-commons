@@ -20,10 +20,8 @@ import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
-import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.autoredeploy.MLModelAutoReDeployer;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
-import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.task.MLTaskManager;
@@ -40,7 +38,6 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
     private final MLModelCacheHelper modelCacheHelper;
     private final MLModelAutoReDeployer mlModelAutoReDeployer;
     private final Client client;
-    private final MLIndicesHandler mlIndicesHandler;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     public MLCommonsClusterEventListener(
@@ -50,7 +47,6 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
         MLModelCacheHelper modelCacheHelper,
         MLModelAutoReDeployer mlModelAutoReDeployer,
         Client client,
-        MLIndicesHandler mlIndicesHandler,
         MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         this.clusterService = clusterService;
@@ -60,7 +56,6 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
         this.modelCacheHelper = modelCacheHelper;
         this.mlModelAutoReDeployer = mlModelAutoReDeployer;
         this.client = client;
-        this.mlIndicesHandler = mlIndicesHandler;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
@@ -86,19 +81,11 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
                 // As a result, we need to wait for a data node to come up before creating the new jobs index
                 if (node.isDataNode() && Version.V_3_1_0.onOrAfter(node.getVersion())) {
                     if (mlFeatureEnabledSetting.isMetricCollectionEnabled() && mlFeatureEnabledSetting.isStaticMetricCollectionEnabled()) {
-                        mlIndicesHandler.initMLJobsIndex(ActionListener.wrap(success -> {
-                            if (success) {
-                                mlTaskManager.startStatsCollectorJob();
-                            }
-                        }, e -> log.error("Failed to initialize ML jobs index", e)));
+                        mlTaskManager.startStatsCollectorJob();
                     }
 
                     if (clusterService.state().getMetadata().hasIndex(TASK_POLLING_JOB_INDEX)) {
-                        mlIndicesHandler.initMLJobsIndex(ActionListener.wrap(success -> {
-                            if (success) {
-                                mlTaskManager.startTaskPollingJob();
-                            }
-                        }, e -> log.error("Failed to initialize ML jobs index", e)));
+                        mlTaskManager.startTaskPollingJob();
                     }
                 }
             }

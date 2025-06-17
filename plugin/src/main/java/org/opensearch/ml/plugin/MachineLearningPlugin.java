@@ -778,7 +778,6 @@ public class MachineLearningPlugin extends Plugin
             modelCacheHelper,
             mlModelAutoRedeployer,
             client,
-            mlIndicesHandler,
             mlFeatureEnabledSetting
         );
         MLCommonsClusterManagerEventListener clusterManagerEventListener = new MLCommonsClusterManagerEventListener(
