@@ -27,6 +27,7 @@ import org.opensearch.action.bulk.BulkResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
+import org.opensearch.action.support.WriteRequest;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -209,6 +210,7 @@ public class TransportMcpToolsRegisterAction extends HandledTransportAction<Acti
             });
 
             BulkRequest bulkRequest = new BulkRequest();
+            bulkRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
             for (McpToolRegisterInput mcpTool : registerNodesRequest.getMcpTools()) {
                 IndexRequest indexRequest = new IndexRequest(MLIndex.MCP_TOOLS.getIndexName());
                 // Set opType to create to avoid race condition when creating tools with same name.
