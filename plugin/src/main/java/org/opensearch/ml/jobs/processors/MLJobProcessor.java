@@ -14,7 +14,6 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.jobscheduler.spi.JobExecutionContext;
 import org.opensearch.jobscheduler.spi.ScheduledJobParameter;
 import org.opensearch.jobscheduler.spi.utils.LockService;
-import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
@@ -36,7 +35,8 @@ public abstract class MLJobProcessor {
 
     public void process(ScheduledJobParameter scheduledJobParameter, JobExecutionContext jobExecutionContext, boolean isProcessorEnabled) {
         if (!isProcessorEnabled) {
-            throw new MLException(scheduledJobParameter.getName() + " not enabled.");
+            log.warn("{} not enabled.", scheduledJobParameter.getName());
+            return;
         }
 
         process(scheduledJobParameter, jobExecutionContext);

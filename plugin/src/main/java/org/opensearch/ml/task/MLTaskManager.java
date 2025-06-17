@@ -541,32 +541,69 @@ public class MLTaskManager {
         });
     }
 
-    public void startTaskPollingJob() throws IOException {
+    public void startTaskPollingJob() {
         if (this.taskPollingJobStarted) {
             return;
         }
 
-        String id = "ml_batch_task_polling_job";
-        String jobName = "poll_batch_jobs";
-        String interval = "1";
-        Long lockDurationSeconds = 20L;
+        mlIndicesHandler.initMLJobsIndex(ActionListener.wrap(success -> {
+            if (success) {
+                String id = "ml_batch_task_polling_job";
+                String jobName = "poll_batch_jobs";
+                String interval = "1";
+                Long lockDurationSeconds = 20L;
 
-        MLJobParameter jobParameter = new MLJobParameter(
-            jobName,
-            new IntervalSchedule(Instant.now(), Integer.parseInt(interval), ChronoUnit.MINUTES),
-            lockDurationSeconds,
-            null,
-            MLJobType.BATCH_TASK_UPDATE
-        );
-        IndexRequest indexRequest = new IndexRequest()
-            .index(CommonValue.ML_JOBS_INDEX)
-            .id(id)
-            .source(jobParameter.toXContent(JsonXContent.contentBuilder(), null))
-            .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+                MLJobParameter jobParameter = new MLJobParameter(
+                    jobName,
+                    new IntervalSchedule(Instant.now(), Integer.parseInt(interval), ChronoUnit.MINUTES),
+                    lockDurationSeconds,
+                    null,
+                    MLJobType.BATCH_TASK_UPDATE
+                );
+                IndexRequest indexRequest = new IndexRequest()
+                    .index(CommonValue.ML_JOBS_INDEX)
+                    .id(id)
+                    .source(jobParameter.toXContent(JsonXContent.contentBuilder(), null))
+                    .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
-        client.index(indexRequest, ActionListener.wrap(r -> {
-            log.info("Indexed ml task polling job successfully");
-            this.taskPollingJobStarted = true;
-        }, e -> log.error("Failed to index task polling job", e)));
+                client.index(indexRequest, ActionListener.wrap(r -> {
+                    log.info("Indexed ml task polling job successfully");
+                    this.taskPollingJobStarted = true;
+                }, e -> log.error("Failed to index task polling job", e)));
+            }
+        }, e -> log.error("Failed to initialize ML jobs index", e)));
+    }
+
+    public void startStatsCollectorJob() {
+        try {
+            int intervalInMinutes = 5;
+            Long lockDurationSeconds = 60L;
+
+            MLJobParameter jobParameter = new MLJobParameter(
+                MLJobType.STATS_COLLECTOR.name(),
+                new IntervalSchedule(Instant.now(), intervalInMinutes, ChronoUnit.MINUTES),
+                lockDurationSeconds,
+                null,
+                MLJobType.STATS_COLLECTOR
+            );
+
+            IndexRequest indexRequest = new IndexRequest()
+                .index(CommonValue.ML_JOBS_INDEX)
+                .id(MLJobType.STATS_COLLECTOR.name())
+                .source(jobParameter.toXContent(JsonXContent.contentBuilder(), null))
+                .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+
+            client
+                .index(
+                    indexRequest,
+                    ActionListener
+                        .wrap(
+                            r -> log.info("Indexed ml stats collection job successfully"),
+                            e -> log.error("Failed to index stats collection job", e)
+                        )
+                );
+        } catch (IOException e) {
+            log.error("Failed to index stats collection job", e);
+        }
     }
 }
