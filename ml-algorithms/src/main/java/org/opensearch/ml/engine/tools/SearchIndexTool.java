@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
+import org.apache.commons.lang3.StringUtils;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
@@ -101,8 +102,8 @@ public class SearchIndexTool implements Tool {
             && !parameters.get(INPUT_FIELD).isEmpty();
         boolean argumentsFromParameters = parameters.containsKey(INDEX_FIELD)
             && parameters.containsKey(QUERY_FIELD)
-            && !parameters.get(INDEX_FIELD).isEmpty()
-            && !parameters.get(QUERY_FIELD).isEmpty();
+            && !StringUtils.isEmpty(parameters.get(INDEX_FIELD))
+            && !StringUtils.isEmpty(parameters.get(QUERY_FIELD));
         boolean validRequest = argumentsFromInput || argumentsFromParameters;
         if (!validRequest) {
             log.error("SearchIndexTool's two parameter: index and query are required!");
