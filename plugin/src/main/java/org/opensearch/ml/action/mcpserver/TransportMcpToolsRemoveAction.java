@@ -19,6 +19,7 @@ import org.opensearch.action.bulk.BulkResponse;
 import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
+import org.opensearch.action.support.WriteRequest;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -163,6 +164,7 @@ public class TransportMcpToolsRemoveAction extends HandledTransportAction<Action
                 restoreListener.onFailure(e);
             });
             BulkRequest bulkRequest = new BulkRequest();
+            bulkRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
             for (String name : foundTools) {
                 DeleteRequest deleteRequest = new DeleteRequest(MLIndex.MCP_TOOLS.getIndexName(), name);
                 bulkRequest.add(deleteRequest);
