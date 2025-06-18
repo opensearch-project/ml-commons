@@ -75,23 +75,31 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
             Set<String> removedNodeIds = delta.removedNodes().stream().map(DiscoveryNode::getId).collect(Collectors.toSet());
             mlModelManager.removeWorkerNodes(removedNodeIds, false);
         } else if (delta.added()) {
-            for (DiscoveryNode node : delta.addedNodes()) {
-                // 3.1 introduces a new index for the job scheduler to track jobs
-                // the statsCollectorJob needs to be run when a cluster is started with the stats settings enabled
-                // As a result, we need to wait for a data node to come up before creating the new jobs index
-                if (node.isDataNode() && Version.V_3_1_0.onOrAfter(node.getVersion())) {
-                    if (mlFeatureEnabledSetting.isMetricCollectionEnabled() && mlFeatureEnabledSetting.isStaticMetricCollectionEnabled()) {
-                        mlTaskManager.startStatsCollectorJob();
-                    }
-
-                    if (clusterService.state().getMetadata().hasIndex(TASK_POLLING_JOB_INDEX)) {
-                        mlTaskManager.startTaskPollingJob();
-                    }
-                }
-            }
-
             List<String> addedNodesIds = delta.addedNodes().stream().map(DiscoveryNode::getId).collect(Collectors.toList());
             mlModelAutoReDeployer.buildAutoReloadArrangement(addedNodesIds, state.getNodes().getClusterManagerNodeId());
+        }
+
+        /*
+         * In version 3.1, a new index `.plugins-ml-jobs` replaces the old `.ml_commons_task_polling_job` index for the job scheduler.
+         * Version 3.1 also introduces a stats collector job that should run at startup if the relevant settings are enabled.
+         * When upgrading from 3.0 to 3.1, we need to ensure the new `.plugins-ml-jobs` index is created if either:
+         *   - The stats collector job is enabled, or
+         *   - The batch polling task job was already running.
+         * To avoid issues during blue/green or rolling upgrades, we wait for a data node running 3.1 or later before creating the new jobs index and starting the jobs.
+         * The following logic implements this behavior.
+         */
+        for (DiscoveryNode node : state.nodes()) {
+            if (node.isDataNode() && Version.V_3_1_0.onOrAfter(node.getVersion())) {
+                if (mlFeatureEnabledSetting.isMetricCollectionEnabled() && mlFeatureEnabledSetting.isStaticMetricCollectionEnabled()) {
+                    mlTaskManager.startStatsCollectorJob();
+                }
+
+                if (clusterService.state().getMetadata().hasIndex(TASK_POLLING_JOB_INDEX)) {
+                    mlTaskManager.startTaskPollingJob();
+                }
+
+                break;
+            }
         }
     }
 }
