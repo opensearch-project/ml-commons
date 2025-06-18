@@ -48,6 +48,7 @@ import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
+import org.opensearch.ml.jobs.MLJobType;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.test.OpenSearchTestCase;
@@ -349,6 +350,12 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
 
     public void testStartTaskPollingJob() throws IOException {
         doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLJobsIndex(any());
+
+        doAnswer(invocation -> {
             ActionListener<IndexResponse> listener = invocation.getArgument(1);
             listener.onResponse(indexResponse);
             return null;
@@ -366,6 +373,12 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
     }
 
     public void testStartTaskPollingJob_IndexException() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLJobsIndex(any());
+
         String errorMessage = "Failed to index task polling job";
         doAnswer(invocation -> {
             ActionListener<IndexResponse> listener = invocation.getArgument(1);
@@ -374,6 +387,49 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
         }).when(client).index(any(), any());
 
         mlTaskManager.startTaskPollingJob();
+
+        verify(client).index(any(), any());
+    }
+
+    public void testStartStatsCollectorJob() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLJobsIndex(any());
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(), any());
+
+        mlTaskManager.startStatsCollectorJob();
+
+        ArgumentCaptor<IndexRequest> indexRequestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
+        verify(client).index(indexRequestCaptor.capture(), any());
+
+        IndexRequest capturedRequest = indexRequestCaptor.getValue();
+        assertEquals(ML_JOBS_INDEX, capturedRequest.index());
+        assertEquals(MLJobType.STATS_COLLECTOR.name(), capturedRequest.id());
+        assertEquals(WriteRequest.RefreshPolicy.IMMEDIATE, capturedRequest.getRefreshPolicy());
+    }
+
+    public void testStartStatsCollectorJob_IndexException() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLJobsIndex(any());
+
+        String errorMessage = "Failed to index stats collector job";
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException(errorMessage));
+            return null;
+        }).when(client).index(any(), any());
+
+        mlTaskManager.startStatsCollectorJob();
 
         verify(client).index(any(), any());
     }

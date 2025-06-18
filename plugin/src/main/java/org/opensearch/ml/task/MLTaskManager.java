@@ -82,6 +82,7 @@ public class MLTaskManager {
     private final MLIndicesHandler mlIndicesHandler;
     private final Map<MLTaskType, AtomicInteger> runningTasksCount;
     private boolean taskPollingJobStarted;
+    private boolean statsCollectorJobStarted;
     public static final ImmutableSet<MLTaskState> TASK_DONE_STATES = ImmutableSet
         .of(MLTaskState.COMPLETED, MLTaskState.COMPLETED_WITH_ERROR, MLTaskState.FAILED, MLTaskState.CANCELLED);
 
@@ -541,32 +542,77 @@ public class MLTaskManager {
         });
     }
 
-    public void startTaskPollingJob() throws IOException {
+    public void startTaskPollingJob() {
         if (this.taskPollingJobStarted) {
             return;
         }
 
-        String id = "ml_batch_task_polling_job";
-        String jobName = "poll_batch_jobs";
-        String interval = "1";
-        Long lockDurationSeconds = 20L;
+        try {
+            MLJobParameter jobParameter = new MLJobParameter(
+                MLJobType.BATCH_TASK_UPDATE.name(),
+                new IntervalSchedule(Instant.now(), 1, ChronoUnit.MINUTES),
+                20L,
+                null,
+                MLJobType.BATCH_TASK_UPDATE
+            );
 
-        MLJobParameter jobParameter = new MLJobParameter(
-            jobName,
-            new IntervalSchedule(Instant.now(), Integer.parseInt(interval), ChronoUnit.MINUTES),
-            lockDurationSeconds,
-            null,
-            MLJobType.BATCH_TASK_UPDATE
-        );
-        IndexRequest indexRequest = new IndexRequest()
-            .index(CommonValue.ML_JOBS_INDEX)
-            .id(id)
-            .source(jobParameter.toXContent(JsonXContent.contentBuilder(), null))
-            .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+            IndexRequest indexRequest = new IndexRequest()
+                .index(CommonValue.ML_JOBS_INDEX)
+                .id(MLJobType.BATCH_TASK_UPDATE.name())
+                .source(jobParameter.toXContent(JsonXContent.contentBuilder(), null))
+                .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
-        client.index(indexRequest, ActionListener.wrap(r -> {
-            log.info("Indexed ml task polling job successfully");
-            this.taskPollingJobStarted = true;
-        }, e -> log.error("Failed to index task polling job", e)));
+            startJob(indexRequest, MLJobType.BATCH_TASK_UPDATE, () -> this.taskPollingJobStarted = true);
+        } catch (IOException e) {
+            log.error("Failed to index task polling job", e);
+        }
+    }
+
+    public void startStatsCollectorJob() {
+        if (statsCollectorJobStarted) {
+            return;
+        }
+
+        try {
+            MLJobParameter jobParameter = new MLJobParameter(
+                MLJobType.STATS_COLLECTOR.name(),
+                new IntervalSchedule(Instant.now(), 5, ChronoUnit.MINUTES),
+                60L,
+                null,
+                MLJobType.STATS_COLLECTOR
+            );
+
+            IndexRequest indexRequest = new IndexRequest()
+                .index(CommonValue.ML_JOBS_INDEX)
+                .id(MLJobType.STATS_COLLECTOR.name())
+                .source(jobParameter.toXContent(JsonXContent.contentBuilder(), null))
+                .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+
+            startJob(indexRequest, MLJobType.STATS_COLLECTOR, () -> this.statsCollectorJobStarted = true);
+        } catch (IOException e) {
+            log.error("Failed to index stats collection job", e);
+        }
+    }
+
+    /**
+     * Start a job by indexing the job parameter to ML jobs index.
+     * 
+     * @param indexRequest the index request containing the job parameter
+     * @param jobType the type of job being started
+     * @param successCallback callback to execute on successful job indexing
+     */
+    private void startJob(IndexRequest indexRequest, MLJobType jobType, Runnable successCallback) {
+        mlIndicesHandler.initMLJobsIndex(ActionListener.wrap(success -> {
+            if (success) {
+                try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                    client.index(indexRequest, ActionListener.runBefore(ActionListener.wrap(r -> {
+                        log.info("Indexed {} successfully", jobType.name());
+                        if (successCallback != null) {
+                            successCallback.run();
+                        }
+                    }, e -> log.error("Failed to index {} job", jobType.name(), e)), context::restore));
+                }
+            }
+        }, e -> log.error("Failed to initialize ML jobs index", e)));
     }
 }
