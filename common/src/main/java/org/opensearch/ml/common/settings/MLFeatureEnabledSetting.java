@@ -19,6 +19,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_OFF
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_STREAM_ENABLED;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -43,6 +44,7 @@ public class MLFeatureEnabledSetting {
 
     // This is to identify if this node is in multi-tenancy or not.
     private volatile Boolean isMultiTenancyEnabled;
+    private volatile Boolean isStreamEnabled;
 
     private volatile Boolean isMcpServerEnabled;
 
@@ -66,6 +68,7 @@ public class MLFeatureEnabledSetting {
         isRagSearchPipelineEnabled = ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED.get(settings);
         isMetricCollectionEnabled = ML_COMMONS_METRIC_COLLECTION_ENABLED.get(settings);
         isStaticMetricCollectionEnabled = ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED.get(settings);
+        isStreamEnabled = ML_COMMONS_STREAM_ENABLED.get(settings);
 
         clusterService
             .getClusterSettings()
@@ -94,6 +97,7 @@ public class MLFeatureEnabledSetting {
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED, it -> isStaticMetricCollectionEnabled = it);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_STREAM_ENABLED, it -> isStreamEnabled = it);
     }
 
     /**
@@ -162,6 +166,13 @@ public class MLFeatureEnabledSetting {
      */
     public boolean isMcpServerEnabled() {
         return isMcpServerEnabled;
+    }
+
+    /** Whether the streaming feature is enabled. If disabled, APIs in ml-commons will block stream.
+     * @return whether the streaming is enabled.
+     */
+    public boolean isStreamEnabled() {
+        return isStreamEnabled;
     }
 
     public void addListener(SettingsChangeListener listener) {

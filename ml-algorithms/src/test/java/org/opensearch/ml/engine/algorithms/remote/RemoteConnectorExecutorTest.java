@@ -12,6 +12,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.connector.AbstractConnector.ACCESS_KEY_FIELD;
 import static org.opensearch.ml.common.connector.AbstractConnector.SECRET_KEY_FIELD;
+import static org.opensearch.ml.common.connector.AbstractConnector.SESSION_TOKEN_FIELD;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
 import static org.opensearch.ml.common.connector.HttpConnector.REGION_FIELD;
 import static org.opensearch.ml.common.connector.HttpConnector.SERVICE_NAME_FIELD;
@@ -81,8 +82,15 @@ public class RemoteConnectorExecutorTest {
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
-        return AwsConnector
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptor.encrypt("test_key", null),
+                SECRET_KEY_FIELD,
+                encryptor.encrypt("test_secret_key", null),
+                SESSION_TOKEN_FIELD,
+                encryptor.encrypt("test_session_token", null)
+            );
+        AwsConnector connector = AwsConnector
             .awsConnectorBuilder()
             .name("test connector")
             .version("1")
@@ -92,6 +100,8 @@ public class RemoteConnectorExecutorTest {
             .actions(Arrays.asList(predictAction))
             .connectorClientConfig(new ConnectorClientConfig(10, 10, 10, 1, 1, 0, RetryBackoffPolicy.CONSTANT))
             .build();
+        connector.decrypt(PREDICT.name(), (c, tenantId) -> encryptor.decrypt(c, null), null);
+        return connector;
     }
 
     private AwsConnectorExecutor getExecutor(Connector connector) {
