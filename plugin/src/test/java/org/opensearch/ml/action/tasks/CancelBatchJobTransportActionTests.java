@@ -30,8 +30,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.ResourceNotFoundException;
+import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
+import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.metadata.Metadata;
 import org.opensearch.cluster.service.ClusterService;
@@ -40,6 +42,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
+import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
@@ -48,6 +51,7 @@ import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
+import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction;
@@ -344,5 +348,100 @@ public class CancelBatchJobTransportActionTests extends OpenSearchTestCase {
         GetResult getResult = new GetResult("indexName", "111", 111l, 111l, 111l, true, bytesReference, null, null);
         GetResponse getResponse = new GetResponse(getResult);
         return getResponse;
+    }
+
+    public void testCancelAgentTask_TaskInFinalState() {
+        cancelBatchJobTransportAction.cancelAgentTask("test_id", MLTaskState.COMPLETED, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Task test_id cannot be cancelled as it is in a final state: COMPLETED.", argumentCaptor.getValue().getMessage());
+    }
+
+    public void testCancelAgentTask_Success() {
+        UpdateResponse updateResponse = mock(UpdateResponse.class);
+        when(updateResponse.getResult()).thenReturn(UpdateResponse.Result.UPDATED);
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(2);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(mlTaskManager).updateMLTaskDirectly(eq("test_id"), eq(Map.of(MLTask.STATE_FIELD, MLTaskState.CANCELLING)), any());
+
+        cancelBatchJobTransportAction.cancelAgentTask("test_id", MLTaskState.RUNNING, actionListener);
+        verify(actionListener).onResponse(any(MLCancelBatchJobResponse.class));
+    }
+
+    public void testCancelAgentExecutionTask() throws IOException {
+        GetResponse getResponse = prepareMLTask(FunctionName.AGENT, MLTaskType.AGENT_EXECUTION, new HashMap<>());
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(2);
+            listener.onResponse(new UpdateResponse(new ShardId("index", "uuid", 0), "test_id", 1, 1, 1, DocWriteResponse.Result.UPDATED));
+            return null;
+        }).when(mlTaskManager).updateMLTaskDirectly(eq("test_id"), eq(Map.of(MLTask.STATE_FIELD, MLTaskState.CANCELLING)), any());
+
+        cancelBatchJobTransportAction.doExecute(null, mlCancelBatchJobRequest, actionListener);
+
+        verify(mlTaskManager).updateMLTaskDirectly(eq("test_id"), eq(Map.of(MLTask.STATE_FIELD, MLTaskState.CANCELLING)), any());
+        verify(actionListener).onResponse(any(MLCancelBatchJobResponse.class));
+    }
+
+    public void testCancelAgentExecutionTask_UpdateFailed() throws IOException {
+        GetResponse getResponse = prepareMLTask(FunctionName.AGENT, MLTaskType.AGENT_EXECUTION, new HashMap<>());
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        UpdateResponse updateResponse = mock(UpdateResponse.class);
+        when(updateResponse.getResult()).thenReturn(DocWriteResponse.Result.NOOP);
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(2);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(mlTaskManager).updateMLTaskDirectly(eq("test_id"), eq(Map.of(MLTask.STATE_FIELD, MLTaskState.CANCELLING)), any());
+
+        cancelBatchJobTransportAction.doExecute(null, mlCancelBatchJobRequest, actionListener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+
+        Exception exception = exceptionCaptor.getValue();
+        assertTrue(exception instanceof RuntimeException);
+        assertEquals("Failed to cancel task test_id: NOOP", exception.getMessage());
+    }
+
+    public void testCancelAgentExecutionTask_UpdateException() throws IOException {
+        GetResponse getResponse = prepareMLTask(FunctionName.AGENT, MLTaskType.AGENT_EXECUTION, new HashMap<>());
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(2);
+            listener.onFailure(new RuntimeException("Update failed"));
+            return null;
+        }).when(mlTaskManager).updateMLTaskDirectly(eq("test_id"), eq(Map.of(MLTask.STATE_FIELD, MLTaskState.CANCELLING)), any());
+
+        cancelBatchJobTransportAction.doExecute(null, mlCancelBatchJobRequest, actionListener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+
+        Exception exception = exceptionCaptor.getValue();
+        assertTrue(exception instanceof RuntimeException);
+        assertEquals("Update failed", exception.getMessage());
     }
 }
