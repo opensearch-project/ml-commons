@@ -1,0 +1,48 @@
+{
+  "_meta": {
+    "schema_version": 1
+  },
+  "properties": {
+    "name": {
+      "type": "keyword"
+    },
+    "enabled": {
+      "type": "boolean"
+    },
+    "enabled_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "last_update_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "schedule": {
+      "properties": {
+        "interval": {
+          "properties": {
+            "start_time": {
+              "type": "date",
+              "format": "strict_date_time||epoch_millis"
+            },
+            "period": {
+              "type": "integer"
+            },
+            "unit": {
+              "type": "keyword"
+            }
+          }
+        }
+      }
+    },
+    "lock_duration_seconds": {
+      "type": "long"
+    },
+    "jitter": {
+      "type": "double"
+    },
+    "type": {
+      "type": "keyword"
+    }
+  }
+}
