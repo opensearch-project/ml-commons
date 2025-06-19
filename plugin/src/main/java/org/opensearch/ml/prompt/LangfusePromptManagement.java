@@ -51,7 +51,7 @@ import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 @Getter
-public class LangfusePromptManagement extends AbstractPromptManagement {
+public class LangfusePromptManagement extends AbstractPromptManagement implements PromptImportable {
     public static final String PUBLIC_KEY_FIELD = "public_key";
     public static final String ACCESS_KEY_FIELD = "access_key";
     public static final String LANGFUSE_URL = "https://us.cloud.langfuse.com";
@@ -72,10 +72,23 @@ public class LangfusePromptManagement extends AbstractPromptManagement {
         this.langfuseClient = initLangfuseClient(this.publicKey, this.accessKey);
     }
 
+    /**
+     * Initialize Langfuse Client that is used to invoke Langfuse API to Langfuse Server
+     *
+     * @param username
+     * @param password
+     * @return
+     */
     public LangfuseClient initLangfuseClient(String username, String password) {
         return LangfuseClient.builder().url(LANGFUSE_URL).credentials(username, password).build();
     }
 
+    /**
+     * Create Langfuse Prompt in Langfuse Server
+     *
+     * @param mlCreatePromptInput input that contains metadata to create a prompt
+     * @return MLPrompt that will be used to create Langfuse Prompt
+     */
     @Override
     public MLPrompt createPrompt(MLCreatePromptInput mlCreatePromptInput) {
         PromptExtraConfig promptExtraConfig = mlCreatePromptInput.getPromptExtraConfig();
@@ -122,6 +135,13 @@ public class LangfusePromptManagement extends AbstractPromptManagement {
         }
     }
 
+    /**
+     * Build Text Prompt Request
+     *
+     * @param mlCreatePromptInput MLCreatePromptInput that contains metadata to create Langfuse Text Prompt
+     * @param promptExtraConfig Prompt Extra Config that contains credentials and other metadatas to construct Text Prompt
+     * @return CreatePromptRequest
+     */
     private CreatePromptRequest buildTextPromptRequest(MLCreatePromptInput mlCreatePromptInput, PromptExtraConfig promptExtraConfig) {
         CreateTextPromptRequest textRequest = CreateTextPromptRequest
             .builder()
@@ -134,6 +154,13 @@ public class LangfusePromptManagement extends AbstractPromptManagement {
         return CreatePromptRequest.text(textRequest);
     }
 
+    /**
+     * Build Chat Prompt Request
+     *
+     * @param mlCreatePromptInput MLCreatePromptInput that contains metadata to create Langfuse Chat Prompt
+     * @param promptExtraConfig Prompt Extra Config that contains credentials and other metadatas to construct Chat Prompt
+     * @return CreatePromptRequest
+     */
     private CreatePromptRequest buildChatPromptRequest(MLCreatePromptInput mlCreatePromptInput, PromptExtraConfig promptExtraConfig) {
         List<ChatMessage> langfusePromptTemplate = new ArrayList<>();
         Map<String, String> mlPromptTemplate = mlCreatePromptInput.getPrompt();
@@ -167,6 +194,11 @@ public class LangfusePromptManagement extends AbstractPromptManagement {
         return builder;
     }
 
+    /**
+     * Retrieve prompt from Langfuse Server
+     *
+     * @param mlPrompt Prompt that contains credentials and prompt name that is used to retrieve Langfuse Prompt
+     */
     @Override
     public void getPrompt(MLPrompt mlPrompt) {
         mlPrompt.setPromptExtraConfig(null); // won't include credentials in response body
@@ -195,6 +227,13 @@ public class LangfusePromptManagement extends AbstractPromptManagement {
         }
     }
 
+    /**
+     * Build Langfuse Prompt from TextPrompt
+     *
+     * @param textPrompt TextPrompt
+     * @param mlPrompt Prompt that is used to be deserialized into from retrieved Langfuse Prompt
+     * @param promptWithInitialVersion Initial version of LangfusePrompt
+     */
     private void buildMLPromptFromTextPrompt(TextPrompt textPrompt, MLPrompt mlPrompt, TextPrompt promptWithInitialVersion) {
         mlPrompt.setVersion(String.valueOf(textPrompt.getVersion()));
         mlPrompt.setPrompt(Map.of(USER_ROLE, textPrompt.getPrompt()));
@@ -208,6 +247,13 @@ public class LangfusePromptManagement extends AbstractPromptManagement {
         setTimeInstants(textPrompt.toString(), mlPrompt);
     }
 
+    /**
+     * Build Langfuse Prompt from ChatPrompt
+     *
+     * @param chatPrompt ChatPrompt
+     * @param mlPrompt Prompt that is used to be deserialized into from retrieved Langfuse Prompt
+     * @param promptWithInitialVersion Initial version of LangfusePrompt
+     */
     private void buildMLPromptFromChatPrompt(ChatPrompt chatPrompt, MLPrompt mlPrompt, ChatPrompt promptWithInitialVersion) {
         mlPrompt.setVersion(String.valueOf(chatPrompt.getVersion()));
         mlPrompt.setTags(chatPrompt.getTags());
@@ -231,6 +277,12 @@ public class LangfusePromptManagement extends AbstractPromptManagement {
         setTimeInstants(chatPrompt.toString(), mlPrompt);
     }
 
+    /**
+     * Set time instant based on fetch source
+     *
+     * @param fetchSource response sent from langfuse server upon successful import in JSON format
+     * @param mlPrompt Prompt
+     */
     private void setTimeInstants(String fetchSource, MLPrompt mlPrompt) {
         int version = 0;
         String createdTime = null;
@@ -277,6 +329,18 @@ public class LangfusePromptManagement extends AbstractPromptManagement {
         return message;
     }
 
+    /**
+     * Import Langfuse prompt based on user input
+     *
+     * <p>
+     *     1. Import a langfuse prompt by name
+     *     2. Import a langfuse prompt or list of langfuse prompts by shared tag
+     *     3. Import a langfuse prompt or list of langfuse prompts by setting a limit
+     * </p>
+     *
+     * @param mlImportPromptInput MLImportPromptInput that contains importing details
+     * @return list of imported langfuse prompts
+     */
     @Override
     public List<MLPrompt> importPrompts(MLImportPromptInput mlImportPromptInput) {
         String name = mlImportPromptInput.getName();
@@ -328,6 +392,13 @@ public class LangfusePromptManagement extends AbstractPromptManagement {
         }
     }
 
+    /**
+     * Update the prompt based on the update content
+     *
+     * @param mlUpdatePromptInput content that needs to be updated
+     * @param mlPrompt prompt that contains content before update
+     * @return updateDataObjectRequest
+     */
     @Override
     public UpdateDataObjectRequest updatePrompt(MLUpdatePromptInput mlUpdatePromptInput, MLPrompt mlPrompt) {
         getPrompt(mlPrompt);
@@ -350,6 +421,7 @@ public class LangfusePromptManagement extends AbstractPromptManagement {
             updateContent.getPromptExtraConfig().setLabels(mlUpdatePromptInput.getExtraConfig().getLabels());
         }
 
+        // Langfuse can only be updated via create endpoint
         createPrompt(updateContent);
         MLUpdatePromptInput input = MLUpdatePromptInput.builder().build();
         return UpdateDataObjectRequest

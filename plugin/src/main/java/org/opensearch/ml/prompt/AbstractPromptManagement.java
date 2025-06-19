@@ -8,13 +8,10 @@ package org.opensearch.ml.prompt;
 import static org.opensearch.ml.common.prompt.MLPrompt.LANGFUSE;
 import static org.opensearch.ml.common.prompt.MLPrompt.MLPROMPT;
 
-import java.util.List;
-
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.ml.common.prompt.MLPrompt;
 import org.opensearch.ml.common.prompt.PromptExtraConfig;
 import org.opensearch.ml.common.transport.prompt.MLCreatePromptInput;
-import org.opensearch.ml.common.transport.prompt.MLImportPromptInput;
 import org.opensearch.ml.common.transport.prompt.MLUpdatePromptInput;
 import org.opensearch.remote.metadata.client.UpdateDataObjectRequest;
 
@@ -37,8 +34,6 @@ public abstract class AbstractPromptManagement implements ToXContentObject {
     public abstract MLPrompt createPrompt(MLCreatePromptInput mlCreatePromptInput);
 
     public abstract void getPrompt(MLPrompt mlPrompt);
-
-    public abstract List<MLPrompt> importPrompts(MLImportPromptInput mlImportPromptInput);
 
     public abstract UpdateDataObjectRequest updatePrompt(MLUpdatePromptInput mlUpdatePromptInput, MLPrompt mlPrompt);
 }

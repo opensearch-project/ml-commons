@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -24,6 +25,7 @@ import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.prompt.MLPrompt;
 import org.opensearch.ml.common.prompt.PromptExtraConfig;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -35,6 +37,7 @@ import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.prompt.AbstractPromptManagement;
 import org.opensearch.ml.prompt.MLPromptManager;
+import org.opensearch.ml.prompt.PromptImportable;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.PutDataObjectRequest;
@@ -94,28 +97,41 @@ public class ImportPromptTransportAction extends HandledTransportAction<MLImport
                 promptManagementType,
                 PromptExtraConfig.builder().publicKey(publicKey).accessKey(accessKey).build()
             );
-            List<MLPrompt> mlPromptList = promptManagement.importPrompts(mlImportPromptInput);
-            Map<String, String> responseBody = new HashMap<>();
-            if (mlPromptList.isEmpty()) {
-                listener.onResponse(new MLImportPromptResponse(responseBody));
-                return;
-            }
-            AtomicInteger remainingMLPrompts = new AtomicInteger(mlPromptList.size());
-            for (MLPrompt mlPrompt : mlPromptList) {
-                mlPrompt.encrypt(promptManagementType, mlEngine::encrypt, tenantId);
-                handleDuplicateName(mlPrompt, tenantId, ActionListener.wrap(promptId -> {
-                    if (promptId == null) {
-                        indexPrompt(mlPrompt, responseBody, remainingMLPrompts, listener);
-                    } else {
-                        updateImportResponseBody(promptId, mlPrompt.getName(), responseBody, remainingMLPrompts, listener);
-                    }
-                }, listener::onFailure));
+
+            if (!(promptManagement instanceof PromptImportable importer)) {
+                throw new OpenSearchStatusException("Import prompt is not supported for MLPromptManagement", RestStatus.BAD_REQUEST);
+            } else {
+                List<MLPrompt> mlPromptList = importer.importPrompts(mlImportPromptInput);
+                Map<String, String> responseBody = new HashMap<>();
+                if (mlPromptList.isEmpty()) {
+                    listener.onResponse(new MLImportPromptResponse(responseBody));
+                    return;
+                }
+                AtomicInteger remainingMLPrompts = new AtomicInteger(mlPromptList.size());
+                for (MLPrompt mlPrompt : mlPromptList) {
+                    mlPrompt.encrypt(promptManagementType, mlEngine::encrypt, tenantId);
+                    handleConflictingName(mlPrompt, tenantId, ActionListener.wrap(promptId -> {
+                        if (promptId == null) {
+                            indexPrompt(mlPrompt, responseBody, remainingMLPrompts, listener);
+                        } else {
+                            updateImportResponseBody(promptId, mlPrompt.getName(), responseBody, remainingMLPrompts, listener);
+                        }
+                    }, listener::onFailure));
+                }
             }
         } catch (Exception e) {
             handleFailure(e, null, listener, "Failed to import " + promptManagementType + " Prompts into System Index");
         }
     }
 
+    /**
+     * Store prompt into system index
+     *
+     * @param prompt prompt that needs to be stored into the system index
+     * @param responseBody response body that will be return upon success in the format of prompt name to prompt id
+     * @param remainingMLPrompts remaining prompt to be stored into the system index
+     * @param listener actionListener that will be notified upon success or failure of the prompt creation
+     */
     private void indexPrompt(
         MLPrompt prompt,
         Map<String, String> responseBody,
@@ -140,10 +156,26 @@ public class ImportPromptTransportAction extends HandledTransportAction<MLImport
         }, e -> { handleFailure(e, null, listener, "Failed to init ML prompt index"); }));
     }
 
+    /**
+     * Builds putRequest to write prompt into index
+     *
+     * @param prompt prompt that needs to be stored into the system index
+     * @return PutDataObjectRequest
+     */
     private PutDataObjectRequest buildPromptPutRequest(MLPrompt prompt) {
         return PutDataObjectRequest.builder().tenantId(prompt.getTenantId()).index(ML_PROMPT_INDEX).dataObject(prompt).build();
     }
 
+    /**
+     * Handles PutResponse after prompt is indexed
+     *
+     * @param putResponse response received after prompt is indexed
+     * @param throwable throwable
+     * @param name prompt name that is indexed
+     * @param responseBody response body that will be return upon success in the format of prompt name to prompt id
+     * @param remainingMLPrompts remaining prompt to be stored into the system index
+     * @param listener actionListener that will be notified upon success or failure of the prompt creation
+     */
     private void handlePromptPutResponse(
         PutDataObjectResponse putResponse,
         Throwable throwable,
@@ -165,6 +197,15 @@ public class ImportPromptTransportAction extends HandledTransportAction<MLImport
         }
     }
 
+    /**
+     * Update the response body with the prompt name and prompt id upon successful import
+     *
+     * @param promptId prompt id returned after prompt is successfully indexed into the system index
+     * @param name name of the prompt that is stored
+     * @param responseBody response body that will be return upon success in the format of prompt name to prompt id
+     * @param remainingMLPrompts remaining prompt to be stored into the system index
+     * @param listener actionListener that will be notified upon success or failure of the prompt creation
+     */
     private void updateImportResponseBody(
         String promptId,
         String name,
@@ -179,7 +220,16 @@ public class ImportPromptTransportAction extends HandledTransportAction<MLImport
         }
     }
 
-    private void handleDuplicateName(MLPrompt importingPrompt, String tenantId, ActionListener<String> wrappedListener) throws IOException {
+    /**
+     * Search name field on prompt system index.
+     *
+     * @param importingPrompt prompt that needs to be imported into prompt system index
+     * @param tenantId tenant id
+     * @param wrappedListener listener that will be notified with prompt id upon success or failure of the prompt creation
+     * @throws IOException if search hits, meaning conflicting name exist
+     */
+    private void handleConflictingName(MLPrompt importingPrompt, String tenantId, ActionListener<String> wrappedListener)
+        throws IOException {
         String name = importingPrompt.getName();
         SearchResponse searchResponse = mlPromptManager.searchPromptByName(name, tenantId);
         if (searchResponse != null

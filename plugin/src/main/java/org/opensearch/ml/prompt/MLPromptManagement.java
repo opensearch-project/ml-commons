@@ -9,14 +9,10 @@ import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX;
 
 import java.io.IOException;
 import java.time.Instant;
-import java.util.List;
 
-import org.opensearch.OpenSearchStatusException;
-import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.prompt.MLPrompt;
 import org.opensearch.ml.common.transport.prompt.MLCreatePromptInput;
-import org.opensearch.ml.common.transport.prompt.MLImportPromptInput;
 import org.opensearch.ml.common.transport.prompt.MLUpdatePromptInput;
 import org.opensearch.remote.metadata.client.UpdateDataObjectRequest;
 
@@ -64,11 +60,6 @@ public class MLPromptManagement extends AbstractPromptManagement {
             .tenantId(mlUpdatePromptInput.getTenantId())
             .dataObject(mlUpdatePromptInput)
             .build();
-    }
-
-    @Override
-    public List<MLPrompt> importPrompts(MLImportPromptInput mlImportPromptInput) {
-        throw new OpenSearchStatusException("Import prompt is not supported for MLPromptManagement", RestStatus.BAD_REQUEST);
     }
 
     @Override
