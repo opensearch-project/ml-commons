@@ -690,7 +690,8 @@ public class MachineLearningPlugin extends Plugin
             mlTaskDispatcher,
             mlCircuitBreakerService,
             nodeHelper,
-            mlEngine
+            mlEngine,
+            mlPromptManager
         );
 
         // Register thread-safe ML objects here.

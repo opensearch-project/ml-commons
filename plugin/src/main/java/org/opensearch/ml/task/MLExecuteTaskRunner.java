@@ -20,6 +20,7 @@ import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskResponse;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.indices.MLInputDatasetHandler;
+import org.opensearch.ml.prompt.MLPromptManager;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
@@ -42,6 +43,7 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
     protected final DiscoveryNodeHelper nodeHelper;
     private final MLEngine mlEngine;
     private volatile Boolean isPythonModelEnabled;
+    private final MLPromptManager mlPromptManager;
 
     public MLExecuteTaskRunner(
         ThreadPool threadPool,
@@ -53,7 +55,8 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
         MLTaskDispatcher mlTaskDispatcher,
         MLCircuitBreakerService mlCircuitBreakerService,
         DiscoveryNodeHelper nodeHelper,
-        MLEngine mlEngine
+        MLEngine mlEngine,
+        MLPromptManager mlPromptManager
     ) {
         super(mlTaskManager, mlStats, nodeHelper, mlTaskDispatcher, mlCircuitBreakerService, clusterService);
         this.threadPool = threadPool;
@@ -66,6 +69,7 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
         this.clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_ENABLE_INHOUSE_PYTHON_MODEL, it -> isPythonModelEnabled = it);
+        this.mlPromptManager = mlPromptManager;
     }
 
     @Override
@@ -94,6 +98,7 @@ public class MLExecuteTaskRunner extends MLTaskRunner<MLExecuteTaskRequest, MLEx
                     .increment();
 
                 // ActionListener<MLExecuteTaskResponse> wrappedListener = ActionListener.runBefore(listener, )
+                mlPromptManager.resolvePromptGroup(request);
                 Input input = request.getInput();
                 FunctionName functionName = request.getFunctionName();
                 if (FunctionName.METRICS_CORRELATION.equals(functionName)) {

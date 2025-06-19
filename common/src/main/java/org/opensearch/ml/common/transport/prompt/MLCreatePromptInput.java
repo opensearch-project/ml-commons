@@ -72,12 +72,12 @@ public class MLCreatePromptInput implements ToXContentObject, Writeable {
         if (prompt == null || prompt.isEmpty()) {
             throw new IllegalArgumentException("MLPrompt prompt field cannot be empty or null");
         }
-        if (!prompt.containsKey(PROMPT_FIELD_SYSTEM_PROMPT)) {
+        /*if (!prompt.containsKey(PROMPT_FIELD_SYSTEM_PROMPT)) {
             throw new IllegalArgumentException("MLPrompt prompt field requires " + PROMPT_FIELD_SYSTEM_PROMPT + " parameter");
         }
         if (!prompt.containsKey(PROMPT_FIELD_USER_PROMPT)) {
             throw new IllegalArgumentException("MLPrompt prompt field requires " + PROMPT_FIELD_USER_PROMPT + " parameter");
-        }
+        }*/
 
         this.name = name;
         this.description = description;

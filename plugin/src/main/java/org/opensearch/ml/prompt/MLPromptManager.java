@@ -11,10 +11,12 @@ import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -38,8 +40,12 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
+import org.opensearch.ml.common.dataset.MLInputDataset;
+import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.prompt.MLPrompt;
+import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.prompt.MLCreatePromptInput;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.utils.MLExceptionUtils;
@@ -73,6 +79,24 @@ public class MLPromptManager {
 
     public static final String ROLE_PARAMETER = "role";
     public static final String CONTENT_PARAMETER = "content";
+
+    public static final Map<String, String> ML_PROMPT_MATCHING_KEYS = Map
+        .of(
+            "planner_template",
+            "planner_prompt_template",
+            "planner",
+            "planner_prompt",
+            "reflect_template",
+            "reflect_prompt_template",
+            "reflect",
+            "reflect_prompt",
+            "planner_with_history_template",
+            "planner_with_history_template",
+            "system",
+            "system_prompt",
+            "executor_system",
+            "executor_prompt_system"
+        );
 
     public static final String PARAMETERS_PROMPT_FIELD = "prompt";
     public static final String PARAMETERS_MESSAGES_FIELD = "messages";
@@ -221,6 +245,97 @@ public class MLPromptManager {
             && searchResponse.getHits().getTotalHits().value() != 0;
     }
 
+    public static Map<String, String> extractInputParameter(MLInput input) {
+        MLInputDataset inputDataset = input.getInputDataset();
+        return inputDataset instanceof RemoteInferenceInputDataSet
+            ? ((RemoteInferenceInputDataSet) inputDataset).getParameters()
+            : new HashMap<>();
+    }
+
+    /**
+     * Resolves a prompt group reference by fetching all associated prompts
+     * linked to the given group ID or name.
+     *
+     * <p>
+     *    This method checks if prompt_group field and correct pull_prompt syntax
+     *    are present in the execution request parameters. It queries the prompt store
+     *    to retrieve all prompts under the specified prompt reference,
+     *    and returns them in the defined order.</p>
+     * </p>
+     *
+     * @param request MLExecuteTaskRequest that contains execution request parameters
+     * @throws IOException if failed parsing prompt body
+     */
+    public void resolvePromptGroup(MLExecuteTaskRequest request) throws IOException {
+        MLInput mlInput = (MLInput) request.getInput();
+        MLInputDataset inputDataset = mlInput.getInputDataset();
+        Map<String, String> inputParameters = inputDataset instanceof RemoteInferenceInputDataSet
+            ? ((RemoteInferenceInputDataSet) inputDataset).getParameters()
+            : new HashMap<>();
+
+        resolveSinglePrompts(inputParameters);
+
+        if (!inputParameters.containsKey("prompt_group")) {
+            return;
+        }
+        resolvePromptGroup(inputParameters);
+
+        ((RemoteInferenceInputDataSet) inputDataset).setParameters(inputParameters);
+        mlInput.setInputDataset(inputDataset);
+        request = MLExecuteTaskRequest.builder().functionName(request.getFunctionName()).input(mlInput).build();
+    }
+
+    /**
+     * Resolve single prompt that has following pull_prompt syntax: pull_prompt(id).key
+     *
+     * @param inputParameters parameters fetched from Input Dataset
+     */
+    private void resolveSinglePrompts(Map<String, String> inputParameters) throws IOException {
+        List<String> unresolvedPrompts = ML_PROMPT_MATCHING_KEYS
+            .values()
+            .stream()
+            .filter(inputParameters::containsKey)
+            .filter(value -> inputParameters.get(value).contains("pull_prompt"))
+            .toList();
+        if (unresolvedPrompts.isEmpty()) {
+            // if the list is empty, then the request does not contain any single pull prompts to resolve
+            return;
+        }
+
+        for (String prompt : unresolvedPrompts) {
+            handlePromptField(inputParameters, prompt, inputParameters.get(prompt), null, null);
+        }
+    }
+
+    /**
+     * Resolve prompt group that has following pull_prompt syntax: Either pull_prompt(id) or pull_prompt(id, [filter_list])
+     *
+     * @param inputParameters parameters fetched from Input Dataset
+     */
+    private void resolvePromptGroup(Map<String, String> inputParameters) {
+        List<String> promptGroupParameters = validatePullPromptGroupSyntax(inputParameters.get("prompt_group"));
+        String nameOrID = promptGroupParameters.getFirst();
+        String promptId = resolvePromptID(nameOrID, null);
+        inputParameters.remove("prompt_group"); // don't need this no more
+
+        AtomicReference<List<String>> reference = new AtomicReference<>(promptGroupParameters);
+
+        GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest.builder().index(ML_PROMPT_INDEX).id(promptId).build();
+        MLPrompt mlPrompt = getPrompt(getDataObjectRequest);
+        Map<String, String> promptTemplate = mlPrompt.getPrompt();
+        for (String key : promptTemplate.keySet()) {
+            if (reference.get().size() == 1 || reference.get().contains(key)) {
+                String matchingKey = ML_PROMPT_MATCHING_KEYS.get(key);
+                // If a key exists in both the prompt group and request parameters, the value from the
+                // value from the request parameters takes precedence.
+                if (inputParameters.containsKey(matchingKey)) {
+                    continue;
+                }
+                inputParameters.put(matchingKey, promptTemplate.get(key));
+            }
+        }
+    }
+
     /**
      *  Builds a new map containing modified request body after pull_prompt is invoked
      *
@@ -246,7 +361,7 @@ public class MLPromptManager {
             PromptParameters promptParam = PromptParameters.buildPromptParameters(JsonStrPromptParameters);
             switch (promptType) {
                 case PARAMETERS_PROMPT_FIELD:
-                    handlePromptField(parameters, inputContent, promptParam, tenantId);
+                    handlePromptField(parameters, PARAMETERS_PROMPT_FIELD, inputContent, promptParam, tenantId);
                     break;
                 case PARAMETERS_MESSAGES_FIELD:
                     handleMessagesField(parameters, inputContent, promptParam, tenantId);
@@ -272,13 +387,18 @@ public class MLPromptManager {
      * @param promptParam Prompt Parameters field that holds user-defined values to placeholder variables
      * @param tenantId tenant id
      */
-    private void handlePromptField(Map<String, String> parameters, String promptContent, PromptParameters promptParam, String tenantId)
-        throws IOException {
+    private void handlePromptField(
+        Map<String, String> parameters,
+        String promptType,
+        String promptContent,
+        PromptParameters promptParam,
+        String tenantId
+    ) throws IOException {
         Tuple<String, String> IDAndKey = validatePullPromptSyntax(promptContent);
         String promptId = IDAndKey.v1();
         String key = IDAndKey.v2();
         PromptResult promptResult = pullPrompt(promptId, key, promptParam, tenantId);
-        parameters.put(PARAMETERS_PROMPT_FIELD, promptResult.getContent());
+        parameters.put(promptType, promptResult.getContent());
     }
 
     /**
@@ -332,6 +452,55 @@ public class MLPromptManager {
     }
 
     /**
+     * Validate pull_prompt syntax and Retrieves prompt reference and key that are needed to retrieve a specific prompt
+     *
+     * @param content content that contains pull_prompt syntax alongside prompt reference and key
+     * @return List that contains prompt reference and list of keys user wants to extract
+     * @throws InvalidPullPromptSyntaxException if invalid syntax is provided
+     */
+    private static List<String> validatePullPromptGroupSyntax(String content) {
+        if (content != null && content.contains("pull_prompt(")) {
+            // e.g. pull_prompt(prompt_id)
+            String pullPromptWithOnlyIDRegex = "pull_prompt\\(\\s*([a-zA-Z0-9_\\-]+)\\s*\\)";
+            // e.g. pull_prompt(prompt_id, [filter_list])
+            String pullPromptWithIDAndFilterListRegex =
+                "pull_prompt\\(\\s*([a-zA-Z0-9_\\-]+)\\s*,\\s*\\[\\s*([a-zA-Z0-9_\\-\\s,]*)\\s*]\\s*\\)";
+
+            Pattern patternWithOnlyID = Pattern.compile(pullPromptWithOnlyIDRegex);
+            Pattern patternWithIDAndFilterList = Pattern.compile(pullPromptWithIDAndFilterListRegex);
+
+            Matcher matcherWithOnlyID = patternWithOnlyID.matcher(content);
+            Matcher matcherWithIDAndFilterList = patternWithIDAndFilterList.matcher(content);
+
+            if (matcherWithOnlyID.matches()) {
+                String promptId = matcherWithOnlyID.group(1);
+
+                return List.of(promptId);
+            }
+
+            if (matcherWithIDAndFilterList.matches()) {
+                String promptId = matcherWithIDAndFilterList.group(1);
+                String filterList = matcherWithIDAndFilterList.group(2);
+
+                // Split variables by comma and trim whitespace
+                filterList = promptId + "," + filterList;
+                String[] promptList = Arrays
+                    .stream(filterList.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .toArray(String[]::new);
+
+                return Arrays.asList(promptList);
+            }
+        }
+        throw new InvalidPullPromptSyntaxException(
+            "Invalid pull_prompt syntax is provided: "
+                + content
+                + ". Expected: pull_prompt(prompt_id) or pull_prompt(prompt_id, [filtered_list])"
+        );
+    }
+
+    /**
      * Fetches the ML Prompt based on prompt id, then replace the content with the retrieved content from prompt
      * template based on the specified key.
      *
@@ -349,7 +518,7 @@ public class MLPromptManager {
      * </p>
      * @throws OpenSearchStatusException if the ML Prompt is not found
      */
-    public PromptResult pullPrompt(String promptRef, String key, PromptParameters promptParameters, String tenantId) throws IOException {
+    public PromptResult pullPrompt(String promptRef, String key, PromptParameters promptParameters, String tenantId) {
         try {
             String promptId = resolvePromptID(promptRef, tenantId);
             GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
@@ -418,7 +587,7 @@ public class MLPromptManager {
      * @return
      */
     private String populatePlaceholders(String content, PromptParameters promptParameters, String promptRef) {
-        if (!promptParameters.isEmpty() && content.contains(PROMPT_PARAMETER_PLACEHOLDER)) {
+        if (promptParameters != null && !promptParameters.isEmpty() && content.contains(PROMPT_PARAMETER_PLACEHOLDER)) {
             StringSubstitutor substitutor = new StringSubstitutor(
                 promptParameters.getParameters(promptRef),
                 PROMPT_PARAMETER_PLACEHOLDER,
