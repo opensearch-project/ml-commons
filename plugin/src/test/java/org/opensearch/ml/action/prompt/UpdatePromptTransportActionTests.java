@@ -13,7 +13,6 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.prompt.MLPromptManager.TAG_RESTRICTION_ERR_MESSAGE;
-import static org.opensearch.ml.prompt.MLPromptManager.UNIQUE_NAME_ERR_MESSAGE;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -46,7 +45,6 @@ import org.opensearch.ml.common.prompt.MLPrompt;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.prompt.MLUpdatePromptInput;
 import org.opensearch.ml.common.transport.prompt.MLUpdatePromptRequest;
-import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.prompt.MLPromptManager;
 import org.opensearch.ml.utils.TestHelper;
@@ -112,7 +110,15 @@ public class UpdatePromptTransportActionTests extends OpenSearchTestCase {
         sdkClient = SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap());
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
         updatePromptTransportAction = spy(
-            new UpdatePromptTransportAction(transportService, actionFilters, client, sdkClient, mlFeatureEnabledSetting, mlPromptManager, encryptor)
+            new UpdatePromptTransportAction(
+                transportService,
+                actionFilters,
+                client,
+                sdkClient,
+                mlFeatureEnabledSetting,
+                mlPromptManager,
+                encryptor
+            )
         );
         threadContext = new ThreadContext(Settings.EMPTY);
         when(client.threadPool()).thenReturn(threadPool);

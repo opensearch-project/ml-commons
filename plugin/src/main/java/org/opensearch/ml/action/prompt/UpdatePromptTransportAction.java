@@ -7,13 +7,10 @@ package org.opensearch.ml.action.prompt;
 
 import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX;
 import static org.opensearch.ml.prompt.AbstractPromptManagement.init;
-import static org.opensearch.ml.prompt.MLPromptManager.MLPromptNameAlreadyExists;
 import static org.opensearch.ml.prompt.MLPromptManager.TAG_RESTRICTION_ERR_MESSAGE;
 import static org.opensearch.ml.prompt.MLPromptManager.UNIQUE_NAME_ERR_MESSAGE;
 import static org.opensearch.ml.prompt.MLPromptManager.handleFailure;
 import static org.opensearch.ml.prompt.MLPromptManager.validateTags;
-
-import java.time.Instant;
 
 import org.apache.commons.lang3.StringUtils;
 import org.opensearch.action.search.SearchResponse;
@@ -21,7 +18,6 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.common.inject.Inject;
-import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.prompt.MLPrompt;
 import org.opensearch.ml.common.prompt.PromptExtraConfig;
@@ -29,7 +25,6 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.prompt.MLUpdatePromptAction;
 import org.opensearch.ml.common.transport.prompt.MLUpdatePromptInput;
 import org.opensearch.ml.common.transport.prompt.MLUpdatePromptRequest;
-import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.prompt.AbstractPromptManagement;
 import org.opensearch.ml.prompt.MLPromptManager;
@@ -37,8 +32,6 @@ import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.UpdateDataObjectRequest;
-import org.opensearch.remote.metadata.client.UpdateDataObjectResponse;
-import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.SearchHit;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
@@ -110,10 +103,10 @@ public class UpdatePromptTransportAction extends HandledTransportAction<MLUpdate
         try {
             if (StringUtils.isNotBlank(mlUpdatePromptInput.getName())) {
                 SearchResponse searchResponse = mlPromptManager
-                        .validateUniquePromptName(mlUpdatePromptInput.getName(), mlUpdatePromptInput.getTenantId());
+                    .searchPromptByName(mlUpdatePromptInput.getName(), mlUpdatePromptInput.getTenantId());
                 if (searchResponse != null
-                        && searchResponse.getHits().getTotalHits() != null
-                        && searchResponse.getHits().getTotalHits().value() != 0) {
+                    && searchResponse.getHits().getTotalHits() != null
+                    && searchResponse.getHits().getTotalHits().value() != 0) {
                     SearchHit hit = searchResponse.getHits().getAt(0);
                     String id = hit.getId();
                     actionListener.onFailure(new IllegalArgumentException(UNIQUE_NAME_ERR_MESSAGE + id));
@@ -129,10 +122,11 @@ public class UpdatePromptTransportAction extends HandledTransportAction<MLUpdate
                 .getPromptAsync(
                     getDataObjectRequest,
                     promptId,
-                    ActionListener.wrap(
-                        mlPrompt -> handleGetPrompt(mlPrompt, mlUpdatePromptInput, promptId, tenantId, actionListener),
-                        e -> handleFailure(e, promptId, actionListener, "Failed to get ML Prompt {}")
-                    )
+                    ActionListener
+                        .wrap(
+                            mlPrompt -> handleGetPrompt(mlPrompt, mlUpdatePromptInput, promptId, tenantId, actionListener),
+                            e -> handleFailure(e, promptId, actionListener, "Failed to get ML Prompt {}")
+                        )
                 );
         } catch (Exception exception) {
             handleFailure(exception, promptId, actionListener, "Failed to search ML Prompt Index");

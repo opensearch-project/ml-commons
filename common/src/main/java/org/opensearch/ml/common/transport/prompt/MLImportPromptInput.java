@@ -39,7 +39,15 @@ public class MLImportPromptInput implements ToXContentObject, Writeable {
     private String tenantId;
 
     @Builder(toBuilder = true)
-    public MLImportPromptInput(String name, String tag, @NonNull String promptManagementType, @NonNull String publicKey, @NonNull String accessKey, String limit, String tenantId) {
+    public MLImportPromptInput(
+        String name,
+        String tag,
+        @NonNull String promptManagementType,
+        @NonNull String publicKey,
+        @NonNull String accessKey,
+        String limit,
+        String tenantId
+    ) {
         Objects.requireNonNull(promptManagementType, "must specify prompt management type");
         Objects.requireNonNull(publicKey, "public key can not be null");
         Objects.requireNonNull(accessKey, "access key can not be null");
@@ -113,15 +121,15 @@ public class MLImportPromptInput implements ToXContentObject, Writeable {
             }
         }
         return MLImportPromptInput
-                .builder()
-                .name(name)
-                .tag(tag)
-                .promptManagementType(promptManagementType)
-                .publicKey(publicKey)
-                .accessKey(accessKey)
-                .limit(limit)
-                .tenantId(tenantId)
-                .build();
+            .builder()
+            .name(name)
+            .tag(tag)
+            .promptManagementType(promptManagementType)
+            .publicKey(publicKey)
+            .accessKey(accessKey)
+            .limit(limit)
+            .tenantId(tenantId)
+            .build();
     }
 
     @Override

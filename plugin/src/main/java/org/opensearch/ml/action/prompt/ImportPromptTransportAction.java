@@ -89,7 +89,6 @@ public class ImportPromptTransportAction extends HandledTransportAction<MLImport
         String accessKey = mlImportPromptInput.getAccessKey();
         String tenantId = mlImportPromptInput.getTenantId();
 
-        // TODO: pass in PromptManagementType inside request body
         try {
             AbstractPromptManagement promptManagement = init(
                 promptManagementType,
@@ -97,22 +96,20 @@ public class ImportPromptTransportAction extends HandledTransportAction<MLImport
             );
             List<MLPrompt> mlPromptList = promptManagement.importPrompts(mlImportPromptInput);
             Map<String, String> responseBody = new HashMap<>();
+            if (mlPromptList.isEmpty()) {
+                listener.onResponse(new MLImportPromptResponse(responseBody));
+                return;
+            }
             AtomicInteger remainingMLPrompts = new AtomicInteger(mlPromptList.size());
             for (MLPrompt mlPrompt : mlPromptList) {
                 mlPrompt.encrypt(promptManagementType, mlEngine::encrypt, tenantId);
-                handleDuplicateName(
-                    mlPrompt,
-                    tenantId,
-                    ActionListener.wrap(
-                        promptId ->
-                        {
-                            if (promptId == null) {
-                                indexPrompt(mlPrompt, responseBody, remainingMLPrompts, listener);
-                            } else {
-                                updateImportResponseBody(promptId, mlPrompt.getName(), responseBody, remainingMLPrompts, listener);
-                            }
-                        }, listener::onFailure
-                    ));
+                handleDuplicateName(mlPrompt, tenantId, ActionListener.wrap(promptId -> {
+                    if (promptId == null) {
+                        indexPrompt(mlPrompt, responseBody, remainingMLPrompts, listener);
+                    } else {
+                        updateImportResponseBody(promptId, mlPrompt.getName(), responseBody, remainingMLPrompts, listener);
+                    }
+                }, listener::onFailure));
             }
         } catch (Exception e) {
             handleFailure(e, null, listener, "Failed to import " + promptManagementType + " Prompts into System Index");
@@ -184,17 +181,17 @@ public class ImportPromptTransportAction extends HandledTransportAction<MLImport
 
     private void handleDuplicateName(MLPrompt importingPrompt, String tenantId, ActionListener<String> wrappedListener) throws IOException {
         String name = importingPrompt.getName();
-        SearchResponse searchResponse = mlPromptManager.validateUniquePromptName(name, tenantId);
+        SearchResponse searchResponse = mlPromptManager.searchPromptByName(name, tenantId);
         if (searchResponse != null
-                && searchResponse.getHits().getTotalHits() != null
-                && searchResponse.getHits().getTotalHits().value() != 0) {
+            && searchResponse.getHits().getTotalHits() != null
+            && searchResponse.getHits().getTotalHits().value() != 0) {
             String promptId = searchResponse.getHits().getAt(0).getId();
             GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
-                    .builder()
-                    .index(ML_PROMPT_INDEX)
-                    .id(promptId)
-                    .tenantId(tenantId)
-                    .build();
+                .builder()
+                .index(ML_PROMPT_INDEX)
+                .id(promptId)
+                .tenantId(tenantId)
+                .build();
             MLPrompt existingMLPrompt = mlPromptManager.getPrompt(getDataObjectRequest);
 
             // check the prompt management type
@@ -203,18 +200,17 @@ public class ImportPromptTransportAction extends HandledTransportAction<MLImport
                 throw new IllegalArgumentException("Provided name: " + name + " is already being used by ML Prompt with id: " + promptId);
             } else if (promptManagementType.equalsIgnoreCase(LANGFUSE)) {
                 // update the existing langfuse prompt with new content if the version des not match
-                UpdateDataObjectRequest updateDataObjectRequest = UpdateDataObjectRequest.builder()
+                UpdateDataObjectRequest updateDataObjectRequest = UpdateDataObjectRequest
+                    .builder()
                     .index(ML_PROMPT_INDEX)
                     .id(promptId)
                     .tenantId(tenantId)
                     .dataObject(importingPrompt)
                     .build();
-                mlPromptManager.updatePromptIndex(updateDataObjectRequest, promptId, ActionListener.wrap(
-                    updateResponse -> {
-                        log.info("{} Prompt with promptId: {} updated successfully", promptManagementType, promptId);
-                        wrappedListener.onResponse(promptId);
-                    }, wrappedListener::onFailure
-                ));
+                mlPromptManager.updatePromptIndex(updateDataObjectRequest, promptId, ActionListener.wrap(updateResponse -> {
+                    log.info("{} Prompt with promptId: {} updated successfully", promptManagementType, promptId);
+                    wrappedListener.onResponse(promptId);
+                }, wrappedListener::onFailure));
             }
         } else {
             // provided name is unique, good to be imported

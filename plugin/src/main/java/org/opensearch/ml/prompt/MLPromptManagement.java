@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.prompt;
 
+import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX;
+
 import java.io.IOException;
 import java.time.Instant;
 import java.util.List;
@@ -15,12 +17,10 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.prompt.MLPrompt;
 import org.opensearch.ml.common.transport.prompt.MLCreatePromptInput;
 import org.opensearch.ml.common.transport.prompt.MLImportPromptInput;
-
-import lombok.extern.log4j.Log4j2;
 import org.opensearch.ml.common.transport.prompt.MLUpdatePromptInput;
 import org.opensearch.remote.metadata.client.UpdateDataObjectRequest;
 
-import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX;
+import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class MLPromptManagement extends AbstractPromptManagement {

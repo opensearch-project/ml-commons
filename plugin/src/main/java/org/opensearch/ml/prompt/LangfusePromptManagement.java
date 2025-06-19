@@ -9,7 +9,6 @@ import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX;
 import static org.opensearch.ml.common.prompt.MLPrompt.LANGFUSE;
-import static org.opensearch.ml.common.prompt.MLPrompt.MLPROMPT;
 import static org.opensearch.ml.prompt.MLPromptManagement.INITIAL_VERSION;
 
 import java.io.IOException;
@@ -21,7 +20,6 @@ import java.util.List;
 import java.util.Map;
 
 import org.opensearch.OpenSearchStatusException;
-import org.opensearch.action.search.SearchResponse;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -31,6 +29,8 @@ import org.opensearch.ml.common.prompt.MLPrompt;
 import org.opensearch.ml.common.prompt.PromptExtraConfig;
 import org.opensearch.ml.common.transport.prompt.MLCreatePromptInput;
 import org.opensearch.ml.common.transport.prompt.MLImportPromptInput;
+import org.opensearch.ml.common.transport.prompt.MLUpdatePromptInput;
+import org.opensearch.remote.metadata.client.UpdateDataObjectRequest;
 
 import com.langfuse.client.LangfuseClient;
 import com.langfuse.client.core.LangfuseClientApiException;
@@ -48,9 +48,6 @@ import com.langfuse.client.resources.prompts.types.TextPrompt;
 
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
-import org.opensearch.ml.common.transport.prompt.MLUpdatePromptInput;
-import org.opensearch.remote.metadata.client.GetDataObjectRequest;
-import org.opensearch.remote.metadata.client.UpdateDataObjectRequest;
 
 @Log4j2
 @Getter
@@ -295,8 +292,8 @@ public class LangfusePromptManagement extends AbstractPromptManagement {
             }
 
             PromptMetaListResponse promptMetaListResponse = langfuseClient
-                    .prompts()
-                    .list(ListPromptsMetaRequest.builder().tag(tag).limit(Integer.parseInt(limit)).build());
+                .prompts()
+                .list(ListPromptsMetaRequest.builder().tag(tag).limit(Integer.parseInt(limit)).build());
 
             List<PromptMeta> promptMetas = promptMetaListResponse.getData();
             List<MLPrompt> mlPromptList = new ArrayList<>();
@@ -335,12 +332,12 @@ public class LangfusePromptManagement extends AbstractPromptManagement {
     public UpdateDataObjectRequest updatePrompt(MLUpdatePromptInput mlUpdatePromptInput, MLPrompt mlPrompt) {
         getPrompt(mlPrompt);
         MLCreatePromptInput updateContent = MLCreatePromptInput
-                .builder()
-                .name(mlPrompt.getName())
-                .tags(mlPrompt.getTags())
-                .prompt(mlPrompt.getPrompt())
-                .promptExtraConfig(mlPrompt.getPromptExtraConfig())
-                .build();
+            .builder()
+            .name(mlPrompt.getName())
+            .tags(mlPrompt.getTags())
+            .prompt(mlPrompt.getPrompt())
+            .promptExtraConfig(mlPrompt.getPromptExtraConfig())
+            .build();
 
         // Langfuse does not allow users to change prompt's name
         if (mlUpdatePromptInput.getTags() != null) {

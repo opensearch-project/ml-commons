@@ -21,11 +21,11 @@ import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.prompt.PromptExtraConfig;
 
 import lombok.Builder;
 import lombok.Data;
 import lombok.Setter;
-import org.opensearch.ml.common.prompt.PromptExtraConfig;
 
 /**
  * MLUpdatePromptInput is the input class for MLUpdatePromptAction. It contains the parameters

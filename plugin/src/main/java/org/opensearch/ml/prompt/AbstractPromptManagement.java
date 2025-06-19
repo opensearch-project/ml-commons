@@ -15,10 +15,10 @@ import org.opensearch.ml.common.prompt.MLPrompt;
 import org.opensearch.ml.common.prompt.PromptExtraConfig;
 import org.opensearch.ml.common.transport.prompt.MLCreatePromptInput;
 import org.opensearch.ml.common.transport.prompt.MLImportPromptInput;
-
-import lombok.Getter;
 import org.opensearch.ml.common.transport.prompt.MLUpdatePromptInput;
 import org.opensearch.remote.metadata.client.UpdateDataObjectRequest;
+
+import lombok.Getter;
 
 @Getter
 public abstract class AbstractPromptManagement implements ToXContentObject {

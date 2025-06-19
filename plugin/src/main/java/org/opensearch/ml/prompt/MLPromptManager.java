@@ -26,8 +26,8 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
-import org.opensearch.common.collect.Tuple;
 import org.opensearch.action.update.UpdateResponse;
+import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentType;
@@ -45,7 +45,6 @@ import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.prompt.MLPrompt;
 import org.opensearch.ml.common.transport.prompt.MLCreatePromptInput;
 import org.opensearch.ml.common.utils.StringUtils;
-import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.utils.MLExceptionUtils;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
@@ -369,7 +368,8 @@ public class MLPromptManager {
                 .build();
             // fetch prompt first based on prompt id
             MLPrompt mlPrompt = getPrompt(getDataObjectRequest);
-            // enables user execute the prompt in external prompt management server that is created via ml commons create, without importing it
+            // enables user execute the prompt in external prompt management server that is created via ml commons create, without importing
+            // it
             if (fetchPromptExternally(mlPrompt)) {
                 mlPrompt.decrypt(mlPrompt.getPromptManagementType(), encryptor::decrypt, tenantId);
                 AbstractPromptManagement promptManagement = init(mlPrompt.getPromptManagementType(), mlPrompt.getPromptExtraConfig());
@@ -425,6 +425,20 @@ public class MLPromptManager {
     }
 
     /**
+     * Checks if the prompt type is Langfuse
+     *
+     * @param mlPrompt prompt that is either MLPrompt or LangfusePrompt
+     * @return true if the given prompt is Langfuse prompt, false otherwise.
+     */
+    boolean fetchPromptExternally(MLPrompt mlPrompt) {
+        if (mlPrompt.getPromptManagementType().equalsIgnoreCase(LANGFUSE) && mlPrompt.getPrompt() == null) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    /**
      * Replace all the placeholder variables with user-defined values provided during execution time.
      *
      * @param content content that contains placeholder variables
@@ -435,24 +449,15 @@ public class MLPromptManager {
     private String populatePlaceholders(String content, PromptParameters promptParameters, String promptRef) {
         StringSubstitutor substitutor = new StringSubstitutor();
         if (!promptParameters.isEmpty() && content.contains(PROMPT_PARAMETER_PLACEHOLDER)) {
-            substitutor = new StringSubstitutor(
-                promptParameters.getParameters(promptRef),
-                PROMPT_PARAMETER_PLACEHOLDER,
-                "}"
-            );
+            substitutor = new StringSubstitutor(promptParameters.getParameters(promptRef), PROMPT_PARAMETER_PLACEHOLDER, "}");
             content = substitutor.replace(content);
         } else if (!promptParameters.isEmpty() && content.contains("{{") && content.contains("}}")) {
-            substitutor = new StringSubstitutor(
-                    promptParameters.getParameters(promptRef),
-                    "{{",
-                    "}}"
-            );
+            substitutor = new StringSubstitutor(promptParameters.getParameters(promptRef), "{{", "}}");
         }
         content = substitutor.replace(content);
 
         // this checks if all the required input values are provided by users and all the placeholder variables are replaced.
-        if (content.contains(PROMPT_PARAMETER_PLACEHOLDER) ||
-                (content.contains("{{") && content.contains("}}"))) {
+        if (content.contains(PROMPT_PARAMETER_PLACEHOLDER) || (content.contains("{{") && content.contains("}}"))) {
             throw new InvalidPullPromptSyntaxException("Failed to replace all the placeholders");
         }
         return content;
@@ -491,7 +496,11 @@ public class MLPromptManager {
      * @param promptId The prompt ID of a prompt that needs to be updated
      * @param listener a listener to be notified of the response
      */
-    public void updatePromptIndex(UpdateDataObjectRequest updateDataObjectRequest, String promptId, ActionListener<UpdateResponse> listener) {
+    public void updatePromptIndex(
+        UpdateDataObjectRequest updateDataObjectRequest,
+        String promptId,
+        ActionListener<UpdateResponse> listener
+    ) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             sdkClient.updateDataObjectAsync(updateDataObjectRequest).whenComplete((updateDataObjectResponse, throwable) -> {
                 context.restore();
@@ -509,10 +518,10 @@ public class MLPromptManager {
      * @param listener The listener to be notified of the response
      */
     private void handleUpdateResponse(
-            UpdateDataObjectResponse updateDataObjectResponse,
-            Throwable throwable,
-            String promptId,
-            ActionListener<UpdateResponse> listener
+        UpdateDataObjectResponse updateDataObjectResponse,
+        Throwable throwable,
+        String promptId,
+        ActionListener<UpdateResponse> listener
     ) {
         if (throwable != null) {
             Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
