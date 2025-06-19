@@ -6,33 +6,32 @@
 package org.opensearch.ml.action.prompt;
 
 import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX;
-import static org.opensearch.ml.prompt.MLPromptManager.MLPromptNameAlreadyExists;
+import static org.opensearch.ml.prompt.AbstractPromptManagement.init;
 import static org.opensearch.ml.prompt.MLPromptManager.TAG_RESTRICTION_ERR_MESSAGE;
 import static org.opensearch.ml.prompt.MLPromptManager.UNIQUE_NAME_ERR_MESSAGE;
 import static org.opensearch.ml.prompt.MLPromptManager.handleFailure;
 import static org.opensearch.ml.prompt.MLPromptManager.validateTags;
 
-import java.time.Instant;
-
+import org.apache.commons.lang3.StringUtils;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.common.inject.Inject;
-import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.prompt.MLPrompt;
+import org.opensearch.ml.common.prompt.PromptExtraConfig;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.prompt.MLUpdatePromptAction;
 import org.opensearch.ml.common.transport.prompt.MLUpdatePromptInput;
 import org.opensearch.ml.common.transport.prompt.MLUpdatePromptRequest;
+import org.opensearch.ml.engine.encryptor.EncryptorImpl;
+import org.opensearch.ml.prompt.AbstractPromptManagement;
 import org.opensearch.ml.prompt.MLPromptManager;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.UpdateDataObjectRequest;
-import org.opensearch.remote.metadata.client.UpdateDataObjectResponse;
-import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.SearchHit;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
@@ -52,6 +51,7 @@ public class UpdatePromptTransportAction extends HandledTransportAction<MLUpdate
     Client client;
     SdkClient sdkClient;
     MLPromptManager mlPromptManager;
+    EncryptorImpl encryptor;
 
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
@@ -62,13 +62,15 @@ public class UpdatePromptTransportAction extends HandledTransportAction<MLUpdate
         Client client,
         SdkClient sdkClient,
         MLFeatureEnabledSetting mlFeatureEnabledSetting,
-        MLPromptManager mlPromptManager
+        MLPromptManager mlPromptManager,
+        EncryptorImpl encryptor
     ) {
         super(MLUpdatePromptAction.NAME, transportService, actionFilters, MLUpdatePromptRequest::new);
         this.client = client;
         this.sdkClient = sdkClient;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         this.mlPromptManager = mlPromptManager;
+        this.encryptor = encryptor;
     }
 
     /**
@@ -97,19 +99,18 @@ public class UpdatePromptTransportAction extends HandledTransportAction<MLUpdate
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
             return;
         }
+
         try {
-            SearchResponse searchResponse = mlPromptManager
-                .searchPromptByName(mlUpdatePromptInput.getName(), mlUpdatePromptInput.getTenantId());
-            if (MLPromptNameAlreadyExists(searchResponse)) {
-                SearchHit hit = searchResponse.getHits().getAt(0);
-                String id = hit.getId();
-                actionListener
-                    .onFailure(
-                        new IllegalArgumentException(
-                            UNIQUE_NAME_ERR_MESSAGE + id + " . The conflicting name you provided: " + mlUpdatePromptInput.getName()
-                        )
-                    );
-                return;
+            if (StringUtils.isNotBlank(mlUpdatePromptInput.getName())) {
+                SearchResponse searchResponse = mlPromptManager
+                    .searchPromptByName(mlUpdatePromptInput.getName(), mlUpdatePromptInput.getTenantId());
+                if (searchResponse != null
+                    && searchResponse.getHits().getTotalHits() != null
+                    && searchResponse.getHits().getTotalHits().value() != 0) {
+                    SearchHit hit = searchResponse.getHits().getAt(0);
+                    String id = hit.getId();
+                    actionListener.onFailure(new IllegalArgumentException(UNIQUE_NAME_ERR_MESSAGE + id));
+                }
             }
             GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
                 .builder()
@@ -148,56 +149,13 @@ public class UpdatePromptTransportAction extends HandledTransportAction<MLUpdate
         String tenantId,
         ActionListener<UpdateResponse> listener
     ) {
-        int version = Integer.parseInt(mlPrompt.getVersion());
-        mlUpdatePromptInput.setLastUpdateTime(Instant.now());
-        mlUpdatePromptInput.setVersion(String.valueOf(version + 1));
-        UpdateDataObjectRequest updateDataObjectRequest = UpdateDataObjectRequest
-            .builder()
-            .index(ML_PROMPT_INDEX)
-            .id(promptId)
-            .tenantId(tenantId)
-            .dataObject(mlUpdatePromptInput)
-            .build();
+        PromptExtraConfig extraConfig = mlPrompt.getPromptExtraConfig();
+        String promptManagementType = mlPrompt.getPromptManagementType();
+        mlPrompt.setPromptId(promptId);
+        mlPrompt.decrypt(mlPrompt.getPromptManagementType(), encryptor::decrypt, tenantId);
+        AbstractPromptManagement promptManagement = init(promptManagementType, extraConfig);
+        UpdateDataObjectRequest updateDataObjectRequest = promptManagement.updatePrompt(mlUpdatePromptInput, mlPrompt);
 
-        updatePrompt(updateDataObjectRequest, promptId, listener);
-    }
-
-    /**
-     * Updates the prompt based on the update contents and replace the old prompt with updated prompt from the index
-     *
-     * @param updateDataObjectRequest the updateRequest that needs to be handled
-     * @param promptId The prompt ID of a prompt that needs to be updated
-     * @param listener a listener to be notified of the response
-     */
-    private void updatePrompt(UpdateDataObjectRequest updateDataObjectRequest, String promptId, ActionListener<UpdateResponse> listener) {
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            sdkClient.updateDataObjectAsync(updateDataObjectRequest).whenComplete((updateDataObjectResponse, throwable) -> {
-                context.restore();
-                handleUpdateResponse(updateDataObjectResponse, throwable, promptId, listener);
-            });
-        }
-    }
-
-    /**
-     * Handles the response from the update prompt request. If the response is successful, notify the listener
-     * with the UpdateResponse. Otherwise, notify the failure exception to the listener.
-     *
-     * @param updateDataObjectResponse The response from the update prompt request
-     * @param throwable The exception that occurred during the update prompt request
-     * @param listener The listener to be notified of the response
-     */
-    private void handleUpdateResponse(
-        UpdateDataObjectResponse updateDataObjectResponse,
-        Throwable throwable,
-        String promptId,
-        ActionListener<UpdateResponse> listener
-    ) {
-        if (throwable != null) {
-            Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-            handleFailure(cause, promptId, listener, "Failed to update ML prompt {}");
-            return;
-        }
-        UpdateResponse updateResponse = updateDataObjectResponse.updateResponse();
-        listener.onResponse(updateResponse);
+        mlPromptManager.updatePromptIndex(updateDataObjectRequest, promptId, listener);
     }
 }

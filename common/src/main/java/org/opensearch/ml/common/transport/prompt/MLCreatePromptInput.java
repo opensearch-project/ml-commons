@@ -7,6 +7,7 @@ package org.opensearch.ml.common.transport.prompt;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.common.prompt.MLPrompt.LANGFUSE;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 import java.io.IOException;
@@ -20,6 +21,7 @@ import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.prompt.PromptExtraConfig;
 
 import lombok.Builder;
 import lombok.Data;
@@ -34,18 +36,22 @@ public class MLCreatePromptInput implements ToXContentObject, Writeable {
     public static final String PROMPT_DESCRIPTION_FIELD = "description";
     public static final String PROMPT_VERSION_FIELD = "version";
     public static final String PROMPT_PROMPT_FIELD = "prompt";
+    public static final String PROMPT_MANAGEMENT_TYPE = "prompt_management_type";
     public static final String PROMPT_TAGS_FIELD = "tags";
 
-    public static final String PROMPT_FIELD_USER_PROMPT = "user";
-    public static final String PROMPT_FIELD_SYSTEM_PROMPT = "system";
+    public static final String PROMPT_EXTRA_CONFIG_FIELD = "extra_config";
+
+    public static final String PROMPT_VERSION_INITIAL_VERSION = "1";
 
     private String name;
     private String description;
     private String version;
     private Map<String, String> prompt;
+    private String promptManagementType;
     private List<String> tags;
     @Setter
     private String tenantId;
+    private PromptExtraConfig promptExtraConfig;
 
     /**
      * Constructor to pass values to the MLCreatePromptInput constructor.
@@ -63,8 +69,10 @@ public class MLCreatePromptInput implements ToXContentObject, Writeable {
         String description,
         String version,
         Map<String, String> prompt,
+        String promptManagementType,
         List<String> tags,
-        String tenantId
+        String tenantId,
+        PromptExtraConfig promptExtraConfig
     ) {
         if (name == null) {
             throw new IllegalArgumentException("MLPrompt name field is null");
@@ -72,19 +80,29 @@ public class MLCreatePromptInput implements ToXContentObject, Writeable {
         if (prompt == null || prompt.isEmpty()) {
             throw new IllegalArgumentException("MLPrompt prompt field cannot be empty or null");
         }
-        if (!prompt.containsKey(PROMPT_FIELD_SYSTEM_PROMPT)) {
-            throw new IllegalArgumentException("MLPrompt prompt field requires " + PROMPT_FIELD_SYSTEM_PROMPT + " parameter");
-        }
-        if (!prompt.containsKey(PROMPT_FIELD_USER_PROMPT)) {
-            throw new IllegalArgumentException("MLPrompt prompt field requires " + PROMPT_FIELD_USER_PROMPT + " parameter");
+        if (promptExtraConfig != null && promptManagementType != null && promptManagementType.equalsIgnoreCase(LANGFUSE)) {
+            if (promptExtraConfig.getType() == null) {
+                throw new IllegalArgumentException("LangfusePrompt type field is null");
+            }
+            if (promptExtraConfig.getPublicKey() == null) {
+                throw new IllegalArgumentException("LangfusePrompt Public Key field cannot be null");
+            }
+            if (promptExtraConfig.getAccessKey() == null) {
+                throw new IllegalArgumentException("LangfusePrompt Access Key field cannot be null");
+            }
+            if (promptExtraConfig.getType().equals("text") && !prompt.containsKey("user")) {
+                throw new IllegalArgumentException("Langfuse Text Prompt requires User Prompt");
+            }
         }
 
         this.name = name;
         this.description = description;
-        this.version = version;
+        this.version = version == null ? PROMPT_VERSION_INITIAL_VERSION : version;
         this.prompt = prompt;
+        this.promptManagementType = promptManagementType;
         this.tags = tags;
         this.tenantId = tenantId;
+        this.promptExtraConfig = promptExtraConfig;
     }
 
     /**
@@ -98,8 +116,10 @@ public class MLCreatePromptInput implements ToXContentObject, Writeable {
         this.description = input.readOptionalString();
         this.version = input.readOptionalString();
         this.prompt = input.readMap(s -> s.readString(), s -> s.readString());
+        this.promptManagementType = input.readOptionalString();
         this.tags = input.readList(StreamInput::readString);
         this.tenantId = input.readOptionalString();
+        this.promptExtraConfig = new PromptExtraConfig(input);
     }
 
     /**
@@ -114,8 +134,10 @@ public class MLCreatePromptInput implements ToXContentObject, Writeable {
         output.writeOptionalString(description);
         output.writeOptionalString(version);
         output.writeMap(prompt, StreamOutput::writeString, StreamOutput::writeString);
+        output.writeOptionalString(promptManagementType);
         output.writeCollection(tags, StreamOutput::writeString);
         output.writeOptionalString(tenantId);
+        promptExtraConfig.writeTo(output);
     }
 
     /**
@@ -130,8 +152,10 @@ public class MLCreatePromptInput implements ToXContentObject, Writeable {
         String description = null;
         String version = null;
         Map<String, String> prompt = null;
+        String promptManagementType = null;
         List<String> tags = null;
         String tenantId = null;
+        PromptExtraConfig promptExtraConfig = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -150,6 +174,9 @@ public class MLCreatePromptInput implements ToXContentObject, Writeable {
                 case PROMPT_PROMPT_FIELD:
                     prompt = getParameterMap(parser.map());
                     break;
+                case PROMPT_MANAGEMENT_TYPE:
+                    promptManagementType = parser.text();
+                    break;
                 case PROMPT_TAGS_FIELD:
                     tags = new ArrayList<>();
                     ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
@@ -159,6 +186,10 @@ public class MLCreatePromptInput implements ToXContentObject, Writeable {
                     break;
                 case TENANT_ID_FIELD:
                     tenantId = parser.textOrNull();
+                    break;
+                case PROMPT_EXTRA_CONFIG_FIELD:
+                    promptExtraConfig = PromptExtraConfig.parse(parser);
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -170,8 +201,10 @@ public class MLCreatePromptInput implements ToXContentObject, Writeable {
             .description(description)
             .version(version)
             .prompt(prompt)
+            .promptManagementType(promptManagementType)
             .tags(tags)
             .tenantId(tenantId)
+            .promptExtraConfig(promptExtraConfig)
             .build();
     }
 
@@ -198,11 +231,14 @@ public class MLCreatePromptInput implements ToXContentObject, Writeable {
         if (prompt != null) {
             builder.field(PROMPT_PROMPT_FIELD, prompt);
         }
+        if (promptManagementType != null) {
+            builder.field(PROMPT_MANAGEMENT_TYPE, promptManagementType);
+        }
         if (tags != null) {
             builder.field(PROMPT_TAGS_FIELD, tags);
         }
-        if (tenantId != null) {
-            builder.field(TENANT_ID_FIELD, tenantId);
+        if (promptExtraConfig != null) {
+            builder.field(PROMPT_EXTRA_CONFIG_FIELD, promptExtraConfig);
         }
         builder.endObject();
         return builder;

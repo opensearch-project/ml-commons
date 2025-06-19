@@ -21,6 +21,7 @@ import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.prompt.PromptExtraConfig;
 
 import lombok.Builder;
 import lombok.Data;
@@ -37,6 +38,7 @@ public class MLUpdatePromptInput implements ToXContentObject, Writeable {
     public static final String PROMPT_VERSION_FIELD = "version";
     public static final String PROMPT_PROMPT_FIELD = "prompt";
     public static final String PROMPT_TAGS_FIELD = "tags";
+    public static final String PROMPT_EXTRA_CONFIG_FIELD = "extra_config";
 
     public static final String PROMPT_FIELD_USER_PROMPT = "user";
     public static final String PROMPT_FIELD_SYSTEM_PROMPT = "system";
@@ -48,6 +50,7 @@ public class MLUpdatePromptInput implements ToXContentObject, Writeable {
     private String version;
     private Map<String, String> prompt;
     private List<String> tags;
+    private PromptExtraConfig extraConfig;
     @Setter
     private String tenantId;
     private Instant lastUpdateTime;
@@ -68,6 +71,7 @@ public class MLUpdatePromptInput implements ToXContentObject, Writeable {
         String version,
         Map<String, String> prompt,
         List<String> tags,
+        PromptExtraConfig extraConfig,
         String tenantId,
         Instant lastUpdateTime
     ) {
@@ -77,6 +81,7 @@ public class MLUpdatePromptInput implements ToXContentObject, Writeable {
         this.version = version;
         this.prompt = prompt;
         this.tags = tags;
+        this.extraConfig = extraConfig;
         this.tenantId = tenantId;
         this.lastUpdateTime = lastUpdateTime;
     }
@@ -93,6 +98,7 @@ public class MLUpdatePromptInput implements ToXContentObject, Writeable {
         this.version = input.readOptionalString();
         this.prompt = input.readMap(s -> s.readString(), s -> s.readString());
         this.tags = input.readList(StreamInput::readString);
+        this.extraConfig = new PromptExtraConfig(input);
         this.tenantId = input.readOptionalString();
         this.lastUpdateTime = input.readOptionalInstant();
     }
@@ -110,6 +116,7 @@ public class MLUpdatePromptInput implements ToXContentObject, Writeable {
         output.writeOptionalString(version);
         output.writeMap(prompt, StreamOutput::writeString, StreamOutput::writeString);
         output.writeCollection(tags, StreamOutput::writeString);
+        extraConfig.writeTo(output);
         output.writeOptionalString(tenantId);
         output.writeOptionalInstant(lastUpdateTime);
     }
@@ -140,6 +147,9 @@ public class MLUpdatePromptInput implements ToXContentObject, Writeable {
         if (tags != null) {
             builder.field(PROMPT_TAGS_FIELD, tags);
         }
+        if (extraConfig != null) {
+            builder.field(PROMPT_EXTRA_CONFIG_FIELD, extraConfig);
+        }
         if (tenantId != null) {
             builder.field(TENANT_ID_FIELD, tenantId);
         }
@@ -163,6 +173,7 @@ public class MLUpdatePromptInput implements ToXContentObject, Writeable {
         String version = null;
         Map<String, String> prompt = null;
         List<String> tags = null;
+        PromptExtraConfig extraConfig = null;
         String tenantId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
@@ -189,6 +200,9 @@ public class MLUpdatePromptInput implements ToXContentObject, Writeable {
                         tags.add(parser.text());
                     }
                     break;
+                case PROMPT_EXTRA_CONFIG_FIELD:
+                    extraConfig = PromptExtraConfig.parse(parser);
+                    break;
                 case TENANT_ID_FIELD:
                     tenantId = parser.textOrNull();
                 default:
@@ -203,6 +217,7 @@ public class MLUpdatePromptInput implements ToXContentObject, Writeable {
             .version(version)
             .prompt(prompt)
             .tags(tags)
+            .extraConfig(extraConfig)
             .tenantId(tenantId)
             .build();
     }

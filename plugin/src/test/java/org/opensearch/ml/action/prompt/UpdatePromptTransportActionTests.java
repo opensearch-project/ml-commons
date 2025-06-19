@@ -45,6 +45,7 @@ import org.opensearch.ml.common.prompt.MLPrompt;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.prompt.MLUpdatePromptInput;
 import org.opensearch.ml.common.transport.prompt.MLUpdatePromptRequest;
+import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.prompt.MLPromptManager;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
@@ -96,6 +97,9 @@ public class UpdatePromptTransportActionTests extends OpenSearchTestCase {
 
     UpdateResponse updateResponse;
 
+    @Mock
+    EncryptorImpl encryptor;
+
     @Captor
     private ArgumentCaptor<GetDataObjectRequest> getDataObjectRequestArgumentCaptor;
 
@@ -106,7 +110,15 @@ public class UpdatePromptTransportActionTests extends OpenSearchTestCase {
         sdkClient = SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap());
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
         updatePromptTransportAction = spy(
-            new UpdatePromptTransportAction(transportService, actionFilters, client, sdkClient, mlFeatureEnabledSetting, mlPromptManager)
+            new UpdatePromptTransportAction(
+                transportService,
+                actionFilters,
+                client,
+                sdkClient,
+                mlFeatureEnabledSetting,
+                mlPromptManager,
+                encryptor
+            )
         );
         threadContext = new ThreadContext(Settings.EMPTY);
         when(client.threadPool()).thenReturn(threadPool);
@@ -131,7 +143,8 @@ public class UpdatePromptTransportActionTests extends OpenSearchTestCase {
             client,
             sdkClient,
             mlFeatureEnabledSetting,
-            mlPromptManager
+            mlPromptManager,
+            encryptor
         );
         assertNotNull(updatePromptTransportAction);
     }

@@ -97,6 +97,13 @@ dependencies {
 
     // https://mvnrepository.com/artifact/io.projectreactor/reactor-test
     testImplementation("io.projectreactor:reactor-test:3.5.20")
+
+    // Langfuse SDK Client
+    implementation("com.langfuse:langfuse-java:0.0.6")
+    implementation("com.squareup.okhttp3:okhttp:5.0.0-alpha.14")
+    implementation("com.squareup.okio:okio:3.11.0")
+    implementation("com.fasterxml.jackson.core:jackson-databind:2.19.0")
+    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jdk8:2.18.2")
 }
 
 publishing {

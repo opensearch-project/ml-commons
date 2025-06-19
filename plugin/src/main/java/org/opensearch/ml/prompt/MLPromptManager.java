@@ -8,6 +8,8 @@ package org.opensearch.ml.prompt;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_PROMPT_INDEX;
+import static org.opensearch.ml.common.prompt.MLPrompt.LANGFUSE;
+import static org.opensearch.ml.prompt.AbstractPromptManagement.init;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -24,6 +26,7 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
@@ -42,12 +45,15 @@ import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.prompt.MLPrompt;
 import org.opensearch.ml.common.transport.prompt.MLCreatePromptInput;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.utils.MLExceptionUtils;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
 import org.opensearch.remote.metadata.client.SearchDataObjectResponse;
+import org.opensearch.remote.metadata.client.UpdateDataObjectRequest;
+import org.opensearch.remote.metadata.client.UpdateDataObjectResponse;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.transport.client.Client;
@@ -81,10 +87,12 @@ public class MLPromptManager {
 
     private final Client client;
     private final SdkClient sdkClient;
+    private final EncryptorImpl encryptor;
 
-    public MLPromptManager(@NonNull Client client, @NonNull SdkClient sdkClient) {
+    public MLPromptManager(@NonNull Client client, @NonNull SdkClient sdkClient, EncryptorImpl encryptor) {
         this.client = Objects.requireNonNull(client, "Client cannot be null");
         this.sdkClient = Objects.requireNonNull(sdkClient, "SdkClient cannot be null");
+        this.encryptor = encryptor;
     }
 
     /**
@@ -360,6 +368,13 @@ public class MLPromptManager {
                 .build();
             // fetch prompt first based on prompt id
             MLPrompt mlPrompt = getPrompt(getDataObjectRequest);
+            // enables user execute the prompt in external prompt management server that is created via ml commons create, without importing
+            // it
+            if (fetchPromptExternally(mlPrompt)) {
+                mlPrompt.decrypt(mlPrompt.getPromptManagementType(), encryptor::decrypt, tenantId);
+                AbstractPromptManagement promptManagement = init(mlPrompt.getPromptManagementType(), mlPrompt.getPromptExtraConfig());
+                promptManagement.getPrompt(mlPrompt);
+            }
             // extract a prompt object from retrieved ML Prompt
             Map<String, String> promptField = mlPrompt.getPrompt();
             // check if the specified key is defined in the prompt
@@ -410,6 +425,20 @@ public class MLPromptManager {
     }
 
     /**
+     * Checks if the prompt type is Langfuse
+     *
+     * @param mlPrompt prompt that is either MLPrompt or LangfusePrompt
+     * @return true if the given prompt is Langfuse prompt, false otherwise.
+     */
+    boolean fetchPromptExternally(MLPrompt mlPrompt) {
+        if (mlPrompt.getPromptManagementType().equalsIgnoreCase(LANGFUSE) && mlPrompt.getPrompt() == null) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    /**
      * Replace all the placeholder variables with user-defined values provided during execution time.
      *
      * @param content content that contains placeholder variables
@@ -418,17 +447,17 @@ public class MLPromptManager {
      * @return
      */
     private String populatePlaceholders(String content, PromptParameters promptParameters, String promptRef) {
+        StringSubstitutor substitutor = new StringSubstitutor();
         if (!promptParameters.isEmpty() && content.contains(PROMPT_PARAMETER_PLACEHOLDER)) {
-            StringSubstitutor substitutor = new StringSubstitutor(
-                promptParameters.getParameters(promptRef),
-                PROMPT_PARAMETER_PLACEHOLDER,
-                "}"
-            );
+            substitutor = new StringSubstitutor(promptParameters.getParameters(promptRef), PROMPT_PARAMETER_PLACEHOLDER, "}");
             content = substitutor.replace(content);
+        } else if (!promptParameters.isEmpty() && content.contains("{{") && content.contains("}}")) {
+            substitutor = new StringSubstitutor(promptParameters.getParameters(promptRef), "{{", "}}");
         }
+        content = substitutor.replace(content);
 
         // this checks if all the required input values are provided by users and all the placeholder variables are replaced.
-        if (content.contains(PROMPT_PARAMETER_PLACEHOLDER)) {
+        if (content.contains(PROMPT_PARAMETER_PLACEHOLDER) || (content.contains("{{") && content.contains("}}"))) {
             throw new InvalidPullPromptSyntaxException("Failed to replace all the placeholders");
         }
         return content;
@@ -458,6 +487,49 @@ public class MLPromptManager {
                 "Failed to parse ML Prompt data in Json format into MLPrompt due to following cause:  + ex.getMessage()"
             );
         }
+    }
+
+    /**
+     * Updates the prompt based on the update contents and replace the old prompt with updated prompt from the index
+     *
+     * @param updateDataObjectRequest the updateRequest that needs to be handled
+     * @param promptId The prompt ID of a prompt that needs to be updated
+     * @param listener a listener to be notified of the response
+     */
+    public void updatePromptIndex(
+        UpdateDataObjectRequest updateDataObjectRequest,
+        String promptId,
+        ActionListener<UpdateResponse> listener
+    ) {
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            sdkClient.updateDataObjectAsync(updateDataObjectRequest).whenComplete((updateDataObjectResponse, throwable) -> {
+                context.restore();
+                handleUpdateResponse(updateDataObjectResponse, throwable, promptId, listener);
+            });
+        }
+    }
+
+    /**
+     * Handles the response from the update prompt request. If the response is successful, notify the listener
+     * with the UpdateResponse. Otherwise, notify the failure exception to the listener.
+     *
+     * @param updateDataObjectResponse The response from the update prompt request
+     * @param throwable The exception that occurred during the update prompt request
+     * @param listener The listener to be notified of the response
+     */
+    private void handleUpdateResponse(
+        UpdateDataObjectResponse updateDataObjectResponse,
+        Throwable throwable,
+        String promptId,
+        ActionListener<UpdateResponse> listener
+    ) {
+        if (throwable != null) {
+            Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+            handleFailure(cause, promptId, listener, "Failed to update ML prompt {}");
+            return;
+        }
+        UpdateResponse updateResponse = updateDataObjectResponse.updateResponse();
+        listener.onResponse(updateResponse);
     }
 
     /**

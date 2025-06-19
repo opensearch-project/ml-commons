@@ -43,6 +43,7 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.prompt.MLCreatePromptInput;
 import org.opensearch.ml.common.transport.prompt.MLCreatePromptRequest;
 import org.opensearch.ml.common.transport.prompt.MLCreatePromptResponse;
+import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.prompt.MLPromptManager;
 import org.opensearch.ml.utils.TestHelper;
@@ -101,6 +102,9 @@ public class TransportCreatePromptActionTests extends OpenSearchTestCase {
     @Mock
     private MLPromptManager mlPromptManager;
 
+    @Mock
+    private MLEngine mlEngine;
+
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
@@ -115,6 +119,7 @@ public class TransportCreatePromptActionTests extends OpenSearchTestCase {
                 mlIndicesHandler,
                 client,
                 sdkClient,
+                mlEngine,
                 mlPromptManager,
                 mlFeatureEnabledSetting
             )
@@ -149,6 +154,7 @@ public class TransportCreatePromptActionTests extends OpenSearchTestCase {
             mlIndicesHandler,
             client,
             sdkClient,
+            mlEngine,
             mlPromptManager,
             mlFeatureEnabledSetting
         );

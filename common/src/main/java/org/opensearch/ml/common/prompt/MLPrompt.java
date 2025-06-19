@@ -13,6 +13,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiFunction;
 
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -24,29 +25,40 @@ import org.opensearch.core.xcontent.XContentParser;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
 import lombok.Getter;
+import lombok.Setter;
 
 /**
  * MLPrompt is the class to store prompt information.
  */
 @Getter
+@Setter
 @EqualsAndHashCode
 public class MLPrompt implements ToXContentObject, Writeable {
 
+    // fields
     public static final String PROMPT_ID_FIELD = "prompt_id";
     public static final String NAME_FIELD = "name";
     public static final String DESCRIPTION_FIELD = "description";
     public static final String VERSION_FIELD = "version";
     public static final String PROMPT_FIELD = "prompt";
+    public static final String PROMPT_MANAGEMENT_TYPE_FIELD = "prompt_management_type"; // prompt management type -> MLPrompt or Langfuse
     public static final String TAGS_FIELD = "tags";
+    public static final String PROMPT_EXTRA_CONFIG_FIELD = "extra_config";
     public static final String CREATE_TIME_FIELD = "create_time";
     public static final String LAST_UPDATE_TIME_FIELD = "last_update_time";
+
+    // prompt management type
+    public static final String LANGFUSE = "LANGFUSE";
+    public static final String MLPROMPT = "MLPROMPT";
 
     private String promptId;
     private String name;
     private String description;
     private String version;
     private Map<String, String> prompt;
+    private String promptManagementType;
     private List<String> tags;
+    private PromptExtraConfig promptExtraConfig;
     private String tenantId;
     private Instant createTime;
     private Instant lastUpdateTime;
@@ -71,7 +83,9 @@ public class MLPrompt implements ToXContentObject, Writeable {
         String description,
         String version,
         Map<String, String> prompt,
+        String promptManagementType,
         List<String> tags,
+        PromptExtraConfig promptExtraConfig,
         String tenantId,
         Instant createTime,
         Instant lastUpdateTime
@@ -81,7 +95,9 @@ public class MLPrompt implements ToXContentObject, Writeable {
         this.description = description;
         this.version = version;
         this.prompt = prompt;
+        this.promptManagementType = promptManagementType;
         this.tags = tags;
+        this.promptExtraConfig = promptExtraConfig;
         this.tenantId = tenantId;
         this.createTime = createTime;
         this.lastUpdateTime = lastUpdateTime;
@@ -99,7 +115,9 @@ public class MLPrompt implements ToXContentObject, Writeable {
         this.description = input.readOptionalString();
         this.version = input.readOptionalString();
         this.prompt = input.readMap(s -> s.readString(), s -> s.readString());
+        this.promptManagementType = input.readOptionalString();
         this.tags = input.readList(StreamInput::readString);
+        this.promptExtraConfig = new PromptExtraConfig(input);
         this.tenantId = input.readOptionalString();
         this.createTime = input.readOptionalInstant();
         this.lastUpdateTime = input.readOptionalInstant();
@@ -118,7 +136,9 @@ public class MLPrompt implements ToXContentObject, Writeable {
         out.writeOptionalString(description);
         out.writeOptionalString(version);
         out.writeMap(prompt, StreamOutput::writeString, StreamOutput::writeString);
+        out.writeOptionalString(promptManagementType);
         out.writeCollection(tags, StreamOutput::writeString);
+        promptExtraConfig.writeTo(out);
         out.writeOptionalString(tenantId);
         out.writeOptionalInstant(createTime);
         out.writeOptionalInstant(lastUpdateTime);
@@ -150,8 +170,14 @@ public class MLPrompt implements ToXContentObject, Writeable {
         if (prompt != null) {
             builder.field(PROMPT_FIELD, prompt);
         }
+        if (promptManagementType != null) {
+            builder.field(PROMPT_MANAGEMENT_TYPE_FIELD, promptManagementType);
+        }
         if (tags != null) {
             builder.field(TAGS_FIELD, tags);
+        }
+        if (promptExtraConfig != null) {
+            builder.field(PROMPT_EXTRA_CONFIG_FIELD, promptExtraConfig);
         }
         if (tenantId != null) {
             builder.field(TENANT_ID_FIELD, tenantId);
@@ -189,7 +215,9 @@ public class MLPrompt implements ToXContentObject, Writeable {
         String description = null;
         String version = null;
         Map<String, String> prompt = null;
+        String promptManagementType = null;
         List<String> tags = null;
+        PromptExtraConfig promptExtraConfig = null;
         String tenantId = null;
         Instant createTime = null;
         Instant lastUpdateTime = null;
@@ -214,12 +242,18 @@ public class MLPrompt implements ToXContentObject, Writeable {
                 case PROMPT_FIELD:
                     prompt = parser.mapStrings();
                     break;
+                case PROMPT_MANAGEMENT_TYPE_FIELD:
+                    promptManagementType = parser.text();
+                    break;
                 case TAGS_FIELD:
                     tags = new ArrayList<>();
                     ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
                     while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
                         tags.add(parser.text());
                     }
+                    break;
+                case PROMPT_EXTRA_CONFIG_FIELD:
+                    promptExtraConfig = PromptExtraConfig.parse(parser);
                     break;
                 case TENANT_ID_FIELD:
                     tenantId = parser.text();
@@ -242,10 +276,40 @@ public class MLPrompt implements ToXContentObject, Writeable {
             .description(description)
             .version(version)
             .prompt(prompt)
+            .promptManagementType(promptManagementType)
             .tags(tags)
+            .promptExtraConfig(promptExtraConfig)
             .tenantId(tenantId)
             .createTime(createTime)
             .lastUpdateTime(lastUpdateTime)
             .build();
+    }
+
+    public void encrypt(String promptManagementType, BiFunction<String, String, String> function, String tenantId) {
+        if (promptManagementType.equalsIgnoreCase(LANGFUSE)) {
+            PromptExtraConfig promptExtraConfig = this.getPromptExtraConfig();
+            String publicKey = promptExtraConfig.getPublicKey();
+            String accessKey = this.getPromptExtraConfig().getAccessKey();
+
+            promptExtraConfig.setPublicKey(function.apply(publicKey, tenantId));
+            promptExtraConfig.setAccessKey(function.apply(accessKey, tenantId));
+
+            this.setPromptExtraConfig(promptExtraConfig);
+        }
+        // add other prompt management client case here, if needed
+    }
+
+    public void decrypt(String promptManagementType, BiFunction<String, String, String> function, String tenantId) {
+        if (promptManagementType.equalsIgnoreCase(LANGFUSE)) {
+            PromptExtraConfig promptExtraConfig = this.getPromptExtraConfig();
+            String publicKey = promptExtraConfig.getPublicKey();
+            String accessKey = this.getPromptExtraConfig().getAccessKey();
+
+            promptExtraConfig.setPublicKey(function.apply(publicKey, tenantId));
+            promptExtraConfig.setAccessKey(function.apply(accessKey, tenantId));
+
+            this.setPromptExtraConfig(promptExtraConfig);
+        }
+        // add other prompt management client case here, if needed
     }
 }

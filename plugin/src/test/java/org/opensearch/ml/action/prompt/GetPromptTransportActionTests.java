@@ -34,6 +34,7 @@ import org.opensearch.ml.common.prompt.MLPrompt;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.prompt.MLPromptGetRequest;
 import org.opensearch.ml.common.transport.prompt.MLPromptGetResponse;
+import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.prompt.MLPromptManager;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -84,6 +85,9 @@ public class GetPromptTransportActionTests extends OpenSearchTestCase {
     @Mock
     private MLPromptManager mlPromptManager;
 
+    @Mock
+    private EncryptorImpl encryptor;
+
     @Captor
     private ArgumentCaptor<GetDataObjectRequest> getDataObjectRequestArgumentCaptor;
 
@@ -98,7 +102,15 @@ public class GetPromptTransportActionTests extends OpenSearchTestCase {
         when(getResponse.getSourceAsString()).thenReturn("{}");
 
         getPromptTransportAction = spy(
-            new GetPromptTransportAction(transportService, actionFilters, client, sdkClient, mlFeatureEnabledSetting, mlPromptManager)
+            new GetPromptTransportAction(
+                transportService,
+                actionFilters,
+                client,
+                sdkClient,
+                encryptor,
+                mlFeatureEnabledSetting,
+                mlPromptManager
+            )
         );
 
         threadContext = new ThreadContext(Settings.EMPTY);
@@ -113,6 +125,7 @@ public class GetPromptTransportActionTests extends OpenSearchTestCase {
             actionFilters,
             client,
             sdkClient,
+            encryptor,
             mlFeatureEnabledSetting,
             mlPromptManager
         );

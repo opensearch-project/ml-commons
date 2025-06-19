@@ -21,8 +21,14 @@
     "prompt": {
       "type": "flat_object"
     },
+    "prompt_management_type": {
+      "type": "keyword"
+    },
     "tags": {
       "type": "keyword"
+    },
+    "extra_config": {
+      "type": "flat_object"
     },
     "tenant_id": {
       "type": "keyword"
