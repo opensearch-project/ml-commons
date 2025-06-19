@@ -21,8 +21,6 @@ import java.util.stream.Collectors;
 import org.opensearch.action.search.SearchAction;
 import org.opensearch.action.search.SearchRequestBuilder;
 import org.opensearch.action.search.SearchResponse;
-import org.opensearch.client.Client;
-import org.opensearch.client.OpenSearchClient;
 import org.opensearch.cluster.block.ClusterBlockException;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
@@ -32,6 +30,7 @@ import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
@@ -39,13 +38,14 @@ import org.opensearch.ml.common.transport.undeploy.MLUndeployModelAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesRequest;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesResponse;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.settings.MLCommonsSettings;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.search.sort.FieldSortBuilder;
 import org.opensearch.search.sort.SortBuilders;
 import org.opensearch.search.sort.SortOrder;
+import org.opensearch.transport.client.Client;
+import org.opensearch.transport.client.OpenSearchClient;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableMap;
@@ -115,7 +115,7 @@ public class MLModelAutoReDeployer {
     private void undeployModelsOnDataNodes() {
         List<String> dataNodeIds = new ArrayList<>();
         clusterService.state().nodes().getDataNodes().values().iterator().forEachRemaining(x -> { dataNodeIds.add(x.getId()); });
-        if (dataNodeIds.size() > 0)
+        if (!dataNodeIds.isEmpty())
             triggerUndeployModelsOnDataNodes(dataNodeIds);
     }
 
@@ -152,7 +152,7 @@ public class MLModelAutoReDeployer {
             startCronjobAndClearListener();
             return;
         }
-        if (modelAutoRedeployArrangements.size() == 0) {
+        if (modelAutoRedeployArrangements.isEmpty()) {
             log.info("No models needs to be auto redeployed!");
             startCronjobAndClearListener();
             return;
@@ -163,7 +163,7 @@ public class MLModelAutoReDeployer {
 
     private void triggerAutoDeployModels(List<String> addedNodes) {
         ActionListener<SearchResponse> listener = ActionListener.wrap(res -> {
-            if (res != null && res.getHits() != null && res.getHits().getTotalHits() != null && res.getHits().getTotalHits().value > 0) {
+            if (res != null && res.getHits() != null && res.getHits().getTotalHits() != null) {
                 Arrays
                     .stream(res.getHits().getHits())
                     .filter(
@@ -205,9 +205,9 @@ public class MLModelAutoReDeployer {
     private void triggerUndeployModelsOnDataNodes(List<String> dataNodeIds) {
         List<String> modelIds = new ArrayList<>();
         ActionListener<SearchResponse> listener = ActionListener.wrap(res -> {
-            if (res != null && res.getHits() != null && res.getHits().getTotalHits() != null && res.getHits().getTotalHits().value > 0) {
+            if (res != null && res.getHits() != null && res.getHits().getTotalHits() != null && res.getHits().getTotalHits().value() > 0) {
                 Arrays.stream(res.getHits().getHits()).forEach(x -> modelIds.add(x.getId()));
-                if (modelIds.size() > 0) {
+                if (!modelIds.isEmpty()) {
                     ActionListener<MLUndeployModelNodesResponse> undeployModelListener = ActionListener.wrap(r -> {
                         log.info("Undeploy models on data nodes successfully!");
                     }, e -> { log.error("Failed to undeploy models on data nodes, error is: {}", e.getMessage(), e); });
@@ -280,13 +280,13 @@ public class MLModelAutoReDeployer {
         String[] nodeIds = null;
         if (deployToAllNodes || !allowCustomDeploymentPlan) {
             nodeIds = new String[0];
-        } else if (planningWorkerNodes != null && planningWorkerNodes.size() > 0) {
+        } else if (planningWorkerNodes != null && !planningWorkerNodes.isEmpty()) {
             // allow custom deploy plan and not deploy to all case, we need to check if the added nodes in planning worker nodes.
             List<String> needRedeployPlanningWorkerNodes = Arrays
                 .stream(planningWorkerNodes.toArray(new String[0]))
                 .filter(addedNodes::contains)
                 .collect(Collectors.toList());
-            nodeIds = needRedeployPlanningWorkerNodes.size() > 0 ? planningWorkerNodes.toArray(new String[0]) : null;
+            nodeIds = !needRedeployPlanningWorkerNodes.isEmpty() ? planningWorkerNodes.toArray(new String[0]) : null;
         }
 
         if (nodeIds == null) {
@@ -311,14 +311,19 @@ public class MLModelAutoReDeployer {
             redeployAModel();
         });
 
+        // TODO: currently just provided tenantId null as auto re-deployer should work only in single tenant service. Will revisit this
+        // later.
         mlModelManager
             .updateModel(
                 modelId,
+                null,
                 false,
                 ImmutableMap.of(MLModel.AUTO_REDEPLOY_RETRY_TIMES_FIELD, Optional.ofNullable(autoRedeployRetryTimes).orElse(0) + 1)
             );
 
-        MLDeployModelRequest deployModelRequest = new MLDeployModelRequest(modelId, nodeIds, false, true, false);
+        // TODO: currently just provided tenantId null as auto re-deployer should work only in single tenant service. Will revisit this
+        // later.
+        MLDeployModelRequest deployModelRequest = new MLDeployModelRequest(modelId, null, nodeIds, false, true, false);
         client.execute(MLDeployModelAction.INSTANCE, deployModelRequest, listener);
     }
 

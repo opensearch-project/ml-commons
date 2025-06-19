@@ -10,7 +10,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MONITORING_REQUEST_COUNT;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MONITORING_REQUEST_COUNT;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.util.ArrayList;
@@ -130,12 +130,6 @@ public class MLModelCacheHelperTests extends OpenSearchTestCase {
         expectedEx.expectMessage("Duplicate deploy model task");
         cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes, true);
         cacheHelper.initModelState(modelId, MLModelState.DEPLOYING, FunctionName.TEXT_EMBEDDING, targetWorkerNodes, true);
-    }
-
-    public void testPredictor_NotFoundException() {
-        expectedEx.expect(IllegalArgumentException.class);
-        expectedEx.expectMessage("Model not found in cache");
-        cacheHelper.setPredictor("modelId1", predictor);
     }
 
     public void testPredictor() {

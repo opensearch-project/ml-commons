@@ -16,8 +16,8 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ML_TASK_TIMEOUT_IN_SECONDS;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ONLY_RUN_ON_ML_NODE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ML_TASK_TIMEOUT_IN_SECONDS;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ONLY_RUN_ON_ML_NODE;
 import static org.opensearch.ml.utils.TestHelper.ML_ROLE;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
@@ -36,6 +36,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.junit.Before;
+import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -44,7 +45,6 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.Version;
 import org.opensearch.action.FailedNodeException;
 import org.opensearch.action.support.ActionFilters;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.ClusterName;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
@@ -71,6 +71,7 @@ import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -143,10 +144,12 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
             .thenReturn(Arrays.asList(new String[] { "deploy_task_id1" }, new String[] { "model_id1" }));
     }
 
+    @Test
     public void testConstructor() {
         assertNotNull(action);
     }
 
+    @Test
     public void testNewResponse() {
         final MLSyncUpNodesRequest nodesRequest = Mockito.mock(MLSyncUpNodesRequest.class);
         final List<MLSyncUpNodeResponse> responses = new ArrayList<MLSyncUpNodeResponse>();
@@ -155,11 +158,13 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
         assertNotNull(response);
     }
 
+    @Test
     public void testNewRequest() {
         final MLSyncUpNodeRequest request = action.newNodeRequest(new MLSyncUpNodesRequest(new String[] {}, prepareRequest()));
         assertNotNull(request);
     }
 
+    @Test
     public void testNewNodeResponse() throws IOException {
         final DiscoveryNode mlNode1 = new DiscoveryNode(
             "123",
@@ -186,6 +191,7 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
         assertNotNull(response1);
     }
 
+    @Test
     public void testNodeOperation_AddedWorkerNodes() throws IOException {
         testFolder.create();
         File file1 = testFolder.newFolder();
@@ -220,6 +226,7 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
         testFolder.delete();
     }
 
+    @Test
     public void testNodeOperation_RemovedWorkerNodes() throws IOException {
         testFolder.create();
         File file1 = testFolder.newFolder();
@@ -257,18 +264,21 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
         testFolder.delete();
     }
 
+    @Test
     public void testCleanUpLocalCache_NoTasks() {
         when(mlTaskManager.getAllTaskIds()).thenReturn(null);
         action.cleanUpLocalCache(runningDeployModelTasks);
-        verify(mlTaskManager, never()).updateMLTask(anyString(), any(), anyLong(), anyBoolean());
+        verify(mlTaskManager, never()).updateMLTask(anyString(), anyString(), any(), anyLong(), anyBoolean());
     }
 
+    @Test
     public void testCleanUpLocalCache_EmptyTasks() {
         when(mlTaskManager.getAllTaskIds()).thenReturn(new String[] {});
         action.cleanUpLocalCache(runningDeployModelTasks);
-        verify(mlTaskManager, never()).updateMLTask(anyString(), any(), anyLong(), anyBoolean());
+        verify(mlTaskManager, never()).updateMLTask(anyString(), anyString(), any(), anyLong(), anyBoolean());
     }
 
+    @Test
     public void testCleanUpLocalCache_NotExpiredMLTask() {
         String taskId = randomAlphaOfLength(5);
         when(mlTaskManager.getAllTaskIds()).thenReturn(new String[] { taskId });
@@ -276,9 +286,10 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
         MLTaskCache taskCache = MLTaskCache.builder().mlTask(mlTask).build();
         when(mlTaskManager.getMLTaskCache(taskId)).thenReturn(taskCache);
         action.cleanUpLocalCache(runningDeployModelTasks);
-        verify(mlTaskManager, never()).updateMLTask(anyString(), any(), anyLong(), anyBoolean());
+        verify(mlTaskManager, never()).updateMLTask(anyString(), anyString(), any(), anyLong(), anyBoolean());
     }
 
+    @Test
     public void testCleanUpLocalCache_ExpiredMLTask_Register() {
         String taskId = randomAlphaOfLength(5);
         when(mlTaskManager.getAllTaskIds()).thenReturn(new String[] { taskId });
@@ -286,18 +297,21 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
         MLTaskCache taskCache = MLTaskCache.builder().mlTask(mlTask).build();
         when(mlTaskManager.getMLTaskCache(taskId)).thenReturn(taskCache);
         action.cleanUpLocalCache(runningDeployModelTasks);
-        verify(mlTaskManager, times(1)).updateMLTask(anyString(), any(), anyLong(), anyBoolean());
-        verify(mlModelManager, never()).updateModel(anyString(), (Boolean) any(), any());
+        verify(mlTaskManager, times(1)).updateMLTask(anyString(), any(), any(), anyLong(), anyBoolean());
+        verify(mlModelManager, never()).updateModel(anyString(), any(), (Boolean) any(), any());
     }
 
+    @Test
     public void testCleanUpLocalCache_ExpiredMLTask_Deploy_NullWorkerNode() {
         testCleanUpLocalCache_ExpiredMLTask_DeployStatus(MLModelState.DEPLOY_FAILED);
     }
 
+    @Test
     public void testCleanUpLocalCache_ExpiredMLTask_Deploy_PartiallyDEPLOYED() {
         testCleanUpLocalCache_ExpiredMLTask_DeployStatus(MLModelState.PARTIALLY_DEPLOYED);
     }
 
+    @Test
     public void testCleanUpLocalCache_ExpiredMLTask_Deploy_DEPLOYED() {
         testCleanUpLocalCache_ExpiredMLTask_DeployStatus(MLModelState.DEPLOYED);
     }
@@ -324,9 +338,9 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
         }
         when(mlTaskManager.getMLTaskCache(taskId)).thenReturn(taskCache);
         action.cleanUpLocalCache(runningDeployModelTasks);
-        verify(mlTaskManager, times(1)).updateMLTask(anyString(), any(), anyLong(), anyBoolean());
+        verify(mlTaskManager, times(1)).updateMLTask(anyString(), any(), any(), anyLong(), anyBoolean());
         ArgumentCaptor<Map> argumentCaptor = ArgumentCaptor.forClass(Map.class);
-        verify(mlModelManager, never()).updateModel(eq(modelId), eq(false), argumentCaptor.capture());
+        verify(mlModelManager, never()).updateModel(eq(modelId), eq(null), eq(false), argumentCaptor.capture());
     }
 
     private MLSyncUpInput prepareRequest() {

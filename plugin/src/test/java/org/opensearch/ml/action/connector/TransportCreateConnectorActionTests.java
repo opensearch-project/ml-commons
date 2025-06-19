@@ -11,8 +11,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.REKOGNITION_TRUST_ENDPOINT_REGEX;
 import static org.opensearch.ml.task.MLPredictTaskRunnerTests.USER_STRING;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
@@ -26,11 +29,11 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
@@ -43,6 +46,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.connector.ConnectorAction;
 import org.opensearch.ml.common.connector.ConnectorProtocols;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorRequest;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorResponse;
@@ -50,7 +54,6 @@ import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.remote.metadata.client.PutDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
@@ -58,6 +61,7 @@ import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -118,7 +122,13 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
     private ArgumentCaptor<PutDataObjectRequest> putDataObjectRequestArgumentCaptor;
 
     private static final List<String> TRUSTED_CONNECTOR_ENDPOINTS_REGEXES = ImmutableList
-        .of("^https://runtime\\.sagemaker\\..*\\.amazonaws\\.com/.*$", "^https://api\\.openai\\.com/.*$", "^https://api\\.cohere\\.ai/.*$");
+        .of(
+            "^https://runtime\\.sagemaker\\..*\\.amazonaws\\.com/.*$",
+            "^https://api\\.openai\\.com/.*$",
+            "^https://api\\.cohere\\.ai/.*$",
+            REKOGNITION_TRUST_ENDPOINT_REGEX,
+            "^https://api\\.deepseek\\.com/.*$"
+        );
 
     @Before
     public void setup() {
@@ -134,11 +144,13 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         ClusterSettings clusterSettings = clusterSetting(
             settings,
             ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX,
-            ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED
+            ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED,
+            ML_COMMONS_MCP_CONNECTOR_ENABLED
         );
         when(clusterService.getClusterSettings()).thenReturn(clusterSettings);
 
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
+        when(this.clusterService.getSettings()).thenReturn(settings);
 
         action = new TransportCreateConnectorAction(
             transportService,
@@ -538,5 +550,159 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
             "Connector URL is not matching the trusted connector endpoint regex, URL is: https://api.openai1.com/v1/completions",
             argumentCaptor.getValue().getMessage()
         );
+    }
+
+    public void test_connector_creation_success_deepseek() {
+        TransportCreateConnectorAction action = new TransportCreateConnectorAction(
+            transportService,
+            actionFilters,
+            mlIndicesHandler,
+            client,
+            sdkClient,
+            mlEngine,
+            connectorAccessControlHelper,
+            settings,
+            clusterService,
+            mlModelManager,
+            mlFeatureEnabledSetting
+        );
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConnectorIndex(isA(ActionListener.class));
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(IndexRequest.class), isA(ActionListener.class));
+        List<ConnectorAction> actions = new ArrayList<>();
+        actions
+            .add(
+                ConnectorAction
+                    .builder()
+                    .actionType(ConnectorAction.ActionType.PREDICT)
+                    .method("POST")
+                    .url("https://api.deepseek.com/v1/chat/completions")
+                    .build()
+            );
+        Map<String, String> credential = ImmutableMap.of("access_key", "mockKey", "secret_key", "mockSecret");
+        MLCreateConnectorInput mlCreateConnectorInput = MLCreateConnectorInput
+            .builder()
+            .name(randomAlphaOfLength(5))
+            .description(randomAlphaOfLength(10))
+            .version("1")
+            .protocol(ConnectorProtocols.HTTP)
+            .credential(credential)
+            .actions(actions)
+            .build();
+        MLCreateConnectorRequest request = new MLCreateConnectorRequest(mlCreateConnectorInput);
+        action.doExecute(task, request, actionListener);
+        verify(actionListener).onResponse(any(MLCreateConnectorResponse.class));
+    }
+
+    public void test_mcp_connector_creation_fail_default() {
+        TransportCreateConnectorAction action = new TransportCreateConnectorAction(
+            transportService,
+            actionFilters,
+            mlIndicesHandler,
+            client,
+            sdkClient,
+            mlEngine,
+            connectorAccessControlHelper,
+            settings,
+            clusterService,
+            mlModelManager,
+            mlFeatureEnabledSetting
+        );
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConnectorIndex(isA(ActionListener.class));
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(IndexRequest.class), isA(ActionListener.class));
+
+        Map<String, String> credential = ImmutableMap.of("access_key", "mockKey", "secret_key", "mockSecret");
+        MLCreateConnectorInput mlCreateConnectorInput = MLCreateConnectorInput
+            .builder()
+            .name(randomAlphaOfLength(5))
+            .description(randomAlphaOfLength(10))
+            .version("1")
+            .protocol(ConnectorProtocols.MCP_SSE)
+            .credential(credential)
+            .build();
+        MLCreateConnectorRequest request = new MLCreateConnectorRequest(mlCreateConnectorInput);
+        action.doExecute(task, request, actionListener);
+        ArgumentCaptor<OpenSearchException> argCaptor = ArgumentCaptor.forClass(OpenSearchException.class);
+        verify(actionListener).onFailure(argCaptor.capture());
+        assertEquals(argCaptor.getValue().getMessage(), ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE);
+    }
+
+    public void test_connector_creation_success_rekognition() {
+        TransportCreateConnectorAction action = new TransportCreateConnectorAction(
+            transportService,
+            actionFilters,
+            mlIndicesHandler,
+            client,
+            sdkClient,
+            mlEngine,
+            connectorAccessControlHelper,
+            settings,
+            clusterService,
+            mlModelManager,
+            mlFeatureEnabledSetting
+        );
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConnectorIndex(isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(IndexRequest.class), isA(ActionListener.class));
+
+        List<ConnectorAction> actions = new ArrayList<>();
+        actions
+            .add(
+                ConnectorAction
+                    .builder()
+                    .actionType(ConnectorAction.ActionType.PREDICT)
+                    .method("POST")
+                    .url("https://rekognition.test-region-1.amazonaws.com")
+                    .build()
+            );
+        actions
+            .add(
+                ConnectorAction
+                    .builder()
+                    .actionType(ConnectorAction.ActionType.PREDICT)
+                    .method("POST")
+                    .url("https://rekognition-fips.test-region-1.amazonaws.com")
+                    .build()
+            );
+
+        Map<String, String> credential = ImmutableMap.of("access_key", "mockKey", "secret_key", "mockSecret");
+        MLCreateConnectorInput mlCreateConnectorInput = MLCreateConnectorInput
+            .builder()
+            .name(randomAlphaOfLength(5))
+            .description(randomAlphaOfLength(10))
+            .version("1")
+            .protocol(ConnectorProtocols.HTTP)
+            .credential(credential)
+            .actions(actions)
+            .build();
+
+        MLCreateConnectorRequest request = new MLCreateConnectorRequest(mlCreateConnectorInput);
+
+        action.doExecute(task, request, actionListener);
+        verify(actionListener).onResponse(any(MLCreateConnectorResponse.class));
     }
 }

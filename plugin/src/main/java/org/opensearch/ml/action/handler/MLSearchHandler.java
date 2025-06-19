@@ -15,10 +15,10 @@ import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import org.apache.lucene.search.TotalHits;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
@@ -41,9 +41,13 @@ import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
+import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
+import org.opensearch.transport.client.Client;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Throwables;
@@ -76,14 +80,15 @@ public class MLSearchHandler {
 
     /**
      * Fetch all the models from the model group index, and then create a combined query to model version index.
+     * @param sdkClient sdkclient a wrapper of the client
      * @param request
      * @param actionListener
      */
-    public void search(SearchRequest request, ActionListener<SearchResponse> actionListener) {
+    public void search(SdkClient sdkClient, SearchRequest request, String tenantId, ActionListener<SearchResponse> actionListener) {
         User user = RestActionUtils.getUserContext(client);
         ActionListener<SearchResponse> listener = wrapRestActionListener(actionListener, "Fail to search model version");
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<SearchResponse> wrappedListener = ActionListener.runBefore(listener, () -> context.restore());
+            ActionListener<SearchResponse> wrappedListener = ActionListener.runBefore(listener, context::restore);
             List<String> excludes = Optional
                 .ofNullable(request.source())
                 .map(SearchSourceBuilder::fetchSource)
@@ -126,10 +131,18 @@ public class MLSearchHandler {
             request.source().fetchSource(rebuiltFetchSourceContext);
             final ActionListener<SearchResponse> doubleWrapperListener = ActionListener
                 .wrap(wrappedListener::onResponse, e -> wrapListenerToHandleSearchIndexNotFound(e, wrappedListener));
-            if (modelAccessControlHelper.skipModelAccessControl(user)) {
-                client.search(request, doubleWrapperListener);
-            } else if (!clusterService.state().metadata().hasIndex(CommonValue.ML_MODEL_GROUP_INDEX)) {
-                client.search(request, doubleWrapperListener);
+            if (modelAccessControlHelper.skipModelAccessControl(user)
+                || !clusterService.state().metadata().hasIndex(CommonValue.ML_MODEL_GROUP_INDEX)) {
+
+                SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
+                    .builder()
+                    .indices(request.indices())
+                    .searchSourceBuilder(request.source())
+                    .tenantId(tenantId)
+                    .build();
+                sdkClient
+                    .searchDataObjectAsync(searchDataObjectRequest)
+                    .whenComplete(SdkClientUtils.wrapSearchCompletion(doubleWrapperListener));
             } else {
                 SearchSourceBuilder sourceBuilder = modelAccessControlHelper.createSearchSourceBuilder(user);
                 SearchRequest modelGroupSearchRequest = new SearchRequest();
@@ -142,23 +155,38 @@ public class MLSearchHandler {
                         .ofNullable(r)
                         .map(SearchResponse::getHits)
                         .map(SearchHits::getTotalHits)
-                        .map(x -> x.value)
+                        .map(TotalHits::value)
                         .orElse(0L) > 0) {
                         List<String> modelGroupIds = new ArrayList<>();
                         Arrays.stream(r.getHits().getHits()).forEach(hit -> { modelGroupIds.add(hit.getId()); });
 
                         request.source().query(rewriteQueryBuilder(request.source().query(), modelGroupIds));
-                        client.search(request, doubleWrapperListener);
                     } else {
                         log.debug("No model group found");
                         request.source().query(rewriteQueryBuilder(request.source().query(), null));
-                        client.search(request, doubleWrapperListener);
                     }
+                    SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
+                        .builder()
+                        .indices(request.indices())
+                        .searchSourceBuilder(request.source())
+                        .tenantId(tenantId)
+                        .build();
+                    sdkClient
+                        .searchDataObjectAsync(searchDataObjectRequest)
+                        .whenComplete(SdkClientUtils.wrapSearchCompletion(doubleWrapperListener));
                 }, e -> {
                     log.error("Fail to search model groups!", e);
                     wrappedListener.onFailure(e);
                 });
-                client.search(modelGroupSearchRequest, modelGroupSearchActionListener);
+                SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
+                    .builder()
+                    .indices(modelGroupSearchRequest.indices())
+                    .searchSourceBuilder(modelGroupSearchRequest.source())
+                    .tenantId(tenantId)
+                    .build();
+                sdkClient
+                    .searchDataObjectAsync(searchDataObjectRequest)
+                    .whenComplete(SdkClientUtils.wrapSearchCompletion(modelGroupSearchActionListener));
             }
         } catch (Exception e) {
             log.error(e.getMessage(), e);

@@ -16,14 +16,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.FailedNodeException;
-import org.opensearch.action.bulk.BulkRequest;
+import org.opensearch.action.bulk.BulkItemResponse;
 import org.opensearch.action.bulk.BulkResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.WriteRequest;
 import org.opensearch.action.support.nodes.TransportNodesAction;
-import org.opensearch.action.update.UpdateRequest;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -44,9 +43,14 @@ import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesResponse;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
+import org.opensearch.remote.metadata.client.BulkDataObjectRequest;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.UpdateDataObjectRequest;
+import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableList;
 
@@ -58,6 +62,7 @@ public class TransportUndeployModelAction extends
     private final MLModelManager mlModelManager;
     private final ClusterService clusterService;
     private final Client client;
+    private final SdkClient sdkClient;
     private final DiscoveryNodeHelper nodeFilter;
     private final MLStats mlStats;
 
@@ -69,6 +74,7 @@ public class TransportUndeployModelAction extends
         ClusterService clusterService,
         ThreadPool threadPool,
         Client client,
+        SdkClient sdkClient,
         DiscoveryNodeHelper nodeFilter,
         MLStats mlStats
     ) {
@@ -87,23 +93,27 @@ public class TransportUndeployModelAction extends
 
         this.clusterService = clusterService;
         this.client = client;
+        this.sdkClient = sdkClient;
         this.nodeFilter = nodeFilter;
         this.mlStats = mlStats;
     }
 
     @Override
     protected void doExecute(Task task, MLUndeployModelNodesRequest request, ActionListener<MLUndeployModelNodesResponse> listener) {
+        log.info("Executing undeploy for models: {}", Arrays.toString(request.getModelIds()));
         ActionListener<MLUndeployModelNodesResponse> wrappedListener = ActionListener.wrap(undeployModelNodesResponse -> {
-            processUndeployModelResponseAndUpdate(undeployModelNodesResponse, listener);
+            processUndeployModelResponseAndUpdate(request.getTenantId(), undeployModelNodesResponse, listener);
         }, listener::onFailure);
         super.doExecute(task, request, wrappedListener);
     }
 
     void processUndeployModelResponseAndUpdate(
+        String tenantId,
         MLUndeployModelNodesResponse undeployModelNodesResponse,
         ActionListener<MLUndeployModelNodesResponse> listener
     ) {
         List<MLUndeployModelNodeResponse> responses = undeployModelNodesResponse.getNodes();
+        log.debug("Processing undeploy model responses from nodes");
         if (responses == null || responses.isEmpty()) {
             listener.onResponse(undeployModelNodesResponse);
             return;
@@ -127,9 +137,10 @@ public class TransportUndeployModelAction extends
 
             Map<String, String> modelUndeployStatus = r.getModelUndeployStatus();
             for (Map.Entry<String, String> entry : modelUndeployStatus.entrySet()) {
+                String modelId = entry.getKey();
                 String status = entry.getValue();
+                log.debug("Model status of model {} on node {}: {}", modelId, r.getNode().getId(), status);
                 if (UNDEPLOYED.equals(status)) {
-                    String modelId = entry.getKey();
                     if (!actualRemovedNodesMap.containsKey(modelId)) {
                         actualRemovedNodesMap.put(modelId, new ArrayList<>());
                     }
@@ -145,11 +156,11 @@ public class TransportUndeployModelAction extends
 
         MLSyncUpNodesRequest syncUpRequest = new MLSyncUpNodesRequest(nodeFilter.getAllNodes(), syncUpInput);
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            if (actualRemovedNodesMap.size() > 0) {
-                BulkRequest bulkRequest = new BulkRequest();
+            if (!actualRemovedNodesMap.isEmpty()) {
+                log.debug("Models undeployed from nodes: {}", actualRemovedNodesMap);
+                BulkDataObjectRequest bulkRequest = BulkDataObjectRequest.builder().globalIndex(ML_MODEL_INDEX).build();
                 Map<String, Boolean> deployToAllNodes = new HashMap<>();
                 for (String modelId : actualRemovedNodesMap.keySet()) {
-                    UpdateRequest updateRequest = new UpdateRequest();
                     List<String> removedNodes = actualRemovedNodesMap.get(modelId);
                     int removedNodeCount = removedNodes.size();
                     /**
@@ -159,8 +170,10 @@ public class TransportUndeployModelAction extends
                      *  we need to update both planning worker nodes (count) and current worker nodes (count)
                      *  and deployToAllNodes value in model index.
                      */
+                    log.debug("Updating metadata for model {}: removedNodes={}", modelId, removedNodes);
                     Map<String, Object> updateDocument = new HashMap<>();
-                    if (modelWorkNodesBeforeRemoval.get(modelId).length == removedNodeCount) { // undeploy all nodes.
+                    if (modelWorkNodesBeforeRemoval.get(modelId).length == removedNodeCount) {
+                        log.debug("All nodes removed for model {}. Marking as undeployed.", modelId);// undeploy all nodes.
                         updateDocument.put(MLModel.PLANNING_WORKER_NODES_FIELD, ImmutableList.of());
                         updateDocument.put(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD, 0);
                         updateDocument.put(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD, 0);
@@ -173,15 +186,28 @@ public class TransportUndeployModelAction extends
                             .stream(modelWorkNodesBeforeRemoval.get(modelId))
                             .filter(x -> !removedNodes.contains(x))
                             .collect(Collectors.toList());
+                        log
+                            .debug(
+                                "Partially undeployed for model {} with remaining planning worker nodes: {}",
+                                modelId,
+                                newPlanningWorkerNodes
+                            );
                         updateDocument.put(MLModel.PLANNING_WORKER_NODES_FIELD, newPlanningWorkerNodes);
                         updateDocument.put(MLModel.PLANNING_WORKER_NODE_COUNT_FIELD, newPlanningWorkerNodes.size());
                         updateDocument.put(MLModel.CURRENT_WORKER_NODE_COUNT_FIELD, newPlanningWorkerNodes.size());
                         deployToAllNodes.put(modelId, false);
                     }
-                    updateRequest.index(ML_MODEL_INDEX).id(modelId).doc(updateDocument);
+
+                    UpdateDataObjectRequest updateRequest = UpdateDataObjectRequest
+                        .builder()
+                        .id(modelId)
+                        .tenantId(tenantId)
+                        .dataObject(updateDocument)
+                        .build();
                     bulkRequest.add(updateRequest).setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
                 }
                 syncUpInput.setDeployToAllNodes(deployToAllNodes);
+                log.debug("Sending bulk metadata update request for undeploy");
                 ActionListener<BulkResponse> actionListener = ActionListener.wrap(r -> {
                     log
                         .debug(
@@ -189,10 +215,34 @@ public class TransportUndeployModelAction extends
                             Arrays.toString(actualRemovedNodesMap.keySet().toArray(new String[0]))
                         );
                 }, e -> { log.error("Failed to update model state as undeployed", e); });
-                client.bulk(bulkRequest, ActionListener.runAfter(actionListener, () -> {
+                ActionListener<BulkResponse> wrappedListener = ActionListener.runAfter(actionListener, () -> {
+                    log.debug("Triggering sync-up after bulk update for undeploy");
                     syncUpUndeployedModels(syncUpRequest);
                     listener.onResponse(undeployModelNodesResponse);
-                }));
+                });
+                sdkClient.bulkDataObjectAsync(bulkRequest).whenComplete((r, throwable) -> {
+                    if (throwable != null) {
+                        Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable, OpenSearchStatusException.class);
+                        log.error("Failed to execute BulkDataObject request", cause);
+                        wrappedListener.onFailure(cause);
+                    } else {
+                        try {
+                            BulkResponse bulkResponse = r.bulkResponse();
+                            log
+                                .info(
+                                    "Executed {} bulk operations with {} failures, Took: {}",
+                                    bulkResponse.getItems().length,
+                                    bulkResponse.hasFailures()
+                                        ? Arrays.stream(bulkResponse.getItems()).filter(BulkItemResponse::isFailed).count()
+                                        : 0,
+                                    bulkResponse.getTook()
+                                );
+                            wrappedListener.onResponse(bulkResponse);
+                        } catch (Exception e) {
+                            wrappedListener.onFailure(e);
+                        }
+                    }
+                });
             } else {
                 syncUpUndeployedModels(syncUpRequest);
                 listener.onResponse(undeployModelNodesResponse);
@@ -252,11 +302,14 @@ public class TransportUndeployModelAction extends
 
         boolean specifiedModelIds = modelIds != null && modelIds.length > 0;
         String[] removedModelIds = specifiedModelIds ? modelIds : mlModelManager.getAllModelIds();
+
+        log.debug("Models to undeploy: {}", Arrays.toString(removedModelIds));
         if (removedModelIds != null) {
             for (String modelId : removedModelIds) {
                 FunctionName functionName = mlModelManager.getModelFunctionName(modelId);
                 String[] workerNodes = mlModelManager.getWorkerNodes(modelId, functionName);
                 modelWorkerNodesMap.put(modelId, workerNodes);
+                log.debug("Retrieved worker nodes for model {}: {}", modelId, Arrays.toString(workerNodes));
             }
         }
 

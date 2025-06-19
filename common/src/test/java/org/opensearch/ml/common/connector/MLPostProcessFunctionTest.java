@@ -46,12 +46,12 @@ public class MLPostProcessFunctionTest {
     public void test_buildModelTensorList() {
         List<List<Float>> numbersList = new ArrayList<>();
         numbersList.add(Collections.singletonList(1.0f));
-        Assert.assertNotNull(MLPostProcessFunction.get(DEFAULT_EMBEDDING).apply(numbersList));
+        Assert.assertNotNull(MLPostProcessFunction.get(DEFAULT_EMBEDDING).apply(numbersList, null));
     }
 
     @Test
     public void test_buildModelTensorList_exception() {
         exceptionRule.expect(IllegalArgumentException.class);
-        MLPostProcessFunction.get(DEFAULT_EMBEDDING).apply(null);
+        MLPostProcessFunction.get(DEFAULT_EMBEDDING).apply(null, null);
     }
 }

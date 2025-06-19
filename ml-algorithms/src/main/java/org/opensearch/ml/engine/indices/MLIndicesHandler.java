@@ -22,7 +22,6 @@ import org.opensearch.action.admin.indices.create.CreateIndexRequest;
 import org.opensearch.action.admin.indices.create.CreateIndexResponse;
 import org.opensearch.action.admin.indices.mapping.put.PutMappingRequest;
 import org.opensearch.action.admin.indices.settings.put.UpdateSettingsRequest;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.metadata.IndexMetadata;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -31,6 +30,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.transport.client.Client;
 
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -82,6 +82,18 @@ public class MLIndicesHandler {
 
     public void initMLControllerIndex(ActionListener<Boolean> listener) {
         initMLIndexIfAbsent(MLIndex.CONTROLLER, listener);
+    }
+
+    public void initMLMcpSessionManagementIndex(ActionListener<Boolean> listener) {
+        initMLIndexIfAbsent(MLIndex.MCP_SESSION_MANAGEMENT, listener);
+    }
+
+    public void initMLMcpToolsIndex(ActionListener<Boolean> listener) {
+        initMLIndexIfAbsent(MLIndex.MCP_TOOLS, listener);
+    }
+
+    public void initMLJobsIndex(ActionListener<Boolean> listener) {
+        initMLIndexIfAbsent(MLIndex.JOBS, listener);
     }
 
     public void initMLAgentIndex(ActionListener<Boolean> listener) {
@@ -190,7 +202,7 @@ public class MLIndicesHandler {
      */
     public void shouldUpdateIndex(String indexName, Integer newVersion, ActionListener<Boolean> listener) {
         IndexMetadata indexMetaData = clusterService.state().getMetadata().indices().get(indexName);
-        if (indexMetaData == null) {
+        if (indexMetaData == null || indexMetaData.mapping() == null) {
             listener.onResponse(Boolean.FALSE);
             return;
         }

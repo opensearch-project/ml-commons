@@ -31,22 +31,24 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.BooleanSupplier;
 
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchException;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.SearchResponseSections;
-import org.opensearch.client.Client;
 import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.builder.SearchSourceBuilder;
@@ -58,13 +60,21 @@ import org.opensearch.searchpipelines.questionanswering.generative.llm.ChatCompl
 import org.opensearch.searchpipelines.questionanswering.generative.llm.ChatCompletionOutput;
 import org.opensearch.searchpipelines.questionanswering.generative.llm.Llm;
 import org.opensearch.test.OpenSearchTestCase;
+import org.opensearch.transport.client.Client;
 
 public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
 
-    private BooleanSupplier alwaysOn = () -> true;
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
+
+    @Before
+    public void setup() {
+        MockitoAnnotations.openMocks(this);
+        when(mlFeatureEnabledSetting.isRagSearchPipelineEnabled()).thenReturn(true);
+    }
 
     public void testProcessorFactoryRemoteModel() throws Exception {
         Client client = mock(Client.class);
@@ -74,7 +84,7 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
 
         GenerativeQAResponseProcessor processor = (GenerativeQAResponseProcessor) new GenerativeQAResponseProcessor.Factory(
             client,
-            alwaysOn
+            mlFeatureEnabledSetting
         ).create(null, "tag", "desc", true, config, null);
         assertNotNull(processor);
     }
@@ -92,7 +102,7 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
             List.of("text"),
             "system_prompt",
             "user_instructions",
-            alwaysOn
+            mlFeatureEnabledSetting
         );
         assertEquals(GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE, processor.getType());
     }
@@ -105,7 +115,7 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
 
         GenerativeQAResponseProcessor processor = (GenerativeQAResponseProcessor) new GenerativeQAResponseProcessor.Factory(
             client,
-            alwaysOn
+            mlFeatureEnabledSetting
         ).create(null, "tag", "desc", true, config, null);
 
         SearchRequest request = new SearchRequest(); // mock(SearchRequest.class);
@@ -163,7 +173,7 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
 
         GenerativeQAResponseProcessor processor = (GenerativeQAResponseProcessor) new GenerativeQAResponseProcessor.Factory(
             client,
-            alwaysOn
+            mlFeatureEnabledSetting
         ).create(null, "tag", "desc", true, config, null);
 
         ConversationalMemoryClient memoryClient = mock(ConversationalMemoryClient.class);
@@ -256,7 +266,7 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
 
         GenerativeQAResponseProcessor processor = (GenerativeQAResponseProcessor) new GenerativeQAResponseProcessor.Factory(
             client,
-            alwaysOn
+            mlFeatureEnabledSetting
         ).create(null, "tag", "desc", true, config, null);
 
         ConversationalMemoryClient memoryClient = mock(ConversationalMemoryClient.class);
@@ -350,7 +360,7 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
 
         GenerativeQAResponseProcessor processor = (GenerativeQAResponseProcessor) new GenerativeQAResponseProcessor.Factory(
             client,
-            alwaysOn
+            mlFeatureEnabledSetting
         ).create(null, "tag", "desc", true, config, null);
 
         ConversationalMemoryClient memoryClient = mock(ConversationalMemoryClient.class);
@@ -444,7 +454,7 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
 
         GenerativeQAResponseProcessor processor = (GenerativeQAResponseProcessor) new GenerativeQAResponseProcessor.Factory(
             client,
-            alwaysOn
+            mlFeatureEnabledSetting
         ).create(null, "tag", "desc", true, config, null);
 
         ConversationalMemoryClient memoryClient = mock(ConversationalMemoryClient.class);
@@ -533,12 +543,10 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
         config.put(GenerativeQAProcessorConstants.CONFIG_NAME_MODEL_ID, "xyz");
         config.put(GenerativeQAProcessorConstants.CONFIG_NAME_CONTEXT_FIELD_LIST, List.of("text"));
 
-        Processor processor = new GenerativeQAResponseProcessor.Factory(client, () -> false)
+        when(mlFeatureEnabledSetting.isRagSearchPipelineEnabled()).thenReturn(false);
+        Processor processor = new GenerativeQAResponseProcessor.Factory(client, mlFeatureEnabledSetting)
             .create(null, "tag", "desc", true, config, null);
     }
-
-    // Use this only for the following test case.
-    private boolean featureEnabled001;
 
     public void testProcessorFeatureOffOnOff() throws Exception {
         Client client = mock(Client.class);
@@ -546,9 +554,8 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
         config.put(GenerativeQAProcessorConstants.CONFIG_NAME_MODEL_ID, "xyz");
         config.put(GenerativeQAProcessorConstants.CONFIG_NAME_CONTEXT_FIELD_LIST, List.of("text"));
 
-        featureEnabled001 = false;
-        BooleanSupplier supplier = () -> featureEnabled001;
-        Processor.Factory factory = new GenerativeQAResponseProcessor.Factory(client, supplier);
+        when(mlFeatureEnabledSetting.isRagSearchPipelineEnabled()).thenReturn(false);
+        Processor.Factory factory = new GenerativeQAResponseProcessor.Factory(client, mlFeatureEnabledSetting);
         GenerativeQAResponseProcessor processor;
         boolean firstExceptionThrown = false;
         try {
@@ -558,10 +565,10 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
             firstExceptionThrown = true;
         }
         assertTrue(firstExceptionThrown);
-        featureEnabled001 = true;
+        when(mlFeatureEnabledSetting.isRagSearchPipelineEnabled()).thenReturn(true);
         processor = (GenerativeQAResponseProcessor) factory.create(null, "tag", "desc", true, config, null);
 
-        featureEnabled001 = false;
+        when(mlFeatureEnabledSetting.isRagSearchPipelineEnabled()).thenReturn(false);
         boolean secondExceptionThrown = false;
         try {
             processor
@@ -584,7 +591,7 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
 
         GenerativeQAResponseProcessor processor = (GenerativeQAResponseProcessor) new GenerativeQAResponseProcessor.Factory(
             client,
-            alwaysOn
+            mlFeatureEnabledSetting
         ).create(null, "tag", "desc", true, config, null);
 
         ConversationalMemoryClient memoryClient = mock(ConversationalMemoryClient.class);
@@ -658,7 +665,7 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
 
         GenerativeQAResponseProcessor processor = (GenerativeQAResponseProcessor) new GenerativeQAResponseProcessor.Factory(
             client,
-            alwaysOn
+            mlFeatureEnabledSetting
         ).create(null, "tag", "desc", true, config, null);
 
         ConversationalMemoryClient memoryClient = mock(ConversationalMemoryClient.class);
@@ -729,7 +736,7 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
 
         GenerativeQAResponseProcessor processor = (GenerativeQAResponseProcessor) new GenerativeQAResponseProcessor.Factory(
             client,
-            alwaysOn
+            mlFeatureEnabledSetting
         ).create(null, "tag", "desc", true, config, null);
 
         ConversationalMemoryClient memoryClient = mock(ConversationalMemoryClient.class);
@@ -809,7 +816,7 @@ public class GenerativeQAResponseProcessorTests extends OpenSearchTestCase {
 
         GenerativeQAResponseProcessor processor = (GenerativeQAResponseProcessor) new GenerativeQAResponseProcessor.Factory(
             client,
-            alwaysOn
+            mlFeatureEnabledSetting
         ).create(null, "tag", "desc", true, config, null);
 
         ConversationalMemoryClient memoryClient = mock(ConversationalMemoryClient.class);

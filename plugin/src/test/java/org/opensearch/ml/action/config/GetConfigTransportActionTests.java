@@ -27,7 +27,6 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
-import org.opensearch.client.Client;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
@@ -41,12 +40,14 @@ import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.Configuration;
 import org.opensearch.ml.common.MLConfig;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.config.MLConfigGetRequest;
 import org.opensearch.ml.common.transport.config.MLConfigGetResponse;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
 
 public class GetConfigTransportActionTests extends OpenSearchTestCase {
     @Mock
@@ -67,6 +68,9 @@ public class GetConfigTransportActionTests extends OpenSearchTestCase {
     @Mock
     ActionListener<MLConfigGetResponse> actionListener;
 
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
@@ -79,7 +83,9 @@ public class GetConfigTransportActionTests extends OpenSearchTestCase {
         MockitoAnnotations.openMocks(this);
         mlConfigGetRequest = MLConfigGetRequest.builder().configId("test_id").build();
 
-        getConfigTransportAction = spy(new GetConfigTransportAction(transportService, actionFilters, client, xContentRegistry));
+        getConfigTransportAction = spy(
+            new GetConfigTransportAction(transportService, actionFilters, client, xContentRegistry, mlFeatureEnabledSetting)
+        );
 
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
@@ -128,7 +134,7 @@ public class GetConfigTransportActionTests extends OpenSearchTestCase {
         String configId = "test-config-id";
 
         ActionListener<MLConfigGetResponse> actionListener = mock(ActionListener.class);
-        MLConfigGetRequest getRequest = new MLConfigGetRequest(configId);
+        MLConfigGetRequest getRequest = new MLConfigGetRequest(configId, null);
         Task task = mock(Task.class);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenThrow(new RuntimeException());
@@ -149,7 +155,7 @@ public class GetConfigTransportActionTests extends OpenSearchTestCase {
         String configID = "config_id";
         GetResponse getResponse = prepareMLConfig(configID);
         ActionListener<MLConfigGetResponse> actionListener = mock(ActionListener.class);
-        MLConfigGetRequest request = new MLConfigGetRequest(configID);
+        MLConfigGetRequest request = new MLConfigGetRequest(configID, null);
         Task task = mock(Task.class);
 
         doAnswer(invocation -> {
@@ -165,14 +171,14 @@ public class GetConfigTransportActionTests extends OpenSearchTestCase {
     @Test
     public void testDoExecute_Success_ForNewFields() throws IOException {
         String configID = "config_id";
-        MLConfig mlConfig = new MLConfig(null, "olly_agent", null, new Configuration("agent_id"), Instant.EPOCH, null, Instant.EPOCH);
+        MLConfig mlConfig = new MLConfig(null, "olly_agent", null, new Configuration("agent_id"), Instant.EPOCH, null, Instant.EPOCH, null);
 
         XContentBuilder content = mlConfig.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
         BytesReference bytesReference = BytesReference.bytes(content);
         GetResult getResult = new GetResult("indexName", configID, 111l, 111l, 111l, true, bytesReference, null, null);
         GetResponse getResponse = new GetResponse(getResult);
         ActionListener<MLConfigGetResponse> actionListener = mock(ActionListener.class);
-        MLConfigGetRequest request = new MLConfigGetRequest(configID);
+        MLConfigGetRequest request = new MLConfigGetRequest(configID, null);
         Task task = mock(Task.class);
 
         doAnswer(invocation -> {
@@ -187,13 +193,12 @@ public class GetConfigTransportActionTests extends OpenSearchTestCase {
 
     public GetResponse prepareMLConfig(String configID) throws IOException {
 
-        MLConfig mlConfig = new MLConfig("olly_agent", null, new Configuration("agent_id"), null, Instant.EPOCH, Instant.EPOCH, null);
+        MLConfig mlConfig = new MLConfig("olly_agent", null, new Configuration("agent_id"), null, Instant.EPOCH, Instant.EPOCH, null, null);
 
         XContentBuilder content = mlConfig.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
         BytesReference bytesReference = BytesReference.bytes(content);
         GetResult getResult = new GetResult("indexName", configID, 111l, 111l, 111l, true, bytesReference, null, null);
-        GetResponse getResponse = new GetResponse(getResult);
-        return getResponse;
+        return new GetResponse(getResult);
     }
 
     @Test
@@ -201,7 +206,7 @@ public class GetConfigTransportActionTests extends OpenSearchTestCase {
         String configID = MASTER_KEY;
         GetResponse getResponse = prepareMLConfig(configID);
         ActionListener<MLConfigGetResponse> actionListener = mock(ActionListener.class);
-        MLConfigGetRequest request = new MLConfigGetRequest(configID);
+        MLConfigGetRequest request = new MLConfigGetRequest(configID, null);
         Task task = mock(Task.class);
 
         doAnswer(invocation -> {

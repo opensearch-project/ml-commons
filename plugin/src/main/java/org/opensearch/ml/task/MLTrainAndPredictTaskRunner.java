@@ -12,7 +12,6 @@ import java.util.UUID;
 
 import org.opensearch.action.ActionListenerResponseHandler;
 import org.opensearch.action.support.ThreadedActionListener;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
@@ -36,6 +35,7 @@ import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportResponseHandler;
+import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableList;
 
@@ -138,7 +138,7 @@ public class MLTrainAndPredictTaskRunner extends MLTaskRunner<MLTrainingTaskRequ
 
         // run train and predict
         try {
-            mlTaskManager.updateTaskStateAsRunning(mlTask.getTaskId(), mlTask.isAsync());
+            mlTaskManager.updateTaskStateAsRunning(mlTask.getTaskId(), mlTask.getTenantId(), mlTask.isAsync());
             MLOutput output = mlEngine.trainAndPredict(mlInput);
             handleAsyncMLTaskComplete(mlTask);
             if (output instanceof MLPredictionOutput) {

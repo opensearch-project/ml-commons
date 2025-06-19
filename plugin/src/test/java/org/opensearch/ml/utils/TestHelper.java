@@ -8,11 +8,13 @@ package org.opensearch.ml.utils;
 import static org.apache.hc.core5.http.ContentType.APPLICATION_JSON;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.DATA_ROLE;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.INGEST_ROLE;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.REMOTE_CLUSTER_CLIENT_ROLE;
-import static org.opensearch.cluster.node.DiscoveryNodeRole.SEARCH_ROLE;
+import static org.opensearch.cluster.node.DiscoveryNodeRole.WARM_ROLE;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_ALGORITHM;
@@ -43,7 +45,10 @@ import org.apache.hc.core5.http.Header;
 import org.apache.hc.core5.http.HttpEntity;
 import org.apache.hc.core5.http.io.entity.StringEntity;
 import org.apache.logging.log4j.util.Strings;
+import org.apache.lucene.search.TotalHits;
 import org.opensearch.Version;
+import org.opensearch.action.search.SearchResponse;
+import org.opensearch.action.search.ShardSearchFailure;
 import org.opensearch.client.Request;
 import org.opensearch.client.RequestOptions;
 import org.opensearch.client.Response;
@@ -59,6 +64,7 @@ import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Setting;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.common.xcontent.XContentType;
@@ -78,6 +84,7 @@ import org.opensearch.ml.common.dataset.SearchQueryInputDataset;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.Constants;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.input.execute.anomalylocalization.AnomalyLocalizationInput;
 import org.opensearch.ml.common.input.execute.metricscorrelation.MetricsCorrelationInput;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
 import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
@@ -85,8 +92,16 @@ import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.profile.MLProfileInput;
 import org.opensearch.ml.stats.MLStatsInput;
 import org.opensearch.rest.RestRequest;
+import org.opensearch.search.SearchHit;
+import org.opensearch.search.SearchHits;
 import org.opensearch.search.SearchModule;
+import org.opensearch.search.aggregations.InternalAggregations;
+import org.opensearch.search.internal.InternalSearchResponse;
+import org.opensearch.search.profile.SearchProfileShardResults;
+import org.opensearch.search.suggest.Suggest;
 import org.opensearch.test.rest.FakeRestRequest;
+import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
@@ -104,7 +119,7 @@ public class TestHelper {
 
     public static SortedSet<DiscoveryNodeRole> ALL_ROLES = Collections
         .unmodifiableSortedSet(
-            new TreeSet<>(Arrays.asList(DATA_ROLE, INGEST_ROLE, CLUSTER_MANAGER_ROLE, REMOTE_CLUSTER_CLIENT_ROLE, SEARCH_ROLE, ML_ROLE))
+            new TreeSet<>(Arrays.asList(DATA_ROLE, INGEST_ROLE, CLUSTER_MANAGER_ROLE, REMOTE_CLUSTER_CLIENT_ROLE, WARM_ROLE, ML_ROLE))
         );
 
     public static XContentParser parser(String xc) throws IOException {
@@ -198,6 +213,17 @@ public class TestHelper {
     public static String httpEntityToString(HttpEntity entity) throws IOException {
         InputStream inputStream = entity.getContent();
         BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, "iso-8859-1"));
+        StringBuilder sb = new StringBuilder();
+        String line = null;
+        while ((line = reader.readLine()) != null) {
+            sb.append(line + "\n");
+        }
+        return sb.toString();
+    }
+
+    public static String httpEntityToString(HttpEntity entity, String charsetName) throws IOException {
+        InputStream inputStream = entity.getContent();
+        BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, charsetName));
         StringBuilder sb = new StringBuilder();
         String line = null;
         while ((line = reader.readLine()) != null) {
@@ -358,12 +384,33 @@ public class TestHelper {
             .build();
     }
 
+    public static RestRequest getAnomalyLocalizationRestRequest() {
+        Map<String, String> params = new HashMap<>();
+        params.put(PARAMETER_ALGORITHM, FunctionName.ANOMALY_LOCALIZATION.name());
+        final String requestContent = "{"
+            + "\"input_data\": {"
+            + "\"index_name\": \"test-index\","
+            + "\"attribute_field_names\": [\"attribute\"],"
+            + "\"time_field_name\": \"timestamp\","
+            + "\"start_time\": 1620630000000,"
+            + "\"end_time\": 1621234800000,"
+            + "\"min_time_interval\": 86400000,"
+            + "\"num_outputs\": 1"
+            + "}"
+            + "}";
+        RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
+            .withParams(params)
+            .withContent(new BytesArray(requestContent), XContentType.JSON)
+            .build();
+        return request;
+    }
+
     public static RestRequest getExecuteAgentRestRequest() {
         Map<String, String> params = new HashMap<>();
         params.put(PARAMETER_AGENT_ID, "test_agent_id");
         final String requestContent = "{\"name\":\"Test_Agent_For_RAG\",\"type\":\"flow\","
             + "\"description\":\"this is a test agent\",\"app_type\":\"my app\","
-            + "\"tools\":[{\"type\":\"CatIndexTool\",\"name\":\"CatIndexTool\","
+            + "\"tools\":[{\"type\":\"ListIndexTool\",\"name\":\"ListIndexTool\","
             + "\"description\":\"Use this tool to get OpenSearch index information: "
             + "(health, status, index, uuid, primary count, replica count, docs.count, docs.deleted, "
             + "store.size, primary.store.size).\",\"include_output_in_agent_response\":true}]}";
@@ -375,7 +422,11 @@ public class TestHelper {
     }
 
     public static RestRequest getSearchAllRestRequest() {
+        String tenantId = "test-tenant";
+        Map<String, List<String>> headers = new HashMap<>();
+        headers.put(Constants.TENANT_ID_HEADER, Collections.singletonList(tenantId));
         RestRequest request = new FakeRestRequest.Builder(getXContentRegistry())
+            .withHeaders(headers)
             .withContent(new BytesArray(TestData.matchAllSearchQuery()), XContentType.JSON)
             .build();
         return request;
@@ -405,6 +456,7 @@ public class TestHelper {
         entries.add(KMeansParams.XCONTENT_REGISTRY);
         entries.add(LocalSampleCalculatorInput.XCONTENT_REGISTRY);
         entries.add(MetricsCorrelationInput.XCONTENT_REGISTRY);
+        entries.add(AnomalyLocalizationInput.XCONTENT_REGISTRY_ENTRY);
         return new NamedXContentRegistry(entries);
     }
 
@@ -421,7 +473,7 @@ public class TestHelper {
             discoBuilder.add(node);
         }
         if (clusterManagerNode != null) {
-            discoBuilder.masterNodeId(clusterManagerNode.getId());
+            discoBuilder.clusterManagerNodeId(clusterManagerNode.getId());
         }
         discoBuilder.localNodeId(localNode.getId());
 
@@ -552,5 +604,56 @@ public class TestHelper {
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .build();
         return request;
+    }
+
+    public static void mockClientStashContext(Client client, Settings settings) {
+        ThreadPool threadPool = mock(ThreadPool.class);
+        ThreadContext threadContext = new ThreadContext(settings);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+        when(client.threadPool()).thenReturn(threadPool);
+    }
+
+    public static SearchResponse createSearchResponse(ToXContent toXContent, int size) throws IOException {
+        if (size == 0) {
+            return new SearchResponse(
+                new InternalSearchResponse(
+                    new SearchHits(new SearchHit[0], new TotalHits(0, TotalHits.Relation.EQUAL_TO), 1.0f),
+                    InternalAggregations.EMPTY,
+                    new Suggest(Collections.emptyList()),
+                    new SearchProfileShardResults(Collections.emptyMap()),
+                    false,
+                    false,
+                    1
+                ),
+                "",
+                1,
+                1,
+                0,
+                100,
+                ShardSearchFailure.EMPTY_ARRAY,
+                SearchResponse.Clusters.EMPTY
+            );
+        }
+        XContentBuilder content = toXContent.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
+        SearchHit[] hits = new SearchHit[size];
+        hits[0] = new SearchHit(0).sourceRef(BytesReference.bytes(content));
+        return new SearchResponse(
+            new InternalSearchResponse(
+                new SearchHits(hits, new TotalHits(size, TotalHits.Relation.EQUAL_TO), 1.0f),
+                InternalAggregations.EMPTY,
+                new Suggest(Collections.emptyList()),
+                new SearchProfileShardResults(Collections.emptyMap()),
+                false,
+                false,
+                1
+            ),
+            "",
+            1,
+            1,
+            0,
+            100,
+            ShardSearchFailure.EMPTY_ARRAY,
+            SearchResponse.Clusters.EMPTY
+        );
     }
 }

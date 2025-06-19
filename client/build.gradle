@@ -17,8 +17,9 @@ dependencies {
     implementation project(path: ":${rootProject.name}-spi", configuration: 'shadow')
     implementation project(path: ":${rootProject.name}-common", configuration: 'shadow')
     compileOnly group: 'org.opensearch', name: 'opensearch', version: "${opensearch_version}"
+    testImplementation "org.opensearch.test:framework:${opensearch_version}"
     testImplementation group: 'junit', name: 'junit', version: '4.13.2'
-    testImplementation group: 'org.mockito', name: 'mockito-core', version: '5.7.0'
+    testImplementation group: 'org.mockito', name: 'mockito-core', version: '5.15.2'
 
 }
 
@@ -27,7 +28,7 @@ spotless {
         removeUnusedImports()
         importOrder 'java', 'javax', 'org', 'com'
 
-        eclipse().configFile rootProject.file('.eclipseformat.xml')
+        eclipse().withP2Mirrors(Map.of("https://download.eclipse.org/", "https://mirror.umd.edu/eclipse/")).configFile rootProject.file('.eclipseformat.xml')
     }
 }
 

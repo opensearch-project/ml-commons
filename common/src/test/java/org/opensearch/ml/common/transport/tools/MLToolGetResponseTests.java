@@ -33,6 +33,7 @@ public class MLToolGetResponseTests {
             .description("Use this tool to calculate any math problem.")
             .type("MathTool")
             .version(null)
+            .attributes(null)
             .build();
 
         mlToolGetResponse = MLToolGetResponse.builder().toolMetadata(toolMetadata).build();

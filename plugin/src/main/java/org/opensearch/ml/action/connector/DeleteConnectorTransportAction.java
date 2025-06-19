@@ -7,9 +7,7 @@ package org.opensearch.ml.action.connector;
 
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
-import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -22,7 +20,6 @@ import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
-import org.opensearch.client.Client;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
@@ -32,10 +29,10 @@ import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.exception.MLValidationException;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.DeleteDataObjectRequest;
 import org.opensearch.remote.metadata.client.DeleteDataObjectResponse;
@@ -47,6 +44,7 @@ import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -137,9 +135,6 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
     private SearchDataObjectRequest buildModelSearchRequest(String connectorId, String tenantId) {
         SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
         sourceBuilder.query(QueryBuilders.matchQuery(MLModel.CONNECTOR_ID_FIELD, connectorId));
-        if (mlFeatureEnabledSetting.isMultiTenancyEnabled()) {
-            sourceBuilder.query(QueryBuilders.matchQuery(TENANT_ID_FIELD, tenantId));
-        }
 
         return SearchDataObjectRequest.builder().indices(ML_MODEL_INDEX).tenantId(tenantId).searchSourceBuilder(sourceBuilder).build();
     }
@@ -158,7 +153,8 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
         }
 
         try {
-            SearchResponse response = SearchResponse.fromXContent(searchResponse.parser());
+            SearchResponse response = searchResponse.searchResponse();
+            // Parsing failure would produce NPE on next line
             SearchHit[] searchHits = response.getHits().getHits();
 
             if (searchHits.length == 0) {
@@ -224,10 +220,10 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
             actionListener.onFailure(cause);
         } else {
             try {
-                DeleteResponse deleteResponse = DeleteResponse.fromXContent(response.parser());
+                DeleteResponse deleteResponse = response.deleteResponse();
                 log.info("Connector deletion result: {}, connector id: {}", deleteResponse.getResult(), response.id());
                 actionListener.onResponse(deleteResponse);
-            } catch (IOException e) {
+            } catch (Exception e) {
                 actionListener.onFailure(e);
             }
         }

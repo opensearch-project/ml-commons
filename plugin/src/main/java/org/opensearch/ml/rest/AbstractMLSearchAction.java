@@ -7,6 +7,7 @@ package org.opensearch.ml.rest;
 
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 import static org.opensearch.ml.utils.RestActionUtils.getSourceContext;
+import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -15,9 +16,10 @@ import java.util.List;
 import org.opensearch.action.ActionType;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
-import org.opensearch.client.node.NodeClient;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.ToXContentObject;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.common.transport.search.MLSearchActionRequest;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.BytesRestResponse;
 import org.opensearch.rest.RestChannel;
@@ -25,6 +27,7 @@ import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.RestResponse;
 import org.opensearch.rest.action.RestResponseListener;
 import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.transport.client.node.NodeClient;
 
 public abstract class AbstractMLSearchAction<T extends ToXContentObject> extends BaseRestHandler {
 
@@ -32,12 +35,20 @@ public abstract class AbstractMLSearchAction<T extends ToXContentObject> extends
     protected final String index;
     protected final Class<T> clazz;
     protected final ActionType<SearchResponse> actionType;
+    MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
-    public AbstractMLSearchAction(List<String> urlPaths, String index, Class<T> clazz, ActionType<SearchResponse> actionType) {
+    public AbstractMLSearchAction(
+        List<String> urlPaths,
+        String index,
+        Class<T> clazz,
+        ActionType<SearchResponse> actionType,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
+    ) {
         this.urlPaths = urlPaths;
         this.index = index;
         this.clazz = clazz;
         this.actionType = actionType;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
@@ -46,12 +57,18 @@ public abstract class AbstractMLSearchAction<T extends ToXContentObject> extends
         searchSourceBuilder.parseXContent(request.contentOrSourceParamParser());
         searchSourceBuilder.fetchSource(getSourceContext(request, searchSourceBuilder));
         searchSourceBuilder.seqNoAndPrimaryTerm(true).version(true);
+        String tenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
         SearchRequest searchRequest = new SearchRequest().source(searchSourceBuilder).indices(index);
-        return channel -> client.execute(actionType, searchRequest, search(channel));
+        MLSearchActionRequest mlSearchActionRequest = MLSearchActionRequest
+            .builder()
+            .searchRequest(searchRequest)
+            .tenantId(tenantId)
+            .build();
+        return channel -> client.execute(actionType, mlSearchActionRequest, search(channel));
     }
 
     protected RestResponseListener<SearchResponse> search(RestChannel channel) {
-        return new RestResponseListener<SearchResponse>(channel) {
+        return new RestResponseListener<>(channel) {
             @Override
             public RestResponse buildResponse(SearchResponse response) throws Exception {
                 if (response.isTimedOut()) {

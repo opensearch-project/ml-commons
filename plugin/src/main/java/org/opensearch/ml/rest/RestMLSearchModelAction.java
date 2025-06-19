@@ -9,6 +9,7 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 
 import org.opensearch.ml.common.MLModel;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
 
 import com.google.common.collect.ImmutableList;
@@ -20,8 +21,8 @@ public class RestMLSearchModelAction extends AbstractMLSearchAction<MLModel> {
     private static final String ML_SEARCH_MODEL_ACTION = "ml_search_model_action";
     private static final String SEARCH_MODEL_PATH = ML_BASE_URI + "/models/_search";
 
-    public RestMLSearchModelAction() {
-        super(ImmutableList.of(SEARCH_MODEL_PATH), ML_MODEL_INDEX, MLModel.class, MLModelSearchAction.INSTANCE);
+    public RestMLSearchModelAction(MLFeatureEnabledSetting mlFeatureEnabledSetting) {
+        super(ImmutableList.of(SEARCH_MODEL_PATH), ML_MODEL_INDEX, MLModel.class, MLModelSearchAction.INSTANCE, mlFeatureEnabledSetting);
     }
 
     @Override

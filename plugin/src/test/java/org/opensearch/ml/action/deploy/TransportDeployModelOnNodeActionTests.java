@@ -13,7 +13,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE;
 import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 
 import java.io.IOException;
@@ -37,7 +37,6 @@ import org.opensearch.Version;
 import org.opensearch.action.ActionListenerResponseHandler;
 import org.opensearch.action.FailedNodeException;
 import org.opensearch.action.support.ActionFilters;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.ClusterName;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.node.DiscoveryNode;
@@ -72,6 +71,7 @@ import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportException;
 import org.opensearch.transport.TransportResponseHandler;
 import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
 
 public class TransportDeployModelOnNodeActionTests extends OpenSearchTestCase {
 
@@ -381,7 +381,8 @@ public class TransportDeployModelOnNodeActionTests extends OpenSearchTestCase {
             3,
             coordinatingNodeId,
             true,
-            mlTask
+            mlTask,
+            null
         );
         return new MLDeployModelNodesRequest(nodeIds, deployModelInput);
     }

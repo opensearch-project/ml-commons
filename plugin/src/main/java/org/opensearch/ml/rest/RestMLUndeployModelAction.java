@@ -6,26 +6,28 @@
 package org.opensearch.ml.rest;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_ID;
 import static org.opensearch.ml.utils.RestActionUtils.getAllNodes;
+import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
 
 import org.apache.commons.lang3.ArrayUtils;
-import org.opensearch.client.node.NodeClient;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelInput;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsRequest;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
+import org.opensearch.transport.client.node.NodeClient;
 
 import com.google.common.collect.ImmutableList;
 
@@ -36,14 +38,16 @@ public class RestMLUndeployModelAction extends BaseRestHandler {
     private Settings settings;
 
     private boolean allowCustomDeploymentPlan;
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     /**
      * Constructor
      */
-    public RestMLUndeployModelAction(ClusterService clusterService, Settings settings) {
+    public RestMLUndeployModelAction(ClusterService clusterService, Settings settings, MLFeatureEnabledSetting mlFeatureEnabledSetting) {
         this.clusterService = clusterService;
         this.settings = settings;
         this.allowCustomDeploymentPlan = ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN.get(settings);
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
 
         clusterService
             .getClusterSettings()
@@ -82,6 +86,7 @@ public class RestMLUndeployModelAction extends BaseRestHandler {
 
     MLUndeployModelsRequest getRequest(RestRequest request) throws IOException {
         String modelId = request.param(PARAMETER_MODEL_ID);
+        String tenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
         String[] targetModelIds = null;
         if (modelId != null) {
             targetModelIds = new String[] { modelId };
@@ -109,6 +114,6 @@ public class RestMLUndeployModelAction extends BaseRestHandler {
             targetNodeIds = getAllNodes(clusterService);
         }
 
-        return new MLUndeployModelsRequest(targetModelIds, targetNodeIds);
+        return new MLUndeployModelsRequest(targetModelIds, targetNodeIds, tenantId);
     }
 }

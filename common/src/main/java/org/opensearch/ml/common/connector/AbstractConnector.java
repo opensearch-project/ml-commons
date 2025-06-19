@@ -37,7 +37,6 @@ public abstract class AbstractConnector implements Connector {
     public static final String DESCRIPTION_FIELD = "description";
     public static final String PROTOCOL_FIELD = "protocol";
     public static final String ACTIONS_FIELD = "actions";
-    public static final String CREDENTIAL_FIELD = "credential";
     public static final String PARAMETERS_FIELD = "parameters";
     public static final String CREATED_TIME_FIELD = "created_time";
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
@@ -83,7 +82,7 @@ public abstract class AbstractConnector implements Connector {
         for (String key : headers.keySet()) {
             decryptedHeaders.put(key, substitutor.replace(headers.get(key)));
         }
-        if (parameters != null && parameters.size() > 0) {
+        if (parameters != null && !parameters.isEmpty()) {
             substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
             for (String key : decryptedHeaders.keySet()) {
                 decryptedHeaders.put(key, substitutor.replace(decryptedHeaders.get(key)));
@@ -142,11 +141,11 @@ public abstract class AbstractConnector implements Connector {
     @Override
     public String getActionEndpoint(String action, Map<String, String> parameters) {
         Optional<ConnectorAction> actionEndpoint = findAction(action);
-        if (!actionEndpoint.isPresent()) {
+        if (actionEndpoint.isEmpty()) {
             return null;
         }
         String predictEndpoint = actionEndpoint.get().getUrl();
-        if (parameters != null && parameters.size() > 0) {
+        if (parameters != null && !parameters.isEmpty()) {
             StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
             predictEndpoint = substitutor.replace(predictEndpoint);
         }

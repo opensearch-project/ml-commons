@@ -9,21 +9,26 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.times;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_TASK_ID;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.junit.Before;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
 import org.opensearch.action.delete.DeleteResponse;
-import org.opensearch.client.node.NodeClient;
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.task.MLTaskDeleteAction;
 import org.opensearch.ml.common.transport.task.MLTaskDeleteRequest;
 import org.opensearch.rest.RestChannel;
@@ -33,6 +38,7 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
 import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.client.node.NodeClient;
 
 public class RestMLDeleteTaskActionTests extends OpenSearchTestCase {
 
@@ -42,11 +48,24 @@ public class RestMLDeleteTaskActionTests extends OpenSearchTestCase {
     private ThreadPool threadPool;
 
     @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
+    @Mock
     RestChannel channel;
+
+    Settings settings;
+
+    @Mock
+    private ClusterService clusterService;
 
     @Before
     public void setup() {
-        restMLDeleteTaskAction = new RestMLDeleteTaskAction();
+        MockitoAnnotations.openMocks(this);
+        settings = Settings.builder().put(ML_COMMONS_MULTI_TENANCY_ENABLED.getKey(), false).build();
+        when(clusterService.getSettings()).thenReturn(settings);
+        when(clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MULTI_TENANCY_ENABLED)));
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
+        restMLDeleteTaskAction = new RestMLDeleteTaskAction(mlFeatureEnabledSetting);
 
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
@@ -65,7 +84,7 @@ public class RestMLDeleteTaskActionTests extends OpenSearchTestCase {
     }
 
     public void testConstructor() {
-        RestMLDeleteTaskAction mlDeleteTaskAction = new RestMLDeleteTaskAction();
+        RestMLDeleteTaskAction mlDeleteTaskAction = new RestMLDeleteTaskAction(mlFeatureEnabledSetting);
         assertNotNull(mlDeleteTaskAction);
     }
 
@@ -97,7 +116,6 @@ public class RestMLDeleteTaskActionTests extends OpenSearchTestCase {
     private RestRequest getRestRequest() {
         Map<String, String> params = new HashMap<>();
         params.put(PARAMETER_TASK_ID, "test_id");
-        RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(params).build();
-        return request;
+        return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY).withParams(params).build();
     }
 }

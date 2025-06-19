@@ -5,8 +5,8 @@
 
 package org.opensearch.ml.task;
 
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_ML_TASK_PER_NODE;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TASK_DISPATCH_POLICY;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_ML_TASK_PER_NODE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TASK_DISPATCH_POLICY;
 
 import java.util.List;
 import java.util.Optional;
@@ -15,7 +15,6 @@ import java.util.stream.Collectors;
 
 import javax.naming.LimitExceededException;
 
-import org.opensearch.client.Client;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
@@ -26,6 +25,7 @@ import org.opensearch.ml.action.stats.MLStatsNodesRequest;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.stats.MLNodeLevelStat;
+import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableSet;
 
@@ -171,7 +171,7 @@ public class MLTaskDispatcher {
                 "No eligible node found to execute this request. It's best practice to"
                     + " provision ML nodes to serve your models. You can disable this setting to serve the model on your data"
                     + " node for development purposes by disabling the \"plugins.ml_commons.only_run_on_ml_node\" "
-                    + "configuration using the _cluster/setting api"
+                    + "configuration using the _cluster/settings api"
             );
         }
         dispatchTaskWithRoundRobin(eligibleNodes, listener);

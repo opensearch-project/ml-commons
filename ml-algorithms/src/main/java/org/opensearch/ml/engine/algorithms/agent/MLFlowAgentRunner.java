@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.apache.commons.text.StringEscapeUtils.escapeJson;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getToolName;
 
@@ -21,7 +22,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.action.StepListener;
 import org.opensearch.action.update.UpdateResponse;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.json.JsonXContent;
@@ -37,9 +37,12 @@ import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.transport.client.Client;
 
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -56,6 +59,8 @@ public class MLFlowAgentRunner implements MLAgentRunner {
     private NamedXContentRegistry xContentRegistry;
     private Map<String, Tool.Factory> toolFactories;
     private Map<String, Memory.Factory> memoryFactoryMap;
+    private SdkClient sdkClient;
+    private Encryptor encryptor;
 
     public MLFlowAgentRunner(
         Client client,
@@ -63,7 +68,9 @@ public class MLFlowAgentRunner implements MLAgentRunner {
         ClusterService clusterService,
         NamedXContentRegistry xContentRegistry,
         Map<String, Tool.Factory> toolFactories,
-        Map<String, Memory.Factory> memoryFactoryMap
+        Map<String, Memory.Factory> memoryFactoryMap,
+        SdkClient sdkClient,
+        Encryptor encryptor
     ) {
         this.client = client;
         this.settings = settings;
@@ -71,6 +78,8 @@ public class MLFlowAgentRunner implements MLAgentRunner {
         this.xContentRegistry = xContentRegistry;
         this.toolFactories = toolFactories;
         this.memoryFactoryMap = memoryFactoryMap;
+        this.sdkClient = sdkClient;
+        this.encryptor = encryptor;
     }
 
     @SuppressWarnings("removal")
@@ -83,7 +92,7 @@ public class MLFlowAgentRunner implements MLAgentRunner {
         Map<String, String> firstToolExecuteParams = null;
         StepListener<Object> previousStepListener = null;
         Map<String, Object> additionalInfo = new ConcurrentHashMap<>();
-        if (toolSpecs == null || toolSpecs.size() == 0) {
+        if (toolSpecs == null || toolSpecs.isEmpty()) {
             listener.onFailure(new IllegalArgumentException("no tool configured"));
             return;
         }
@@ -95,11 +104,11 @@ public class MLFlowAgentRunner implements MLAgentRunner {
         for (int i = 0; i <= toolSpecs.size(); i++) {
             if (i == 0) {
                 MLToolSpec toolSpec = toolSpecs.get(i);
-                Tool tool = createTool(toolSpec);
+                Tool tool = createTool(toolSpec, mlAgent.getTenantId());
                 firstStepListener = new StepListener<>();
                 previousStepListener = firstStepListener;
                 firstTool = tool;
-                firstToolExecuteParams = getToolExecuteParams(toolSpec, params);
+                firstToolExecuteParams = getToolExecuteParams(toolSpec, params, mlAgent.getTenantId());
             } else {
                 MLToolSpec previousToolSpec = toolSpecs.get(i - 1);
                 StepListener<Object> nextStepListener = new StepListener<>();
@@ -130,8 +139,8 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                         if (memoryId == null || parentInteractionId == null || memorySpec == null || memorySpec.getType() == null) {
                             listener.onResponse(flowAgentOutput);
                         } else {
-                            ActionListener updateListener = ActionListener.<UpdateResponse>wrap(updateResponse -> {
-                                log.info("Updated additional info for interaction ID: " + updateResponse.getId() + " in the flow agent.");
+                            ActionListener<UpdateResponse> updateListener = ActionListener.wrap(updateResponse -> {
+                                log.info("Updated additional info for interaction ID: {} in the flow agent.", updateResponse.getId());
                                 listener.onResponse(flowAgentOutput);
                             }, e -> {
                                 log.error("Failed to update root interaction", e);
@@ -143,9 +152,9 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                     }
 
                     MLToolSpec toolSpec = toolSpecs.get(finalI);
-                    Tool tool = createTool(toolSpec);
+                    Tool tool = createTool(toolSpec, mlAgent.getTenantId());
                     if (finalI < toolSpecs.size()) {
-                        tool.run(getToolExecuteParams(toolSpec, params), nextStepListener);
+                        tool.run(getToolExecuteParams(toolSpec, params, mlAgent.getTenantId()), nextStepListener);
                     }
 
                 }, e -> {
@@ -175,7 +184,7 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                 ActionListener
                     .wrap(
                         memory -> updateInteraction(additionalInfo, interactionId, memory),
-                        e -> log.error("Failed create memory from id: " + memoryId, e)
+                        e -> log.error("Failed create memory from id: {}", memoryId, e)
                     )
             );
     }
@@ -199,7 +208,7 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                 ActionListener
                     .wrap(
                         memory -> updateInteractionWithListener(additionalInfo, interactionId, memory, listener),
-                        e -> log.error("Failed create memory from id: " + memoryId, e)
+                        e -> log.error("Failed create memory from id: {}", memoryId, e)
                     )
             );
     }
@@ -212,8 +221,8 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                 interactionId,
                 ImmutableMap.of(ActionConstants.ADDITIONAL_INFO_FIELD, additionalInfo),
                 ActionListener.<UpdateResponse>wrap(updateResponse -> {
-                    log.info("Updated additional info for interaction ID: " + interactionId);
-                }, e -> { log.error("Failed to update root interaction", e); })
+                    log.info("Updated additional info for interaction ID: {}", interactionId);
+                }, e -> log.error("Failed to update root interaction", e))
             );
     }
 
@@ -231,8 +240,8 @@ public class MLFlowAgentRunner implements MLAgentRunner {
 
     @VisibleForTesting
     String parseResponse(Object output) throws IOException {
-        if (output instanceof List && !((List) output).isEmpty() && ((List) output).get(0) instanceof ModelTensors) {
-            ModelTensors tensors = (ModelTensors) ((List) output).get(0);
+        if (output instanceof List && !((List<?>) output).isEmpty() && ((List<?>) output).get(0) instanceof ModelTensors) {
+            ModelTensors tensors = (ModelTensors) ((List<?>) output).get(0);
             return tensors.toXContent(JsonXContent.contentBuilder(), null).toString();
         } else if (output instanceof ModelTensor) {
             return ((ModelTensor) output).toXContent(JsonXContent.contentBuilder(), null).toString();
@@ -248,11 +257,12 @@ public class MLFlowAgentRunner implements MLAgentRunner {
     }
 
     @VisibleForTesting
-    Tool createTool(MLToolSpec toolSpec) {
+    Tool createTool(MLToolSpec toolSpec, String tenantId) {
         Map<String, String> toolParams = new HashMap<>();
         if (toolSpec.getParameters() != null) {
             toolParams.putAll(toolSpec.getParameters());
         }
+        toolParams.put(TENANT_ID_FIELD, tenantId);
         if (!toolFactories.containsKey(toolSpec.getType())) {
             throw new IllegalArgumentException("Tool not found: " + toolSpec.getType());
         }
@@ -268,7 +278,7 @@ public class MLFlowAgentRunner implements MLAgentRunner {
     }
 
     @VisibleForTesting
-    Map<String, String> getToolExecuteParams(MLToolSpec toolSpec, Map<String, String> params) {
+    Map<String, String> getToolExecuteParams(MLToolSpec toolSpec, Map<String, String> params, String tenantId) {
         Map<String, String> executeParams = new HashMap<>();
         if (toolSpec.getParameters() != null) {
             executeParams.putAll(toolSpec.getParameters());
@@ -291,6 +301,8 @@ public class MLFlowAgentRunner implements MLAgentRunner {
         if (toolSpec.getConfigMap() != null && !toolSpec.getConfigMap().isEmpty()) {
             executeParams.putAll(toolSpec.getConfigMap());
         }
+
+        executeParams.put(TENANT_ID_FIELD, tenantId);
 
         if (executeParams.containsKey("input")) {
             String input = executeParams.get("input");

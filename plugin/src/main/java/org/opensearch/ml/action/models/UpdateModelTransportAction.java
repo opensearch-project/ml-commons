@@ -9,7 +9,7 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.FunctionName.REMOTE;
 import static org.opensearch.ml.common.FunctionName.TEXT_EMBEDDING;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -30,7 +30,6 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
@@ -48,6 +47,7 @@ import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.controller.MLRateLimiter;
 import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model.MLUpdateModelAction;
 import org.opensearch.ml.common.transport.model.MLUpdateModelInput;
 import org.opensearch.ml.common.transport.model.MLUpdateModelRequest;
@@ -59,7 +59,6 @@ import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -67,6 +66,7 @@ import org.opensearch.remote.metadata.client.UpdateDataObjectRequest;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -283,6 +283,16 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
             if (newConnectorId == null) {
                 if (updateModelInput.getConnector() != null) {
                     Connector connector = mlModel.getConnector();
+                    if (connector == null) {
+                        wrappedListener
+                            .onFailure(
+                                new OpenSearchStatusException(
+                                    "Cannot update connector settings for this model. The model was created with a connector_id and does not have an inline connector.",
+                                    RestStatus.BAD_REQUEST
+                                )
+                            );
+                        return;
+                    }
                     connector.update(updateModelInput.getConnector(), mlEngine::encrypt);
                     connector.validateConnectorURL(trustedConnectorEndpointsRegex);
                     updateModelInput.setUpdatedConnector(connector);
@@ -450,8 +460,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         sdkClient.updateDataObjectAsync(updateDataObjectRequest).whenComplete((ur, ut) -> {
             if (ut == null) {
                 try {
-                    UpdateResponse updateResponse = ur.parser() == null ? null : UpdateResponse.fromXContent(ur.parser());
-                    updateListener.onResponse(updateResponse);
+                    updateListener.onResponse(ur.updateResponse());
                 } catch (Exception e) {
                     updateListener.onFailure(e);
                 }
@@ -503,8 +512,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                 sdkClient.updateDataObjectAsync(updateDataObjectRequest).whenComplete((ur, ut) -> {
                     if (ut == null) {
                         try {
-                            UpdateResponse updateResponse = ur.parser() == null ? null : UpdateResponse.fromXContent(ur.parser());
-                            updateListener.onResponse(updateResponse);
+                            updateListener.onResponse(ur.updateResponse());
                         } catch (Exception e) {
                             updateListener.onFailure(e);
                         }

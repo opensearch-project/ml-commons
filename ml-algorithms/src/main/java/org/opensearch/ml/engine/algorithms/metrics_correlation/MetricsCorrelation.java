@@ -5,9 +5,9 @@
 
 package org.opensearch.ml.engine.algorithms.metrics_correlation;
 
-import static org.opensearch.action.support.WriteRequest.RefreshPolicy.IMMEDIATE;
 import static org.opensearch.index.query.QueryBuilders.termQuery;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX_MAPPING_PATH;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.common.MLModel.MODEL_STATE_FIELD;
 
@@ -25,7 +25,6 @@ import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.search.SearchRequest;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.action.ActionFuture;
 import org.opensearch.common.settings.Settings;
@@ -39,7 +38,6 @@ import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.MLTask;
@@ -70,6 +68,7 @@ import org.opensearch.ml.common.transport.task.MLTaskGetResponse;
 import org.opensearch.ml.engine.algorithms.DLModelExecute;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.transport.client.Client;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -131,7 +130,7 @@ public class MetricsCorrelation extends DLModelExecute {
             if (!hasModelGroupIndex) { // Create model group index if it doesn't exist
                 try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                     CreateIndexRequest request = new CreateIndexRequest(ML_MODEL_GROUP_INDEX)
-                        .mapping(MLIndex.MODEL_GROUP.getMapping(), XContentType.JSON);
+                        .mapping(ML_MODEL_GROUP_INDEX_MAPPING_PATH, XContentType.JSON);
                     CreateIndexResponse createIndexResponse = client.admin().indices().create(request).actionGet(1000);
                     if (!createIndexResponse.isAcknowledged()) {
                         throw new MLException("Failed to create model group index");
@@ -270,7 +269,6 @@ public class MetricsCorrelation extends DLModelExecute {
             XContentBuilder builder = XContentBuilder.builder(XContentType.JSON.xContent());
             modelGroup.toXContent(builder, ToXContent.EMPTY_PARAMS);
             createModelGroupRequest.source(builder);
-            createModelGroupRequest.setRefreshPolicy(IMMEDIATE);
             client.index(createModelGroupRequest, ActionListener.runBefore(ActionListener.wrap(r -> {
                 client.execute(MLRegisterModelAction.INSTANCE, registerRequest, ActionListener.wrap(listener::onResponse, e -> {
                     log.error("Failed to Register Model", e);
@@ -358,7 +356,7 @@ public class MetricsCorrelation extends DLModelExecute {
     }
 
     public MLTask getTask(String taskId) {
-        MLTaskGetRequest getRequest = new MLTaskGetRequest(taskId);
+        MLTaskGetRequest getRequest = new MLTaskGetRequest(taskId, null);
         MLTaskGetResponse response = client.execute(MLTaskGetAction.INSTANCE, getRequest).actionGet(10000);
         return response.getMlTask();
     }

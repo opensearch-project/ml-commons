@@ -9,8 +9,6 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_INDEX;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_MODEL_GROUP_ID;
 
-import java.io.IOException;
-
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
@@ -19,7 +17,6 @@ import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -31,10 +28,10 @@ import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.common.exception.MLValidationException;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.DeleteDataObjectRequest;
@@ -46,6 +43,7 @@ import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
 
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
@@ -156,7 +154,8 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
         }
 
         try {
-            SearchResponse response = SearchResponse.fromXContent(searchResponse.parser());
+            SearchResponse response = searchResponse.searchResponse();
+            // Parsing failure would cause NPE on next line
             if (response.getHits().getHits().length == 0) {
                 DeleteRequest deleteRequest = new DeleteRequest(ML_MODEL_GROUP_INDEX, modelGroupId);
                 deleteModelGroup(deleteRequest, tenantId, listener);
@@ -210,10 +209,10 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
             actionListener.onFailure(cause);
         } else {
             try {
-                DeleteResponse deleteResponse = DeleteResponse.fromXContent(response.parser());
+                DeleteResponse deleteResponse = response.deleteResponse();
                 log.debug("Completed Delete Model Group Request, model group id:{} deleted", response.id());
                 actionListener.onResponse(deleteResponse);
-            } catch (IOException e) {
+            } catch (Exception e) {
                 actionListener.onFailure(e);
             }
         }

@@ -5,11 +5,13 @@
 package org.opensearch.ml.processor;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.utils.StringUtils.toJson;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.INPUT_MAP;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.MAX_PREDICTION_TASKS;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.MODEL_CONFIG;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.MODEL_ID;
 import static org.opensearch.ml.processor.InferenceProcessorAttributes.OUTPUT_MAP;
+import static org.opensearch.ml.processor.ModelExecutor.combineMaps;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -25,10 +27,10 @@ import org.apache.logging.log4j.Logger;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.support.GroupedActionListener;
-import org.opensearch.client.Client;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.util.CollectionUtils;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ingest.ConfigurationUtils;
@@ -42,11 +44,15 @@ import org.opensearch.search.pipeline.AbstractProcessor;
 import org.opensearch.search.pipeline.PipelineProcessingContext;
 import org.opensearch.search.pipeline.Processor;
 import org.opensearch.search.pipeline.SearchRequestProcessor;
+import org.opensearch.transport.client.Client;
 
 import com.jayway.jsonpath.Configuration;
 import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.Option;
+import com.jayway.jsonpath.PathNotFoundException;
 import com.jayway.jsonpath.ReadContext;
+
+import lombok.Getter;
 
 /**
  * MLInferenceSearchRequestProcessor requires a modelId string to call model inferences
@@ -56,9 +62,14 @@ import com.jayway.jsonpath.ReadContext;
 public class MLInferenceSearchRequestProcessor extends AbstractProcessor implements SearchRequestProcessor, ModelExecutor {
     private final NamedXContentRegistry xContentRegistry;
     private static final Logger logger = LogManager.getLogger(MLInferenceSearchRequestProcessor.class);
+    @Getter
     private final InferenceProcessorAttributes inferenceProcessorAttributes;
     private final boolean ignoreMissing;
     private final String functionName;
+    @Getter
+    private final List<Map<String, String>> optionalInputMaps;
+    @Getter
+    private final List<Map<String, String>> optionalOutputMaps;
     private String queryTemplate;
     private final boolean fullResponsePath;
     private final boolean ignoreFailure;
@@ -76,12 +87,16 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
     // At default, ml inference processor allows maximum 10 prediction tasks running in parallel
     // it can be overwritten using max_prediction_tasks when creating processor
     public static final int DEFAULT_MAX_PREDICTION_TASKS = 10;
+    public static final String OPTIONAL_INPUT_MAP = "optional_input_map";
+    public static final String OPTIONAL_OUTPUT_MAP = "optional_output_map";
 
     protected MLInferenceSearchRequestProcessor(
         String modelId,
         String queryTemplate,
         List<Map<String, String>> inputMaps,
         List<Map<String, String>> outputMaps,
+        List<Map<String, String>> optionalInputMaps,
+        List<Map<String, String>> optionalOutputMaps,
         Map<String, String> modelConfigMaps,
         int maxPredictionTask,
         String tag,
@@ -102,6 +117,8 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
             modelConfigMaps,
             maxPredictionTask
         );
+        this.optionalInputMaps = optionalInputMaps;
+        this.optionalOutputMaps = optionalOutputMaps;
         this.ignoreMissing = ignoreMissing;
         this.functionName = functionName;
         this.fullResponsePath = fullResponsePath;
@@ -147,10 +164,9 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
             if (request.source() == null) {
                 throw new IllegalArgumentException("query body is empty, cannot processor inference on empty query request.");
             }
-
+            setRequestContextFromExt(request, requestContext);
             String queryString = request.source().toString();
-
-            rewriteQueryString(request, queryString, requestListener);
+            rewriteQueryString(request, queryString, requestListener, requestContext);
 
         } catch (Exception e) {
             if (ignoreFailure) {
@@ -164,28 +180,39 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
     /**
      * Rewrites the query string based on the input and output mappings and the ML model output.
      *
-     * @param request        the {@link SearchRequest} to be rewritten
-     * @param queryString    the original query string
+     * @param request         the {@link SearchRequest} to be rewritten
+     * @param queryString     the original query string
      * @param requestListener the {@link ActionListener} to be notified when the rewriting is complete
+     * @param requestContext
      * @throws IOException if an I/O error occurs during the rewriting process
      */
-    private void rewriteQueryString(SearchRequest request, String queryString, ActionListener<SearchRequest> requestListener)
-        throws IOException {
+    private void rewriteQueryString(
+        SearchRequest request,
+        String queryString,
+        ActionListener<SearchRequest> requestListener,
+        PipelineProcessingContext requestContext
+    ) throws IOException {
         List<Map<String, String>> processInputMap = inferenceProcessorAttributes.getInputMaps();
         List<Map<String, String>> processOutputMap = inferenceProcessorAttributes.getOutputMaps();
-        int inputMapSize = (processInputMap != null) ? processInputMap.size() : 0;
 
-        if (inputMapSize == 0) {
+        // Combine processInputMap and optionalInputMaps
+        List<Map<String, String>> combinedInputMaps = combineMaps(processInputMap, optionalInputMaps);
+        // Combine processOutputMap and optionalOutputMaps
+        List<Map<String, String>> combinedOutputMaps = combineMaps(processOutputMap, optionalOutputMaps);
+
+        int combinedInputMapSize = (combinedInputMaps != null) ? combinedInputMaps.size() : 0;
+
+        if (combinedInputMapSize == 0) {
             requestListener.onResponse(request);
             return;
         }
 
         try {
-            if (!validateQueryFieldInQueryString(processInputMap, processOutputMap, queryString)) {
+            if (!validateQueryFieldInQueryString(processInputMap, processOutputMap, queryString, ignoreMissing)) {
                 requestListener.onResponse(request);
             }
         } catch (Exception e) {
-            if (ignoreMissing) {
+            if (ignoreFailure) {
                 requestListener.onResponse(request);
                 return;
             } else {
@@ -198,15 +225,16 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
             request,
             queryString,
             requestListener,
-            processOutputMap
+            combinedOutputMaps,
+            requestContext
         );
         GroupedActionListener<Map<Integer, MLOutput>> batchPredictionListener = createBatchPredictionListener(
             rewriteRequestListener,
-            inputMapSize
+            combinedInputMapSize
         );
 
-        for (int inputMapIndex = 0; inputMapIndex < inputMapSize; inputMapIndex++) {
-            processPredictions(queryString, processInputMap, inputMapIndex, batchPredictionListener);
+        for (int inputMapIndex = 0; inputMapIndex < combinedInputMapSize; inputMapIndex++) {
+            processPredictions(queryString, combinedInputMaps, inputMapIndex, batchPredictionListener);
         }
 
     }
@@ -219,13 +247,15 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
      * @param queryString      the original query string
      * @param requestListener  the {@link ActionListener} to be notified when the query string or query template is updated
      * @param processOutputMap the list of output mappings
+     * @param requestContext   the requestContext can be carried over search processors into the search pipeline
      * @return an {@link ActionListener} that handles the response from the ML model inference
      */
     private ActionListener<Map<Integer, MLOutput>> createRewriteRequestListener(
         SearchRequest request,
         String queryString,
         ActionListener<SearchRequest> requestListener,
-        List<Map<String, String>> processOutputMap
+        List<Map<String, String>> processOutputMap,
+        PipelineProcessingContext requestContext
     ) {
         return new ActionListener<>() {
             @Override
@@ -237,12 +267,10 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
                     try {
                         if (queryTemplate == null) {
                             Object incomeQueryObject = JsonPath.parse(queryString).read("$");
-                            updateIncomeQueryObject(incomeQueryObject, outputMapping, mlOutput);
-                            SearchSourceBuilder searchSourceBuilder = getSearchSourceBuilder(
-                                xContentRegistry,
-                                StringUtils.toJson(incomeQueryObject)
-                            );
+                            updateIncomeQueryObject(incomeQueryObject, outputMapping, mlOutput, requestContext);
+                            SearchSourceBuilder searchSourceBuilder = getSearchSourceBuilder(xContentRegistry, toJson(incomeQueryObject));
                             request.source(searchSourceBuilder);
+
                             requestListener.onResponse(request);
                         } else {
                             String newQueryString = updateQueryTemplate(queryTemplate, outputMapping, mlOutput);
@@ -273,13 +301,56 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
                 }
             }
 
-            private void updateIncomeQueryObject(Object incomeQueryObject, Map<String, String> outputMapping, MLOutput mlOutput) {
+            /**
+             * Updates the income query object with values from the ML output based on the provided output mapping.
+             *
+             * This method iterates through the output mapping, retrieves corresponding values from the ML output,
+             * and updates the income query object accordingly. It also handles nested JSON structures and updates
+             * the request context with the new values.
+             *
+             * @param incomeQueryObject The object representing the income query to be updated.
+             * @param outputMapping A map containing the mapping between new query fields and model output field names.
+             * @param mlOutput The MLOutput object containing the results from the machine learning model.
+             * @param requestContext The context object for the current pipeline processing request.
+             *
+             * @throws IllegalArgumentException If a specified JSON path cannot be found in the query string.
+             *
+             * @implNote This method uses JsonPath for JSON manipulation and supports both regular and extended (ext) fields.
+             *           For extended fields, it creates nested structures if they don't exist.
+             *           The method also updates the request context with new field values for further processing.
+             *
+             * @see JsonPath
+             * @see PipelineProcessingContext
+             * @see MLOutput
+             */
+            private void updateIncomeQueryObject(
+                Object incomeQueryObject,
+                Map<String, String> outputMapping,
+                MLOutput mlOutput,
+                PipelineProcessingContext requestContext
+            ) {
                 for (Map.Entry<String, String> outputMapEntry : outputMapping.entrySet()) {
-                    String newQueryField = outputMapEntry.getKey();
-                    String modelOutputFieldName = outputMapEntry.getValue();
-                    Object modelOutputValue = getModelOutputValue(mlOutput, modelOutputFieldName, ignoreMissing, fullResponsePath);
-                    String jsonPathExpression = "$." + newQueryField;
-                    JsonPath.parse(incomeQueryObject).set(jsonPathExpression, modelOutputValue);
+                    String newQueryField = null;
+                    try {
+                        newQueryField = outputMapEntry.getKey();
+                        String modelOutputFieldName = outputMapEntry.getValue();
+                        Object modelOutputValue = getModelOutputValue(mlOutput, modelOutputFieldName, ignoreMissing, fullResponsePath);
+                        requestContext.setAttribute(newQueryField, modelOutputValue);
+
+                        // if output mapping is using jsonpath starts with $. or use dot path starts with ext.
+                        // to allow writing to search extension, try to prepare the path in the query,
+                        // for example {"ext":{"ml_inference":{}}}
+                        if (newQueryField.startsWith("$.ext.") || newQueryField.startsWith("ext.")) {
+                            incomeQueryObject = StringUtils.prepareNestedStructures(incomeQueryObject, newQueryField);
+                        }
+                        if (StringUtils.pathExists(incomeQueryObject, newQueryField)) {
+                            JsonPath.using(suppressExceptionConfiguration).parse(incomeQueryObject).set(newQueryField, modelOutputValue);
+                        }
+
+                    } catch (PathNotFoundException e) {
+                        logger.error("Failed to set {} in query string: {}", newQueryField, e.getMessage(), e);
+                        throw new IllegalArgumentException("can not find path " + newQueryField + "in query string");
+                    }
                 }
             }
 
@@ -289,6 +360,9 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
                     String newQueryField = outputMapEntry.getKey();
                     String modelOutputFieldName = outputMapEntry.getValue();
                     Object modelOutputValue = getModelOutputValue(mlOutput, modelOutputFieldName, ignoreMissing, fullResponsePath);
+                    if (modelOutputValue instanceof Map) {
+                        modelOutputValue = toJson(modelOutputValue);
+                    }
                     valuesMap.put(newQueryField, modelOutputValue);
                 }
                 StringSubstitutor sub = new StringSubstitutor(valuesMap);
@@ -300,12 +374,12 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
     /**
      * Creates a {@link GroupedActionListener} that collects the responses from multiple ML model inferences.
      *
-     * @param rewriteRequestListner the {@link ActionListener} to be notified when all ML model inferences are complete
+     * @param rewriteRequestListener the {@link ActionListener} to be notified when all ML model inferences are complete
      * @param inputMapSize  the number of input mappings
      * @return a {@link GroupedActionListener} that handles the responses from multiple ML model inferences
      */
     private GroupedActionListener<Map<Integer, MLOutput>> createBatchPredictionListener(
-        ActionListener<Map<Integer, MLOutput>> rewriteRequestListner,
+        ActionListener<Map<Integer, MLOutput>> rewriteRequestListener,
         int inputMapSize
     ) {
         return new GroupedActionListener<>(new ActionListener<>() {
@@ -315,15 +389,77 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
                 for (Map<Integer, MLOutput> mlOutputMap : mlOutputMapCollection) {
                     mlOutputMaps.putAll(mlOutputMap);
                 }
-                rewriteRequestListner.onResponse(mlOutputMaps);
+                rewriteRequestListener.onResponse(mlOutputMaps);
             }
 
             @Override
             public void onFailure(Exception e) {
                 logger.error("Prediction Failed:", e);
-                rewriteRequestListner.onFailure(e);
+                rewriteRequestListener.onFailure(e);
             }
         }, Math.max(inputMapSize, 1));
+    }
+
+    private boolean validateRequiredInputMappingFields(
+        List<Map<String, String>> processInputMap,
+        String queryString,
+        boolean ignoreMissing
+    ) {
+        // Suppress errors thrown by JsonPath and instead return null if a path does not exist in a JSON blob.
+        Configuration suppressExceptionConfiguration = Configuration.defaultConfiguration().addOptions(Option.SUPPRESS_EXCEPTIONS);
+        ReadContext jsonData = JsonPath.using(suppressExceptionConfiguration).parse(queryString);
+
+        // check all values if exists in query for required fields
+        for (Map<String, String> inputMap : processInputMap) {
+            for (Map.Entry<String, String> entry : inputMap.entrySet()) {
+                // the inputMap takes in model input as keys and query fields as value
+                String queryField = entry.getValue();
+                Object pathData = jsonData.read(queryField);
+                if (pathData == null) {
+                    if (!ignoreMissing) {
+                        throw new IllegalArgumentException(
+                            "cannot find field: " + queryField + " in query string: " + jsonData.jsonString()
+                        );
+                    } else {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
+    private boolean validateRequiredOutputMappingFields(
+        List<Map<String, String>> processOutputMap,
+        String queryString,
+        boolean ignoreMissing
+    ) {
+        // Suppress errors thrown by JsonPath and instead return null if a path does not exist in a JSON blob.
+        Configuration suppressExceptionConfiguration = Configuration.defaultConfiguration().addOptions(Option.SUPPRESS_EXCEPTIONS);
+        ReadContext jsonData = JsonPath.using(suppressExceptionConfiguration).parse(queryString);
+
+        // check all values if exists in query for required fields
+        if (queryTemplate == null) {
+            for (Map<String, String> outputMap : processOutputMap) {
+                for (Map.Entry<String, String> entry : outputMap.entrySet()) {
+                    String queryField = entry.getKey();
+                    // output writing to search extension can be new field
+                    if (queryField.startsWith("query.") || queryField.startsWith("$.query.")) {
+                        Object pathData = jsonData.read(queryField);
+                        if (pathData == null) {
+                            if (!ignoreMissing) {
+                                throw new IllegalArgumentException(
+                                    "cannot find field: " + queryField + " in query string: " + jsonData.jsonString()
+                                );
+                            } else {
+                                return false;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return true;
     }
 
     /**
@@ -332,51 +468,36 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
      * @param processInputMap  the list of input mappings
      * @param processOutputMap the list of output mappings
      * @param queryString      the query string to be validated
+     * @param ignoreMissing
      * @return true if all query fields exist in the query string, false otherwise
      */
     private boolean validateQueryFieldInQueryString(
         List<Map<String, String>> processInputMap,
         List<Map<String, String>> processOutputMap,
-        String queryString
+        String queryString,
+        boolean ignoreMissing
     ) {
-        // Suppress errors thrown by JsonPath and instead return null if a path does not exist in a JSON blob.
-        Configuration suppressExceptionConfiguration = Configuration.defaultConfiguration().addOptions(Option.SUPPRESS_EXCEPTIONS);
-        ReadContext jsonData = JsonPath.using(suppressExceptionConfiguration).parse(queryString);
+        if (!CollectionUtils.isEmpty(processInputMap)) {
+            if (!validateRequiredInputMappingFields(processInputMap, queryString, ignoreMissing)) {
+                return false;
+            }
+        }
 
-        // check all values if exists in query
-        for (Map<String, String> inputMap : processInputMap) {
-            for (Map.Entry<String, String> entry : inputMap.entrySet()) {
-                // the inputMap takes in model input as keys and query fields as value
-                String queryField = entry.getValue();
-                Object pathData = jsonData.read(queryField);
-                if (pathData == null) {
-                    throw new IllegalArgumentException("cannot find field: " + queryField + " in query string: " + jsonData.jsonString());
-                }
+        if (!CollectionUtils.isEmpty(processOutputMap)) {
+            if (!validateRequiredOutputMappingFields(processOutputMap, queryString, ignoreMissing)) {
+                return false;
             }
         }
-        if (queryTemplate == null) {
-            for (Map<String, String> outputMap : processOutputMap) {
-                for (Map.Entry<String, String> entry : outputMap.entrySet()) {
-                    String queryField = entry.getKey();
-                    Object pathData = jsonData.read(queryField);
-                    if (pathData == null) {
-                        throw new IllegalArgumentException(
-                            "cannot find field: " + queryField + " in query string: " + jsonData.jsonString()
-                        );
-                    }
-                }
-            }
-        }
+
         return true;
-
     }
 
     /**
      * Processes the ML model inference for a given input mapping index.
      *
-     * @param queryString            the original query string
-     * @param processInputMap        the list of input mappings
-     * @param inputMapIndex          the index of the input mapping to be processed
+     * @param queryString             the original query string
+     * @param processInputMap         the list of input mappings
+     * @param inputMapIndex           the index of the input mapping to be processed
      * @param batchPredictionListener the {@link GroupedActionListener} to be notified when the ML model inference is complete
      * @throws IOException if an I/O error occurs during the processing
      */
@@ -402,8 +523,10 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
                 // model field as key, query field name as value
                 String modelInputFieldName = entry.getKey();
                 String queryFieldName = entry.getValue();
-                String queryFieldValue = StringUtils.toJson(JsonPath.parse(newQuery).read(queryFieldName));
-                modelParameters.put(modelInputFieldName, queryFieldValue);
+                if (hasField(newQuery, queryFieldName)) {
+                    String queryFieldValue = toJson(JsonPath.parse(newQuery).read(queryFieldName));
+                    modelParameters.put(modelInputFieldName, queryFieldValue);
+                }
             }
         }
 
@@ -446,13 +569,18 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
     /**
      * Creates a SearchSourceBuilder instance from the given query string.
      *
+     * This method parses the provided query string, substitutes parameters, and constructs
+     * a SearchSourceBuilder object. It handles JSON content and performs variable substitution
+     * using a StringSubstitutor.
+     *
      * @param xContentRegistry the XContentRegistry instance to be used for parsing
-     * @param queryString    the query template string to be parsed
+     * @param queryString      the query template string to be parsed
      * @return a SearchSourceBuilder instance created from the query string
-     * @throws IOException if an I/O error occurs during parsing
+     * @throws IOException if an I/O error occurs during parsing or content creation
      */
     private static SearchSourceBuilder getSearchSourceBuilder(NamedXContentRegistry xContentRegistry, String queryString)
         throws IOException {
+
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
 
         XContentParser queryParser = XContentType.JSON
@@ -461,7 +589,9 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
         ensureExpectedToken(XContentParser.Token.START_OBJECT, queryParser.nextToken(), queryParser);
 
         searchSourceBuilder.parseXContent(queryParser);
+
         return searchSourceBuilder;
+
     }
 
     /**
@@ -517,8 +647,26 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
             String queryTemplate = ConfigurationUtils.readOptionalStringProperty(TYPE, processorTag, config, QUERY_TEMPLATE);
             Map<String, Object> modelConfigInput = ConfigurationUtils.readOptionalMap(TYPE, processorTag, config, MODEL_CONFIG);
 
-            List<Map<String, String>> inputMaps = ConfigurationUtils.readList(TYPE, processorTag, config, INPUT_MAP);
-            List<Map<String, String>> outputMaps = ConfigurationUtils.readList(TYPE, processorTag, config, OUTPUT_MAP);
+            List<Map<String, String>> inputMaps = ConfigurationUtils.readOptionalList(TYPE, processorTag, config, INPUT_MAP);
+            List<Map<String, String>> outputMaps = ConfigurationUtils.readOptionalList(TYPE, processorTag, config, OUTPUT_MAP);
+
+            List<Map<String, String>> optionalInputMaps = ConfigurationUtils
+                .readOptionalList(TYPE, processorTag, config, OPTIONAL_INPUT_MAP);
+            List<Map<String, String>> optionalOutputMaps = ConfigurationUtils
+                .readOptionalList(TYPE, processorTag, config, OPTIONAL_OUTPUT_MAP);
+
+            if (CollectionUtils.isEmpty(inputMaps) && CollectionUtils.isEmpty(optionalInputMaps)) {
+                throw new IllegalArgumentException(
+                    "Please provide at least one non-empty input_map or optional_input_map for ML Inference Search Request Processor"
+                );
+            }
+
+            if (CollectionUtils.isEmpty(outputMaps) && CollectionUtils.isEmpty(optionalOutputMaps)) {
+                throw new IllegalArgumentException(
+                    "Please provide at least one non-empty output_map or optional_output_map for ML Inference Search Request Processor"
+                );
+            }
+
             int maxPredictionTask = ConfigurationUtils
                 .readIntProperty(TYPE, processorTag, config, MAX_PREDICTION_TASKS, DEFAULT_MAX_PREDICTION_TASKS);
             boolean ignoreMissing = ConfigurationUtils.readBooleanProperty(TYPE, processorTag, config, IGNORE_MISSING, false);
@@ -537,22 +685,33 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
             boolean fullResponsePath = ConfigurationUtils
                 .readBooleanProperty(TYPE, processorTag, config, FULL_RESPONSE_PATH, defaultFullResponsePath);
 
-            ignoreFailure = ConfigurationUtils
-                .readBooleanProperty(TYPE, processorTag, config, ConfigurationUtils.IGNORE_FAILURE_KEY, false);
-
             // convert model config user input data structure to Map<String, String>
             Map<String, String> modelConfigMaps = null;
             if (modelConfigInput != null) {
                 modelConfigMaps = StringUtils.getParameterMap(modelConfigInput);
             }
+            // Combine processInputMap and optionalInputMaps
+            List<Map<String, String>> combinedInputMaps = ModelExecutor.combineMaps(inputMaps, optionalInputMaps);
+            // Combine processOutputMap and optionalOutputMaps
+            List<Map<String, String>> combinedOutputMaps = ModelExecutor.combineMaps(outputMaps, optionalOutputMaps);
+
             // check if the number of prediction tasks exceeds max prediction tasks
-            if (inputMaps != null && inputMaps.size() > maxPredictionTask) {
+            if (combinedInputMaps != null && combinedInputMaps.size() > maxPredictionTask) {
                 throw new IllegalArgumentException(
                     "The number of prediction task setting in this process is "
-                        + inputMaps.size()
+                        + combinedInputMaps.size()
                         + ". It exceeds the max_prediction_tasks of "
                         + maxPredictionTask
-                        + ". Please reduce the size of input_map or increase max_prediction_tasks."
+                        + ". Please reduce the size of input_map or optional_input_map or increase max_prediction_tasks."
+                );
+            }
+            if (combinedOutputMaps != null && combinedInputMaps != null && combinedOutputMaps.size() != combinedInputMaps.size()) {
+                throw new IllegalArgumentException(
+                    "when output_maps/optional_output_maps and input_maps/optional_input_maps are provided, their length needs to match. The input is in length of "
+                        + combinedInputMaps.size()
+                        + ", while output_maps is in the length of "
+                        + combinedOutputMaps.size()
+                        + ". Please adjust mappings."
                 );
             }
 
@@ -561,6 +720,8 @@ public class MLInferenceSearchRequestProcessor extends AbstractProcessor impleme
                 queryTemplate,
                 inputMaps,
                 outputMaps,
+                optionalInputMaps,
+                optionalOutputMaps,
                 modelConfigMaps,
                 maxPredictionTask,
                 processorTag,

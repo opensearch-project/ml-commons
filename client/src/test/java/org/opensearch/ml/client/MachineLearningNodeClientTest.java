@@ -48,7 +48,6 @@ import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.search.ShardSearchFailure;
-import org.opensearch.client.node.NodeClient;
 import org.opensearch.cluster.ClusterName;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.action.ActionListener;
@@ -147,6 +146,7 @@ import org.opensearch.search.aggregations.InternalAggregations;
 import org.opensearch.search.internal.InternalSearchResponse;
 import org.opensearch.search.profile.SearchProfileShardResults;
 import org.opensearch.search.suggest.Suggest;
+import org.opensearch.transport.client.node.NodeClient;
 
 public class MachineLearningNodeClientTest {
 
@@ -884,7 +884,7 @@ public class MachineLearningNodeClientTest {
         }).when(client).execute(eq(MLTaskDeleteAction.INSTANCE), any(), any());
 
         ArgumentCaptor<DeleteResponse> argumentCaptor = ArgumentCaptor.forClass(DeleteResponse.class);
-        machineLearningNodeClient.deleteTask(taskId, deleteTaskActionListener);
+        machineLearningNodeClient.deleteTask(taskId, null, deleteTaskActionListener);
 
         verify(client).execute(eq(MLTaskDeleteAction.INSTANCE), isA(MLTaskDeleteRequest.class), any());
         verify(deleteTaskActionListener).onResponse(argumentCaptor.capture());
@@ -909,7 +909,7 @@ public class MachineLearningNodeClientTest {
 
         verify(client).execute(eq(MLTaskSearchAction.INSTANCE), isA(SearchRequest.class), any());
         verify(searchTaskActionListener).onResponse(argumentCaptor.capture());
-        assertEquals(1, argumentCaptor.getValue().getHits().getTotalHits().value);
+        assertEquals(1, argumentCaptor.getValue().getHits().getTotalHits().value());
         Map<String, Object> source = argumentCaptor.getValue().getHits().getAt(0).getSourceAsMap();
         assertEquals(taskId, source.get(MLTask.TASK_ID_FIELD));
         assertEquals(modelId, source.get(MLTask.MODEL_ID_FIELD));
@@ -1182,7 +1182,7 @@ public class MachineLearningNodeClientTest {
 
         ArgumentCaptor<DeleteResponse> argumentCaptor = ArgumentCaptor.forClass(DeleteResponse.class);
 
-        machineLearningNodeClient.deleteAgent(agentId, deleteAgentActionListener);
+        machineLearningNodeClient.deleteAgent(agentId, null, deleteAgentActionListener);
 
         verify(client).execute(eq(MLAgentDeleteAction.INSTANCE), isA(MLAgentDeleteRequest.class), any());
         verify(deleteAgentActionListener).onResponse(argumentCaptor.capture());
@@ -1274,6 +1274,185 @@ public class MachineLearningNodeClientTest {
         verify(getMlConfigListener).onFailure(argumentCaptor.capture());
         assertEquals(RestStatus.FORBIDDEN, argumentCaptor.getValue().status());
         assertEquals("You are not allowed to access this config doc", argumentCaptor.getValue().getLocalizedMessage());
+    }
+
+    @Test
+    public void predict_withTenantId() {
+        String tenantId = "testTenant";
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> actionListener = invocation.getArgument(2);
+            MLPredictionOutput predictionOutput = MLPredictionOutput
+                .builder()
+                .status("Success")
+                .predictionResult(output)
+                .taskId("taskId")
+                .build();
+            actionListener.onResponse(MLTaskResponse.builder().output(predictionOutput).build());
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
+
+        ArgumentCaptor<MLPredictionTaskRequest> requestCaptor = ArgumentCaptor.forClass(MLPredictionTaskRequest.class);
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).inputDataset(input).build();
+        machineLearningNodeClient.predict("modelId", tenantId, mlInput, dataFrameActionListener);
+
+        verify(client).execute(eq(MLPredictionTaskAction.INSTANCE), requestCaptor.capture(), any());
+        assertEquals(tenantId, requestCaptor.getValue().getTenantId());
+        assertEquals("modelId", requestCaptor.getValue().getModelId());
+    }
+
+    @Test
+    public void getTask_withFailure() {
+        String taskId = "taskId";
+        String errorMessage = "Task not found";
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskGetResponse> actionListener = invocation.getArgument(2);
+            actionListener.onFailure(new IllegalArgumentException(errorMessage));
+            return null;
+        }).when(client).execute(eq(MLTaskGetAction.INSTANCE), any(), any());
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+
+        machineLearningNodeClient.getTask(taskId, new ActionListener<>() {
+            @Override
+            public void onResponse(MLTask mlTask) {
+                fail("Expected failure but got success");
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                assertEquals(errorMessage, e.getMessage());
+            }
+        });
+
+        verify(client).execute(eq(MLTaskGetAction.INSTANCE), isA(MLTaskGetRequest.class), any());
+    }
+
+    @Test
+    public void deploy_withTenantId() {
+        String modelId = "testModel";
+        String tenantId = "testTenant";
+        String taskId = "taskId";
+        String status = MLTaskState.CREATED.name();
+
+        doAnswer(invocation -> {
+            ActionListener<MLDeployModelResponse> actionListener = invocation.getArgument(2);
+            MLDeployModelResponse output = new MLDeployModelResponse(taskId, MLTaskType.DEPLOY_MODEL, status);
+            actionListener.onResponse(output);
+            return null;
+        }).when(client).execute(eq(MLDeployModelAction.INSTANCE), any(), any());
+
+        ArgumentCaptor<MLDeployModelRequest> requestCaptor = ArgumentCaptor.forClass(MLDeployModelRequest.class);
+        machineLearningNodeClient.deploy(modelId, tenantId, deployModelActionListener);
+
+        verify(client).execute(eq(MLDeployModelAction.INSTANCE), requestCaptor.capture(), any());
+        assertEquals(modelId, requestCaptor.getValue().getModelId());
+        assertEquals(tenantId, requestCaptor.getValue().getTenantId());
+    }
+
+    @Test
+    public void trainAndPredict_withNullInput() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("ML Input can't be null");
+
+        machineLearningNodeClient.trainAndPredict(null, trainingActionListener);
+    }
+
+    @Test
+    public void trainAndPredict_withNullDataSet() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("input data set can't be null");
+
+        MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).build();
+        machineLearningNodeClient.trainAndPredict(mlInput, trainingActionListener);
+    }
+
+    @Test
+    public void getTask_withTaskIdAndTenantId() {
+        String taskId = "taskId";
+        String tenantId = "testTenant";
+        String modelId = "modelId";
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskGetResponse> actionListener = invocation.getArgument(2);
+            MLTask mlTask = MLTask.builder().taskId(taskId).modelId(modelId).functionName(FunctionName.KMEANS).build();
+            MLTaskGetResponse output = MLTaskGetResponse.builder().mlTask(mlTask).build();
+            actionListener.onResponse(output);
+            return null;
+        }).when(client).execute(eq(MLTaskGetAction.INSTANCE), any(), any());
+
+        ArgumentCaptor<MLTaskGetRequest> requestCaptor = ArgumentCaptor.forClass(MLTaskGetRequest.class);
+        ArgumentCaptor<MLTask> taskCaptor = ArgumentCaptor.forClass(MLTask.class);
+
+        machineLearningNodeClient.getTask(taskId, tenantId, getTaskActionListener);
+
+        verify(client).execute(eq(MLTaskGetAction.INSTANCE), requestCaptor.capture(), any());
+        verify(getTaskActionListener).onResponse(taskCaptor.capture());
+
+        // Verify request parameters
+        assertEquals(taskId, requestCaptor.getValue().getTaskId());
+        assertEquals(tenantId, requestCaptor.getValue().getTenantId());
+
+        // Verify response
+        assertEquals(taskId, taskCaptor.getValue().getTaskId());
+        assertEquals(modelId, taskCaptor.getValue().getModelId());
+        assertEquals(FunctionName.KMEANS, taskCaptor.getValue().getFunctionName());
+    }
+
+    @Test
+    public void deleteTask_withTaskId() {
+        String taskId = "taskId";
+
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> actionListener = invocation.getArgument(2);
+            ShardId shardId = new ShardId(new Index("indexName", "uuid"), 1);
+            DeleteResponse output = new DeleteResponse(shardId, taskId, 1, 1, 1, true);
+            actionListener.onResponse(output);
+            return null;
+        }).when(client).execute(eq(MLTaskDeleteAction.INSTANCE), any(), any());
+
+        ArgumentCaptor<MLTaskDeleteRequest> requestCaptor = ArgumentCaptor.forClass(MLTaskDeleteRequest.class);
+        ArgumentCaptor<DeleteResponse> responseCaptor = ArgumentCaptor.forClass(DeleteResponse.class);
+
+        machineLearningNodeClient.deleteTask(taskId, deleteTaskActionListener);
+
+        verify(client).execute(eq(MLTaskDeleteAction.INSTANCE), requestCaptor.capture(), any());
+        verify(deleteTaskActionListener).onResponse(responseCaptor.capture());
+
+        // Verify request parameter
+        assertEquals(taskId, requestCaptor.getValue().getTaskId());
+
+        // Verify response
+        assertEquals(taskId, responseCaptor.getValue().getId());
+        assertEquals("DELETED", responseCaptor.getValue().getResult().toString());
+    }
+
+    @Test
+    public void deleteTask_withFailure() {
+        String taskId = "taskId";
+        String errorMessage = "Task deletion failed";
+
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> actionListener = invocation.getArgument(2);
+            actionListener.onFailure(new RuntimeException(errorMessage));
+            return null;
+        }).when(client).execute(eq(MLTaskDeleteAction.INSTANCE), any(), any());
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+
+        machineLearningNodeClient.deleteTask(taskId, new ActionListener<>() {
+            @Override
+            public void onResponse(DeleteResponse deleteResponse) {
+                fail("Expected failure but got success");
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                assertEquals(errorMessage, e.getMessage());
+            }
+        });
+
+        verify(client).execute(eq(MLTaskDeleteAction.INSTANCE), isA(MLTaskDeleteRequest.class), any());
     }
 
     private SearchResponse createSearchResponse(ToXContentObject o) throws IOException {

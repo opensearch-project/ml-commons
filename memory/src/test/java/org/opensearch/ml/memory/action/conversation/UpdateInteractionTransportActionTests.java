@@ -26,7 +26,6 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.update.UpdateResponse;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
@@ -34,12 +33,13 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.index.Index;
 import org.opensearch.core.index.shard.ShardId;
-import org.opensearch.ml.common.conversation.ConversationalIndexConstants;
+import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.memory.index.OpenSearchConversationalMemoryHandler;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
 
 public class UpdateInteractionTransportActionTests extends OpenSearchTestCase {
     private UpdateInteractionTransportAction updateInteractionTransportAction;
@@ -81,7 +81,7 @@ public class UpdateInteractionTransportActionTests extends OpenSearchTestCase {
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
         this.clusterService = Mockito.mock(ClusterService.class);
-        Settings settings = Settings.builder().put(ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED.getKey(), true).build();
+        Settings settings = Settings.builder().put(MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED.getKey(), true).build();
 
         threadContext = new ThreadContext(settings);
         this.threadContext = new ThreadContext(settings);
@@ -89,7 +89,7 @@ public class UpdateInteractionTransportActionTests extends OpenSearchTestCase {
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         when(this.clusterService.getSettings()).thenReturn(settings);
         when(this.clusterService.getClusterSettings())
-            .thenReturn(new ClusterSettings(settings, Set.of(ConversationalIndexConstants.ML_COMMONS_MEMORY_FEATURE_ENABLED)));
+            .thenReturn(new ClusterSettings(settings, Set.of(MLCommonsSettings.ML_COMMONS_MEMORY_FEATURE_ENABLED)));
         String interactionId = "test_interaction_id";
         Map<String, Object> updateContent = Map
             .of(INTERACTIONS_ADDITIONAL_INFO_FIELD, Map.of("feedback", "thumbs up!"), INTERACTIONS_RESPONSE_FIELD, "response");

@@ -5,6 +5,11 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
+import static org.opensearch.ml.common.CommonValue.MCP_CONNECTOR_ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.common.utils.StringUtils.isJson;
@@ -21,31 +26,66 @@ import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.THOUGH
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.THOUGHT_RESPONSE;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.TOOL_DESCRIPTIONS;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.TOOL_NAMES;
+import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.RESPONSE_FIELD;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.LAST_N_INTERACTIONS;
 
+import java.io.IOException;
+import java.lang.reflect.Type;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.apache.commons.text.StringSubstitutor;
+import org.opensearch.ExceptionsHelper;
+import org.opensearch.OpenSearchStatusException;
+import org.opensearch.action.get.GetResponse;
+import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
+import org.opensearch.common.xcontent.XContentHelper;
+import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
+import org.opensearch.core.common.bytes.BytesReference;
+import org.opensearch.core.rest.RestStatus;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
+import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.engine.MLEngineClassLoader;
+import org.opensearch.ml.engine.algorithms.remote.McpConnectorExecutor;
+import org.opensearch.ml.engine.encryptor.Encryptor;
+import org.opensearch.ml.engine.function_calling.FunctionCalling;
+import org.opensearch.ml.engine.tools.McpSseTool;
+import org.opensearch.remote.metadata.client.GetDataObjectRequest;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.common.SdkClientUtils;
+import org.opensearch.transport.client.Client;
+
+import com.google.gson.reflect.TypeToken;
+import com.jayway.jsonpath.DocumentContext;
+import com.jayway.jsonpath.JsonPath;
+import com.jayway.jsonpath.PathNotFoundException;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -61,6 +101,37 @@ public class AgentUtils {
     public static final String DISABLE_TRACE = "disable_trace";
     public static final String VERBOSE = "verbose";
     public static final String LLM_GEN_INPUT = "llm_generated_input";
+
+    public static final String LLM_RESPONSE_EXCLUDE_PATH = "llm_response_exclude_path";
+    public static final String LLM_RESPONSE_FILTER = "llm_response_filter";
+    public static final String TOOL_RESULT = "tool_result";
+    public static final String TOOL_CALL_ID = "tool_call_id";
+    public static final String LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE = "bedrock/converse/claude";
+    public static final String LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS = "openai/v1/chat/completions";
+    public static final String LLM_INTERFACE_BEDROCK_CONVERSE_DEEPSEEK_R1 = "bedrock/converse/deepseek_r1";
+
+    public static final String TOOL_CALLS_PATH = "tool_calls_path";
+    public static final String TOOL_CALLS_TOOL_NAME = "tool_calls.tool_name";
+    public static final String TOOL_CALLS_TOOL_INPUT = "tool_calls.tool_input";
+    public static final String TOOL_CALL_ID_PATH = "tool_calls.id_path";
+    private static final String NAME = "name";
+    private static final String DESCRIPTION = "description";
+
+    public static final String NO_ESCAPE_PARAMS = "no_escape_params";
+    public static final String TOOLS = "_tools";
+    public static final String TOOL_TEMPLATE = "tool_template";
+    public static final String INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS = "interaction_template.assistant_tool_calls";
+    public static final String INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS_PATH = "interaction_template.assistant_tool_calls_path";
+    public static final String INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS_EXCLUDE_PATH =
+        "interaction_template.assistant_tool_calls_exclude_path";
+    public static final String INTERACTIONS_PREFIX = "${_interactions.";
+    public static final String LLM_FINAL_RESPONSE_POST_FILTER = "llm_final_response_post_filter";
+    public static final String LLM_FINISH_REASON_PATH = "llm_finish_reason_path";
+    public static final String LLM_FINISH_REASON_TOOL_USE = "llm_finish_reason_tool_use";
+    public static final String TOOL_FILTERS_FIELD = "tool_filters";
+
+    // For function calling, do not escape the below params in connector by default
+    public static final String DEFAULT_NO_ESCAPE_PARAMS = "_chat_history,_tools,_interactions,tool_configs";
 
     public static String addExamplesToPrompt(Map<String, String> parameters, String prompt) {
         Map<String, String> examplesMap = new HashMap<>();
@@ -100,6 +171,49 @@ public class AgentUtils {
     }
 
     public static String addToolsToPrompt(Map<String, Tool> tools, Map<String, String> parameters, List<String> inputTools, String prompt) {
+        if (parameters.containsKey(TOOL_TEMPLATE)) {
+            return addToolsToFunctionCalling(tools, parameters, inputTools, prompt);
+        } else {
+            return addToolsToPromptString(tools, parameters, inputTools, prompt);
+        }
+    }
+
+    public static String addToolsToFunctionCalling(
+        Map<String, Tool> tools,
+        Map<String, String> parameters,
+        List<String> inputTools,
+        String prompt
+    ) {
+        String toolTemplate = parameters.get(TOOL_TEMPLATE);
+        List<String> toolInfos = new ArrayList<>();
+        for (String toolName : inputTools) {
+            if (!tools.containsKey(toolName)) {
+                throw new IllegalArgumentException("Tool [" + toolName + "] not registered for model");
+            }
+            Tool tool = tools.get(toolName);
+            Map<String, Object> toolParams = new HashMap<>();
+            toolParams.put(NAME, tool.getName());
+            toolParams.put(DESCRIPTION, tool.getDescription());
+            Map<String, ?> attributes = tool.getAttributes();
+            if (attributes != null) {
+                for (String key : attributes.keySet()) {
+                    toolParams.put("attributes." + key, attributes.get(key));
+                }
+            }
+            StringSubstitutor substitutor = new StringSubstitutor(toolParams, "${tool.", "}");
+            String chatQuestionMessage = substitutor.replace(toolTemplate);
+            toolInfos.add(chatQuestionMessage);
+        }
+        parameters.put(TOOLS, String.join(", ", toolInfos));
+        return prompt;
+    }
+
+    public static String addToolsToPromptString(
+        Map<String, Tool> tools,
+        Map<String, String> parameters,
+        List<String> inputTools,
+        String prompt
+    ) {
         StringBuilder toolsBuilder = new StringBuilder();
         StringBuilder toolNamesBuilder = new StringBuilder();
 
@@ -170,7 +284,7 @@ public class AgentUtils {
         Map<String, String> contextMap = new HashMap<>();
         contextMap.put(CONTEXT, parameters.getOrDefault(CONTEXT, ""));
         parameters.put(CONTEXT, contextMap.get(CONTEXT));
-        if (contextMap.size() > 0) {
+        if (!contextMap.isEmpty()) {
             StringSubstitutor substitutor = new StringSubstitutor(contextMap, "${parameters.", "}");
             return substitutor.replace(prompt);
         }
@@ -185,14 +299,21 @@ public class AgentUtils {
     }
 
     public static Map<String, String> parseLLMOutput(
+        Map<String, String> parameters,
         ModelTensorOutput tmpModelTensorOutput,
         List<String> llmResponsePatterns,
-        Set<String> inputTools
+        Set<String> inputTools,
+        List<String> interactions,
+        FunctionCalling functionCalling
     ) {
         Map<String, String> modelOutput = new HashMap<>();
         Map<String, ?> dataAsMap = tmpModelTensorOutput.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
-        if (dataAsMap.size() == 1 && dataAsMap.containsKey("response")) {
-            String llmReasoningResponse = (String) dataAsMap.get("response");
+        String llmResponseExcludePath = parameters.get(LLM_RESPONSE_EXCLUDE_PATH);
+        if (llmResponseExcludePath != null) {
+            dataAsMap = removeJsonPath(dataAsMap, llmResponseExcludePath, true);
+        }
+        if (dataAsMap.size() == 1 && dataAsMap.containsKey(RESPONSE_FIELD)) {
+            String llmReasoningResponse = (String) dataAsMap.get(RESPONSE_FIELD);
             String thoughtResponse = null;
             try {
                 thoughtResponse = extractModelResponseJson(llmReasoningResponse, llmResponsePatterns);
@@ -202,6 +323,93 @@ public class AgentUtils {
                 thoughtResponse = llmReasoningResponse;
             }
             parseThoughtResponse(modelOutput, thoughtResponse);
+        } else if (parameters.containsKey(TOOL_CALLS_PATH)) {
+            modelOutput.put(THOUGHT_RESPONSE, StringUtils.toJson(dataAsMap));
+            Object response;
+            boolean isToolUseResponse = false;
+            try {
+                response = JsonPath.read(dataAsMap, parameters.get(LLM_RESPONSE_FILTER));
+            } catch (PathNotFoundException e) {
+                // If the regular response path fails, try the tool calls path
+                response = JsonPath.read(dataAsMap, parameters.get(TOOL_CALLS_PATH));
+                isToolUseResponse = true;
+            }
+
+            String llmFinishReasonPath = parameters.get(LLM_FINISH_REASON_PATH);
+            String llmFinishReason = "";
+            if (llmFinishReasonPath.startsWith("_llm_response.")) {// TODO: support _llm_response for all other places
+                Map<String, Object> llmResponse = StringUtils.fromJson(response.toString(), RESPONSE_FIELD);
+                llmFinishReason = JsonPath.read(llmResponse, llmFinishReasonPath.substring("_llm_response.".length()));
+            } else {
+                llmFinishReason = JsonPath.read(dataAsMap, llmFinishReasonPath);
+            }
+            if (parameters.get(LLM_FINISH_REASON_TOOL_USE).equalsIgnoreCase(llmFinishReason) || isToolUseResponse) {
+                List<Map<String, String>> toolCalls = null;
+                try {
+                    String toolName = "";
+                    String toolInput = "";
+                    String toolCallId = "";
+                    if (functionCalling != null) {
+                        toolCalls = functionCalling.handle(tmpModelTensorOutput, parameters);
+                        // TODO: support multiple tool calls here
+                        toolName = toolCalls.getFirst().get("tool_name");
+                        toolInput = toolCalls.getFirst().get("tool_input");
+                        toolCallId = toolCalls.getFirst().get("tool_call_id");
+                    } else {
+                        String toolCallsPath = parameters.get(TOOL_CALLS_PATH);
+                        if (toolCallsPath.startsWith("_llm_response.")) {
+                            Map<String, Object> llmResponse = StringUtils.fromJson(response.toString(), RESPONSE_FIELD);
+                            toolCalls = JsonPath.read(llmResponse, toolCallsPath.substring("_llm_response.".length()));
+                        } else {
+                            toolCalls = JsonPath.read(dataAsMap, toolCallsPath);
+                        }
+                        toolName = JsonPath.read(toolCalls.get(0), parameters.get(TOOL_CALLS_TOOL_NAME));
+                        toolInput = StringUtils.toJson(JsonPath.read(toolCalls.get(0), parameters.get(TOOL_CALLS_TOOL_INPUT)));
+                        toolCallId = JsonPath.read(toolCalls.get(0), parameters.get(TOOL_CALL_ID_PATH));
+                    }
+                    String toolCallsMsgPath = parameters.get(INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS_PATH);
+                    String toolCallsMsgExcludePath = parameters.get(INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS_EXCLUDE_PATH);
+                    if (toolCallsMsgPath != null) {
+                        if (toolCallsMsgExcludePath != null) {
+                            Map<String, ?> newDataAsMap = removeJsonPath(dataAsMap, toolCallsMsgExcludePath, false);
+                            Object toolCallsMsg = JsonPath.read(newDataAsMap, toolCallsMsgPath);
+                            interactions.add(StringUtils.toJson(toolCallsMsg));
+                        } else {
+                            Object toolCallsMsg = JsonPath.read(dataAsMap, toolCallsMsgPath);
+                            interactions.add(StringUtils.toJson(toolCallsMsg));
+                        }
+
+                    } else {
+                        interactions
+                            .add(
+                                substitute(
+                                    parameters.get(INTERACTION_TEMPLATE_ASSISTANT_TOOL_CALLS),
+                                    Map.of("tool_calls", StringUtils.toJson(toolCalls)),
+                                    INTERACTIONS_PREFIX
+                                )
+                            );
+                    }
+                    modelOutput.put(THOUGHT, "");
+                    modelOutput.put(ACTION, toolName);
+                    modelOutput.put(ACTION_INPUT, toolInput);
+                    modelOutput.put(TOOL_CALL_ID, toolCallId);
+                } catch (PathNotFoundException e) {
+                    if (StringUtils.isJson(response.toString())) {
+                        Map<String, Object> llmResponse = StringUtils.fromJson(response.toString(), RESPONSE_FIELD);
+                        modelOutput.put(FINAL_ANSWER, StringUtils.toJson(postFilterFinalAnswer(parameters, llmResponse)));
+                    } else {
+                        modelOutput.put(FINAL_ANSWER, StringUtils.toJson(response));
+                    }
+                }
+            } else {
+                if (StringUtils.isJson(response.toString())) {
+                    Map<String, Object> llmResponse = StringUtils.fromJson(response.toString(), RESPONSE_FIELD);
+                    modelOutput.put(FINAL_ANSWER, StringUtils.toJson(postFilterFinalAnswer(parameters, llmResponse)));
+                } else {
+                    modelOutput.put(FINAL_ANSWER, StringUtils.toJson(response));
+                }
+
+            }
         } else {
             extractParams(modelOutput, dataAsMap, THOUGHT);
             extractParams(modelOutput, dataAsMap, ACTION);
@@ -226,6 +434,55 @@ public class AgentUtils {
             modelOutput.put(FINAL_ANSWER, modelOutput.get(THOUGHT_RESPONSE));
         }
         return modelOutput;
+    }
+
+    private static String postFilterFinalAnswer(Map<String, String> parameters, Map<String, Object> llmResponse) {
+        String filter = parameters.get(LLM_FINAL_RESPONSE_POST_FILTER);
+        if (filter != null) {
+            return StringUtils.toJson(JsonPath.read(llmResponse, filter));
+        }
+        return StringUtils.toJson(llmResponse);
+    }
+
+    public static Map<String, ?> removeJsonPath(Map<String, ?> json, String excludePaths, boolean inPlace) {
+        Type listType = new TypeToken<List<String>>() {
+        }.getType();
+        List<String> excludedPath = gson.fromJson(excludePaths, listType);
+        return removeJsonPath(json, excludedPath, inPlace);
+    }
+
+    public static Map<String, ?> removeJsonPath(Map<String, ?> json, List<String> excludePaths, boolean inPlace) {
+
+        if (json == null || excludePaths == null || excludePaths.isEmpty()) {
+            return json;
+        }
+        if (inPlace) {
+            DocumentContext context = JsonPath.parse(json);
+            for (String path : excludePaths) {
+                try {
+                    context.delete(path);
+                } catch (PathNotFoundException e) {
+                    log.warn("can't find path: {}", path);
+                }
+            }
+            return json;
+        } else {
+            Map<String, Object> copy = StringUtils.fromJson(gson.toJson(json), RESPONSE_FIELD);
+            DocumentContext context = JsonPath.parse(copy);
+            for (String path : excludePaths) {
+                try {
+                    context.delete(path);
+                } catch (PathNotFoundException e) {
+                    log.warn("can't find path: {}", path);
+                }
+            }
+            return context.json();
+        }
+    }
+
+    public static String substitute(String template, Map<String, String> params, String prefix) {
+        StringSubstitutor substitutor = new StringSubstitutor(params, prefix, "}");
+        return substitutor.replace(template);
     }
 
     public static String getMatchedTool(Collection<String> tools, String action) {
@@ -387,7 +644,11 @@ public class AgentUtils {
 
     public static List<MLToolSpec> getMlToolSpecs(MLAgent mlAgent, Map<String, String> params) {
         String selectedToolsStr = params.get(SELECTED_TOOLS);
-        List<MLToolSpec> toolSpecs = mlAgent.getTools();
+        List<MLToolSpec> toolSpecs = new ArrayList<>();
+        List<MLToolSpec> mlToolSpecs = mlAgent.getTools();
+        if (mlToolSpecs != null) {
+            toolSpecs.addAll(mlToolSpecs);
+        }
         if (!Strings.isEmpty(selectedToolsStr)) {
             List<String> selectedTools = gson.fromJson(selectedToolsStr, List.class);
             Map<String, MLToolSpec> toolNameSpecMap = new HashMap<>();
@@ -405,21 +666,194 @@ public class AgentUtils {
         return toolSpecs;
     }
 
+    public static void getMcpToolSpecs(
+        MLAgent mlAgent,
+        Client client,
+        SdkClient sdkClient,
+        Encryptor encryptor,
+        ActionListener<List<MLToolSpec>> finalListener
+    ) {
+        String tenantId = mlAgent.getTenantId();
+
+        String mcpConnectorConfigJSON = (mlAgent.getParameters() != null) ? mlAgent.getParameters().get(MCP_CONNECTORS_FIELD) : null;
+        // If mcpConnectorConfigJSON is null i.e no config for MCP Connectors, return an empty list
+        if (mcpConnectorConfigJSON == null) {
+            finalListener.onResponse(Collections.emptyList());
+            return;
+        }
+
+        Type listType = new TypeToken<List<Map<String, Object>>>() {
+        }.getType();
+        List<Map<String, Object>> mcpConnectorConfigs = gson.fromJson(mcpConnectorConfigJSON, listType);
+
+        // Use AtomicInteger to track completion of all async operations
+        AtomicInteger remainingConnectors = new AtomicInteger(mcpConnectorConfigs.size());
+        List<MLToolSpec> finalToolSpecs = Collections.synchronizedList(new ArrayList<>());
+
+        // We make multiple Async calls in for loop, which happen in parallel
+        for (Map<String, Object> mcpConnectorConfig : mcpConnectorConfigs) {
+            String connectorId = (String) mcpConnectorConfig.get(MCP_CONNECTOR_ID_FIELD);
+            List<String> toolFilters = (List<String>) mcpConnectorConfig.get(TOOL_FILTERS_FIELD);
+
+            getMCPToolSpecsFromConnector(connectorId, tenantId, sdkClient, client, encryptor, ActionListener.wrap(mcpToolspecs -> {
+                List<MLToolSpec> filteredTools;
+                if (toolFilters == null || toolFilters.isEmpty()) {
+                    filteredTools = mcpToolspecs;
+                } else {
+                    filteredTools = new ArrayList<>();
+                    List<Pattern> compiledPatterns = toolFilters.stream().map(Pattern::compile).collect(Collectors.toList());
+
+                    for (MLToolSpec toolSpec : mcpToolspecs) {
+                        for (Pattern pattern : compiledPatterns) {
+                            if (pattern.matcher(toolSpec.getName()).matches()) {
+                                filteredTools.add(toolSpec);
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                finalToolSpecs.addAll(filteredTools);
+
+                // If this is the last connector, send the final response
+                if (remainingConnectors.decrementAndGet() == 0) {
+                    finalListener.onResponse(finalToolSpecs);
+                }
+            }, e -> {
+                log.error("Error processing connector: " + connectorId, e);
+                // Even on error, we need to check if this is the last connector
+                if (remainingConnectors.decrementAndGet() == 0) {
+                    finalListener.onResponse(finalToolSpecs);
+                }
+            }));
+        }
+    }
+
+    private static void getMCPToolSpecsFromConnector(
+        String connectorId,
+        String tenantId,
+        SdkClient sdkClient,
+        Client client,
+        Encryptor encryptor,
+        ActionListener<List<MLToolSpec>> toolListener
+    ) {
+        getConnector(connectorId, tenantId, sdkClient, client, ActionListener.wrap(connector -> {
+            try {
+                if (!(connector instanceof McpConnector)) {
+                    log.error("Connector with ID " + connectorId + " is not of type McpConnector");
+                    toolListener.onResponse(Collections.emptyList());
+                    return;
+                }
+                connector.decrypt("", (credential, tid) -> encryptor.decrypt(credential, tenantId), tenantId);
+                McpConnectorExecutor connectorExecutor = MLEngineClassLoader
+                    .initInstance(connector.getProtocol(), connector, Connector.class);
+                List<MLToolSpec> mcpToolSpecs = connectorExecutor.getMcpToolSpecs();
+                toolListener.onResponse(mcpToolSpecs);
+            } catch (Exception e) {
+                log.error("Failed to get tools from connector: " + connectorId, e);
+                toolListener.onResponse(Collections.emptyList());
+            }
+        }, e -> {
+            log.error("Failed to get the MCP Connector: " + connectorId, e);
+            toolListener.onResponse(Collections.emptyList());
+        }));
+
+    }
+
+    public static void getConnector(
+        String connectorId,
+        String tenantId,
+        SdkClient sdkClient,
+        Client client,
+        ActionListener<Connector> listener
+    ) {
+        GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
+            .builder()
+            .index(ML_CONNECTOR_INDEX)
+            .id(connectorId)
+            .tenantId(tenantId)
+            .build();
+
+        try (ThreadContext.StoredContext ctx = client.threadPool().getThreadContext().stashContext()) {
+            sdkClient.getDataObjectAsync(getDataObjectRequest).whenComplete((r, throwable) -> {
+                log.debug("Completed Get Connector Request, id:{}", connectorId);
+                ctx.restore();
+                if (throwable != null) {
+                    Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                    if (ExceptionsHelper.unwrap(cause, IndexNotFoundException.class) != null) {
+                        log.error("Failed to get connector index", cause);
+                        listener.onFailure(new OpenSearchStatusException("Failed to find connector", RestStatus.NOT_FOUND));
+                    } else {
+                        log.error("Failed to get ML connector {}", connectorId, cause);
+                        listener.onFailure(cause);
+                    }
+                } else {
+                    try {
+                        GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
+                        if (gr != null && gr.isExists()) {
+                            try (
+                                XContentParser parser = createXContentParserFromRegistry(
+                                    NamedXContentRegistry.EMPTY,
+                                    gr.getSourceAsBytesRef()
+                                )
+                            ) {
+                                ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                                Connector connector = Connector.createConnector(parser);
+                                listener.onResponse(connector);
+                            } catch (Exception e) {
+                                log.error("Failed to parse connector:{}", connectorId);
+                                listener.onFailure(e);
+                            }
+                        } else {
+                            listener
+                                .onFailure(new OpenSearchStatusException("Failed to find connector:" + connectorId, RestStatus.NOT_FOUND));
+                        }
+                    } catch (Exception e) {
+                        listener.onFailure(e);
+                    }
+                }
+            });
+        }
+    }
+
+    public static XContentParser createXContentParserFromRegistry(NamedXContentRegistry xContentRegistry, BytesReference bytesReference)
+        throws IOException {
+        return XContentHelper.createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, bytesReference, XContentType.JSON);
+    }
+
     public static void createTools(
         Map<String, Tool.Factory> toolFactories,
         Map<String, String> params,
         List<MLToolSpec> toolSpecs,
         Map<String, Tool> tools,
-        Map<String, MLToolSpec> toolSpecMap
+        Map<String, MLToolSpec> toolSpecMap,
+        MLAgent mlAgent
     ) {
+        if (toolSpecs == null) {
+            return;
+        }
         for (MLToolSpec toolSpec : toolSpecs) {
-            Tool tool = createTool(toolFactories, params, toolSpec);
+            Tool tool = createTool(toolFactories, params, toolSpec, mlAgent.getTenantId());
             tools.put(tool.getName(), tool);
+            if (toolSpec.getAttributes() != null) {
+                if (tool.getAttributes() == null) {
+                    Map<String, Object> attributes = new HashMap<>();
+                    attributes.putAll(toolSpec.getAttributes());
+                    tool.setAttributes(attributes);
+                } else {
+                    tool.getAttributes().putAll(toolSpec.getAttributes());
+                }
+            }
             toolSpecMap.put(tool.getName(), toolSpec);
         }
     }
 
-    public static Tool createTool(Map<String, Tool.Factory> toolFactories, Map<String, String> params, MLToolSpec toolSpec) {
+    public static Tool createTool(
+        Map<String, Tool.Factory> toolFactories,
+        Map<String, String> params,
+        MLToolSpec toolSpec,
+        String tenantId
+    ) {
         if (!toolFactories.containsKey(toolSpec.getType())) {
             throw new IllegalArgumentException("Tool not found: " + toolSpec.getType());
         }
@@ -427,13 +861,20 @@ public class AgentUtils {
         if (toolSpec.getParameters() != null) {
             executeParams.putAll(toolSpec.getParameters());
         }
+        executeParams.put(TENANT_ID_FIELD, tenantId);
         for (String key : params.keySet()) {
             String toolNamePrefix = getToolName(toolSpec) + ".";
             if (key.startsWith(toolNamePrefix)) {
                 executeParams.put(key.replace(toolNamePrefix, ""), params.get(key));
             }
         }
-        Tool tool = toolFactories.get(toolSpec.getType()).create(executeParams);
+        Map<String, Object> toolParams = new HashMap<>();
+        toolParams.putAll(executeParams);
+        Map<String, Object> runtimeResources = toolSpec.getRuntimeResources();
+        if (runtimeResources != null) {
+            toolParams.putAll(runtimeResources);
+        }
+        Tool tool = toolFactories.get(toolSpec.getType()).create(toolParams);
         String toolName = getToolName(toolSpec);
         tool.setName(toolName);
 
@@ -494,5 +935,15 @@ public class AgentUtils {
             toolParams.put("input", actionInput);
         }
         return toolParams;
+    }
+
+    public static void cleanUpResource(Map<String, Tool> tools) {
+        for (Map.Entry<String, Tool> entry : tools.entrySet()) {
+            Tool tool = entry.getValue();
+            if (tool instanceof McpSseTool) {
+                // TODO: make this more general, avoid checking specific tool type
+                ((McpSseTool) tool).getMcpSyncClient().closeGracefully();
+            }
+        }
     }
 }

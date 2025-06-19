@@ -15,8 +15,10 @@ import static org.opensearch.ml.engine.helper.MLTestHelper.constructTestDataFram
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -43,6 +45,7 @@ import org.opensearch.ml.common.dataset.DataFrameInputDataset;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.input.execute.metricscorrelation.MetricsCorrelationInput;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
@@ -65,7 +68,7 @@ public class MLEngineTest extends MLStaticMockBase {
 
     @Before
     public void setUp() {
-        Encryptor encryptor = new EncryptorImpl("m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
+        Encryptor encryptor = new EncryptorImpl(null, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=");
         mlEngine = new MLEngine(Path.of("/tmp/test" + UUID.randomUUID()), encryptor);
     }
 
@@ -255,6 +258,17 @@ public class MLEngineTest extends MLStaticMockBase {
     }
 
     @Test
+    public void trainAndPredictWithMetricsCorrelationThrowsException() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Unsupported algorithm: METRICS_CORRELATION");
+        int dataSize = 100;
+        DataFrame dataFrame = constructTestDataFrame(dataSize);
+        MLInputDataset inputData = new DataFrameInputDataset(dataFrame);
+        Input input = new MLInput(FunctionName.METRICS_CORRELATION, null, inputData);
+        mlEngine.trainAndPredict(input);
+    }
+
+    @Test
     public void trainAndPredictWithInvalidInput() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("Input should be MLInput");
@@ -270,6 +284,18 @@ public class MLEngineTest extends MLStaticMockBase {
             assertEquals(3.0, output.getResult(), 1e-5);
         }, e -> { fail("Test failed"); });
         mlEngine.execute(input, listener);
+    }
+
+    @Test
+    public void executeWithMetricsCorrelationThrowsException() throws Exception {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Unsupported executable function: METRICS_CORRELATION");
+        List<float[]> inputData = new ArrayList<>();
+        inputData.add(new float[] { 1.0f, 2.0f, 3.0f, 4.0f });
+        inputData.add(new float[] { 1.0f, 2.0f, 3.0f, 4.0f });
+        inputData.add(new float[] { 1.0f, 2.0f, 3.0f, 4.0f });
+        Input input = MetricsCorrelationInput.builder().inputData(inputData).build();
+        mlEngine.execute(input, null);
     }
 
     @Test
@@ -355,15 +381,39 @@ public class MLEngineTest extends MLStaticMockBase {
     }
 
     @Test
-    public void getDeployModelPath_ReturnsCorrectPath() {
+    public void getPathAPIs_ReturnsCorrectPath() {
         String modelId = "deployedModel";
 
         // Use the actual base path from the mlEngine instance
         Path basePath = mlEngine.getMlCachePath().getParent();
-        Path expectedPath = basePath.resolve("ml_cache").resolve("models_cache").resolve(MLEngine.DEPLOY_MODEL_FOLDER).resolve(modelId);
-        Path actualPath = mlEngine.getDeployModelPath(modelId);
+        Path modelsCachePath = basePath.resolve("ml_cache").resolve("models_cache");
+        Path expectedDeployModelRootPath = modelsCachePath.resolve(MLEngine.DEPLOY_MODEL_FOLDER);
+        assertEquals(expectedDeployModelRootPath.toString(), mlEngine.getDeployModelRootPath().toString());
+        Path expectedDeployModelPath = expectedDeployModelRootPath.resolve(modelId);
+        assertEquals(expectedDeployModelPath.toString(), mlEngine.getDeployModelPath(modelId).toString());
 
-        assertEquals(expectedPath.toString(), actualPath.toString());
+        String expectedDeployModelZipPath = expectedDeployModelRootPath.resolve(modelId).resolve("myModel") + ".zip";
+        assertEquals(expectedDeployModelZipPath, mlEngine.getDeployModelZipPath(modelId, "myModel"));
+        Path expectedDeployModelChunkPath = expectedDeployModelRootPath.resolve(modelId).resolve("chunks").resolve("1");
+        assertEquals(expectedDeployModelChunkPath.toString(), mlEngine.getDeployModelChunkPath(modelId, 1).toString());
+
+        assertEquals(
+            "https://artifacts.opensearch.org/models/ml-models/model_listing/pre_trained_models.json",
+            mlEngine.getPrebuiltModelMetaListPath()
+        );
+
+        Path expectedRegisterRootPath = modelsCachePath.resolve(MLEngine.REGISTER_MODEL_FOLDER);
+        assertEquals(expectedRegisterRootPath.toString(), mlEngine.getRegisterModelRootPath().toString());
+        Path expectedRegisterModelPath = expectedRegisterRootPath.resolve(modelId);
+        assertEquals(expectedRegisterModelPath.toString(), mlEngine.getRegisterModelPath(modelId).toString());
+
+        Path expectedMdelCacheRootPath = modelsCachePath.resolve("models");
+        assertEquals(expectedMdelCacheRootPath.toString(), mlEngine.getModelCacheRootPath().toString());
+        Path expectedMdelCachePath = expectedMdelCacheRootPath.resolve(modelId);
+        assertEquals(expectedMdelCachePath.toString(), mlEngine.getModelCachePath(modelId).toString());
+
+        Path expectedAnalysisRootPath = modelsCachePath.resolve("analysis");
+        assertEquals(expectedAnalysisRootPath.toString(), mlEngine.getAnalysisRootPath().toString());
     }
 
     @Test
@@ -389,7 +439,7 @@ public class MLEngineTest extends MLStaticMockBase {
     @Test
     public void testMLEngineInitialization() {
         Path testPath = Path.of("/tmp/test" + UUID.randomUUID());
-        mlEngine = new MLEngine(testPath, new EncryptorImpl("m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w="));
+        mlEngine = new MLEngine(testPath, new EncryptorImpl(null, "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w="));
 
         Path expectedMlCachePath = testPath.resolve("ml_cache");
         Path expectedMlConfigPath = expectedMlCachePath.resolve("config");
@@ -411,14 +461,14 @@ public class MLEngineTest extends MLStaticMockBase {
     @Test
     public void testEncryptMethod() {
         String testString = "testString";
-        String encryptedString = mlEngine.encrypt(testString);
+        String encryptedString = mlEngine.encrypt(testString, null);
         assertNotNull(encryptedString);
         assertNotEquals(testString, encryptedString);
     }
 
     @Test
     public void testGetConnectorCredential() throws IOException {
-        String encryptedValue = mlEngine.encrypt("test_key_value");
+        String encryptedValue = mlEngine.encrypt("test_key_value", null);
         String test_connector_string = "{\"name\":\"test_connector_name\",\"version\":\"1\","
             + "\"description\":\"this is a test connector\",\"protocol\":\"http\","
             + "\"parameters\":{\"region\":\"test region\"},\"credential\":{\"key\":\""
@@ -443,5 +493,34 @@ public class MLEngineTest extends MLStaticMockBase {
         assertNotNull(decryptedCredential);
         assertEquals(decryptedCredential.get("key"), "test_key_value");
         assertEquals(decryptedCredential.get("region"), "test region");
+    }
+
+    @Test
+    public void testGetConnectorCredentialWithoutRegion() throws IOException {
+        String encryptedValue = mlEngine.encrypt("test_key_value", null);
+        String test_connector_string = "{\"name\":\"test_connector_name\",\"version\":\"1\","
+            + "\"description\":\"this is a test connector\",\"protocol\":\"http\","
+            + "\"parameters\":{},\"credential\":{\"key\":\""
+            + encryptedValue
+            + "\"},"
+            + "\"actions\":[{\"action_type\":\"PREDICT\",\"method\":\"POST\",\"url\":\"https://test.com\","
+            + "\"headers\":{\"api_key\":\"${credential.key}\"},"
+            + "\"request_body\":\"{\\\"input\\\": \\\"${parameters.input}\\\"}\"}],"
+            + "\"retry_backoff_millis\":10,\"retry_timeout_seconds\":10,\"max_retry_times\":-1,\"retry_backoff_policy\":\"constant\"}}";
+
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                test_connector_string
+            );
+        parser.nextToken();
+
+        HttpConnector connector = new HttpConnector("http", parser);
+        Map<String, String> decryptedCredential = mlEngine.getConnectorCredential(connector);
+        assertNotNull(decryptedCredential);
+        assertEquals("test_key_value", decryptedCredential.get("key"));
+        assertEquals(null, decryptedCredential.get("region"));
     }
 }

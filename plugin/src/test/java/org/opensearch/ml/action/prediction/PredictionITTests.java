@@ -5,16 +5,16 @@
 
 package org.opensearch.ml.action.prediction;
 
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_SYNC_UP_JOB_INTERVAL_IN_SECONDS;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_SYNC_UP_JOB_INTERVAL_IN_SECONDS;
 import static org.opensearch.ml.utils.TestData.IRIS_DATA_SIZE;
 import static org.opensearch.ml.utils.TestData.TIME_FIELD;
 
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.lucene.tests.util.LuceneTestCase;
 import org.junit.Before;
 import org.junit.Rule;
-import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.action.ActionFuture;
@@ -69,9 +69,10 @@ public class PredictionITTests extends MLCommonsIntegTestCase {
         irisIndexName = "iris_data_for_prediction_it";
         loadIrisData(irisIndexName);
 
-        kMeansModelId = trainKmeansWithIrisData(irisIndexName, false);
-        MLModel kMeansModel = getModel(kMeansModelId);
-        assertNotNull(kMeansModel);
+        // TODO: open these lines when this bug fix merged https://github.com/oracle/tribuo/issues/223
+        // modelId = trainKmeansWithIrisData(irisIndexName, false);
+        // MLModel kMeansModel = getModel(kMeansModelId);
+        // assertNotNull(kMeansModel);
 
         batchRcfModelId = trainBatchRCFWithDataFrame(500, false);
         fitRcfModelId = trainFitRCFWithDataFrame(500, false);
@@ -81,40 +82,38 @@ public class PredictionITTests extends MLCommonsIntegTestCase {
         assertNotNull(batchRcfModel);
     }
 
-    @Test
+    @LuceneTestCase.AwaitsFix(bugUrl = "https://github.com/oracle/tribuo/issues/223")
     public void testPredictionWithSearchInput_KMeans() {
         MLInputDataset inputDataset = new SearchQueryInputDataset(ImmutableList.of(irisIndexName), irisDataQuery());
         predictAndVerify(kMeansModelId, inputDataset, FunctionName.KMEANS, null, IRIS_DATA_SIZE);
     }
 
-    @Test
+    @LuceneTestCase.AwaitsFix(bugUrl = "https://github.com/oracle/tribuo/issues/223")
     public void testPredictionWithDataInput_KMeans() {
         MLInputDataset inputDataset = new DataFrameInputDataset(irisDataFrame());
         predictAndVerify(kMeansModelId, inputDataset, FunctionName.KMEANS, null, IRIS_DATA_SIZE);
     }
 
-    @Test
     public void testPredictionWithoutDataset_KMeans() {
         exceptionRule.expect(ActionRequestValidationException.class);
         exceptionRule.expectMessage("input data can't be null");
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).build();
-        MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest(kMeansModelId, mlInput, null);
+        MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest(kMeansModelId, mlInput, null, null);
         ActionFuture<MLTaskResponse> predictionFuture = client().execute(MLPredictionTaskAction.INSTANCE, predictionRequest);
         predictionFuture.actionGet();
     }
 
-    @Test
+    @LuceneTestCase.AwaitsFix(bugUrl = "https://github.com/oracle/tribuo/issues/223")
     public void testPredictionWithEmptyDataset_KMeans() {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule.expectMessage("No document found");
         MLInputDataset emptySearchInputDataset = emptyQueryInputDataSet(irisIndexName);
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.KMEANS).inputDataset(emptySearchInputDataset).build();
-        MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest(kMeansModelId, mlInput, null);
+        MLPredictionTaskRequest predictionRequest = new MLPredictionTaskRequest(kMeansModelId, mlInput, null, null);
         ActionFuture<MLTaskResponse> predictionFuture = client().execute(MLPredictionTaskAction.INSTANCE, predictionRequest);
         predictionFuture.actionGet();
     }
 
-    @Test
     public void testPredictionWithSearchInput_LogisticRegression() {
         MLInputDataset inputDataset = new SearchQueryInputDataset(
             ImmutableList.of(irisIndexName),
@@ -123,13 +122,11 @@ public class PredictionITTests extends MLCommonsIntegTestCase {
         predictAndVerify(logisticRegressionModelId, inputDataset, FunctionName.LOGISTIC_REGRESSION, null, IRIS_DATA_SIZE);
     }
 
-    @Test
     public void testPredictionWithDataFrame_BatchRCF() {
         MLInputDataset inputDataset = new DataFrameInputDataset(TestData.constructTestDataFrame(batchRcfDataSize));
         predictAndVerify(batchRcfModelId, inputDataset, FunctionName.BATCH_RCF, null, batchRcfDataSize);
     }
 
-    @Test
     public void testPredictionWithDataFrame_FitRCF() {
         MLInputDataset inputDataset = new DataFrameInputDataset(TestData.constructTestDataFrame(batchRcfDataSize, true));
         DataFrame dataFrame = predictAndVerify(
@@ -141,7 +138,6 @@ public class PredictionITTests extends MLCommonsIntegTestCase {
         );
     }
 
-    @Test
     public void testPredictionWithDataFrame_LinearRegression() {
         int size = 1;
         int feet = 20;

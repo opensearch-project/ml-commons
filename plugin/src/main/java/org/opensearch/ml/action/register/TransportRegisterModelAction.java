@@ -8,10 +8,10 @@ package org.opensearch.ml.action.register;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
 import static org.opensearch.ml.common.utils.ModelInterfaceUtils.updateRegisterModelInputModelInterfaceFieldsByConnector;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_ALLOW_MODEL_URL;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_TRUSTED_URL_REGEX;
 import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
 import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
@@ -27,7 +27,6 @@ import org.opensearch.action.ActionListenerResponseHandler;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.settings.Settings;
@@ -39,6 +38,8 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.connector.McpConnector;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorRequest;
@@ -59,7 +60,6 @@ import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
@@ -70,7 +70,9 @@ import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 
@@ -170,7 +172,8 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                 "To upload custom model user needs to enable allow_registering_model_via_url settings. Otherwise please use OpenSearch pre-trained models."
             );
         }
-        registerModelInput.setIsHidden(RestActionUtils.isSuperAdminUser(clusterService, client));
+        boolean isSuperAdmin = isSuperAdminUserWrapper(clusterService, client);
+        registerModelInput.setIsHidden(isSuperAdmin);
         if (StringUtils.isEmpty(registerModelInput.getModelGroupId())) {
             mlModelGroupManager
                 .validateUniqueModelGroupName(
@@ -179,7 +182,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                     ActionListener.wrap(modelGroups -> {
                         if (modelGroups != null
                             && modelGroups.getHits().getTotalHits() != null
-                            && modelGroups.getHits().getTotalHits().value != 0) {
+                            && modelGroups.getHits().getTotalHits().value() != 0) {
                             String modelGroupIdOfTheNameProvided = modelGroups.getHits().getAt(0).getId();
                             registerModelInput.setModelGroupId(modelGroupIdOfTheNameProvided);
                             checkUserAccess(registerModelInput, listener, true);
@@ -270,7 +273,29 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                         mlFeatureEnabledSetting,
                         ActionListener.wrap(r -> {
                             if (Boolean.TRUE.equals(r)) {
-                                createModelGroup(registerModelInput, listener);
+                                if (registerModelInput.getModelInterface() == null) {
+                                    mlModelManager
+                                        .getConnector(
+                                            registerModelInput.getConnectorId(),
+                                            registerModelInput.getTenantId(),
+                                            ActionListener.wrap(connector -> {
+                                                if (connector instanceof McpConnector) {
+                                                    listener
+                                                        .onFailure(
+                                                            new IllegalArgumentException(
+                                                                "Cannot Create a Model from MCP Connector: "
+                                                                    + registerModelInput.getConnectorId()
+                                                            )
+                                                        );
+                                                    return;
+                                                }
+                                                updateRegisterModelInputModelInterfaceFieldsByConnector(registerModelInput, connector);
+                                                createModelGroup(registerModelInput, listener);
+                                            }, listener::onFailure)
+                                        );
+                                } else {
+                                    createModelGroup(registerModelInput, listener);
+                                }
                             } else {
                                 listener
                                     .onFailure(
@@ -302,7 +327,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                     log.error(e.getMessage(), e);
                     listener.onFailure(e);
                 });
-                MLCreateConnectorRequest mlCreateConnectorRequest = createDryRunConnectorRequest();
+                MLCreateConnectorRequest mlCreateConnectorRequest = createDryRunConnectorRequest(registerModelInput.getTenantId());
                 client.execute(MLCreateConnectorAction.INSTANCE, mlCreateConnectorRequest, dryRunResultListener);
             }
         } else {
@@ -327,8 +352,9 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         }
     }
 
-    private MLCreateConnectorRequest createDryRunConnectorRequest() {
+    private MLCreateConnectorRequest createDryRunConnectorRequest(final String tenantId) {
         MLCreateConnectorInput createConnectorInput = MLCreateConnectorInput.builder().dryRun(true).build();
+        createConnectorInput.setTenantId(tenantId);
         return new MLCreateConnectorRequest(createConnectorInput);
     }
 
@@ -344,7 +370,11 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             throw new IllegalArgumentException("Connector endpoint is required when creating a remote model without connector id!");
         }
         // check if the connector url is trusted
-        registerModelInput.getConnector().validateConnectorURL(trustedConnectorEndpointsRegex);
+        // if the model is a hidden model, that means Superuser of this domain or cloud provider is settings up this
+        // model, so no need to verify the connector endpoint as trusted or not
+        if (!registerModelInput.getIsHidden()) {
+            registerModelInput.getConnector().validateConnectorURL(trustedConnectorEndpointsRegex);
+        }
     }
 
     private void registerModel(MLRegisterModelInput registerModelInput, ActionListener<MLRegisterModelResponse> listener) {
@@ -367,6 +397,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             .lastUpdateTime(Instant.now())
             .state(MLTaskState.CREATED)
             .workerNodes(ImmutableList.of(clusterService.localNode().getId()))
+            .tenantId(registerModelInput.getTenantId())
             .build();
 
         if (!isAsync) {
@@ -399,6 +430,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                     mlTaskManager
                         .updateMLTask(
                             taskId,
+                            registerModelInput.getTenantId(),
                             ImmutableMap.of(MLTask.ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(ex), STATE_FIELD, FAILED),
                             TASK_SEMAPHORE_TIMEOUT,
                             true
@@ -441,6 +473,13 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             .backendRoles(registerModelInput.getBackendRoles())
             .modelAccessMode(registerModelInput.getAccessMode())
             .isAddAllBackendRoles(registerModelInput.getAddAllBackendRoles())
+            .tenantId(registerModelInput.getTenantId())
             .build();
+    }
+
+    // this method is only to stub static method.
+    @VisibleForTesting
+    boolean isSuperAdminUserWrapper(ClusterService clusterService, Client client) {
+        return RestActionUtils.isSuperAdminUser(clusterService, client);
     }
 }

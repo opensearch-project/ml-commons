@@ -11,7 +11,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE;
 import static org.opensearch.ml.utils.MLExceptionUtils.LOCAL_MODEL_DISABLED_ERR_MSG;
 
 import java.util.Arrays;
@@ -22,13 +22,13 @@ import java.util.Map;
 
 import org.junit.Before;
 import org.junit.Rule;
+import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.support.ActionFilters;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
@@ -48,16 +48,19 @@ import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.task.MLPredictTaskRunner;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
 
 public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
     @Mock
@@ -71,6 +74,7 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
 
     @Mock
     private Client client;
+    SdkClient sdkClient;
 
     @Mock
     private ClusterService clusterService;
@@ -128,7 +132,7 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
             .build();
 
         mlPredictionTaskRequest = MLPredictionTaskRequest.builder().modelId("test_id").mlInput(mlInput).user(user).build();
-
+        sdkClient = SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap());
         Settings settings = Settings.builder().put(ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE.getKey(), true).build();
         ClusterSettings clusterSettings = new ClusterSettings(settings, new HashSet<>(Arrays.asList(ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE)));
 
@@ -147,6 +151,7 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
                 mlPredictTaskRunner,
                 clusterService,
                 client,
+                sdkClient,
                 xContentRegistry,
                 mlModelManager,
                 modelAccessControlHelper,
@@ -156,15 +161,16 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
         );
     }
 
+    @Test
     public void testPrediction_default_exception() {
         when(modelCacheHelper.getModelInfo(anyString())).thenReturn(model);
         when(model.getAlgorithm()).thenReturn(FunctionName.KMEANS);
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onFailure(new RuntimeException("Exception occurred. Please check log for more details."));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ((ActionListener<MLTaskResponse>) invocation.getArguments()[3]).onResponse(null);
@@ -178,6 +184,7 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
         assertEquals("Failed to Validate Access for ModelId test_id", argumentCaptor.getValue().getMessage());
     }
 
+    @Test
     public void testPrediction_local_model_not_exception() {
         when(modelCacheHelper.getModelInfo(anyString())).thenReturn(model);
         when(model.getAlgorithm()).thenReturn(FunctionName.TEXT_EMBEDDING);
@@ -193,15 +200,16 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
         );
     }
 
+    @Test
     public void testPrediction_OpenSearchStatusException() {
         when(modelCacheHelper.getModelInfo(anyString())).thenReturn(model);
         when(model.getAlgorithm()).thenReturn(FunctionName.KMEANS);
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onFailure(new OpenSearchStatusException("Testing OpenSearchStatusException", RestStatus.BAD_REQUEST));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ((ActionListener<MLTaskResponse>) invocation.getArguments()[3]).onResponse(null);
@@ -215,15 +223,16 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
         assertEquals("Testing OpenSearchStatusException", argumentCaptor.getValue().getMessage());
     }
 
+    @Test
     public void testPrediction_MLResourceNotFoundException() {
         when(modelCacheHelper.getModelInfo(anyString())).thenReturn(model);
         when(model.getAlgorithm()).thenReturn(FunctionName.KMEANS);
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onFailure(new MLResourceNotFoundException("Testing MLResourceNotFoundException"));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ((ActionListener<MLTaskResponse>) invocation.getArguments()[3]).onResponse(null);
@@ -237,15 +246,16 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
         assertEquals("Testing MLResourceNotFoundException", argumentCaptor.getValue().getMessage());
     }
 
+    @Test
     public void testPrediction_MLLimitExceededException() {
         when(modelCacheHelper.getModelInfo(anyString())).thenReturn(model);
         when(model.getAlgorithm()).thenReturn(FunctionName.TEXT_EMBEDDING);
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onFailure(new CircuitBreakingException("Memory Circuit Breaker is open, please check your resources!", CircuitBreaker.Durability.TRANSIENT));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ((ActionListener<MLTaskResponse>) invocation.getArguments()[3]).onResponse(null);
@@ -259,6 +269,7 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
         assertEquals("Memory Circuit Breaker is open, please check your resources!", argumentCaptor.getValue().getMessage());
     }
 
+    @Test
     public void testValidateInputSchemaSuccess() {
         RemoteInferenceInputDataSet remoteInferenceInputDataSet = RemoteInferenceInputDataSet
             .builder()
@@ -282,6 +293,7 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
         transportPredictionTaskAction.validateInputSchema("testId", mlInput);
     }
 
+    @Test
     public void testValidateInputSchemaFailed() {
         exceptionRule.expect(OpenSearchStatusException.class);
         RemoteInferenceInputDataSet remoteInferenceInputDataSet = RemoteInferenceInputDataSet

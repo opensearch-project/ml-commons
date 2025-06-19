@@ -47,9 +47,7 @@ public class AnomalyLocalizationOutputTests {
     @Test
     public void testXContent() throws Exception {
         XContentBuilder builder = XContentFactory.jsonBuilder();
-        builder.startObject();
         builder = output.toXContent(builder, null);
-        builder.endObject();
         String json = builder.toString();
         XContentParser parser = XContentType.JSON.xContent().createParser(NamedXContentRegistry.EMPTY, null, json);
         AnomalyLocalizationOutput newOutput = AnomalyLocalizationOutput.parse(parser);

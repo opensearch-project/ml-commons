@@ -11,15 +11,17 @@ import static org.mockito.Mockito.*;
 import java.util.*;
 
 import org.junit.Test;
-import org.opensearch.client.Client;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.execute.samplecalculator.LocalSampleCalculatorInput;
+import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalculatorOutput;
+import org.opensearch.ml.engine.algorithms.metrics_correlation.MetricsCorrelation;
 import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
+import org.opensearch.transport.client.Client;
 
 public class MLEngineClassLoaderTests {
 
@@ -79,6 +81,12 @@ public class MLEngineClassLoaderTests {
     public void testInitInstance_ClassNotFound() {
         // Test for case where class is not found in the maps
         MLEngineClassLoader.initInstance("SOMETHING ELSE", null, Object.class);
+    }
+
+    @Test
+    public void initInstanceMetricsCorrelationReturnsNull() {
+        MetricsCorrelation instance = MLEngineClassLoader.initInstance(FunctionName.METRICS_CORRELATION, null, MLAlgoParams.class);
+        assertNull(instance);
     }
 
 }

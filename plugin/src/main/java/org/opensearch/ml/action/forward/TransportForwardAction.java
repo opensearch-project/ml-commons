@@ -5,8 +5,8 @@
 
 package org.opensearch.ml.action.forward;
 
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_SUCCESS_RATIO;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MODEL_AUTO_REDEPLOY_SUCCESS_RATIO;
 import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 import static org.opensearch.ml.utils.MLExceptionUtils.toJsonString;
@@ -25,7 +25,6 @@ import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.action.update.UpdateResponse;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
@@ -39,6 +38,7 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.forward.MLForwardAction;
 import org.opensearch.ml.common.transport.forward.MLForwardInput;
 import org.opensearch.ml.common.transport.forward.MLForwardRequest;
@@ -51,8 +51,11 @@ import org.opensearch.ml.common.transport.sync.MLSyncUpNodesRequest;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.task.MLTaskCache;
 import org.opensearch.ml.task.MLTaskManager;
+import org.opensearch.ml.utils.TenantAwareHelper;
+import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableMap;
 
@@ -66,6 +69,7 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
     private final ClusterService clusterService;
     MLTaskManager mlTaskManager;
     Client client;
+    final SdkClient sdkClient;
     MLModelManager mlModelManager;
     DiscoveryNodeHelper nodeHelper;
 
@@ -77,26 +81,32 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
 
     private final MLModelAutoReDeployer mlModelAutoReDeployer;
 
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Inject
     public TransportForwardAction(
         TransportService transportService,
         ActionFilters actionFilters,
         MLTaskManager mlTaskManager,
         Client client,
+        SdkClient sdkClient,
         MLModelManager mlModelManager,
         DiscoveryNodeHelper nodeHelper,
         Settings settings,
         ClusterService clusterService,
-        MLModelAutoReDeployer mlModelAutoReDeployer
+        MLModelAutoReDeployer mlModelAutoReDeployer,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLForwardAction.NAME, transportService, actionFilters, MLForwardRequest::new);
         this.mlTaskManager = mlTaskManager;
         this.client = client;
+        this.sdkClient = sdkClient;
         this.mlModelManager = mlModelManager;
         this.nodeHelper = nodeHelper;
         this.settings = settings;
         this.clusterService = clusterService;
         this.mlModelAutoReDeployer = mlModelAutoReDeployer;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
 
         modelAutoRedeploySuccessRatio = ML_COMMONS_MODEL_AUTO_REDEPLOY_SUCCESS_RATIO.get(settings);
         enableAutoReDeployModel = ML_COMMONS_MODEL_AUTO_REDEPLOY_ENABLE.get(settings);
@@ -112,6 +122,10 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
         MLForwardInput forwardInput = mlForwardRequest.getForwardInput();
         String modelId = forwardInput.getModelId();
         String taskId = forwardInput.getTaskId();
+        String tenantId = forwardInput.getTenantId();
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, listener)) {
+            return;
+        }
         MLRegisterModelInput registerModelInput = forwardInput.getRegisterModelInput();
         MLTask mlTask = forwardInput.getMlTask();
         String workerNodeId = forwardInput.getWorkerNodeId();
@@ -170,7 +184,7 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
                             builder.put(MLTask.ERROR_FIELD, toJsonString(mlTaskCache.getErrors()));
                         }
                         boolean clearAutoReDeployRetryTimes = triggerNextModelDeployAndCheckIfRestRetryTimes(workNodes, taskId);
-                        mlTaskManager.updateMLTask(taskId, builder.build(), TASK_SEMAPHORE_TIMEOUT, true);
+                        mlTaskManager.updateMLTask(taskId, tenantId, builder.build(), TASK_SEMAPHORE_TIMEOUT, true);
 
                         MLModelState modelState;
                         if (mlTaskCache.allNodeFailed() || mlTaskCache.getWorkerNodeSize() == 0) {
@@ -194,8 +208,8 @@ public class TransportForwardAction extends HandledTransportAction<ActionRequest
                             } else {
                                 log.error("Failed to update ML model {}, status: {}", modelId, response.status());
                             }
-                        }, e -> { log.error("Failed to update ML model: " + modelId, e); });
-                        mlModelManager.updateModel(modelId, updateFields, ActionListener.runBefore(updateModelListener, () -> {
+                        }, e -> { log.error("Failed to update ML model: {}", modelId, e); });
+                        mlModelManager.updateModel(modelId, tenantId, updateFields, ActionListener.runBefore(updateModelListener, () -> {
                             mlModelManager.removeAutoDeployModel(modelId);
                         }));
                     }

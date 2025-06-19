@@ -9,7 +9,9 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.Collections;
@@ -17,10 +19,12 @@ import java.util.HashMap;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.opensearch.Version;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.commons.authuser.User;
+import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.ml.common.FunctionName;
@@ -172,5 +176,227 @@ public class MLPredictionTaskRequestTest {
             }
         };
         MLPredictionTaskRequest.fromActionRequest(actionRequest);
+    }
+
+    @Test
+    public void fromActionRequest_Failure_WithTruncatedStream() {
+        MLPredictionTaskRequest request = MLPredictionTaskRequest.builder().mlInput(mlInput).build();
+
+        ActionRequest actionRequest = new ActionRequest() {
+            @Override
+            public ActionRequestValidationException validate() {
+                return null;
+            }
+
+            @Override
+            public void writeTo(StreamOutput out) throws IOException {
+                // Write only part of the data to simulate a truncated stream
+                out.writeOptionalString(request.getModelId()); // Only writes the modelId
+            }
+        };
+
+        try {
+            MLPredictionTaskRequest.fromActionRequest(actionRequest);
+        } catch (UncheckedIOException e) {
+            assertEquals("failed to parse ActionRequest into MLPredictionTaskRequest", e.getMessage());
+            assertTrue(e.getCause() instanceof EOFException);
+        }
+    }
+
+    @Test
+    public void fromActionRequest_Failure_WithVersionMismatch() {
+        MLPredictionTaskRequest request = MLPredictionTaskRequest.builder().mlInput(mlInput).build();
+
+        ActionRequest actionRequest = new ActionRequest() {
+            @Override
+            public ActionRequestValidationException validate() {
+                return null;
+            }
+
+            @Override
+            public void writeTo(StreamOutput out) throws IOException {
+                out.setVersion(Version.V_2_18_0); // Simulate an older version
+                request.writeTo(out);
+            }
+        };
+
+        try {
+            MLPredictionTaskRequest.fromActionRequest(actionRequest);
+        } catch (UncheckedIOException e) {
+            assertEquals("failed to parse ActionRequest into MLPredictionTaskRequest", e.getMessage());
+        }
+    }
+
+    @Test
+    public void fromActionRequest_Success_WithNullOptionalFields() throws IOException {
+        MLPredictionTaskRequest request = MLPredictionTaskRequest.builder().mlInput(mlInput).tenantId(null).user(null).build();
+
+        BytesStreamOutput bytesStreamOutput = new BytesStreamOutput();
+        request.writeTo(bytesStreamOutput);
+
+        MLPredictionTaskRequest result = new MLPredictionTaskRequest(bytesStreamOutput.bytes().streamInput());
+        assertNull(result.getUser());
+        assertNull(result.getTenantId());
+        assertEquals(mlInput.getAlgorithm(), result.getMlInput().getAlgorithm());
+    }
+
+    @Test
+    public void writeTo_Failure_WithInvalidMLInput() {
+        MLInput invalidMLInput = MLInput.builder().algorithm(FunctionName.KMEANS).build();
+        MLPredictionTaskRequest request = MLPredictionTaskRequest.builder().mlInput(invalidMLInput).build();
+
+        try (BytesStreamOutput bytesStreamOutput = new BytesStreamOutput()) {
+            request.writeTo(bytesStreamOutput);
+        } catch (IOException e) {
+            assertEquals("ML input can't be null", e.getMessage());
+        }
+    }
+
+    @Test
+    public void integrationTest_FromActionRequest() throws IOException {
+        // Create a realistic MLPredictionTaskRequest
+        User user = User.parse("test_user|role1|all_access");
+        MLPredictionTaskRequest originalRequest = MLPredictionTaskRequest
+            .builder()
+            .modelId("test_model_id")
+            .mlInput(mlInput)
+            .user(user)
+            .tenantId(null)
+            .build();
+
+        // Serialize the request
+        BytesStreamOutput out = new BytesStreamOutput();
+        originalRequest.writeTo(out);
+
+        // Deserialize it
+        MLPredictionTaskRequest deserializedRequest = new MLPredictionTaskRequest(out.bytes().streamInput());
+
+        // Validate the fields
+        assertEquals(originalRequest.getModelId(), deserializedRequest.getModelId());
+        assertEquals(originalRequest.getMlInput().getAlgorithm(), deserializedRequest.getMlInput().getAlgorithm());
+        assertEquals(originalRequest.getUser().getName(), deserializedRequest.getUser().getName());
+        assertEquals(originalRequest.getTenantId(), deserializedRequest.getTenantId());
+    }
+
+    @Test
+    public void integrationTest_FromActionRequest_WithOlderVersion() throws IOException {
+        // Simulate an older version that does not support `tenantId`
+        Version olderVersion = Version.V_2_18_0; // Replace with an actual older version number
+        BytesStreamOutput out = new BytesStreamOutput();
+        out.setVersion(olderVersion);
+
+        // Serialize the request with an older version
+        MLPredictionTaskRequest originalRequest = MLPredictionTaskRequest
+            .builder()
+            .modelId("test_model_id")
+            .mlInput(mlInput)
+            .user(User.parse("test_user|role1|all_access"))
+            .tenantId("test_tenant") // This should be ignored in older versions
+            .build();
+        originalRequest.writeTo(out);
+
+        // Deserialize it
+        StreamInput in = out.bytes().streamInput();
+        in.setVersion(olderVersion);
+        MLPredictionTaskRequest deserializedRequest = new MLPredictionTaskRequest(in);
+
+        // Validate fields
+        assertEquals(originalRequest.getModelId(), deserializedRequest.getModelId());
+        assertEquals(originalRequest.getMlInput().getAlgorithm(), deserializedRequest.getMlInput().getAlgorithm());
+        assertEquals(originalRequest.getUser().getName(), deserializedRequest.getUser().getName());
+        assertNull(deserializedRequest.getTenantId()); // tenantId should not exist in older versions
+    }
+
+    @Test
+    public void integrationTest_FromActionRequest_WithNewerVersion() throws IOException {
+        // Simulate a newer version
+        Version newerVersion = Version.V_2_19_0; // Replace with the actual newer version number
+        BytesStreamOutput out = new BytesStreamOutput();
+        out.setVersion(newerVersion);
+
+        // Serialize the request with a newer version
+        MLPredictionTaskRequest originalRequest = MLPredictionTaskRequest
+            .builder()
+            .modelId("test_model_id")
+            .mlInput(mlInput)
+            .user(User.parse("test_user|role1|all_access"))
+            .tenantId("test_tenant")
+            .build();
+        originalRequest.writeTo(out);
+
+        // Deserialize it
+        StreamInput in = out.bytes().streamInput();
+        in.setVersion(newerVersion);
+        MLPredictionTaskRequest deserializedRequest = new MLPredictionTaskRequest(in);
+
+        // Validate fields
+        assertEquals(originalRequest.getModelId(), deserializedRequest.getModelId());
+        assertEquals(originalRequest.getMlInput().getAlgorithm(), deserializedRequest.getMlInput().getAlgorithm());
+        assertEquals(originalRequest.getUser().getName(), deserializedRequest.getUser().getName());
+        assertEquals(originalRequest.getTenantId(), deserializedRequest.getTenantId()); // tenantId should exist
+    }
+
+    @Test
+    public void integrationTest_FromActionRequest_WithMixedVersion() throws IOException {
+        // Serialize with a newer version
+        Version newerVersion = Version.V_2_19_0;
+        BytesStreamOutput out = new BytesStreamOutput();
+        out.setVersion(newerVersion);
+
+        MLPredictionTaskRequest originalRequest = MLPredictionTaskRequest
+            .builder()
+            .modelId("test_model_id")
+            .mlInput(mlInput)
+            .user(User.parse("test_user|role1|all_access"))
+            .tenantId("test_tenant")
+            .build();
+        originalRequest.writeTo(out);
+
+        // Deserialize with an older version
+        Version olderVersion = Version.V_2_18_0; // Replace with an actual older version number
+        StreamInput in = out.bytes().streamInput();
+        in.setVersion(olderVersion);
+
+        MLPredictionTaskRequest deserializedRequest = new MLPredictionTaskRequest(in);
+
+        // Validate fields
+        assertEquals(originalRequest.getModelId(), deserializedRequest.getModelId());
+        assertEquals(originalRequest.getMlInput().getAlgorithm(), deserializedRequest.getMlInput().getAlgorithm());
+        assertEquals(originalRequest.getUser().getName(), deserializedRequest.getUser().getName());
+        assertNull(deserializedRequest.getTenantId()); // tenantId should not exist in older versions
+    }
+
+    @Test
+    public void constructor_WithModelIdAndMLInput() {
+        // Given
+        String modelId = "test_model_id";
+
+        // When
+        MLPredictionTaskRequest request = new MLPredictionTaskRequest(modelId, mlInput);
+
+        // Then
+        assertEquals(modelId, request.getModelId());
+        assertEquals(mlInput, request.getMlInput());
+        assertTrue(request.isDispatchTask()); // Default value
+        assertNull(request.getUser());       // Default value
+        assertNull(request.getTenantId());   // Default value
+    }
+
+    @Test
+    public void constructor_WithModelIdMLInputUserAndTenantId() {
+        // Given
+        String modelId = "test_model_id";
+        User user = User.parse("admin|role-1|all_access");
+        String tenantId = "test_tenant";
+
+        // When
+        MLPredictionTaskRequest request = new MLPredictionTaskRequest(modelId, mlInput, user, tenantId);
+
+        // Then
+        assertEquals(modelId, request.getModelId());
+        assertEquals(mlInput, request.getMlInput());
+        assertTrue(request.isDispatchTask()); // Default value
+        assertEquals(user, request.getUser());
+        assertEquals(tenantId, request.getTenantId());
     }
 }

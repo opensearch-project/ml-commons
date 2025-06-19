@@ -5,12 +5,17 @@
 
 package org.opensearch.ml.common.utils;
 
+import static org.opensearch.action.ValidateActions.addValidationError;
+
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.AccessController;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -25,6 +30,7 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.opensearch.OpenSearchParseException;
+import org.opensearch.action.ActionRequestValidationException;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -35,6 +41,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
 import com.jayway.jsonpath.JsonPath;
+import com.jayway.jsonpath.PathNotFoundException;
 import com.networknt.schema.JsonSchema;
 import com.networknt.schema.JsonSchemaFactory;
 import com.networknt.schema.SpecVersion;
@@ -55,6 +62,11 @@ public class StringUtils {
         + "      if (input.contains('\f')) {\n        input = input.replace('\f', '\\\\f');\n      }\n"
         + "      return input;"
         + "\n    }\n";
+
+    // Regex allows letters, digits, spaces, hyphens, underscores, and dots.
+    private static final Pattern SAFE_INPUT_PATTERN = Pattern.compile("^[\\p{L}\\p{N}\\s.,!?():@\\-_/'\"]*$");
+
+    public static final String SAFE_INPUT_DESCRIPTION = "can only contain letters, numbers, spaces, and basic punctuation (.,!?():@-_'/\")";
 
     public static final Gson gson;
 
@@ -347,6 +359,111 @@ public class StringUtils {
         return JsonParser.parseString(jsonString).getAsJsonObject();
     }
 
+    /**
+     * Checks if a specified JSON path exists within a given JSON object.
+     *
+     * This method attempts to read the value at the specified path in the JSON object.
+     * If the path exists, it returns true. If a PathNotFoundException is thrown,
+     * indicating that the path does not exist, it returns false.
+     *
+     * @param json The JSON object to check. This can be a Map, List, or any object
+     *             that JsonPath can parse.
+     * @param path The JSON path to check for existence. This should be a valid
+     *             JsonPath expression (e.g., "$.store.book[0].title").
+     * @return true if the path exists in the JSON object, false otherwise.
+     * @throws IllegalArgumentException if the json object is null or if the path is null or empty.
+     */
+    public static boolean pathExists(Object json, String path) {
+        if (json == null) {
+            throw new IllegalArgumentException("JSON object cannot be null");
+        }
+        if (path == null || path.isEmpty()) {
+            throw new IllegalArgumentException("Path cannot be null or empty");
+        }
+        if (!isValidJSONPath(path)) {
+            throw new IllegalArgumentException("the field path is not a valid json path: " + path);
+        }
+        try {
+            JsonPath.read(json, path);
+            return true;
+        } catch (PathNotFoundException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Prepares nested structures in a JSON object based on the given field path.
+     *
+     * This method ensures that all intermediate nested objects and arrays exist in the JSON object
+     * for a given field path. If any part of the path doesn't exist, it creates new empty objects
+     * (HashMaps) or arrays (ArrayLists) for those parts.
+     *
+     * The method can handle complex paths including both object properties and array indices.
+     * For example, it can process paths like "foo.bar[1].baz[0].qux".
+     *
+     * @param jsonObject The JSON object to be updated. If this is not a Map, a new Map will be created.
+     * @param fieldPath The full path of the field, potentially including nested structures and array indices.
+     *                  The path can optionally start with "$." which will be ignored if present.
+     * @return The updated JSON object with necessary nested structures in place.
+     *         If the input was not a Map, returns the newly created Map structure.
+     *
+     * @throws IllegalArgumentException If the field path is null or not a valid JSON path.
+     *
+     */
+    public static Object prepareNestedStructures(Object jsonObject, String fieldPath) {
+        if (fieldPath == null) {
+            throw new IllegalArgumentException("The field path is null");
+        }
+        if (jsonObject == null) {
+            throw new IllegalArgumentException("The object is null");
+        }
+        if (!isValidJSONPath(fieldPath)) {
+            throw new IllegalArgumentException("The field path is not a valid JSON path: " + fieldPath);
+        }
+
+        String path = fieldPath.startsWith("$.") ? fieldPath.substring(2) : fieldPath;
+        String[] pathParts = path.split("(?<!\\\\)\\.");
+
+        Map<String, Object> current = (jsonObject instanceof Map) ? (Map<String, Object>) jsonObject : new HashMap<>();
+
+        for (String part : pathParts) {
+            if (part.contains("[")) {
+                // Handle array notation
+                String[] arrayParts = part.split("\\[");
+                String key = arrayParts[0];
+                int index = Integer.parseInt(arrayParts[1].replaceAll("\\]", ""));
+
+                if (!current.containsKey(key)) {
+                    current.put(key, new ArrayList<>());
+                }
+                if (!(current.get(key) instanceof List)) {
+                    return jsonObject;
+                }
+                List<Object> list = (List<Object>) current.get(key);
+                if (index >= list.size()) {
+                    while (list.size() <= index) {
+                        list.add(null);
+                    }
+                    list.set(index, new HashMap<>());
+                }
+                if (!(list.get(index) instanceof Map)) {
+                    return jsonObject;
+                }
+                current = (Map<String, Object>) list.get(index);
+            } else {
+                // Handle object notation
+                if (!current.containsKey(part)) {
+                    current.put(part, new HashMap<>());
+                } else if (!(current.get(part) instanceof Map)) {
+                    return jsonObject;
+                }
+                current = (Map<String, Object>) current.get(part);
+            }
+        }
+
+        return jsonObject;
+    }
+
     public static void validateSchema(String schemaString, String instanceString) {
         try {
             // parse the schema JSON as string
@@ -371,4 +488,68 @@ public class StringUtils {
             throw new OpenSearchParseException("Schema validation failed: " + e.getMessage(), e);
         }
     }
+
+    public static String hashString(String input) {
+        try {
+            // Create a MessageDigest instance for SHA-256
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+
+            // Perform the hashing and get the byte array
+            byte[] hashBytes = digest.digest(input.getBytes());
+
+            // Convert the byte array to a Base64 encoded string
+            return Base64.getUrlEncoder().encodeToString(hashBytes);
+
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("Error: Unable to compute hash", e);
+        }
+    }
+
+    /**
+     * Validates a map of fields to ensure that their values only contain allowed characters.
+     * <p>
+     * Allowed characters are: letters, digits, spaces, underscores (_), hyphens (-), dots (.), and colons (:).
+     * If a value does not comply, a validation error is added.
+     *
+     * @param fields A map where the key is the field name (used for error messages) and the value is the text to validate.
+     * @return An {@link ActionRequestValidationException} containing all validation errors, or {@code null} if all fields are valid.
+     */
+    public static ActionRequestValidationException validateFields(Map<String, FieldDescriptor> fields) {
+        ActionRequestValidationException exception = null;
+
+        for (Map.Entry<String, FieldDescriptor> entry : fields.entrySet()) {
+            String key = entry.getKey();
+            FieldDescriptor descriptor = entry.getValue();
+            String value = descriptor.getValue();
+
+            if (descriptor.isRequired()) {
+                if (!isSafeText(value)) {
+                    String reason = (value == null || value.isBlank()) ? "is required and cannot be null or blank" : SAFE_INPUT_DESCRIPTION;
+                    exception = addValidationError(key + " " + reason, exception);
+                }
+            } else {
+                if (value != null && !value.isBlank() && !matchesSafePattern(value)) {
+                    exception = addValidationError(key + " " + SAFE_INPUT_DESCRIPTION, exception);
+                }
+            }
+        }
+
+        return exception;
+    }
+
+    /**
+     * Checks if the input is safe (non-null, non-blank, matches safe character set).
+     *
+     * @param value The input string to validate
+     * @return true if input is safe, false otherwise
+     */
+    public static boolean isSafeText(String value) {
+        return value != null && !value.isBlank() && matchesSafePattern(value);
+    }
+
+    // Just checks pattern
+    public static boolean matchesSafePattern(String value) {
+        return SAFE_INPUT_PATTERN.matcher(value).matches();
+    }
+
 }

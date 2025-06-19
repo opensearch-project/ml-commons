@@ -15,14 +15,20 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_CANCELLED_REGEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_CANCELLING_REGEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_COMPLETED_REGEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_EXPIRED_REGEX;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_FIELD;
+import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_PRIMARY_TERM;
+import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_SEQ_NO;
+import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
+import static org.opensearch.ml.common.connector.AbstractConnector.*;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_CANCELLED_REGEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_CANCELLING_REGEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_COMPLETED_REGEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_EXPIRED_REGEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_FAILED_REGEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_JOB_STATUS_FIELD;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -38,7 +44,6 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.metadata.Metadata;
 import org.opensearch.cluster.service.ClusterService;
@@ -65,19 +70,23 @@ import org.opensearch.ml.common.dataset.MLInputDataType;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.task.MLTaskGetRequest;
 import org.opensearch.ml.common.transport.task.MLTaskGetResponse;
+import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.task.MLTaskManager;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.script.ScriptService;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
 
 public class GetTaskTransportActionTests extends OpenSearchTestCase {
     @Mock
@@ -85,6 +94,7 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
 
     @Mock
     Client client;
+    SdkClient sdkClient;
 
     @Mock
     NamedXContentRegistry xContentRegistry;
@@ -127,6 +137,9 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
+    @Mock
+    MLEngine mlEngine;
+
     GetTaskTransportAction getTaskTransportAction;
     MLTaskGetRequest mlTaskGetRequest;
     ThreadContext threadContext;
@@ -135,7 +148,7 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
         mlTaskGetRequest = MLTaskGetRequest.builder().taskId("test_id").build();
-
+        sdkClient = SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap());
         Settings settings = Settings
             .builder()
             .putList(ML_COMMONS_REMOTE_JOB_STATUS_FIELD.getKey(), List.of("status", "TransformJobStatus"))
@@ -143,6 +156,7 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
             .put(ML_COMMONS_REMOTE_JOB_STATUS_CANCELLED_REGEX.getKey(), "(stopped|cancelled)")
             .put(ML_COMMONS_REMOTE_JOB_STATUS_CANCELLING_REGEX.getKey(), "(stopping|cancelling)")
             .put(ML_COMMONS_REMOTE_JOB_STATUS_EXPIRED_REGEX.getKey(), "(expired|timeout)")
+            .put(ML_COMMONS_REMOTE_JOB_STATUS_FAILED_REGEX.getKey(), "(failed)")
             .build();
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
@@ -163,7 +177,8 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
                             ML_COMMONS_REMOTE_JOB_STATUS_COMPLETED_REGEX,
                             ML_COMMONS_REMOTE_JOB_STATUS_CANCELLED_REGEX,
                             ML_COMMONS_REMOTE_JOB_STATUS_CANCELLING_REGEX,
-                            ML_COMMONS_REMOTE_JOB_STATUS_EXPIRED_REGEX
+                            ML_COMMONS_REMOTE_JOB_STATUS_EXPIRED_REGEX,
+                            ML_COMMONS_REMOTE_JOB_STATUS_FAILED_REGEX
                         )
                 )
             );
@@ -173,6 +188,7 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
                 transportService,
                 actionFilters,
                 client,
+                sdkClient,
                 xContentRegistry,
                 clusterService,
                 scriptService,
@@ -182,7 +198,8 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
                 mlTaskManager,
                 mlModelManager,
                 mlFeatureEnabledSetting,
-                settings
+                settings,
+                mlEngine
             )
         );
 
@@ -241,15 +258,26 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
     }
 
     public void testGetTask_NullResponse() {
+        GetResult getResult = new GetResult(
+            ML_TASK_INDEX,
+            "fake_id",
+            UNASSIGNED_SEQ_NO,
+            UNASSIGNED_PRIMARY_TERM,
+            -1L,
+            false,
+            null,
+            null,
+            null
+        );
         doAnswer(invocation -> {
             ActionListener<GetResponse> listener = invocation.getArgument(1);
-            listener.onResponse(null);
+            listener.onResponse(new GetResponse(getResult));
             return null;
         }).when(client).get(any(), any());
         getTaskTransportAction.doExecute(null, mlTaskGetRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Fail to find task", argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to find task", argumentCaptor.getValue().getMessage());
     }
 
     public void testGetTask_RuntimeException() {
@@ -261,7 +289,7 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         getTaskTransportAction.doExecute(null, mlTaskGetRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("errorMessage", argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to get data object from index .plugins-ml-task", argumentCaptor.getValue().getMessage());
     }
 
     public void testGetTask_IndexNotFoundException() {
@@ -273,7 +301,7 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         getTaskTransportAction.doExecute(null, mlTaskGetRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Fail to find task", argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to find task", argumentCaptor.getValue().getMessage());
     }
 
     @Ignore
@@ -306,10 +334,10 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         remoteJob.put("TransformJobName", "SM-offline-batch-transform13");
 
         doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(3);
+            ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onResponse(false);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
 
         GetResponse getResponse = prepareMLTask(FunctionName.REMOTE, MLTaskType.BATCH_PREDICTION, remoteJob);
 
@@ -360,6 +388,12 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         remoteJob.put("TransformJobName", "SM-offline-batch-transform13");
 
         doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(6);
+            listener.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
+
+        doAnswer(invocation -> {
             ActionListener<Connector> listener = invocation.getArgument(2);
             listener.onFailure(new ResourceNotFoundException("Failed to get connector"));
             return null;
@@ -383,6 +417,12 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         Map<String, Object> remoteJob = new HashMap<>();
         remoteJob.put("Status", "IN PROGRESS");
         remoteJob.put("TransformJobName", "SM-offline-batch-transform13");
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(6);
+            listener.onResponse(true);
+            return null;
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ActionListener<Connector> listener = invocation.getArgument(2);
@@ -436,6 +476,10 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         processTaskResponse("status", "expired", MLTaskState.EXPIRED);
     }
 
+    public void test_processTaskResponse_failed() {
+        processTaskResponse("status", "failed", MLTaskState.FAILED);
+    }
+
     public void test_processTaskResponse_WrongStatusField() {
         processTaskResponse("wrong_status_field", "expired", null);
     }
@@ -467,7 +511,7 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         ActionListener<MLTaskGetResponse> actionListener = mock(ActionListener.class);
         ArgumentCaptor<Map<String, Object>> updatedTaskCaptor = ArgumentCaptor.forClass(Map.class);
 
-        getTaskTransportAction.processTaskResponse(mlTask, taskId, taskResponse, mlTask.getRemoteJob(), actionListener);
+        getTaskTransportAction.processTaskResponse(mlTask, taskId, true, taskResponse, mlTask.getRemoteJob(), null, actionListener);
 
         verify(mlTaskManager).updateMLTaskDirectly(any(), updatedTaskCaptor.capture(), any());
         Map<String, Object> updatedTask = updatedTaskCaptor.getValue();
@@ -475,5 +519,79 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
         Map<String, Object> updatedRemoteJob = (Map<String, Object>) updatedTask.get("remote_job");
         assertEquals(remoteJobResponseStatus, updatedRemoteJob.get(statusField));
         assertEquals(remoteJobName, updatedRemoteJob.get("name"));
+    }
+
+    public void testUpdateDLQ_Success() throws IOException {
+        // Setup test data
+        Map<String, Object> remoteJob = new HashMap<>();
+        remoteJob.put("TransformJobName", "test-job");
+        Map<String, String> dlq = new HashMap<>();
+        dlq.put("bucket", "test-bucket");
+        dlq.put("region", "us-west-2");
+        remoteJob.put("dlq", dlq);
+
+        MLTask mlTask = MLTask
+            .builder()
+            .taskId("test-task")
+            .state(MLTaskState.FAILED)
+            .error("Test error message")
+            .remoteJob(remoteJob)
+            .build();
+
+        // Setup decrypted credentials
+        Map<String, String> decryptedCredential = new HashMap<>();
+        decryptedCredential.put(ACCESS_KEY_FIELD, "test-key");
+        decryptedCredential.put(SECRET_KEY_FIELD, "test-secret");
+        decryptedCredential.put(SESSION_TOKEN_FIELD, "test-token");
+
+        // Call the method
+        getTaskTransportAction.updateDLQ(mlTask, decryptedCredential);
+
+        // Verify remoteJob DLQ is removed
+        assertNull(mlTask.getRemoteJob().get("dlq"));
+    }
+
+    public void testUpdateDLQ_MissingBucketOrRegion() {
+        // Setup test data with missing bucket/region
+        Map<String, Object> remoteJob = new HashMap<>();
+        remoteJob.put("TransformJobName", "test-job");
+        Map<String, String> dlq = new HashMap<>();
+        // Intentionally missing bucket and region
+        remoteJob.put("dlq", dlq);
+
+        MLTask mlTask = MLTask
+            .builder()
+            .taskId("test-task")
+            .state(MLTaskState.FAILED)
+            .error("Test error message")
+            .remoteJob(remoteJob)
+            .build();
+
+        // Call the method - should not throw exception but log error
+        getTaskTransportAction.updateDLQ(mlTask, Collections.emptyMap());
+
+        // Verify DLQ still exists since update failed
+        assertNotNull(mlTask.getRemoteJob().get("dlq"));
+    }
+
+    public void testUpdateDLQ_NullDLQ() {
+        // Setup test data with null DLQ
+        Map<String, Object> remoteJob = new HashMap<>();
+        remoteJob.put("TransformJobName", "test-job");
+        // No DLQ configuration
+
+        MLTask mlTask = MLTask
+            .builder()
+            .taskId("test-task")
+            .state(MLTaskState.FAILED)
+            .error("Test error message")
+            .remoteJob(remoteJob)
+            .build();
+
+        // Call the method - should do nothing
+        getTaskTransportAction.updateDLQ(mlTask, null);
+
+        // Verify remoteJob is unchanged
+        assertEquals("test-job", mlTask.getRemoteJob().get("TransformJobName"));
     }
 }

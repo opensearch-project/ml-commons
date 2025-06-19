@@ -8,7 +8,6 @@ package org.opensearch.ml.model;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 
-import java.io.IOException;
 import java.time.Instant;
 import java.util.HashSet;
 
@@ -18,7 +17,6 @@ import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -35,13 +33,12 @@ import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.common.AccessMode;
-import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model_group.MLRegisterModelGroupInput;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.GetDataObjectResponse;
@@ -51,6 +48,7 @@ import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.transport.client.Client;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -90,7 +88,7 @@ public class MLModelGroupManager {
                 validateUniqueModelGroupName(input.getName(), input.getTenantId(), ActionListener.wrap(modelGroups -> {
                     if (modelGroups != null
                         && modelGroups.getHits().getTotalHits() != null
-                        && modelGroups.getHits().getTotalHits().value != 0) {
+                        && modelGroups.getHits().getTotalHits().value() != 0) {
                         for (SearchHit documentFields : modelGroups.getHits()) {
                             String id = documentFields.getId();
                             wrappedListener
@@ -147,7 +145,7 @@ public class MLModelGroupManager {
                                         wrappedListener.onFailure(cause);
                                     } else {
                                         try {
-                                            IndexResponse indexResponse = IndexResponse.fromXContent(r.parser());
+                                            IndexResponse indexResponse = r.indexResponse();
                                             log
                                                 .info(
                                                     "Model group creation result: {}, model group id: {}",
@@ -224,9 +222,6 @@ public class MLModelGroupManager {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             BoolQueryBuilder query = new BoolQueryBuilder();
             query.filter(new TermQueryBuilder(MLRegisterModelGroupInput.NAME_FIELD + ".keyword", name));
-            if (tenantId != null) {
-                query.filter(new TermQueryBuilder(CommonValue.TENANT_ID_FIELD, tenantId));
-            }
 
             SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder().query(query);
             SearchRequest searchRequest = new SearchRequest(ML_MODEL_GROUP_INDEX).source(searchSourceBuilder);
@@ -234,7 +229,6 @@ public class MLModelGroupManager {
             SearchDataObjectRequest searchDataObjectRequest = SearchDataObjectRequest
                 .builder()
                 .indices(searchRequest.indices())
-                .tenantId(tenantId)
                 .searchSourceBuilder(searchRequest.source())
                 .tenantId(tenantId)
                 .build();
@@ -251,10 +245,11 @@ public class MLModelGroupManager {
                     }
                 } else {
                     try {
-                        SearchResponse searchResponse = SearchResponse.fromXContent(r.parser());
+                        SearchResponse searchResponse = r.searchResponse();
+                        // Parsing failure would cause NPE on next line
                         log.info("Model group search complete: {}", searchResponse.getHits().getTotalHits());
                         listener.onResponse(searchResponse);
-                    } catch (IOException e) {
+                    } catch (Exception e) {
                         log.error("Failed to parse search response", e);
                         listener
                             .onFailure(new OpenSearchStatusException("Failed to parse search response", RestStatus.INTERNAL_SERVER_ERROR));
@@ -298,7 +293,7 @@ public class MLModelGroupManager {
 
     private void processModelGroupResponse(GetDataObjectResponse response, String modelGroupId, ActionListener<GetResponse> listener) {
         try {
-            GetResponse getResponse = parseGetResponse(response);
+            GetResponse getResponse = response.getResponse();
             if (getResponse == null || !getResponse.isExists()) {
                 listener.onFailure(new MLResourceNotFoundException("Failed to find model group with ID: " + modelGroupId));
                 return;
@@ -308,10 +303,6 @@ public class MLModelGroupManager {
         } catch (Exception e) {
             listener.onFailure(e);
         }
-    }
-
-    private GetResponse parseGetResponse(GetDataObjectResponse response) throws IOException {
-        return response.parser() == null ? null : GetResponse.fromXContent(response.parser());
     }
 
     private void parseAndRespond(GetResponse getResponse, ActionListener<GetResponse> listener) {

@@ -13,8 +13,6 @@ import java.util.Optional;
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
-import org.opensearch.client.Client;
-import org.opensearch.client.Requests;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.index.IndexNotFoundException;
@@ -24,6 +22,8 @@ import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.transport.client.Client;
+import org.opensearch.transport.client.Requests;
 
 import lombok.Builder;
 import lombok.Getter;
@@ -52,6 +52,9 @@ public class VisualizationsTool implements Tool {
     @Getter
     @Setter
     private String name = NAME;
+    @Getter
+    @Setter
+    private Map<String, Object> attributes;
     @Getter
     @Setter
     private String type = TYPE;
@@ -86,7 +89,7 @@ public class VisualizationsTool implements Tool {
                 SearchHits hits = searchResponse.getHits();
                 StringBuilder visBuilder = new StringBuilder();
                 visBuilder.append("Title,Id\n");
-                if (hits.getTotalHits().value > 0) {
+                if (hits.getTotalHits().value() > 0) {
                     Arrays.stream(hits.getHits()).forEach(h -> {
                         String id = trimIdPrefix(h.getId());
                         Map<String, String> visMap = (Map<String, String>) h.getSourceAsMap().get(SAVED_OBJECT_TYPE);
@@ -102,7 +105,8 @@ public class VisualizationsTool implements Tool {
 
             @Override
             public void onFailure(Exception e) {
-                if (ExceptionsHelper.unwrapCause(e) instanceof IndexNotFoundException) {
+                if (ExceptionsHelper.unwrapCause(e) instanceof IndexNotFoundException
+                    || ExceptionsHelper.unwrap(e, IndexNotFoundException.class) != null) {
                     listener.onResponse((T) "No Visualization found");
                 } else {
                     listener.onFailure(e);

@@ -39,7 +39,6 @@ import org.mockito.stubbing.Answer;
 import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.StepListener;
 import org.opensearch.action.update.UpdateResponse;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
@@ -58,6 +57,7 @@ import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
+import org.opensearch.transport.client.Client;
 
 import software.amazon.awssdk.utils.ImmutableMap;
 
@@ -129,7 +129,7 @@ public class MLFlowAgentRunnerTest {
         settings = Settings.builder().build();
         toolFactories = ImmutableMap.of(FIRST_TOOL, firstToolFactory, SECOND_TOOL, secondToolFactory);
         memoryMap = ImmutableMap.of("memoryType", mockMemoryFactory);
-        mlFlowAgentRunner = new MLFlowAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryMap);
+        mlFlowAgentRunner = new MLFlowAgentRunner(client, settings, clusterService, xContentRegistry, toolFactories, memoryMap, null, null);
         when(firstToolFactory.create(anyMap())).thenReturn(firstTool);
         when(secondToolFactory.create(anyMap())).thenReturn(secondTool);
         when(secondTool.getDescription()).thenReturn(SECOND_TOOL_DESC);
@@ -292,7 +292,7 @@ public class MLFlowAgentRunnerTest {
 
         Map<String, String> params = Map.of("toolType.param2", "value2", "toolName.param3", "value3", "param4", "value4");
 
-        Map<String, String> result = mlFlowAgentRunner.getToolExecuteParams(toolSpec, params);
+        Map<String, String> result = mlFlowAgentRunner.getToolExecuteParams(toolSpec, params, null);
 
         assertEquals("value1", result.get("param1"));
         assertEquals("value3", result.get("param3"));
@@ -311,7 +311,7 @@ public class MLFlowAgentRunnerTest {
         Map<String, String> params = Map
             .of("toolType.param2", "value2", "toolName.param3", "value3", "param4", "value4", "toolName.tool_key", "dynamic value");
 
-        Map<String, String> result = mlFlowAgentRunner.getToolExecuteParams(toolSpec, params);
+        Map<String, String> result = mlFlowAgentRunner.getToolExecuteParams(toolSpec, params, null);
 
         assertEquals("value1", result.get("param1"));
         assertEquals("value3", result.get("param3"));
@@ -342,7 +342,7 @@ public class MLFlowAgentRunnerTest {
             );
 
         // Execute the method
-        Map<String, String> result = mlFlowAgentRunner.getToolExecuteParams(toolSpec, params);
+        Map<String, String> result = mlFlowAgentRunner.getToolExecuteParams(toolSpec, params, null);
 
         // Assertions
         assertEquals("value1", result.get("param1"));
@@ -358,7 +358,7 @@ public class MLFlowAgentRunnerTest {
     @Test
     public void testCreateTool() {
         MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).description("description").type(FIRST_TOOL).build();
-        Tool result = mlFlowAgentRunner.createTool(firstToolSpec);
+        Tool result = mlFlowAgentRunner.createTool(firstToolSpec, null);
 
         assertNotNull(result);
         assertEquals(FIRST_TOOL, result.getName());

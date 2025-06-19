@@ -26,16 +26,15 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.function.BooleanSupplier;
 
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
-import org.opensearch.client.Client;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.ingest.ConfigurationUtils;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.exception.MLException;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.pipeline.AbstractProcessor;
 import org.opensearch.search.pipeline.PipelineProcessingContext;
@@ -50,6 +49,7 @@ import org.opensearch.searchpipelines.questionanswering.generative.llm.Llm;
 import org.opensearch.searchpipelines.questionanswering.generative.llm.LlmIOUtil;
 import org.opensearch.searchpipelines.questionanswering.generative.llm.ModelLocator;
 import org.opensearch.searchpipelines.questionanswering.generative.prompt.PromptUtil;
+import org.opensearch.transport.client.Client;
 
 import com.google.gson.JsonArray;
 
@@ -83,7 +83,7 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
     // Mainly for unit testing purpose
     private Llm llm;
 
-    private final BooleanSupplier featureFlagSupplier;
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     protected GenerativeQAResponseProcessor(
         Client client,
@@ -95,7 +95,7 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
         List<String> contextFields,
         String systemPrompt,
         String userInstructions,
-        BooleanSupplier supplier
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(tag, description, ignoreFailure);
         this.llmModel = llmModel;
@@ -104,7 +104,7 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
         this.userInstructions = userInstructions;
         this.llm = llm;
         this.memoryClient = new ConversationalMemoryClient(client);
-        this.featureFlagSupplier = supplier;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
@@ -122,7 +122,7 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
     ) {
         log.debug("Entering processResponse.");
 
-        if (!this.featureFlagSupplier.getAsBoolean()) {
+        if (!this.mlFeatureEnabledSetting.isRagSearchPipelineEnabled()) {
             throw new MLException(GenerativeQAProcessorConstants.FEATURE_NOT_ENABLED_ERROR_MSG);
         }
 
@@ -328,11 +328,11 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
     public static final class Factory implements Processor.Factory<SearchResponseProcessor> {
 
         private final Client client;
-        private final BooleanSupplier featureFlagSupplier;
+        private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
-        public Factory(Client client, BooleanSupplier supplier) {
+        public Factory(Client client, MLFeatureEnabledSetting mlFeatureEnabledSetting) {
             this.client = client;
-            this.featureFlagSupplier = supplier;
+            this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         }
 
         @Override
@@ -344,7 +344,7 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
             Map<String, Object> config,
             PipelineContext pipelineContext
         ) throws Exception {
-            if (this.featureFlagSupplier.getAsBoolean()) {
+            if (mlFeatureEnabledSetting.isRagSearchPipelineEnabled()) {
                 String modelId = ConfigurationUtils
                     .readOptionalStringProperty(
                         GenerativeQAProcessorConstants.RESPONSE_PROCESSOR_TYPE,
@@ -398,7 +398,7 @@ public class GenerativeQAResponseProcessor extends AbstractProcessor implements 
                     contextFields,
                     systemPrompt,
                     userInstructions,
-                    featureFlagSupplier
+                    mlFeatureEnabledSetting
                 );
             } else {
                 throw new MLException(GenerativeQAProcessorConstants.FEATURE_NOT_ENABLED_ERROR_MSG);

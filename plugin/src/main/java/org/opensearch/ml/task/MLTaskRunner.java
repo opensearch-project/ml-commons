@@ -67,7 +67,7 @@ public abstract class MLTaskRunner<Request extends MLTaskRequest, Response exten
             Map<String, Object> updatedFields = ImmutableMap
                 .of(MLTask.STATE_FIELD, MLTaskState.FAILED.name(), MLTask.ERROR_FIELD, e.getMessage());
             // wait for 2 seconds to make sure failed state persisted
-            mlTaskManager.updateMLTask(mlTask.getTaskId(), updatedFields, TIMEOUT_IN_MILLIS, true);
+            mlTaskManager.updateMLTask(mlTask.getTaskId(), null, updatedFields, TIMEOUT_IN_MILLIS, true);
         }
     }
 
@@ -80,7 +80,7 @@ public abstract class MLTaskRunner<Request extends MLTaskRequest, Response exten
                 updatedFields.put(MLTask.MODEL_ID_FIELD, mlTask.getModelId());
             }
             // wait for 2 seconds to make sure completed state persisted
-            mlTaskManager.updateMLTask(mlTask.getTaskId(), updatedFields, TIMEOUT_IN_MILLIS, true);
+            mlTaskManager.updateMLTask(mlTask.getTaskId(), null, updatedFields, TIMEOUT_IN_MILLIS, true);
         }
     }
 
@@ -112,15 +112,14 @@ public abstract class MLTaskRunner<Request extends MLTaskRequest, Response exten
             if (clusterService.localNode().getId().equals(nodeId)) {
                 // Execute ML task locally
                 log.debug("Execute ML request {} locally on node {}", request.getRequestID(), nodeId);
-                checkOpenCircuitBreaker(mlCircuitBreakerService, mlStats);
-                executeTask(request, listener);
+                checkCBAndExecute(functionName, request, listener);
             } else {
                 // Execute ML task remotely
                 log.debug("Execute ML request {} remotely on node {}", request.getRequestID(), nodeId);
                 request.setDispatchTask(false);
                 transportService.sendRequest(node, getTransportActionName(), request, getResponseHandler(listener));
             }
-        }, e -> listener.onFailure(e)));
+        }, listener::onFailure));
     }
 
     protected abstract String getTransportActionName();
@@ -130,7 +129,8 @@ public abstract class MLTaskRunner<Request extends MLTaskRequest, Response exten
     protected abstract void executeTask(Request request, ActionListener<Response> listener);
 
     protected void checkCBAndExecute(FunctionName functionName, Request request, ActionListener<Response> listener) {
-        if (functionName != FunctionName.REMOTE) {
+        // for agent and remote model prediction we don't need to check circuit breaker
+        if (functionName != FunctionName.REMOTE && functionName != FunctionName.AGENT) {
             checkOpenCircuitBreaker(mlCircuitBreakerService, mlStats);
         }
         executeTask(request, listener);

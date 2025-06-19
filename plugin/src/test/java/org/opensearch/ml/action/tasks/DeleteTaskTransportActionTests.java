@@ -10,8 +10,13 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.action.DocWriteResponse.Result.DELETED;
+import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_PRIMARY_TERM;
+import static org.opensearch.index.seqno.SequenceNumbers.UNASSIGNED_SEQ_NO;
+import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 
 import java.io.IOException;
+import java.util.Collections;
 
 import org.junit.Before;
 import org.junit.Rule;
@@ -22,23 +27,28 @@ import org.mockito.MockitoAnnotations;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
-import org.opensearch.client.Client;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
+import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.task.MLTaskDeleteRequest;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
 
 public class DeleteTaskTransportActionTests extends OpenSearchTestCase {
     @Mock
@@ -46,6 +56,8 @@ public class DeleteTaskTransportActionTests extends OpenSearchTestCase {
 
     @Mock
     Client client;
+
+    SdkClient sdkClient;
 
     @Mock
     TransportService transportService;
@@ -62,6 +74,9 @@ public class DeleteTaskTransportActionTests extends OpenSearchTestCase {
     @Mock
     NamedXContentRegistry xContentRegistry;
 
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
@@ -72,17 +87,20 @@ public class DeleteTaskTransportActionTests extends OpenSearchTestCase {
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
-
-        mlTaskDeleteRequest = MLTaskDeleteRequest.builder().taskId("test_id").build();
-        deleteTaskTransportAction = spy(new DeleteTaskTransportAction(transportService, actionFilters, client, xContentRegistry));
-
         Settings settings = Settings.builder().build();
+        sdkClient = SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap());
+        mlTaskDeleteRequest = MLTaskDeleteRequest.builder().taskId("test_id").build();
+        deleteTaskTransportAction = spy(
+            new DeleteTaskTransportAction(transportService, actionFilters, client, sdkClient, xContentRegistry, mlFeatureEnabledSetting)
+        );
+
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
     }
 
     public void testDeleteTask_Success() throws IOException {
+        DeleteResponse deleteResponse = new DeleteResponse(new ShardId(ML_TASK_INDEX, "_na_", 0), "TASK_ID", 1, 0, 2, true);
         doAnswer(invocation -> {
             ActionListener<DeleteResponse> listener = invocation.getArgument(1);
             listener.onResponse(deleteResponse);
@@ -96,7 +114,10 @@ public class DeleteTaskTransportActionTests extends OpenSearchTestCase {
         }).when(client).get(any(), any());
 
         deleteTaskTransportAction.doExecute(null, mlTaskDeleteRequest, actionListener);
-        verify(actionListener).onResponse(deleteResponse);
+        ArgumentCaptor<DeleteResponse> captor = ArgumentCaptor.forClass(DeleteResponse.class);
+        verify(actionListener).onResponse(captor.capture());
+        assertEquals("TASK_ID", captor.getValue().getId());
+        assertEquals(DELETED, captor.getValue().getResult());
     }
 
     public void testDeleteTask_CheckTaskState() throws IOException {
@@ -110,7 +131,7 @@ public class DeleteTaskTransportActionTests extends OpenSearchTestCase {
         deleteTaskTransportAction.doExecute(null, mlTaskDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Task cannot be deleted in running state. Try after sometime", argumentCaptor.getValue().getMessage());
+        assertEquals("Task cannot be deleted in running state. Try after some time.", argumentCaptor.getValue().getMessage());
     }
 
     public void testDeleteTask_ResourceNotFoundException() throws IOException {
@@ -123,20 +144,45 @@ public class DeleteTaskTransportActionTests extends OpenSearchTestCase {
         deleteTaskTransportAction.doExecute(null, mlTaskDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Fail to find task", argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to get data object from index .plugins-ml-task", argumentCaptor.getValue().getMessage());
     }
 
-    public void testDeleteTask_GetResponseNullException() {
+    public void testDeleteTask_IndexNotFoundException() {
         doAnswer(invocation -> {
             ActionListener<GetResponse> actionListener = invocation.getArgument(1);
-            actionListener.onResponse(null);
+            actionListener.onFailure(new IndexNotFoundException(ML_TASK_INDEX));
+            return null;
+        }).when(client).get(any(), any());
+
+        deleteTaskTransportAction.doExecute(null, mlTaskDeleteRequest, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Failed to find task", argumentCaptor.getValue().getMessage());
+    }
+
+    public void testDeleteTask_GetResponseNotExistsException() {
+        GetResult getResult = new GetResult(
+            ML_TASK_INDEX,
+            "fake_id",
+            UNASSIGNED_SEQ_NO,
+            UNASSIGNED_PRIMARY_TERM,
+            -1L,
+            false,
+            null,
+            null,
+            null
+        );
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(new GetResponse(getResult));
             return null;
         }).when(client).get(any(), any());
 
         deleteTaskTransportAction.doExecute(null, mlTaskDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Fail to find task", argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to find task", argumentCaptor.getValue().getMessage());
     }
 
     public void testDeleteTask_RuntimeException() throws IOException {
@@ -156,7 +202,7 @@ public class DeleteTaskTransportActionTests extends OpenSearchTestCase {
         deleteTaskTransportAction.doExecute(null, mlTaskDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("errorMessage", argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to delete data object from index .plugins-ml-task", argumentCaptor.getValue().getMessage());
     }
 
     public void testDeleteTask_ThreadContextError() {
@@ -165,6 +211,51 @@ public class DeleteTaskTransportActionTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("thread context error", argumentCaptor.getValue().getMessage());
+    }
+
+    public void testDeleteTask_NullTenantValidation() {
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
+        MLTaskDeleteRequest request = MLTaskDeleteRequest.builder()
+            .taskId("test_id")
+            .tenantId(null)
+            .build();
+        
+        deleteTaskTransportAction.doExecute(null, request, actionListener);
+        
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("You don't have permission to access this resource", argumentCaptor.getValue().getMessage());
+    }
+
+    public void testDeleteTask_TenantMismatch() throws IOException {
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
+        MLTaskDeleteRequest request = MLTaskDeleteRequest.builder()
+            .taskId("test_id")
+            .tenantId("tenant1")
+            .build();
+        
+        MLTask mlTask = MLTask.builder()
+            .taskId("taskID")
+            .state(MLTaskState.COMPLETED)
+            .tenantId("tenant2")
+            .build();
+        
+        XContentBuilder content = mlTask.toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS);
+        BytesReference bytesReference = BytesReference.bytes(content);
+        GetResult getResult = new GetResult("indexName", "111", 111L, 111L, 111L, true, bytesReference, null, null);
+        GetResponse getResponse = new GetResponse(getResult);
+        
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(getResponse);
+            return null;
+        }).when(client).get(any(), any());
+        
+        deleteTaskTransportAction.doExecute(null, request, actionListener);
+        
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("You don't have permission to access this resource", argumentCaptor.getValue().getMessage());
     }
 
     public GetResponse prepareMLTask(MLTaskState mlTaskState) throws IOException {

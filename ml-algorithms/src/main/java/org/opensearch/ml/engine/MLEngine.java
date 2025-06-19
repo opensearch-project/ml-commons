@@ -38,6 +38,7 @@ public class MLEngine {
 
     public static final String REGISTER_MODEL_FOLDER = "register";
     public static final String DEPLOY_MODEL_FOLDER = "deploy";
+    public static final String ANALYSIS_FOLDER = "analysis";
     private final String MODEL_REPO = "https://artifacts.opensearch.org/models/ml-models";
 
     @Getter
@@ -114,6 +115,10 @@ public class MLEngine {
         return mlModelsCachePath.resolve("models");
     }
 
+    public Path getAnalysisRootPath() {
+        return mlModelsCachePath.resolve(ANALYSIS_FOLDER);
+    }
+
     public MLModel train(Input input) {
         validateMLInput(input);
         MLInput mlInput = (MLInput) input;
@@ -125,7 +130,12 @@ public class MLEngine {
     }
 
     public Map<String, String> getConnectorCredential(Connector connector) {
-        connector.decrypt(PREDICT.name(), (credential) -> encryptor.decrypt(credential));
+        connector
+            .decrypt(
+                PREDICT.name(),
+                (credential, tenantId) -> encryptor.decrypt(credential, connector.getTenantId()),
+                connector.getTenantId()
+            );
         Map<String, String> decryptedCredential = connector.getDecryptedCredential();
         String region = connector.getParameters().get(REGION_FIELD);
         if (region != null) {
@@ -211,8 +221,8 @@ public class MLEngine {
         }
     }
 
-    public String encrypt(String credential) {
-        return encryptor.encrypt(credential);
+    public String encrypt(String credential, String tenantId) {
+        return encryptor.encrypt(credential, tenantId);
     }
 
 }

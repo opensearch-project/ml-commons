@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.model;
 
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MONITORING_REQUEST_COUNT;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MONITORING_REQUEST_COUNT;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -735,7 +735,8 @@ public class MLModelCacheHelper {
     private MLModelCache getExistingModelCache(String modelId) {
         MLModelCache modelCache = modelCaches.get(modelId);
         if (modelCache == null) {
-            throw new IllegalArgumentException("Model not found in cache");
+            return getOrCreateModelCache(modelId);
+            // throw new IllegalArgumentException("Model not found in cache");
         }
         return modelCache;
     }

@@ -9,8 +9,8 @@ import static org.opensearch.ml.common.MLTask.ERROR_FIELD;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTaskState.COMPLETED;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_BATCH_INGESTION_BULK_SIZE;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.INGEST_THREAD_POOL;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_BATCH_INGESTION_BULK_SIZE;
 import static org.opensearch.ml.task.MLTaskManager.TASK_SEMAPHORE_TIMEOUT;
 import static org.opensearch.ml.utils.MLExceptionUtils.OFFLINE_BATCH_INGESTION_DISABLED_ERR_MSG;
 
@@ -24,7 +24,6 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.settings.Settings;
@@ -33,6 +32,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.batch.MLBatchIngestionAction;
 import org.opensearch.ml.common.transport.batch.MLBatchIngestionInput;
 import org.opensearch.ml.common.transport.batch.MLBatchIngestionRequest;
@@ -40,12 +40,12 @@ import org.opensearch.ml.common.transport.batch.MLBatchIngestionResponse;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.ingest.Ingestable;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.MLExceptionUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
+import org.opensearch.transport.client.Client;
 
 import com.jayway.jsonpath.PathNotFoundException;
 
@@ -169,6 +169,7 @@ public class TransportBatchIngestionAction extends HandledTransportAction<Action
                         mlTaskManager
                             .updateMLTask(
                                 taskId,
+                                null,
                                 Map.of(STATE_FIELD, FAILED, ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(ex)),
                                 TASK_SEMAPHORE_TIMEOUT,
                                 true
@@ -194,6 +195,7 @@ public class TransportBatchIngestionAction extends HandledTransportAction<Action
             mlTaskManager
                 .updateMLTask(
                     taskId,
+                    null,
                     Map.of(STATE_FIELD, FAILED, ERROR_FIELD, jsonPathNotFoundException.getMessage()),
                     TASK_SEMAPHORE_TIMEOUT,
                     true
@@ -203,6 +205,7 @@ public class TransportBatchIngestionAction extends HandledTransportAction<Action
             mlTaskManager
                 .updateMLTask(
                     taskId,
+                    null,
                     Map.of(STATE_FIELD, FAILED, ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(e)),
                     TASK_SEMAPHORE_TIMEOUT,
                     true
@@ -212,11 +215,12 @@ public class TransportBatchIngestionAction extends HandledTransportAction<Action
 
     protected void handleSuccessRate(double successRate, String taskId) {
         if (successRate == 100) {
-            mlTaskManager.updateMLTask(taskId, Map.of(STATE_FIELD, COMPLETED), 5000, true);
+            mlTaskManager.updateMLTask(taskId, null, Map.of(STATE_FIELD, COMPLETED), 5000, true);
         } else if (successRate > 0) {
             mlTaskManager
                 .updateMLTask(
                     taskId,
+                    null,
                     Map.of(STATE_FIELD, FAILED, ERROR_FIELD, "batch ingestion successful rate is " + successRate),
                     TASK_SEMAPHORE_TIMEOUT,
                     true
@@ -225,6 +229,7 @@ public class TransportBatchIngestionAction extends HandledTransportAction<Action
             mlTaskManager
                 .updateMLTask(
                     taskId,
+                    null,
                     Map.of(STATE_FIELD, FAILED, ERROR_FIELD, "batch ingestion successful rate is 0"),
                     TASK_SEMAPHORE_TIMEOUT,
                     true

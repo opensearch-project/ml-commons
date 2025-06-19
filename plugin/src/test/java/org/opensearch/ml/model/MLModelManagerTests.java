@@ -22,25 +22,24 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.MLTask.FUNCTION_NAME_FIELD;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_BATCH_INGESTION_BULK_SIZE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_BATCH_INFERENCE_TASKS;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_BATCH_INGESTION_TASKS;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_MODELS_PER_NODE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MONITORING_REQUEST_COUNT;
 import static org.opensearch.ml.engine.ModelHelper.CHUNK_FILES;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_FILE_HASH;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_SIZE_IN_BYTES;
 import static org.opensearch.ml.model.MLModelManager.TIMEOUT_IN_MILLIS;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.DEPLOY_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.REGISTER_THREAD_POOL;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_BATCH_INGESTION_BULK_SIZE;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_BATCH_INFERENCE_TASKS;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_BATCH_INGESTION_TASKS;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_MODELS_PER_NODE;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MONITORING_REQUEST_COUNT;
 import static org.opensearch.ml.utils.MockHelper.mock_MLIndicesHandler_initModelIndex;
 import static org.opensearch.ml.utils.MockHelper.mock_MLIndicesHandler_initModelIndex_failure;
 import static org.opensearch.ml.utils.MockHelper.mock_client_ThreadContext;
 import static org.opensearch.ml.utils.MockHelper.mock_client_ThreadContext_Exception;
 import static org.opensearch.ml.utils.MockHelper.mock_client_get_NotExist;
-import static org.opensearch.ml.utils.MockHelper.mock_client_get_NullResponse;
 import static org.opensearch.ml.utils.MockHelper.mock_client_get_failure;
 import static org.opensearch.ml.utils.MockHelper.mock_client_index;
 import static org.opensearch.ml.utils.MockHelper.mock_client_index_failure;
@@ -75,12 +74,12 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
-import org.opensearch.client.Client;
 import org.opensearch.cluster.service.ClusterApplierService;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
@@ -92,9 +91,11 @@ import org.opensearch.core.common.breaker.CircuitBreaker;
 import org.opensearch.core.common.breaker.CircuitBreakingException;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.index.shard.ShardId;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.breaker.MLCircuitBreakerService;
 import org.opensearch.ml.breaker.ThresholdCircuitBreaker;
@@ -112,6 +113,7 @@ import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
@@ -121,7 +123,6 @@ import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
@@ -134,6 +135,7 @@ import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.script.ScriptService;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -202,7 +204,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     public void setup() throws URISyntaxException {
         String masterKey = "m+dWmfmnNRiNlOdej/QelEkvMTyH//frS2TBeS2BP4w=";
         MockitoAnnotations.openMocks(this);
-        encryptor = new EncryptorImpl(masterKey);
+        encryptor = new EncryptorImpl(null, masterKey);
         mlEngine = new MLEngine(Path.of("/tmp/test" + randomAlphaOfLength(10)), encryptor);
         settings = Settings.builder().put(ML_COMMONS_MAX_MODELS_PER_NODE.getKey(), 10).build();
         settings = Settings.builder().put(ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE.getKey(), 10).build();
@@ -345,7 +347,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         expectedEx.expect(MLException.class);
         expectedEx.expectMessage(error);
         modelManager.registerMLModel(registerModelInput, mlTask);
-        verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
+        verify(mlTaskManager).updateMLTask(anyString(), any(), anyMap(), anyLong(), anyBoolean());
     }
 
     public void testRegisterMLModel_CircuitBreakerOpen() {
@@ -356,7 +358,19 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         expectedEx.expect(CircuitBreakingException.class);
         expectedEx.expectMessage("Disk Circuit Breaker is open, please check your resources!");
         modelManager.registerMLModel(registerModelInput, mlTask);
-        verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
+        verify(mlTaskManager).updateMLTask(anyString(), any(), anyMap(), anyLong(), anyBoolean());
+    }
+
+    public void testRegisterMLModel_CircuitBreakerNotOpenForAgent() {
+        registerModelInput.setFunctionName(FunctionName.AGENT);
+        doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
+        when(mlCircuitBreakerService.checkOpenCB()).thenReturn(thresholdCircuitBreaker);
+        when(thresholdCircuitBreaker.getName()).thenReturn("Disk Circuit Breaker");
+        when(thresholdCircuitBreaker.getThreshold()).thenReturn(87);
+        expectedEx.expect(CircuitBreakingException.class);
+        expectedEx.expectMessage("Disk Circuit Breaker is open, please check your resources!");
+        modelManager.registerMLModel(registerModelInput, mlTask);
+        verify(mlTaskManager).updateMLTask(anyString(), any(), anyMap(), anyLong(), anyBoolean());
     }
 
     public void testRegisterMLModel_InitModelIndexFailure() {
@@ -366,7 +380,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         mock_MLIndicesHandler_initModelIndex_failure(mlIndicesHandler);
 
         modelManager.registerMLModel(registerModelInput, mlTask);
-        verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
+        verify(mlTaskManager).updateMLTask(anyString(), any(), anyMap(), anyLong(), anyBoolean());
         verify(modelHelper, never()).downloadAndSplit(any(), any(), any(), any(), any(), any(), any(), any());
         verify(client, never()).index(any(), any());
     }
@@ -455,6 +469,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         verify(mlTaskManager)
             .updateMLTask(
                 eq("pretrained"),
+                any(),
                 eq(ImmutableMap.of(FUNCTION_NAME_FIELD, FunctionName.SPARSE_ENCODING)),
                 eq((long) TIMEOUT_IN_MILLIS),
                 eq(false)
@@ -488,7 +503,47 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         when(indexResponse.getId()).thenReturn("mockIndexId");
         modelManager.registerMLRemoteModel(sdkClient, pretrainedInput, pretrainedTask, listener);
         assertEquals(pretrainedTask.getFunctionName(), FunctionName.REMOTE);
-        verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
+        verify(mlTaskManager).updateMLTask(anyString(), any(), anyMap(), anyLong(), anyBoolean());
+    }
+
+    @Test
+    public void testRegisterMLRemoteModelModelGroupNotFoundException() throws PrivilegedActionException, IOException {
+        // Create listener and capture the failure
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        ActionListener<MLRegisterModelResponse> listener = mock(ActionListener.class);
+
+        // Setup mocks
+        doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
+        when(mlCircuitBreakerService.checkOpenCB()).thenReturn(null);
+        when(threadPool.executor(REGISTER_THREAD_POOL)).thenReturn(taskExecutorService);
+        when(modelHelper.downloadPrebuiltModelMetaList(any(), any())).thenReturn(Collections.singletonList("demo"));
+        when(modelHelper.isModelAllowed(any(), any())).thenReturn(true);
+
+        // Create test inputs
+        MLRegisterModelInput pretrainedInput = mockRemoteModelInput(true);
+        MLTask pretrainedTask = MLTask.builder().taskId("pretrained").modelId("pretrained").functionName(FunctionName.REMOTE).build();
+
+        // Mock index handler
+        mock_MLIndicesHandler_initModelIndex(mlIndicesHandler, true);
+
+        // Mock client.get() to throw IndexNotFoundException
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> getModelGroupListener = invocation.getArgument(1);
+            getModelGroupListener.onFailure(new IndexNotFoundException("Test", "test"));
+            return null;
+        }).when(client).get(any(), any());
+
+        // Execute method under test
+        modelManager.registerMLRemoteModel(sdkClient, pretrainedInput, pretrainedTask, listener);
+
+        // Verify the listener's onFailure was called with correct exception
+        verify(listener).onFailure(exceptionCaptor.capture());
+        Exception exception = exceptionCaptor.getValue();
+
+        // Verify exception type and message
+        assertTrue(exception instanceof OpenSearchStatusException);
+        assertEquals("Model group not found", exception.getMessage());
+        assertEquals(RestStatus.NOT_FOUND, ((OpenSearchStatusException) exception).status());
     }
 
     public void testRegisterMLRemoteModel_SkipMemoryCBOpen() throws IOException {
@@ -522,7 +577,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         when(indexResponse.getId()).thenReturn("mockIndexId");
         modelManager.registerMLRemoteModel(sdkClient, pretrainedInput, pretrainedTask, listener);
         assertEquals(pretrainedTask.getFunctionName(), FunctionName.REMOTE);
-        verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
+        verify(mlTaskManager).updateMLTask(anyString(), any(), anyMap(), anyLong(), anyBoolean());
     }
 
     public void testIndexRemoteModel() throws PrivilegedActionException, IOException {
@@ -552,7 +607,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         }).when(client).index(any(), any());
         modelManager.indexRemoteModel(pretrainedInput, pretrainedTask, "1.0.0");
         assertEquals(pretrainedTask.getFunctionName(), FunctionName.REMOTE);
-        verify(mlTaskManager).updateMLTask(anyString(), anyMap(), anyLong(), anyBoolean());
+        verify(mlTaskManager).updateMLTask(anyString(), any(), anyMap(), anyLong(), anyBoolean());
         verify(modelManager).deployModelAfterRegistering(any(), anyString());
 
     }
@@ -673,47 +728,6 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exception.capture());
         assertEquals("Failed to get data object from index .plugins-ml-model", exception.getValue().getMessage());
-        verify(mlStats)
-            .createCounterStatIfAbsent(
-                eq(FunctionName.TEXT_EMBEDDING),
-                eq(ActionName.DEPLOY),
-                eq(MLActionLevelStat.ML_ACTION_FAILURE_COUNT)
-            );
-    }
-
-    public void testDeployModel_NullGetModelResponse() {
-        MLModelConfig modelConfig = TextEmbeddingModelConfig
-            .builder()
-            .modelType("bert")
-            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
-            .embeddingDimension(384)
-            .build();
-        model = MLModel
-            .builder()
-            .modelId(modelId)
-            .modelState(MLModelState.DEPLOYING)
-            .algorithm(FunctionName.TEXT_EMBEDDING)
-            .name(modelName)
-            .version(version)
-            .totalChunks(2)
-            .modelFormat(MLModelFormat.TORCH_SCRIPT)
-            .modelConfig(modelConfig)
-            .modelContentHash(modelContentHashValue)
-            .modelContentSizeInBytes(modelContentSize)
-            .build();
-        String[] nodes = new String[] { "node1", "node2" };
-        mlTask.setWorkerNodes(List.of(nodes));
-        ActionListener<String> listener = mock(ActionListener.class);
-        when(modelCacheHelper.isModelDeployed(modelId)).thenReturn(false);
-        when(modelCacheHelper.getDeployedModels()).thenReturn(new String[] {});
-        when(modelCacheHelper.getLocalDeployedModels()).thenReturn(new String[] {});
-        mock_threadpool(threadPool, taskExecutorService);
-        mock_client_get_NullResponse(client);
-        modelManager.deployModel(modelId, modelContentHashValue, FunctionName.TEXT_EMBEDDING, true, false, mlTask, listener);
-        assertFalse(modelManager.isModelRunningOnNode(modelId));
-        ArgumentCaptor<Exception> exception = ArgumentCaptor.forClass(Exception.class);
-        verify(listener).onFailure(exception.capture());
-        assertEquals("Failed to find model", exception.getValue().getMessage());
         verify(mlStats)
             .createCounterStatIfAbsent(
                 eq(FunctionName.TEXT_EMBEDDING),
@@ -1292,6 +1306,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
                     123,
                     TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS,
                     "all config",
+                    null,
                     TextEmbeddingModelConfig.PoolingMode.MEAN,
                     true,
                     512

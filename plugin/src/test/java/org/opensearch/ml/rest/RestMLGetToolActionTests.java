@@ -23,7 +23,6 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
@@ -32,7 +31,7 @@ import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.tools.MLGetToolAction;
 import org.opensearch.ml.common.transport.tools.MLToolGetRequest;
 import org.opensearch.ml.common.transport.tools.MLToolGetResponse;
-import org.opensearch.ml.engine.tools.CatIndexTool;
+import org.opensearch.ml.engine.tools.ListIndexTool;
 import org.opensearch.rest.RestChannel;
 import org.opensearch.rest.RestHandler;
 import org.opensearch.rest.RestRequest;
@@ -40,6 +39,7 @@ import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.test.rest.FakeRestRequest;
 import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.client.node.NodeClient;
 
 public class RestMLGetToolActionTests extends OpenSearchTestCase {
 
@@ -61,7 +61,7 @@ public class RestMLGetToolActionTests extends OpenSearchTestCase {
         Mockito.when(mockFactory.getDefaultType()).thenReturn("Mocked type");
         Mockito.when(mockFactory.getDefaultVersion()).thenReturn("Mocked version");
 
-        Tool tool = CatIndexTool.Factory.getInstance().create(Collections.emptyMap());
+        Tool tool = ListIndexTool.Factory.getInstance().create(Collections.emptyMap());
         Mockito.when(mockFactory.create(Mockito.any())).thenReturn(tool);
         toolFactories.put("mockTool", mockFactory);
 

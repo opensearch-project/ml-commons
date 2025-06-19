@@ -1,0 +1,8 @@
+#
+# Copyright OpenSearch Contributors
+# SPDX-License-Identifier: Apache-2.0
+#
+
+# This file is needed to register MLPlugin in job scheduler framework
+# See https://github.com/opensearch-project/job-scheduler/blob/main/README.md#getting-started
+org.opensearch.ml.plugin.MachineLearningPlugin
