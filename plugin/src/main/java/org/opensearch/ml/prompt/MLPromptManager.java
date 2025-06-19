@@ -80,16 +80,23 @@ public class MLPromptManager {
     public static final String ROLE_PARAMETER = "role";
     public static final String CONTENT_PARAMETER = "content";
 
-    public static final Map<String, String> ML_PROMPT_MATCHING_KEYS = Map.of
-            (
-                    "planner_template", "planner_prompt_template",
-                    "planner", "planner_prompt",
-                    "reflect_template", "reflect_prompt_template",
-                    "reflect", "reflect_prompt",
-                    "planner_with_history_template", "planner_with_history_template",
-                    "system", "system_prompt",
-                    "executor_system", "executor_prompt_system"
-            );
+    public static final Map<String, String> ML_PROMPT_MATCHING_KEYS = Map
+        .of(
+            "planner_template",
+            "planner_prompt_template",
+            "planner",
+            "planner_prompt",
+            "reflect_template",
+            "reflect_prompt_template",
+            "reflect",
+            "reflect_prompt",
+            "planner_with_history_template",
+            "planner_with_history_template",
+            "system",
+            "system_prompt",
+            "executor_system",
+            "executor_prompt_system"
+        );
 
     public static final String PARAMETERS_PROMPT_FIELD = "prompt";
     public static final String PARAMETERS_MESSAGES_FIELD = "messages";
@@ -241,8 +248,8 @@ public class MLPromptManager {
     public static Map<String, String> extractInputParameter(MLInput input) {
         MLInputDataset inputDataset = input.getInputDataset();
         return inputDataset instanceof RemoteInferenceInputDataSet
-                ? ((RemoteInferenceInputDataSet) inputDataset).getParameters()
-                : new HashMap<>();
+            ? ((RemoteInferenceInputDataSet) inputDataset).getParameters()
+            : new HashMap<>();
     }
 
     /**
@@ -263,8 +270,8 @@ public class MLPromptManager {
         MLInput mlInput = (MLInput) request.getInput();
         MLInputDataset inputDataset = mlInput.getInputDataset();
         Map<String, String> inputParameters = inputDataset instanceof RemoteInferenceInputDataSet
-                ? ((RemoteInferenceInputDataSet) inputDataset).getParameters()
-                : new HashMap<>();
+            ? ((RemoteInferenceInputDataSet) inputDataset).getParameters()
+            : new HashMap<>();
 
         resolveSinglePrompts(inputParameters);
 
@@ -279,7 +286,12 @@ public class MLPromptManager {
     }
 
     private void resolveSinglePrompts(Map<String, String> inputParameters) throws IOException {
-        List<String> unresolvedPrompts = ML_PROMPT_MATCHING_KEYS.values().stream().filter(inputParameters::containsKey).filter(value -> inputParameters.get(value).contains("pull_prompt")).toList();
+        List<String> unresolvedPrompts = ML_PROMPT_MATCHING_KEYS
+            .values()
+            .stream()
+            .filter(inputParameters::containsKey)
+            .filter(value -> inputParameters.get(value).contains("pull_prompt"))
+            .toList();
         if (unresolvedPrompts.isEmpty()) {
             // if the list is empty, then the request does not contain any single pull prompts to resolve
             return;
@@ -298,15 +310,11 @@ public class MLPromptManager {
 
         AtomicReference<List<String>> reference = new AtomicReference<>(promptGroupParameters);
 
-        GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
-                .builder()
-                .index(ML_PROMPT_INDEX)
-                .id(promptId)
-                .build();
+        GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest.builder().index(ML_PROMPT_INDEX).id(promptId).build();
         MLPrompt mlPrompt = getPrompt(getDataObjectRequest);
         Map<String, String> promptTemplate = mlPrompt.getPrompt();
         for (String key : promptTemplate.keySet()) {
-            if (reference.get() == null || reference.get().isEmpty() || reference.get().contains(key)) {
+            if (reference.get().size() == 1 || reference.get().contains(key)) {
                 String matchingKey = ML_PROMPT_MATCHING_KEYS.get(key);
                 // If a key exists in both the prompt group and request parameters, the value from the
                 // value from the request parameters takes precedence.
@@ -431,7 +439,8 @@ public class MLPromptManager {
     private static List<String> validatePullPromptGroupSyntax(String content) {
         if (content != null && content.contains("pull_prompt(")) {
             String pullPromptWithOnlyIDRegex = "pull_prompt\\(\\s*([a-zA-Z0-9_\\-]+)\\s*\\)";
-            String pullPromptWithIDAndFilterListRegex = "pull_prompt\\(\\s*([a-zA-Z0-9_\\-]+)\\s*,\\s*\\[\\s*([a-zA-Z0-9_\\-\\s,]*)\\s*]\\s*\\)";
+            String pullPromptWithIDAndFilterListRegex =
+                "pull_prompt\\(\\s*([a-zA-Z0-9_\\-]+)\\s*,\\s*\\[\\s*([a-zA-Z0-9_\\-\\s,]*)\\s*]\\s*\\)";
 
             Pattern patternWithOnlyID = Pattern.compile(pullPromptWithOnlyIDRegex);
             Pattern patternWithIDAndFilterList = Pattern.compile(pullPromptWithIDAndFilterListRegex);
@@ -445,16 +454,17 @@ public class MLPromptManager {
                 return List.of(promptId);
             }
 
-            while(matcherWithIDAndFilterList.find()) {
+            while (matcherWithIDAndFilterList.find()) {
                 String promptId = matcherWithIDAndFilterList.group(1);
                 String filterList = matcherWithIDAndFilterList.group(2);
 
                 // Split variables by comma and trim whitespace
                 filterList = promptId + "," + filterList;
-                String[] promptList = Arrays.stream(filterList.split(","))
-                        .map(String::trim)
-                        .filter(s -> !s.isEmpty())
-                        .toArray(String[]::new);
+                String[] promptList = Arrays
+                    .stream(filterList.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .toArray(String[]::new);
 
                 List<String> filterListArray = Arrays.asList(promptList);
                 return filterListArray;
