@@ -92,6 +92,10 @@ public class MLIndicesHandler {
         initMLIndexIfAbsent(MLIndex.MCP_TOOLS, listener);
     }
 
+    public void initMLJobsIndex(ActionListener<Boolean> listener) {
+        initMLIndexIfAbsent(MLIndex.JOBS, listener);
+    }
+
     public void initMLAgentIndex(ActionListener<Boolean> listener) {
         initMLIndexIfAbsent(MLIndex.AGENT, listener);
     }
