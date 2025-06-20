@@ -99,14 +99,6 @@ configurations.all {
     resolutionStrategy.force 'com.google.protobuf:protobuf-java:3.25.5'
     resolutionStrategy.force 'org.apache.commons:commons-compress:1.26.0'
     resolutionStrategy.force 'software.amazon.awssdk:bom:2.30.18'
-    resolutionStrategy.eachDependency { DependencyResolveDetails details ->
-        if (details.requested.group == 'commons-beanutils') {
-            details.useVersion '1.11.0'
-        }
-        if (details.requested.group == 'org.apache.commons' && details.requested.name == 'commons-beanutils2') {
-            details.useVersion '2.0.0-M2'
-        }
-    }
 }
 
 jacocoTestReport {
