@@ -112,7 +112,7 @@ public class TransportMcpToolsRemoveOnNodesAction extends
                         );
                     errors.get().add(toolName);
                     return Mono.empty();
-                }).subscribe();
+                }).doOnSuccess(x -> McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.remove(toolName)).subscribe();
             }
             return Mono.empty();
         }).doOnComplete(() -> log.debug("Successfully removed tools on node: {}", clusterService.localNode().getId())).subscribe();
