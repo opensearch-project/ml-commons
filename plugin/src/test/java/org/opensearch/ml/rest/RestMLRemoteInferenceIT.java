@@ -19,9 +19,11 @@ import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.client.Request;
 import org.opensearch.client.Response;
 import org.opensearch.client.ResponseException;
 import org.opensearch.ml.common.MLTaskState;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.utils.TestHelper;
 
 import com.google.common.collect.ImmutableList;
@@ -1176,5 +1178,75 @@ public class RestMLRemoteInferenceIT extends MLCommonsRestTestCase {
         String taskId = (String) responseMap.get("task_id");
         logger.info("task ID created: {}", taskId);
         return taskId;
+    }
+
+    public void testRefreshMLKey() throws IOException, InterruptedException {
+        // Skip test if key is null
+        if (OPENAI_KEY == null) {
+            return;
+        }
+        String entity = "{\n"
+            + "  \"name\": \"OpenAI chat model Connector\",\n"
+            + "  \"description\": \"The connector to public OpenAI model service for GPT 3.5\",\n"
+            + "  \"version\": 1,\n"
+            + "\"client_config\": {\n"
+            + "    \"max_connection\": 20,\n"
+            + "    \"connection_timeout\": 50000,\n"
+            + "    \"read_timeout\": 50000\n"
+            + "  },\n"
+            + "  \"protocol\": \"http\",\n"
+            + "  \"parameters\": {\n"
+            + "      \"endpoint\": \"api.openai.com\",\n"
+            + "      \"auth\": \"API_Key\",\n"
+            + "      \"content_type\": \"application/json\",\n"
+            + "      \"max_tokens\": 7,\n"
+            + "      \"temperature\": 0,\n"
+            + "      \"model\": \"gpt-3.5-turbo\"\n"
+            + "  },\n"
+            + "  \"credential\": {\n"
+            + "      \"openAI_key\": \""
+            + OPENAI_KEY
+            + "\"\n"
+            + "  },\n"
+            + "  \"actions\": [\n"
+            + "      {\n"
+            + "      \"action_type\": \"predict\",\n"
+            + "          \"method\": \"POST\",\n"
+            + "          \"url\": \"https://api.openai.com/v1/chat/completions\",\n"
+            + "          \"headers\": { \n"
+            + "            \"Authorization\": \"Bearer ${credential.openAI_key}\"\n"
+            + "          },\n"
+            + "          \"request_body\": \"{ \\\"model\\\": \\\"${parameters.model}\\\", \\\"messages\\\": ${parameters.messages} }\"\n"
+            + "      }\n"
+            + "  ]\n"
+            + "}";
+        Response response = createConnector(entity);
+        Map responseMap = parseResponseToMap(response);
+        String connectorId = (String) responseMap.get("connector_id");
+
+        // Delete config index to regenerate ml key.
+        Request request = new Request("DELETE", "/.plugins-ml-config");
+        adminClient().performRequest(request);
+        updateClusterSettings("plugins.ml_commons.key_refresh_enabled", true);
+        // Ensure cron job getting run after the setting update.
+        Thread.sleep(5000);
+
+        response = registerRemoteModel("openAI-GPT-3.5 chat model", connectorId);
+        responseMap = parseResponseToMap(response);
+        String taskId = (String) responseMap.get("task_id");
+        waitForTask(taskId, MLTaskState.COMPLETED);
+        response = getTask(taskId);
+        responseMap = parseResponseToMap(response);
+        String modelId = (String) responseMap.get("model_id");
+        response = deployRemoteModel(modelId);
+        responseMap = parseResponseToMap(response);
+        taskId = (String) responseMap.get("task_id");
+        waitForTask(taskId, MLTaskState.FAILED);
+        response = TestHelper.makeRequest(client(), "GET", "/_plugins/_ml/tasks/" + taskId, null, "", null);
+        Map<String, Object> task = parseResponseToMap(response);
+        String errorJson = (String) task.get("error");
+        Map errorMap = StringUtils.gson.fromJson(errorJson, Map.class);
+        String errorMsg = (String) errorMap.values().toArray()[0];
+        assertEquals("Tag mismatch", errorMsg);
     }
 }

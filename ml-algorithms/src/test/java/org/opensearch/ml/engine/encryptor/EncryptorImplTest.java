@@ -779,6 +779,64 @@ public class EncryptorImplTest {
         encryptor.encrypt("test", TENANT_ID);
     }
 
+    @Test
+    public void refreshMLKey() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> actionListener = (ActionListener) invocation.getArgument(0);
+            actionListener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConfigIndex(any());
+
+        GetResponse response = prepareMLConfigResponse(null);
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(response);
+            return null;
+        }).when(client).get(any(), any());
+
+        ActionListener<Boolean> refreshMLKeyListener = ActionListener.wrap(r -> {
+            if (r) {
+                Assert.assertNull(encryptor.getMasterKey(null));
+                String encrypted = encryptor.encrypt("test", null);
+                String decrypted = encryptor.decrypt(encrypted, null);
+                Assert.assertEquals("test", decrypted);
+                Assert.assertEquals(masterKey.get(DEFAULT_TENANT_ID), encryptor.getMasterKey(null));
+                return;
+            }
+        }, e -> { throw new MLException(e); });
+        Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
+        ((EncryptorImpl) encryptor).refreshMasterKey(refreshMLKeyListener);
+    }
+
+    @Test
+    public void refreshMLKeyException() throws IOException {
+        exceptionRule.expect(MLException.class);
+        exceptionRule.expectMessage("test exception");
+        doThrow(new RuntimeException("test exception")).when(mlIndicesHandler).initMLConfigIndex(any());
+
+        GetResponse response = prepareMLConfigResponse(null);
+
+        doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(response);
+            return null;
+        }).when(client).get(any(), any());
+
+        ActionListener<Boolean> refreshMLKeyListener = ActionListener.wrap(r -> {
+            if (r) {
+                Assert.assertNull(encryptor.getMasterKey(null));
+                String encrypted = encryptor.encrypt("test", null);
+                String decrypted = encryptor.decrypt(encrypted, null);
+                Assert.assertEquals("test", decrypted);
+                Assert.assertEquals(masterKey.get(DEFAULT_TENANT_ID), encryptor.getMasterKey(null));
+                return;
+            }
+        }, e -> { throw new MLException(e); });
+        Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
+        ((EncryptorImpl) encryptor).refreshMasterKey(refreshMLKeyListener);
+    }
+
     // Helper method to prepare a valid IndexResponse
     private IndexResponse prepareIndexResponse() {
         ShardId shardId = new ShardId(ML_CONFIG_INDEX, "index_uuid", 0);
