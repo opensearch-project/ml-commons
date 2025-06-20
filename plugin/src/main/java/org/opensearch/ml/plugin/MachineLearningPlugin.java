@@ -1156,7 +1156,8 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED,
                 MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED,
                 MLCommonsSettings.ML_COMMONS_METRIC_COLLECTION_ENABLED,
-                MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED
+                MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED,
+                MLCommonsSettings.ML_COMMONS_KEY_REFRESH_ENABLED
             );
         return settings;
     }
