@@ -63,6 +63,7 @@ public class ConnectorActionTest {
     private static final ConnectorAction.ActionType TEST_ACTION_TYPE = ConnectorAction.ActionType.PREDICT;
     private static final String TEST_METHOD_POST = "post";
     private static final String TEST_METHOD_HTTP = "http";
+    private static final String LOG_APPENDER_NAME = "TestAppender";
     private static final String TEST_REQUEST_BODY = "{\"input\": \"${parameters.input}\"}";
     private static final String URL = "https://test.com";
     private static final String OPENAI_URL = "https://api.openai.com/v1/chat/completions";
@@ -72,12 +73,13 @@ public class ConnectorActionTest {
         "https://runtime.sagemaker.us-west-2.amazonaws.com/endpoints/lmi-model-2023-06-24-01-35-32-275/invocations";
     private static final Logger logger = LogManager.getLogger(ConnectorActionTest.class);
     private static TestLogAppender testAppender;
+    private static LoggerConfig loggerConfig;
 
     @BeforeClass
     public static void setUpClass() {
-        testAppender = new TestLogAppender("TestAppender");
+        testAppender = new TestLogAppender(LOG_APPENDER_NAME);
         LoggerContext context = (LoggerContext) LogManager.getContext(false);
-        LoggerConfig loggerConfig = context.getConfiguration().getLoggerConfig(logger.getName());
+        loggerConfig = context.getConfiguration().getLoggerConfig(logger.getName());
         loggerConfig.addAppender(testAppender, Level.WARN, null);
         context.updateLoggers();
     }
@@ -89,6 +91,7 @@ public class ConnectorActionTest {
 
     @AfterClass
     public static void tearDownClass() {
+        loggerConfig.removeAppender(LOG_APPENDER_NAME);
         testAppender.stop();
     }
 
