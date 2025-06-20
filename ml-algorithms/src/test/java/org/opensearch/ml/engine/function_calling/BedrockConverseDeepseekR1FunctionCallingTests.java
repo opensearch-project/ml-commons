@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.engine.function_calling;
 
-import static org.junit.Assert.*;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE_DEEPSEEK_R1;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_FILTER;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALL_ID;
@@ -29,6 +28,7 @@ import org.junit.Test;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 
 public class BedrockConverseDeepseekR1FunctionCallingTests {
@@ -77,8 +77,11 @@ public class BedrockConverseDeepseekR1FunctionCallingTests {
         Assert.assertEquals(1, messages.size());
         LLMMessage message = messages.get(0);
         Assert.assertEquals("user", message.getRole());
-        List<Map<String, Map<String, String>>> content = (List<Map<String, Map<String, String>>>) message.getContent();
-        Assert.assertEquals("test_tool_call_id", content.get(0).get("text").get(TOOL_CALL_ID));
-        Assert.assertEquals("test result for bedrock deepseek", content.get(0).get("text").get(TOOL_RESULT));
+        List<Object> content = (List<Object>) message.getContent();
+        Map<String, String> textMap = (Map<String, String>) content.get(0);
+        String textJson = textMap.get("text");
+        Map<String, Object> resultMap = StringUtils.fromJson(textJson, "response");
+        Assert.assertEquals("test_tool_call_id", resultMap.get("tool_call_id"));
+        Assert.assertEquals("test result for bedrock deepseek", resultMap.get("tool_result"));
     }
 }
