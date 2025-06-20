@@ -11,6 +11,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -57,6 +58,7 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.sync.MLSyncUpInput;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodeRequest;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodeResponse;
@@ -64,6 +66,7 @@ import org.opensearch.ml.common.transport.sync.MLSyncUpNodesRequest;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodesResponse;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
+import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.task.MLTaskCache;
@@ -119,11 +122,19 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
     @Mock
     private MLModelCacheHelper mlModelCacheHelper;
 
+    @Mock
+    private EncryptorImpl encryptor;
+
+    @Mock
+    MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
         mockSettings(true);
         when(clusterService.getClusterName()).thenReturn(new ClusterName("Local Cluster"));
+        when(mlFeatureEnabledSetting.isKeyRefreshEnabled()).thenReturn(false);
+        doNothing().when(encryptor).refreshMasterKey(any());
         action = new TransportSyncUpOnNodeAction(
             transportService,
             settings,
@@ -136,7 +147,9 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
             client,
             xContentRegistry,
             mlEngine,
-            mlModelCacheHelper
+            mlModelCacheHelper,
+            encryptor,
+            mlFeatureEnabledSetting
         );
         runningDeployModelTasks = new HashMap<>();
         runningDeployModelTasks.put("model1", ImmutableSet.of("node1"));

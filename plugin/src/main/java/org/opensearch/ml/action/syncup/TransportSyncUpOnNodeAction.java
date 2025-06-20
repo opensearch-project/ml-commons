@@ -23,11 +23,13 @@ import org.opensearch.action.support.nodes.TransportNodesAction;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpInput;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodeRequest;
@@ -36,6 +38,7 @@ import org.opensearch.ml.common.transport.sync.MLSyncUpNodesRequest;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodesResponse;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
+import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.utils.FileUtils;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
@@ -66,6 +69,8 @@ public class TransportSyncUpOnNodeAction extends
     private volatile Integer mlTaskTimeout;
 
     private final MLModelCacheHelper mlModelCacheHelper;
+    private final EncryptorImpl encryptor;
+    private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Inject
     public TransportSyncUpOnNodeAction(
@@ -80,7 +85,9 @@ public class TransportSyncUpOnNodeAction extends
         Client client,
         NamedXContentRegistry xContentRegistry,
         MLEngine mlEngine,
-        MLModelCacheHelper mlModelCacheHelper
+        MLModelCacheHelper mlModelCacheHelper,
+        EncryptorImpl encryptor,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(
             MLSyncUpAction.NAME,
@@ -103,6 +110,8 @@ public class TransportSyncUpOnNodeAction extends
         this.xContentRegistry = xContentRegistry;
         this.mlEngine = mlEngine;
         this.mlModelCacheHelper = mlModelCacheHelper;
+        this.encryptor = encryptor;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
 
         this.mlTaskTimeout = ML_COMMONS_ML_TASK_TIMEOUT_IN_SECONDS.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_ML_TASK_TIMEOUT_IN_SECONDS, it -> { mlTaskTimeout = it; });
@@ -182,6 +191,14 @@ public class TransportSyncUpOnNodeAction extends
 
         cleanUpLocalCache(runningDeployModelTasks);
         cleanUpLocalCacheFiles();
+        if (mlFeatureEnabledSetting.isKeyRefreshEnabled()) {
+            encryptor.refreshMasterKey(ActionListener.wrap(r -> {
+                if (r) {
+                    log.debug("Refresh ML key completed.");
+                    return;
+                }
+            }, e -> { log.error("Failed to refresh ML key", e); }));
+        }
 
         return new MLSyncUpNodeResponse(
             clusterService.localNode(),
