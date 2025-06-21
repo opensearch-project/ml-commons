@@ -8,13 +8,21 @@ package org.opensearch.ml.action.model_group;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
+import static org.opensearch.security.spi.resources.FeatureConfigConstants.OPENSEARCH_RESOURCE_SHARING_ENABLED;
+import static org.opensearch.security.spi.resources.FeatureConfigConstants.OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT;
+import static org.opensearch.security.spi.resources.ResourceAccessLevels.PLACE_HOLDER;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.tuple.Pair;
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
@@ -23,6 +31,7 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.commons.authuser.User;
@@ -35,6 +44,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLModelGroup;
+import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupAction;
@@ -51,6 +61,10 @@ import org.opensearch.remote.metadata.client.UpdateDataObjectRequest;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
+import org.opensearch.security.spi.resources.sharing.Recipient;
+import org.opensearch.security.spi.resources.sharing.Recipients;
+import org.opensearch.security.spi.resources.sharing.ShareWith;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -66,6 +80,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
     private final ActionFilters actionFilters;
     private Client client;
     final SdkClient sdkClient;
+    final Settings settings;
     private NamedXContentRegistry xContentRegistry;
     ClusterService clusterService;
 
@@ -78,6 +93,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
+        Settings settings,
         SdkClient sdkClient,
         NamedXContentRegistry xContentRegistry,
         ClusterService clusterService,
@@ -89,6 +105,7 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
         this.actionFilters = actionFilters;
         this.transportService = transportService;
         this.client = client;
+        this.settings = settings;
         this.sdkClient = sdkClient;
         this.xContentRegistry = xContentRegistry;
         this.clusterService = clusterService;
@@ -107,6 +124,8 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
             return;
         }
         User user = RestActionUtils.getUserContext(client);
+        boolean isResourceSharingFeatureEnabled = ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED.get(settings)
+            && this.settings.getAsBoolean(OPENSEARCH_RESOURCE_SHARING_ENABLED, OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT);
         FetchSourceContext fetchSourceContext = new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);
         GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
             .builder()
@@ -146,12 +165,74 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
                                         mlModelGroup.getTenantId(),
                                         wrappedListener
                                     )) {
-                                    if (modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(user)) {
-                                        validateRequestForAccessControl(updateModelGroupInput, user, mlModelGroup);
+                                    // TODO: Remove this feature flag check once feature is GA, as it will be enabled by default
+                                    if (isResourceSharingFeatureEnabled) {
+                                        ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor
+                                            .getInstance()
+                                            .getResourceSharingClient();
+                                        resourceSharingClient
+                                            .verifyAccess(modelGroupId, ML_MODEL_GROUP_INDEX, ActionListener.wrap(isAuthorized -> {
+                                                if (!isAuthorized) {
+                                                    listener
+                                                        .onFailure(
+                                                            new OpenSearchStatusException(
+                                                                "User "
+                                                                    + user.getName()
+                                                                    + " is not authorized to update ml-model-group: "
+                                                                    + mlModelGroup.getName(),
+                                                                RestStatus.FORBIDDEN
+                                                            )
+                                                        );
+                                                    return;
+                                                }
+
+                                                Pair<ShareWith, ShareWith> shareAndRevoke = buildShareAndRevokeEntities(
+                                                    r.source(),
+                                                    updateModelGroupInput,
+                                                    user
+                                                );
+
+                                                // Share and revoke based on updates
+                                                resourceSharingClient
+                                                    .share(
+                                                        modelGroupId,
+                                                        ML_MODEL_GROUP_INDEX,
+                                                        shareAndRevoke.getLeft(),
+                                                        ActionListener.wrap(res -> {
+                                                            resourceSharingClient
+                                                                .revoke(
+                                                                    modelGroupId,
+                                                                    ML_MODEL_GROUP_INDEX,
+                                                                    shareAndRevoke.getRight(),
+                                                                    ActionListener.wrap(res2 -> {
+                                                                        // For backwards compatibility we still allow storing backend_roles
+                                                                        // data in ml_model_group
+                                                                        // index
+                                                                        updateModelGroup(
+                                                                            modelGroupId,
+                                                                            r.source(),
+                                                                            updateModelGroupInput,
+                                                                            wrappedListener,
+                                                                            user
+                                                                        );
+                                                                    }, listener::onFailure)
+                                                                );
+                                                        }, listener::onFailure)
+                                                    );
+
+                                            }, listener::onFailure));
                                     } else {
-                                        validateSecurityDisabledOrModelAccessControlDisabled(updateModelGroupInput);
+                                        // TODO: At some point, this call must be replaced by the one above, (i.e. no user info to
+                                        // be stored in model-group index)
+                                        if (modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(user)) {
+                                            validateRequestForAccessControl(updateModelGroupInput, user, mlModelGroup);
+                                        } else {
+                                            validateSecurityDisabledOrModelAccessControlDisabled(updateModelGroupInput);
+                                        }
+
+                                        updateModelGroup(modelGroupId, r.source(), updateModelGroupInput, wrappedListener, user);
                                     }
-                                    updateModelGroup(modelGroupId, r.source(), updateModelGroupInput, wrappedListener, user);
+
                                 }
                             } catch (Exception e) {
                                 log.error("Failed to parse ml connector {}", r.id(), e);
@@ -175,6 +256,54 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
             logException("Failed to Update model group", e, log);
             listener.onFailure(e);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Pair<ShareWith, ShareWith> buildShareAndRevokeEntities(
+        Map<String, Object> source,
+        MLUpdateModelGroupInput updateModelGroupInput,
+        User user
+    ) {
+        Map<Recipient, Set<String>> shareMap = new HashMap<>();
+        Map<Recipient, Set<String>> revokeMap = new HashMap<>();
+        if (updateModelGroupInput.getModelAccessMode() != null) {
+            Set<String> sourceBRs = new HashSet<>((List<String>) (source.getOrDefault(MLModelGroup.BACKEND_ROLES_FIELD, List.of())));
+            switch (updateModelGroupInput.getModelAccessMode()) {
+                case PRIVATE -> {
+                    // revoke all accesses
+                    revokeMap.put(Recipient.BACKEND_ROLES, sourceBRs);
+                }
+                case RESTRICTED -> {
+                    // share with new entries
+                    Set<String> updateBRs = new HashSet<>(updateModelGroupInput.getBackendRoles());
+                    Set<String> toShare = new HashSet<>(updateBRs);
+                    toShare.removeAll(sourceBRs);
+
+                    // Revoke those that are not present in the update but were already shared with
+                    Set<String> toRevoke = new HashSet<>(sourceBRs);
+                    toRevoke.removeAll(updateBRs);
+
+                    shareMap = Map.of(Recipient.BACKEND_ROLES, toShare);
+                    revokeMap = Map.of(Recipient.BACKEND_ROLES, toRevoke);
+                }
+                case PUBLIC -> // share with *
+                    shareMap = Map.of(Recipient.USERS, Set.of("*"), Recipient.ROLES, Set.of("*"), Recipient.BACKEND_ROLES, Set.of("*"));
+                default -> {
+
+                }
+            }
+        }
+        if (updateModelGroupInput.getBackendRoles() != null) {
+            source.put(MLModelGroup.BACKEND_ROLES_FIELD, updateModelGroupInput.getBackendRoles());
+        }
+        if (Boolean.TRUE.equals(updateModelGroupInput.getIsAddAllBackendRoles())) {
+            source.put(MLModelGroup.BACKEND_ROLES_FIELD, user.getBackendRoles());
+        }
+
+        ShareWith share = new ShareWith(Map.of(PLACE_HOLDER, new Recipients(shareMap)));
+        ShareWith revoke = new ShareWith(Map.of(PLACE_HOLDER, new Recipients(revokeMap)));
+
+        return Pair.of(share, revoke);
     }
 
     private void updateModelGroup(
