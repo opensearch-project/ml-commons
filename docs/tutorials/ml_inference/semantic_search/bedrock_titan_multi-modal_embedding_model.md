@@ -230,16 +230,7 @@ PUT test-index-area
     "properties": {
       "multimodal_embedding": {
         "type": "knn_vector",
-        "dimension": 1024,
-        "method": {
-          "name": "hnsw",
-          "space_type": "l2",
-          "engine": "nmslib",
-          "parameters": {
-            "ef_construction": 128,
-            "m": 24
-          }
-        }
+        "dimension": 1024
       }
     }
   }
