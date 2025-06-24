@@ -25,10 +25,10 @@ POST _plugins/_ml/connectors/_create
         "session_token": "{{session_token}}"
     },
     "parameters": {
-    "region": "us-east-1",
-    "service_name": "bedrock",
-    "model": "amazon.titan-embed-image-v1",
-    "input_docs_processed_step_size": 2
+        "region": "{{region}}", // sample region, us-east-1
+        "service_name": "bedrock",
+        "model": "amazon.titan-embed-image-v1",
+        "input_docs_processed_step_size": 2
     },
     "actions": [
                {
@@ -50,7 +50,7 @@ Sample response
 }
 ```
 
-- Create model, see [more info about register model](https://opensearch.org/docs/latest/ml-commons-plugin/api/model-apis/register-model/) 
+- Create model. Please note that it's optional to create model with interface, for other models, you will need to define the model interface according to its prediction input and output schema. For model information about create model and interface, see [more info about register model](https://opensearch.org/docs/latest/ml-commons-plugin/api/model-apis/register-model/) . 
 ```
 POST _plugins/_ml/models/_register?deploy=true
 {
@@ -75,14 +75,19 @@ Sample response
 ```
 
 - Test predict
-Get Image and Text Embedding. Note that Titan multi-modal embedding model required the model input, inputImage in String Base64 format. 
 
+Get Image and Text Embedding. Note that Titan multi-modal embedding model required the model input, inputImage in String Base64 format.
+When using a multi-modal embedding model like Amazon Titan, when both text and image are provided as model inputs, the model processes them together to create a unified semantic embedding representation.
+Please check the [model documentation](https://docs.aws.amazon.com/bedrock/latest/userguide/titan-embedding-models.html) for more details on how the model handles multi-modal inputs.
+
+Get Text And Image Embedding.
 ```
 POST /_plugins/_ml/models/ncdJJZUB7judm8f4HN3P/_predict
 {
-    "parameters": {
-        "inputText": "Say this is a test",
-        "inputImage": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBAQEAwUEBAQFBQUGBwwIB..."
+  "parameters": {
+    "inputText": "Say this is a test",
+    "inputImage": "/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDBAQEAwUEBAQFBQUGBwwIB..."
+  }
 }
 ```
 Sample response
@@ -176,9 +181,8 @@ Sample response
 
 ## 2. Create Ingest Pipeline
 In the ingest pipeline, `model_id` is the required field, used the model id created in step 1.
-In the input mapping, mapping the document field, `name` to be model input field, `inputText`, mapping the document field, `image` to be model input field, `inputImage`.
-In the output mapping,  in the input mapping, mapping the model output field, `embedding` to be new document field, `multimodal_embeddings`.
-For multi-modal model, both inputText and inputImage are optional model input fields, set ignoreMissing and ignoreFailure to true. When a field is missing from the document, the ingest process continue. 
+In the output mapping, mapping the model output field, `embedding` to be new document field, `multimodal_embedding`.In the output mapping,  in the input mapping, mapping the model output field, `embedding` to be new document field, `multimodal_embedding`.
+In the ingest pipeline, only the `model_id` is the required field, use the model id created in step 1.
 
 ```
 PUT _ingest/pipeline/ml_inference_pipeline_multi_modal
@@ -197,7 +201,7 @@ PUT _ingest/pipeline/ml_inference_pipeline_multi_modal
         ],
         "output_map": [
           {
-            "multimodal_embeddings": "embedding"
+            "multimodal_embedding": "embedding"
           }
         ],
         "ignore_missing":true,
@@ -224,7 +228,7 @@ PUT test-index-area
   },
   "mappings": {
     "properties": {
-      "multimodal_embeddings": {
+      "multimodal_embedding": {
         "type": "knn_vector",
         "dimension": 1024,
         "method": {
@@ -266,7 +270,7 @@ Sample Response
     "_primary_term": 1,
     "found": true,
     "_source": {
-        "multimodal_embeddings": [
+        "multimodal_embedding": [
             0.01171875,...],
       "name": "Central Park",
       "category": "Park"
@@ -279,7 +283,7 @@ Load a example doc with text + image.
 ```
 PUT test-index-area/_doc/2
 {
-  "name": "Time Sqaure",
+  "name": "Times Sqaure",
   "category": "Sqaure",
   "image":"iVBORw0KGgoAAAANSUhEUgAAAFcAAAAdCAYAAADfC/BmAAAAAXNSR0IArs4c6QAAAGJlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAABJKGAAcAAAASAAAAUKABAAMAAAABAAEAAKACAAQAAAABAAAAV6ADAAQAAAABAAAAHQAAAABBU0NJSQAAAFNjcmVlbnNob3QnedEpAAAB1GlUWHRYTUw6Y29tLmFkb2JlLnhtcAAAAAAAPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyIgeDp4bXB0az0iWE1QIENvcmUgNi4wLjAiPgogICA8cmRmOlJERiB4bWxuczpyZGY9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyMiPgogICAgICA8cmRmOkRlc2NyaXB0aW9uIHJkZjphYm91dD0iIgogICAgICAgICAgICB4bWxuczpleGlmPSJodHRwOi8vbnMuYWRvYmUuY29tL2V4aWYvMS4wLyI+CiAgICAgICAgIDxleGlmOlBpeGVsWURpbWVuc2lvbj4yOTwvZXhpZjpQaXhlbFlEaW1lbnNpb24+CiAgICAgICAgIDxleGlmOlBpeGVsWERpbWVuc2lvbj44NzwvZXhpZjpQaXhlbFhEaW1lbnNpb24+CiAgICAgICAgIDxleGlmOlVzZXJDb21tZW50PlNjcmVlbnNob3Q8L2V4aWY6VXNlckNvbW1lbnQ+CiAgICAgIDwvcmRmOkRlc2NyaXB0aW9uPgogICA8L3JkZjpSREY+CjwveDp4bXBtZXRhPgpitcX4AAAGBElEQVRoBe1ZeVBVVRj/sa+iLEKKCj4QN9QExSUpd7M0HTWz0UZD07TGXCozy0rUpnGboUyc1JmycVwaNTdGRSGBEEWHxUBxAYSQTZbH+ngPTuc7yO3x5KFPvQx/3G/mXs75zne+c87vfNt9mDFOUEgWBMxl0aooFQgo4MpoCAq4CrgyIiCjasVyFXBlREBG1YrlKuDKiICMqhXLVcCVEQEZVSuWKze4B2Oyoa7WmrRMSWUdth5LM3meSYsYCFdrdNBoGwy47a+bml2GhIxiWNLWwk7dxIg+bnCyt8K+yLvYfOSG2HFxhQZ21hZwsBFiiNwwDt4ejmKsjIN7LukBZgd7iXmCKdMrPaccn+xJRDk3gMpaHdw72uK3FSPR3c1ephWfT+3f6UUoLK9tBFdfVch4H9BDNG97HN4c6ol3g71FX/+leskR574bp8+Srb2Fe8jc13pi/liVWONofA5u5pa3W3CbgBAm2cXZDpYWZk28Vv8mZ5Zi3o44IWNrZYGr2yZL8lM3RsOHg37iSi42znsZoYdSMWtkD4TOHSRkyF0+3JWAvIc1CPR1QfjSYXBzspHmG2tcSivE4km9pOEZI7pL7foGhuW/JOJIXDaG+LpiJh97WFGHz2f0A4WRj3dfxZlrefDz7IDV0/ph2rBuYm52URU+3XcdR9YEi37Gv2qEHk7F/pWvoKyqDsFrzwn+aH8PTA3qhrCTN+Hl7oidS4aigf9Ku/5ACg7GZMGGY/DlLH9++d5Cnl6OdlbQ6OoB+j3XGM3dFssOXMpsNqzVNbCi8lrxOM051Gysz7IT7EpGMVt/IJlN2xTN1NV1zGvhMSGj0dazvh+dYAm3ikV/5+lb7O0fLjWbb6yzYk8iG7j8lNhLQVlNM7HI5AcsYOUZlpxZwkoqNGz65mi2au81IXMxJZ+t+z2J1dTpWEpWKVN9cJzp+G0Q3c5Ti3miw180f9QXZ0W3gYvQGY/G3xe8kLB4dvJKLvvnfpkYD4/IYIQNnYm7PxvA90b6DcnkaoEsnKzNmMX5e3VCb08n8XTgN2hva4EqHiejUgsQ6OOCID9XccNLJ/vhQkr+UyWoLQsCsGCcCrsiMuC75E9MCY3i1qkRemK5VS+a4IOB3s5wdrTGpMFdBZ9eYwZ4YCP3GvKwAXxfPdwdcP1uiTRurGHGnZjO15HnoNt5FQhfFoQpPDz2695RTNkfnYlv5gyEtaU5OnO5+WNUwnMM9TVmKkPuc/YtzP8PMZYW5sKNsgsrcSE5H0NWR0ja7XmyzC+rgVdnB4nXUoMudOVbfcVTpNZg0Y/x2MST7vaQQJ6VH2INDwFNZKm3NiW/n07fwl83CkDz7uVXok5nWrUxvLcbrPgZ9CmLn2X2lhg0nZPCz/hBXfRFRFsWcB9bhTNc+Q1T7Nq9bFhLw0/NI0uZ86o3/oi7L+ZQNVPAM3NL9OvFe8gqrMLBz4KFFb6xIUoSs+JWR6A8iciKDcm1gw1OfT0ani6tVyvNr8RQywvsj+rrjhjuwlROEVFCWbs/6YkrEAAj15wFlWNElEwiEvMwfXhjUgvq5SqA1tU3/iswKatU0nnnQQUCVM4CWG19Awe6UhojbyFeTnG14KXlqKWxJzUmDu6Cw7HZkhh5Udqj/UlM3jDZcnngxvthl4UOnigQuKrRzWO+n6Cv97G2RydbEacIKE8XO+GmOxYGPiZnyLDnNTZl43e2xsKGW5uGu3WgykVUBSRLVQRVKarFx0UF0vNRHS7GJvryvcaL6qWTgzWWvu6HJT8nIGrTBBEr187sjzHrzova3b9HYzyleWQAY7+KREWNVsT2pjOe/XasiMW0n/d4xXT8ci5qtfXo3dUJfvwxJDPKcIZMOftkecU8/tGHgKlUyj9c6EOnKdbpz6eY6sbdde/5O0jPVWNbSIA0TF+TLjzZtUQUgynhUjI0legSbKzMRcJsaa7JltuSElN45jyIPQuwtEZrAFAsNkbGgCV5yvjWzwAszaVqojVqc3Bb28yLGAvu7w4qB9sDtXlYaA+Hbqs9tFm10FYHak/rKODKeBsKuDKC+x8IEeWI5EFOZwAAAABJRU5ErkJggg=="
 }
@@ -300,9 +304,9 @@ Sample Response
     "found": true,
     "_source": {
         "image": "iVBORw0KGgoAAAANSUhEUgAAAFcAAAAdCAYAAADfC/BmAAAAAXNSR0IArs4c6QAAAGJlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAABJKGAAcAAAASAAAAUKABAAMAAAABAAEAAKACAAQAAAABAAAAV6ADAAQAAAABAAAAHQAAAABBU0NJSQAAAFNjcmVlbnNob3QnedEpAAAB1GlUWHRYTUw6Y29tLmFkb2JlLnhtcAAAAAAAPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyIgeDp4bXB0az0iWE1QIENvcmUgNi4wLjAiPgogICA8cmRmOlJERiB4bWxuczpyZGY9Imh0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyMiPgogICAgICA8cmRmOkRlc2NyaXB0aW9uIHJkZjphYm91dD0iIgogICAgICAgICAgICB4bWxuczpleGlmPSJodHRwOi8vbnMuYWRvYmUuY29tL2V4aWYvMS4wLyI+CiAgICAgICAgIDxleGlmOlBpeGVsWURpbWVuc2lvbj4yOTwvZXhpZjpQaXhlbFlEaW1lbnNpb24+CiAgICAgICAgIDxleGlmOlBpeGVsWERpbWVuc2lvbj44NzwvZXhpZjpQaXhlbFhEaW1lbnNpb24+CiAgICAgICAgIDxleGlmOlVzZXJDb21tZW50PlNjcmVlbnNob3Q8L2V4aWY6VXNlckNvbW1lbnQ+CiAgICAgIDwvcmRmOkRlc2NyaXB0aW9uPgogICA8L3JkZjpSREY+CjwveDp4bXBtZXRhPgpitcX4AAAGBElEQVRoBe1ZeVBVVRj/sa+iLEKKCj4QN9QExSUpd7M0HTWz0UZD07TGXCozy0rUpnGboUyc1JmycVwaNTdGRSGBEEWHxUBxAYSQTZbH+ngPTuc7yO3x5KFPvQx/3G/mXs75zne+c87vfNt9mDFOUEgWBMxl0aooFQgo4MpoCAq4CrgyIiCjasVyFXBlREBG1YrlKuDKiICMqhXLVcCVEQEZVSuWKze4B2Oyoa7WmrRMSWUdth5LM3meSYsYCFdrdNBoGwy47a+bml2GhIxiWNLWwk7dxIg+bnCyt8K+yLvYfOSG2HFxhQZ21hZwsBFiiNwwDt4ejmKsjIN7LukBZgd7iXmCKdMrPaccn+xJRDk3gMpaHdw72uK3FSPR3c1ephWfT+3f6UUoLK9tBFdfVch4H9BDNG97HN4c6ol3g71FX/+leskR574bp8+Srb2Fe8jc13pi/liVWONofA5u5pa3W3CbgBAm2cXZDpYWZk28Vv8mZ5Zi3o44IWNrZYGr2yZL8lM3RsOHg37iSi42znsZoYdSMWtkD4TOHSRkyF0+3JWAvIc1CPR1QfjSYXBzspHmG2tcSivE4km9pOEZI7pL7foGhuW/JOJIXDaG+LpiJh97WFGHz2f0A4WRj3dfxZlrefDz7IDV0/ph2rBuYm52URU+3XcdR9YEi37Gv2qEHk7F/pWvoKyqDsFrzwn+aH8PTA3qhrCTN+Hl7oidS4aigf9Ku/5ACg7GZMGGY/DlLH9++d5Cnl6OdlbQ6OoB+j3XGM3dFssOXMpsNqzVNbCi8lrxOM051Gysz7IT7EpGMVt/IJlN2xTN1NV1zGvhMSGj0dazvh+dYAm3ikV/5+lb7O0fLjWbb6yzYk8iG7j8lNhLQVlNM7HI5AcsYOUZlpxZwkoqNGz65mi2au81IXMxJZ+t+z2J1dTpWEpWKVN9cJzp+G0Q3c5Ti3miw180f9QXZ0W3gYvQGY/G3xe8kLB4dvJKLvvnfpkYD4/IYIQNnYm7PxvA90b6DcnkaoEsnKzNmMX5e3VCb08n8XTgN2hva4EqHiejUgsQ6OOCID9XccNLJ/vhQkr+UyWoLQsCsGCcCrsiMuC75E9MCY3i1qkRemK5VS+a4IOB3s5wdrTGpMFdBZ9eYwZ4YCP3GvKwAXxfPdwdcP1uiTRurGHGnZjO15HnoNt5FQhfFoQpPDz2695RTNkfnYlv5gyEtaU5OnO5+WNUwnMM9TVmKkPuc/YtzP8PMZYW5sKNsgsrcSE5H0NWR0ja7XmyzC+rgVdnB4nXUoMudOVbfcVTpNZg0Y/x2MST7vaQQJ6VH2INDwFNZKm3NiW/n07fwl83CkDz7uVXok5nWrUxvLcbrPgZ9CmLn2X2lhg0nZPCz/hBXfRFRFsWcB9bhTNc+Q1T7Nq9bFhLw0/NI0uZ86o3/oi7L+ZQNVPAM3NL9OvFe8gqrMLBz4KFFb6xIUoSs+JWR6A8iciKDcm1gw1OfT0ani6tVyvNr8RQywvsj+rrjhjuwlROEVFCWbs/6YkrEAAj15wFlWNElEwiEvMwfXhjUgvq5SqA1tU3/iswKatU0nnnQQUCVM4CWG19Awe6UhojbyFeTnG14KXlqKWxJzUmDu6Cw7HZkhh5Udqj/UlM3jDZcnngxvthl4UOnigQuKrRzWO+n6Cv97G2RydbEacIKE8XO+GmOxYGPiZnyLDnNTZl43e2xsKGW5uGu3WgykVUBSRLVQRVKarFx0UF0vNRHS7GJvryvcaL6qWTgzWWvu6HJT8nIGrTBBEr187sjzHrzova3b9HYzyleWQAY7+KREWNVsT2pjOe/XasiMW0n/d4xXT8ci5qtfXo3dUJfvwxJDPKcIZMOftkecU8/tGHgKlUyj9c6EOnKdbpz6eY6sbdde/5O0jPVWNbSIA0TF+TLjzZtUQUgynhUjI0legSbKzMRcJsaa7JltuSElN45jyIPQuwtEZrAFAsNkbGgCV5yvjWzwAszaVqojVqc3Bb28yLGAvu7w4qB9sDtXlYaA+Hbqs9tFm10FYHak/rKODKeBsKuDKC+x8IEeWI5EFOZwAAAABJRU5ErkJggg==",
-        "multimodal_embeddings": [
+        "multimodal_embedding": [
             0.016407186,...],
-        "name": "Time Sqaure",
+        "name": "Times Sqaure",
         "category": "Sqaure"
     }
 }
@@ -358,9 +362,9 @@ Create a search pipeline with a ML inference search request processor to rewrite
 
 The pipeline consists of an ML Inference processor, which takes optional model input fields mapping `ext.ml_inference.text` and `ext.ml_inference.image` in the search request to the `inputText` and `InputImage` fields into model input .
 
-The processor outputs the `embedding` field from the model response as the `multimodal_embeddings` variable. It then runs a KNN query defined in the query_template using the `multimodal_embeddings` variable.
+The processor outputs the `embedding` field from the model response as the `multimodal_embedding` variable. It then runs a KNN query defined in the query_template using the `multimodal_embedding` variable.
 
-
+With this search pipeline, users can search with text, image or text and image together. This offer flexibility to search with multimodal inputs.
 ```
 PUT _search/pipeline/multimodal_semantic_search_pipeline
 {
@@ -370,7 +374,7 @@ PUT _search/pipeline/multimodal_semantic_search_pipeline
         "tag": "ml_inference",
         "description": "This processor is to run knn query",
         "model_id": "ncdJJZUB7judm8f4HN3P",
-        "query_template": "{\"size\": 2,\"query\": {\"knn\": {\"multimodal_embeddings\": {\"vector\": ${multimodal_embeddings},\"k\": 3}}}}",
+        "query_template": "{\"query\": {\"knn\": {\"multimodal_embedding\": {\"vector\": ${multimodal_embedding},\"k\": 3}}}}",
          "optional_input_map": [
           {
             "inputText": "ext.ml_inference.text",
@@ -379,7 +383,7 @@ PUT _search/pipeline/multimodal_semantic_search_pipeline
         ],
         "output_map": [
           {
-            "multimodal_embeddings": "embedding"
+            "multimodal_embedding": "embedding"
           }
         ],
         "model_config":{},
@@ -392,7 +396,7 @@ PUT _search/pipeline/multimodal_semantic_search_pipeline
 }
 ```
 
-Search with text using search pipeline.
+Search with text using search pipeline. 
 ```
 GET opensearch_docs/_search?search_pipeline=multimodal_semantic_search_pipeline
 {
@@ -401,7 +405,7 @@ GET opensearch_docs/_search?search_pipeline=multimodal_semantic_search_pipeline
     },
     "ext": {
         "ml_inference": {
-            "text": "Central Park"
+            "text": "place where recreational activities are done, picnics happen there"
         }
     }
 }
@@ -431,7 +435,7 @@ Sample Response:
                 "_id": "1",
                 "_score": 1.0,
                 "_source": {
-                    "multimodal_embeddings": [
+                    "multimodal_embedding": [
                         0.01171875, ],
                     "name": "Central Park",
                     "category": "Park"
@@ -443,9 +447,9 @@ Sample Response:
                 "_score": 0.58686763,
                 "_source": {
                     "image": "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",
-                    "multimodal_embeddings": [
+                    "multimodal_embedding": [
                         0.016407186,],
-                    "name": "Time Sqaure",
+                    "name": "Times Sqaure",
                     "category": "Sqaure"
                 }
             }
@@ -453,7 +457,112 @@ Sample Response:
     }
 }
 ```
+Optional, if turn on verbose mode with `verbose_pipeline`, you can see the model input and output in the response.
 
+```
+GET opensearch_docs/_search?search_pipeline=multimodal_semantic_search_pipeline&verbose_pipeline=true
+{
+    "query": {
+        "match_all": {}
+    },
+    "ext": {
+        "ml_inference": {
+            "text": "place where recreational activities are done, picnics happen there"
+        }
+    }
+}
+```
+
+Sample Response:
+
+``` 
+{
+    "took": 215,
+    "timed_out": false,
+    "_shards": {
+        "total": 1,
+        "successful": 1,
+        "skipped": 0,
+        "failed": 0
+    },
+    "hits": {
+        "total": {
+            "value": 2,
+            "relation": "eq"
+        },
+        "max_score": 0.56406975,
+        "hits": [
+            {
+                "_index": "test-index-area",
+                "_id": "1",
+                "_score": 0.56406975,
+                "_source": {
+                    "multimodal_embedding": [
+                        0.01171875,
+                        0.0027160645,
+                        0.0099487305,
+                        ...
+                    ],
+                    "name": "Central Park",
+                    "category": "Park"
+                }
+            },
+            {
+                "_index": "test-index-area",
+                "_id": "2",
+                "_score": 0.5522874,
+                "_source": {
+                    "image": "iVBORw0KGgoAAAANSUhEUgAAAFcAAAAdCAYAAADfC/BmAAAAAXNSR0IArs4c6QAAAGJlWElmTU0AKgAAAA...",                    "multimodal_embedding": [
+                        0.016357422,
+                        0.039794922,
+                        ...
+                    ],
+                    "name": "Time Sqaure",
+                    "category": "Sqaure"
+                }
+            }
+        ]
+    },
+    "processor_results": [
+        {
+            "processor_name": "ml_inference",
+            "tag": "ml_inference",
+            "duration_millis": 153421676,
+            "status": "success",
+            "input_data": {
+                "ext": {
+                    "ml_inference": {
+                        "text": "place where recreational activities are done, picnics happen there"
+                    }
+                },
+                "verbose_pipeline": true,
+                "query": {
+                    "match_all": {
+                        "boost": 1.0
+                    }
+                }
+            },
+            "output_data": {
+                "query": {
+                    "knn": {
+                        "multimodal_embedding": {
+                            "vector": [
+                                0.035888672,
+                                0.014221191,
+                                ..
+                            ],
+                            "boost": 1.0,
+                            "k": 3
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}
+
+
+```
 Search with image using search pipeline.
 ```
 GET opensearch_docs/_search?search_pipeline=multimodal_semantic_search_pipeline
@@ -493,9 +602,9 @@ Sample Response:
                 "_score": 0.7822725,
                 "_source": {
                     "image": "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",
-                    "multimodal_embeddings": [
+                    "multimodal_embedding": [
                       0.016407186,...],
-                    "name": "Time Sqaure",
+                    "name": "Times Sqaure",
                     "category": "Sqaure"
                 }
             },
@@ -504,7 +613,7 @@ Sample Response:
                 "_id": "1",
                 "_score": 0.42675978,
                 "_source": {
-                    "multimodal_embeddings": [
+                    "multimodal_embedding": [
                        0.01171875,..],
                     "name": "Central Park",
                     "category": "Park"
@@ -556,9 +665,9 @@ Sample Response:
                 "_score": 0.58110446,
                 "_source": {
                     "image": "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",
-                    "multimodal_embeddings": [
+                    "multimodal_embedding": [
                         0.016407186,...],
-                    "name": "Time Sqaure",
+                    "name": "Times Sqaure",
                     "category": "Sqaure"
                 }
             },
@@ -567,7 +676,7 @@ Sample Response:
                 "_id": "1",
                 "_score": 0.57516855,
                 "_source": {
-                    "multimodal_embeddings": [
+                    "multimodal_embedding": [
                       0.01171875, ...],
                     "name": "Central Park",
                     "category": "Park"
