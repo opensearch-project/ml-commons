@@ -551,7 +551,6 @@ public class MLModelCacheHelper {
         return modelCache.getTargetWorkerNodes();
     }
 
-
     /**
      * Add worker node of model.
      * 
@@ -621,6 +620,19 @@ public class MLModelCacheHelper {
         modelWorkerNodes.entrySet().forEach(entry -> {
             MLModelCache modelCache = getOrCreateModelCache(entry.getKey());
             modelCache.syncWorkerNode(entry.getValue());
+        });
+    }
+
+    /**
+     * Sync planning worker nodes for all models.
+     *
+     * @param modelPlanningWorkerNodes planning worker nodes of all models
+     */
+    public void syncPlanningWorkerNodes(Map<String, Set<String>> modelPlanningWorkerNodes) {
+        log.debug("sync model planning worker nodes");
+        modelPlanningWorkerNodes.entrySet().forEach(entry -> {
+            MLModelCache modelCache = getOrCreateModelCache(entry.getKey());
+            modelCache.syncPlanningWorkerNode(entry.getValue());
         });
     }
 
