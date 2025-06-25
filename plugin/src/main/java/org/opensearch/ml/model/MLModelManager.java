@@ -2480,6 +2480,23 @@ public class MLModelManager {
      */
     public synchronized void syncModelWorkerNodes(Map<String, Set<String>> modelWorkerNodes) {
         modelCacheHelper.syncWorkerNodes(modelWorkerNodes);
+
+        syncModelPlanningWorkerNodes(modelWorkerNodes);
+    }
+
+    public synchronized void syncModelPlanningWorkerNodes(Map<String, Set<String>> modelWorkerNodes) {
+        Map<String, Set<String>> modelPlanningWorkerNodes = new HashMap<>();
+        modelWorkerNodes.keySet().forEach(modelId -> {
+            FunctionName functionName = modelCacheHelper.getFunctionName(modelId);
+            boolean isDeployToAll = modelCacheHelper.getDeployToAllNodes(modelId);
+            if (!isDeployToAll) {
+                return;
+            }
+            DiscoveryNode[] eligibleNodes = nodeHelper.getEligibleNodes(functionName);
+            Set<String> eligibleNodeIds = Arrays.stream(eligibleNodes).map(DiscoveryNode::getId).collect(Collectors.toSet());
+            modelPlanningWorkerNodes.put(modelId, eligibleNodeIds);
+        });
+        modelCacheHelper.syncPlanningWorkerNodes(modelPlanningWorkerNodes);
     }
 
     /**

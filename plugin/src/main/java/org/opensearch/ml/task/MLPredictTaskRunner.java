@@ -655,7 +655,8 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
     }
 
     private boolean requiresAutoDeployment(String[] workerNodes, String[] targetWorkerNodes) {
-        return workerNodes == null || workerNodes.length == 0 ||
-                (targetWorkerNodes != null && workerNodes.length < targetWorkerNodes.length);
+        return workerNodes == null
+            || workerNodes.length == 0
+            || (targetWorkerNodes != null && workerNodes.length < targetWorkerNodes.length);
     }
 }
