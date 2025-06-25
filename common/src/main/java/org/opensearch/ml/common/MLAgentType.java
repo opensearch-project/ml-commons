@@ -11,6 +11,7 @@ public enum MLAgentType {
     FLOW,
     CONVERSATIONAL,
     CONVERSATIONAL_FLOW,
+    SOP_BASED_EXECUTE,
     PLAN_EXECUTE_AND_REFLECT;
 
     public static MLAgentType from(String value) {
