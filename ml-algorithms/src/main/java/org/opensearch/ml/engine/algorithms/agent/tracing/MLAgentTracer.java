@@ -106,4 +106,8 @@ public class MLAgentTracer extends AbstractMLTracer {
     public Tracer getTracer() {
         return tracer;
     }
+
+    static void resetForTest() {
+        instance = null;
+    }
 }
