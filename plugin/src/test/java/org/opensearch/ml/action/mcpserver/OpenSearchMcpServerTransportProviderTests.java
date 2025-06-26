@@ -11,20 +11,32 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.action.index.IndexResponse;
+import org.opensearch.common.xcontent.XContentFactory;
+import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.rest.RestStatus;
+import org.opensearch.core.xcontent.MediaType;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
+import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.StreamingRestChannel;
 import org.opensearch.test.OpenSearchTestCase;
+import org.opensearch.test.rest.FakeRestRequest;
 import org.opensearch.transport.client.node.NodeClient;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.collect.ImmutableMap;
 
 import io.modelcontextprotocol.spec.McpSchema;
 import io.modelcontextprotocol.spec.McpServerSession;
@@ -276,7 +288,15 @@ public class OpenSearchMcpServerTransportProviderTests extends OpenSearchTestCas
     }
 
     @Test
-    public void test_handleErrorResult() {
+    public void test_handleErrorResult() throws IOException {
+        BytesReference bytesReference = BytesReference.fromByteBuffer(ByteBuffer.wrap("".getBytes(StandardCharsets.UTF_8)));
+        RestRequest restRequest = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withParams(ImmutableMap.of())
+            .withContent(bytesReference, MediaType.fromMediaType(XContentType.JSON.mediaType()))
+            .build();
+        when(channel.detailedErrorsEnabled()).thenReturn(false);
+        when(channel.newErrorBuilder()).thenReturn(XContentFactory.jsonBuilder());
+        when(channel.request()).thenReturn(restRequest);
         transport.handleErrorResult(new RuntimeException("runtime error"));
     }
 

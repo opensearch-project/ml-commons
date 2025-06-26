@@ -133,7 +133,7 @@ public class SearchIndexTool implements Tool {
             String input = parameters.get(INPUT_FIELD);
             String index = null;
             String query = null;
-            if (input != null && !input.isEmpty()) {
+            if (!StringUtils.isEmpty(input)) {
                 try {
                     JsonObject jsonObject = GSON.fromJson(input, JsonObject.class);
                     if (jsonObject != null && jsonObject.has(INDEX_FIELD) && jsonObject.has(QUERY_FIELD)) {
