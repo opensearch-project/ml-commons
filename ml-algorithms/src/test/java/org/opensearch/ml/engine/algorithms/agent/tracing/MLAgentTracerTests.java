@@ -28,7 +28,10 @@ public class MLAgentTracerTests {
     @Test
     public void testExceptionThrownForNotInitialized() {
         IllegalStateException exception = assertThrows(IllegalStateException.class, MLAgentTracer::getInstance);
-        assertEquals("MLAgentTracer is not initialized. Call initialize() first or enable plugins.ml_commons.agent_tracing_feature_enabled setting.", exception.getMessage());
+        assertEquals(
+            "MLAgentTracer is not initialized. Call initialize() first or enable plugins.ml_commons.agent_tracing_feature_enabled setting.",
+            exception.getMessage()
+        );
     }
 
     @Test
