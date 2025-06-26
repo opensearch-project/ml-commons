@@ -102,7 +102,7 @@ public class MLSopBasedAgentRunner implements MLAgentRunner {
     public static final String DEFAULT_REACT_MAX_ITERATIONS = "20";
 
     private static final String DEFALUT_SUMMARIZE_PROMPT =
-            "You are a dedicated helper agent working on summarize the interaction. We just finish an interaction process targeting on the user's question. You should answer user's question based on the interaction process.";
+            "You are a dedicated helper agent working on summarize the interaction. We just finish an interaction process targeting on the user's question. You should answer user's question based on the interaction process. \\n Here is the interaction: ${allParams.completed_steps} \\n And here is the user's question. ${allParams.user_prompt} \\n Please give a short summarization and give the answer";
 
     // fields
     public static final String PROMPT_FIELD = "prompt";
@@ -132,6 +132,7 @@ public class MLSopBasedAgentRunner implements MLAgentRunner {
     public static final String REFLECT_PROMPT_TEMPLATE_FIELD = "reflect_prompt_template";
     public static final String PLANNER_WITH_HISTORY_TEMPLATE_FIELD = "planner_with_history_template";
     public static final String EXECUTOR_MAX_ITERATIONS_FIELD = "executor_max_iterations";
+    public static final String SUMMARIZE_MODEL_ID_FIELD = "summarize_model_id";
 
     public MLSopBasedAgentRunner(
             Client client,
@@ -336,14 +337,14 @@ public class MLSopBasedAgentRunner implements MLAgentRunner {
         // on reaching max iteration, update parent interaction question with last executed step rather than task to allow continue using
         // memory_id
         if (currentStep >= steps.size()) {
-            StringSubstitutor substitutor = new StringSubstitutor(allParams, "${indexInfo.", "}");
+            StringSubstitutor substitutor = new StringSubstitutor(allParams, "${allParams.", "}");
             String summarizePrompt = substitutor.replace(DEFALUT_SUMMARIZE_PROMPT);
             RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet
                     .builder()
                     .parameters(Map.of("prompt", summarizePrompt))
                     .build();
             MLPredictionTaskRequest request = new MLPredictionTaskRequest(
-                    llm.getModelId(),
+                    allParams.get(SUMMARIZE_MODEL_ID_FIELD),
                     RemoteInferenceMLInput
                             .builder()
                             .algorithm(FunctionName.REMOTE)
@@ -352,6 +353,7 @@ public class MLSopBasedAgentRunner implements MLAgentRunner {
                     null,
                     allParams.get(TENANT_ID_FIELD)
             );
+
             client.execute(MLPredictionTaskAction.INSTANCE, request, ActionListener.wrap(mlTaskResponse -> {
                         ModelTensorOutput modelTensorOutput = (ModelTensorOutput) mlTaskResponse.getOutput();
                         ModelTensors modelTensors = modelTensorOutput.getMlModelOutputs().get(0);
@@ -367,12 +369,12 @@ public class MLSopBasedAgentRunner implements MLAgentRunner {
                                 null,
                                 finalListener
                         );
-                    }, e -> {}));
+                    }, e -> {
+                finalListener.onFailure(e);
+            }));
 
             return;
         }
-
-
 
         addSteps(steps, allParams, STEPS_FIELD);
 
