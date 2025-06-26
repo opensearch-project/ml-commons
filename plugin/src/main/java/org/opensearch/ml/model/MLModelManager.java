@@ -2436,6 +2436,12 @@ public class MLModelManager {
         return getWorkerNodes(modelId, functionName, false).length;
     }
 
+    /**
+     * Get target/planning worker node of a specific model.
+     *
+     * @param modelId      model id
+     * @return list of planning worker node ids
+     */
     public String[] getTargetWorkerNodes(String modelId) {
         return modelCacheHelper.getTargetWorkerNodes(modelId);
     }
