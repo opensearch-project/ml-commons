@@ -21,7 +21,6 @@ import org.opensearch.telemetry.tracing.SpanCreationContext;
 import org.opensearch.telemetry.tracing.Tracer;
 import org.opensearch.telemetry.tracing.attributes.Attributes;
 import org.opensearch.telemetry.tracing.noop.NoopTracer;
-import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 
 import lombok.extern.log4j.Log4j2;
 
