@@ -95,9 +95,9 @@ public class MLFeatureEnabledSetting {
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED, it -> isRagSearchPipelineEnabled = it);
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(
-            MLCommonsSettings.ML_COMMONS_AGENT_TRACING_ENABLED, it -> isAgentTracingEnabled = it
-        );
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_AGENT_TRACING_ENABLED, it -> isAgentTracingEnabled = it);
     }
 
     /**
