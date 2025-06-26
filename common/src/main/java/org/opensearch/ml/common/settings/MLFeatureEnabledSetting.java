@@ -19,6 +19,8 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_OFF
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_REMOTE_INFERENCE_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_TRACING_FEATURE_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_TRACING_ENABLED;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -51,6 +53,9 @@ public class MLFeatureEnabledSetting {
     private volatile Boolean isMetricCollectionEnabled;
     private volatile Boolean isStaticMetricCollectionEnabled;
 
+    private volatile Boolean isAgentTracingFeatureEnabled;
+    private volatile Boolean isAgentTracingEnabled;
+
     private final List<SettingsChangeListener> listeners = new ArrayList<>();
 
     public MLFeatureEnabledSetting(ClusterService clusterService, Settings settings) {
@@ -66,6 +71,8 @@ public class MLFeatureEnabledSetting {
         isRagSearchPipelineEnabled = ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED.get(settings);
         isMetricCollectionEnabled = ML_COMMONS_METRIC_COLLECTION_ENABLED.get(settings);
         isStaticMetricCollectionEnabled = ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED.get(settings);
+        isAgentTracingFeatureEnabled = ML_COMMONS_AGENT_TRACING_FEATURE_ENABLED.get(settings);
+        isAgentTracingEnabled = ML_COMMONS_AGENT_TRACING_ENABLED.get(settings);
 
         clusterService
             .getClusterSettings()
@@ -88,6 +95,9 @@ public class MLFeatureEnabledSetting {
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED, it -> isRagSearchPipelineEnabled = it);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(
+            MLCommonsSettings.ML_COMMONS_AGENT_TRACING_ENABLED, it -> isAgentTracingEnabled = it
+        );
     }
 
     /**
@@ -176,6 +186,14 @@ public class MLFeatureEnabledSetting {
 
     public boolean isStaticMetricCollectionEnabled() {
         return isStaticMetricCollectionEnabled;
+    }
+
+    public boolean isAgentTracingFeatureEnabled() {
+        return isAgentTracingFeatureEnabled;
+    }
+
+    public boolean isAgentTracingEnabled() {
+        return isAgentTracingEnabled;
     }
 
     @VisibleForTesting
