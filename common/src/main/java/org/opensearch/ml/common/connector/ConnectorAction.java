@@ -215,8 +215,10 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
         String endPoint = substitutor.replace(url);
         String remoteServer = getRemoteServerFromURL(endPoint);
-        validateProcessFunctions(remoteServer, preProcessFunction, PRE_PROCESS_FUNC);
-        validateProcessFunctions(remoteServer, postProcessFunction, POST_PROCESS_FUNC);
+        if (!remoteServer.isEmpty()) {
+            validateProcessFunctions(remoteServer, preProcessFunction, PRE_PROCESS_FUNC);
+            validateProcessFunctions(remoteServer, postProcessFunction, POST_PROCESS_FUNC);
+        }
     }
 
     /**

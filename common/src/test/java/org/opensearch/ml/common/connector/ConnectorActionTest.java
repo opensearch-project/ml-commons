@@ -131,6 +131,21 @@ public class ConnectorActionTest {
     }
 
     @Test
+    public void testValidatePrePostProcessFunctionsWithExternalServers() {
+        ConnectorAction action = new ConnectorAction(
+            TEST_ACTION_TYPE,
+            TEST_METHOD_HTTP,
+            URL,
+            null,
+            TEST_REQUEST_BODY,
+            TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT,
+            OPENAI_EMBEDDING
+        );
+        action.validatePrePostProcessFunctions(Map.of());
+        assertFalse(testAppender.getLogEvents().stream().anyMatch(event -> event.getLevel() == Level.WARN));
+    }
+
+    @Test
     public void testValidatePrePostProcessFunctionsWithCustomPainlessScriptPreProcessFunctionSuccess() {
         String preProcessFunction =
             "\"\\n    StringBuilder builder = new StringBuilder();\\n    builder.append(\\\"\\\\\\\"\\\");\\n    String first = params.text_docs[0];\\n    builder.append(first);\\n    builder.append(\\\"\\\\\\\"\\\");\\n    def parameters = \\\"{\\\" +\\\"\\\\\\\"text_inputs\\\\\\\":\\\" + builder + \\\"}\\\";\\n    return  \\\"{\\\" +\\\"\\\\\\\"parameters\\\\\\\":\\\" + parameters + \\\"}\\\";\"";
