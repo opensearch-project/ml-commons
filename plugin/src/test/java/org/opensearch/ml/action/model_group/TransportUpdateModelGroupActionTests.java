@@ -120,6 +120,7 @@ public class TransportUpdateModelGroupActionTests extends OpenSearchTestCase {
             transportService,
             actionFilters,
             client,
+            settings,
             sdkClient,
             xContentRegistry,
             clusterService,
