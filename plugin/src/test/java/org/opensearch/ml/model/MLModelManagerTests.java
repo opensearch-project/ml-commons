@@ -21,6 +21,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
 import static org.opensearch.ml.common.MLTask.FUNCTION_NAME_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_BATCH_INGESTION_BULK_SIZE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_BATCH_INFERENCE_TASKS;
@@ -50,6 +51,7 @@ import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 import static org.opensearch.ml.utils.TestHelper.copyFile;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -65,6 +67,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import org.junit.Before;
 import org.junit.Ignore;
@@ -75,11 +78,13 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.Version;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
+import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterApplierService;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
@@ -90,6 +95,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.breaker.CircuitBreaker;
 import org.opensearch.core.common.breaker.CircuitBreakingException;
 import org.opensearch.core.common.bytes.BytesReference;
+import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -984,6 +990,28 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         Map<String, Set<String>> modelWorkerNodes = ImmutableMap.of(modelId, ImmutableSet.of("node1"));
         modelManager.syncModelWorkerNodes(modelWorkerNodes);
         verify(modelCacheHelper).syncWorkerNodes(eq(modelWorkerNodes));
+    }
+
+    public void testSyncModelPlanningWorkerNodes() {
+        DiscoveryNode localNode = new DiscoveryNode(
+            "foo1",
+            "node1",
+            new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
+            Collections.emptyMap(),
+            Collections.singleton(CLUSTER_MANAGER_ROLE),
+            Version.CURRENT
+        );
+
+        Map<String, Set<String>> modelWorkerNodes = ImmutableMap.of(modelId, ImmutableSet.of("node1"));
+        when(modelCacheHelper.getFunctionName(modelId)).thenReturn(FunctionName.TEXT_EMBEDDING);
+        when(modelCacheHelper.getDeployToAllNodes(modelId)).thenReturn(true);
+        DiscoveryNode[] planningWorkerNodes = new DiscoveryNode[] { localNode };
+        when(nodeHelper.getEligibleNodes(FunctionName.TEXT_EMBEDDING)).thenReturn(planningWorkerNodes);
+        modelManager.syncModelPlanningWorkerNodes(modelWorkerNodes);
+        verify(modelCacheHelper)
+            .syncPlanningWorkerNodes(
+                Map.of(modelId, Arrays.stream(planningWorkerNodes).map(DiscoveryNode::getId).collect(Collectors.toSet()))
+            );
     }
 
     public void testClearRoutingTable() {
