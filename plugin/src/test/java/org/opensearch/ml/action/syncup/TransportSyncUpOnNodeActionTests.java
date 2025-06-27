@@ -11,6 +11,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -51,12 +52,15 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskType;
+import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.sync.MLSyncUpInput;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodeRequest;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodeResponse;
@@ -64,6 +68,7 @@ import org.opensearch.ml.common.transport.sync.MLSyncUpNodesRequest;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodesResponse;
 import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.ModelHelper;
+import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.task.MLTaskCache;
@@ -119,11 +124,18 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
     @Mock
     private MLModelCacheHelper mlModelCacheHelper;
 
+    @Mock
+    private EncryptorImpl encryptor;
+
+    @Mock
+    MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
         mockSettings(true);
         when(clusterService.getClusterName()).thenReturn(new ClusterName("Local Cluster"));
+        when(mlFeatureEnabledSetting.isKeyRefreshEnabled()).thenReturn(false);
         action = new TransportSyncUpOnNodeAction(
             transportService,
             settings,
@@ -136,7 +148,9 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
             client,
             xContentRegistry,
             mlEngine,
-            mlModelCacheHelper
+            mlModelCacheHelper,
+            encryptor,
+            mlFeatureEnabledSetting
         );
         runningDeployModelTasks = new HashMap<>();
         runningDeployModelTasks.put("model1", ImmutableSet.of("node1"));
@@ -314,6 +328,88 @@ public class TransportSyncUpOnNodeActionTests extends OpenSearchTestCase {
     @Test
     public void testCleanUpLocalCache_ExpiredMLTask_Deploy_DEPLOYED() {
         testCleanUpLocalCache_ExpiredMLTask_DeployStatus(MLModelState.DEPLOYED);
+    }
+
+    @Test
+    public void testNodeOperation_RefreshMLKey() throws IOException {
+        testFolder.create();
+        File file1 = testFolder.newFolder();
+        File file2 = testFolder.newFolder();
+        File file3 = testFolder.newFolder();
+        for (int i = 0; i < 5; i++) {
+            File.createTempFile("Hello" + i, "1.txt", file1);
+            File.createTempFile("Hello" + i, "1.txt", file2);
+            File.createTempFile("Hello" + i, "1.txt", file3);
+        }
+        when(mlEngine.getModelCachePath(any())).thenReturn(Paths.get(file3.getCanonicalPath()));
+        when(mlEngine.getDeployModelPath(any())).thenReturn(Paths.get(file2.getCanonicalPath()));
+        when(mlEngine.getRegisterModelPath(any())).thenReturn(Paths.get(file1.getCanonicalPath()));
+        DiscoveryNode localNode = new DiscoveryNode(
+            "foo0",
+            "foo0",
+            new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
+            Collections.emptyMap(),
+            Collections.singleton(CLUSTER_MANAGER_ROLE),
+            Version.CURRENT
+        );
+        when(clusterService.localNode()).thenReturn(localNode);
+        when(mlEngine.getRegisterModelRootPath()).thenReturn(Paths.get(file1.getCanonicalPath()));
+        when(mlEngine.getDeployModelRootPath()).thenReturn(Paths.get(file2.getCanonicalPath()));
+        when(mlEngine.getModelCacheRootPath()).thenReturn(Paths.get(file3.getCanonicalPath()));
+        when(mlFeatureEnabledSetting.isKeyRefreshEnabled()).thenReturn(true);
+        doAnswer(invocation -> {
+            ActionListener<Boolean> actionListener = (ActionListener) invocation.getArgument(0);
+            actionListener.onResponse(true);
+            return null;
+        }).when(encryptor).refreshMasterKey(any());
+        final MLSyncUpNodeRequest request = action.newNodeRequest(new MLSyncUpNodesRequest(new String[] {}, prepareRequest()));
+        final MLSyncUpNodeResponse response = action.nodeOperation(request);
+        assertNotNull(response);
+        file1.deleteOnExit();
+        file2.deleteOnExit();
+        file3.deleteOnExit();
+        testFolder.delete();
+    }
+
+    @Test
+    public void testNodeOperation_RefreshMLKeyFailure() throws IOException {
+        testFolder.create();
+        File file1 = testFolder.newFolder();
+        File file2 = testFolder.newFolder();
+        File file3 = testFolder.newFolder();
+        for (int i = 0; i < 5; i++) {
+            File.createTempFile("Hello" + i, "1.txt", file1);
+            File.createTempFile("Hello" + i, "1.txt", file2);
+            File.createTempFile("Hello" + i, "1.txt", file3);
+        }
+        when(mlEngine.getModelCachePath(any())).thenReturn(Paths.get(file3.getCanonicalPath()));
+        when(mlEngine.getDeployModelPath(any())).thenReturn(Paths.get(file2.getCanonicalPath()));
+        when(mlEngine.getRegisterModelPath(any())).thenReturn(Paths.get(file1.getCanonicalPath()));
+        DiscoveryNode localNode = new DiscoveryNode(
+            "foo0",
+            "foo0",
+            new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
+            Collections.emptyMap(),
+            Collections.singleton(CLUSTER_MANAGER_ROLE),
+            Version.CURRENT
+        );
+        when(clusterService.localNode()).thenReturn(localNode);
+        when(mlEngine.getRegisterModelRootPath()).thenReturn(Paths.get(file1.getCanonicalPath()));
+        when(mlEngine.getDeployModelRootPath()).thenReturn(Paths.get(file2.getCanonicalPath()));
+        when(mlEngine.getModelCacheRootPath()).thenReturn(Paths.get(file3.getCanonicalPath()));
+        when(mlFeatureEnabledSetting.isKeyRefreshEnabled()).thenReturn(true);
+        doAnswer(invocation -> {
+            ActionListener<Boolean> actionListener = (ActionListener) invocation.getArgument(0);
+            actionListener.onFailure(new MLException("test refresh key failure"));
+            return null;
+        }).when(encryptor).refreshMasterKey(any());
+        final MLSyncUpNodeRequest request = action.newNodeRequest(new MLSyncUpNodesRequest(new String[] {}, prepareRequest()));
+        final MLSyncUpNodeResponse response = action.nodeOperation(request);
+        assertNotNull(response);
+        file1.deleteOnExit();
+        file2.deleteOnExit();
+        file3.deleteOnExit();
+        testFolder.delete();
     }
 
     private void testCleanUpLocalCache_ExpiredMLTask_DeployStatus(MLModelState modelState) {
