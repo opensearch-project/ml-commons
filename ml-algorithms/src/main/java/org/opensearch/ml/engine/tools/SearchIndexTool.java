@@ -11,8 +11,8 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 
+import org.apache.commons.lang3.StringUtils;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
@@ -33,6 +33,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonSyntaxException;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -97,9 +98,17 @@ public class SearchIndexTool implements Tool {
         if (parameters == null || parameters.isEmpty()) {
             return false;
         }
-        boolean argumentsFromInput = parameters.containsKey(INPUT_FIELD) && parameters.get(INPUT_FIELD) != null;
-        boolean argumentsFromParameters = parameters.containsKey(INDEX_FIELD) && parameters.containsKey(QUERY_FIELD);
-        return argumentsFromInput || argumentsFromParameters;
+        boolean argumentsFromInput = parameters.containsKey(INPUT_FIELD) && !StringUtils.isEmpty(parameters.get(INPUT_FIELD));
+        boolean argumentsFromParameters = parameters.containsKey(INDEX_FIELD)
+            && parameters.containsKey(QUERY_FIELD)
+            && !StringUtils.isEmpty(parameters.get(INDEX_FIELD))
+            && !StringUtils.isEmpty(parameters.get(QUERY_FIELD));
+        boolean validRequest = argumentsFromInput || argumentsFromParameters;
+        if (!validRequest) {
+            log.error("SearchIndexTool's two parameter: index and query are required!");
+            return false;
+        }
+        return true;
     }
 
     private SearchRequest getSearchRequest(String index, String query) throws IOException {
@@ -122,21 +131,36 @@ public class SearchIndexTool implements Tool {
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
         try {
             String input = parameters.get(INPUT_FIELD);
-            JsonObject jsonObject = GSON.fromJson(input, JsonObject.class);
-            String index = Optional
-                .ofNullable(jsonObject)
-                .map(x -> x.get(INDEX_FIELD))
-                .map(JsonElement::getAsString)
-                .orElse(parameters.getOrDefault(INDEX_FIELD, null));
-            String query = Optional
-                .ofNullable(jsonObject)
-                .map(x -> x.get(QUERY_FIELD))
-                .map(JsonElement::toString)
-                .orElse(parameters.getOrDefault(QUERY_FIELD, null));
-            if (index == null || query == null) {
-                listener.onFailure(new IllegalArgumentException("SearchIndexTool's two parameter: index and query are required!"));
+            String index = null;
+            String query = null;
+            if (!StringUtils.isEmpty(input)) {
+                try {
+                    JsonObject jsonObject = GSON.fromJson(input, JsonObject.class);
+                    if (jsonObject != null && jsonObject.has(INDEX_FIELD) && jsonObject.has(QUERY_FIELD)) {
+                        index = jsonObject.get(INDEX_FIELD).getAsString();
+                        JsonElement queryElement = jsonObject.get(QUERY_FIELD);
+                        query = queryElement == null ? null : queryElement.toString();
+                    }
+                } catch (JsonSyntaxException e) {
+                    log.error("Invalid JSON input: {}", input, e);
+                }
+            }
+            if (StringUtils.isEmpty(index)) {
+                index = parameters.get(INDEX_FIELD);
+            }
+            if (StringUtils.isEmpty(query)) {
+                query = parameters.get(QUERY_FIELD);
+            }
+            if (StringUtils.isEmpty(index) || StringUtils.isEmpty(query)) {
+                listener
+                    .onFailure(
+                        new IllegalArgumentException(
+                            "SearchIndexTool's two parameters: index and query are required and should in valid format!"
+                        )
+                    );
                 return;
             }
+
             SearchRequest searchRequest = getSearchRequest(index, query);
 
             ActionListener<SearchResponse> actionListener = ActionListener.<SearchResponse>wrap(r -> {
