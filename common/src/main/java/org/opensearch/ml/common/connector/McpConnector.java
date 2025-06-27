@@ -32,6 +32,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.function.BiFunction;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -205,21 +207,37 @@ public class McpConnector implements Connector {
     }
 
     @Override
-    public void decrypt(String action, BiFunction<String, String, String> function, String tenantId) {
-        Map<String, String> decrypted = new HashMap<>();
+    public void decrypt(String action, BiFunction<String, String, Future<String>> function, String tenantId) {
+        Map<String, Future<String>> decryptingTempCredential = new HashMap<>();
+        decryptedCredential = new HashMap<>();
         for (String key : credential.keySet()) {
-            decrypted.put(key, function.apply(credential.get(key), tenantId));
+            decryptingTempCredential.put(key, function.apply(credential.get(key), tenantId));
         }
-        this.decryptedCredential = decrypted;
+        fillCredential(decryptingTempCredential, decryptedCredential);
         this.decryptedHeaders = createDecryptedHeaders(headers);
     }
 
-    @Override
-    public void encrypt(BiFunction<String, String, String> function, String tenantId) {
-        for (String key : credential.keySet()) {
-            String encrypted = function.apply(credential.get(key), tenantId);
-            credential.put(key, encrypted);
+    private void fillCredential(Map<String, Future<String>> decrypted, Map<String, String> decryptedCredential) {
+        for (String key : decrypted.keySet()) {
+            try {
+                if (decrypted.get(key) != null) {
+                    decryptedCredential.put(key, decrypted.get(key).get());
+                } else {
+                    decryptedCredential.put(key, null);
+                }
+            } catch (InterruptedException | ExecutionException e) {
+                throw new RuntimeException(e);
+            }
         }
+    }
+
+    @Override
+    public void encrypt(BiFunction<String, String, Future<String>> function, String tenantId) {
+        Map<String, Future<String>> encryptingCredential = new HashMap<>();
+        for (String key : credential.keySet()) {
+            encryptingCredential.put(key, function.apply(credential.get(key), tenantId));
+        }
+        fillCredential(encryptingCredential, credential);
     }
 
     @Override
@@ -332,7 +350,7 @@ public class McpConnector implements Connector {
     }
 
     @Override
-    public void update(MLCreateConnectorInput updateContent, BiFunction<String, String, String> function) {
+    public void update(MLCreateConnectorInput updateContent, BiFunction<String, String, Future<String>> function) {
         if (updateContent.getName() != null) {
             this.name = updateContent.getName();
         }
