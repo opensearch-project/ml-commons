@@ -546,10 +546,7 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
         action.doExecute(task, request, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals(
-            "Connector URL is not matching the trusted connector endpoint regex",
-            argumentCaptor.getValue().getMessage()
-        );
+        assertEquals("Connector URL is not matching the trusted connector endpoint regex", argumentCaptor.getValue().getMessage());
     }
 
     public void test_connector_creation_success_deepseek() {
