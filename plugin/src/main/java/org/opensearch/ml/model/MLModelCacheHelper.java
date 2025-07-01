@@ -632,7 +632,7 @@ public class MLModelCacheHelper {
         log.debug("sync model planning worker nodes");
         modelPlanningWorkerNodes.entrySet().forEach(entry -> {
             MLModelCache modelCache = getOrCreateModelCache(entry.getKey());
-            modelCache.syncPlanningWorkerNode(entry.getValue());
+            modelCache.syncPlanningWorkerNodes(entry.getValue());
         });
     }
 

@@ -146,7 +146,7 @@ public class MLModelCache {
         this.workerNodes.addAll(workerNodes);
     }
 
-    public void syncPlanningWorkerNode(Set<String> planningWorkerNodes) {
+    public void syncPlanningWorkerNodes(Set<String> planningWorkerNodes) {
         this.targetWorkerNodes.clear();
         this.targetWorkerNodes.addAll(planningWorkerNodes);
     }
