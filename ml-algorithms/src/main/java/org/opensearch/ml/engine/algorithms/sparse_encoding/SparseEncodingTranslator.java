@@ -6,7 +6,7 @@
 package org.opensearch.ml.engine.algorithms.sparse_encoding;
 
 import static org.opensearch.ml.common.CommonValue.ML_MAP_RESPONSE_KEY;
-import static org.opensearch.ml.common.input.parameter.textembedding.SparseEncodingParameters.SPARSE_ENCODING_FORMAT_FIELD;
+import static org.opensearch.ml.common.input.parameter.textembedding.SparseEncodingParameters.EMBEDDING_FORMAT_FIELD;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -14,7 +14,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.opensearch.ml.common.input.parameter.textembedding.SparseEncodingParameters;
+import org.opensearch.ml.common.input.parameter.textembedding.AbstractSparseEncodingParameters;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.algorithms.SentenceTransformerTranslator;
@@ -29,9 +29,9 @@ public class SparseEncodingTranslator extends SentenceTransformerTranslator {
 
     @Override
     public NDList processInput(TranslatorContext ctx, Input input) {
-        String sparse_encoding_format = input.getAsString(SPARSE_ENCODING_FORMAT_FIELD);
+        String sparse_encoding_format = input.getAsString(EMBEDDING_FORMAT_FIELD);
         if (sparse_encoding_format != null) {
-            ctx.setAttachment(SPARSE_ENCODING_FORMAT_FIELD, sparse_encoding_format);
+            ctx.setAttachment(EMBEDDING_FORMAT_FIELD, sparse_encoding_format);
         }
         return super.processInput(ctx, input);
     }
@@ -39,15 +39,15 @@ public class SparseEncodingTranslator extends SentenceTransformerTranslator {
     @Override
     public Output processOutput(TranslatorContext ctx, NDList list) {
         Output output = new Output(200, "OK");
-        Object sparseEncodingFormatObject = ctx.getAttachment(SPARSE_ENCODING_FORMAT_FIELD);
-        String sparseEncodingFormatString = sparseEncodingFormatObject != null
-            ? sparseEncodingFormatObject.toString()
-            : SparseEncodingParameters.SparseEncodingFormat.WORD.name();
+        Object embeddingFormatObject = ctx.getAttachment(EMBEDDING_FORMAT_FIELD);
+        String embeddingFormatString = embeddingFormatObject != null
+            ? embeddingFormatObject.toString()
+            : AbstractSparseEncodingParameters.EmbeddingFormat.LEXICAL.name();
 
         List<ModelTensor> outputs = new ArrayList<>();
         for (NDArray ndArray : list) {
             String name = ndArray.getName();
-            Map<String, Float> tokenWeightsMap = convertOutput(ndArray, sparseEncodingFormatString);
+            Map<String, Float> tokenWeightsMap = convertOutput(ndArray, embeddingFormatString);
             Map<String, ?> wrappedMap = Map.of(ML_MAP_RESPONSE_KEY, Collections.singletonList(tokenWeightsMap));
             ModelTensor tensor = ModelTensor.builder().name(name).dataAsMap(wrappedMap).build();
             outputs.add(tensor);
@@ -58,12 +58,12 @@ public class SparseEncodingTranslator extends SentenceTransformerTranslator {
         return output;
     }
 
-    private Map<String, Float> convertOutput(NDArray array, String sparseEncodingFormat) {
+    private Map<String, Float> convertOutput(NDArray array, String embeddingFormat) {
         Map<String, Float> map = new HashMap<>();
         NDArray nonZeroIndices = array.nonzero().squeeze();
 
         for (long index : nonZeroIndices.toLongArray()) {
-            String s = sparseEncodingFormat.equals(SparseEncodingParameters.SparseEncodingFormat.INT.name())
+            String s = embeddingFormat.equals(AbstractSparseEncodingParameters.EmbeddingFormat.VECTOR.name())
                 ? Long.toString(index)
                 : this.tokenizer.decode(new long[] { index }, true);
             if (!s.isEmpty()) {
