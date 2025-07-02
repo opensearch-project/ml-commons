@@ -15,6 +15,7 @@ import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -25,6 +26,12 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
+
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.google.gson.JsonPrimitive;
 
 import lombok.Builder;
 import lombok.Data;
@@ -232,7 +239,7 @@ public class ModelTensor implements Writeable, ToXContentObject {
         this.result = in.readOptionalString();
         if (in.readBoolean()) {
             String mapStr = in.readString();
-            this.dataAsMap = gson.fromJson(mapStr, Map.class);
+            this.dataAsMap = parseMapPreservingNumberTypes(mapStr);
         }
     }
 
@@ -288,5 +295,56 @@ public class ModelTensor implements Writeable, ToXContentObject {
         } else {
             out.writeBoolean(false);
         }
+    }
+
+    /**
+     * Parse JSON string to Map while preserving number types (int vs double)
+     */
+    private static Map<String, Object> parseMapPreservingNumberTypes(String jsonStr) {
+        JsonElement element = JsonParser.parseString(jsonStr);
+        return convertJsonElementToObject(element);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> T convertJsonElementToObject(JsonElement element) {
+        if (element.isJsonNull()) {
+            return null;
+        } else if (element.isJsonPrimitive()) {
+            JsonPrimitive primitive = element.getAsJsonPrimitive();
+            if (primitive.isNumber()) {
+                // Preserve integer types
+                Number number = primitive.getAsNumber();
+                if (number.toString().contains(".")) {
+                    return (T) Double.valueOf(number.doubleValue());
+                } else {
+                    // Check if it fits in an int, otherwise use long
+                    long longValue = number.longValue();
+                    if (longValue >= Integer.MIN_VALUE && longValue <= Integer.MAX_VALUE) {
+                        return (T) Integer.valueOf((int) longValue);
+                    } else {
+                        return (T) Long.valueOf(longValue);
+                    }
+                }
+            } else if (primitive.isBoolean()) {
+                return (T) Boolean.valueOf(primitive.getAsBoolean());
+            } else {
+                return (T) primitive.getAsString();
+            }
+        } else if (element.isJsonArray()) {
+            JsonArray array = element.getAsJsonArray();
+            List<Object> list = new ArrayList<>();
+            for (JsonElement arrayElement : array) {
+                list.add(convertJsonElementToObject(arrayElement));
+            }
+            return (T) list;
+        } else if (element.isJsonObject()) {
+            JsonObject object = element.getAsJsonObject();
+            Map<String, Object> map = new HashMap<>();
+            for (Map.Entry<String, JsonElement> entry : object.entrySet()) {
+                map.put(entry.getKey(), convertJsonElementToObject(entry.getValue()));
+            }
+            return (T) map;
+        }
+        return null;
     }
 }
