@@ -17,31 +17,31 @@ import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 
 import lombok.Builder;
 
-@MLAlgoParameter(algorithms = { FunctionName.SPARSE_ENCODING })
-public class SparseEncodingParameters extends AbstractSparseEncodingParameters {
+@MLAlgoParameter(algorithms = { FunctionName.SPARSE_TOKENIZE })
+public class SparseTokenizeParameters extends AbstractSparseEncodingParameters {
 
-    public static final String PARSE_FIELD_NAME = FunctionName.SPARSE_ENCODING.name();
+    public static final String PARSE_FIELD_NAME = FunctionName.SPARSE_TOKENIZE.name();
 
     public static final NamedXContentRegistry.Entry XCONTENT_REGISTRY = new NamedXContentRegistry.Entry(
         MLAlgoParams.class,
         new ParseField(PARSE_FIELD_NAME),
-        SparseEncodingParameters::parse
+        SparseTokenizeParameters::parse
     );
 
     // Default constructor with LEXICAL format
-    public SparseEncodingParameters() {
+    public SparseTokenizeParameters() {
         super(EmbeddingFormat.LEXICAL);
     }
 
     @Builder(toBuilder = true)
-    public SparseEncodingParameters(EmbeddingFormat sparseEncodingType) {
+    public SparseTokenizeParameters(EmbeddingFormat sparseEncodingType) {
         super(sparseEncodingType);
     }
 
     /**
      * Constructor for deserialization from StreamInput
      */
-    public SparseEncodingParameters(StreamInput in) throws IOException {
+    public SparseTokenizeParameters(StreamInput in) throws IOException {
         super(in);
     }
 
@@ -52,6 +52,6 @@ public class SparseEncodingParameters extends AbstractSparseEncodingParameters {
 
     public static MLAlgoParams parse(XContentParser parser) throws IOException {
         EmbeddingFormat sparseEncodingType = parseCommon(parser);
-        return new SparseEncodingParameters(sparseEncodingType);
+        return new SparseTokenizeParameters(sparseEncodingType);
     }
 }
