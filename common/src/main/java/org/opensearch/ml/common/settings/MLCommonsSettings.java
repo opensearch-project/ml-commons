@@ -352,8 +352,8 @@ public final class MLCommonsSettings {
         .boolSetting("plugins.ml_commons.metrics_static_collection_enabled", false, Setting.Property.NodeScope, Setting.Property.Final);
 
     // Feature flag for enabling telemetry tracer
-    public static final Setting<Boolean> ML_COMMONS_AGENT_TRACING_FEATURE_ENABLED = Setting
-        .boolSetting("plugins.ml_commons.agent_tracing_feature_enabled", false, Setting.Property.NodeScope, Setting.Property.Final);
+    public static final Setting<Boolean> ML_COMMONS_TRACING_ENABLED = Setting
+        .boolSetting("plugins.ml_commons.tracing_enabled", false, Setting.Property.NodeScope, Setting.Property.Final);
 
     // Feature flag for enabling telemetry agent tracing
     public static final Setting<Boolean> ML_COMMONS_AGENT_TRACING_ENABLED = Setting

@@ -44,7 +44,7 @@ public class MLFeatureEnabledSettingTests {
                     MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED,
                     MLCommonsSettings.ML_COMMONS_METRIC_COLLECTION_ENABLED,
                     MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED,
-                    MLCommonsSettings.ML_COMMONS_AGENT_TRACING_FEATURE_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_TRACING_ENABLED,
                     MLCommonsSettings.ML_COMMONS_AGENT_TRACING_ENABLED
                 )
         );
@@ -67,7 +67,7 @@ public class MLFeatureEnabledSettingTests {
             .put("plugins.ml_commons.rag_pipeline_feature_enabled", true)
             .put("plugins.ml_commons.metrics_collection_enabled", true)
             .put("plugins.ml_commons.metrics_static_collection_enabled", true)
-            .put("plugins.ml_commons.agent_tracing_feature_enabled", true)
+            .put("plugins.ml_commons.tracing_enabled", true)
             .put("plugins.ml_commons.agent_tracing_enabled", true)
             .build();
 
@@ -85,7 +85,7 @@ public class MLFeatureEnabledSettingTests {
         assertTrue(setting.isRagSearchPipelineEnabled());
         assertTrue(setting.isMetricCollectionEnabled());
         assertTrue(setting.isStaticMetricCollectionEnabled());
-        assertTrue(setting.isAgentTracingFeatureEnabled());
+        assertTrue(setting.isTracingEnabled());
         assertTrue(setting.isAgentTracingEnabled());
     }
 
@@ -105,7 +105,7 @@ public class MLFeatureEnabledSettingTests {
             .put("plugins.ml_commons.rag_pipeline_feature_enabled", false)
             .put("plugins.ml_commons.metrics_collection_enabled", false)
             .put("plugins.ml_commons.metrics_static_collection_enabled", false)
-            .put("plugins.ml_commons.agent_tracing_feature_enabled", false)
+            .put("plugins.ml_commons.tracing_enabled", false)
             .put("plugins.ml_commons.agent_tracing_enabled", false)
             .build();
 
@@ -123,7 +123,7 @@ public class MLFeatureEnabledSettingTests {
         assertFalse(setting.isRagSearchPipelineEnabled());
         assertFalse(setting.isMetricCollectionEnabled());
         assertFalse(setting.isStaticMetricCollectionEnabled());
-        assertFalse(setting.isAgentTracingFeatureEnabled());
+        assertFalse(setting.isTracingEnabled());
         assertFalse(setting.isAgentTracingEnabled());
     }
 

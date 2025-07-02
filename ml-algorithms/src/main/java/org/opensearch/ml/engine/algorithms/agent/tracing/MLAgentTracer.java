@@ -27,7 +27,7 @@ public class MLAgentTracer extends AbstractMLTracer {
     }
 
     public static synchronized void initialize(Tracer tracer, MLFeatureEnabledSetting mlFeatureEnabledSetting) {
-        if (mlFeatureEnabledSetting == null || !mlFeatureEnabledSetting.isAgentTracingFeatureEnabled()) {
+        if (mlFeatureEnabledSetting == null || !mlFeatureEnabledSetting.isTracingEnabled()) {
             instance = null;
             return;
         }
@@ -38,7 +38,7 @@ public class MLAgentTracer extends AbstractMLTracer {
     public static synchronized MLAgentTracer getInstance() {
         if (instance == null) {
             throw new IllegalStateException(
-                "MLAgentTracer is not initialized. Call initialize() first or enable plugins.ml_commons.agent_tracing_feature_enabled setting."
+                "MLAgentTracer is not initialized. Call initialize() first or enable plugins.ml_commons.tracing_enabled setting."
             );
         }
         return instance;

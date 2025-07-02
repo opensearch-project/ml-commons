@@ -807,7 +807,7 @@ public class MachineLearningPlugin extends Plugin
         McpAsyncServerHolder.init(mlIndicesHandler, mcpToolsHelper);
 
         MLAgentTracer.initialize(tracer, mlFeatureEnabledSetting);
-        if (mlFeatureEnabledSetting.isAgentTracingFeatureEnabled()) {
+        if (mlFeatureEnabledSetting.isTracingEnabled()) {
             mlEngine.getAgentExecutor().setAgentTracer(MLAgentTracer.getInstance());
         }
 
@@ -1163,7 +1163,7 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED,
                 MLCommonsSettings.ML_COMMONS_METRIC_COLLECTION_ENABLED,
                 MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED,
-                MLCommonsSettings.ML_COMMONS_AGENT_TRACING_FEATURE_ENABLED,
+                MLCommonsSettings.ML_COMMONS_TRACING_ENABLED,
                 MLCommonsSettings.ML_COMMONS_AGENT_TRACING_ENABLED
             );
         return settings;

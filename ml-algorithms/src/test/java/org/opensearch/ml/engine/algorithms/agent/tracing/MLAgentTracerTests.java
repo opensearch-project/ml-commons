@@ -29,21 +29,21 @@ public class MLAgentTracerTests {
     public void testExceptionThrownForNotInitialized() {
         IllegalStateException exception = assertThrows(IllegalStateException.class, MLAgentTracer::getInstance);
         assertEquals(
-            "MLAgentTracer is not initialized. Call initialize() first or enable plugins.ml_commons.agent_tracing_feature_enabled setting.",
+            "MLAgentTracer is not initialized. Call initialize() first or enable plugins.ml_commons.tracing_enabled setting.",
             exception.getMessage()
         );
     }
 
     @Test
     public void testInitializeWithFeatureFlagDisabled() {
-        when(mockFeatureSetting.isAgentTracingFeatureEnabled()).thenReturn(false);
+        when(mockFeatureSetting.isTracingEnabled()).thenReturn(false);
         MLAgentTracer.initialize(mockTracer, mockFeatureSetting);
         assertThrows(IllegalStateException.class, MLAgentTracer::getInstance);
     }
 
     @Test
     public void testInitializeWithFeatureFlagEnabledAndDynamicEnabled() {
-        when(mockFeatureSetting.isAgentTracingFeatureEnabled()).thenReturn(true);
+        when(mockFeatureSetting.isTracingEnabled()).thenReturn(true);
         when(mockFeatureSetting.isAgentTracingEnabled()).thenReturn(true);
         MLAgentTracer.initialize(mockTracer, mockFeatureSetting);
         MLAgentTracer instance = MLAgentTracer.getInstance();
@@ -53,11 +53,38 @@ public class MLAgentTracerTests {
 
     @Test
     public void testInitializeWithFeatureFlagEnabledAndDynamicDisabled() {
-        when(mockFeatureSetting.isAgentTracingFeatureEnabled()).thenReturn(true);
+        when(mockFeatureSetting.isTracingEnabled()).thenReturn(true);
         when(mockFeatureSetting.isAgentTracingEnabled()).thenReturn(false);
         MLAgentTracer.initialize(mockTracer, mockFeatureSetting);
         MLAgentTracer instance = MLAgentTracer.getInstance();
         assertNotNull(instance);
         assertTrue(instance.getTracer() instanceof NoopTracer);
+    }
+
+    @Test
+    public void testStartSpanReturnsNullIfTracerIsNull() {
+        when(mockFeatureSetting.isTracingEnabled()).thenReturn(true);
+        when(mockFeatureSetting.isAgentTracingEnabled()).thenReturn(true);
+        MLAgentTracer.initialize(null, mockFeatureSetting);
+        MLAgentTracer instance = MLAgentTracer.getInstance();
+        assertNull(instance.startSpan("test", null, null));
+    }
+
+    @Test
+    public void testEndSpanDoesNothingIfSpanOrTracerIsNull() {
+        when(mockFeatureSetting.isTracingEnabled()).thenReturn(true);
+        when(mockFeatureSetting.isAgentTracingEnabled()).thenReturn(true);
+        MLAgentTracer.initialize(null, mockFeatureSetting);
+        MLAgentTracer instance = MLAgentTracer.getInstance();
+        instance.endSpan(null);
+    }
+
+    @Test
+    public void testGetTracerReturnsTracer() {
+        when(mockFeatureSetting.isTracingEnabled()).thenReturn(true);
+        when(mockFeatureSetting.isAgentTracingEnabled()).thenReturn(true);
+        MLAgentTracer.initialize(mockTracer, mockFeatureSetting);
+        MLAgentTracer instance = MLAgentTracer.getInstance();
+        assertEquals(mockTracer, instance.getTracer());
     }
 }

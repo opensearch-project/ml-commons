@@ -523,4 +523,9 @@ public class MLEngineTest extends MLStaticMockBase {
         assertEquals("test_key_value", decryptedCredential.get("key"));
         assertEquals(null, decryptedCredential.get("region"));
     }
+
+    @Test
+    public void testGetAgentExecutorReturnsNotNull() {
+        assertNotNull(mlEngine.getAgentExecutor());
+    }
 }
