@@ -29,9 +29,9 @@ public class SparseEncodingTranslator extends SentenceTransformerTranslator {
 
     @Override
     public NDList processInput(TranslatorContext ctx, Input input) {
-        String sparse_encoding_format = input.getAsString(EMBEDDING_FORMAT_FIELD);
-        if (sparse_encoding_format != null) {
-            ctx.setAttachment(EMBEDDING_FORMAT_FIELD, sparse_encoding_format);
+        String embedding_format = input.getAsString(EMBEDDING_FORMAT_FIELD);
+        if (embedding_format != null) {
+            ctx.setAttachment(EMBEDDING_FORMAT_FIELD, embedding_format);
         }
         return super.processInput(ctx, input);
     }

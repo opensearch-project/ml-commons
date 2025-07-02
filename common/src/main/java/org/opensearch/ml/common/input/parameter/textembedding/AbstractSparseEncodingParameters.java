@@ -74,7 +74,7 @@ public abstract class AbstractSparseEncodingParameters implements MLAlgoParams {
      * @throws IOException if parsing fails
      */
     protected static EmbeddingFormat parseCommon(XContentParser parser) throws IOException {
-        EmbeddingFormat sparseEncodingType = null;
+        EmbeddingFormat embeddingFormat = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -83,16 +83,13 @@ public abstract class AbstractSparseEncodingParameters implements MLAlgoParams {
 
             if (fieldName.equals(EMBEDDING_FORMAT_FIELD)) {
                 String contentType = parser.text();
-                sparseEncodingType = EmbeddingFormat.valueOf(contentType.toUpperCase(Locale.ROOT));
+                embeddingFormat = EmbeddingFormat.valueOf(contentType.toUpperCase(Locale.ROOT));
             } else {
                 parser.skipChildren();
             }
         }
         // Return LEXICAL as default if not specified
-        return sparseEncodingType != null ? sparseEncodingType : EmbeddingFormat.LEXICAL;
+        return embeddingFormat != null ? embeddingFormat : EmbeddingFormat.LEXICAL;
     }
 
-    public EmbeddingFormat getEmbeddingFormat() {
-        return embeddingFormat;
-    }
 }
