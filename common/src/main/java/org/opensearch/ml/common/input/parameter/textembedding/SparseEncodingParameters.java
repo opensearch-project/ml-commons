@@ -34,8 +34,8 @@ public class SparseEncodingParameters extends AbstractSparseEncodingParameters {
     }
 
     @Builder(toBuilder = true)
-    public SparseEncodingParameters(EmbeddingFormat sparseEncodingType) {
-        super(sparseEncodingType);
+    public SparseEncodingParameters(EmbeddingFormat embeddingFormat) {
+        super(embeddingFormat);
     }
 
     /**
@@ -51,7 +51,7 @@ public class SparseEncodingParameters extends AbstractSparseEncodingParameters {
     }
 
     public static MLAlgoParams parse(XContentParser parser) throws IOException {
-        EmbeddingFormat sparseEncodingType = parseCommon(parser);
-        return new SparseEncodingParameters(sparseEncodingType);
+        EmbeddingFormat embeddingFormat = parseCommon(parser);
+        return new SparseEncodingParameters(embeddingFormat);
     }
 }
