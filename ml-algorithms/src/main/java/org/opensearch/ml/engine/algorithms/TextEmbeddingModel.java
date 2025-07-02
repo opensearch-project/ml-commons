@@ -10,9 +10,9 @@ import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
-import org.opensearch.ml.common.input.parameter.textembedding.AbstractSparseEncodingParameters;
 import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters;
 import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters.EmbeddingContentType;
+import org.opensearch.ml.common.input.parameter.textembedding.SparseEncodingParameters;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.output.model.ModelResultFilter;
@@ -41,11 +41,11 @@ public abstract class TextEmbeddingModel extends DLModel {
         for (String doc : textDocsInput.getDocs()) {
             Input input = new Input();
             input.add(doc);
-            if (mlParams instanceof AbstractSparseEncodingParameters) {
+            if (mlParams instanceof SparseEncodingParameters) {
                 input
                     .add(
-                        AbstractSparseEncodingParameters.EMBEDDING_FORMAT_FIELD,
-                        ((AbstractSparseEncodingParameters) mlParams).getEmbeddingFormat().name()
+                        SparseEncodingParameters.EMBEDDING_FORMAT_FIELD,
+                        ((SparseEncodingParameters) mlParams).getEmbeddingFormat().name()
                     );
             }
 

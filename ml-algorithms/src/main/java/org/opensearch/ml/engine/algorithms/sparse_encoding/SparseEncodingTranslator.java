@@ -29,9 +29,9 @@ public class SparseEncodingTranslator extends SentenceTransformerTranslator {
 
     @Override
     public NDList processInput(TranslatorContext ctx, Input input) {
-        String embedding_format = input.getAsString(EMBEDDING_FORMAT_FIELD);
-        if (embedding_format != null) {
-            ctx.setAttachment(EMBEDDING_FORMAT_FIELD, embedding_format);
+        String embeddingFormat = input.getAsString(EMBEDDING_FORMAT_FIELD);
+        if (embeddingFormat != null) {
+            ctx.setAttachment(EMBEDDING_FORMAT_FIELD, embeddingFormat);
         }
         return super.processInput(ctx, input);
     }
@@ -47,8 +47,8 @@ public class SparseEncodingTranslator extends SentenceTransformerTranslator {
         List<ModelTensor> outputs = new ArrayList<>();
         for (NDArray ndArray : list) {
             String name = ndArray.getName();
-            Map<String, Float> tokenWeightsMap = convertOutput(ndArray, embeddingFormatString);
-            Map<String, ?> wrappedMap = Map.of(ML_MAP_RESPONSE_KEY, Collections.singletonList(tokenWeightsMap));
+            Object result = convertOutput(ndArray, embeddingFormatString);
+            Map<String, ?> wrappedMap = Map.of(ML_MAP_RESPONSE_KEY, Collections.singletonList(result));
             ModelTensor tensor = ModelTensor.builder().name(name).dataAsMap(wrappedMap).build();
             outputs.add(tensor);
         }
@@ -58,18 +58,36 @@ public class SparseEncodingTranslator extends SentenceTransformerTranslator {
         return output;
     }
 
-    private Map<String, Float> convertOutput(NDArray array, String embeddingFormat) {
-        Map<String, Float> map = new HashMap<>();
+    private Object convertOutput(NDArray array, String embeddingFormat) {
         NDArray nonZeroIndices = array.nonzero().squeeze();
+        long[] indices = nonZeroIndices.toLongArray();
 
-        for (long index : nonZeroIndices.toLongArray()) {
-            String s = embeddingFormat.equals(AbstractSparseEncodingParameters.EmbeddingFormat.VECTOR.name())
-                ? Long.toString(index)
-                : this.tokenizer.decode(new long[] { index }, true);
-            if (!s.isEmpty()) {
-                map.put(s, array.getFloat(index));
+        if (embeddingFormat.equals(AbstractSparseEncodingParameters.EmbeddingFormat.VECTOR.name())) {
+            // Return vector format: {"indices": [...], "values": [...]}
+            // Sort indices for vector format
+            java.util.Arrays.sort(indices);
+            List<Long> indicesList = new ArrayList<>();
+            List<Float> valuesList = new ArrayList<>();
+
+            for (long index : indices) {
+                indicesList.add(index);
+                valuesList.add(array.getFloat(index));
             }
+
+            Map<String, Object> vectorFormat = new HashMap<>();
+            vectorFormat.put("indices", indicesList);
+            vectorFormat.put("values", valuesList);
+            return vectorFormat;
+        } else {
+            // Return lexical format: {"token": weight, ...}
+            Map<String, Float> tokenWeights = new HashMap<>();
+            for (long index : indices) {
+                String token = this.tokenizer.decode(new long[] { index }, true);
+                if (!token.isEmpty()) {
+                    tokenWeights.put(token, array.getFloat(index));
+                }
+            }
+            return tokenWeights;
         }
-        return map;
     }
 }

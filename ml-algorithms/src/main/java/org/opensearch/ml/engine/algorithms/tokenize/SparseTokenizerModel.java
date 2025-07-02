@@ -22,8 +22,10 @@ import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
+import org.opensearch.ml.common.input.parameter.MLAlgoParams;
+import org.opensearch.ml.common.input.parameter.textembedding.AbstractSparseEncodingParameters;
+import org.opensearch.ml.common.input.parameter.textembedding.SparseTokenizeParameters;
 import org.opensearch.ml.common.model.MLModelConfig;
-import org.opensearch.ml.common.output.model.ModelResultFilter;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -67,28 +69,57 @@ public class SparseTokenizerModel extends DLModel {
         MLInputDataset inputDataSet = mlInput.getInputDataset();
         List<ModelTensors> tensorOutputs = new ArrayList<>();
         TextDocsInputDataSet textDocsInput = (TextDocsInputDataSet) inputDataSet;
-        ModelResultFilter resultFilter = textDocsInput.getResultFilter();
+
+        // Get the embedding format from parameters
+        MLAlgoParams parameters = mlInput.getParameters();
+        AbstractSparseEncodingParameters.EmbeddingFormat embeddingFormat = AbstractSparseEncodingParameters.EmbeddingFormat.LEXICAL; // default
+
+        if (parameters instanceof SparseTokenizeParameters) {
+            SparseTokenizeParameters sparseParams = (SparseTokenizeParameters) parameters;
+            embeddingFormat = sparseParams.getEmbeddingFormat();
+        }
+
         for (String doc : textDocsInput.getDocs()) {
-            Output output = new Output(200, "OK");
             Encoding encodings = tokenizer.encode(doc);
             long[] indices = encodings.getIds();
-            List<ModelTensor> outputs = new ArrayList<>();
-            String[] tokens = Arrays
-                .stream(indices)
-                .distinct()
-                .mapToObj(value -> new long[] { value })
-                .map(value -> this.tokenizer.decode(value, true))
-                .filter(s -> !s.isEmpty())
-                .toArray(String[]::new);
-            Map<String, Float> tokenWeights = Arrays
-                .stream(tokens)
-                .collect(Collectors.toMap(token -> token, token -> idf.getOrDefault(token, 1.0f)));
-            Map<String, ?> wrappedMap = Map.of(ML_MAP_RESPONSE_KEY, Collections.singletonList(tokenWeights));
+
+            Map<String, ?> wrappedMap;
+            if (embeddingFormat == AbstractSparseEncodingParameters.EmbeddingFormat.VECTOR) {
+                // Return vector format: {"indices": [...], "values": [...]}
+                // Get distinct token IDs and sort them for vector format
+                long[] uniqueIndices = Arrays.stream(indices).distinct().sorted().toArray();
+                List<Long> indicesList = new ArrayList<>();
+                List<Float> valuesList = new ArrayList<>();
+
+                for (long index : uniqueIndices) {
+                    String token = this.tokenizer.decode(new long[] { index }, true);
+                    if (!token.isEmpty()) {
+                        indicesList.add(index);
+                        valuesList.add(idf.getOrDefault(token, 1.0f));
+                    }
+                }
+
+                Map<String, Object> vectorFormat = new HashMap<>();
+                vectorFormat.put("indices", indicesList);
+                vectorFormat.put("values", valuesList);
+                wrappedMap = Map.of(ML_MAP_RESPONSE_KEY, Collections.singletonList(vectorFormat));
+            } else {
+                // Return lexical format: {"token": weight, ...}
+                String[] tokens = Arrays
+                    .stream(indices)
+                    .distinct()
+                    .mapToObj(value -> new long[] { value })
+                    .map(value -> this.tokenizer.decode(value, true))
+                    .filter(s -> !s.isEmpty())
+                    .toArray(String[]::new);
+                Map<String, Float> tokenWeights = Arrays
+                    .stream(tokens)
+                    .collect(Collectors.toMap(token -> token, token -> idf.getOrDefault(token, 1.0f)));
+                wrappedMap = Map.of(ML_MAP_RESPONSE_KEY, Collections.singletonList(tokenWeights));
+            }
+
             ModelTensor tensor = ModelTensor.builder().dataAsMap(wrappedMap).build();
-            outputs.add(tensor);
-            ModelTensors modelTensorOutput = new ModelTensors(outputs);
-            output.add(modelTensorOutput.toBytes());
-            tensorOutputs.add(parseModelTensorOutput(output, resultFilter));
+            tensorOutputs.add(new ModelTensors(List.of(tensor)));
         }
         return new ModelTensorOutput(tensorOutputs);
     }
