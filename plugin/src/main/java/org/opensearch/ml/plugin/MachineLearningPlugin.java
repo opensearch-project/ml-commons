@@ -230,6 +230,7 @@ import org.opensearch.ml.engine.indices.MLInputDatasetHandler;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
 import org.opensearch.ml.engine.tools.AgentTool;
+import org.opensearch.ml.engine.tools.ClusterHealthTool;
 import org.opensearch.ml.engine.tools.ConnectorTool;
 import org.opensearch.ml.engine.tools.IndexMappingTool;
 import org.opensearch.ml.engine.tools.ListIndexTool;
@@ -713,6 +714,7 @@ public class MachineLearningPlugin extends Plugin
         McpSseTool.Factory.getInstance().init();
         AgentTool.Factory.getInstance().init(client);
         ListIndexTool.Factory.getInstance().init(client, clusterService);
+        ClusterHealthTool.Factory.getInstance().init(client, clusterService);
         IndexMappingTool.Factory.getInstance().init(client);
         SearchIndexTool.Factory.getInstance().init(client, xContentRegistry);
         VisualizationsTool.Factory.getInstance().init(client);
@@ -726,6 +728,7 @@ public class MachineLearningPlugin extends Plugin
         toolFactories.put(SearchIndexTool.TYPE, SearchIndexTool.Factory.getInstance());
         toolFactories.put(VisualizationsTool.TYPE, VisualizationsTool.Factory.getInstance());
         toolFactories.put(ConnectorTool.TYPE, ConnectorTool.Factory.getInstance());
+        toolFactories.put(ClusterHealthTool.TYPE, ClusterHealthTool.Factory.getInstance());
 
         if (externalToolFactories != null) {
             toolFactories.putAll(externalToolFactories);
