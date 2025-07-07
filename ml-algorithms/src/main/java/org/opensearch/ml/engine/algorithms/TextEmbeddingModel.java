@@ -12,7 +12,6 @@ import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters;
 import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters.EmbeddingContentType;
-import org.opensearch.ml.common.input.parameter.textembedding.SparseEncodingParameters;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.output.model.ModelResultFilter;
@@ -25,6 +24,7 @@ import ai.djl.modality.Output;
 import ai.djl.translate.TranslateException;
 
 public abstract class TextEmbeddingModel extends DLModel {
+    protected boolean isSparseModel = false;
 
     @Override
     public ModelTensorOutput predict(String modelId, MLInput mlInput) throws TranslateException {
@@ -41,12 +41,9 @@ public abstract class TextEmbeddingModel extends DLModel {
         for (String doc : textDocsInput.getDocs()) {
             Input input = new Input();
             input.add(doc);
-            if (mlParams instanceof SparseEncodingParameters) {
-                input
-                    .add(
-                        SparseEncodingParameters.EMBEDDING_FORMAT_FIELD,
-                        ((SparseEncodingParameters) mlParams).getEmbeddingFormat().name()
-                    );
+            if (mlParams instanceof AsymmetricTextEmbeddingParameters) {
+                AsymmetricTextEmbeddingParameters params = (AsymmetricTextEmbeddingParameters) mlParams;
+                input.add(AsymmetricTextEmbeddingParameters.SPARSE_EMBEDDING_FORMAT_FIELD, params.getSparseEmbeddingFormat().name());
             }
 
             output = getPredictor().predict(input);
@@ -55,7 +52,7 @@ public abstract class TextEmbeddingModel extends DLModel {
         return new ModelTensorOutput(tensorOutputs);
     }
 
-    private boolean isAsymmetricModel(MLAlgoParams mlParams) {
+    protected boolean isAsymmetricModel(MLAlgoParams mlParams) {
         if (mlParams instanceof AsymmetricTextEmbeddingParameters) {
             // Check for the necessary prefixes in modelConfig
             if (modelConfig == null
