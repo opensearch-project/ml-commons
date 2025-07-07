@@ -16,6 +16,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_FILTER;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.cleanUpResource;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createAgentTaskAttributes;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTools;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMcpToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
@@ -70,6 +71,7 @@ import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.telemetry.tracing.Span;
+import org.opensearch.telemetry.tracing.Tracer;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -89,6 +91,8 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     private final Map<String, Memory.Factory> memoryFactoryMap;
     private SdkClient sdkClient;
     private Encryptor encryptor;
+    private final Tracer tracer;
+    private final MLAgentTracer agentTracer;
     // flag to track if task has been updated with executor memory ids or not
     private boolean taskUpdated = false;
     private final Map<String, Object> taskUpdates = new HashMap<>();
@@ -147,7 +151,8 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         Map<String, Tool.Factory> toolFactories,
         Map<String, Memory.Factory> memoryFactoryMap,
         SdkClient sdkClient,
-        Encryptor encryptor
+        Encryptor encryptor,
+        Tracer tracer
     ) {
         this.client = client;
         this.settings = settings;
@@ -157,11 +162,20 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         this.memoryFactoryMap = memoryFactoryMap;
         this.sdkClient = sdkClient;
         this.encryptor = encryptor;
+        this.tracer = tracer;
+        this.agentTracer = org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRACING_ENABLED.get(settings)
+            ? MLAgentTracer.getInstance()
+            : null;
         this.plannerPrompt = DEFAULT_PLANNER_PROMPT;
         this.plannerPromptTemplate = DEFAULT_PLANNER_PROMPT_TEMPLATE;
         this.reflectPrompt = DEFAULT_REFLECT_PROMPT;
         this.reflectPromptTemplate = DEFAULT_REFLECT_PROMPT_TEMPLATE;
         this.plannerWithHistoryPromptTemplate = DEFAULT_PLANNER_WITH_HISTORY_PROMPT_TEMPLATE;
+        log
+            .info(
+                "MLPlanExecuteAndReflectAgentRunner initialized with tracer type: {}",
+                this.tracer != null ? this.tracer.getClass().getSimpleName() : "null"
+            );
     }
 
     @VisibleForTesting
@@ -211,6 +225,11 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             };
 
             params.put(LLM_RESPONSE_FILTER, llmResponseFilter);
+        }
+
+        if (params.containsKey(LLM_RESPONSE_FILTER)) {
+            params.put("original_llm_response_filter", params.get(LLM_RESPONSE_FILTER));
+            params.remove(LLM_RESPONSE_FILTER);
         }
     }
 
@@ -630,11 +649,18 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         if (dataAsMap.size() == 1 && dataAsMap.containsKey(RESPONSE_FIELD)) {
             llmResponse = ((String) dataAsMap.get(RESPONSE_FIELD)).trim();
         } else {
-            if (!allParams.containsKey(LLM_RESPONSE_FILTER) || allParams.get(LLM_RESPONSE_FILTER).isEmpty()) {
-                throw new IllegalArgumentException("llm_response_filter not found. Please provide the path to the model output.");
+            // if (!allParams.containsKey(LLM_RESPONSE_FILTER) || allParams.get(LLM_RESPONSE_FILTER).isEmpty()) {
+            // throw new IllegalArgumentException("llm_response_filter not found. Please provide the path to the model output.");
+            // }
+
+            // Use the original response filter for content extraction
+            String responseFilter = allParams.get("original_llm_response_filter");
+            if (responseFilter == null || responseFilter.isEmpty()) {
+                throw new IllegalArgumentException("original_llm_response_filter not found. Please provide the path to the model output.");
             }
 
-            llmResponse = ((String) JsonPath.read(dataAsMap, allParams.get(LLM_RESPONSE_FILTER))).trim();
+            // llmResponse = ((String) JsonPath.read(dataAsMap, allParams.get(LLM_RESPONSE_FILTER))).trim();
+            llmResponse = ((String) JsonPath.read(dataAsMap, responseFilter)).trim();
         }
 
         // if response is not a pure json, check if it is returned as markdown and fetch that
@@ -682,6 +708,60 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         }
 
         return response;
+    }
+
+    private String extractCompletionFromModelOutput(ModelTensorOutput modelTensorOutput, Map<String, String> allParams) {
+        if (modelTensorOutput == null || modelTensorOutput.getMlModelOutputs() == null || modelTensorOutput.getMlModelOutputs().isEmpty()) {
+            return "";
+        }
+
+        try {
+            Map<String, ?> dataAsMap = modelTensorOutput.getMlModelOutputs().getFirst().getMlModelTensors().getFirst().getDataAsMap();
+            if (dataAsMap == null) {
+                return "";
+            }
+
+            // Try to extract completion using the original LLM response filter
+            String responseFilter = allParams.get("original_llm_response_filter");
+            if (responseFilter != null && !responseFilter.isEmpty()) {
+                try {
+                    String completion = (String) JsonPath.read(dataAsMap, responseFilter);
+                    return completion != null ? completion.trim() : "";
+                } catch (Exception e) {
+                    log.debug("Failed to extract completion using original LLM response filter: {}", e.getMessage());
+                }
+            }
+
+            // Fallback: try to extract from common response fields
+            if (dataAsMap.containsKey(RESPONSE_FIELD)) {
+                return ((String) dataAsMap.get(RESPONSE_FIELD)).trim();
+            }
+
+            // Try to extract from choices array (OpenAI format)
+            if (dataAsMap.containsKey("choices")) {
+                Object choicesObj = dataAsMap.get("choices");
+                if (choicesObj instanceof List && !((List<?>) choicesObj).isEmpty()) {
+                    Object firstChoice = ((List<?>) choicesObj).get(0);
+                    if (firstChoice instanceof Map) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> choice = (Map<String, Object>) firstChoice;
+                        if (choice.containsKey("message") && choice.get("message") instanceof Map) {
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> message = (Map<String, Object>) choice.get("message");
+                            if (message.containsKey("content")) {
+                                return message.get("content").toString().trim();
+                            }
+                        }
+                    }
+                }
+            }
+
+            return "LLM response processed successfully";
+
+        } catch (Exception e) {
+            log.debug("Failed to extract completion from ModelTensorOutput: {}", e.getMessage());
+            return "LLM response processed";
+        }
     }
 
     @VisibleForTesting
