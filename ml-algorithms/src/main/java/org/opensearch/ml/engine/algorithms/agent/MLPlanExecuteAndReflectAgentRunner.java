@@ -525,7 +525,13 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
                     if (parseLLMOutput.get(RESULT_FIELD) != null) {
                         String finalResult = parseLLMOutput.get(RESULT_FIELD);
+                        if (agentTracer != null && agentTaskSpan != null) {
+                            agentTaskSpan.addAttribute("gen_ai.agent.result", finalResult != null ? finalResult : "");
+                        }
                         if (agentTracer != null && planStepSpan != null) {
+                            planStepSpan
+                                .addAttribute("gen_ai.agent.task", allParams.get(PROMPT_FIELD) != null ? allParams.get(PROMPT_FIELD) : "");
+                            planStepSpan.addAttribute("gen_ai.agent.result", finalResult != null ? finalResult : "");
                             agentTracer.endSpan(planStepSpan);
                         }
                         saveAndReturnFinalResult(
@@ -567,6 +573,9 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         MLExecuteTaskRequest executeRequest = new MLExecuteTaskRequest(FunctionName.AGENT, agentInput);
 
                         if (agentTracer != null && planStepSpan != null) {
+                            planStepSpan
+                                .addAttribute("gen_ai.agent.task", allParams.get(PROMPT_FIELD) != null ? allParams.get(PROMPT_FIELD) : "");
+                            planStepSpan.addAttribute("gen_ai.agent.result", completion);
                             agentTracer.endSpan(planStepSpan);
                         }
 
@@ -673,6 +682,8 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                                 useReflectPromptTemplate(allParams);
 
                                 if (agentTracer != null && executeStepSpan != null) {
+                                    executeStepSpan.addAttribute("gen_ai.agent.task", stepToExecute);
+                                    executeStepSpan.addAttribute("gen_ai.agent.result", results.get(STEP_RESULT_FIELD));
                                     agentTracer.endSpan(executeStepSpan);
                                 }
 
