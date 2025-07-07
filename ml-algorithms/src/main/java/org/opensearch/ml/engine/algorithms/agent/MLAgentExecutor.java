@@ -407,6 +407,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 agentResponse.put(PARENT_INTERACTION_ID, parentInteractionId);
             }
             mlTask.setResponse(agentResponse);
+            mlTask.setAsync(true);
 
             indexMLTask(mlTask, ActionListener.wrap(indexResponse -> {
                 String taskId = indexResponse.getId();

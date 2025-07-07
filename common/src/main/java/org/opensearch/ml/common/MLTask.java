@@ -73,6 +73,7 @@ public class MLTask implements ToXContentObject, Writeable {
     @Setter
     private String error;
     private User user; // TODO: support document level access control later
+    @Setter
     private boolean async;
     @Setter
     private Map<String, Object> remoteJob;

@@ -538,6 +538,20 @@ public class MLModelCacheHelper {
     }
 
     /**
+     * Get target worker nodes of model.
+     *
+     * @param modelId model id
+     * @return array of node id; return null if model not exists in cache
+     */
+    public String[] getTargetWorkerNodes(String modelId) {
+        MLModelCache modelCache = modelCaches.get(modelId);
+        if (modelCache == null) {
+            return null;
+        }
+        return modelCache.getTargetWorkerNodes();
+    }
+
+    /**
      * Add worker node of model.
      * 
      * @param modelId model id
@@ -606,6 +620,19 @@ public class MLModelCacheHelper {
         modelWorkerNodes.entrySet().forEach(entry -> {
             MLModelCache modelCache = getOrCreateModelCache(entry.getKey());
             modelCache.syncWorkerNode(entry.getValue());
+        });
+    }
+
+    /**
+     * Sync planning worker nodes for all models.
+     *
+     * @param modelPlanningWorkerNodes planning worker nodes of all models
+     */
+    public void syncPlanningWorkerNodes(Map<String, Set<String>> modelPlanningWorkerNodes) {
+        log.debug("sync model planning worker nodes");
+        modelPlanningWorkerNodes.entrySet().forEach(entry -> {
+            MLModelCache modelCache = getOrCreateModelCache(entry.getKey());
+            modelCache.syncPlanningWorkerNodes(entry.getValue());
         });
     }
 

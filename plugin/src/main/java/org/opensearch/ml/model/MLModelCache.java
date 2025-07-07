@@ -146,6 +146,11 @@ public class MLModelCache {
         this.workerNodes.addAll(workerNodes);
     }
 
+    public void syncPlanningWorkerNodes(Set<String> planningWorkerNodes) {
+        this.targetWorkerNodes.clear();
+        this.targetWorkerNodes.addAll(planningWorkerNodes);
+    }
+
     public boolean isDeployToAllNodes() {
         return this.deployToAllNodes != null && this.deployToAllNodes;
     }
