@@ -991,6 +991,7 @@ public class AgentUtils {
         attributes.put("gen_ai.agent.task", parameters.get("prompt") != null ? parameters.get("prompt") : "");
         attributes.put("gen_ai.agent.result", completion != null ? completion : "");
         attributes.put("gen_ai.agent.latency", String.valueOf(latency));
+        attributes.put("gen_ai.agent.phase", "planner");
         attributes.put("gen_ai.system.message", parameters.get("system_prompt") != null ? parameters.get("system_prompt") : "");
         attributes.put("gen_ai.tool.description", parameters.get("tools_prompt") != null ? parameters.get("tools_prompt") : "");
 
