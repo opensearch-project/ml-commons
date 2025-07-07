@@ -16,7 +16,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.MLInputDataset;
@@ -83,7 +82,10 @@ public class SparseTokenizerModel extends DLModel {
             Encoding encodings = tokenizer.encode(doc);
             long[] indices = encodings.getIds();
             long[] uniqueIndices = Arrays.stream(indices).distinct().toArray();
-            String[] tokens = Arrays.stream(uniqueIndices).mapToObj(value -> this.tokenizer.decode(new long[] { value }, true)).toArray(String[]::new);
+            String[] tokens = Arrays
+                .stream(uniqueIndices)
+                .mapToObj(value -> this.tokenizer.decode(new long[] { value }, true))
+                .toArray(String[]::new);
 
             Map<String, Float> tokenWeights = new HashMap<>();
             for (int i = 0; i < uniqueIndices.length; i++) {

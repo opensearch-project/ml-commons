@@ -9,6 +9,7 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 
 import java.io.IOException;
 import java.util.Locale;
+import java.util.Objects;
 
 import org.opensearch.Version;
 import org.opensearch.core.ParseField;
@@ -80,7 +81,8 @@ public class AsymmetricTextEmbeddingParameters implements MLAlgoParams {
 
     public AsymmetricTextEmbeddingParameters(StreamInput in) throws IOException {
         Version streamInputVersion = in.getVersion();
-        this.embeddingContentType = EmbeddingContentType.valueOf(in.readOptionalString());
+        String contentType = in.readOptionalString();
+        this.embeddingContentType = contentType != null ? EmbeddingContentType.valueOf(contentType) : null;
         if (streamInputVersion.onOrAfter(Version.V_3_2_0)) {
             String formatName = in.readOptionalString();
             this.sparseEmbeddingFormat = formatName != null ? SparseEmbeddingFormat.valueOf(formatName) : SparseEmbeddingFormat.LEXICAL;
@@ -137,9 +139,9 @@ public class AsymmetricTextEmbeddingParameters implements MLAlgoParams {
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         Version streamOutputVersion = out.getVersion();
-        out.writeOptionalString(embeddingContentType.name());
+        out.writeOptionalString(embeddingContentType != null ? embeddingContentType.name() : null);
         if (streamOutputVersion.onOrAfter(Version.V_3_2_0)) {
-            out.writeOptionalString(sparseEmbeddingFormat.name());
+            out.writeOptionalString(sparseEmbeddingFormat != null ? sparseEmbeddingFormat.name() : null);
         }
     }
 
@@ -160,5 +162,18 @@ public class AsymmetricTextEmbeddingParameters implements MLAlgoParams {
 
     public SparseEmbeddingFormat getSparseEmbeddingFormat() {
         return sparseEmbeddingFormat;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (obj == null || getClass() != obj.getClass()) {
+            return false;
+        }
+        AsymmetricTextEmbeddingParameters other = (AsymmetricTextEmbeddingParameters) obj;
+        return Objects.equals(embeddingContentType, other.embeddingContentType)
+            && Objects.equals(sparseEmbeddingFormat, other.sparseEmbeddingFormat);
     }
 }
