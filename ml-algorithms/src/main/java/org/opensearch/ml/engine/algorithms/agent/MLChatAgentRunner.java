@@ -70,6 +70,7 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.engine.algorithms.agent.tracing.MLAgentTracer;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.function_calling.FunctionCalling;
 import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
@@ -80,15 +81,15 @@ import org.opensearch.ml.engine.tools.MLModelTool;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.ml.repackage.com.google.common.collect.Lists;
 import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.telemetry.tracing.Span;
+import org.opensearch.telemetry.tracing.Tracer;
 import org.opensearch.transport.client.Client;
 
 import lombok.Data;
-import lombok.NoArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 @Data
-@NoArgsConstructor
 public class MLChatAgentRunner implements MLAgentRunner {
 
     public static final String SESSION_ID = "session_id";
@@ -128,6 +129,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
     private Map<String, Memory.Factory> memoryFactoryMap;
     private SdkClient sdkClient;
     private Encryptor encryptor;
+    private final Tracer tracer;
+    private final MLAgentTracer agentTracer;
 
     public MLChatAgentRunner(
         Client client,
@@ -137,7 +140,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
         Map<String, Tool.Factory> toolFactories,
         Map<String, Memory.Factory> memoryFactoryMap,
         SdkClient sdkClient,
-        Encryptor encryptor
+        Encryptor encryptor,
+        Tracer tracer
     ) {
         this.client = client;
         this.settings = settings;
@@ -147,101 +151,156 @@ public class MLChatAgentRunner implements MLAgentRunner {
         this.memoryFactoryMap = memoryFactoryMap;
         this.sdkClient = sdkClient;
         this.encryptor = encryptor;
+        this.tracer = tracer;
+        this.agentTracer = org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRACING_ENABLED.get(settings)
+            ? MLAgentTracer.getInstance()
+            : null;
+        log
+            .info(
+                "MLChatAgentRunner initialized with tracer type: {}",
+                this.tracer != null ? this.tracer.getClass().getSimpleName() : "null"
+            );
     }
 
     @Override
     public void run(MLAgent mlAgent, Map<String, String> inputParams, ActionListener<Object> listener) {
-        Map<String, String> params = new HashMap<>();
-        if (mlAgent.getParameters() != null) {
-            params.putAll(mlAgent.getParameters());
-            for (String key : mlAgent.getParameters().keySet()) {
-                if (key.startsWith("_")) {
-                    params.put(key, mlAgent.getParameters().get(key));
+        // Check if conversational is run independently or through another agent
+        boolean hasParentSpanContext = inputParams.containsKey("traceparent");
+        final Span agentTaskSpan;
+        if (hasParentSpanContext && agentTracer != null) {
+            Map<String, String> agentAttributes = AgentUtils
+                .createAgentTaskAttributes(mlAgent.getName(), inputParams.get(MLAgentExecutor.QUESTION));
+            Span parentSpan = agentTracer.extractSpanContext(inputParams);
+            agentTaskSpan = agentTracer.startSpan("agent.conv_task", agentAttributes, parentSpan);
+        } else {
+            Map<String, String> agentAttributes = AgentUtils
+                .createAgentTaskAttributes(mlAgent.getName(), inputParams.get(MLAgentExecutor.QUESTION));
+            agentTaskSpan = agentTracer != null ? agentTracer.startSpan("agent.task", agentAttributes, null) : null;
+        }
+
+        try {
+            Map<String, String> params = new HashMap<>();
+            if (mlAgent.getParameters() != null) {
+                params.putAll(mlAgent.getParameters());
+                for (String key : mlAgent.getParameters().keySet()) {
+                    if (key.startsWith("_")) {
+                        params.put(key, mlAgent.getParameters().get(key));
+                    }
                 }
             }
-        }
 
-        params.putAll(inputParams);
+            params.putAll(inputParams);
 
-        String llmInterface = params.get(LLM_INTERFACE);
-        FunctionCalling functionCalling = FunctionCallingFactory.create(llmInterface);
-        if (functionCalling != null) {
-            functionCalling.configure(params);
-        }
+            String llmInterface = params.get(LLM_INTERFACE);
+            FunctionCalling functionCalling = FunctionCallingFactory.create(llmInterface);
+            if (functionCalling != null) {
+                functionCalling.configure(params);
+            }
 
-        String memoryType = mlAgent.getMemory().getType();
-        String memoryId = params.get(MLAgentExecutor.MEMORY_ID);
-        String appType = mlAgent.getAppType();
-        String title = params.get(MLAgentExecutor.QUESTION);
-        String chatHistoryPrefix = params.getOrDefault(PROMPT_CHAT_HISTORY_PREFIX, CHAT_HISTORY_PREFIX);
-        String chatHistoryQuestionTemplate = params.get(CHAT_HISTORY_QUESTION_TEMPLATE);
-        String chatHistoryResponseTemplate = params.get(CHAT_HISTORY_RESPONSE_TEMPLATE);
-        int messageHistoryLimit = getMessageHistoryLimit(params);
+            String memoryType = mlAgent.getMemory().getType();
+            String memoryId = params.get(MLAgentExecutor.MEMORY_ID);
+            String appType = mlAgent.getAppType();
+            String title = params.get(MLAgentExecutor.QUESTION);
+            String chatHistoryPrefix = params.getOrDefault(PROMPT_CHAT_HISTORY_PREFIX, CHAT_HISTORY_PREFIX);
+            String chatHistoryQuestionTemplate = params.get(CHAT_HISTORY_QUESTION_TEMPLATE);
+            String chatHistoryResponseTemplate = params.get(CHAT_HISTORY_RESPONSE_TEMPLATE);
+            int messageHistoryLimit = getMessageHistoryLimit(params);
 
-        ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap.get(memoryType);
-        conversationIndexMemoryFactory.create(title, memoryId, appType, ActionListener.<ConversationIndexMemory>wrap(memory -> {
-            // TODO: call runAgent directly if messageHistoryLimit == 0
-            memory.getMessages(ActionListener.<List<Interaction>>wrap(r -> {
-                List<Message> messageList = new ArrayList<>();
-                for (Interaction next : r) {
-                    String question = next.getInput();
-                    String response = next.getResponse();
-                    // As we store the conversation with empty response first and then update when have final answer,
-                    // filter out those in-flight requests when run in parallel
-                    if (Strings.isNullOrEmpty(response)) {
-                        continue;
-                    }
-                    messageList
-                        .add(
-                            ConversationIndexMessage
-                                .conversationIndexMessageBuilder()
-                                .sessionId(memory.getConversationId())
-                                .question(question)
-                                .response(response)
-                                .build()
-                        );
-                }
-                if (!messageList.isEmpty()) {
-                    if (chatHistoryQuestionTemplate == null) {
-                        StringBuilder chatHistoryBuilder = new StringBuilder();
-                        chatHistoryBuilder.append(chatHistoryPrefix);
-                        for (Message message : messageList) {
-                            chatHistoryBuilder.append(message.toString()).append("\n");
+            ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap
+                .get(memoryType);
+            conversationIndexMemoryFactory.create(title, memoryId, appType, ActionListener.<ConversationIndexMemory>wrap(memory -> {
+                // TODO: call runAgent directly if messageHistoryLimit == 0
+                memory.getMessages(ActionListener.<List<Interaction>>wrap(r -> {
+                    List<Message> messageList = new ArrayList<>();
+                    for (Interaction next : r) {
+                        String question = next.getInput();
+                        String response = next.getResponse();
+                        // As we store the conversation with empty response first and then update when have final answer,
+                        // filter out those in-flight requests when run in parallel
+                        if (Strings.isNullOrEmpty(response)) {
+                            continue;
                         }
-                        params.put(CHAT_HISTORY, chatHistoryBuilder.toString());
-
-                        // required for MLChatAgentRunnerTest.java, it requires chatHistory to be added to input params to validate
-                        inputParams.put(CHAT_HISTORY, chatHistoryBuilder.toString());
-                    } else {
-                        List<String> chatHistory = new ArrayList<>();
-                        for (Message message : messageList) {
-                            Map<String, String> messageParams = new HashMap<>();
-                            messageParams.put("question", processTextDoc(((ConversationIndexMessage) message).getQuestion()));
-
-                            StringSubstitutor substitutor = new StringSubstitutor(messageParams, CHAT_HISTORY_MESSAGE_PREFIX, "}");
-                            String chatQuestionMessage = substitutor.replace(chatHistoryQuestionTemplate);
-                            chatHistory.add(chatQuestionMessage);
-
-                            messageParams.clear();
-                            messageParams.put("response", processTextDoc(((ConversationIndexMessage) message).getResponse()));
-                            substitutor = new StringSubstitutor(messageParams, CHAT_HISTORY_MESSAGE_PREFIX, "}");
-                            String chatResponseMessage = substitutor.replace(chatHistoryResponseTemplate);
-                            chatHistory.add(chatResponseMessage);
-                        }
-                        params.put(CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
-                        params.put(NEW_CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
-
-                        // required for MLChatAgentRunnerTest.java, it requires chatHistory to be added to input params to validate
-                        inputParams.put(CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
+                        messageList
+                            .add(
+                                ConversationIndexMessage
+                                    .conversationIndexMessageBuilder()
+                                    .sessionId(memory.getConversationId())
+                                    .question(question)
+                                    .response(response)
+                                    .build()
+                            );
                     }
-                }
+                    if (!messageList.isEmpty()) {
+                        if (chatHistoryQuestionTemplate == null) {
+                            StringBuilder chatHistoryBuilder = new StringBuilder();
+                            chatHistoryBuilder.append(chatHistoryPrefix);
+                            for (Message message : messageList) {
+                                chatHistoryBuilder.append(message.toString()).append("\n");
+                            }
+                            params.put(CHAT_HISTORY, chatHistoryBuilder.toString());
 
-                runAgent(mlAgent, params, listener, memory, memory.getConversationId(), functionCalling);
+                            // required for MLChatAgentRunnerTest.java, it requires chatHistory to be added to input params to validate
+                            inputParams.put(CHAT_HISTORY, chatHistoryBuilder.toString());
+                        } else {
+                            List<String> chatHistory = new ArrayList<>();
+                            for (Message message : messageList) {
+                                Map<String, String> messageParams = new HashMap<>();
+                                messageParams.put("question", processTextDoc(((ConversationIndexMessage) message).getQuestion()));
+
+                                StringSubstitutor substitutor = new StringSubstitutor(messageParams, CHAT_HISTORY_MESSAGE_PREFIX, "}");
+                                String chatQuestionMessage = substitutor.replace(chatHistoryQuestionTemplate);
+                                chatHistory.add(chatQuestionMessage);
+
+                                messageParams.clear();
+                                messageParams.put("response", processTextDoc(((ConversationIndexMessage) message).getResponse()));
+                                substitutor = new StringSubstitutor(messageParams, CHAT_HISTORY_MESSAGE_PREFIX, "}");
+                                String chatResponseMessage = substitutor.replace(chatHistoryResponseTemplate);
+                                chatHistory.add(chatResponseMessage);
+                            }
+                            params.put(CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
+                            params.put(NEW_CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
+
+                            // required for MLChatAgentRunnerTest.java, it requires chatHistory to be added to input params to validate
+                            inputParams.put(CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
+                        }
+                    }
+
+                    runAgent(mlAgent, params, ActionListener.wrap(result -> {
+                        if (agentTaskSpan != null) {
+                            agentTracer.endSpan(agentTaskSpan);
+                        }
+                        listener.onResponse(result);
+                    }, e -> {
+                        if (agentTaskSpan != null) {
+                            agentTaskSpan.setError(e);
+                            agentTracer.endSpan(agentTaskSpan);
+                        }
+                        listener.onFailure(e);
+                    }), memory, memory.getConversationId(), functionCalling);
+                }, e -> {
+                    log.error("Failed to get chat history", e);
+                    if (agentTaskSpan != null) {
+                        agentTaskSpan.setError(e);
+                        agentTracer.endSpan(agentTaskSpan);
+                    }
+                    listener.onFailure(e);
+                }), messageHistoryLimit);
             }, e -> {
-                log.error("Failed to get chat history", e);
+                log.error("Failed to create memory", e);
+                if (agentTaskSpan != null) {
+                    agentTaskSpan.setError(e);
+                    agentTracer.endSpan(agentTaskSpan);
+                }
                 listener.onFailure(e);
-            }), messageHistoryLimit);
-        }, listener::onFailure));
+            }));
+        } catch (Exception e) {
+            log.error("Error in MLChatAgentRunner", e);
+            if (agentTaskSpan != null) {
+                agentTaskSpan.setError(e);
+                agentTracer.endSpan(agentTaskSpan);
+            }
+            listener.onFailure(e);
+        }
     }
 
     private void runAgent(
