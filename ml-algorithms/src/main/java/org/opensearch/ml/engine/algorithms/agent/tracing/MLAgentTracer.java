@@ -29,10 +29,12 @@ public class MLAgentTracer extends AbstractMLTracer {
     public static synchronized void initialize(Tracer tracer, MLFeatureEnabledSetting mlFeatureEnabledSetting) {
         if (mlFeatureEnabledSetting == null || !mlFeatureEnabledSetting.isTracingEnabled()) {
             instance = null;
+            log.info("MLAgentTracer not initialized: agent tracing feature flag is disabled.");
             return;
         }
         Tracer tracerToUse = mlFeatureEnabledSetting.isAgentTracingEnabled() ? tracer : NoopTracer.INSTANCE;
         instance = new MLAgentTracer(tracerToUse, mlFeatureEnabledSetting);
+        log.info("MLAgentTracer initialized with {}", tracerToUse.getClass().getSimpleName());
     }
 
     public static synchronized MLAgentTracer getInstance() {
@@ -113,5 +115,61 @@ public class MLAgentTracer extends AbstractMLTracer {
     @VisibleForTesting
     static void resetForTest() {
         instance = null;
+    }
+
+    /**
+     * Injects the span context into a carrier map using the TracingContextPropagator
+     * @param span The span whose context to inject
+     * @param carrier The map to inject context into
+     */
+    public void injectSpanContext(Span span, Map<String, String> carrier) {
+        try {
+            java.lang.reflect.Field defaultTracerField = tracer.getClass().getDeclaredField("defaultTracer");
+            defaultTracerField.setAccessible(true);
+            Object defaultTracer = defaultTracerField.get(tracer);
+
+            java.lang.reflect.Field tracingTelemetryField = defaultTracer.getClass().getDeclaredField("tracingTelemetry");
+            tracingTelemetryField.setAccessible(true);
+            Object tracingTelemetry = tracingTelemetryField.get(defaultTracer);
+
+            java.lang.reflect.Method getContextPropagatorMethod = tracingTelemetry.getClass().getMethod("getContextPropagator");
+            Object propagator = getContextPropagatorMethod.invoke(tracingTelemetry);
+
+            java.lang.reflect.Method injectMethod = propagator
+                .getClass()
+                .getMethod("inject", Span.class, java.util.function.BiConsumer.class);
+            injectMethod.invoke(propagator, span, (java.util.function.BiConsumer<String, String>) carrier::put);
+        } catch (Exception e) {
+            log.warn("Failed to inject span context", e);
+        }
+    }
+
+    /**
+     * Extracts a parent span from a carrier map using the TracingContextPropagator
+     * @param carrier The map containing the context
+     * @return The extracted parent span, or null if not found
+     */
+    public Span extractSpanContext(Map<String, String> carrier) {
+        try {
+            java.lang.reflect.Field defaultTracerField = tracer.getClass().getDeclaredField("defaultTracer");
+            defaultTracerField.setAccessible(true);
+            Object defaultTracer = defaultTracerField.get(tracer);
+
+            java.lang.reflect.Field tracingTelemetryField = defaultTracer.getClass().getDeclaredField("tracingTelemetry");
+            tracingTelemetryField.setAccessible(true);
+            Object tracingTelemetry = tracingTelemetryField.get(defaultTracer);
+
+            java.lang.reflect.Method getContextPropagatorMethod = tracingTelemetry.getClass().getMethod("getContextPropagator");
+            Object propagator = getContextPropagatorMethod.invoke(tracingTelemetry);
+
+            java.lang.reflect.Method extractMethod = propagator.getClass().getMethod("extract", Map.class);
+            java.util.Optional<?> spanOpt = (java.util.Optional<?>) extractMethod.invoke(propagator, carrier);
+            if (spanOpt.isPresent()) {
+                return (Span) spanOpt.get();
+            }
+        } catch (Exception e) {
+            log.warn("Failed to extract span context", e);
+        }
+        return null;
     }
 }
