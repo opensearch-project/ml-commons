@@ -284,10 +284,8 @@ public class ConnectorAction implements ToXContentObject, Writeable {
         String processFunction,
         String funcNameForWarnText
     ) {
-        if (endPointUrl.contains(EMBED)) {
-            if (!processFunction.contains(EMBEDDING)) {
-                logWarningForInvalidProcessFunc(remoteServer + " " + EMBEDDING, funcNameForWarnText);
-            }
+        if (endPointUrl.contains(EMBED) && !(processFunction.contains(EMBEDDING))) {
+            logWarningForInvalidProcessFunc(remoteServer + " " + EMBEDDING, funcNameForWarnText);
         }
     }
 
