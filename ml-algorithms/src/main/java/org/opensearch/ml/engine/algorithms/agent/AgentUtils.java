@@ -85,6 +85,7 @@ import org.opensearch.ml.engine.tools.ToolUtils;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
+import org.opensearch.telemetry.tracing.Span;
 import org.opensearch.transport.client.Client;
 
 import com.google.gson.reflect.TypeToken;
@@ -957,5 +958,135 @@ public class AgentUtils {
         }
 
         return DEFAULT_DATETIME_PREFIX + formatter.format(now);
+    }
+
+    public static Map<String, String> createToolCallAttributesWithStep(
+        String actionInput,
+        int stepNumber,
+        String toolName,
+        String toolDescription
+    ) {
+        Map<String, String> attributes = new HashMap<>();
+        attributes.put("service.type", "agent");
+        attributes.put("gen_ai.operation.name", "execute_tool");
+        attributes.put("gen_ai.agent.task", actionInput != null ? actionInput : "");
+        attributes.put("gen_ai.agent.step.number", String.valueOf(stepNumber));
+        attributes.put("gen_ai.tool.name", toolName != null ? toolName : "");
+        if (toolDescription != null) {
+            attributes.put("gen_ai.tool.description", toolDescription);
+        }
+        return attributes;
+    }
+
+    public static Map<String, String> createLLMCallAttributesForConv(
+        String question,
+        int stepNumber,
+        String systemPrompt,
+        String llmInterface
+    ) {
+        Map<String, String> attributes = new HashMap<>();
+        attributes.put("service.type", "agent");
+        attributes.put("gen_ai.operation.name", "chat");
+        attributes.put("gen_ai.agent.task", question != null ? question : "");
+        attributes.put("gen_ai.agent.step.number", String.valueOf(stepNumber));
+        if (systemPrompt != null) {
+            attributes.put("gen_ai.system.message", systemPrompt);
+        }
+        if (llmInterface != null) {
+            String provider = detectProviderFromParameters(llmInterface);
+            attributes.put("gen_ai.system", provider);
+        }
+        return attributes;
+    }
+
+    public static Object[] extractToolResultInfo(Object toolOutput) {
+        String toolResultText = null;
+        Double inputTokens = null, outputTokens = null, totalTokens = null, latency = null;
+
+        try {
+            if (toolOutput instanceof ModelTensorOutput) {
+                ModelTensorOutput mto = (ModelTensorOutput) toolOutput;
+                Map<String, ?> dataAsMap = mto.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
+
+                Object outputObj = dataAsMap.get("output");
+                if (outputObj instanceof Map) {
+                    Map<?, ?> outputMap = (Map<?, ?>) outputObj;
+                    Object messageObj = outputMap.get("message");
+                    if (messageObj instanceof Map) {
+                        Map<?, ?> messageMap = (Map<?, ?>) messageObj;
+                        Object contentObj = messageMap.get("content");
+                        if (contentObj instanceof List && !((List<?>) contentObj).isEmpty()) {
+                            Object firstContent = ((List<?>) contentObj).get(0);
+                            if (firstContent instanceof Map) {
+                                Object textObj = ((Map<?, ?>) firstContent).get("text");
+                                if (textObj instanceof String) {
+                                    toolResultText = (String) textObj;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Object usageObj = dataAsMap.get("usage");
+                if (usageObj instanceof Map) {
+                    Map<?, ?> usageMap = (Map<?, ?>) usageObj;
+                    Object inputTok = usageMap.get("inputTokens");
+                    Object outputTok = usageMap.get("outputTokens");
+                    Object totalTok = usageMap.get("totalTokens");
+                    if (inputTok instanceof Number)
+                        inputTokens = ((Number) inputTok).doubleValue();
+                    if (outputTok instanceof Number)
+                        outputTokens = ((Number) outputTok).doubleValue();
+                    if (totalTok instanceof Number)
+                        totalTokens = ((Number) totalTok).doubleValue();
+                }
+
+                Object metricsObj = dataAsMap.get("metrics");
+                if (metricsObj instanceof Map) {
+                    Map<?, ?> metricsMap = (Map<?, ?>) metricsObj;
+                    Object latencyObj = metricsMap.get("latencyMs");
+                    if (latencyObj instanceof Number)
+                        latency = ((Number) latencyObj).doubleValue();
+                }
+            } else if (toolOutput instanceof String) {
+                // Handle String results (simple tools like McpSseTool, ListIndexTool)
+                toolResultText = (String) toolOutput;
+            } else if (toolOutput != null) {
+                toolResultText = toolOutput.toString();
+            }
+        } catch (Exception e) {
+            if (toolOutput != null) {
+                toolResultText = toolOutput.toString();
+            }
+        }
+
+        return new Object[] { toolResultText, inputTokens, outputTokens, totalTokens, latency };
+    }
+
+    public static void updateSpanWithResultAttributes(
+        Span span,
+        String result,
+        Double inputTokens,
+        Double outputTokens,
+        Double totalTokens,
+        Double latency
+    ) {
+        if (span == null)
+            return;
+        if (result != null) {
+            span.addAttribute("gen_ai.agent.result", result);
+        }
+        if (inputTokens != null) {
+            span.addAttribute("gen_ai.usage.input_tokens", String.valueOf(inputTokens.intValue()));
+        }
+        if (outputTokens != null) {
+            span.addAttribute("gen_ai.usage.output_tokens", String.valueOf(outputTokens.intValue()));
+        }
+        if (totalTokens != null) {
+            span.addAttribute("gen_ai.usage.total_tokens", String.valueOf(totalTokens.intValue()));
+        }
+        if (latency != null) {
+            span.addAttribute("gen_ai.agent.latency", String.valueOf(latency.intValue()));
+        }
     }
 }

@@ -381,6 +381,36 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
         List<ModelTensors> traceTensors = createModelTensors(sessionId, parentInteractionId);
         int maxIterations = Integer.parseInt(tmpParameters.getOrDefault(MAX_ITERATION, DEFAULT_MAX_ITERATIONS));
+
+        int llmCallIndex = 0;
+        int toolCallIndex = 0;
+
+        Map<String, String> llmCallAttrs = AgentUtils
+            .createLLMCallAttributesForConv(
+                question,
+                llmCallIndex,
+                tmpParameters.get("system_prompt"),
+                tmpParameters.get("_llm_interface")
+            );
+        Span llmCallSpan = agentTracer != null
+            ? agentTracer.startSpan("agent.llm_call_" + llmCallIndex, llmCallAttrs, agentTaskSpan)
+            : null;
+
+        ActionRequest request = new MLPredictionTaskRequest(
+            llm.getModelId(),
+            RemoteInferenceMLInput
+                .builder()
+                .algorithm(FunctionName.REMOTE)
+                .inputDataset(RemoteInferenceInputDataSet.builder().parameters(tmpParameters).build())
+                .build(),
+            null,
+            tenantId
+        );
+
+        ListenerWithSpan firstListenerWithSpan = new ListenerWithSpan(firstListener, llmCallSpan);
+        lastLlmListenerWithSpan.set(firstListenerWithSpan);
+        client.execute(MLPredictionTaskAction.INSTANCE, request, firstListener);
+
         for (int i = 0; i < maxIterations; i++) {
             int finalI = i;
             int currentLlmCallIndex = context.getLlmCallIndex().get();
@@ -692,7 +722,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         }
     }
 
-    private static void runTool(
+    private void runTool(
         Map<String, Tool> tools,
         Map<String, MLToolSpec> toolSpecMap,
         Map<String, String> tmpParameters,
