@@ -121,6 +121,18 @@ public class EncryptorImpl implements Encryptor {
         return Base64.getEncoder().encodeToString(keyBytes);
     }
 
+    // Refresh the key from the config index.
+    public void refreshMasterKey(ActionListener<Boolean> listener) {
+        try {
+            // Currently, we only handle no tenant case.
+            initMasterKeyFromIndex(null);
+            listener.onResponse(true);
+        } catch (Exception e) {
+            log.info("Refreshing ML key failed.");
+            listener.onFailure(e);
+        }
+    }
+
     private JceMasterKey createJceMasterKey(String tenantId) {
         byte[] bytes = Base64.getDecoder().decode(tenantMasterKeys.get(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID)));
         return JceMasterKey.getInstance(new SecretKeySpec(bytes, "AES"), "Custom", "", "AES/GCM/NOPADDING");
@@ -130,6 +142,10 @@ public class EncryptorImpl implements Encryptor {
         if (tenantMasterKeys.containsKey(Objects.requireNonNullElse(tenantId, DEFAULT_TENANT_ID))) {
             return;
         }
+        initMasterKeyFromIndex(tenantId);
+    }
+
+    private void initMasterKeyFromIndex(String tenantId) {
         String masterKeyId = MASTER_KEY;
         if (tenantId != null) {
             masterKeyId = MASTER_KEY + "_" + hashString(tenantId);

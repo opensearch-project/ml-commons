@@ -8,6 +8,7 @@ package org.opensearch.ml.common.settings;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONTROLLER_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_KEY_REFRESH_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_METRIC_COLLECTION_ENABLED;
@@ -48,6 +49,7 @@ public class MLFeatureEnabledSetting {
 
     private volatile Boolean isMetricCollectionEnabled;
     private volatile Boolean isStaticMetricCollectionEnabled;
+    private volatile Boolean isKeyRefreshEnabled;
 
     private final List<SettingsChangeListener> listeners = new ArrayList<>();
 
@@ -64,6 +66,7 @@ public class MLFeatureEnabledSetting {
         isRagSearchPipelineEnabled = ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED.get(settings);
         isMetricCollectionEnabled = ML_COMMONS_METRIC_COLLECTION_ENABLED.get(settings);
         isStaticMetricCollectionEnabled = ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED.get(settings);
+        isKeyRefreshEnabled = ML_COMMONS_KEY_REFRESH_ENABLED.get(settings);
 
         clusterService
             .getClusterSettings()
@@ -86,6 +89,7 @@ public class MLFeatureEnabledSetting {
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED, it -> isRagSearchPipelineEnabled = it);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_KEY_REFRESH_ENABLED, it -> isKeyRefreshEnabled = it);
     }
 
     /**
@@ -174,6 +178,14 @@ public class MLFeatureEnabledSetting {
 
     public boolean isStaticMetricCollectionEnabled() {
         return isStaticMetricCollectionEnabled;
+    }
+
+    /**
+     * Whether the key refresh feature is enabled.
+     * @return whether the key refresh is enabled.
+     */
+    public boolean isKeyRefreshEnabled() {
+        return isKeyRefreshEnabled;
     }
 
     @VisibleForTesting

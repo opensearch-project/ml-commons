@@ -100,9 +100,9 @@ public class MLSyncUpCron implements Runnable {
     @Override
     public void run() {
         initMLConfig();
-        if (!clusterService.state().metadata().indices().containsKey(ML_MODEL_INDEX)) {
-            // no need to run sync up job if no model index
-            log.debug("Skipping sync up job - ML model index not found");
+        if (!clusterService.state().metadata().indices().containsKey(ML_MODEL_INDEX) && !mlFeatureEnabledSetting.isKeyRefreshEnabled()) {
+            // no need to run sync up job if no model index and ML key refresh disabled
+            log.info("Skipping sync up job - ML model index not found");
             return;
         }
         log.debug("ML sync job starts");
