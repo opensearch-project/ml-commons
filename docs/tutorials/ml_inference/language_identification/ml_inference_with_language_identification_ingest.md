@@ -1,6 +1,5 @@
 # Enhancing Multi-Language Search with an ML Inference Ingest Processor
 
-
 The ML Inference ingest processor allows you to perform inference using a trained model as part of a preprocessing pipeline. This is useful for tasks like enriching documents with information derived from their content before indexing them.
 
 This tutorial explains how to use the ML Inference ingest processor to perform language identification on text fields within ingested documents. We will deploy a pre-trained language identification model on Amazon SageMaker, connect it to OpenSearch, and then use an ingest pipeline to automatically identify the language of specific fields and store it in the document. This enables powerful multi-language search capabilities.
@@ -96,7 +95,6 @@ Create and attach the following two inline policies to the role.
     "Statement": [
         {
             "Action": [
-                "sagemaker:InvokeEndpointAsync",
                 "sagemaker:InvokeEndpoint"
             ],
             "Effect": "Allow",
@@ -285,6 +283,14 @@ The response should show the predicted language. Note the path to the label, `re
 # Building an Ingest Pipeline for Language Identification
 
 ## 1. Create an Ingest Pipeline
+
+Before defining the pipeline, it's helpful to understand a few key principles of the `ml_inference` processor to avoid common configuration errors:
+
+*   **Input and Output Mapping:** The `input_map` and `output_map` are arrays that are processed in order. The first entry in `input_map` corresponds to the first entry in `output_map`, the second to the second, and so on. Therefore, they must contain the same number of entries.
+*   **Parsing Model Output:** The value in the `output_map` (e.g., `response[0].label`) is a path expression that extracts data from the model's JSON response for each prediction. You must inspect your model's prediction output to determine the correct path for the data you want to store.
+*   **Processing Results:** It is a common pattern to follow the `ml_inference` processor with other processors, like `copy` processor, to act on the inference results. In this tutorial, for each field where we identify the language, we use a corresponding `copy` processor to create a new, language-specific field.
+
+With these principles in mind, let's create the pipeline:
 
 This pipeline uses the `ml_inference` processor to identify the language of the `name` and `notes` fields. It then uses a `copy` processor to create a new, language-specific field (e.g., `name_en`, `name_de`).
 
