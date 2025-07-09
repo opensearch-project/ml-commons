@@ -1094,7 +1094,9 @@ public class MachineLearningPlugin extends Plugin
                 RCFSummarizeParams.XCONTENT_REGISTRY,
                 LogisticRegressionParams.XCONTENT_REGISTRY,
                 TextEmbeddingModelConfig.XCONTENT_REGISTRY,
-                AsymmetricTextEmbeddingParameters.XCONTENT_REGISTRY
+                AsymmetricTextEmbeddingParameters.XCONTENT_REGISTRY,
+                AsymmetricTextEmbeddingParameters.XCONTENT_REGISTRY_SPARSE_ENCODING,
+                AsymmetricTextEmbeddingParameters.XCONTENT_REGISTRY_SPARSE_TOKENIZE
             );
     }
 
