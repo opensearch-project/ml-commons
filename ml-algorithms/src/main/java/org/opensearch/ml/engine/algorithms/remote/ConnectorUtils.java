@@ -324,10 +324,20 @@ public class ConnectorUtils {
             throw new IllegalArgumentException("Content length is 0. Aborting request to remote model");
         }
         String endpoint = connector.getActionEndpoint(action, parameters);
+        URI uri;
+        try {
+            uri = URI.create(endpoint);
+            if (uri.getHost() == null) {
+                throw new IllegalArgumentException("Invalid URI: " + endpoint + ". Please check if the endpoint is valid.");
+            }
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Invalid URI: " + endpoint + ". Please check if the endpoint is valid.", e);
+        }
+
         SdkHttpFullRequest.Builder builder = SdkHttpFullRequest
             .builder()
             .method(method)
-            .uri(URI.create(endpoint))
+            .uri(uri)
             .contentStreamProvider(requestBody.contentStreamProvider());
         Map<String, String> headers = connector.getDecryptedHeaders();
         if (headers != null) {
