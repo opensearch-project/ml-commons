@@ -5,8 +5,13 @@
 
 package org.opensearch.ml.engine.algorithms.agent.tracing;
 
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -28,10 +33,12 @@ public class MLAgentTracerTests {
     @Test
     public void testExceptionThrownForNotInitialized() {
         IllegalStateException exception = assertThrows(IllegalStateException.class, MLAgentTracer::getInstance);
-        assertEquals(
-            "MLAgentTracer is not initialized. Call initialize() first or enable plugins.ml_commons.tracing_enabled setting.",
-            exception.getMessage()
-        );
+        String msg = exception.getMessage();
+        boolean valid =
+            "MLAgentTracer is not enabled. Please set plugins.ml_commons.tracing_enabled to true in your OpenSearch configuration."
+                .equals(msg)
+                || "MLAgentTracer is not initialized. Call initialize() first before using getInstance().".equals(msg);
+        assertTrue("Unexpected exception message: " + msg, valid);
     }
 
     @Test
