@@ -612,4 +612,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     public void setAgentTracer(MLAgentTracer agentTracer) {
         this.agentTracer = agentTracer;
     }
+
+    public MLAgentTracer getAgentTracer() {
+        return this.agentTracer;
+    }
 }
