@@ -8,6 +8,7 @@ package org.opensearch.ml.engine.algorithms.agent.tracing;
 import java.util.Map;
 
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.telemetry.tracing.Span;
 import org.opensearch.telemetry.tracing.SpanContext;
 import org.opensearch.telemetry.tracing.SpanCreationContext;
@@ -162,6 +163,7 @@ public class MLAgentTracer extends AbstractMLTracer {
     /**
      * Resets the singleton instance for testing purposes.
      */
+    @VisibleForTesting
     static void resetForTest() {
         instance = null;
     }
