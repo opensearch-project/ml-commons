@@ -71,19 +71,19 @@ public class ConnectorUtilsTest {
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(dataSet).build();
 
         ConnectorAction predictAction = ConnectorAction
-            .builder()
-            .actionType(PREDICT)
-            .method("POST")
-            .url("http://test.com/mock")
-            .requestBody("{\"input\": \"${parameters.input}\"}")
-            .build();
+                .builder()
+                .actionType(PREDICT)
+                .method("POST")
+                .url("http://test.com/mock")
+                .requestBody("{\"input\": \"${parameters.input}\"}")
+                .build();
         Connector connector = HttpConnector
-            .builder()
-            .name("test connector")
-            .version("1")
-            .protocol("http")
-            .actions(Arrays.asList(predictAction))
-            .build();
+                .builder()
+                .name("test connector")
+                .version("1")
+                .protocol("http")
+                .actions(Arrays.asList(predictAction))
+                .build();
         ConnectorUtils.processInput(PREDICT.name(), mlInput, connector, new HashMap<>(), scriptService);
     }
 
@@ -125,19 +125,19 @@ public class ConnectorUtilsTest {
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(dataSet).build();
 
         ConnectorAction predictAction = ConnectorAction
-            .builder()
-            .actionType(PREDICT)
-            .method("POST")
-            .url("http://test.com/mock")
-            .requestBody("{\"input\": \"${parameters.input}\"}")
-            .build();
+                .builder()
+                .actionType(PREDICT)
+                .method("POST")
+                .url("http://test.com/mock")
+                .requestBody("{\"input\": \"${parameters.input}\"}")
+                .build();
         Connector connector = HttpConnector
-            .builder()
-            .name("test connector")
-            .version("1")
-            .protocol("http")
-            .actions(Arrays.asList(predictAction))
-            .build();
+                .builder()
+                .name("test connector")
+                .version("1")
+                .protocol("http")
+                .actions(Arrays.asList(predictAction))
+                .build();
         ConnectorUtils.processInput(PREDICT.name(), mlInput, connector, new HashMap<>(), scriptService);
         assertEquals(expectedInput, ((RemoteInferenceInputDataSet) mlInput.getInputDataset()).getParameters().get("input"));
     }
@@ -147,11 +147,11 @@ public class ConnectorUtilsTest {
         List<String> input = Collections.singletonList("test_value");
         String inputJson = gson.toJson(input);
         processInput_TextDocsInputDataSet_PreprocessFunction(
-            "{\"input\": \"${parameters.input}\"}",
-            input,
-            inputJson,
-            MLPreProcessFunction.TEXT_DOCS_TO_COHERE_EMBEDDING_INPUT,
-            "texts"
+                "{\"input\": \"${parameters.input}\"}",
+                input,
+                inputJson,
+                MLPreProcessFunction.TEXT_DOCS_TO_COHERE_EMBEDDING_INPUT,
+                "texts"
         );
     }
 
@@ -162,11 +162,11 @@ public class ConnectorUtilsTest {
         input.add("test_value2");
         String inputJson = gson.toJson(input);
         processInput_TextDocsInputDataSet_PreprocessFunction(
-            "{\"input\": ${parameters.input}}",
-            input,
-            inputJson,
-            MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT,
-            "input"
+                "{\"input\": ${parameters.input}}",
+                input,
+                inputJson,
+                MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT,
+                "input"
         );
     }
 
@@ -180,26 +180,26 @@ public class ConnectorUtilsTest {
     @Test
     public void processOutput_NoPostprocessFunction_jsonResponse() throws IOException {
         ConnectorAction predictAction = ConnectorAction
-            .builder()
-            .actionType(PREDICT)
-            .method("POST")
-            .url("http://test.com/mock")
-            .requestBody("{\"input\": \"${parameters.input}\"}")
-            .build();
+                .builder()
+                .actionType(PREDICT)
+                .method("POST")
+                .url("http://test.com/mock")
+                .requestBody("{\"input\": \"${parameters.input}\"}")
+                .build();
         Map<String, String> parameters = new HashMap<>();
         parameters.put("key1", "value1");
         Connector connector = HttpConnector
-            .builder()
-            .name("test connector")
-            .version("1")
-            .protocol("http")
-            .parameters(parameters)
-            .actions(Arrays.asList(predictAction))
-            .build();
+                .builder()
+                .name("test connector")
+                .version("1")
+                .protocol("http")
+                .parameters(parameters)
+                .actions(Arrays.asList(predictAction))
+                .build();
         String modelResponse =
-            "{\"object\":\"list\",\"data\":[{\"object\":\"embedding\",\"index\":0,\"embedding\":[-0.014555434,-0.0002135904,0.0035105038]}],\"model\":\"text-embedding-ada-002-v2\",\"usage\":{\"prompt_tokens\":5,\"total_tokens\":5}}";
+                "{\"object\":\"list\",\"data\":[{\"object\":\"embedding\",\"index\":0,\"embedding\":[-0.014555434,-0.0002135904,0.0035105038]}],\"model\":\"text-embedding-ada-002-v2\",\"usage\":{\"prompt_tokens\":5,\"total_tokens\":5}}";
         ModelTensors tensors = ConnectorUtils
-            .processOutput(PREDICT.name(), modelResponse, connector, scriptService, ImmutableMap.of(), null);
+                .processOutput(PREDICT.name(), modelResponse, connector, scriptService, ImmutableMap.of(), null);
         assertEquals(1, tensors.getMlModelTensors().size());
         assertEquals("response", tensors.getMlModelTensors().get(0).getName());
         assertEquals(4, tensors.getMlModelTensors().get(0).getDataAsMap().size());
@@ -208,31 +208,31 @@ public class ConnectorUtilsTest {
     @Test
     public void processOutput_PostprocessFunction() throws IOException {
         String postprocessResult =
-            "{\"name\":\"sentence_embedding\",\"data_type\":\"FLOAT32\",\"shape\":[1536],\"data\":[-0.014555434, -2.135904E-4, 0.0035105038]}";
+                "{\"name\":\"sentence_embedding\",\"data_type\":\"FLOAT32\",\"shape\":[1536],\"data\":[-0.014555434, -2.135904E-4, 0.0035105038]}";
         when(scriptService.compile(any(), any())).then(invocation -> new TestTemplateService.MockTemplateScript.Factory(postprocessResult));
 
         ConnectorAction predictAction = ConnectorAction
-            .builder()
-            .actionType(PREDICT)
-            .method("POST")
-            .url("http://test.com/mock")
-            .requestBody("{\"input\": \"${parameters.input}\"}")
-            .postProcessFunction(MLPostProcessFunction.OPENAI_EMBEDDING)
-            .build();
+                .builder()
+                .actionType(PREDICT)
+                .method("POST")
+                .url("http://test.com/mock")
+                .requestBody("{\"input\": \"${parameters.input}\"}")
+                .postProcessFunction(MLPostProcessFunction.OPENAI_EMBEDDING)
+                .build();
         Map<String, String> parameters = new HashMap<>();
         parameters.put("key1", "value1");
         Connector connector = HttpConnector
-            .builder()
-            .name("test connector")
-            .version("1")
-            .protocol("http")
-            .parameters(parameters)
-            .actions(Arrays.asList(predictAction))
-            .build();
+                .builder()
+                .name("test connector")
+                .version("1")
+                .protocol("http")
+                .parameters(parameters)
+                .actions(Arrays.asList(predictAction))
+                .build();
         String modelResponse =
-            "{\"object\":\"list\",\"data\":[{\"object\":\"embedding\",\"index\":0,\"embedding\":[-0.014555434,-0.0002135904,0.0035105038]}],\"model\":\"text-embedding-ada-002-v2\",\"usage\":{\"prompt_tokens\":5,\"total_tokens\":5}}";
+                "{\"object\":\"list\",\"data\":[{\"object\":\"embedding\",\"index\":0,\"embedding\":[-0.014555434,-0.0002135904,0.0035105038]}],\"model\":\"text-embedding-ada-002-v2\",\"usage\":{\"prompt_tokens\":5,\"total_tokens\":5}}";
         ModelTensors tensors = ConnectorUtils
-            .processOutput(PREDICT.name(), modelResponse, connector, scriptService, ImmutableMap.of(), null);
+                .processOutput(PREDICT.name(), modelResponse, connector, scriptService, ImmutableMap.of(), null);
         assertEquals(1, tensors.getMlModelTensors().size());
         assertEquals("sentence_embedding", tensors.getMlModelTensors().get(0).getName());
         assertNull(tensors.getMlModelTensors().get(0).getDataAsMap());
@@ -243,35 +243,35 @@ public class ConnectorUtilsTest {
     }
 
     private void processInput_TextDocsInputDataSet_PreprocessFunction(
-        String requestBody,
-        List<String> inputs,
-        String expectedProcessedInput,
-        String preProcessName,
-        String resultKey
+            String requestBody,
+            List<String> inputs,
+            String expectedProcessedInput,
+            String preProcessName,
+            String resultKey
     ) {
         TextDocsInputDataSet dataSet = TextDocsInputDataSet.builder().docs(inputs).build();
         MLInput mlInput = MLInput.builder().algorithm(FunctionName.REMOTE).inputDataset(dataSet).build();
 
         ConnectorAction predictAction = ConnectorAction
-            .builder()
-            .actionType(PREDICT)
-            .method("POST")
-            .url("http://test.com/mock")
-            .requestBody(requestBody)
-            .preProcessFunction(preProcessName)
-            .build();
+                .builder()
+                .actionType(PREDICT)
+                .method("POST")
+                .url("http://test.com/mock")
+                .requestBody(requestBody)
+                .preProcessFunction(preProcessName)
+                .build();
         Map<String, String> parameters = new HashMap<>();
         parameters.put("key1", "value1");
         Connector connector = HttpConnector
-            .builder()
-            .name("test connector")
-            .version("1")
-            .protocol("http")
-            .parameters(parameters)
-            .actions(Arrays.asList(predictAction))
-            .build();
+                .builder()
+                .name("test connector")
+                .version("1")
+                .protocol("http")
+                .parameters(parameters)
+                .actions(Arrays.asList(predictAction))
+                .build();
         RemoteInferenceInputDataSet remoteInferenceInputDataSet = ConnectorUtils
-            .processInput(PREDICT.name(), mlInput, connector, new HashMap<>(), scriptService);
+                .processInput(PREDICT.name(), mlInput, connector, new HashMap<>(), scriptService);
         Assert.assertNotNull(remoteInferenceInputDataSet.getParameters());
         assertEquals(1, remoteInferenceInputDataSet.getParameters().size());
         assertEquals(expectedProcessedInput, remoteInferenceInputDataSet.getParameters().get(resultKey));
@@ -280,28 +280,28 @@ public class ConnectorUtilsTest {
     @Test
     public void testGetTask_createBatchStatusActionForSageMaker() {
         Connector connector1 = HttpConnector
-            .builder()
-            .name("test")
-            .protocol("http")
-            .version("1")
-            .credential(Map.of("api_key", "credential_value"))
-            .parameters(Map.of("param1", "value1"))
-            .actions(
-                new ArrayList<>(
-                    Arrays
-                        .asList(
-                            ConnectorAction
-                                .builder()
-                                .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
-                                .method("POST")
-                                .url("https://api.sagemaker.us-east-1.amazonaws.com/CreateTransformJob")
-                                .headers(Map.of("Authorization", "Bearer ${credential.api_key}"))
-                                .requestBody("{ \"TransformJobName\" : \"${parameters.TransformJobName}\"}")
-                                .build()
+                .builder()
+                .name("test")
+                .protocol("http")
+                .version("1")
+                .credential(Map.of("api_key", "credential_value"))
+                .parameters(Map.of("param1", "value1"))
+                .actions(
+                        new ArrayList<>(
+                                Arrays
+                                        .asList(
+                                                ConnectorAction
+                                                        .builder()
+                                                        .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
+                                                        .method("POST")
+                                                        .url("https://api.sagemaker.us-east-1.amazonaws.com/CreateTransformJob")
+                                                        .headers(Map.of("Authorization", "Bearer ${credential.api_key}"))
+                                                        .requestBody("{ \"TransformJobName\" : \"${parameters.TransformJobName}\"}")
+                                                        .build()
+                                        )
                         )
                 )
-            )
-            .build();
+                .build();
 
         ConnectorAction result = ConnectorUtils.createConnectorAction(connector1, BATCH_PREDICT_STATUS);
 
@@ -316,28 +316,28 @@ public class ConnectorUtilsTest {
     @Test
     public void testGetTask_createBatchStatusActionForOpenAI() {
         Connector connector1 = HttpConnector
-            .builder()
-            .name("test")
-            .protocol("http")
-            .version("1")
-            .credential(Map.of("api_key", "credential_value"))
-            .parameters(Map.of("param1", "value1"))
-            .actions(
-                new ArrayList<>(
-                    Arrays
-                        .asList(
-                            ConnectorAction
-                                .builder()
-                                .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
-                                .method("POST")
-                                .url("https://api.openai.com/v1/batches")
-                                .headers(Map.of("Authorization", "Bearer ${credential.openAI_key}"))
-                                .requestBody("{ \\\"input_file_id\\\": \\\"${parameters.input_file_id}\\\" }")
-                                .build()
+                .builder()
+                .name("test")
+                .protocol("http")
+                .version("1")
+                .credential(Map.of("api_key", "credential_value"))
+                .parameters(Map.of("param1", "value1"))
+                .actions(
+                        new ArrayList<>(
+                                Arrays
+                                        .asList(
+                                                ConnectorAction
+                                                        .builder()
+                                                        .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
+                                                        .method("POST")
+                                                        .url("https://api.openai.com/v1/batches")
+                                                        .headers(Map.of("Authorization", "Bearer ${credential.openAI_key}"))
+                                                        .requestBody("{ \\\"input_file_id\\\": \\\"${parameters.input_file_id}\\\" }")
+                                                        .build()
+                                        )
                         )
                 )
-            )
-            .build();
+                .build();
 
         ConnectorAction result = ConnectorUtils.createConnectorAction(connector1, BATCH_PREDICT_STATUS);
 
@@ -351,38 +351,38 @@ public class ConnectorUtilsTest {
     @Test
     public void testGetTask_createCancelBatchActionForBedrock() {
         Connector connector1 = HttpConnector
-            .builder()
-            .name("test")
-            .protocol("http")
-            .version("1")
-            .credential(Map.of("api_key", "credential_value"))
-            .parameters(Map.of("param1", "value1"))
-            .actions(
-                new ArrayList<>(
-                    Arrays
-                        .asList(
-                            ConnectorAction
-                                .builder()
-                                .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
-                                .method("POST")
-                                .url("https://bedrock.${parameters.region}.amazonaws.com/model-invocation-job")
-                                .requestBody(
-                                    "{\\\"inputDataConfig\\\":{\\\"s3InputDataConfig\\\":{\\\"s3Uri\\\":\\\"${parameters.input_s3Uri}\\\"}},\\\"jobName\\\":\\\"${parameters.job_name}\\\",\\\"modelId\\\":\\\"${parameters.model}\\\",\\\"outputDataConfig\\\":{\\\"s3OutputDataConfig\\\":{\\\"s3Uri\\\":\\\"${parameters.output_s3Uri}\\\"}},\\\"roleArn\\\":\\\"${parameters.role_arn}\\\"}"
-                                )
-                                .postProcessFunction("connector.post_process.bedrock.batch_job_arn")
-                                .build()
+                .builder()
+                .name("test")
+                .protocol("http")
+                .version("1")
+                .credential(Map.of("api_key", "credential_value"))
+                .parameters(Map.of("param1", "value1"))
+                .actions(
+                        new ArrayList<>(
+                                Arrays
+                                        .asList(
+                                                ConnectorAction
+                                                        .builder()
+                                                        .actionType(ConnectorAction.ActionType.BATCH_PREDICT)
+                                                        .method("POST")
+                                                        .url("https://bedrock.${parameters.region}.amazonaws.com/model-invocation-job")
+                                                        .requestBody(
+                                                                "{\\\"inputDataConfig\\\":{\\\"s3InputDataConfig\\\":{\\\"s3Uri\\\":\\\"${parameters.input_s3Uri}\\\"}},\\\"jobName\\\":\\\"${parameters.job_name}\\\",\\\"modelId\\\":\\\"${parameters.model}\\\",\\\"outputDataConfig\\\":{\\\"s3OutputDataConfig\\\":{\\\"s3Uri\\\":\\\"${parameters.output_s3Uri}\\\"}},\\\"roleArn\\\":\\\"${parameters.role_arn}\\\"}"
+                                                        )
+                                                        .postProcessFunction("connector.post_process.bedrock.batch_job_arn")
+                                                        .build()
+                                        )
                         )
                 )
-            )
-            .build();
+                .build();
 
         ConnectorAction result = ConnectorUtils.createConnectorAction(connector1, CANCEL_BATCH_PREDICT);
 
         assertEquals(ConnectorAction.ActionType.CANCEL_BATCH_PREDICT, result.getActionType());
         assertEquals("POST", result.getMethod());
         assertEquals(
-            "https://bedrock.${parameters.region}.amazonaws.com/model-invocation-job/${parameters.processedJobArn}/stop",
-            result.getUrl()
+                "https://bedrock.${parameters.region}.amazonaws.com/model-invocation-job/${parameters.processedJobArn}/stop",
+                result.getUrl()
         );
         assertNull(result.getRequestBody());
     }
@@ -434,5 +434,20 @@ public class ConnectorUtilsTest {
         assertEquals(expectedKey1, inputData.getParameters().get("key1"));
         assertEquals("test value", inputData.getParameters().get("key2"));
         assertEquals(expectedKey3, inputData.getParameters().get("key3"));
+    }
+
+    @Test
+    public void buildSdkRequest_InvalidEndpoint_ThrowException() {
+        exceptionRule.expect(IllegalArgumentException.class);
+        exceptionRule.expectMessage("Invalid URI: invalid-endpoint. Please check if the endpoint is valid.");
+        ConnectorAction predictAction = ConnectorAction
+                .builder()
+                .actionType(PREDICT)
+                .method("POST")
+                .url("invalid-endpoint")
+                .requestBody("{\"input\": \"${parameters.input}\"}")
+                .build();
+        Connector connector = HttpConnector.builder().name("test").protocol("http").version("1").actions(Arrays.asList(predictAction)).build();
+        ConnectorUtils.buildSdkRequest("PREDICT", connector, Collections.emptyMap(), "{}", software.amazon.awssdk.http.SdkHttpMethod.POST);
     }
 }
