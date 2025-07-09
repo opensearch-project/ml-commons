@@ -40,14 +40,14 @@ public class SparseEncodingTranslator extends SentenceTransformerTranslator {
     public Output processOutput(TranslatorContext ctx, NDList list) {
         Output output = new Output(200, "OK");
         Object embeddingFormatObject = ctx.getAttachment(SPARSE_EMBEDDING_FORMAT_FIELD);
-        String embeddingFormatString = embeddingFormatObject != null
-            ? embeddingFormatObject.toString()
-            : AsymmetricTextEmbeddingParameters.SparseEmbeddingFormat.LEXICAL.name();
+        AsymmetricTextEmbeddingParameters.SparseEmbeddingFormat embeddingFormat = embeddingFormatObject != null
+            ? AsymmetricTextEmbeddingParameters.SparseEmbeddingFormat.valueOf(embeddingFormatObject.toString())
+            : AsymmetricTextEmbeddingParameters.SparseEmbeddingFormat.LEXICAL;
 
         List<ModelTensor> outputs = new ArrayList<>();
         for (NDArray ndArray : list) {
             String name = ndArray.getName();
-            Object result = convertOutput(ndArray, embeddingFormatString);
+            Object result = convertOutput(ndArray, embeddingFormat);
             Map<String, ?> wrappedMap = Map.of(ML_MAP_RESPONSE_KEY, Collections.singletonList(result));
             ModelTensor tensor = ModelTensor.builder().name(name).dataAsMap(wrappedMap).build();
             outputs.add(tensor);
@@ -58,11 +58,11 @@ public class SparseEncodingTranslator extends SentenceTransformerTranslator {
         return output;
     }
 
-    private Object convertOutput(NDArray array, String embeddingFormat) {
+    private Object convertOutput(NDArray array, AsymmetricTextEmbeddingParameters.SparseEmbeddingFormat embeddingFormat) {
         NDArray nonZeroIndices = array.nonzero().squeeze();
         long[] indices = nonZeroIndices.toLongArray();
 
-        if (embeddingFormat.equals(AsymmetricTextEmbeddingParameters.SparseEmbeddingFormat.TOKEN_ID.name())) {
+        if (embeddingFormat == AsymmetricTextEmbeddingParameters.SparseEmbeddingFormat.TOKEN_ID) {
             // Return token_id format: {"123": 1.1, "456": 2.2}
             Map<String, Float> tokenIdWeights = new HashMap<>();
 
