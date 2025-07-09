@@ -14,6 +14,7 @@ import java.util.function.BiConsumer;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.telemetry.tracing.Span;
 import org.opensearch.telemetry.tracing.SpanContext;
 import org.opensearch.telemetry.tracing.SpanCreationContext;
