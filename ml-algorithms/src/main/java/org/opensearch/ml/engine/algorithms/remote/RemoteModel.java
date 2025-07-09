@@ -10,6 +10,7 @@ import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PRED
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.opensearch.arrow.spi.StreamManager;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.util.TokenBucket;
 import org.opensearch.core.action.ActionListener;
@@ -29,6 +30,7 @@ import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.script.ScriptService;
+import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -98,7 +100,13 @@ public class RemoteModel implements Predictable {
     }
 
     @Override
-    public void initModel(MLModel model, Map<String, Object> params, Encryptor encryptor) {
+    public void initModel(
+        MLModel model,
+        Map<String, Object> params,
+        Encryptor encryptor,
+        StreamManager streamManager,
+        ThreadPool threadPool
+    ) {
         try {
             Connector connector = model.getConnector().cloneConnector();
             connector
@@ -116,6 +124,8 @@ public class RemoteModel implements Predictable {
             this.connectorExecutor.setUserRateLimiterMap((Map<String, TokenBucket>) params.get(USER_RATE_LIMITER_MAP));
             this.connectorExecutor.setMlGuard((MLGuard) params.get(GUARDRAILS));
             this.connectorExecutor.setConnectorPrivateIpEnabled((AtomicBoolean) params.get(CONNECTOR_PRIVATE_IP_ENABLED));
+            this.connectorExecutor.setStreamManager(streamManager);
+            this.connectorExecutor.setThreadPool(threadPool);
         } catch (RuntimeException e) {
             log.error("Failed to init remote model.", e);
             throw e;
