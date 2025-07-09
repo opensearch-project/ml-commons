@@ -1,0 +1,64 @@
+entry-pipeline:
+  workers: 8
+  source:
+    otel_trace_source:
+      ssl: false
+      authentication:
+        unauthenticated:
+  buffer:
+    bounded_blocking:
+      buffer_size: 512
+      batch_size: 8
+  sink:
+    - pipeline:
+        name: "raw-trace-pipeline"
+    - pipeline:
+        name: "service-map-pipeline"
+
+raw-trace-pipeline:
+  workers: 8
+  source:
+    pipeline:
+      name: "entry-pipeline"
+  buffer:
+    bounded_blocking:
+      buffer_size: 512
+      batch_size: 64
+  processor:
+    - otel_trace_raw:
+        # flatten_attributes: false
+    - otel_trace_group:
+        hosts: [ "http://opensearch-node1:9200" ]
+        username: "admin"
+        password: "MyPassword123!"
+  sink:
+    - opensearch:
+        hosts: ["http://opensearch-node1:9200"]
+        insecure: true
+        username: admin
+        password: MyPassword123!
+        # index_type: trace-analytics-raw # To use default index mappings
+        index_type: custom
+        index: otel-v1-apm-span-agent
+        template_file: ml_agent_trace.json
+        template_type: index-template
+
+service-map-pipeline:
+  workers: 8
+  source:
+    pipeline:
+      name: "entry-pipeline"
+  processor:
+    - service_map_stateful:
+        window_duration: 360
+  buffer:
+    bounded_blocking:
+      buffer_size: 512
+      batch_size: 8
+  sink:
+    - opensearch:
+        hosts: ["http://opensearch-node1:9200"]
+        insecure: true
+        username: admin
+        password: MyPassword123!
+        index_type: trace-analytics-service-map
