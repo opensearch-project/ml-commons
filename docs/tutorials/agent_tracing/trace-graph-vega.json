@@ -1,0 +1,400 @@
+{
+    "$schema": "https://vega.github.io/schema/vega/v5.json",
+    "padding": 10,
+    "autosize": "fit",
+  
+    "signals": [
+      {
+        "name": "tooltip",
+        "value": null,
+        "on": [
+          {"events": "symbol:click", "update": "datum"},
+          {"events": "window:click", "update": "null"}
+        ]
+      },
+      {
+        "name": "clicked",
+        "value": null,
+        "on": [
+          {"events": "symbol:click", "update": "datum"}
+        ]
+      },
+      {
+        "name": "zoom",
+        "value": 1,
+        "on": [
+          {
+            "events": {"type": "wheel", "consume": true},
+            "update": "clamp(zoom * pow(1.001, -event.deltaY * pow(16, event.deltaMode)), 0.1, 5)"
+          }
+        ]
+      },
+      {
+        "name": "tx",
+        "value": 0,
+        "on": [
+          {
+            "events": {"type": "mousedown", "consume": true},
+            "update": "tx"
+          },
+          {
+            "events": {"type": "[mousedown, window:mouseup] > window:mousemove", "consume": true},
+            "update": "tx + event.dx / zoom"
+          }
+        ]
+      },
+      {
+        "name": "ty",
+        "value": 0,
+        "on": [
+          {
+            "events": {"type": "mousedown", "consume": true},
+            "update": "ty"
+          },
+          {
+            "events": {"type": "[mousedown, window:mouseup] > window:mousemove", "consume": true},
+            "update": "ty + event.dy / zoom"
+          }
+        ]
+      }
+    ],
+  
+    "data": [
+      {
+        "name": "spans",
+        "url": {
+          "index": "otel-v1-apm-span-agent",
+          "body": {
+            "size": 10000,
+            "query": {
+              "term": {
+                "traceId": "a6fdee64202f8450bb646fb2ae4f0cf6"
+              }
+            }
+          }
+        },
+        "format": {"property": "hits.hits"},
+        "transform": [
+          {"type": "formula", "expr": "datum._source.spanId", "as": "spanId"},
+          {"type": "formula", "expr": "datum._source.parentSpanId", "as": "parentSpanId"},
+          {"type": "formula", "expr": "replace(datum._source.name, 'agent.', '')", "as": "name"}
+          {"type": "formula", "expr": "datum._source.startTime", "as": "startTime"},
+          {"type": "formula", "expr": "datum._source.durationInNanos / 1e9", "as": "durationSeconds"},
+          {"type": "formula", "expr": "datum._source['span.attributes.gen_ai@agent@task']", "as": "agentTask"},
+          {"type": "formula", "expr": "datum._source['span.attributes.gen_ai@agent@result']", "as": "agentResult"},
+          {"type": "formula", "expr": "datum._source.name == 'agent.task' ? '' : datum.parentSpanId", "as": "parentSpanId"},
+          {
+            "type": "collect",
+            "sort": {
+              "field": "startTime",
+              "order": "ascending"
+            }
+          },
+          {"type": "stratify", "key": "spanId", "parentKey": "parentSpanId"},
+          {"type": "tree", "size": [{"signal": "width"}, {"signal": "height - 100"}], "separation": true, "as": ["x", "y", "depth", "children"]}
+        ]
+      },
+      {
+        "name": "links",
+        "source": "spans",
+        "transform": [
+          {"type": "treelinks"},
+          {
+            "type": "linkpath",
+            "orient": "vertical",
+            "shape": "line"
+          }
+        ]
+      }
+    ],
+  
+    "scales": [
+      {
+        "name": "color",
+        "type": "ordinal",
+        "domain": {"data": "spans", "field": "name"},
+        "range": {"scheme": "category20"}
+      }
+    ],
+  
+    "marks": [
+      {
+        "type": "group",
+        "encode": {
+          "update": {
+            "width": {"signal": "width"},
+            "height": {"signal": "height"},
+            "clip": {"value": true},
+            "cursor": {"value": "move"}
+          }
+        },
+        "marks": [
+          {
+            "type": "path",
+            "from": {"data": "links"},
+            "encode": {
+              "update": {
+                "path": {"field": "path"},
+                "stroke": {"value": "#ccc"},
+                "strokeWidth": {"value": 1.5},
+                "x": {"signal": "tx"},
+                "y": {"signal": "ty"},
+                "scaleX": {"signal": "zoom"},
+                "scaleY": {"signal": "zoom"}
+              }
+            }
+          },
+          {
+            "type": "symbol",
+            "from": {"data": "links"},
+            "encode": {
+              "enter": {
+                "shape": {"value": "triangle"},
+                "size": {"value": 100},
+                "fill": {"value": "#ccc"}
+              },
+              "update": {
+                "x": {"signal": "(datum.target.x + tx) * zoom"},
+                "y": {"signal": "(datum.target.y + ty) * zoom"},
+                "angle": {"signal": "datum.source.y < datum.target.y ? 0 : 180"}
+              }
+            }
+          },
+          {
+            "type": "symbol",
+            "from": {"data": "spans"},
+            "encode": {
+              "enter": {
+                "size": {"value": 1000},
+                "cursor": {"value": "pointer"}
+              },
+              "update": {
+                "x": {"signal": "(datum.x + tx) * zoom"},
+                "y": {"signal": "(datum.y + ty) * zoom"},
+                "fill": {"scale": "color", "field": "name"},
+                "stroke": {"value": "white"},
+                "strokeWidth": {"value": 1},
+                "zindex": {"value": 1}
+              },
+              "hover": {
+                "strokeWidth": {"value": 2},
+                "stroke": {"value": "#000"},
+                "zindex": {"value": 2}
+              }
+            }
+          },
+          {
+            "type": "text",
+            "from": {"data": "spans"},
+            "encode": {
+              "enter": {
+                "fontSize": {"value": 12},
+                "baseline": {"value": "middle"},
+                "fill": {"value": "#333"}
+              },
+              "update": {
+                "x": {"signal": "(datum.x + tx) * zoom"},
+                "y": {"signal": "((datum.y + ty) * zoom) + 25"},
+                "text": {"field": "name"},
+                "align": {"value": "center"},
+                "fontSize": {"signal": "12 * zoom"}
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "group",
+        "encode": {
+          "update": {
+            "x": {"value": 10},
+            "y": {"value": 40},
+            "width": {"value": 560},
+            "height": {"value": 200},
+            "fill": {"value": "white"},
+            "fillOpacity": {"value": 0.95},
+            "stroke": {"value": "#aaa"},
+            "strokeWidth": {"value": 0.5},
+            "opacity": {"signal": "clicked ? 1 : 0"}
+          }
+        },
+        "marks": [
+          {
+            "type": "text",
+            "encode": {
+              "update": {
+                "x": {"value": 6},
+                "y": {"value": 20},
+                "text": {"signal": "clicked ? 'Span ID: ' + clicked.spanId : ''"},
+                "fill": {"value": "black"},
+                "fontSize": {"value": 12},
+                "fontWeight": {"value": "bold"}
+              }
+            }
+          },
+          {
+            "type": "text",
+            "encode": {
+              "update": {
+                "x": {"value": 6},
+                "y": {"value": 35},
+                "text": {"signal": "clicked ? 'Operation: ' + clicked.name : ''"},
+                "fill": {"value": "black"},
+                "fontSize": {"value": 12}
+              }
+            }
+          },
+          {
+            "type": "text",
+            "encode": {
+              "update": {
+                "x": {"value": 6},
+                "y": {"value": 50},
+                "text": {"signal": "clicked ? 'Start Time: ' + clicked.startTime : ''"},
+                "fill": {"value": "black"},
+                "fontSize": {"value": 12}
+              }
+            }
+          },
+          {
+            "type": "text",
+            "encode": {
+              "update": {
+                "x": {"value": 6},
+                "y": {"value": 65},
+                "text": {"signal": "clicked ? 'Duration: ' + format(clicked.durationSeconds, '.3f') + ' seconds' : ''"},
+                "fill": {"value": "black"},
+                "fontSize": {"value": 12}
+              }
+            }
+          },
+          {
+            "type": "text",
+            "encode": {
+              "update": {
+                "x": {"value": 6},
+                "y": {"value": 80},
+                "text": {"value": "Input:"},
+                "fill": {"value": "black"},
+                "fontSize": {"value": 12},
+                "fontWeight": {"value": "bold"}
+              }
+            }
+          },
+          {
+            "type": "text",
+            "encode": {
+              "update": {
+                "x": {"value": 6},
+                "y": {"value": 95},
+                "width": {"value": 580},
+                "text": {"signal": "clicked && clicked.agentTask ? substring(clicked.agentTask, 0, 100) : 'N/A'"},
+                "fill": {"value": "black"},
+                "fontSize": {"value": 12},
+                "lineBreak": {"value": true}
+              }
+            }
+          },
+          {
+            "type": "text",
+            "encode": {
+              "update": {
+                "x": {"value": 6},
+                "y": {"value": 110},
+                "width": {"value": 580},
+                "text": {"signal": "clicked && clicked.agentTask && length(clicked.agentTask) > 100 ? substring(clicked.agentTask, 100, 200) : ''"},
+                "fill": {"value": "black"},
+                "fontSize": {"value": 12},
+                "lineBreak": {"value": true}
+              }
+            }
+          },
+          {
+            "type": "text",
+            "encode": {
+              "update": {
+                "x": {"value": 6},
+                "y": {"value": 125},
+                "width": {"value": 580},
+                "text": {"signal": "clicked && clicked.agentTask && length(clicked.agentTask) > 200 ? substring(clicked.agentTask, 200, 300) : ''"},
+                "fill": {"value": "black"},
+                "fontSize": {"value": 12},
+                "lineBreak": {"value": true}
+              }
+            }
+          },
+          {
+            "type": "text",
+            "encode": {
+              "update": {
+                "x": {"value": 6},
+                "y": {"value": 140},
+                "text": {"value": "Output:"},
+                "fill": {"value": "black"},
+                "fontSize": {"value": 12},
+                "fontWeight": {"value": "bold"}
+              }
+            }
+          },
+          {
+            "type": "text",
+            "encode": {
+              "update": {
+                "x": {"value": 6},
+                "y": {"value": 155},
+                "width": {"value": 580},
+                "text": {"signal": "clicked && clicked.agentResult ? substring(clicked.agentResult, 0, 100) : 'N/A'"},
+                "fill": {"value": "black"},
+                "fontSize": {"value": 12},
+                "lineBreak": {"value": true}
+              }
+            }
+          },
+          {
+            "type": "text",
+            "encode": {
+              "update": {
+                "x": {"value": 6},
+                "y": {"value": 170},
+                "width": {"value": 580},
+                "text": {"signal": "clicked && clicked.agentResult && length(clicked.agentResult) > 100 ? substring(clicked.agentResult, 100, 200) : ''"},
+                "fill": {"value": "black"},
+                "fontSize": {"value": 12},
+                "lineBreak": {"value": true}
+              }
+            }
+          },
+          {
+            "type": "text",
+            "encode": {
+              "update": {
+                "x": {"value": 6},
+                "y": {"value": 185},
+                "width": {"value": 580},
+                "text": {"signal": "clicked && clicked.agentResult && length(clicked.agentResult) > 200 ? substring(clicked.agentResult, 200, 300) : ''"},
+                "fill": {"value": "black"},
+                "fontSize": {"value": 12},
+                "lineBreak": {"value": true}
+              }
+            }
+          }
+        ]
+      },
+      {
+        "type": "text",
+        "encode": {
+          "enter": {
+            "x": {"value": 10},
+            "y": {"value": 20},
+            "fill": {"value": "black"},
+            "fontSize": {"value": 14},
+            "fontWeight": {"value": "bold"}
+          },
+          "update": {
+            "text": {"signal": "'Total Spans: ' + length(data('spans'))"}
+          }
+        }
+      }
+    ]
+  }
+  
