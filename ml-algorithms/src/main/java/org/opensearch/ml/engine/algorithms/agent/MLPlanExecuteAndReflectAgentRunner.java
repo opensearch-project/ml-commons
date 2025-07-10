@@ -90,8 +90,6 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     private final Map<String, Memory.Factory> memoryFactoryMap;
     private SdkClient sdkClient;
     private Encryptor encryptor;
-    private final Tracer tracer;
-    private final MLAgentTracer agentTracer;
     // flag to track if task has been updated with executor memory ids or not
     private boolean taskUpdated = false;
     private final Map<String, Object> taskUpdates = new HashMap<>();
@@ -150,8 +148,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         Map<String, Tool.Factory> toolFactories,
         Map<String, Memory.Factory> memoryFactoryMap,
         SdkClient sdkClient,
-        Encryptor encryptor,
-        Tracer tracer
+        Encryptor encryptor
     ) {
         this.client = client;
         this.settings = settings;
@@ -161,20 +158,11 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         this.memoryFactoryMap = memoryFactoryMap;
         this.sdkClient = sdkClient;
         this.encryptor = encryptor;
-        this.tracer = tracer;
-        this.agentTracer = org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRACING_ENABLED.get(settings)
-            ? MLAgentTracer.getInstance()
-            : null;
         this.plannerPrompt = DEFAULT_PLANNER_PROMPT;
         this.plannerPromptTemplate = DEFAULT_PLANNER_PROMPT_TEMPLATE;
         this.reflectPrompt = DEFAULT_REFLECT_PROMPT;
         this.reflectPromptTemplate = DEFAULT_REFLECT_PROMPT_TEMPLATE;
         this.plannerWithHistoryPromptTemplate = DEFAULT_PLANNER_WITH_HISTORY_PROMPT_TEMPLATE;
-        log
-            .info(
-                "MLPlanExecuteAndReflectAgentRunner initialized with tracer type: {}",
-                this.tracer != null ? this.tracer.getClass().getSimpleName() : "null"
-            );
     }
 
     @VisibleForTesting
