@@ -121,7 +121,7 @@ Sample response:
 }
 ```
 
-## 7. Test model inference
+## 5. Test model inference
 
 ```json
 POST /_plugins/_ml/models/<YOUR_MODEL_ID>/_predict
