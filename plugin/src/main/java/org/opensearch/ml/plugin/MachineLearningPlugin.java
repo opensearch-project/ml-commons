@@ -807,19 +807,8 @@ public class MachineLearningPlugin extends Plugin
         McpAsyncServerHolder.init(mlIndicesHandler, mcpToolsHelper);
 
         MLAgentTracer.initialize(tracer, mlFeatureEnabledSetting);
-        if (mlFeatureEnabledSetting.isTracingEnabled() && mlFeatureEnabledSetting.isAgentTracingEnabled()) {
-            mlEngine.getAgentExecutor().setAgentTracer(MLAgentTracer.getInstance());
-        } else {
-            mlEngine.getAgentExecutor().setAgentTracer(null);
-        }
-
         clusterService.getClusterSettings().addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_AGENT_TRACING_ENABLED, enabled -> {
             MLAgentTracer.initialize(tracer, mlFeatureEnabledSetting);
-            if (mlFeatureEnabledSetting.isTracingEnabled() && mlFeatureEnabledSetting.isAgentTracingEnabled()) {
-                mlEngine.getAgentExecutor().setAgentTracer(MLAgentTracer.getInstance());
-            } else {
-                mlEngine.getAgentExecutor().setAgentTracer(null);
-            }
         });
 
         return ImmutableList

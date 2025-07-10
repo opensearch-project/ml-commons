@@ -7,7 +7,6 @@ package org.opensearch.ml.engine.algorithms.agent.tracing;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -34,18 +33,16 @@ public class MLAgentTracerTests {
     public void testExceptionThrownForNotInitialized() {
         IllegalStateException exception = assertThrows(IllegalStateException.class, MLAgentTracer::getInstance);
         String msg = exception.getMessage();
-        boolean valid =
-            "MLAgentTracer is not enabled. Please set plugins.ml_commons.tracing_enabled to true in your OpenSearch configuration."
-                .equals(msg)
-                || "MLAgentTracer is not initialized. Call initialize() first before using getInstance().".equals(msg);
-        assertTrue("Unexpected exception message: " + msg, valid);
+        assertEquals("MLAgentTracer is not initialized. Call initialize() first before using getInstance().", msg);
     }
 
     @Test
     public void testInitializeWithFeatureFlagDisabled() {
         when(mockFeatureSetting.isTracingEnabled()).thenReturn(false);
         MLAgentTracer.initialize(mockTracer, mockFeatureSetting);
-        assertThrows(IllegalStateException.class, MLAgentTracer::getInstance);
+        MLAgentTracer instance = MLAgentTracer.getInstance();
+        assertNotNull(instance);
+        assertTrue(instance.getTracer() instanceof AgentNoopTracer);
     }
 
     @Test
@@ -69,21 +66,24 @@ public class MLAgentTracerTests {
     }
 
     @Test
-    public void testStartSpanReturnsNullIfTracerIsNull() {
+    public void testStartSpanWorksWithNullTracer() {
         when(mockFeatureSetting.isTracingEnabled()).thenReturn(true);
         when(mockFeatureSetting.isAgentTracingEnabled()).thenReturn(true);
         MLAgentTracer.initialize(null, mockFeatureSetting);
         MLAgentTracer instance = MLAgentTracer.getInstance();
-        assertNull(instance.startSpan("test", null, null));
+        assertNotNull(instance);
+        assertTrue(instance.getTracer() instanceof NoopTracer);
+        // Should not throw exception when using NoopTracer
+        instance.startSpan("test", null, null);
     }
 
     @Test
-    public void testEndSpanDoesNothingIfSpanOrTracerIsNull() {
+    public void testEndSpanThrowsExceptionIfSpanIsNull() {
         when(mockFeatureSetting.isTracingEnabled()).thenReturn(true);
         when(mockFeatureSetting.isAgentTracingEnabled()).thenReturn(true);
-        MLAgentTracer.initialize(null, mockFeatureSetting);
+        MLAgentTracer.initialize(mockTracer, mockFeatureSetting);
         MLAgentTracer instance = MLAgentTracer.getInstance();
-        instance.endSpan(null);
+        assertThrows(IllegalArgumentException.class, () -> instance.endSpan(null));
     }
 
     @Test
