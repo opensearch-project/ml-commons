@@ -71,6 +71,7 @@ import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.algorithms.remote.McpConnectorExecutor;
@@ -1162,68 +1163,115 @@ public class AgentUtils {
         return attributes;
     }
 
-    public static Object[] extractToolResultInfo(Object toolOutput) {
-        String toolResultText = null;
-        Double inputTokens = null, outputTokens = null, totalTokens = null, latency = null;
+    public static class ToolCallExtractionResult {
+        public String input;
+        public String output;
+        public Map<String, Object> usage;
+        public Map<String, Object> metrics;
+    }
+
+    public static ToolCallExtractionResult extractToolCallInfo(Object toolOutput, String actionInput) {
+        ToolCallExtractionResult result = new ToolCallExtractionResult();
+        result.input = actionInput;
 
         try {
+            // Unwrap MLTaskResponse
+            if (toolOutput instanceof MLTaskResponse) {
+                return extractToolCallInfo(((MLTaskResponse) toolOutput).getOutput(), actionInput);
+            }
+
+            // ModelTensorOutput
             if (toolOutput instanceof ModelTensorOutput) {
                 ModelTensorOutput mto = (ModelTensorOutput) toolOutput;
-                Map<String, ?> dataAsMap = mto.getMlModelOutputs().get(0).getMlModelTensors().get(0).getDataAsMap();
-
-                Object outputObj = dataAsMap.get("output");
-                if (outputObj instanceof Map) {
-                    Map<?, ?> outputMap = (Map<?, ?>) outputObj;
-                    Object messageObj = outputMap.get("message");
-                    if (messageObj instanceof Map) {
-                        Map<?, ?> messageMap = (Map<?, ?>) messageObj;
-                        Object contentObj = messageMap.get("content");
-                        if (contentObj instanceof List && !((List<?>) contentObj).isEmpty()) {
-                            Object firstContent = ((List<?>) contentObj).get(0);
-                            if (firstContent instanceof Map) {
-                                Object textObj = ((Map<?, ?>) firstContent).get("text");
-                                if (textObj instanceof String) {
-                                    toolResultText = (String) textObj;
-                                }
+                if (mto.getMlModelOutputs() != null && !mto.getMlModelOutputs().isEmpty()) {
+                    var tensors = mto.getMlModelOutputs().get(0).getMlModelTensors();
+                    if (tensors != null && !tensors.isEmpty()) {
+                        var tensor = tensors.get(0);
+                        // Try result
+                        if (tensor.getResult() != null) {
+                            result.output = tensor.getResult();
+                        }
+                        // Try dataAsMap
+                        if (tensor.getDataAsMap() != null) {
+                            Map<String, ?> map = tensor.getDataAsMap();
+                            if (map.containsKey("response")) {
+                                Object resp = map.get("response");
+                                result.output = (resp instanceof String) ? (String) resp : StringUtils.toJson(resp);
+                            } else if (map.containsKey("output")) {
+                                Object out = map.get("output");
+                                result.output = (out instanceof String) ? (String) out : StringUtils.toJson(out);
+                            }
+                            if (map.containsKey("usage")) {
+                                result.usage = (Map<String, Object>) map.get("usage");
+                            }
+                            if (map.containsKey("metrics")) {
+                                result.metrics = (Map<String, Object>) map.get("metrics");
                             }
                         }
                     }
                 }
-
-                Object usageObj = dataAsMap.get("usage");
-                if (usageObj instanceof Map) {
-                    Map<?, ?> usageMap = (Map<?, ?>) usageObj;
-                    Object inputTok = usageMap.get("inputTokens");
-                    Object outputTok = usageMap.get("outputTokens");
-                    Object totalTok = usageMap.get("totalTokens");
-                    if (inputTok instanceof Number)
-                        inputTokens = ((Number) inputTok).doubleValue();
-                    if (outputTok instanceof Number)
-                        outputTokens = ((Number) outputTok).doubleValue();
-                    if (totalTok instanceof Number)
-                        totalTokens = ((Number) totalTok).doubleValue();
-                }
-
-                Object metricsObj = dataAsMap.get("metrics");
-                if (metricsObj instanceof Map) {
-                    Map<?, ?> metricsMap = (Map<?, ?>) metricsObj;
-                    Object latencyObj = metricsMap.get("latencyMs");
-                    if (latencyObj instanceof Number)
-                        latency = ((Number) latencyObj).doubleValue();
-                }
-            } else if (toolOutput instanceof String) {
-                // Handle String results (simple tools like McpSseTool, ListIndexTool)
-                toolResultText = (String) toolOutput;
-            } else if (toolOutput != null) {
-                toolResultText = toolOutput.toString();
+                return result;
             }
+
+            // String: try to parse as JSON, or extract JSON from markdown
+            if (toolOutput instanceof String) {
+                String str = (String) toolOutput;
+                String json = extractJsonBlock(str);
+                if (json != null) {
+                    Map<String, Object> map = StringUtils.fromJson(json, "response");
+                    if (map.containsKey("final_answer")) {
+                        result.output = map.get("final_answer").toString();
+                    } else if (map.containsKey("action")) {
+                        result.output = map.get("action").toString();
+                    } else {
+                        result.output = json;
+                    }
+                } else {
+                    result.output = str;
+                }
+                return result;
+            }
+
+            // Map: use as is
+            if (toolOutput instanceof Map) {
+                Map<?, ?> map = (Map<?, ?>) toolOutput;
+                if (map.containsKey("response")) {
+                    result.output = map.get("response").toString();
+                } else if (map.containsKey("final_answer")) {
+                    result.output = map.get("final_answer").toString();
+                } else {
+                    result.output = StringUtils.toJson(map);
+                }
+                return result;
+            }
+
+            // Fallback: toString
+            result.output = toolOutput != null ? toolOutput.toString() : null;
         } catch (Exception e) {
-            if (toolOutput != null) {
-                toolResultText = toolOutput.toString();
+            result.output = toolOutput != null ? toolOutput.toString() : null;
+        }
+        return result;
+    }
+
+    // Helper to extract JSON block from markdown or plain string
+    private static String extractJsonBlock(String str) {
+        if (str == null)
+            return null;
+        int start = str.indexOf("```json");
+        if (start >= 0) {
+            start += "```json".length();
+            int end = str.indexOf("```", start);
+            if (end > start) {
+                return str.substring(start, end).trim();
             }
         }
-
-        return new Object[] { toolResultText, inputTokens, outputTokens, totalTokens, latency };
+        // Try to find first '{' and last '}'
+        int first = str.indexOf('{');
+        int last = str.lastIndexOf('}');
+        if (first >= 0 && last > first) {
+            return str.substring(first, last + 1);
+        }
+        return null;
     }
 
     public static void updateSpanWithResultAttributes(
