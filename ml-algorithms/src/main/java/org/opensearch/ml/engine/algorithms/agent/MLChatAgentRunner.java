@@ -458,7 +458,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     String thoughtResponse = modelOutput.get(THOUGHT_RESPONSE);
                     String finalAnswer = modelOutput.get(FINAL_ANSWER);
 
-                    Object[] llmResultInfo = AgentUtils.extractToolResultInfo(tmpModelTensorOutput);
+                    AgentUtils.ToolCallExtractionResult llmResultInfo = AgentUtils.extractToolCallInfo(tmpModelTensorOutput, null);
 
                     ListenerWithSpan currentLlmListenerWithSpan = lastLlmListenerWithSpan.get();
                     if (agentTracer != null && currentLlmListenerWithSpan != null && currentLlmListenerWithSpan.span != null) {
@@ -466,18 +466,48 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         AgentUtils
                             .updateSpanWithResultAttributes(
                                 currentLlmSpan,
-                                (String) llmResultInfo[0],
-                                (Double) llmResultInfo[1],
-                                (Double) llmResultInfo[2],
-                                (Double) llmResultInfo[3],
-                                (Double) llmResultInfo[4]
+                                (String) llmResultInfo.output,
+                                llmResultInfo.usage != null && llmResultInfo.usage.get("inputTokens") instanceof Number
+                                    ? ((Number) llmResultInfo.usage.get("inputTokens")).doubleValue()
+                                    : null,
+                                llmResultInfo.usage != null && llmResultInfo.usage.get("outputTokens") instanceof Number
+                                    ? ((Number) llmResultInfo.usage.get("outputTokens")).doubleValue()
+                                    : null,
+                                llmResultInfo.usage != null && llmResultInfo.usage.get("totalTokens") instanceof Number
+                                    ? ((Number) llmResultInfo.usage.get("totalTokens")).doubleValue()
+                                    : null,
+                                llmResultInfo.metrics != null && llmResultInfo.metrics.get("latencyMs") instanceof Number
+                                    ? ((Number) llmResultInfo.metrics.get("latencyMs")).doubleValue()
+                                    : null
                             );
-                        AgentUtils.updateSpanWithResultAttributes(agentTaskSpan, (String) llmResultInfo[0], null, null, null, null);
+                        AgentUtils.updateSpanWithResultAttributes(agentTaskSpan, (String) llmResultInfo.output, null, null, null, null);
                         agentTracer.endSpan(currentLlmSpan);
                     }
 
                     if (finalAnswer != null) {
                         finalAnswer = finalAnswer.trim();
+                        if (agentTracer != null && currentLlmListenerWithSpan != null && currentLlmListenerWithSpan.span != null) {
+                            Span currentLlmSpan = currentLlmListenerWithSpan.span;
+                            AgentUtils
+                                .updateSpanWithResultAttributes(
+                                    currentLlmSpan,
+                                    (String) llmResultInfo.output,
+                                    llmResultInfo.usage != null && llmResultInfo.usage.get("inputTokens") instanceof Number
+                                        ? ((Number) llmResultInfo.usage.get("inputTokens")).doubleValue()
+                                        : null,
+                                    llmResultInfo.usage != null && llmResultInfo.usage.get("outputTokens") instanceof Number
+                                        ? ((Number) llmResultInfo.usage.get("outputTokens")).doubleValue()
+                                        : null,
+                                    llmResultInfo.usage != null && llmResultInfo.usage.get("totalTokens") instanceof Number
+                                        ? ((Number) llmResultInfo.usage.get("totalTokens")).doubleValue()
+                                        : null,
+                                    llmResultInfo.metrics != null && llmResultInfo.metrics.get("latencyMs") instanceof Number
+                                        ? ((Number) llmResultInfo.metrics.get("latencyMs")).doubleValue()
+                                        : null
+                                );
+                            AgentUtils.updateSpanWithResultAttributes(agentTaskSpan, (String) llmResultInfo.output, null, null, null, null);
+                            agentTracer.endSpan(currentLlmSpan);
+                        }
                         sendFinalAnswer(
                             sessionId,
                             listener,
@@ -805,15 +835,23 @@ public class MLChatAgentRunner implements MLAgentRunner {
             try {
                 String finalAction = action;
                 ActionListener<Object> toolListener = ActionListener.wrap(r -> {
-                    Object[] toolResultInfo = AgentUtils.extractToolResultInfo(r);
+                    AgentUtils.ToolCallExtractionResult toolResultInfo = AgentUtils.extractToolCallInfo(r, actionInput);
                     AgentUtils
                         .updateSpanWithResultAttributes(
                             toolCallSpan,
-                            (String) toolResultInfo[0],
-                            (Double) toolResultInfo[1],
-                            (Double) toolResultInfo[2],
-                            (Double) toolResultInfo[3],
-                            (Double) toolResultInfo[4]
+                            toolResultInfo.output,
+                            toolResultInfo.usage != null && toolResultInfo.usage.get("inputTokens") instanceof Number
+                                ? ((Number) toolResultInfo.usage.get("inputTokens")).doubleValue()
+                                : null,
+                            toolResultInfo.usage != null && toolResultInfo.usage.get("outputTokens") instanceof Number
+                                ? ((Number) toolResultInfo.usage.get("outputTokens")).doubleValue()
+                                : null,
+                            toolResultInfo.usage != null && toolResultInfo.usage.get("totalTokens") instanceof Number
+                                ? ((Number) toolResultInfo.usage.get("totalTokens")).doubleValue()
+                                : null,
+                            toolResultInfo.metrics != null && toolResultInfo.metrics.get("latencyMs") instanceof Number
+                                ? ((Number) toolResultInfo.metrics.get("latencyMs")).doubleValue()
+                                : null
                         );
 
                     if (functionCalling != null) {

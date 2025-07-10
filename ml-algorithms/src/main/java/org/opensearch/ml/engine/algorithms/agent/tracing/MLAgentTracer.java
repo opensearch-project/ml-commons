@@ -21,6 +21,7 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class MLAgentTracer extends AbstractMLTracer {
     private static MLAgentTracer instance;
+    private static boolean tracingFlagSet = false;
 
     private MLAgentTracer(Tracer tracer, MLFeatureEnabledSetting mlFeatureEnabledSetting) {
         super(tracer, mlFeatureEnabledSetting);
@@ -29,26 +30,31 @@ public class MLAgentTracer extends AbstractMLTracer {
     public static synchronized void initialize(Tracer tracer, MLFeatureEnabledSetting mlFeatureEnabledSetting) {
         if (mlFeatureEnabledSetting == null || !mlFeatureEnabledSetting.isTracingEnabled()) {
             instance = null;
+            tracingFlagSet = false;
             log.info("MLAgentTracer not initialized: agent tracing feature flag is disabled.");
             return;
         }
+        tracingFlagSet = true;
         Tracer tracerToUse = mlFeatureEnabledSetting.isAgentTracingEnabled() ? tracer : NoopTracer.INSTANCE;
         instance = new MLAgentTracer(tracerToUse, mlFeatureEnabledSetting);
         log.info("MLAgentTracer initialized with {}", tracerToUse.getClass().getSimpleName());
     }
 
     public static synchronized MLAgentTracer getInstance() {
-        if (instance == null) {
+        if (!tracingFlagSet) {
             throw new IllegalStateException(
-                "MLAgentTracer is not initialized. Call initialize() first or enable plugins.ml_commons.tracing_enabled setting."
+                "MLAgentTracer is not enabled. Please set plugins.ml_commons.tracing_enabled to true in your OpenSearch configuration."
             );
+        }
+        if (instance == null) {
+            throw new IllegalStateException("MLAgentTracer is not initialized. Call initialize() first before using getInstance().");
         }
         return instance;
     }
 
     @Override
     public Span startSpan(String name, Map<String, String> attributes, Span parentSpan) {
-        if (tracer == null) {
+        if (tracer == null || tracer instanceof NoopTracer) {
             return null;
         }
         Attributes attrBuilder = Attributes.create();
@@ -123,6 +129,10 @@ public class MLAgentTracer extends AbstractMLTracer {
      * @param carrier The map to inject context into
      */
     public void injectSpanContext(Span span, Map<String, String> carrier) {
+        if (tracer == null || tracer instanceof NoopTracer) {
+            return;
+        }
+
         try {
             java.lang.reflect.Field defaultTracerField = tracer.getClass().getDeclaredField("defaultTracer");
             defaultTracerField.setAccessible(true);
@@ -150,6 +160,10 @@ public class MLAgentTracer extends AbstractMLTracer {
      * @return The extracted parent span, or null if not found
      */
     public Span extractSpanContext(Map<String, String> carrier) {
+        if (tracer == null || tracer instanceof NoopTracer) {
+            return null;
+        }
+
         try {
             java.lang.reflect.Field defaultTracerField = tracer.getClass().getDeclaredField("defaultTracer");
             defaultTracerField.setAccessible(true);
