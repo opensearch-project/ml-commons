@@ -51,6 +51,7 @@ public class MLAgentTracer extends AbstractMLTracer {
     public static final String AGENT_TASK_FLOW_SPAN = "agent.task_flow";
 
     private static MLAgentTracer instance;
+    private static boolean tracingFlagSet = false;
 
     /**
      * Private constructor for MLAgentTracer.
@@ -113,6 +114,9 @@ public class MLAgentTracer extends AbstractMLTracer {
      * @throws IllegalStateException if the tracer is not initialized.
      */
     public static synchronized MLAgentTracer getInstance() {
+        if (instance == null) {
+            throw new IllegalStateException("MLAgentTracer is not initialized. Call initialize() first before using getInstance().");
+        }
         if (instance == null) {
             throw new IllegalStateException("MLAgentTracer is not initialized. Call initialize() first before using getInstance().");
         }
