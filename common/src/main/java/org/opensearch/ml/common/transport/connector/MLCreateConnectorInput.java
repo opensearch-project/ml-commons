@@ -109,6 +109,11 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
             if (credential == null || credential.isEmpty()) {
                 throw new IllegalArgumentException("Connector credential is null or empty list");
             }
+            if (actions != null) {
+                for (ConnectorAction action : actions) {
+                    action.validatePrePostProcessFunctions(parameters);
+                }
+            }
         }
         this.name = name;
         this.description = description;

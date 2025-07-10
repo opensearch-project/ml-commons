@@ -46,6 +46,8 @@ import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableMap;
 
+import reactor.core.publisher.Mono;
+
 public class TransportMcpToolsRemoveOnNodesActionTests extends OpenSearchTestCase {
     @Mock
     private TransportService transportService;
@@ -138,14 +140,29 @@ public class TransportMcpToolsRemoveOnNodesActionTests extends OpenSearchTestCas
     public void testNodeOperation() {
         MLMcpToolsRemoveNodeRequest request = new MLMcpToolsRemoveNodeRequest(toRemoveTools);
         McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.put("ListIndexTool", 1L);
-        McpAsyncServerHolder.getMcpAsyncServerInstance().addTool(mcpToolsHelper.createToolSpecification(getRegisterMcpTool())).subscribe();
+        McpAsyncServerHolder
+            .getMcpAsyncServerInstance()
+            .addTool(mcpToolsHelper.createToolSpecification(getRegisterMcpTool("ListIndexTool")))
+            .onErrorResume(e -> {
+                return Mono.empty();
+            })
+            .subscribe();
         MLMcpToolsRemoveNodeResponse response = action.nodeOperation(request);
         assertEquals(true, response.getDeleted());
     }
 
-    private McpToolRegisterInput getRegisterMcpTool() {
+    @Test
+    public void testNodeOperation_OnError() {
+        exceptionRule.expect(FailedNodeException.class);
+        exceptionRule.expectMessage("[ListIndexTool] not found on node: localNodeId");
+        MLMcpToolsRemoveNodeRequest request = new MLMcpToolsRemoveNodeRequest(toRemoveTools);
+        McpAsyncServerHolder.IN_MEMORY_MCP_TOOLS.put("ListIndexTool", 1L);
+        action.nodeOperation(request);
+    }
+
+    private McpToolRegisterInput getRegisterMcpTool(String toolName) {
         McpToolRegisterInput registerMcpTool = new McpToolRegisterInput(
-            "ListIndexTool",
+            toolName,
             "ListIndexTool",
             "OpenSearch index name list, separated by comma. for example: [\\\"index1\\\", \\\"index2\\\"], use empty array [] to list all indices in the cluster",
             Map.of(),

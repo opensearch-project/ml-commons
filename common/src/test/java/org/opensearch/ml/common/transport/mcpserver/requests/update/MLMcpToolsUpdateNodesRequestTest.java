@@ -1,10 +1,8 @@
 package org.opensearch.ml.common.transport.mcpserver.requests.update;
 
 /*
- *
- *  * Copyright OpenSearch Contributors
- *  * SPDX-License-Identifier: Apache-2.0
- *
+ * Copyright OpenSearch Contributors
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 import static org.junit.Assert.*;

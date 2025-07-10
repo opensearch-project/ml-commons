@@ -9,10 +9,14 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 
 import java.io.IOException;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.commons.text.StringSubstitutor;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -35,6 +39,17 @@ public class ConnectorAction implements ToXContentObject, Writeable {
     public static final String REQUEST_BODY_FIELD = "request_body";
     public static final String ACTION_PRE_PROCESS_FUNCTION = "pre_process_function";
     public static final String ACTION_POST_PROCESS_FUNCTION = "post_process_function";
+    public static final String OPENAI = "openai";
+    public static final String COHERE = "cohere";
+    public static final String BEDROCK = "bedrock";
+    public static final String SAGEMAKER = "sagemaker";
+    public static final String SAGEMAKER_PRE_POST_FUNC_TEXT = "default";
+    public static final List<String> SUPPORTED_REMOTE_SERVERS_FOR_DEFAULT_ACTION_TYPES = List.of(SAGEMAKER, OPENAI, BEDROCK, COHERE);
+
+    private static final String INBUILT_FUNC_PREFIX = "connector.";
+    private static final String PRE_PROCESS_FUNC = "PreProcessFunction";
+    private static final String POST_PROCESS_FUNC = "PostProcessFunction";
+    private static final Logger logger = LogManager.getLogger(ConnectorAction.class);
 
     private ActionType actionType;
     private String method;
@@ -183,6 +198,81 @@ public class ConnectorAction implements ToXContentObject, Writeable {
             .preProcessFunction(preProcessFunction)
             .postProcessFunction(postProcessFunction)
             .build();
+    }
+
+    /**
+     * Checks the compatibility of pre and post-process functions with the selected LLM service.
+     * Each LLM service (eg: Bedrock, OpenAI, SageMaker) has recommended pre and post-process functions
+     * designed for optimal performance. While it's possible to use functions from other services,
+     * it's strongly advised to use the corresponding functions for the best results.
+     * This method logs a warning if non-corresponding functions are detected, but allows the
+     * configuration to proceed. Users should be aware that using mismatched functions may lead
+     * to unexpected behavior or reduced performance, though it won't necessarily cause failures.
+     *
+     * @param parameters - connector parameters
+     */
+    public void validatePrePostProcessFunctions(Map<String, String> parameters) {
+        StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
+        String endPoint = substitutor.replace(url);
+        String remoteServer = getRemoteServerFromURL(endPoint);
+        if (!remoteServer.isEmpty()) {
+            validateProcessFunctions(remoteServer, preProcessFunction, PRE_PROCESS_FUNC);
+            validateProcessFunctions(remoteServer, postProcessFunction, POST_PROCESS_FUNC);
+        }
+    }
+
+    /**
+     * To get the remote server name from url
+     *
+     * @param url - remote server url
+     * @return - returns the corresponding remote server name for url, if server is not in the pre-defined list,
+     * it returns null
+     */
+    public static String getRemoteServerFromURL(String url) {
+        return SUPPORTED_REMOTE_SERVERS_FOR_DEFAULT_ACTION_TYPES.stream().filter(url::contains).findFirst().orElse("");
+    }
+
+    private void validateProcessFunctions(String remoteServer, String processFunction, String funcNameForWarnText) {
+        if (isInBuiltProcessFunction(processFunction)) {
+            switch (remoteServer) {
+                case OPENAI:
+                    if (!processFunction.contains(OPENAI)) {
+                        logWarningForInvalidProcessFunc(OPENAI, funcNameForWarnText);
+                    }
+                    break;
+                case COHERE:
+                    if (!processFunction.contains(COHERE)) {
+                        logWarningForInvalidProcessFunc(COHERE, funcNameForWarnText);
+                    }
+                    break;
+                case BEDROCK:
+                    if (!processFunction.contains(BEDROCK)) {
+                        logWarningForInvalidProcessFunc(BEDROCK, funcNameForWarnText);
+                    }
+                    break;
+                case SAGEMAKER:
+                    if (!processFunction.contains(SAGEMAKER_PRE_POST_FUNC_TEXT)) {
+                        logWarningForInvalidProcessFunc(SAGEMAKER, funcNameForWarnText);
+                    }
+            }
+        }
+    }
+
+    private boolean isInBuiltProcessFunction(String processFunction) {
+        return (processFunction != null && processFunction.startsWith(INBUILT_FUNC_PREFIX));
+    }
+
+    private void logWarningForInvalidProcessFunc(String remoteServer, String funcNameForWarnText) {
+        logger
+            .warn(
+                "LLM service is "
+                    + remoteServer
+                    + ", so "
+                    + funcNameForWarnText
+                    + " should be corresponding to "
+                    + remoteServer
+                    + " for better results."
+            );
     }
 
     public enum ActionType {
