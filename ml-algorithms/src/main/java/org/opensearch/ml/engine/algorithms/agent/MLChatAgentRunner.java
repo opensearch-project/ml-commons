@@ -253,39 +253,29 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     }
 
                     runAgent(mlAgent, params, ActionListener.wrap(result -> {
-                        if (agentTaskSpan != null) {
-                            MLAgentTracer.getInstance().endSpan(agentTaskSpan);
-                        }
+                        MLAgentTracer.getInstance().endSpan(agentTaskSpan);
                         listener.onResponse(result);
                     }, e -> {
-                        if (agentTaskSpan != null) {
-                            agentTaskSpan.setError(e);
-                            MLAgentTracer.getInstance().endSpan(agentTaskSpan);
-                        }
+                        agentTaskSpan.setError(e);
+                        MLAgentTracer.getInstance().endSpan(agentTaskSpan);
                         listener.onFailure(e);
                     }), memory, memory.getConversationId(), functionCalling, agentTaskSpan);
                 }, e -> {
                     log.error("Failed to get chat history", e);
-                    if (agentTaskSpan != null) {
-                        agentTaskSpan.setError(e);
-                        MLAgentTracer.getInstance().endSpan(agentTaskSpan);
-                    }
+                    agentTaskSpan.setError(e);
+                    MLAgentTracer.getInstance().endSpan(agentTaskSpan);
                     listener.onFailure(e);
                 }), messageHistoryLimit);
             }, e -> {
                 log.error("Failed to create memory", e);
-                if (agentTaskSpan != null) {
-                    agentTaskSpan.setError(e);
-                    MLAgentTracer.getInstance().endSpan(agentTaskSpan);
-                }
+                agentTaskSpan.setError(e);
+                MLAgentTracer.getInstance().endSpan(agentTaskSpan);
                 listener.onFailure(e);
             }));
         } catch (Exception e) {
             log.error("Error in MLChatAgentRunner", e);
-            if (agentTaskSpan != null) {
-                agentTaskSpan.setError(e);
-                MLAgentTracer.getInstance().endSpan(agentTaskSpan);
-            }
+            agentTaskSpan.setError(e);
+            MLAgentTracer.getInstance().endSpan(agentTaskSpan);
             listener.onFailure(e);
         }
     }
@@ -448,8 +438,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     AgentUtils.ToolCallExtractionResult llmResultInfo = AgentUtils.extractToolCallInfo(tmpModelTensorOutput, null);
 
                     ListenerWithSpan currentLlmListenerWithSpan = lastLlmListenerWithSpan.get();
-                    if (MLAgentTracer.getInstance() != null
-                        && currentLlmListenerWithSpan != null
+                    if (currentLlmListenerWithSpan != null
                         && currentLlmListenerWithSpan.span != null) {
                         Span currentLlmSpan = currentLlmListenerWithSpan.span;
                         AgentUtils
@@ -475,8 +464,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
                     if (finalAnswer != null) {
                         finalAnswer = finalAnswer.trim();
-                        if (MLAgentTracer.getInstance() != null
-                            && currentLlmListenerWithSpan != null
+                        if (currentLlmListenerWithSpan != null
                             && currentLlmListenerWithSpan.span != null) {
                             Span currentLlmSpan = currentLlmListenerWithSpan.span;
                             AgentUtils
@@ -596,10 +584,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                 toolCallSpan
                             );
                         } catch (Exception e) {
-                            if (MLAgentTracer.getInstance() != null && toolCallSpan != null) {
-                                toolCallSpan.setError(e);
-                                MLAgentTracer.getInstance().endSpan(toolCallSpan);
-                            }
+                            toolCallSpan.setError(e);
+                            MLAgentTracer.getInstance().endSpan(toolCallSpan);
                             throw e;
                         }
                     } else {
@@ -614,11 +600,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             );
 
                         try {
-                            if (MLAgentTracer.getInstance() != null && toolCallSpan != null) {
-                                String failureResult = String.format("Failed to run the tool %s which is unsupported.", action);
-                                AgentUtils.updateSpanWithResultAttributes(toolCallSpan, failureResult, null, null, null, null);
-                                MLAgentTracer.getInstance().endSpan(toolCallSpan);
-                            }
+                            String failureResult = String.format("Failed to run the tool %s which is unsupported.", action);
+                            AgentUtils.updateSpanWithResultAttributes(toolCallSpan, failureResult, null, null, null, null);
+                            MLAgentTracer.getInstance().endSpan(toolCallSpan);
 
                             String res = String.format(Locale.ROOT, "Failed to run the tool %s which is unsupported.", action);
                             StringSubstitutor substitutor = new StringSubstitutor(
@@ -644,10 +628,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             MLTaskResponse toolResponse = new MLTaskResponse(toolOutput);
                             nextStepListener.onResponse(toolResponse);
                         } catch (Exception e) {
-                            if (MLAgentTracer.getInstance() != null && toolCallSpan != null) {
-                                toolCallSpan.setError(e);
-                                MLAgentTracer.getInstance().endSpan(toolCallSpan);
-                            }
+                            toolCallSpan.setError(e);
+                            MLAgentTracer.getInstance().endSpan(toolCallSpan);
                             throw e;
                         }
                     }
@@ -848,9 +830,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         List<LLMMessage> llmMessages = functionCalling.supply(toolResults);
                         // TODO: support multiple tool calls at the same time so that multiple LLMMessages can be generated here
                         interactions.add(llmMessages.getFirst().getResponse());
-                        if (toolCallSpan != null) {
-                            MLAgentTracer.getInstance().endSpan(toolCallSpan);
-                        }
+                        MLAgentTracer.getInstance().endSpan(toolCallSpan);
                     } else {
                         interactions
                             .add(
@@ -860,9 +840,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                     INTERACTIONS_PREFIX
                                 )
                             );
-                        if (toolCallSpan != null) {
-                            MLAgentTracer.getInstance().endSpan(toolCallSpan);
-                        }
+                        MLAgentTracer.getInstance().endSpan(toolCallSpan);
                     }
                     nextStepListener.onResponse(r);
                 }, e -> {
@@ -874,13 +852,11 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                 INTERACTIONS_PREFIX
                             )
                         );
-                    if (toolCallSpan != null) {
-                        String errorResult = String
-                            .format("Failed to run the tool %s with the error message %s.", finalAction, e.getMessage());
-                        AgentUtils.updateSpanWithResultAttributes(toolCallSpan, errorResult, null, null, null, null);
-                        toolCallSpan.setError(e);
-                        MLAgentTracer.getInstance().endSpan(toolCallSpan);
-                    }
+                    String errorResult = String
+                        .format("Failed to run the tool %s with the error message %s.", finalAction, e.getMessage());
+                    AgentUtils.updateSpanWithResultAttributes(toolCallSpan, errorResult, null, null, null, null);
+                    toolCallSpan.setError(e);
+                    MLAgentTracer.getInstance().endSpan(toolCallSpan);
                     nextStepListener
                         .onResponse(
                             String
@@ -906,21 +882,17 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 }
             } catch (Exception e) {
                 log.error("Failed to run tool {}", action, e);
-                if (toolCallSpan != null) {
-                    String errorResult = String.format("Failed to run the tool %s with the error message %s.", action, e.getMessage());
-                    AgentUtils.updateSpanWithResultAttributes(toolCallSpan, errorResult, null, null, null, null);
-                    toolCallSpan.setError(e);
-                    MLAgentTracer.getInstance().endSpan(toolCallSpan);
-                }
+                String errorResult = String.format("Failed to run the tool %s with the error message %s.", action, e.getMessage());
+                AgentUtils.updateSpanWithResultAttributes(toolCallSpan, errorResult, null, null, null, null);
+                toolCallSpan.setError(e);
+                MLAgentTracer.getInstance().endSpan(toolCallSpan);
                 nextStepListener
                     .onResponse(String.format(Locale.ROOT, "Failed to run the tool %s with the error message %s.", action, e.getMessage()));
             }
         } else { // TODO: add failure to interaction to let LLM regenerate ?
             String res = String.format(Locale.ROOT, "Failed to run the tool %s due to wrong input %s.", action, actionInput);
-            if (toolCallSpan != null) {
-                AgentUtils.updateSpanWithResultAttributes(toolCallSpan, res, null, null, null, null);
-                MLAgentTracer.getInstance().endSpan(toolCallSpan);
-            }
+            AgentUtils.updateSpanWithResultAttributes(toolCallSpan, res, null, null, null, null);
+            MLAgentTracer.getInstance().endSpan(toolCallSpan);
             nextStepListener.onResponse(res);
         }
     }
