@@ -231,7 +231,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     }
 
     @VisibleForTesting
-    void populatePrompt(Map<String, String> allParams) {
+    static void populatePrompt(Map<String, String> allParams) {
         String promptTemplate = allParams.get(PROMPT_TEMPLATE_FIELD);
         StringSubstitutor promptSubstitutor = new StringSubstitutor(allParams, "${parameters.", "}");
         String prompt = promptSubstitutor.replace(promptTemplate);
@@ -571,7 +571,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     }
 
     @VisibleForTesting
-    void addToolsToPrompt(Map<String, Tool> tools, Map<String, String> allParams) {
+    public static void addToolsToPrompt(Map<String, Tool> tools, Map<String, String> allParams) {
         StringBuilder toolsPrompt = new StringBuilder("In this environment, you have access to the below tools: \n");
         for (Map.Entry<String, Tool> entry : tools.entrySet()) {
             String toolName = entry.getKey();
@@ -585,12 +585,12 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     }
 
     @VisibleForTesting
-    void addSteps(List<String> steps, Map<String, String> allParams, String field) {
+    public static void addSteps(List<String> steps, Map<String, String> allParams, String field) {
         allParams.put(field, String.join(", ", steps));
     }
 
     @VisibleForTesting
-    void saveAndReturnFinalResult(
+    public static void saveAndReturnFinalResult(
         ConversationIndexMemory memory,
         String parentInteractionId,
         String reactAgentMemoryId,

@@ -547,14 +547,14 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 );
             case SOP_BASED_EXECUTE:
                 return new MLSopBasedAgentRunner(
-                        client,
-                        settings,
-                        clusterService,
-                        xContentRegistry,
-                        toolFactories,
-                        memoryFactoryMap,
-                        sdkClient,
-                        encryptor
+                    client,
+                    settings,
+                    clusterService,
+                    xContentRegistry,
+                    toolFactories,
+                    memoryFactoryMap,
+                    sdkClient,
+                    encryptor
                 );
             default:
                 throw new IllegalArgumentException("Unsupported agent type: " + mlAgent.getType());

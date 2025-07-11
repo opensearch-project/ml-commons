@@ -1,13 +1,14 @@
 package org.opensearch.ml.engine.tools;
 
+import static org.opensearch.ml.common.CommonValue.TOOL_INPUT_SCHEMA_FIELD;
 
-import lombok.Getter;
-import lombok.Setter;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.opensearch.action.admin.cluster.health.ClusterHealthRequest;
 import org.opensearch.action.admin.cluster.health.ClusterHealthResponse;
-import org.opensearch.action.support.IndicesOptions;
 import org.opensearch.cluster.service.ClusterService;
-import org.opensearch.common.unit.TimeValue;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Parser;
@@ -15,23 +16,14 @@ import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.transport.client.Client;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import static org.opensearch.ml.common.CommonValue.TOOL_INPUT_SCHEMA_FIELD;
+import lombok.Getter;
+import lombok.Setter;
 
 @ToolAnnotation(ClusterHealthTool.TYPE)
 public class ClusterHealthTool implements Tool {
     public static final String TYPE = "ClusterHealthTool";
-    public static final String DEFAULT_DESCRIPTION = String
-            .join(
-                    " ",
-                    "This tool gets health information of the cluster."
-            );
-    public static final String DEFAULT_INPUT_SCHEMA = "{\"type\":\"object\","
-                                                      + "\"additionalProperties\":false}";
-
+    public static final String DEFAULT_DESCRIPTION = String.join(" ", "This tool gets health information of the cluster.");
+    public static final String DEFAULT_INPUT_SCHEMA = "{\"type\":\"object\"," + "\"additionalProperties\":false}";
 
     @Setter
     @Getter
@@ -76,11 +68,7 @@ public class ClusterHealthTool implements Tool {
         attributes.put(STRICT_FIELD, false);
     }
 
-
-    private void sendClusterHealthRequest(
-            final Client client,
-            final ActionListener<ClusterHealthResponse> listener
-    ) {
+    private void sendClusterHealthRequest(final Client client, final ActionListener<ClusterHealthResponse> listener) {
 
         final ClusterHealthRequest request = new ClusterHealthRequest();
         request.local(true);
@@ -90,9 +78,12 @@ public class ClusterHealthTool implements Tool {
 
     @Override
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
-        sendClusterHealthRequest(client, ActionListener.wrap(clusterHealthResponse -> {
-            listener.onResponse((T) clusterHealthResponse.toString());
-        }, e -> { listener.onFailure(e);}));
+        sendClusterHealthRequest(
+            client,
+            ActionListener.wrap(clusterHealthResponse -> { listener.onResponse((T) clusterHealthResponse.toString()); }, e -> {
+                listener.onFailure(e);
+            })
+        );
     }
 
     @Override
@@ -104,7 +95,6 @@ public class ClusterHealthTool implements Tool {
     public boolean validate(Map<String, String> parameters) {
         return true;
     }
-
 
     public static class Factory implements Tool.Factory<ClusterHealthTool> {
         private Client client;
@@ -163,6 +153,5 @@ public class ClusterHealthTool implements Tool {
             return DEFAULT_ATTRIBUTES;
         }
     }
-
 
 }
