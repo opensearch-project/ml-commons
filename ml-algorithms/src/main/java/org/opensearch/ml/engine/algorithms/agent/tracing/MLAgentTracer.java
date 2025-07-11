@@ -11,6 +11,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiConsumer;
 
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.telemetry.tracing.Span;
@@ -37,23 +39,32 @@ public class MLAgentTracer extends AbstractMLTracer {
     public static final String AGENT_TASK_FLOW_SPAN = "agent.task_flow";
 
     private static MLAgentTracer instance;
-    private static boolean tracingFlagSet = false;
 
     private MLAgentTracer(Tracer tracer, MLFeatureEnabledSetting mlFeatureEnabledSetting) {
         super(tracer, mlFeatureEnabledSetting);
     }
 
     public static synchronized void initialize(Tracer tracer, MLFeatureEnabledSetting mlFeatureEnabledSetting) {
-        if (mlFeatureEnabledSetting == null || !mlFeatureEnabledSetting.isTracingEnabled()) {
-            instance = new MLAgentTracer(AgentNoopTracer.INSTANCE, mlFeatureEnabledSetting);
-            tracingFlagSet = false;
-            log.info("MLAgentTracer not initialized: agent tracing feature flag is disabled. Using AgentNoopTracer for all spans.");
-            return;
-        }
-        tracingFlagSet = true;
-        Tracer tracerToUse = mlFeatureEnabledSetting.isAgentTracingEnabled() ? tracer : NoopTracer.INSTANCE;
+        initialize(tracer, mlFeatureEnabledSetting, null);
+    }
+
+    public static synchronized void initialize(Tracer tracer, MLFeatureEnabledSetting mlFeatureEnabledSetting, ClusterService clusterService) {
+        Tracer tracerToUse = (mlFeatureEnabledSetting != null && 
+                             mlFeatureEnabledSetting.isTracingEnabled() && 
+                             mlFeatureEnabledSetting.isAgentTracingEnabled()) ? tracer : NoopTracer.INSTANCE;
+        
         instance = new MLAgentTracer(tracerToUse, mlFeatureEnabledSetting);
         log.info("MLAgentTracer initialized with {}", tracerToUse.getClass().getSimpleName());
+        
+        if (clusterService != null) {
+            clusterService.getClusterSettings().addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_AGENT_TRACING_ENABLED, enabled -> {
+                Tracer newTracerToUse = (mlFeatureEnabledSetting != null && 
+                                        mlFeatureEnabledSetting.isTracingEnabled() && 
+                                        enabled) ? tracer : NoopTracer.INSTANCE;
+                instance = new MLAgentTracer(newTracerToUse, mlFeatureEnabledSetting);
+                log.info("MLAgentTracer re-initialized with {} due to setting change", newTracerToUse.getClass().getSimpleName());
+            });
+        }
     }
 
     public static synchronized MLAgentTracer getInstance() {
@@ -77,7 +88,7 @@ public class MLAgentTracer extends AbstractMLTracer {
         }
         SpanCreationContext context = SpanCreationContext.server().name(name).attributes(attrBuilder);
         Span newSpan;
-        if (name != null && name.startsWith("agent.task") && !(tracer instanceof AgentNoopTracer) && !(tracer instanceof NoopTracer)) {
+        if (name != null && name.startsWith("agent.task") && !(tracer instanceof NoopTracer)) {
             // Force agent.task* spans to be root span for real tracer
             try {
                 Field defaultTracerField = tracer.getClass().getDeclaredField("defaultTracer");
@@ -134,7 +145,7 @@ public class MLAgentTracer extends AbstractMLTracer {
      * @param carrier The map to inject context into
      */
     public void injectSpanContext(Span span, Map<String, String> carrier) {
-        if (tracer instanceof AgentNoopTracer || tracer instanceof NoopTracer) {
+        if (tracer instanceof NoopTracer) {
             return;
         }
 
@@ -163,7 +174,7 @@ public class MLAgentTracer extends AbstractMLTracer {
      * @return The extracted parent span, or null if not found
      */
     public Span extractSpanContext(Map<String, String> carrier) {
-        if (tracer instanceof AgentNoopTracer || tracer instanceof NoopTracer) {
+        if (tracer instanceof NoopTracer) {
             return null;
         }
 
