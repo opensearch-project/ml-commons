@@ -249,7 +249,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     @Override
     public void run(MLAgent mlAgent, Map<String, String> apiParams, ActionListener<Object> listener) {
         Map<String, String> agentAttributes = createAgentTaskAttributes(mlAgent.getName(), apiParams.get(QUESTION_FIELD));
-        Span agentTaskSpan = MLAgentTracer.getInstance().startSpan(MLAgentTracer.AGENT_TASK_SPAN, agentAttributes, null);
+        Span agentTaskSpan = MLAgentTracer.getInstance().startSpan(MLAgentTracer.AGENT_TASK_PER_SPAN, agentAttributes, null);
 
         try {
             Map<String, String> allParams = new HashMap<>();
@@ -297,11 +297,9 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                             memory,
                             memory.getConversationId(),
                             ActionListener.wrap(result -> {
-                                // End agent task span after all work completes
                                 MLAgentTracer.getInstance().endSpan(agentTaskSpan);
                                 listener.onResponse(result);
                             }, e -> {
-                                // End agent task span even on error
                                 agentTaskSpan.setError(e);
                                 MLAgentTracer.getInstance().endSpan(agentTaskSpan);
                                 listener.onFailure(e);
@@ -398,12 +396,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         Span agentTaskSpan,
         Span planSpan
     ) {
-        final Span finalPlanSpan;
-        if (planSpan == null && stepsExecuted == 0) {
-            finalPlanSpan = null;
-        } else {
-            finalPlanSpan = planSpan;
-        }
+        final Span finalPlanSpan = planSpan;
 
         Map<String, String> planStepAttributes = AgentUtils.createPlanAttributes(stepsExecuted);
         String planStepSpanName;
@@ -437,7 +430,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     allParams.get(EXECUTOR_AGENT_MEMORY_ID_FIELD),
                     allParams.get(EXECUTOR_AGENT_PARENT_INTERACTION_ID_FIELD),
                     finalResult,
-                    null, // completedSteps.get(completedSteps.size() - 2)
+                    completedSteps.get(completedSteps.size() - 2),
                     ActionListener.wrap(result -> {
                         MLAgentTracer.getInstance().endSpan(planStepSpan);
                         finalListener.onResponse(result);

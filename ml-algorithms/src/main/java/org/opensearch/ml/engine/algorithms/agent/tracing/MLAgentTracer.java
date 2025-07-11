@@ -31,6 +31,10 @@ public class MLAgentTracer extends AbstractMLTracer {
     public static final String AGENT_PLAN_SPAN = "agent.plan";
     public static final String AGENT_EXECUTE_STEP_SPAN = "agent.execute_step";
     public static final String AGENT_REFLECT_STEP_SPAN = "agent.reflect_step";
+    public static final String AGENT_TASK_PER_SPAN = "agent.task_per";
+    public static final String AGENT_TASK_CONV_SPAN = "agent.task_conv";
+    public static final String AGENT_TASK_CONV_FLOW_SPAN = "agent.task_convflow";
+    public static final String AGENT_TASK_FLOW_SPAN = "agent.task_flow";
 
     private static MLAgentTracer instance;
     private static boolean tracingFlagSet = false;
@@ -73,8 +77,8 @@ public class MLAgentTracer extends AbstractMLTracer {
         }
         SpanCreationContext context = SpanCreationContext.server().name(name).attributes(attrBuilder);
         Span newSpan;
-        if (AGENT_TASK_SPAN.equals(name) && !(tracer instanceof AgentNoopTracer) && !(tracer instanceof NoopTracer)) {
-            // Force agent.task spans to be root span for real tracer
+        if (name != null && name.startsWith("agent.task") && !(tracer instanceof AgentNoopTracer) && !(tracer instanceof NoopTracer)) {
+            // Force agent.task* spans to be root span for real tracer
             try {
                 Field defaultTracerField = tracer.getClass().getDeclaredField("defaultTracer");
                 defaultTracerField.setAccessible(true);
@@ -91,7 +95,7 @@ public class MLAgentTracer extends AbstractMLTracer {
 
                 newSpan.addAttribute("thread.name", Thread.currentThread().getName());
             } catch (Exception e) {
-                log.warn("Failed to create root span for agent.task, falling back to normal span creation", e);
+                log.warn("Failed to create root span for agent.task*, falling back to normal span creation", e);
                 if (parentSpan != null) {
                     context = context.parent(new SpanContext(parentSpan));
                 }
