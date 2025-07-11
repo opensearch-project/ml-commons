@@ -51,7 +51,6 @@ public class MLAgentTracer extends AbstractMLTracer {
     public static final String AGENT_TASK_FLOW_SPAN = "agent.task_flow";
 
     private static MLAgentTracer instance;
-    private static boolean tracingFlagSet = false;
 
     /**
      * Private constructor for MLAgentTracer.
