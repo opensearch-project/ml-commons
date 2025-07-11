@@ -48,19 +48,23 @@ public class MLAgentTracer extends AbstractMLTracer {
         initialize(tracer, mlFeatureEnabledSetting, null);
     }
 
-    public static synchronized void initialize(Tracer tracer, MLFeatureEnabledSetting mlFeatureEnabledSetting, ClusterService clusterService) {
-        Tracer tracerToUse = (mlFeatureEnabledSetting != null && 
-                             mlFeatureEnabledSetting.isTracingEnabled() && 
-                             mlFeatureEnabledSetting.isAgentTracingEnabled()) ? tracer : NoopTracer.INSTANCE;
-        
+    public static synchronized void initialize(
+        Tracer tracer,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        ClusterService clusterService
+    ) {
+        Tracer tracerToUse = (mlFeatureEnabledSetting != null
+            && mlFeatureEnabledSetting.isTracingEnabled()
+            && mlFeatureEnabledSetting.isAgentTracingEnabled()) ? tracer : NoopTracer.INSTANCE;
+
         instance = new MLAgentTracer(tracerToUse, mlFeatureEnabledSetting);
         log.info("MLAgentTracer initialized with {}", tracerToUse.getClass().getSimpleName());
-        
+
         if (clusterService != null) {
             clusterService.getClusterSettings().addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_AGENT_TRACING_ENABLED, enabled -> {
-                Tracer newTracerToUse = (mlFeatureEnabledSetting != null && 
-                                        mlFeatureEnabledSetting.isTracingEnabled() && 
-                                        enabled) ? tracer : NoopTracer.INSTANCE;
+                Tracer newTracerToUse = (mlFeatureEnabledSetting != null && mlFeatureEnabledSetting.isTracingEnabled() && enabled)
+                    ? tracer
+                    : NoopTracer.INSTANCE;
                 instance = new MLAgentTracer(newTracerToUse, mlFeatureEnabledSetting);
                 log.info("MLAgentTracer re-initialized with {} due to setting change", newTracerToUse.getClass().getSimpleName());
             });
