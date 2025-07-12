@@ -806,10 +806,7 @@ public class MachineLearningPlugin extends Plugin
         mcpToolsHelper = new McpToolsHelper(client, threadPool, toolFactoryWrapper);
         McpAsyncServerHolder.init(mlIndicesHandler, mcpToolsHelper);
 
-        MLAgentTracer.initialize(tracer, mlFeatureEnabledSetting);
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_AGENT_TRACING_ENABLED, enabled -> {
-            MLAgentTracer.initialize(tracer, mlFeatureEnabledSetting);
-        });
+        MLAgentTracer.initialize(tracer, mlFeatureEnabledSetting, clusterService);
 
         return ImmutableList
             .of(

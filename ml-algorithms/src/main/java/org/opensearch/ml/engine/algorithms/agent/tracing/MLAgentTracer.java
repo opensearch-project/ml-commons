@@ -11,6 +11,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiConsumer;
 
+import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.telemetry.tracing.Span;
@@ -43,9 +45,12 @@ public class MLAgentTracer extends AbstractMLTracer {
     public static final String AGENT_PLAN_SPAN = "agent.plan";
     public static final String AGENT_EXECUTE_STEP_SPAN = "agent.execute_step";
     public static final String AGENT_REFLECT_STEP_SPAN = "agent.reflect_step";
+    public static final String AGENT_TASK_PER_SPAN = "agent.task_per";
+    public static final String AGENT_TASK_CONV_SPAN = "agent.task_conv";
+    public static final String AGENT_TASK_CONV_FLOW_SPAN = "agent.task_convflow";
+    public static final String AGENT_TASK_FLOW_SPAN = "agent.task_flow";
 
     private static MLAgentTracer instance;
-    private static boolean tracingFlagSet = false;
 
     /**
      * Private constructor for MLAgentTracer.
@@ -58,23 +63,48 @@ public class MLAgentTracer extends AbstractMLTracer {
 
     /**
      * Initializes the singleton MLAgentTracer instance with the given tracer and settings.
-     * If agent tracing is disabled, a NoopTracer is used.
-     * @param tracer The tracer implementation to use.
-     * @param mlFeatureEnabledSetting The ML feature settings.
+     * This is a convenience method that calls the full initialize method with a null ClusterService.
+     * 
+     * @param tracer The tracer implementation to use. If null or if tracing is disabled,
+     *               a NoopTracer will be used instead.
+     * @param mlFeatureEnabledSetting The ML feature settings that control tracing behavior.
+     *                                If null, tracing will be disabled.
      */
     public static synchronized void initialize(Tracer tracer, MLFeatureEnabledSetting mlFeatureEnabledSetting) {
-        if (mlFeatureEnabledSetting == null || !mlFeatureEnabledSetting.isTracingEnabled()) {
-            instance = new MLAgentTracer(AgentNoopTracer.INSTANCE, mlFeatureEnabledSetting);
-            log.info("MLAgentTracer not initialized: agent tracing feature flag is disabled. Using AgentNoopTracer for all spans.");
-            return;
-        }
-        Tracer tracerToUse;
-        if (mlFeatureEnabledSetting.isAgentTracingEnabled() && tracer != null) {
-            tracerToUse = tracer;
-        } else {
-            tracerToUse = NoopTracer.INSTANCE;
-        }
+        initialize(tracer, mlFeatureEnabledSetting, null);
+    }
+
+    /**
+     * Initializes the singleton MLAgentTracer instance with the given tracer and settings.
+     * If agent tracing is disabled, a NoopTracer is used.
+     * @param tracer The tracer implementation to use. If null or if tracing is disabled,
+     *               a NoopTracer will be used instead.
+     * @param mlFeatureEnabledSetting The ML feature settings that control tracing behavior.
+     *                                If null, tracing will be disabled.
+     */
+    public static synchronized void initialize(
+        Tracer tracer,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        ClusterService clusterService
+    ) {
+        Tracer tracerToUse = (mlFeatureEnabledSetting != null
+            && mlFeatureEnabledSetting.isTracingEnabled()
+            && mlFeatureEnabledSetting.isAgentTracingEnabled()
+            && tracer != null) ? tracer : NoopTracer.INSTANCE;
+
         instance = new MLAgentTracer(tracerToUse, mlFeatureEnabledSetting);
+        log.info("MLAgentTracer initialized with {}", tracerToUse.getClass().getSimpleName());
+
+        if (clusterService != null) {
+            clusterService.getClusterSettings().addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_AGENT_TRACING_ENABLED, enabled -> {
+                Tracer newTracerToUse = (mlFeatureEnabledSetting != null
+                    && mlFeatureEnabledSetting.isTracingEnabled()
+                    && enabled
+                    && tracer != null) ? tracer : NoopTracer.INSTANCE;
+                instance = new MLAgentTracer(newTracerToUse, mlFeatureEnabledSetting);
+                log.info("MLAgentTracer re-initialized with {} due to setting change", newTracerToUse.getClass().getSimpleName());
+            });
+        }
     }
 
     /**
@@ -91,10 +121,27 @@ public class MLAgentTracer extends AbstractMLTracer {
 
     /**
      * Starts a new span for agent tracing.
-     * @param name The name of the span.
-     * @param attributes Attributes to associate with the span.
-     * @param parentSpan The parent span, or null if this is a root span.
-     * @return The started Span object, or null if tracing is disabled.
+     * 
+     * This method creates a new span with the specified name and attributes. For agent.task*
+     * spans, this method attempts to create them as root spans to ensure proper trace
+     * grouping. If the reflection-based root span creation fails, it falls back to
+     * normal span creation which might result in ghost parent span.
+     * 
+     * The method handles both real tracers and NoopTracer instances. When using a real
+     * tracer, spans are created with proper parent-child relationships. When using
+     * NoopTracer, the spans are no-ops but still maintain the expected interface.
+     * 
+     * @param name The name of the span. Should follow the naming convention defined by
+     *             the span constants (e.g., AGENT_TASK_SPAN, AGENT_TOOL_CALL_SPAN).
+     * @param attributes A map of key-value pairs to associate with the span. These
+     *                  provide additional context about the operation being traced.
+     *                  May be null or empty if no attributes are needed.
+     * @param parentSpan The parent span, or null if this should be a root span.
+     *                  For agent.task* spans, this parameter is ignored when using
+     *                  real tracers as they are forced to be root spans.
+     * @return A Span object representing the started span, or null if tracing is disabled.
+     *         The returned span should be passed to {@link #endSpan(Span)} when the
+     *         operation completes.
      */
     @Override
     public Span startSpan(String name, Map<String, String> attributes, Span parentSpan) {
@@ -110,7 +157,7 @@ public class MLAgentTracer extends AbstractMLTracer {
         }
         SpanCreationContext context = SpanCreationContext.server().name(name).attributes(attrBuilder);
         Span newSpan;
-        if (AGENT_TASK_SPAN.equals(name) && !(tracer instanceof AgentNoopTracer) && !(tracer instanceof NoopTracer)) {
+        if (name != null && name.startsWith(AGENT_TASK_SPAN) && !(tracer instanceof NoopTracer)) {
             // Force agent.task spans to be root span
             try {
                 Field defaultTracerField = tracer.getClass().getDeclaredField("defaultTracer");
@@ -128,7 +175,7 @@ public class MLAgentTracer extends AbstractMLTracer {
 
                 newSpan.addAttribute("thread.name", Thread.currentThread().getName());
             } catch (Exception e) {
-                log.warn("Failed to create root span for agent.task, falling back to normal span creation", e);
+                log.warn("Failed to create root span for agent.task*, falling back to normal span creation", e);
                 if (parentSpan != null) {
                     context = context.parent(new SpanContext(parentSpan));
                 }
@@ -146,7 +193,15 @@ public class MLAgentTracer extends AbstractMLTracer {
 
     /**
      * Ends the given span.
-     * @param span The span to end. If null or tracing is disabled, this is a no-op.
+     * 
+     * This method marks the completion of a span and finalizes its timing information.
+     * The span will be recorded in the trace with its start time, end time, and any
+     * attributes that were set during its lifetime.
+     * 
+     * @param span The span to end. This should be the same Span object that was returned
+     *             by a previous call to {@link #startSpan(String, Map, Span)}. If null,
+     *             an IllegalArgumentException is thrown.
+     * @throws IllegalArgumentException if the span parameter is null.
      */
     @Override
     public void endSpan(Span span) {
@@ -158,7 +213,13 @@ public class MLAgentTracer extends AbstractMLTracer {
 
     /**
      * Returns the underlying tracer implementation.
-     * @return The tracer instance.
+     * 
+     * This method provides access to the tracer instance that is currently being used
+     * by this MLAgentTracer. The returned tracer may be either a real tracer implementation
+     * or a NoopTracer, depending on the current configuration and feature settings.
+     * 
+     * @return The tracer instance currently in use. This may be a real tracer or
+     *         NoopTracer.INSTANCE if tracing is disabled.
      */
     public Tracer getTracer() {
         return tracer;
@@ -174,11 +235,22 @@ public class MLAgentTracer extends AbstractMLTracer {
 
     /**
      * Injects the span context into a carrier map using the TracingContextPropagator.
-     * @param span The span whose context to inject.
-     * @param carrier The map to inject context into.
+     * 
+     * This method serializes the span context into a map that can be transmitted
+     * across process boundaries (e.g., in HTTP headers, message queues, etc.).
+     * The injected context can later be extracted using {@link #extractSpanContext(Map)}
+     * to continue the trace in another process or thread.
+     * 
+     * The method uses reflection to access the underlying tracing telemetry components,
+     * as the OpenSearch tracing API doesn't provide direct access to context propagation.
+     * If the reflection fails, the method logs a warning but doesn't throw an exception.
+     * 
+     * @param span The span whose context to inject. If null, this method is a no-op.
+     * @param carrier The map to inject context into. The span context will be added
+     *               as key-value pairs to this map. Must not be null.
      */
     public void injectSpanContext(Span span, Map<String, String> carrier) {
-        if (tracer instanceof AgentNoopTracer || tracer instanceof NoopTracer) {
+        if (tracer instanceof NoopTracer) {
             return;
         }
 
@@ -203,11 +275,24 @@ public class MLAgentTracer extends AbstractMLTracer {
 
     /**
      * Extracts a parent span from a carrier map using the TracingContextPropagator.
-     * @param carrier The map containing the context.
-     * @return The extracted parent span, or null if not found or tracing is disabled.
+     * 
+     * This method deserializes a span context from a map that was previously created
+     * by {@link #injectSpanContext(Span, Map)}. The extracted context can be used
+     * as a parent span to continue a trace across process boundaries.
+     * 
+     * The method uses reflection to access the underlying tracing telemetry components,
+     * as the OpenSearch tracing API doesn't provide direct access to context propagation.
+     * If the reflection fails or no context is found, the method returns null and logs
+     * a warning.
+     * 
+     * @param carrier The map containing the context. This should be the same map that
+     *               was populated by a previous call to {@link #injectSpanContext(Span, Map)}.
+     *               May be null or empty, in which case null is returned.
+     * @return The extracted parent span, or null if no context is found, the carrier
+     *         is null/empty, or tracing is disabled (NoopTracer is being used).
      */
     public Span extractSpanContext(Map<String, String> carrier) {
-        if (tracer instanceof AgentNoopTracer || tracer instanceof NoopTracer) {
+        if (tracer instanceof NoopTracer) {
             return null;
         }
 

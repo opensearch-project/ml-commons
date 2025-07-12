@@ -42,7 +42,7 @@ public class MLAgentTracerTests {
         MLAgentTracer.initialize(mockTracer, mockFeatureSetting);
         MLAgentTracer instance = MLAgentTracer.getInstance();
         assertNotNull(instance);
-        assertTrue(instance.getTracer() instanceof AgentNoopTracer);
+        assertTrue(instance.getTracer() instanceof NoopTracer);
     }
 
     @Test
