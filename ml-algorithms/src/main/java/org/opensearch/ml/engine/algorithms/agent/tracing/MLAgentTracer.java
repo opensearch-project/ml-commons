@@ -139,7 +139,6 @@ public class MLAgentTracer extends MLTracer {
     }
 
     private static MLAgentTracer instance;
-    private static boolean tracingFlagSet = false;
 
     /**
      * Private constructor for MLAgentTracer.
