@@ -249,7 +249,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     @Override
     public void run(MLAgent mlAgent, Map<String, String> apiParams, ActionListener<Object> listener) {
         Map<String, String> agentAttributes = createAgentTaskAttributes(mlAgent.getName(), apiParams.get(QUESTION_FIELD));
-        Span agentTaskSpan = MLAgentTracer.getInstance().startSpan(MLAgentTracer.AGENT_TASK_PER_SPAN, agentAttributes, null);
+        Span agentTaskSpan = MLAgentTracer.getInstance().startSpan(MLAgentTracer.AGENT_TASK_PER_SPAN, agentAttributes);
 
         try {
             Map<String, String> allParams = new HashMap<>();

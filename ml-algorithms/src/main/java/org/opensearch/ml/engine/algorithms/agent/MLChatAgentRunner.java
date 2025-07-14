@@ -162,7 +162,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         } else {
             Map<String, String> agentAttributes = AgentUtils
                 .createAgentTaskAttributes(mlAgent.getName(), inputParams.get(MLAgentExecutor.QUESTION));
-            agentTaskSpan = MLAgentTracer.getInstance().startSpan(MLAgentTracer.AGENT_TASK_CONV_SPAN, agentAttributes, null);
+            agentTaskSpan = MLAgentTracer.getInstance().startSpan(MLAgentTracer.AGENT_TASK_CONV_SPAN, agentAttributes);
         }
 
         try {

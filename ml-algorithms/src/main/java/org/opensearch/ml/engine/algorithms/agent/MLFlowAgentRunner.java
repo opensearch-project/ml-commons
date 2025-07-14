@@ -88,7 +88,7 @@ public class MLFlowAgentRunner implements MLAgentRunner {
     @Override
     public void run(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener) {
         Map<String, String> agentAttributes = AgentUtils.createAgentTaskAttributes(mlAgent.getName(), params.get(MLAgentExecutor.QUESTION));
-        Span agentTaskSpan = MLAgentTracer.getInstance().startSpan(MLAgentTracer.AGENT_TASK_FLOW_SPAN, agentAttributes, null);
+        Span agentTaskSpan = MLAgentTracer.getInstance().startSpan(MLAgentTracer.AGENT_TASK_FLOW_SPAN, agentAttributes);
 
         try {
             List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, params);
