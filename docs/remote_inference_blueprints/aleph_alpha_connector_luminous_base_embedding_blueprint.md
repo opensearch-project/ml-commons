@@ -1,5 +1,5 @@
 # Aleph Alpha connector blueprint example for luminous-base embedding model
-This is an AI connector blueprint for the [Aleph Alpha Luminous-Base Embedding Model](https://docs.aleph-alpha.com/api/semantic-embed/).
+This is an AI connector blueprint for the [Aleph Alpha Luminous-Base Embedding Model](https://docs.aleph-alpha.com/products/pharia-ai/pharia-os/references/inference/endpoints/semantic_embed/).
 This model is particularly effective for German language applications, providing nuanced and contextually relevant embeddings. 
 
 ## 1. Add connector endpoint to trusted URLs:
