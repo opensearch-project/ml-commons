@@ -35,6 +35,7 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
+import com.jayway.jsonpath.JsonPath;
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
@@ -59,6 +60,7 @@ import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.utils.SOP;
@@ -137,6 +139,7 @@ public class MLSopBasedAgentRunner implements MLAgentRunner {
     public static final String EXECUTOR_MAX_ITERATIONS_FIELD = "executor_max_iterations";
     public static final String SUMMARIZE_MODEL_ID_FIELD = "summarize_model_id";
     public static final String NEXT_STEP_DESCRIPTION_FIELD = "next_step_description";
+    public static final String SOP_FIELD = "sop";
 
     public MLSopBasedAgentRunner(
         Client client,
@@ -304,7 +307,7 @@ public class MLSopBasedAgentRunner implements MLAgentRunner {
             addToolsToPrompt(tools, allParams);
 
             AtomicInteger traceNumber = new AtomicInteger(0);
-            String sopString = allParams.getOrDefault("sop", "");
+            String sopString = allParams.getOrDefault(SOP_FIELD, "");
             Map<String, Object> map = gson.fromJson(sopString, Map.class);
             SOP sop = new SOP(map);
             executePlanningLoop(mlAgent.getLlm(), allParams, completedSteps, memory, conversationId, traceNumber, sop, finalListener);
@@ -366,7 +369,6 @@ public class MLSopBasedAgentRunner implements MLAgentRunner {
                     finalListener
                 );
             }, e -> {
-                log.info("balaba");
                 finalListener.onFailure(e);
             }));
 
@@ -550,6 +552,23 @@ public class MLSopBasedAgentRunner implements MLAgentRunner {
     private int parseNextStep(String result) {
         String realResult = result.split("<next_option>")[1].split("</next_option>")[0].strip();
         return Integer.parseInt(realResult);
+    }
+
+    private String parserModelOutput(Map<String, String> allParams, ModelTensorOutput modelTensorOutput) {
+        Map<String, String> modelOutput = new HashMap<>();
+        Map<String, ?> dataAsMap = modelTensorOutput.getMlModelOutputs().getFirst().getMlModelTensors().getFirst().getDataAsMap();
+        String llmResponse;
+        if (dataAsMap.size() == 1 && dataAsMap.containsKey(RESPONSE_FIELD)) {
+            llmResponse = ((String) dataAsMap.get(RESPONSE_FIELD)).trim();
+        } else {
+            if (!allParams.containsKey(LLM_RESPONSE_FILTER) || allParams.get(LLM_RESPONSE_FILTER).isEmpty()) {
+                throw new IllegalArgumentException("llm_response_filter not found. Please provide the path to the model output.");
+            }
+
+            llmResponse = ((String) JsonPath.read(dataAsMap, allParams.get(LLM_RESPONSE_FILTER))).trim();
+        }
+
+        return llmResponse;
     }
 
 }

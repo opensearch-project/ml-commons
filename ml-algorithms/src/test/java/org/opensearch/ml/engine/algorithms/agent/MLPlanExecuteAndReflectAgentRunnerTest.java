@@ -347,7 +347,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             .build();
     }
 
-    private List<Interaction> generateInteractions() {
+    public static List<Interaction> generateInteractions() {
         return Arrays
             .asList(
                 Interaction.builder().id("interaction-1").input("input-1").response("response-1").build(),
