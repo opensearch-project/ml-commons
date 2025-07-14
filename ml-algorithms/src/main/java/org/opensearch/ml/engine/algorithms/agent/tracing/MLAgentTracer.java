@@ -192,6 +192,25 @@ public class MLAgentTracer extends AbstractMLTracer {
     }
 
     /**
+     * Starts a new span for agent tracing with the specified name and attributes, and no parent span.
+     * <p>
+     * This is a convenience overload for starting a root span. It is equivalent to calling
+     * {@link #startSpan(String, Map, Span)} with {@code parentSpan} set to {@code null}.
+     * <p>
+     * The returned span should be passed to {@link #endSpan(Span)} when the operation completes.
+     *
+     * @param name The name of the span. Should follow the naming convention defined by
+     *             the span constants (e.g., AGENT_TASK_SPAN, AGENT_TOOL_CALL_SPAN).
+     * @param attributes A map of key-value pairs to associate with the span. These
+     *                  provide additional context about the operation being traced.
+     *                  May be null or empty if no attributes are needed.
+     * @return A Span object representing the started root span, or null if tracing is disabled.
+     */
+    public Span startSpan(String name, Map<String, String> attributes) {
+        return startSpan(name, attributes, null);
+    }
+
+    /**
      * Ends the given span.
      * 
      * This method marks the completion of a span and finalizes its timing information.
