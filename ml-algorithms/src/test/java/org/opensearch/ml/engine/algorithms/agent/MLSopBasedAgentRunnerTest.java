@@ -1,6 +1,24 @@
 package org.opensearch.ml.engine.algorithms.agent;
 
-import com.google.common.collect.ImmutableMap;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.LLM_INTERFACE;
+import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunnerTest.generateInteractions;
+import static org.opensearch.ml.engine.algorithms.agent.MLSopBasedAgentRunner.SOP_FIELD;
+
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -37,23 +55,7 @@ import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.transport.client.Client;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunnerTest.generateInteractions;
-import static org.opensearch.ml.engine.algorithms.agent.MLSopBasedAgentRunner.SOP_FIELD;
+import com.google.common.collect.ImmutableMap;
 
 public class MLSopBasedAgentRunnerTest extends MLStaticMockBase {
     public static final String FIRST_TOOL = "firstTool";
@@ -147,14 +149,14 @@ public class MLSopBasedAgentRunnerTest extends MLStaticMockBase {
         }).when(conversationIndexMemory).save(any(), any(), any(), any(), any());
 
         mlSopBasedAgentRunner = new MLSopBasedAgentRunner(
-                client,
-                settings,
-                clusterService,
-                xContentRegistry,
-                toolFactories,
-                memoryMap,
-                sdkClient,
-                encryptor
+            client,
+            settings,
+            clusterService,
+            xContentRegistry,
+            toolFactories,
+            memoryMap,
+            sdkClient,
+            encryptor
         );
 
         // Setup tools
@@ -176,9 +178,19 @@ public class MLSopBasedAgentRunnerTest extends MLStaticMockBase {
         doAnswer(invocation -> {
             ActionListener<Object> listener = invocation.getArgument(2);
             ModelTensor modelTensor = ModelTensor
-                    .builder()
-                    .dataAsMap(ImmutableMap.of("content", List.of(Map.of("text", "the step decision <next_option> 1 </next_option>"))))
-                    .build();
+                .builder()
+                .dataAsMap(
+                    ImmutableMap
+                        .of(
+                            "output",
+                            Map
+                                .of(
+                                    "message",
+                                    Map.of("content", List.of(Map.of("text", "the step decision <next_option> 1 </next_option>")))
+                                )
+                        )
+                )
+                .build();
             ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
             ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
             when(mlTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
@@ -189,31 +201,26 @@ public class MLSopBasedAgentRunnerTest extends MLStaticMockBase {
         // Setup tool execution response
         doAnswer(invocation -> {
             ActionListener<Object> listener = invocation.getArgument(2);
-            ModelTensor memoryIdTensor = ModelTensor
-                    .builder()
-                    .name(MLAgentExecutor.MEMORY_ID)
-                    .result("test_executor_memory_id")
-                    .build();
+            ModelTensor memoryIdTensor = ModelTensor.builder().name(MLAgentExecutor.MEMORY_ID).result("test_executor_memory_id").build();
             ModelTensor parentIdTensor = ModelTensor
-                    .builder()
-                    .name(MLAgentExecutor.PARENT_INTERACTION_ID)
-                    .result("test_executor_parent_id")
-                    .build();
+                .builder()
+                .name(MLAgentExecutor.PARENT_INTERACTION_ID)
+                .result("test_executor_parent_id")
+                .build();
             ModelTensor responseTensor = ModelTensor
-                    .builder()
-                    .name("response")
-                    .dataAsMap(ImmutableMap.of("response", "tool execution result"))
-                    .build();
+                .builder()
+                .name("response")
+                .dataAsMap(ImmutableMap.of("response", "tool execution result"))
+                .build();
             ModelTensors modelTensors = ModelTensors
-                    .builder()
-                    .mlModelTensors(Arrays.asList(memoryIdTensor, parentIdTensor, responseTensor))
-                    .build();
+                .builder()
+                .mlModelTensors(Arrays.asList(memoryIdTensor, parentIdTensor, responseTensor))
+                .build();
             ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
             when(mlExecuteTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
             listener.onResponse(mlExecuteTaskResponse);
             return null;
         }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(MLExecuteTaskRequest.class), any());
-
 
         // Setup memory manager update response
         doAnswer(invocation -> {
@@ -226,7 +233,12 @@ public class MLSopBasedAgentRunnerTest extends MLStaticMockBase {
         Map<String, String> params = new HashMap<>();
         params.put("question", "test question");
         params.put(MLAgentExecutor.PARENT_INTERACTION_ID, "test_parent_interaction_id");
-        params.put(SOP_FIELD, "{\"entranceCondition\": null, \"currentStep\": \"demo_branch\", \"judgement\": \"demo_judge\", \"nextSteps\": [{\"entranceCondition\": \"next step 0\", \"currentStep\": \"end 0\", \"nextSteps\": []}, {\"entranceCondition\": \"next step 1\", \"currentStep\": \"end 1\", \"nextSteps\": []}]}");
+        params
+            .put(
+                SOP_FIELD,
+                "{\"entranceCondition\": null, \"currentStep\": \"demo_branch\", \"judgement\": \"demo_judge\", \"nextSteps\": [{\"entranceCondition\": \"next step 0\", \"currentStep\": \"end 0\", \"nextSteps\": []}, {\"entranceCondition\": \"next step 1\", \"currentStep\": \"end 1\", \"nextSteps\": []}]}"
+            );
+        params.put(LLM_INTERFACE, "bedrock/converse/claude");
         mlSopBasedAgentRunner.run(mlAgent, params, agentActionListener);
 
         // Verify the response
@@ -262,20 +274,20 @@ public class MLSopBasedAgentRunnerTest extends MLStaticMockBase {
     public MLAgent createMLAgentWithTools() {
         LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
         MLToolSpec firstToolSpec = MLToolSpec
-                .builder()
-                .name(FIRST_TOOL)
-                .type(FIRST_TOOL)
-                .parameters(ImmutableMap.of("key1", "value1", "key2", "value2"))
-                .build();
+            .builder()
+            .name(FIRST_TOOL)
+            .type(FIRST_TOOL)
+            .parameters(ImmutableMap.of("key1", "value1", "key2", "value2"))
+            .build();
 
         return MLAgent
-                .builder()
-                .name("TestAgent")
-                .type(MLAgentType.CONVERSATIONAL.name())
-                .tools(Arrays.asList(firstToolSpec))
-                .memory(mlMemorySpec)
-                .llm(llmSpec)
-                .parameters(Collections.emptyMap())
-                .build();
+            .builder()
+            .name("TestAgent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .tools(Arrays.asList(firstToolSpec))
+            .memory(mlMemorySpec)
+            .llm(llmSpec)
+            .parameters(Collections.emptyMap())
+            .build();
     }
 }

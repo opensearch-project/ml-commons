@@ -35,7 +35,6 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
-import com.jayway.jsonpath.JsonPath;
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
@@ -51,16 +50,13 @@ import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
 import org.opensearch.ml.common.input.remote.RemoteInferenceMLInput;
-import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
-import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
-import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.utils.SOP;
@@ -68,6 +64,7 @@ import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.jayway.jsonpath.JsonPath;
 
 import joptsimple.internal.Strings;
 import lombok.extern.log4j.Log4j2;
@@ -355,10 +352,7 @@ public class MLSopBasedAgentRunner implements MLAgentRunner {
 
             client.execute(MLPredictionTaskAction.INSTANCE, request, ActionListener.wrap(mlTaskResponse -> {
                 ModelTensorOutput modelTensorOutput = (ModelTensorOutput) mlTaskResponse.getOutput();
-                ModelTensors modelTensors = modelTensorOutput.getMlModelOutputs().get(0);
-                ModelTensor modelTensor = modelTensors.getMlModelTensors().get(0);
-                Map<String, Object> dataAsMap = (Map<String, Object>) modelTensor.getDataAsMap();
-                String finalResult = ((Map<Object, String>) ((List) dataAsMap.get("content")).get(0)).get("text");
+                String finalResult = parserModelOutput(allParams, modelTensorOutput);
                 saveAndReturnFinalResult(
                     (ConversationIndexMemory) memory,
                     parentInteractionId,
@@ -368,9 +362,7 @@ public class MLSopBasedAgentRunner implements MLAgentRunner {
                     null,
                     finalListener
                 );
-            }, e -> {
-                finalListener.onFailure(e);
-            }));
+            }, e -> { finalListener.onFailure(e); }));
 
             return;
         }
@@ -519,10 +511,7 @@ public class MLSopBasedAgentRunner implements MLAgentRunner {
 
         client.execute(MLPredictionTaskAction.INSTANCE, request, ActionListener.wrap(mlTaskResponse -> {
             ModelTensorOutput modelTensorOutput = (ModelTensorOutput) mlTaskResponse.getOutput();
-            ModelTensors modelTensors = modelTensorOutput.getMlModelOutputs().get(0);
-            ModelTensor modelTensor = modelTensors.getMlModelTensors().get(0);
-            Map<String, Object> dataAsMap = (Map<String, Object>) modelTensor.getDataAsMap();
-            String finalResult = ((Map<Object, String>) ((List) dataAsMap.get("content")).get(0)).get("text");
+            String finalResult = parserModelOutput(allParams, modelTensorOutput);
             saveTraceData(
                 (ConversationIndexMemory) memory,
                 memory.getType(),
@@ -555,7 +544,6 @@ public class MLSopBasedAgentRunner implements MLAgentRunner {
     }
 
     private String parserModelOutput(Map<String, String> allParams, ModelTensorOutput modelTensorOutput) {
-        Map<String, String> modelOutput = new HashMap<>();
         Map<String, ?> dataAsMap = modelTensorOutput.getMlModelOutputs().getFirst().getMlModelTensors().getFirst().getDataAsMap();
         String llmResponse;
         if (dataAsMap.size() == 1 && dataAsMap.containsKey(RESPONSE_FIELD)) {
@@ -570,5 +558,4 @@ public class MLSopBasedAgentRunner implements MLAgentRunner {
 
         return llmResponse;
     }
-
 }
