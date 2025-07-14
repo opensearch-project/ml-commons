@@ -85,7 +85,6 @@ import org.opensearch.ml.engine.tools.ToolUtils;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
-import org.opensearch.telemetry.tracing.Span;
 import org.opensearch.transport.client.Client;
 
 import com.google.gson.reflect.TypeToken;

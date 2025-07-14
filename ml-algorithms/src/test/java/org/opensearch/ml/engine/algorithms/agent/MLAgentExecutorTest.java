@@ -1078,8 +1078,4 @@ public class MLAgentExecutorTest {
         return new GetResponse(getResult);
     }
 
-    @Test
-    public void testSetAgentTracer() {
-        mlAgentExecutor.setAgentTracer(null);
-    }
 }

@@ -4,19 +4,13 @@
     "autosize": "fit",
   
     "signals": [
-      {
-        "name": "tooltip",
-        "value": null,
-        "on": [
-          {"events": "symbol:click", "update": "datum"},
-          {"events": "window:click", "update": "null"}
-        ]
-      },
+
       {
         "name": "clicked",
         "value": null,
         "on": [
-          {"events": "symbol:click", "update": "datum"}
+          {"events": "symbol:click", "update": "datum"},
+          {"events": "@closeButton:click", "update": "null"}
         ]
       },
       {
@@ -56,6 +50,23 @@
             "update": "ty + event.dy / zoom"
           }
         ]
+      },
+      {
+        "name": "showAll",
+        "value": false,
+        "on": [
+          {"events": "@showAllButton:click", "update": "!showAll"}
+        ]
+      },
+      {
+        "name": "expanded",
+        "value": [""],
+        "on": [
+          {
+            "events": {"type": "click", "marktype": "symbol"},
+            "update": "expanded + [datum.spanId]"
+          }
+        ]
       }
     ],
   
@@ -68,7 +79,7 @@
             "size": 10000,
             "query": {
               "term": {
-                "traceId": "a6fdee64202f8450bb646fb2ae4f0cf6"
+                "traceId": "<trace_id>"
               }
             }
           }
@@ -77,12 +88,19 @@
         "transform": [
           {"type": "formula", "expr": "datum._source.spanId", "as": "spanId"},
           {"type": "formula", "expr": "datum._source.parentSpanId", "as": "parentSpanId"},
-          {"type": "formula", "expr": "replace(datum._source.name, 'agent.', '')", "as": "name"}
+          {"type": "formula", "expr": "replace(datum._source.name, 'agent.', '')", "as": "name"},
           {"type": "formula", "expr": "datum._source.startTime", "as": "startTime"},
           {"type": "formula", "expr": "datum._source.durationInNanos / 1e9", "as": "durationSeconds"},
           {"type": "formula", "expr": "datum._source['span.attributes.gen_ai@agent@task']", "as": "agentTask"},
           {"type": "formula", "expr": "datum._source['span.attributes.gen_ai@agent@result']", "as": "agentResult"},
-          {"type": "formula", "expr": "datum._source.name == 'agent.task' ? '' : datum.parentSpanId", "as": "parentSpanId"},
+          {"type": "formula", "expr": "datum._source['span.attributes.gen_ai@tool@name'] || 'default'", "as": "toolName"},
+          {"type": "formula", "expr": "datum._source['span.attributes.gen_ai@agent@phase']", "as": "phase"},
+          {
+            "type": "formula",
+            "expr": "test(/^(plan|execute_step_|reflect_step_)/, datum.name) ? datum.phase : (test(/^tool_call_/, datum.name) ? datum.toolName : (test(/^llm_call/, datum.name) ? 'llm_call' : datum.name))",
+            "as": "colorKey"
+          },
+          {"type": "formula", "expr": "datum.name == 'task' ? '' : datum.parentSpanId", "as": "parentSpanId"},
           {
             "type": "collect",
             "sort": {
@@ -95,15 +113,21 @@
         ]
       },
       {
-        "name": "links",
+        "name": "visibleSpans",
         "source": "spans",
         "transform": [
+                  {
+          "type": "filter",
+          "expr": "showAll || datum.parentSpanId == '' || datum.depth <= 1 || indexof(expanded, datum.parentSpanId) >= 0"
+        }
+        ]
+      },
+      {
+        "name": "visibleLinks",
+        "source": "visibleSpans",
+        "transform": [
           {"type": "treelinks"},
-          {
-            "type": "linkpath",
-            "orient": "vertical",
-            "shape": "line"
-          }
+          {"type": "linkpath", "orient": "vertical", "shape": "line"}
         ]
       }
     ],
@@ -112,7 +136,7 @@
       {
         "name": "color",
         "type": "ordinal",
-        "domain": {"data": "spans", "field": "name"},
+        "domain": {"data": "spans", "field": "colorKey"},
         "range": {"scheme": "category20"}
       }
     ],
@@ -131,7 +155,7 @@
         "marks": [
           {
             "type": "path",
-            "from": {"data": "links"},
+            "from": {"data": "visibleLinks"},
             "encode": {
               "update": {
                 "path": {"field": "path"},
@@ -146,23 +170,7 @@
           },
           {
             "type": "symbol",
-            "from": {"data": "links"},
-            "encode": {
-              "enter": {
-                "shape": {"value": "triangle"},
-                "size": {"value": 100},
-                "fill": {"value": "#ccc"}
-              },
-              "update": {
-                "x": {"signal": "(datum.target.x + tx) * zoom"},
-                "y": {"signal": "(datum.target.y + ty) * zoom"},
-                "angle": {"signal": "datum.source.y < datum.target.y ? 0 : 180"}
-              }
-            }
-          },
-          {
-            "type": "symbol",
-            "from": {"data": "spans"},
+            "from": {"data": "visibleSpans"},
             "encode": {
               "enter": {
                 "size": {"value": 1000},
@@ -171,7 +179,7 @@
               "update": {
                 "x": {"signal": "(datum.x + tx) * zoom"},
                 "y": {"signal": "(datum.y + ty) * zoom"},
-                "fill": {"scale": "color", "field": "name"},
+                "fill": {"scale": "color", "field": "colorKey"},
                 "stroke": {"value": "white"},
                 "strokeWidth": {"value": 1},
                 "zindex": {"value": 1}
@@ -185,7 +193,7 @@
           },
           {
             "type": "text",
-            "from": {"data": "spans"},
+            "from": {"data": "visibleSpans"},
             "encode": {
               "enter": {
                 "fontSize": {"value": 12},
@@ -204,6 +212,39 @@
         ]
       },
       {
+        "type": "rect",
+        "name": "showAllButton",
+        "encode": {
+          "enter": {
+            "x": {"value": 130},
+            "y": {"value": 5},
+            "width": {"value": 80},
+            "height": {"value": 30},
+            "fill": {"value": "#4CAF50"},
+            "cornerRadius": {"value": 5},
+            "cursor": {"value": "pointer"}
+          },
+          "update": {
+            "fill": {"signal": "showAll ? '#45a049' : '#4CAF50'"}
+          }
+        }
+      },
+      {
+        "type": "text",
+        "encode": {
+          "enter": {
+            "x": {"value": 170},
+            "y": {"value": 20},
+            "align": {"value": "center"},
+            "baseline": {"value": "middle"},
+            "fill": {"value": "white"},
+            "text": {"signal": "showAll ? 'Collapse' : 'Show All'"},
+            "fontSize": {"value": 14},
+            "fontWeight": {"value": "bold"}
+          }
+        }
+      },
+      {
         "type": "group",
         "encode": {
           "update": {
@@ -219,6 +260,49 @@
           }
         },
         "marks": [
+          {
+            "type": "rect",
+            "name": "closeButton",
+            "encode": {
+              "enter": {
+                "x": {"value": 535},
+                "y": {"value": 10},
+                "width": {"value": 20},
+                "height": {"value": 20},
+                "fill": {"value": "#f0f0f0"},
+                "stroke": {"value": "#ccc"},
+                "strokeWidth": {"value": 1},
+                "cursor": {"value": "pointer"}
+              },
+              "update": {
+                "opacity": {"signal": "clicked ? 1 : 0"}
+              },
+              "hover": {
+                "fill": {"value": "#e0e0e0"}
+              }
+            }
+          },
+          {
+            "type": "text",
+            "encode": {
+              "enter": {
+                "x": {"value": 545},
+                "y": {"value": 25},
+                "text": {"value": "✕"},
+                "fill": {"value": "#666"},
+                "fontSize": {"value": 14},
+                "fontWeight": {"value": "bold"},
+                "align": {"value": "center"},
+                "baseline": {"value": "middle"}
+              },
+              "update": {
+                "opacity": {"signal": "clicked ? 1 : 0"}
+              },
+              "hover": {
+                "fill": {"value": "#000"}
+              }
+            }
+          },
           {
             "type": "text",
             "encode": {
@@ -250,7 +334,7 @@
               "update": {
                 "x": {"value": 6},
                 "y": {"value": 50},
-                "text": {"signal": "clicked ? 'Start Time: ' + clicked.startTime : ''"},
+                "text": {"signal": "clicked ? 'Tool: ' + (clicked.toolName || 'N/A') : ''"},
                 "fill": {"value": "black"},
                 "fontSize": {"value": 12}
               }
@@ -262,7 +346,7 @@
               "update": {
                 "x": {"value": 6},
                 "y": {"value": 65},
-                "text": {"signal": "clicked ? 'Duration: ' + format(clicked.durationSeconds, '.3f') + ' seconds' : ''"},
+                "text": {"signal": "clicked ? 'Phase: ' + (clicked.phase || 'N/A') : ''"},
                 "fill": {"value": "black"},
                 "fontSize": {"value": 12}
               }
@@ -274,6 +358,30 @@
               "update": {
                 "x": {"value": 6},
                 "y": {"value": 80},
+                "text": {"signal": "clicked ? 'Start Time: ' + clicked.startTime : ''"},
+                "fill": {"value": "black"},
+                "fontSize": {"value": 12}
+              }
+            }
+          },
+          {
+            "type": "text",
+            "encode": {
+              "update": {
+                "x": {"value": 6},
+                "y": {"value": 95},
+                "text": {"signal": "clicked ? 'Duration: ' + format(clicked.durationSeconds, '.3f') + ' seconds' : ''"},
+                "fill": {"value": "black"},
+                "fontSize": {"value": 12}
+              }
+            }
+          },
+          {
+            "type": "text",
+            "encode": {
+              "update": {
+                "x": {"value": 6},
+                "y": {"value": 110},
                 "text": {"value": "Input:"},
                 "fill": {"value": "black"},
                 "fontSize": {"value": 12},
@@ -286,8 +394,8 @@
             "encode": {
               "update": {
                 "x": {"value": 6},
-                "y": {"value": 95},
-                "width": {"value": 580},
+                "y": {"value": 125},
+                "width": {"value": 540},
                 "text": {"signal": "clicked && clicked.agentTask ? substring(clicked.agentTask, 0, 100) : 'N/A'"},
                 "fill": {"value": "black"},
                 "fontSize": {"value": 12},
@@ -300,35 +408,7 @@
             "encode": {
               "update": {
                 "x": {"value": 6},
-                "y": {"value": 110},
-                "width": {"value": 580},
-                "text": {"signal": "clicked && clicked.agentTask && length(clicked.agentTask) > 100 ? substring(clicked.agentTask, 100, 200) : ''"},
-                "fill": {"value": "black"},
-                "fontSize": {"value": 12},
-                "lineBreak": {"value": true}
-              }
-            }
-          },
-          {
-            "type": "text",
-            "encode": {
-              "update": {
-                "x": {"value": 6},
-                "y": {"value": 125},
-                "width": {"value": 580},
-                "text": {"signal": "clicked && clicked.agentTask && length(clicked.agentTask) > 200 ? substring(clicked.agentTask, 200, 300) : ''"},
-                "fill": {"value": "black"},
-                "fontSize": {"value": 12},
-                "lineBreak": {"value": true}
-              }
-            }
-          },
-          {
-            "type": "text",
-            "encode": {
-              "update": {
-                "x": {"value": 6},
-                "y": {"value": 140},
+                "y": {"value": 155},
                 "text": {"value": "Output:"},
                 "fill": {"value": "black"},
                 "fontSize": {"value": 12},
@@ -341,37 +421,9 @@
             "encode": {
               "update": {
                 "x": {"value": 6},
-                "y": {"value": 155},
-                "width": {"value": 580},
-                "text": {"signal": "clicked && clicked.agentResult ? substring(clicked.agentResult, 0, 100) : 'N/A'"},
-                "fill": {"value": "black"},
-                "fontSize": {"value": 12},
-                "lineBreak": {"value": true}
-              }
-            }
-          },
-          {
-            "type": "text",
-            "encode": {
-              "update": {
-                "x": {"value": 6},
                 "y": {"value": 170},
-                "width": {"value": 580},
-                "text": {"signal": "clicked && clicked.agentResult && length(clicked.agentResult) > 100 ? substring(clicked.agentResult, 100, 200) : ''"},
-                "fill": {"value": "black"},
-                "fontSize": {"value": 12},
-                "lineBreak": {"value": true}
-              }
-            }
-          },
-          {
-            "type": "text",
-            "encode": {
-              "update": {
-                "x": {"value": 6},
-                "y": {"value": 185},
-                "width": {"value": 580},
-                "text": {"signal": "clicked && clicked.agentResult && length(clicked.agentResult) > 200 ? substring(clicked.agentResult, 200, 300) : ''"},
+                "width": {"value": 540},
+                "text": {"signal": "clicked && clicked.agentResult ? substring(clicked.agentResult, 0, 100) : 'N/A'"},
                 "fill": {"value": "black"},
                 "fontSize": {"value": 12},
                 "lineBreak": {"value": true}
@@ -397,4 +449,3 @@
       }
     ]
   }
-  

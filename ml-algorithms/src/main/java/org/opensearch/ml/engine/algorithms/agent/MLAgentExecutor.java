@@ -66,7 +66,6 @@ import org.opensearch.ml.common.settings.SettingsChangeListener;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.Executable;
-import org.opensearch.ml.engine.algorithms.agent.tracing.MLAgentTracer;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
@@ -550,8 +549,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     toolFactories,
                     memoryFactoryMap,
                     sdkClient,
-                    encryptor,
-                    agentTracer != null ? agentTracer.getTracer() : null
+                    encryptor
                 );
             case PLAN_EXECUTE_AND_REFLECT:
                 return new MLPlanExecuteAndReflectAgentRunner(
@@ -562,8 +560,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                     toolFactories,
                     memoryFactoryMap,
                     sdkClient,
-                    encryptor,
-                    agentTracer != null ? agentTracer.getTracer() : null
+                    encryptor
                 );
             default:
                 throw new IllegalArgumentException("Unsupported agent type: " + mlAgent.getType());
@@ -621,9 +618,5 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             log.error("Failed to create ML task for {}, {}", mlTask.getFunctionName(), mlTask.getTaskType(), e);
             listener.onFailure(e);
         }
-    }
-
-    public void setAgentTracer(MLAgentTracer agentTracer) {
-        this.agentTracer = agentTracer;
     }
 }
