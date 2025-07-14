@@ -25,7 +25,6 @@ import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.Output;
-import org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 
 import lombok.Getter;
@@ -193,10 +192,6 @@ public class MLEngine {
             }
             executable.execute(input, listener);
         }
-    }
-
-    public MLAgentExecutor getAgentExecutor() {
-        return MLEngineClassLoader.initInstance(FunctionName.AGENT, null, Input.class);
     }
 
     private void validateMLInput(Input input) {

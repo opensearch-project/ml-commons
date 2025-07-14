@@ -50,6 +50,26 @@ public class MLAgentTracer extends AbstractMLTracer {
     public static final String AGENT_TASK_CONV_FLOW_SPAN = "agent.task_convflow";
     public static final String AGENT_TASK_FLOW_SPAN = "agent.task_flow";
 
+    public static final String ATTR_RESULT = "gen_ai.agent.result";
+    public static final String ATTR_TASK = "gen_ai.agent.task";
+    public static final String ATTR_PHASE = "gen_ai.agent.phase";
+    public static final String ATTR_STEP_NUMBER = "gen_ai.agent.step.number";
+    public static final String ATTR_NAME = "gen_ai.agent.name";
+    public static final String ATTR_LATENCY = "gen_ai.agent.latency";
+    public static final String ATTR_LLM_START = "llm.start_time";
+
+    public static final String AGENT_TASK_SPAN = "agent.task";
+    public static final String AGENT_CONV_TASK_SPAN = "agent.conv_task";
+    public static final String AGENT_LLM_CALL_SPAN = "agent.llm_call";
+    public static final String AGENT_TOOL_CALL_SPAN = "agent.tool_call";
+    public static final String AGENT_PLAN_SPAN = "agent.plan";
+    public static final String AGENT_EXECUTE_STEP_SPAN = "agent.execute_step";
+    public static final String AGENT_REFLECT_STEP_SPAN = "agent.reflect_step";
+    public static final String AGENT_TASK_PER_SPAN = "agent.task_per";
+    public static final String AGENT_TASK_CONV_SPAN = "agent.task_conv";
+    public static final String AGENT_TASK_CONV_FLOW_SPAN = "agent.task_convflow";
+    public static final String AGENT_TASK_FLOW_SPAN = "agent.task_flow";
+
     private static MLAgentTracer instance;
 
     /**

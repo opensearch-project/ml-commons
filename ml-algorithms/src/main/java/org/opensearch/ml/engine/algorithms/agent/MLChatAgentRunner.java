@@ -82,14 +82,15 @@ import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.ml.repackage.com.google.common.collect.Lists;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.telemetry.tracing.Span;
-import org.opensearch.telemetry.tracing.Tracer;
 import org.opensearch.transport.client.Client;
 
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 @Data
+@NoArgsConstructor
 public class MLChatAgentRunner implements MLAgentRunner {
 
     public static final String SESSION_ID = "session_id";
@@ -129,8 +130,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
     private Map<String, Memory.Factory> memoryFactoryMap;
     private SdkClient sdkClient;
     private Encryptor encryptor;
-    private final Tracer tracer;
-    private final MLAgentTracer agentTracer;
 
     public MLChatAgentRunner(
         Client client,
@@ -140,8 +139,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         Map<String, Tool.Factory> toolFactories,
         Map<String, Memory.Factory> memoryFactoryMap,
         SdkClient sdkClient,
-        Encryptor encryptor,
-        Tracer tracer
+        Encryptor encryptor
     ) {
         this.client = client;
         this.settings = settings;
@@ -151,15 +149,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
         this.memoryFactoryMap = memoryFactoryMap;
         this.sdkClient = sdkClient;
         this.encryptor = encryptor;
-        this.tracer = tracer;
-        this.agentTracer = org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_TRACING_ENABLED.get(settings)
-            ? MLAgentTracer.getInstance()
-            : null;
-        log
-            .info(
-                "MLChatAgentRunner initialized with tracer type: {}",
-                this.tracer != null ? this.tracer.getClass().getSimpleName() : "null"
-            );
     }
 
     @Override
@@ -167,15 +156,15 @@ public class MLChatAgentRunner implements MLAgentRunner {
         // Check if conversational is run independently or through another agent
         boolean hasParentSpanContext = inputParams.containsKey("traceparent");
         final Span agentTaskSpan;
-        if (hasParentSpanContext && agentTracer != null) {
+        if (hasParentSpanContext) {
             Map<String, String> agentAttributes = AgentUtils
                 .createAgentTaskAttributes(mlAgent.getName(), inputParams.get(MLAgentExecutor.QUESTION));
-            Span parentSpan = agentTracer.extractSpanContext(inputParams);
-            agentTaskSpan = agentTracer.startSpan("agent.conv_task", agentAttributes, parentSpan);
+            Span parentSpan = MLAgentTracer.getInstance().extractSpanContext(inputParams);
+            agentTaskSpan = MLAgentTracer.getInstance().startSpan(MLAgentTracer.AGENT_CONV_TASK_SPAN, agentAttributes, parentSpan);
         } else {
             Map<String, String> agentAttributes = AgentUtils
                 .createAgentTaskAttributes(mlAgent.getName(), inputParams.get(MLAgentExecutor.QUESTION));
-            agentTaskSpan = agentTracer != null ? agentTracer.startSpan("agent.task", agentAttributes, null) : null;
+            agentTaskSpan = MLAgentTracer.getInstance().startSpan(MLAgentTracer.AGENT_TASK_CONV_SPAN, agentAttributes, null);
         }
 
         try {
@@ -266,39 +255,29 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     }
 
                     runAgent(mlAgent, params, ActionListener.wrap(result -> {
-                        if (agentTaskSpan != null) {
-                            agentTracer.endSpan(agentTaskSpan);
-                        }
+                        MLAgentTracer.getInstance().endSpan(agentTaskSpan);
                         listener.onResponse(result);
                     }, e -> {
-                        if (agentTaskSpan != null) {
-                            agentTaskSpan.setError(e);
-                            agentTracer.endSpan(agentTaskSpan);
-                        }
+                        agentTaskSpan.setError(e);
+                        MLAgentTracer.getInstance().endSpan(agentTaskSpan);
                         listener.onFailure(e);
                     }), memory, memory.getConversationId(), functionCalling);
                 }, e -> {
                     log.error("Failed to get chat history", e);
-                    if (agentTaskSpan != null) {
-                        agentTaskSpan.setError(e);
-                        agentTracer.endSpan(agentTaskSpan);
-                    }
+                    agentTaskSpan.setError(e);
+                    MLAgentTracer.getInstance().endSpan(agentTaskSpan);
                     listener.onFailure(e);
                 }), messageHistoryLimit);
             }, e -> {
                 log.error("Failed to create memory", e);
-                if (agentTaskSpan != null) {
-                    agentTaskSpan.setError(e);
-                    agentTracer.endSpan(agentTaskSpan);
-                }
+                agentTaskSpan.setError(e);
+                MLAgentTracer.getInstance().endSpan(agentTaskSpan);
                 listener.onFailure(e);
             }));
         } catch (Exception e) {
             log.error("Error in MLChatAgentRunner", e);
-            if (agentTaskSpan != null) {
-                agentTaskSpan.setError(e);
-                agentTracer.endSpan(agentTaskSpan);
-            }
+            agentTaskSpan.setError(e);
+            MLAgentTracer.getInstance().endSpan(agentTaskSpan);
             listener.onFailure(e);
         }
     }
