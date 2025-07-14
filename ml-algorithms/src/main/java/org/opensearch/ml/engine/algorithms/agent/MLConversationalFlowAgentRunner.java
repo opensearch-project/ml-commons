@@ -102,7 +102,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
     @Override
     public void run(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener) {
         Map<String, String> agentAttributes = AgentUtils.createAgentTaskAttributes(mlAgent.getName(), params.get(QUESTION));
-        Span agentTaskSpan = MLAgentTracer.getInstance().startSpan(MLAgentTracer.AGENT_TASK_CONV_FLOW_SPAN, agentAttributes, null);
+        Span agentTaskSpan = MLAgentTracer.getInstance().startSpan(MLAgentTracer.AGENT_TASK_CONV_FLOW_SPAN, agentAttributes);
 
         try {
             String appType = mlAgent.getAppType();
