@@ -14,7 +14,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters;
+import org.opensearch.ml.common.input.parameter.textembedding.SparseEmbeddingFormat;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.engine.algorithms.SentenceTransformerTranslator;
@@ -40,9 +40,9 @@ public class SparseEncodingTranslator extends SentenceTransformerTranslator {
     public Output processOutput(TranslatorContext ctx, NDList list) {
         Output output = new Output(200, "OK");
         Object embeddingFormatObject = ctx.getAttachment(SPARSE_EMBEDDING_FORMAT_FIELD);
-        AsymmetricTextEmbeddingParameters.SparseEmbeddingFormat embeddingFormat = embeddingFormatObject != null
-            ? AsymmetricTextEmbeddingParameters.SparseEmbeddingFormat.valueOf(embeddingFormatObject.toString())
-            : AsymmetricTextEmbeddingParameters.SparseEmbeddingFormat.LEXICAL;
+        SparseEmbeddingFormat embeddingFormat = embeddingFormatObject != null
+            ? SparseEmbeddingFormat.valueOf(embeddingFormatObject.toString())
+            : SparseEmbeddingFormat.WORD;
 
         List<ModelTensor> outputs = new ArrayList<>();
         for (NDArray ndArray : list) {
@@ -58,11 +58,11 @@ public class SparseEncodingTranslator extends SentenceTransformerTranslator {
         return output;
     }
 
-    private Object convertOutput(NDArray array, AsymmetricTextEmbeddingParameters.SparseEmbeddingFormat embeddingFormat) {
+    private Object convertOutput(NDArray array, SparseEmbeddingFormat embeddingFormat) {
         NDArray nonZeroIndices = array.nonzero().squeeze();
         long[] indices = nonZeroIndices.toLongArray();
 
-        if (embeddingFormat == AsymmetricTextEmbeddingParameters.SparseEmbeddingFormat.TOKEN_ID) {
+        if (embeddingFormat == SparseEmbeddingFormat.TOKEN_ID) {
             // Return token_id format: {"123": 1.1, "456": 2.2}
             Map<String, Float> tokenIdWeights = new HashMap<>();
 
@@ -72,7 +72,7 @@ public class SparseEncodingTranslator extends SentenceTransformerTranslator {
 
             return tokenIdWeights;
         } else {
-            // Return lexical format: {"token": weight, ...}
+            // Return word format: {"token": weight, ...}
             Map<String, Float> tokenWeights = new HashMap<>();
             for (long index : indices) {
                 String token = this.tokenizer.decode(new long[] { index }, true);

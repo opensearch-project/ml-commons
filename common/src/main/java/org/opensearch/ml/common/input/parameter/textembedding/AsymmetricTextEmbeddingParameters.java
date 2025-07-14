@@ -45,11 +45,6 @@ public class AsymmetricTextEmbeddingParameters implements MLAlgoParams {
         PASSAGE
     }
 
-    public enum SparseEmbeddingFormat {
-        LEXICAL,
-        TOKEN_ID
-    }
-
     public static final String PARSE_FIELD_NAME = FunctionName.TEXT_EMBEDDING.name();
     public static final NamedXContentRegistry.Entry XCONTENT_REGISTRY = new NamedXContentRegistry.Entry(
         MLAlgoParams.class,
@@ -70,13 +65,13 @@ public class AsymmetricTextEmbeddingParameters implements MLAlgoParams {
     @Builder(toBuilder = true)
     public AsymmetricTextEmbeddingParameters(EmbeddingContentType embeddingContentType, SparseEmbeddingFormat sparseEmbeddingFormat) {
         this.embeddingContentType = embeddingContentType;
-        this.sparseEmbeddingFormat = sparseEmbeddingFormat != null ? sparseEmbeddingFormat : SparseEmbeddingFormat.LEXICAL;
+        this.sparseEmbeddingFormat = sparseEmbeddingFormat != null ? sparseEmbeddingFormat : SparseEmbeddingFormat.WORD;
     }
 
     // Constructor for backward compatibility
     public AsymmetricTextEmbeddingParameters(EmbeddingContentType embeddingContentType) {
         this.embeddingContentType = embeddingContentType;
-        this.sparseEmbeddingFormat = SparseEmbeddingFormat.LEXICAL;
+        this.sparseEmbeddingFormat = SparseEmbeddingFormat.WORD;
     }
 
     public AsymmetricTextEmbeddingParameters(StreamInput in) throws IOException {
@@ -85,9 +80,9 @@ public class AsymmetricTextEmbeddingParameters implements MLAlgoParams {
         this.embeddingContentType = contentType != null ? EmbeddingContentType.valueOf(contentType) : null;
         if (streamInputVersion.onOrAfter(Version.V_3_2_0)) {
             String formatName = in.readOptionalString();
-            this.sparseEmbeddingFormat = formatName != null ? SparseEmbeddingFormat.valueOf(formatName) : SparseEmbeddingFormat.LEXICAL;
+            this.sparseEmbeddingFormat = formatName != null ? SparseEmbeddingFormat.valueOf(formatName) : SparseEmbeddingFormat.WORD;
         } else {
-            this.sparseEmbeddingFormat = SparseEmbeddingFormat.LEXICAL;
+            this.sparseEmbeddingFormat = SparseEmbeddingFormat.WORD;
         }
     }
 

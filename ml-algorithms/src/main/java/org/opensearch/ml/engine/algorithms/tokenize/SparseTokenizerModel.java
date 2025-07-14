@@ -23,6 +23,7 @@ import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters;
+import org.opensearch.ml.common.input.parameter.textembedding.SparseEmbeddingFormat;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
@@ -70,8 +71,7 @@ public class SparseTokenizerModel extends DLModel {
 
         // Get the embedding format from parameters
         MLAlgoParams parameters = mlInput.getParameters();
-        AsymmetricTextEmbeddingParameters.SparseEmbeddingFormat sparseEmbeddingFormat =
-            AsymmetricTextEmbeddingParameters.SparseEmbeddingFormat.LEXICAL; // default
+        SparseEmbeddingFormat sparseEmbeddingFormat = SparseEmbeddingFormat.WORD; // default
 
         if (parameters instanceof AsymmetricTextEmbeddingParameters) {
             AsymmetricTextEmbeddingParameters sparseParams = (AsymmetricTextEmbeddingParameters) parameters;
@@ -93,7 +93,7 @@ public class SparseTokenizerModel extends DLModel {
                 if (token.isEmpty()) {
                     continue;
                 }
-                if (sparseEmbeddingFormat == AsymmetricTextEmbeddingParameters.SparseEmbeddingFormat.TOKEN_ID) {
+                if (sparseEmbeddingFormat == SparseEmbeddingFormat.TOKEN_ID) {
                     tokenWeights.put(String.valueOf(uniqueIndices[i]), idf.getOrDefault(token, 1.0f));
                 } else {
                     tokenWeights.put(token, idf.getOrDefault(token, 1.0f));

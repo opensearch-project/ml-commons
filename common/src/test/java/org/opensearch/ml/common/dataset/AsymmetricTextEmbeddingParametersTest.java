@@ -19,7 +19,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.TestHelper;
 import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters;
 import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters.EmbeddingContentType;
-import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters.SparseEmbeddingFormat;
+import org.opensearch.ml.common.input.parameter.textembedding.SparseEmbeddingFormat;
 
 public class AsymmetricTextEmbeddingParametersTest {
 
@@ -82,7 +82,7 @@ public class AsymmetricTextEmbeddingParametersTest {
         AsymmetricTextEmbeddingParameters params = AsymmetricTextEmbeddingParameters
             .builder()
             .embeddingContentType(EmbeddingContentType.QUERY)
-            .sparseEmbeddingFormat(SparseEmbeddingFormat.LEXICAL)
+            .sparseEmbeddingFormat(SparseEmbeddingFormat.WORD)
             .build();
         TestHelper.testParse(params, function);
     }
@@ -110,9 +110,7 @@ public class AsymmetricTextEmbeddingParametersTest {
     public void parse_AsymmetricTextEmbeddingParameters_SparseEmbeddingFormat_Invalid() throws IOException {
         exceptionRule.expect(IllegalArgumentException.class);
         exceptionRule
-            .expectMessage(
-                "No enum constant org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters.SparseEmbeddingFormat.INVALID"
-            );
+            .expectMessage("No enum constant org.opensearch.ml.common.input.parameter.textembedding.SparseEmbeddingFormat.INVALID");
         String jsonWithInvalidFormat = "{\"content_type\": \"QUERY\", \"sparse_embedding_format\": \"INVALID\"}";
         testParseFromString(params, jsonWithInvalidFormat, function);
     }
@@ -121,7 +119,7 @@ public class AsymmetricTextEmbeddingParametersTest {
     public void constructor_BackwardCompatibility() {
         AsymmetricTextEmbeddingParameters params = new AsymmetricTextEmbeddingParameters(EmbeddingContentType.QUERY);
         assertEquals(EmbeddingContentType.QUERY, params.getEmbeddingContentType());
-        assertEquals(SparseEmbeddingFormat.LEXICAL, params.getSparseEmbeddingFormat());
+        assertEquals(SparseEmbeddingFormat.WORD, params.getSparseEmbeddingFormat());
     }
 
     @Test
@@ -138,7 +136,7 @@ public class AsymmetricTextEmbeddingParametersTest {
     public void constructor_WithNullSparseEmbeddingFormat_DefaultsToLexical() {
         AsymmetricTextEmbeddingParameters params = new AsymmetricTextEmbeddingParameters(EmbeddingContentType.QUERY, null);
         assertEquals(EmbeddingContentType.QUERY, params.getEmbeddingContentType());
-        assertEquals(SparseEmbeddingFormat.LEXICAL, params.getSparseEmbeddingFormat());
+        assertEquals(SparseEmbeddingFormat.WORD, params.getSparseEmbeddingFormat());
     }
 
     @Test
@@ -184,7 +182,7 @@ public class AsymmetricTextEmbeddingParametersTest {
         AsymmetricTextEmbeddingParameters parsedParams = new AsymmetricTextEmbeddingParameters(streamInput);
 
         assertEquals(EmbeddingContentType.QUERY, parsedParams.getEmbeddingContentType());
-        assertEquals(SparseEmbeddingFormat.LEXICAL, parsedParams.getSparseEmbeddingFormat());
+        assertEquals(SparseEmbeddingFormat.WORD, parsedParams.getSparseEmbeddingFormat());
     }
 
     @Test

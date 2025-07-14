@@ -31,7 +31,7 @@ import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters;
-import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters.SparseEmbeddingFormat;
+import org.opensearch.ml.common.input.parameter.textembedding.SparseEmbeddingFormat;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.output.model.ModelResultFilter;
@@ -190,14 +190,14 @@ public class TextEmbeddingSparseEncodingModelTest {
         textEmbeddingSparseEncodingModel.close();
     }
 
-    // Test AsymmetricTextEmbeddingParameters with LEXICAL format
+    // Test AsymmetricTextEmbeddingParameters with WORD format
     @Test
     public void initModel_predict_SparseEncoding_WithLexicalFormat() {
         textEmbeddingSparseEncodingModel.initModel(model, params, encryptor);
 
         AsymmetricTextEmbeddingParameters parameters = AsymmetricTextEmbeddingParameters
             .builder()
-            .sparseEmbeddingFormat(SparseEmbeddingFormat.LEXICAL)
+            .sparseEmbeddingFormat(SparseEmbeddingFormat.WORD)
             .build();
 
         MLInput mlInput = MLInput
@@ -307,7 +307,7 @@ public class TextEmbeddingSparseEncodingModelTest {
         AsymmetricTextEmbeddingParameters parameters = AsymmetricTextEmbeddingParameters
             .builder()
             .embeddingContentType(AsymmetricTextEmbeddingParameters.EmbeddingContentType.QUERY)
-            .sparseEmbeddingFormat(SparseEmbeddingFormat.LEXICAL)
+            .sparseEmbeddingFormat(SparseEmbeddingFormat.WORD)
             .build();
 
         // Test that isAsymmetricModel returns false even with AsymmetricTextEmbeddingParameters

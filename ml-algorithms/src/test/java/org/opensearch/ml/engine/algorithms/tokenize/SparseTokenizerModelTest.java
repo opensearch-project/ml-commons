@@ -28,7 +28,7 @@ import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.exception.MLException;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters;
-import org.opensearch.ml.common.input.parameter.textembedding.AsymmetricTextEmbeddingParameters.SparseEmbeddingFormat;
+import org.opensearch.ml.common.input.parameter.textembedding.SparseEmbeddingFormat;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
@@ -166,7 +166,7 @@ public class SparseTokenizerModelTest {
         }
     }
 
-    // Test default LEXICAL format (no parameters provided)
+    // Test default WORD format (no parameters provided)
     @Test
     public void initModel_predict_Tokenize_DefaultLexicalFormat() throws URISyntaxException, TranslateException {
         sparseTokenizerModel.initModel(model, params, encryptor);
@@ -176,7 +176,7 @@ public class SparseTokenizerModelTest {
         List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
         assertEquals(2, mlModelOutputs.size());
 
-        // Verify output format is LEXICAL (token strings as keys)
+        // Verify output format is WORD (token strings as keys)
         for (ModelTensors tensors : mlModelOutputs) {
             List<ModelTensor> mlModelTensors = tensors.getMlModelTensors();
             assertEquals(1, mlModelTensors.size());
@@ -192,14 +192,14 @@ public class SparseTokenizerModelTest {
         }
     }
 
-    // Test LEXICAL format with explicit parameter
+    // Test WORD format with explicit parameter
     @Test
     public void initModel_predict_Tokenize_WithLexicalFormat() throws URISyntaxException, TranslateException {
         sparseTokenizerModel.initModel(model, params, encryptor);
 
         AsymmetricTextEmbeddingParameters parameters = AsymmetricTextEmbeddingParameters
             .builder()
-            .sparseEmbeddingFormat(SparseEmbeddingFormat.LEXICAL)
+            .sparseEmbeddingFormat(SparseEmbeddingFormat.WORD)
             .build();
 
         MLInput mlInput = MLInput
@@ -214,7 +214,7 @@ public class SparseTokenizerModelTest {
         List<ModelTensors> mlModelOutputs = output.getMlModelOutputs();
         assertEquals(2, mlModelOutputs.size());
 
-        // Verify output format is LEXICAL
+        // Verify output format is WORD
         for (ModelTensors tensors : mlModelOutputs) {
             List<ModelTensor> mlModelTensors = tensors.getMlModelTensors();
             assertEquals(1, mlModelTensors.size());
@@ -225,7 +225,7 @@ public class SparseTokenizerModelTest {
 
             // Verify keys are token strings
             for (String key : result.keySet()) {
-                assertTrue("Key should be a token string for LEXICAL format", !isNumeric(key));
+                assertTrue("Key should be a token string for WORD format", !isNumeric(key));
             }
         }
     }
