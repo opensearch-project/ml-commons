@@ -48,6 +48,7 @@ import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.MLTaskResponse;
@@ -58,11 +59,13 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.utils.MLTaskUtils;
 import org.opensearch.ml.engine.MLStaticMockBase;
+import org.opensearch.ml.engine.algorithms.agent.tracing.MLAgentTracer;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.telemetry.tracing.noop.NoopTracer;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableMap;
@@ -126,6 +129,11 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
     @SuppressWarnings("unchecked")
     public void setup() {
         MockitoAnnotations.openMocks(this);
+        // Initialize MLAgentTracer with NoopTracer for tests
+        MLFeatureEnabledSetting mockFeatureSetting = mock(MLFeatureEnabledSetting.class);
+        when(mockFeatureSetting.isTracingEnabled()).thenReturn(false); // disables tracing, uses NoopTracer
+        MLAgentTracer.resetForTest();
+        MLAgentTracer.initialize(NoopTracer.INSTANCE, mockFeatureSetting);
         settings = Settings.builder().build();
         toolFactories = ImmutableMap.of(FIRST_TOOL, firstToolFactory, SECOND_TOOL, secondToolFactory);
 
