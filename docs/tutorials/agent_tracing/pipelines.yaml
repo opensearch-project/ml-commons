@@ -37,7 +37,7 @@ raw-trace-pipeline:
         insecure: true
         username: admin
         password: MyPassword123!
-        # index_type: trace-analytics-raw # To use default index mappings
+        # index_type: trace-analytics-raw # Uses default index mappings
         index_type: custom
         index: otel-v1-apm-span-agent
         template_file: ml_agent_trace.json
