@@ -234,6 +234,7 @@ import org.opensearch.ml.engine.MLEngine;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor;
+import org.opensearch.ml.engine.algorithms.agent.tracing.MLAgentTracer;
 import org.opensearch.ml.engine.algorithms.anomalylocalization.AnomalyLocalizerImpl;
 import org.opensearch.ml.engine.algorithms.metrics_correlation.MetricsCorrelation;
 import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
@@ -844,6 +845,8 @@ public class MachineLearningPlugin extends Plugin
         mcpToolsHelper = new McpToolsHelper(client, threadPool, toolFactoryWrapper);
         McpAsyncServerHolder.init(mlIndicesHandler, mcpToolsHelper);
 
+        MLAgentTracer.initialize(tracer, mlFeatureEnabledSetting, clusterService);
+
         return ImmutableList
             .of(
                 encryptor,
@@ -1220,7 +1223,9 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED,
                 MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_ENABLED,
                 MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_ENABLED,
-                MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED
+                MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_ENABLED,
+                MLCommonsSettings.ML_COMMONS_TRACING_ENABLED,
+                MLCommonsSettings.ML_COMMONS_AGENT_TRACING_ENABLED
             );
         return settings;
     }

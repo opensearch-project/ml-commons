@@ -368,4 +368,18 @@ public final class MLCommonsSettings {
         .boolSetting("plugins.ml_commons.agentic_memory_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
     public static final String ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE =
         "The Agentic Memory APIs are not enabled. To enable, please update the setting " + ML_COMMONS_AGENTIC_MEMORY_ENABLED.getKey();
+
+    // Feature flag for enabling telemetry tracer
+    // This setting is Final because it controls the core tracing infrastructure initialization.
+    // Once the tracer is initialized, changing this setting would require a node restart
+    // to properly reinitialize the tracing components.
+    public static final Setting<Boolean> ML_COMMONS_TRACING_ENABLED = Setting
+        .boolSetting("plugins.ml_commons.tracing_enabled", false, Setting.Property.NodeScope, Setting.Property.Final);
+
+    // Feature flag for enabling telemetry agent tracing
+    // This setting is Dynamic because agent tracing can be enabled/disabled at runtime
+    // without requiring a node restart. The MLAgentTracer singleton can be updated
+    // to switch between real tracer and NoopTracer based on this setting.
+    public static final Setting<Boolean> ML_COMMONS_AGENT_TRACING_ENABLED = Setting
+        .boolSetting("plugins.ml_commons.agent_tracing_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
 }
