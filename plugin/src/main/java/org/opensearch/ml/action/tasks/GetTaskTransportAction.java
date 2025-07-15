@@ -111,6 +111,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
     Client client;
     SdkClient sdkClient;
     NamedXContentRegistry xContentRegistry;
+    Settings settings;
 
     ClusterService clusterService;
     ScriptService scriptService;
@@ -164,6 +165,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         this.mlModelManager = mlModelManager;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         this.mlEngine = mlEngine;
+        this.settings = settings;
 
         remoteJobStatusFields = ML_COMMONS_REMOTE_JOB_STATUS_FIELD.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_REMOTE_JOB_STATUS_FIELD, it -> remoteJobStatusFields = it);
@@ -374,6 +376,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
                             model.getModelGroupId(),
                             client,
                             sdkClient,
+                            settings,
                             ActionListener.wrap(access -> {
                                 if (!access) {
                                     actionListener
