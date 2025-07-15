@@ -43,7 +43,9 @@ public class MLFeatureEnabledSettingTests {
                     MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED,
                     MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED,
                     MLCommonsSettings.ML_COMMONS_METRIC_COLLECTION_ENABLED,
-                    MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED
+                    MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_TRACING_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_AGENT_TRACING_ENABLED
                 )
         );
         when(mockClusterService.getClusterSettings()).thenReturn(mockClusterSettings);
@@ -65,6 +67,8 @@ public class MLFeatureEnabledSettingTests {
             .put("plugins.ml_commons.rag_pipeline_feature_enabled", true)
             .put("plugins.ml_commons.metrics_collection_enabled", true)
             .put("plugins.ml_commons.metrics_static_collection_enabled", true)
+            .put("plugins.ml_commons.tracing_enabled", true)
+            .put("plugins.ml_commons.agent_tracing_enabled", true)
             .build();
 
         MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
@@ -81,6 +85,8 @@ public class MLFeatureEnabledSettingTests {
         assertTrue(setting.isRagSearchPipelineEnabled());
         assertTrue(setting.isMetricCollectionEnabled());
         assertTrue(setting.isStaticMetricCollectionEnabled());
+        assertTrue(setting.isTracingEnabled());
+        assertTrue(setting.isAgentTracingEnabled());
     }
 
     @Test
@@ -99,6 +105,8 @@ public class MLFeatureEnabledSettingTests {
             .put("plugins.ml_commons.rag_pipeline_feature_enabled", false)
             .put("plugins.ml_commons.metrics_collection_enabled", false)
             .put("plugins.ml_commons.metrics_static_collection_enabled", false)
+            .put("plugins.ml_commons.tracing_enabled", false)
+            .put("plugins.ml_commons.agent_tracing_enabled", false)
             .build();
 
         MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
@@ -115,6 +123,8 @@ public class MLFeatureEnabledSettingTests {
         assertFalse(setting.isRagSearchPipelineEnabled());
         assertFalse(setting.isMetricCollectionEnabled());
         assertFalse(setting.isStaticMetricCollectionEnabled());
+        assertFalse(setting.isTracingEnabled());
+        assertFalse(setting.isAgentTracingEnabled());
     }
 
     @Test
