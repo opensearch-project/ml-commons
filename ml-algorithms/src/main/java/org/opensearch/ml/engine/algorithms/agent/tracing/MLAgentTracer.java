@@ -128,8 +128,24 @@ public class MLAgentTracer extends MLTracer {
         }
     }
 
+    public static final String ATTR_RESULT = "gen_ai.agent.result";
+    public static final String ATTR_TASK = "gen_ai.agent.task";
+    public static final String ATTR_PHASE = "gen_ai.agent.phase";
+    public static final String ATTR_STEP_NUMBER = "gen_ai.agent.step.number";
+    public static final String ATTR_NAME = "gen_ai.agent.name";
+    public static final String ATTR_LATENCY = "gen_ai.agent.latency";
+    public static final String ATTR_LLM_START = "llm.start_time";
+    public static final String ATTR_SERVICE_TYPE = "service.type";
+    public static final String ATTR_OPERATION_NAME = "gen_ai.operation.name";
+    public static final String ATTR_SYSTEM = "gen_ai.system";
+    public static final String ATTR_SYSTEM_MESSAGE = "gen_ai.system.message";
+    public static final String ATTR_TOOL_DESCRIPTION = "gen_ai.tool.description";
+    public static final String ATTR_TOOL_NAME = "gen_ai.tool.name";
+    public static final String ATTR_USAGE_INPUT_TOKENS = "gen_ai.usage.input_tokens";
+    public static final String ATTR_USAGE_OUTPUT_TOKENS = "gen_ai.usage.output_tokens";
+    public static final String ATTR_USAGE_TOTAL_TOKENS = "gen_ai.usage.total_tokens";
+
     private static MLAgentTracer instance;
-    private static boolean tracingFlagSet = false;
 
     /**
      * Private constructor for MLAgentTracer.

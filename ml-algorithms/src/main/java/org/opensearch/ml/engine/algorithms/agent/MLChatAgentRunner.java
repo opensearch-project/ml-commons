@@ -85,10 +85,12 @@ import org.opensearch.telemetry.tracing.Span;
 import org.opensearch.transport.client.Client;
 
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 @Data
+@NoArgsConstructor
 public class MLChatAgentRunner implements MLAgentRunner {
 
     public static final String SESSION_ID = "session_id";
@@ -162,7 +164,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         } else {
             Map<String, String> agentAttributes = AgentUtils
                 .createAgentTaskAttributes(mlAgent.getName(), inputParams.get(MLAgentExecutor.QUESTION));
-            agentTaskSpan = MLAgentTracer.getInstance().startSpan(MLAgentTracer.AGENT_TASK_SPAN, agentAttributes, null);
+            agentTaskSpan = MLAgentTracer.getInstance().startSpan(MLAgentTracer.AGENT_TASK_CONV_SPAN, agentAttributes, null);
         }
 
         try {
@@ -438,8 +440,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     AgentUtils.ToolCallExtractionResult llmResultInfo = AgentUtils.extractToolCallInfo(tmpModelTensorOutput, null);
 
                     ListenerWithSpan currentLlmListenerWithSpan = lastLlmListenerWithSpan.get();
-                    if (currentLlmListenerWithSpan != null
-                        && currentLlmListenerWithSpan.span != null) {
+                    if (currentLlmListenerWithSpan != null && currentLlmListenerWithSpan.span != null) {
                         Span currentLlmSpan = currentLlmListenerWithSpan.span;
                         AgentUtils
                             .updateSpanWithResultAttributes(
@@ -464,8 +465,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
                     if (finalAnswer != null) {
                         finalAnswer = finalAnswer.trim();
-                        if (currentLlmListenerWithSpan != null
-                            && currentLlmListenerWithSpan.span != null) {
+                        if (currentLlmListenerWithSpan != null && currentLlmListenerWithSpan.span != null) {
                             Span currentLlmSpan = currentLlmListenerWithSpan.span;
                             AgentUtils
                                 .updateSpanWithResultAttributes(
@@ -852,8 +852,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                 INTERACTIONS_PREFIX
                             )
                         );
-                    String errorResult = String
-                        .format("Failed to run the tool %s with the error message %s.", finalAction, e.getMessage());
+                    String errorResult = String.format("Failed to run the tool %s with the error message %s.", finalAction, e.getMessage());
                     AgentUtils.updateSpanWithResultAttributes(toolCallSpan, errorResult, null, null, null, null);
                     toolCallSpan.setError(e);
                     MLAgentTracer.getInstance().endSpan(toolCallSpan);

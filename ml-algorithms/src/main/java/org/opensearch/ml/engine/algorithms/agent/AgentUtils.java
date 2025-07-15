@@ -74,6 +74,7 @@ import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.MLEngineClassLoader;
+import org.opensearch.ml.engine.algorithms.agent.tracing.MLAgentTracer;
 import org.opensearch.ml.engine.algorithms.remote.McpConnectorExecutor;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.function_calling.FunctionCalling;
@@ -951,29 +952,29 @@ public class AgentUtils {
 
     public static Map<String, String> createAgentTaskAttributes(String agentName, String userTask) {
         Map<String, String> attributes = new HashMap<>();
-        attributes.put("service.type", "agent");
-        attributes.put("gen_ai.agent.name", agentName != null ? agentName : "");
-        attributes.put("gen_ai.agent.task", userTask != null ? userTask : "");
-        attributes.put("gen_ai.operation.name", "create_agent");
+        attributes.put(MLAgentTracer.ATTR_SERVICE_TYPE, "agent");
+        attributes.put(MLAgentTracer.ATTR_NAME, agentName != null ? agentName : "");
+        attributes.put(MLAgentTracer.ATTR_TASK, userTask != null ? userTask : "");
+        attributes.put(MLAgentTracer.ATTR_OPERATION_NAME, "create_agent");
         return attributes;
     }
 
     public static Map<String, String> createPlanAttributes(int stepNumber) {
         Map<String, String> attributes = new HashMap<>();
-        attributes.put("service.type", "agent");
-        attributes.put("gen_ai.agent.phase", "planner");
-        attributes.put("gen_ai.agent.step.number", String.valueOf(stepNumber));
-        attributes.put("gen_ai.operation.name", "create_agent");
+        attributes.put(MLAgentTracer.ATTR_SERVICE_TYPE, "agent");
+        attributes.put(MLAgentTracer.ATTR_PHASE, "planner");
+        attributes.put(MLAgentTracer.ATTR_STEP_NUMBER, String.valueOf(stepNumber));
+        attributes.put(MLAgentTracer.ATTR_OPERATION_NAME, "create_agent");
         // TODO: get LLM system and model
         return attributes;
     }
 
     public static Map<String, String> createExecuteStepAttributes(int stepNumber) {
         Map<String, String> attributes = new HashMap<>();
-        attributes.put("service.type", "agent");
-        attributes.put("gen_ai.agent.phase", "executor");
-        attributes.put("gen_ai.agent.step.number", String.valueOf(stepNumber));
-        attributes.put("gen_ai.operation.name", "invoke_agent");
+        attributes.put(MLAgentTracer.ATTR_SERVICE_TYPE, "agent");
+        attributes.put(MLAgentTracer.ATTR_PHASE, "executor");
+        attributes.put(MLAgentTracer.ATTR_STEP_NUMBER, String.valueOf(stepNumber));
+        attributes.put(MLAgentTracer.ATTR_OPERATION_NAME, "invoke_agent");
         return attributes;
     }
 
@@ -986,16 +987,16 @@ public class AgentUtils {
         Map<String, String> attributes = new HashMap<>();
 
         String provider = detectProviderFromParameters(parameters.get("_llm_interface"));
-        attributes.put("service.type", "agent");
-        attributes.put("gen_ai.system", provider);
+        attributes.put(MLAgentTracer.ATTR_SERVICE_TYPE, "agent");
+        attributes.put(MLAgentTracer.ATTR_SYSTEM, provider);
         // TODO: get actual request model
-        attributes.put("gen_ai.operation.name", "chat");
-        attributes.put("gen_ai.agent.task", parameters.get("prompt") != null ? parameters.get("prompt") : "");
-        attributes.put("gen_ai.agent.result", completion != null ? completion : "");
-        attributes.put("gen_ai.agent.latency", String.valueOf(latency));
-        attributes.put("gen_ai.agent.phase", "planner");
-        attributes.put("gen_ai.system.message", parameters.get("system_prompt") != null ? parameters.get("system_prompt") : "");
-        attributes.put("gen_ai.tool.description", parameters.get("tools_prompt") != null ? parameters.get("tools_prompt") : "");
+        attributes.put(MLAgentTracer.ATTR_OPERATION_NAME, "chat");
+        attributes.put(MLAgentTracer.ATTR_TASK, parameters.get("prompt") != null ? parameters.get("prompt") : "");
+        attributes.put(MLAgentTracer.ATTR_RESULT, completion != null ? completion : "");
+        attributes.put(MLAgentTracer.ATTR_LATENCY, String.valueOf(latency));
+        attributes.put(MLAgentTracer.ATTR_PHASE, "planner");
+        attributes.put(MLAgentTracer.ATTR_SYSTEM_MESSAGE, parameters.get("system_prompt") != null ? parameters.get("system_prompt") : "");
+        attributes.put(MLAgentTracer.ATTR_TOOL_DESCRIPTION, parameters.get("tools_prompt") != null ? parameters.get("tools_prompt") : "");
 
         if (modelTensorOutput != null
             && modelTensorOutput.getMlModelOutputs() != null
@@ -1017,18 +1018,18 @@ public class AgentUtils {
                                         // Bedrock/Claude format: input_tokens, output_tokens (or inputTokens, outputTokens)
                                         if (usage.containsKey("input_tokens")) {
                                             Object inputTokens = usage.get("input_tokens");
-                                            attributes.put("gen_ai.usage.input_tokens", inputTokens.toString());
+                                            attributes.put(MLAgentTracer.ATTR_USAGE_INPUT_TOKENS, inputTokens.toString());
                                         } else if (usage.containsKey("inputTokens")) {
                                             Object inputTokens = usage.get("inputTokens");
-                                            attributes.put("gen_ai.usage.input_tokens", inputTokens.toString());
+                                            attributes.put(MLAgentTracer.ATTR_USAGE_INPUT_TOKENS, inputTokens.toString());
                                         }
 
                                         if (usage.containsKey("output_tokens")) {
                                             Object outputTokens = usage.get("output_tokens");
-                                            attributes.put("gen_ai.usage.output_tokens", outputTokens.toString());
+                                            attributes.put(MLAgentTracer.ATTR_USAGE_OUTPUT_TOKENS, outputTokens.toString());
                                         } else if (usage.containsKey("outputTokens")) {
                                             Object outputTokens = usage.get("outputTokens");
-                                            attributes.put("gen_ai.usage.output_tokens", outputTokens.toString());
+                                            attributes.put(MLAgentTracer.ATTR_USAGE_OUTPUT_TOKENS, outputTokens.toString());
                                         }
 
                                         if ((usage.containsKey("input_tokens") || usage.containsKey("inputTokens"))
@@ -1049,23 +1050,23 @@ public class AgentUtils {
                                             }
 
                                             double totalTokens = inputTokens + outputTokens;
-                                            attributes.put("gen_ai.usage.total_tokens", String.valueOf((int) totalTokens));
+                                            attributes.put(MLAgentTracer.ATTR_USAGE_TOTAL_TOKENS, String.valueOf((int) totalTokens));
                                         }
                                     } else if ("openai".equalsIgnoreCase(provider)) {
                                         // OpenAI format: prompt_tokens, completion_tokens, total_tokens
                                         if (usage.containsKey("prompt_tokens")) {
                                             Object promptTokens = usage.get("prompt_tokens");
-                                            attributes.put("gen_ai.usage.input_tokens", promptTokens.toString());
+                                            attributes.put(MLAgentTracer.ATTR_USAGE_INPUT_TOKENS, promptTokens.toString());
                                         }
 
                                         if (usage.containsKey("completion_tokens")) {
                                             Object completionTokens = usage.get("completion_tokens");
-                                            attributes.put("gen_ai.usage.output_tokens", completionTokens.toString());
+                                            attributes.put(MLAgentTracer.ATTR_USAGE_OUTPUT_TOKENS, completionTokens.toString());
                                         }
 
                                         if (usage.containsKey("total_tokens")) {
                                             Object totalTokens = usage.get("total_tokens");
-                                            attributes.put("gen_ai.usage.total_tokens", totalTokens.toString());
+                                            attributes.put(MLAgentTracer.ATTR_USAGE_TOTAL_TOKENS, totalTokens.toString());
                                         }
                                     } else {
                                         // TODO: find general method for all providers
@@ -1131,13 +1132,13 @@ public class AgentUtils {
         String toolDescription
     ) {
         Map<String, String> attributes = new HashMap<>();
-        attributes.put("service.type", "agent");
-        attributes.put("gen_ai.operation.name", "execute_tool");
-        attributes.put("gen_ai.agent.task", actionInput != null ? actionInput : "");
-        attributes.put("gen_ai.agent.step.number", String.valueOf(stepNumber));
-        attributes.put("gen_ai.tool.name", toolName != null ? toolName : "");
+        attributes.put(MLAgentTracer.ATTR_SERVICE_TYPE, "agent");
+        attributes.put(MLAgentTracer.ATTR_OPERATION_NAME, "execute_tool");
+        attributes.put(MLAgentTracer.ATTR_TASK, actionInput != null ? actionInput : "");
+        attributes.put(MLAgentTracer.ATTR_STEP_NUMBER, String.valueOf(stepNumber));
+        attributes.put(MLAgentTracer.ATTR_TOOL_NAME, toolName != null ? toolName : "");
         if (toolDescription != null) {
-            attributes.put("gen_ai.tool.description", toolDescription);
+            attributes.put(MLAgentTracer.ATTR_TOOL_DESCRIPTION, toolDescription);
         }
         return attributes;
     }
@@ -1149,16 +1150,16 @@ public class AgentUtils {
         String llmInterface
     ) {
         Map<String, String> attributes = new HashMap<>();
-        attributes.put("service.type", "agent");
-        attributes.put("gen_ai.operation.name", "chat");
-        attributes.put("gen_ai.agent.task", question != null ? question : "");
-        attributes.put("gen_ai.agent.step.number", String.valueOf(stepNumber));
+        attributes.put(MLAgentTracer.ATTR_SERVICE_TYPE, "agent");
+        attributes.put(MLAgentTracer.ATTR_OPERATION_NAME, "chat");
+        attributes.put(MLAgentTracer.ATTR_TASK, question != null ? question : "");
+        attributes.put(MLAgentTracer.ATTR_STEP_NUMBER, String.valueOf(stepNumber));
         if (systemPrompt != null) {
-            attributes.put("gen_ai.system.message", systemPrompt);
+            attributes.put(MLAgentTracer.ATTR_SYSTEM_MESSAGE, systemPrompt);
         }
         if (llmInterface != null) {
             String provider = detectProviderFromParameters(llmInterface);
-            attributes.put("gen_ai.system", provider);
+            attributes.put(MLAgentTracer.ATTR_SYSTEM, provider);
         }
         return attributes;
     }
@@ -1285,19 +1286,19 @@ public class AgentUtils {
         if (span == null)
             return;
         if (result != null) {
-            span.addAttribute("gen_ai.agent.result", result);
+            span.addAttribute(MLAgentTracer.ATTR_RESULT, result);
         }
         if (inputTokens != null) {
-            span.addAttribute("gen_ai.usage.input_tokens", String.valueOf(inputTokens.intValue()));
+            span.addAttribute(MLAgentTracer.ATTR_USAGE_INPUT_TOKENS, String.valueOf(inputTokens.intValue()));
         }
         if (outputTokens != null) {
-            span.addAttribute("gen_ai.usage.output_tokens", String.valueOf(outputTokens.intValue()));
+            span.addAttribute(MLAgentTracer.ATTR_USAGE_OUTPUT_TOKENS, String.valueOf(outputTokens.intValue()));
         }
         if (totalTokens != null) {
-            span.addAttribute("gen_ai.usage.total_tokens", String.valueOf(totalTokens.intValue()));
+            span.addAttribute(MLAgentTracer.ATTR_USAGE_TOTAL_TOKENS, String.valueOf(totalTokens.intValue()));
         }
         if (latency != null) {
-            span.addAttribute("gen_ai.agent.latency", String.valueOf(latency.intValue()));
+            span.addAttribute(MLAgentTracer.ATTR_LATENCY, String.valueOf(latency.intValue()));
         }
     }
 }
