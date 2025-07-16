@@ -328,7 +328,7 @@ public class ConnectorUtils {
         try {
             uri = URI.create(endpoint);
             if (uri.getHost() == null) {
-                throw new IllegalArgumentException("Invalid URI: " + endpoint + ". Please check if the endpoint is valid.");
+                throw new IllegalArgumentException("Invalid URI" + ". Please check if the endpoint is valid from connector.");
             }
         } catch (Exception e) {
             throw new IllegalArgumentException(

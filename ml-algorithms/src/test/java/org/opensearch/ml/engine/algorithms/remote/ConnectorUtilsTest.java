@@ -439,7 +439,10 @@ public class ConnectorUtilsTest {
     @Test
     public void buildSdkRequest_InvalidEndpoint_ThrowException() {
         exceptionRule.expect(IllegalArgumentException.class);
-        exceptionRule.expectMessage("Encountered error when trying to create uri from endpoint in ml connector. Please update the endpoint in connection configuration:");
+        exceptionRule
+            .expectMessage(
+                "Encountered error when trying to create uri from endpoint in ml connector. Please update the endpoint in connection configuration:"
+            );
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(PREDICT)
