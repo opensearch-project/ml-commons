@@ -330,8 +330,11 @@ public class ConnectorUtils {
             if (uri.getHost() == null) {
                 throw new IllegalArgumentException("Invalid URI: " + endpoint + ". Please check if the endpoint is valid.");
             }
-        } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid URI: " + endpoint + ". Please check if the endpoint is valid.", e);
+        } catch (Exception e) {
+            throw new IllegalArgumentException(
+                "Encountered error when trying to create uri from endpoint in ml connector. Please update the endpoint in connection configuration: ",
+                e
+            );
         }
 
         SdkHttpFullRequest.Builder builder = SdkHttpFullRequest
