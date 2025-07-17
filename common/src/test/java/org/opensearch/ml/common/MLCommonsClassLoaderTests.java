@@ -40,6 +40,8 @@ import org.opensearch.ml.common.output.execute.metrics_correlation.MetricsCorrel
 import org.opensearch.ml.common.output.execute.samplecalculator.LocalSampleCalculatorOutput;
 import org.opensearch.search.SearchModule;
 
+import com.fasterxml.jackson.core.JsonParseException;
+
 public class MLCommonsClassLoaderTests {
 
     private SampleAlgoParams params;
@@ -183,7 +185,7 @@ public class MLCommonsClassLoaderTests {
     }
 
     @Test(expected = IllegalArgumentException.class)
-    public void testConnectorInitializationException() {
+    public void testConnectorInitializationException() throws JsonParseException {
         // Example initialization parameters for connectors
         String initParam1 = "parameter1";
 
