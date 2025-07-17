@@ -583,7 +583,6 @@ public class EncryptorImplTest {
         Encryptor encryptor = new EncryptorImpl(clusterService, client, sdkClient, mlIndicesHandler);
 
         // Old buggy code would try to access response.source().get(masterKeyId) and get null
-        // This test ensures the new fix works — we access MASTER_KEY properly
         String encrypted = encryptor.encrypt("test", TENANT_ID);
         Assert.assertNotNull(encrypted);
         Assert.assertEquals("test", encryptor.decrypt(encrypted, TENANT_ID));
