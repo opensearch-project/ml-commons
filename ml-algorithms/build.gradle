@@ -28,7 +28,9 @@ dependencies {
     implementation ("org.jetbrains.kotlin:kotlin-stdlib:${kotlin_version}")
     implementation group: 'org.apache.commons', name: 'commons-text', version: '1.10.0'
     implementation group: 'org.reflections', name: 'reflections', version: '0.9.12'
-    implementation group: 'org.tribuo', name: 'tribuo-clustering-kmeans', version: '4.3.2'
+    implementation (group: 'org.tribuo', name: 'tribuo-clustering-kmeans', version: '4.3.2') {
+        exclude group: "commons-beanutils", module: "commons-beanutils"
+    }
     implementation group: 'org.tribuo', name: 'tribuo-regression-sgd', version: '4.3.2'
     implementation group: 'org.tribuo', name: 'tribuo-anomaly-libsvm', version: '4.3.2'
     implementation group: 'org.tribuo', name: 'tribuo-classification-sgd', version: '4.3.2'
@@ -99,6 +101,7 @@ configurations.all {
     resolutionStrategy.force 'com.google.protobuf:protobuf-java:3.25.5'
     resolutionStrategy.force 'org.apache.commons:commons-compress:1.26.0'
     resolutionStrategy.force 'software.amazon.awssdk:bom:2.30.18'
+    resolutionStrategy.force 'commons-beanutils:commons-beanutils:1.11.0'
 }
 
 
