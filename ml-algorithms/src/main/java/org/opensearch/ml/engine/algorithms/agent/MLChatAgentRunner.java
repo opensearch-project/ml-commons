@@ -350,6 +350,10 @@ public class MLChatAgentRunner implements MLAgentRunner {
         // Trace number
         AtomicInteger traceNumber = new AtomicInteger(0);
 
+        AtomicReference<Double> aggInputTokens = new AtomicReference<>(0.0);
+        AtomicReference<Double> aggOutputTokens = new AtomicReference<>(0.0);
+        AtomicReference<Double> aggTotalTokens = new AtomicReference<>(0.0);
+
         class ListenerWithSpan {
             final StepListener<MLTaskResponse> listener;
             final Span span;
@@ -439,6 +443,22 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
                     AgentUtils.ToolCallExtractionResult llmResultInfo = AgentUtils.extractToolCallInfo(tmpModelTensorOutput, null);
 
+                    Double inputTokens = llmResultInfo.usage != null && llmResultInfo.usage.get("inputTokens") instanceof Number
+                        ? ((Number) llmResultInfo.usage.get("inputTokens")).doubleValue()
+                        : null;
+                    Double outputTokens = llmResultInfo.usage != null && llmResultInfo.usage.get("outputTokens") instanceof Number
+                        ? ((Number) llmResultInfo.usage.get("outputTokens")).doubleValue()
+                        : null;
+                    Double totalTokens = llmResultInfo.usage != null && llmResultInfo.usage.get("totalTokens") instanceof Number
+                        ? ((Number) llmResultInfo.usage.get("totalTokens")).doubleValue()
+                        : null;
+                    if (inputTokens != null)
+                        aggInputTokens.set(aggInputTokens.get() + inputTokens);
+                    if (outputTokens != null)
+                        aggOutputTokens.set(aggOutputTokens.get() + outputTokens);
+                    if (totalTokens != null)
+                        aggTotalTokens.set(aggTotalTokens.get() + totalTokens);
+
                     ListenerWithSpan currentLlmListenerWithSpan = lastLlmListenerWithSpan.get();
                     if (currentLlmListenerWithSpan != null && currentLlmListenerWithSpan.span != null) {
                         Span currentLlmSpan = currentLlmListenerWithSpan.span;
@@ -446,15 +466,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             .updateSpanWithResultAttributes(
                                 currentLlmSpan,
                                 (String) llmResultInfo.output,
-                                llmResultInfo.usage != null && llmResultInfo.usage.get("inputTokens") instanceof Number
-                                    ? ((Number) llmResultInfo.usage.get("inputTokens")).doubleValue()
-                                    : null,
-                                llmResultInfo.usage != null && llmResultInfo.usage.get("outputTokens") instanceof Number
-                                    ? ((Number) llmResultInfo.usage.get("outputTokens")).doubleValue()
-                                    : null,
-                                llmResultInfo.usage != null && llmResultInfo.usage.get("totalTokens") instanceof Number
-                                    ? ((Number) llmResultInfo.usage.get("totalTokens")).doubleValue()
-                                    : null,
+                                inputTokens,
+                                outputTokens,
+                                totalTokens,
                                 llmResultInfo.metrics != null && llmResultInfo.metrics.get("latencyMs") instanceof Number
                                     ? ((Number) llmResultInfo.metrics.get("latencyMs")).doubleValue()
                                     : null
@@ -471,15 +485,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                 .updateSpanWithResultAttributes(
                                     currentLlmSpan,
                                     (String) llmResultInfo.output,
-                                    llmResultInfo.usage != null && llmResultInfo.usage.get("inputTokens") instanceof Number
-                                        ? ((Number) llmResultInfo.usage.get("inputTokens")).doubleValue()
-                                        : null,
-                                    llmResultInfo.usage != null && llmResultInfo.usage.get("outputTokens") instanceof Number
-                                        ? ((Number) llmResultInfo.usage.get("outputTokens")).doubleValue()
-                                        : null,
-                                    llmResultInfo.usage != null && llmResultInfo.usage.get("totalTokens") instanceof Number
-                                        ? ((Number) llmResultInfo.usage.get("totalTokens")).doubleValue()
-                                        : null,
+                                    inputTokens,
+                                    outputTokens,
+                                    totalTokens,
                                     llmResultInfo.metrics != null && llmResultInfo.metrics.get("latencyMs") instanceof Number
                                         ? ((Number) llmResultInfo.metrics.get("latencyMs")).doubleValue()
                                         : null
@@ -487,6 +495,18 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             AgentUtils.updateSpanWithResultAttributes(agentTaskSpan, (String) llmResultInfo.output, null, null, null, null);
                             MLAgentTracer.getInstance().endSpan(currentLlmSpan);
                         }
+                        AgentUtils
+                            .updateSpanWithResultAttributes(
+                                agentTaskSpan,
+                                null,
+                                aggInputTokens.get(),
+                                aggOutputTokens.get(),
+                                aggTotalTokens.get(),
+                                null
+                            );
+                        additionalInfo.put("inputTokens", aggInputTokens.get());
+                        additionalInfo.put("outputTokens", aggOutputTokens.get());
+                        additionalInfo.put("totalTokens", aggTotalTokens.get());
                         sendFinalAnswer(
                             sessionId,
                             listener,
@@ -724,6 +744,15 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 }
             }, e -> {
                 log.error("Failed to run chat agent", e);
+                AgentUtils
+                    .updateSpanWithResultAttributes(
+                        agentTaskSpan,
+                        null,
+                        aggInputTokens.get(),
+                        aggOutputTokens.get(),
+                        aggTotalTokens.get(),
+                        null
+                    );
                 listener.onFailure(e);
             });
             if (i < maxIterations - 1) {
