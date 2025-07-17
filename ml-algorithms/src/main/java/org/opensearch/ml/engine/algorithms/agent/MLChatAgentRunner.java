@@ -70,7 +70,6 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.utils.StringUtils;
-import org.opensearch.ml.engine.algorithms.agent.tracing.MLAgentTracer;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.function_calling.FunctionCalling;
 import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
@@ -81,7 +80,6 @@ import org.opensearch.ml.engine.tools.MLModelTool;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.ml.repackage.com.google.common.collect.Lists;
 import org.opensearch.remote.metadata.client.SdkClient;
-import org.opensearch.telemetry.tracing.Span;
 import org.opensearch.transport.client.Client;
 
 import lombok.Data;
@@ -271,8 +269,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         ActionListener<Object> listener,
         Memory memory,
         String sessionId,
-        FunctionCalling functionCalling,
-        Span agentTaskSpan
+        FunctionCalling functionCalling
     ) {
         List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, params);
 
@@ -281,18 +278,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
             Map<String, Tool> tools = new HashMap<>();
             Map<String, MLToolSpec> toolSpecMap = new HashMap<>();
             createTools(toolFactories, params, allToolSpecs, tools, toolSpecMap, mlAgent);
-            runReAct(
-                mlAgent.getLlm(),
-                tools,
-                toolSpecMap,
-                params,
-                memory,
-                sessionId,
-                mlAgent.getTenantId(),
-                listener,
-                functionCalling,
-                agentTaskSpan
-            );
+            runReAct(mlAgent.getLlm(), tools, toolSpecMap, params, memory, sessionId, mlAgent.getTenantId(), listener, functionCalling);
         };
 
         // Fetch MCP tools and handle both success and failure cases
@@ -314,8 +300,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         String sessionId,
         String tenantId,
         ActionListener<Object> listener,
-        FunctionCalling functionCalling,
-        Span agentTaskSpan
+        FunctionCalling functionCalling
     ) {
         Map<String, String> tmpParameters = constructLLMParams(llm, parameters);
         String prompt = constructLLMPrompt(tools, tmpParameters);
@@ -681,8 +666,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         Map<String, String> toolParams,
         List<String> interactions,
         String toolCallId,
-        FunctionCalling functionCalling,
-        Span toolCallSpan
+        FunctionCalling functionCalling
     ) {
         if (tools.get(action).validate(toolParams)) {
             try {
@@ -696,7 +680,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         List<LLMMessage> llmMessages = functionCalling.supply(toolResults);
                         // TODO: support multiple tool calls at the same time so that multiple LLMMessages can be generated here
                         interactions.add(llmMessages.getFirst().getResponse());
-                        MLAgentTracer.getInstance().endSpan(toolCallSpan);
                     } else {
                         interactions
                             .add(
@@ -706,7 +689,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                     INTERACTIONS_PREFIX
                                 )
                             );
-                        MLAgentTracer.getInstance().endSpan(toolCallSpan);
                     }
                     nextStepListener.onResponse(r);
                 }, e -> {

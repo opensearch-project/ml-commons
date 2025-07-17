@@ -52,11 +52,14 @@ import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.engine.algorithms.agent.tracing.MLAgentTracer;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
+import org.opensearch.telemetry.tracing.Tracer;
 import org.opensearch.transport.client.Client;
 
 import software.amazon.awssdk.utils.ImmutableMap;
@@ -138,6 +141,11 @@ public class MLFlowAgentRunnerTest {
         when(secondTool.getName()).thenReturn(SECOND_TOOL);
         doAnswer(generateToolResponse(FIRST_TOOL_RESPONSE)).when(firstTool).run(anyMap(), nextStepListenerCaptor.capture());
         doAnswer(generateToolResponse(SECOND_TOOL_RESPONSE)).when(secondTool).run(anyMap(), nextStepListenerCaptor.capture());
+        MLFeatureEnabledSetting mockFeatureSetting = mock(MLFeatureEnabledSetting.class);
+        when(mockFeatureSetting.isTracingEnabled()).thenReturn(false);
+        Tracer mockTracer = mock(Tracer.class);
+        MLAgentTracer.resetForTest();
+        MLAgentTracer.initialize(mockTracer, mockFeatureSetting);
     }
 
     private Answer generateToolResponse(String response) {
