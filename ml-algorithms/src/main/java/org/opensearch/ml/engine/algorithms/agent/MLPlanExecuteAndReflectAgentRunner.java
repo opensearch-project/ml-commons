@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 import org.apache.commons.text.StringSubstitutor;
@@ -347,6 +348,10 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
                 AtomicInteger traceNumber = new AtomicInteger(0);
 
+                AtomicReference<Double> agentInputTokens = new AtomicReference<>(0.0);
+                AtomicReference<Double> agentOutputTokens = new AtomicReference<>(0.0);
+                AtomicReference<Double> agentTotalTokens = new AtomicReference<>(0.0);
+
                 executePlanningLoop(
                     mlAgent.getLlm(),
                     allParams,
@@ -364,7 +369,10 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         finalListener.onFailure(e);
                     }),
                     agentTaskSpan,
-                    null
+                    null,
+                    agentInputTokens,
+                    agentOutputTokens,
+                    agentTotalTokens
                 );
             };
 
@@ -394,7 +402,10 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         AtomicInteger traceNumber,
         ActionListener<Object> finalListener,
         Span agentTaskSpan,
-        Span planSpan
+        Span planSpan,
+        AtomicReference<Double> agentInputTokens,
+        AtomicReference<Double> agentOutputTokens,
+        AtomicReference<Double> agentTotalTokens
     ) {
         final Span finalPlanSpan = planSpan;
 
@@ -471,6 +482,26 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     Map<String, String> updatedLLMCallAttrs = AgentUtils
                         .createLLMCallAttributes(completion, llmLatency, modelTensorOutput, allParams);
 
+                    AtomicReference<Double> phaseInputTokens = new AtomicReference<>(0.0);
+                    AtomicReference<Double> phaseOutputTokens = new AtomicReference<>(0.0);
+                    AtomicReference<Double> phaseTotalTokens = new AtomicReference<>(0.0);
+                    AgentUtils.ToolCallExtractionResult planResultInfo = AgentUtils.extractToolCallInfo(modelTensorOutput, null);
+                    Double inputTokens = planResultInfo.usage != null && planResultInfo.usage.get("inputTokens") instanceof Number
+                        ? ((Number) planResultInfo.usage.get("inputTokens")).doubleValue()
+                        : null;
+                    Double outputTokens = planResultInfo.usage != null && planResultInfo.usage.get("outputTokens") instanceof Number
+                        ? ((Number) planResultInfo.usage.get("outputTokens")).doubleValue()
+                        : null;
+                    Double totalTokens = planResultInfo.usage != null && planResultInfo.usage.get("totalTokens") instanceof Number
+                        ? ((Number) planResultInfo.usage.get("totalTokens")).doubleValue()
+                        : null;
+                    if (inputTokens != null)
+                        phaseInputTokens.set(phaseInputTokens.get() + inputTokens);
+                    if (outputTokens != null)
+                        phaseOutputTokens.set(phaseOutputTokens.get() + outputTokens);
+                    if (totalTokens != null)
+                        phaseTotalTokens.set(phaseTotalTokens.get() + totalTokens);
+
                     for (Map.Entry<String, String> entry : updatedLLMCallAttrs.entrySet()) {
                         llmCallSpan.addAttribute(entry.getKey(), entry.getValue());
                     }
@@ -485,6 +516,33 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         planStepSpan
                             .addAttribute("gen_ai.agent.task", allParams.get(PROMPT_FIELD) != null ? allParams.get(PROMPT_FIELD) : "");
                         planStepSpan.addAttribute("gen_ai.agent.result", finalResult != null ? finalResult : "");
+
+                        AgentUtils
+                            .updateSpanWithResultAttributes(
+                                planStepSpan,
+                                null,
+                                phaseInputTokens.get(),
+                                phaseOutputTokens.get(),
+                                phaseTotalTokens.get(),
+                                null
+                            );
+                        agentInputTokens.set(agentInputTokens.get() + phaseInputTokens.get());
+                        agentOutputTokens.set(agentOutputTokens.get() + phaseOutputTokens.get());
+                        agentTotalTokens.set(agentTotalTokens.get() + phaseTotalTokens.get());
+                        AgentUtils
+                            .updateSpanWithResultAttributes(
+                                agentTaskSpan,
+                                null,
+                                agentInputTokens.get(),
+                                agentOutputTokens.get(),
+                                agentTotalTokens.get(),
+                                null
+                            );
+
+                        phaseInputTokens.set(0.0);
+                        phaseOutputTokens.set(0.0);
+                        phaseTotalTokens.set(0.0);
+
                         MLAgentTracer.getInstance().endSpan(planStepSpan);
                         saveAndReturnFinalResult(
                             (ConversationIndexMemory) memory,
@@ -527,6 +585,33 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         planStepSpan
                             .addAttribute("gen_ai.agent.task", allParams.get(PROMPT_FIELD) != null ? allParams.get(PROMPT_FIELD) : "");
                         planStepSpan.addAttribute("gen_ai.agent.result", completion);
+
+                        AgentUtils
+                            .updateSpanWithResultAttributes(
+                                planStepSpan,
+                                null,
+                                phaseInputTokens.get(),
+                                phaseOutputTokens.get(),
+                                phaseTotalTokens.get(),
+                                null
+                            );
+                        agentInputTokens.set(agentInputTokens.get() + phaseInputTokens.get());
+                        agentOutputTokens.set(agentOutputTokens.get() + phaseOutputTokens.get());
+                        agentTotalTokens.set(agentTotalTokens.get() + phaseTotalTokens.get());
+                        AgentUtils
+                            .updateSpanWithResultAttributes(
+                                agentTaskSpan,
+                                null,
+                                agentInputTokens.get(),
+                                agentOutputTokens.get(),
+                                agentTotalTokens.get(),
+                                null
+                            );
+
+                        phaseInputTokens.set(0.0);
+                        phaseOutputTokens.set(0.0);
+                        phaseTotalTokens.set(0.0);
+
                         MLAgentTracer.getInstance().endSpan(planStepSpan);
 
                         int currentStep = stepsExecuted + 1;
@@ -627,8 +712,72 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
                                 useReflectPromptTemplate(allParams);
 
+                                phaseInputTokens.set(0.0);
+                                phaseOutputTokens.set(0.0);
+                                phaseTotalTokens.set(0.0);
+                                // Only extract tokens from additional_info or additionalInfo in dataMap
+                                Double execInput = null, execOutput = null, execTotal = null;
+                                if (reactResult != null
+                                    && reactResult.getMlModelOutputs() != null
+                                    && !reactResult.getMlModelOutputs().isEmpty()) {
+                                    List<ModelTensor> tensors = reactResult.getMlModelOutputs().getLast().getMlModelTensors();
+                                    if (tensors != null && !tensors.isEmpty()) {
+                                        Map<String, ?> dataMap = tensors.getLast().getDataAsMap();
+                                        if (dataMap != null) {
+                                            Object addInfoObj = dataMap.get("additional_info");
+                                            if (addInfoObj == null)
+                                                addInfoObj = dataMap.get("additionalInfo");
+                                            if (addInfoObj instanceof Map) {
+                                                Map<?, ?> addInfo = (Map<?, ?>) addInfoObj;
+                                                execInput = addInfo.get("inputTokens") instanceof Number
+                                                    ? ((Number) addInfo.get("inputTokens")).doubleValue()
+                                                    : null;
+                                                execOutput = addInfo.get("outputTokens") instanceof Number
+                                                    ? ((Number) addInfo.get("outputTokens")).doubleValue()
+                                                    : null;
+                                                execTotal = addInfo.get("totalTokens") instanceof Number
+                                                    ? ((Number) addInfo.get("totalTokens")).doubleValue()
+                                                    : null;
+                                            }
+                                        }
+                                    }
+                                }
+                                if (execInput != null)
+                                    phaseInputTokens.set(phaseInputTokens.get() + execInput);
+                                if (execOutput != null)
+                                    phaseOutputTokens.set(phaseOutputTokens.get() + execOutput);
+                                if (execTotal != null)
+                                    phaseTotalTokens.set(phaseTotalTokens.get() + execTotal);
+
                                 executeStepSpan.addAttribute("gen_ai.agent.task", stepToExecute);
                                 executeStepSpan.addAttribute("gen_ai.agent.result", results.get(STEP_RESULT_FIELD));
+
+                                AgentUtils
+                                    .updateSpanWithResultAttributes(
+                                        executeStepSpan,
+                                        null,
+                                        phaseInputTokens.get(),
+                                        phaseOutputTokens.get(),
+                                        phaseTotalTokens.get(),
+                                        null
+                                    );
+                                agentInputTokens.set(agentInputTokens.get() + phaseInputTokens.get());
+                                agentOutputTokens.set(agentOutputTokens.get() + phaseOutputTokens.get());
+                                agentTotalTokens.set(agentTotalTokens.get() + phaseTotalTokens.get());
+                                AgentUtils
+                                    .updateSpanWithResultAttributes(
+                                        agentTaskSpan,
+                                        null,
+                                        agentInputTokens.get(),
+                                        agentOutputTokens.get(),
+                                        agentTotalTokens.get(),
+                                        null
+                                    );
+
+                                phaseInputTokens.set(0.0);
+                                phaseOutputTokens.set(0.0);
+                                phaseTotalTokens.set(0.0);
+
                                 MLAgentTracer.getInstance().endSpan(executeStepSpan);
 
                                 executePlanningLoop(
@@ -641,7 +790,10 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                                     traceNumber,
                                     finalListener,
                                     agentTaskSpan,
-                                    finalPlanSpan
+                                    finalPlanSpan,
+                                    agentInputTokens,
+                                    agentOutputTokens,
+                                    agentTotalTokens
                                 );
                             } finally {
                                 MLAgentTracer.getInstance().endSpan(executeStepSpan);
