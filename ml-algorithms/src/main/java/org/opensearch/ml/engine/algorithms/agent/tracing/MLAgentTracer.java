@@ -50,6 +50,14 @@ public class MLAgentTracer extends AbstractMLTracer {
     public static final String AGENT_TASK_CONV_FLOW_SPAN = "agent.task_convflow";
     public static final String AGENT_TASK_FLOW_SPAN = "agent.task_flow";
 
+    public static final String ATTR_RESULT = "gen_ai.agent.result";
+    public static final String ATTR_TASK = "gen_ai.agent.task";
+    public static final String ATTR_PHASE = "gen_ai.agent.phase";
+    public static final String ATTR_STEP_NUMBER = "gen_ai.agent.step.number";
+    public static final String ATTR_NAME = "gen_ai.agent.name";
+    public static final String ATTR_LATENCY = "gen_ai.agent.latency";
+    public static final String ATTR_LLM_START = "llm.start_time";
+
     private static MLAgentTracer instance;
 
     /**
@@ -248,7 +256,7 @@ public class MLAgentTracer extends AbstractMLTracer {
      * Resets the singleton instance for testing purposes.
      */
     @VisibleForTesting
-    static void resetForTest() {
+    public static void resetForTest() {
         instance = null;
     }
 
