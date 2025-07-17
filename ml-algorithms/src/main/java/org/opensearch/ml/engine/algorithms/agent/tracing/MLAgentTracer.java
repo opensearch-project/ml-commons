@@ -248,7 +248,7 @@ public class MLAgentTracer extends AbstractMLTracer {
      * Resets the singleton instance for testing purposes.
      */
     @VisibleForTesting
-    static void resetForTest() {
+    public static void resetForTest() {
         instance = null;
     }
 
