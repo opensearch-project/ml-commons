@@ -104,7 +104,6 @@ configurations.all {
     resolutionStrategy.force 'commons-beanutils:commons-beanutils:1.11.0'
 }
 
-
 jacocoTestReport {
     reports {
         xml.getRequired().set(true)
