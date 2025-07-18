@@ -60,7 +60,7 @@ buildscript {
 }
 
 plugins {
-    id 'com.netflix.nebula.ospackage' version "11.5.0"
+    id 'com.netflix.nebula.ospackage' version "12.0.0"
     id 'java'
     id "io.freefair.lombok" version "8.4"
     id 'jacoco'
