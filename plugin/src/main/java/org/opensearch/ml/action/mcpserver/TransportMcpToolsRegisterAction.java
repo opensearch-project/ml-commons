@@ -115,7 +115,7 @@ public class TransportMcpToolsRegisterAction extends HandledTransportAction<Acti
                         String exceptionMessage = String
                             .format(Locale.ROOT, "Unable to register tools: %s as they already exist", existingTools);
                         log.warn(exceptionMessage);
-                        restoreListener.onFailure(new OpenSearchException(exceptionMessage));
+                        restoreListener.onFailure(new IllegalArgumentException(exceptionMessage));
                     } else {
                         indexMcpTools(registerNodesRequest, restoreListener);
                     }
