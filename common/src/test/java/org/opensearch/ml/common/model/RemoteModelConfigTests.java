@@ -6,6 +6,7 @@
 package org.opensearch.ml.common.model;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
 import java.io.IOException;
@@ -17,6 +18,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.Version;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -170,5 +172,49 @@ public class RemoteModelConfigTests {
         assertEquals(config.getModelMaxLength(), parsedConfig.getModelMaxLength());
         assertEquals(config.getAdditionalConfig(), parsedConfig.getAdditionalConfig());
         assertEquals(config.getWriteableName(), parsedConfig.getWriteableName());
+    }
+
+    @Test
+    public void readInputStream_VersionCompatibility() throws IOException {
+        // Test with older version
+        BytesStreamOutput oldOut = new BytesStreamOutput();
+        Version oldVersion = Version.V_3_0_0;
+        oldOut.setVersion(oldVersion);
+        config.writeTo(oldOut);
+
+        StreamInput oldIn = oldOut.bytes().streamInput();
+        oldIn.setVersion(oldVersion);
+        RemoteModelConfig oldConfig = new RemoteModelConfig(oldIn);
+
+        // Verify essential fields with old version
+        assertEquals(config.getModelType(), oldConfig.getModelType());
+        assertEquals(config.getAllConfig(), oldConfig.getAllConfig());
+        assertEquals(config.getEmbeddingDimension(), oldConfig.getEmbeddingDimension());
+        assertEquals(config.getFrameworkType(), oldConfig.getFrameworkType());
+        assertEquals(config.getPoolingMode(), oldConfig.getPoolingMode());
+        assertEquals(config.isNormalizeResult(), oldConfig.isNormalizeResult());
+        assertEquals(config.getModelMaxLength(), oldConfig.getModelMaxLength());
+        assertNull(oldConfig.getAdditionalConfig());
+        assertEquals(config.getWriteableName(), oldConfig.getWriteableName());
+
+        // Test with newer version
+        BytesStreamOutput currentOut = new BytesStreamOutput();
+        currentOut.setVersion(Version.V_3_1_0);
+        config.writeTo(currentOut);
+
+        StreamInput currentIn = currentOut.bytes().streamInput();
+        currentIn.setVersion(Version.V_3_1_0);
+        RemoteModelConfig newConfig = new RemoteModelConfig(currentIn);
+
+        // Verify fields with current version
+        assertEquals(config.getModelType(), newConfig.getModelType());
+        assertEquals(config.getAllConfig(), newConfig.getAllConfig());
+        assertEquals(config.getEmbeddingDimension(), newConfig.getEmbeddingDimension());
+        assertEquals(config.getFrameworkType(), newConfig.getFrameworkType());
+        assertEquals(config.getPoolingMode(), newConfig.getPoolingMode());
+        assertEquals(config.isNormalizeResult(), newConfig.isNormalizeResult());
+        assertEquals(config.getModelMaxLength(), newConfig.getModelMaxLength());
+        assertEquals(config.getAdditionalConfig(), newConfig.getAdditionalConfig());
+        assertEquals(config.getWriteableName(), newConfig.getWriteableName());
     }
 }

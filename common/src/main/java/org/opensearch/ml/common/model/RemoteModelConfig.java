@@ -37,36 +37,29 @@ public class RemoteModelConfig extends BaseModelConfig {
         it -> parse(it)
     );
 
-    public static final String EMBEDDING_DIMENSION_FIELD = "embedding_dimension";
-    public static final String FRAMEWORK_TYPE_FIELD = "framework_type";
-    public static final String POOLING_MODE_FIELD = "pooling_mode";
-    public static final String NORMALIZE_RESULT_FIELD = "normalize_result";
-    public static final String MODEL_MAX_LENGTH_FIELD = "model_max_length";
-
-    private final Integer embeddingDimension;
-    private final FrameworkType frameworkType;
-    private final PoolingMode poolingMode;
-    private final boolean normalizeResult;
-    private final Integer modelMaxLength;
-
     @Builder(toBuilder = true)
     public RemoteModelConfig(
         String modelType,
         Integer embeddingDimension,
-        FrameworkType frameworkType,
+        BaseModelConfig.FrameworkType frameworkType,
         String allConfig,
-        PoolingMode poolingMode,
+        BaseModelConfig.PoolingMode poolingMode,
         boolean normalizeResult,
         Integer modelMaxLength,
         Map<String, Object> additionalConfig
     ) {
-        super(modelType, allConfig, additionalConfig);
-        this.embeddingDimension = embeddingDimension;
-        this.frameworkType = frameworkType;
-        this.poolingMode = poolingMode;
-        this.normalizeResult = normalizeResult;
-        this.modelMaxLength = modelMaxLength;
-
+        super(
+            modelType,
+            allConfig,
+            additionalConfig,
+            embeddingDimension,
+            frameworkType,
+            poolingMode,
+            normalizeResult,
+            modelMaxLength,
+            null,
+            null
+        );
         validateNoDuplicateKeys(allConfig, additionalConfig);
         validateTextEmbeddingConfig();
     }
@@ -74,9 +67,9 @@ public class RemoteModelConfig extends BaseModelConfig {
     public static RemoteModelConfig parse(XContentParser parser) throws IOException {
         String modelType = null;
         Integer embeddingDimension = null;
-        FrameworkType frameworkType = null;
+        BaseModelConfig.FrameworkType frameworkType = null;
         String allConfig = null;
-        PoolingMode poolingMode = null;
+        BaseModelConfig.PoolingMode poolingMode = null;
         boolean normalizeResult = false;
         Integer modelMaxLength = null;
         Map<String, Object> additionalConfig = null;
@@ -94,13 +87,13 @@ public class RemoteModelConfig extends BaseModelConfig {
                     embeddingDimension = parser.intValue();
                     break;
                 case FRAMEWORK_TYPE_FIELD:
-                    frameworkType = FrameworkType.from(parser.text().toUpperCase(Locale.ROOT));
+                    frameworkType = BaseModelConfig.FrameworkType.from(parser.text().toUpperCase(Locale.ROOT));
                     break;
                 case ALL_CONFIG_FIELD:
                     allConfig = parser.text();
                     break;
                 case POOLING_MODE_FIELD:
-                    poolingMode = PoolingMode.from(parser.text().toUpperCase(Locale.ROOT));
+                    poolingMode = BaseModelConfig.PoolingMode.from(parser.text().toUpperCase(Locale.ROOT));
                     break;
                 case NORMALIZE_RESULT_FIELD:
                     normalizeResult = parser.booleanValue();
@@ -135,39 +128,11 @@ public class RemoteModelConfig extends BaseModelConfig {
 
     public RemoteModelConfig(StreamInput in) throws IOException {
         super(in);
-        embeddingDimension = in.readOptionalInt();
-        if (in.readBoolean()) {
-            frameworkType = in.readEnum(FrameworkType.class);
-        } else {
-            frameworkType = null;
-        }
-        if (in.readBoolean()) {
-            poolingMode = in.readEnum(PoolingMode.class);
-        } else {
-            poolingMode = null;
-        }
-        normalizeResult = in.readBoolean();
-        modelMaxLength = in.readOptionalInt();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        out.writeOptionalInt(embeddingDimension);
-        if (frameworkType != null) {
-            out.writeBoolean(true);
-            out.writeEnum(frameworkType);
-        } else {
-            out.writeBoolean(false);
-        }
-        if (poolingMode != null) {
-            out.writeBoolean(true);
-            out.writeEnum(poolingMode);
-        } else {
-            out.writeBoolean(false);
-        }
-        out.writeBoolean(normalizeResult);
-        out.writeOptionalInt(modelMaxLength);
     }
 
     @Override
@@ -199,47 +164,6 @@ public class RemoteModelConfig extends BaseModelConfig {
         }
         builder.endObject();
         return builder;
-    }
-
-    public enum PoolingMode {
-        MEAN("mean"),
-        MEAN_SQRT_LEN("mean_sqrt_len"),
-        MAX("max"),
-        WEIGHTED_MEAN("weightedmean"),
-        CLS("cls"),
-        LAST_TOKEN("lasttoken");
-
-        private String name;
-
-        public String getName() {
-            return name;
-        }
-
-        PoolingMode(String name) {
-            this.name = name;
-        }
-
-        public static PoolingMode from(String value) {
-            try {
-                return PoolingMode.valueOf(value.toUpperCase(Locale.ROOT));
-            } catch (Exception e) {
-                throw new IllegalArgumentException("Wrong pooling method");
-            }
-        }
-    }
-
-    public enum FrameworkType {
-        HUGGINGFACE_TRANSFORMERS,
-        SENTENCE_TRANSFORMERS,
-        HUGGINGFACE_TRANSFORMERS_NEURON;
-
-        public static FrameworkType from(String value) {
-            try {
-                return FrameworkType.valueOf(value.toUpperCase(Locale.ROOT));
-            } catch (Exception e) {
-                throw new IllegalArgumentException("Wrong framework type");
-            }
-        }
     }
 
     private void validateTextEmbeddingConfig() {

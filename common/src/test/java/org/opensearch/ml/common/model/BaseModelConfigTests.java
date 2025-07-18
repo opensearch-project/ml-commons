@@ -44,6 +44,10 @@ public class BaseModelConfigTests {
             .modelType("testModelType")
             .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
             .additionalConfig(additionalConfig)
+            .embeddingDimension(768)
+            .frameworkType(BaseModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .passagePrefix("passage: ")
+            .queryPrefix("query: ")
             .build();
 
         function = parser -> {
@@ -61,7 +65,8 @@ public class BaseModelConfigTests {
         config.toXContent(builder, EMPTY_PARAMS);
         String configContent = TestHelper.xContentBuilderToString(builder);
         assertEquals(
-            "{\"model_type\":\"testModelType\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\",\"additional_config\":{\"space_type\":\"l2\"}}",
+            "{\"model_type\":\"testModelType\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\",\"additional_config\":{\"space_type\":\"l2\"},"
+                + "\"embedding_dimension\":768,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"query_prefix\":\"query: \",\"passage_prefix\":\"passage: \"}",
             configContent
         );
     }
@@ -93,6 +98,11 @@ public class BaseModelConfigTests {
         assertEquals(config.getModelType(), parsedConfig.getModelType());
         assertEquals(config.getAllConfig(), parsedConfig.getAllConfig());
         assertEquals(config.getAdditionalConfig(), parsedConfig.getAdditionalConfig());
+        assertEquals(config.getEmbeddingDimension(), parsedConfig.getEmbeddingDimension());
+        assertEquals(config.getFrameworkType(), parsedConfig.getFrameworkType());
+        assertEquals(config.getFrameworkType(), parsedConfig.getFrameworkType());
+        assertEquals(config.getQueryPrefix(), parsedConfig.getQueryPrefix());
+        assertEquals(config.getPassagePrefix(), parsedConfig.getPassagePrefix());
         assertEquals(config.getWriteableName(), parsedConfig.getWriteableName());
     }
 
@@ -109,6 +119,11 @@ public class BaseModelConfigTests {
         assertEquals(config.getModelType(), parsedConfig.getModelType());
         assertEquals(config.getAllConfig(), parsedConfig.getAllConfig());
         assertNull(parsedConfig.getAdditionalConfig());
+        assertEquals(config.getEmbeddingDimension(), parsedConfig.getEmbeddingDimension());
+        assertEquals(config.getFrameworkType(), parsedConfig.getFrameworkType());
+        assertEquals(config.getFrameworkType(), parsedConfig.getFrameworkType());
+        assertEquals(config.getQueryPrefix(), parsedConfig.getQueryPrefix());
+        assertEquals(config.getPassagePrefix(), parsedConfig.getPassagePrefix());
         assertEquals(config.getWriteableName(), parsedConfig.getWriteableName());
     }
 

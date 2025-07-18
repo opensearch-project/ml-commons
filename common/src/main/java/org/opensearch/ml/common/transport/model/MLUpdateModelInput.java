@@ -25,10 +25,10 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.controller.MLRateLimiter;
+import org.opensearch.ml.common.model.BaseModelConfig;
 import org.opensearch.ml.common.model.Guardrails;
 import org.opensearch.ml.common.model.MLDeploySetting;
 import org.opensearch.ml.common.model.MLModelConfig;
-import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 
@@ -125,7 +125,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
             rateLimiter = new MLRateLimiter(in);
         }
         if (in.readBoolean()) {
-            modelConfig = new TextEmbeddingModelConfig(in);
+            modelConfig = new BaseModelConfig(in);
         }
         if (in.readBoolean()) {
             updatedConnector = Connector.fromStream(in);
@@ -307,7 +307,7 @@ public class MLUpdateModelInput implements ToXContentObject, Writeable {
                     rateLimiter = MLRateLimiter.parse(parser);
                     break;
                 case MODEL_CONFIG_FIELD:
-                    modelConfig = TextEmbeddingModelConfig.parse(parser);
+                    modelConfig = BaseModelConfig.parse(parser);
                     break;
                 case DEPLOY_SETTING_FIELD:
                     deploySetting = MLDeploySetting.parse(parser);
