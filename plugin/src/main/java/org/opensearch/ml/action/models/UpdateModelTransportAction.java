@@ -245,39 +245,34 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
     private void validateModelConfig(MLModelConfig modelConfig, BaseModelConfig existingModelConfig, FunctionName functionName) {
         BaseModelConfig baseModelConfig = (BaseModelConfig) modelConfig;
         String modelType = modelConfig.getModelType();
-        // Validate text embedding model config
-        if (functionName == FunctionName.TEXT_EMBEDDING) {
-            if (baseModelConfig.getEmbeddingDimension() == null) {
-                if (existingModelConfig == null || existingModelConfig.getEmbeddingDimension() == null) {
-                    throw new IllegalArgumentException("Embedding dimension is null");
-                }
-            }
-            if (baseModelConfig.getFrameworkType() == null) {
-                if (existingModelConfig == null || existingModelConfig.getFrameworkType() == null) {
-                    throw new IllegalArgumentException("Framework type is null");
-                }
-            }
+
+        // Only validate for text embedding models
+        if (functionName != FunctionName.TEXT_EMBEDDING
+            && !(functionName == FunctionName.REMOTE && "text_embedding".equalsIgnoreCase(modelType))) {
+            return;
         }
 
-        // Validate remote model config with text_embedding model type
-        if (functionName == FunctionName.REMOTE && modelType != null && modelType.equalsIgnoreCase("text_embedding")) {
-            if (baseModelConfig.getEmbeddingDimension() == null) {
-                if (existingModelConfig == null || existingModelConfig.getEmbeddingDimension() == null) {
-                    throw new IllegalArgumentException("Embedding dimension must be provided for remote text embedding model");
-                }
-            }
-            if (baseModelConfig.getFrameworkType() == null) {
-                if (existingModelConfig == null || existingModelConfig.getFrameworkType() == null) {
-                    throw new IllegalArgumentException("Framework type must be provided for remote text embedding model");
-                }
-            }
-            Map<String, Object> additionalConfig = baseModelConfig.getAdditionalConfig();
-            if (additionalConfig == null || !additionalConfig.containsKey("space_type")) {
-                if (existingModelConfig == null
-                    || existingModelConfig.getAdditionalConfig() == null
-                    || !existingModelConfig.getAdditionalConfig().containsKey("space_type")) {
-                    throw new IllegalArgumentException("Space type must be provided in additional_config for remote text embedding model");
-                }
+        String suffix = functionName == FunctionName.REMOTE ? " must be provided for remote text embedding model" : " is null";
+
+        // Validate embedding dimension
+        if (baseModelConfig.getEmbeddingDimension() == null
+            && (existingModelConfig == null || existingModelConfig.getEmbeddingDimension() == null)) {
+            throw new IllegalArgumentException("Embedding dimension" + suffix);
+        }
+
+        // Validate framework type
+        if (baseModelConfig.getFrameworkType() == null && (existingModelConfig == null || existingModelConfig.getFrameworkType() == null)) {
+            throw new IllegalArgumentException("Framework type" + suffix);
+        }
+
+        // Validate space_type for remote models
+        if (functionName == FunctionName.REMOTE) {
+            Map<String, Object> currentConfig = baseModelConfig.getAdditionalConfig();
+            Map<String, Object> existingConfig = existingModelConfig != null ? existingModelConfig.getAdditionalConfig() : null;
+
+            if ((currentConfig == null || !currentConfig.containsKey("space_type"))
+                && (existingConfig == null || !existingConfig.containsKey("space_type"))) {
+                throw new IllegalArgumentException("Space type must be provided in additional_config for remote text embedding model");
             }
         }
     }
