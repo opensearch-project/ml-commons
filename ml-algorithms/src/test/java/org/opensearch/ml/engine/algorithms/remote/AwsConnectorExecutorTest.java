@@ -169,8 +169,11 @@ public class AwsConnectorExecutorTest {
             );
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         Mockito.verify(actionListener, times(1)).onFailure(exceptionCaptor.capture());
-        assert exceptionCaptor.getValue() instanceof NullPointerException;
-        assertEquals("host must not be null.", exceptionCaptor.getValue().getMessage());
+        assert exceptionCaptor.getValue() instanceof IllegalArgumentException;
+        assertEquals(
+            "Encountered error when trying to create uri from endpoint in ml connector. Please update the endpoint in connection configuration: ",
+            exceptionCaptor.getValue().getMessage()
+        );
     }
 
     @Test
