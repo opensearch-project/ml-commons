@@ -34,22 +34,6 @@ public class TextEmbeddingModelConfig extends BaseModelConfig {
         it -> parse(it)
     );
 
-    public static final String EMBEDDING_DIMENSION_FIELD = "embedding_dimension";
-    public static final String FRAMEWORK_TYPE_FIELD = "framework_type";
-    public static final String POOLING_MODE_FIELD = "pooling_mode";
-    public static final String NORMALIZE_RESULT_FIELD = "normalize_result";
-    public static final String MODEL_MAX_LENGTH_FIELD = "model_max_length";
-    public static final String QUERY_PREFIX = "query_prefix";
-    public static final String PASSAGE_PREFIX = "passage_prefix";
-
-    private final Integer embeddingDimension;
-    private final FrameworkType frameworkType;
-    private final PoolingMode poolingMode;
-    private final boolean normalizeResult;
-    private final Integer modelMaxLength;
-    private final String queryPrefix;
-    private final String passagePrefix;
-
     public TextEmbeddingModelConfig(
         String modelType,
         Integer embeddingDimension,
@@ -78,16 +62,27 @@ public class TextEmbeddingModelConfig extends BaseModelConfig {
     public TextEmbeddingModelConfig(
         String modelType,
         Integer embeddingDimension,
-        FrameworkType frameworkType,
+        BaseModelConfig.FrameworkType frameworkType,
         String allConfig,
         Map<String, Object> additionalConfig,
-        PoolingMode poolingMode,
+        BaseModelConfig.PoolingMode poolingMode,
         boolean normalizeResult,
         Integer modelMaxLength,
         String queryPrefix,
         String passagePrefix
     ) {
-        super(modelType, allConfig, additionalConfig);
+        super(
+            modelType,
+            allConfig,
+            additionalConfig,
+            embeddingDimension,
+            frameworkType,
+            poolingMode,
+            normalizeResult,
+            modelMaxLength,
+            queryPrefix,
+            passagePrefix
+        );
         if (embeddingDimension == null) {
             throw new IllegalArgumentException("embedding dimension is null");
         }
@@ -95,22 +90,15 @@ public class TextEmbeddingModelConfig extends BaseModelConfig {
             throw new IllegalArgumentException("framework type is null");
         }
         validateNoDuplicateKeys(allConfig, additionalConfig);
-        this.embeddingDimension = embeddingDimension;
-        this.frameworkType = frameworkType;
-        this.poolingMode = poolingMode;
-        this.normalizeResult = normalizeResult;
-        this.modelMaxLength = modelMaxLength;
-        this.queryPrefix = queryPrefix;
-        this.passagePrefix = passagePrefix;
     }
 
     public static TextEmbeddingModelConfig parse(XContentParser parser) throws IOException {
         String modelType = null;
         Integer embeddingDimension = null;
-        FrameworkType frameworkType = null;
+        BaseModelConfig.FrameworkType frameworkType = null;
         String allConfig = null;
         Map<String, Object> additionalConfig = null;
-        PoolingMode poolingMode = null;
+        BaseModelConfig.PoolingMode poolingMode = null;
         boolean normalizeResult = false;
         Integer modelMaxLength = null;
         String queryPrefix = null;
@@ -129,7 +117,7 @@ public class TextEmbeddingModelConfig extends BaseModelConfig {
                     embeddingDimension = parser.intValue();
                     break;
                 case FRAMEWORK_TYPE_FIELD:
-                    frameworkType = FrameworkType.from(parser.text().toUpperCase(Locale.ROOT));
+                    frameworkType = BaseModelConfig.FrameworkType.from(parser.text().toUpperCase(Locale.ROOT));
                     break;
                 case ALL_CONFIG_FIELD:
                     allConfig = parser.text();
@@ -138,7 +126,7 @@ public class TextEmbeddingModelConfig extends BaseModelConfig {
                     additionalConfig = parser.map();
                     break;
                 case POOLING_MODE_FIELD:
-                    poolingMode = PoolingMode.from(parser.text().toUpperCase(Locale.ROOT));
+                    poolingMode = BaseModelConfig.PoolingMode.from(parser.text().toUpperCase(Locale.ROOT));
                     break;
                 case NORMALIZE_RESULT_FIELD:
                     normalizeResult = parser.booleanValue();
@@ -178,34 +166,11 @@ public class TextEmbeddingModelConfig extends BaseModelConfig {
 
     public TextEmbeddingModelConfig(StreamInput in) throws IOException {
         super(in);
-        embeddingDimension = in.readInt();
-        frameworkType = in.readEnum(FrameworkType.class);
-        if (in.readBoolean()) {
-            poolingMode = in.readEnum(PoolingMode.class);
-        } else {
-            poolingMode = null;
-        }
-        normalizeResult = in.readBoolean();
-        modelMaxLength = in.readOptionalInt();
-        queryPrefix = in.readOptionalString();
-        passagePrefix = in.readOptionalString();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        out.writeInt(embeddingDimension);
-        out.writeEnum(frameworkType);
-        if (poolingMode != null) {
-            out.writeBoolean(true);
-            out.writeEnum(poolingMode);
-        } else {
-            out.writeBoolean(false);
-        }
-        out.writeBoolean(normalizeResult);
-        out.writeOptionalInt(modelMaxLength);
-        out.writeOptionalString(queryPrefix);
-        out.writeOptionalString(passagePrefix);
     }
 
     @Override
@@ -243,46 +208,5 @@ public class TextEmbeddingModelConfig extends BaseModelConfig {
         }
         builder.endObject();
         return builder;
-    }
-
-    public enum PoolingMode {
-        MEAN("mean"),
-        MEAN_SQRT_LEN("mean_sqrt_len"),
-        MAX("max"),
-        WEIGHTED_MEAN("weightedmean"),
-        CLS("cls"),
-        LAST_TOKEN("lasttoken");
-
-        private String name;
-
-        public String getName() {
-            return name;
-        }
-
-        PoolingMode(String name) {
-            this.name = name;
-        }
-
-        public static PoolingMode from(String value) {
-            try {
-                return PoolingMode.valueOf(value.toUpperCase(Locale.ROOT));
-            } catch (Exception e) {
-                throw new IllegalArgumentException("Wrong pooling method");
-            }
-        }
-    }
-
-    public enum FrameworkType {
-        HUGGINGFACE_TRANSFORMERS,
-        SENTENCE_TRANSFORMERS,
-        HUGGINGFACE_TRANSFORMERS_NEURON;
-
-        public static FrameworkType from(String value) {
-            try {
-                return FrameworkType.valueOf(value.toUpperCase(Locale.ROOT));
-            } catch (Exception e) {
-                throw new IllegalArgumentException("Wrong framework type");
-            }
-        }
     }
 }
