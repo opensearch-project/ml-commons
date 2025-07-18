@@ -46,6 +46,8 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.MLModelGroup;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.controller.MLRateLimiter;
+import org.opensearch.ml.common.model.BaseModelConfig;
+import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model.MLUpdateModelAction;
@@ -127,6 +129,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         MLUpdateModelInput updateModelInput = updateModelRequest.getUpdateModelInput();
         String modelId = updateModelInput.getModelId();
         String tenantId = updateModelInput.getTenantId();
+        MLModelConfig modelConfig = updateModelInput.getModelConfig();
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
             return;
         }
@@ -141,6 +144,15 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                 if (TenantAwareHelper.validateTenantResource(mlFeatureEnabledSetting, tenantId, mlModel.getTenantId(), actionListener)) {
                     if (!isModelDeploying(mlModel.getModelState())) {
                         FunctionName functionName = mlModel.getAlgorithm();
+                        BaseModelConfig existingModelConfig = (BaseModelConfig) mlModel.getModelConfig();
+                        if (modelConfig != null) {
+                            try {
+                                validateModelConfig(modelConfig, existingModelConfig, functionName);
+                            } catch (Exception e) {
+                                wrappedListener.onFailure(new OpenSearchStatusException(e.getMessage(), RestStatus.BAD_REQUEST));
+                                return;
+                            }
+                        }
                         // TODO: Support update as well as model/user level throttling in all other DLModel categories
                         if (functionName == TEXT_EMBEDDING || functionName == REMOTE) {
                             if (mlModel.getIsHidden() != null && mlModel.getIsHidden()) {
@@ -227,6 +239,46 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         } catch (Exception e) {
             log.error("Failed to update ML model for {}", modelId, e);
             actionListener.onFailure(e);
+        }
+    }
+
+    private void validateModelConfig(MLModelConfig modelConfig, BaseModelConfig existingModelConfig, FunctionName functionName) {
+        BaseModelConfig baseModelConfig = (BaseModelConfig) modelConfig;
+        String modelType = modelConfig.getModelType();
+        // Validate text embedding model config
+        if (functionName == FunctionName.TEXT_EMBEDDING) {
+            if (baseModelConfig.getEmbeddingDimension() == null) {
+                if (existingModelConfig == null || existingModelConfig.getEmbeddingDimension() == null) {
+                    throw new IllegalArgumentException("Embedding dimension is null");
+                }
+            }
+            if (baseModelConfig.getFrameworkType() == null) {
+                if (existingModelConfig == null || existingModelConfig.getFrameworkType() == null) {
+                    throw new IllegalArgumentException("Framework type is null");
+                }
+            }
+        }
+
+        // Validate remote model config with text_embedding model type
+        if (functionName == FunctionName.REMOTE && modelType != null && modelType.equalsIgnoreCase("text_embedding")) {
+            if (baseModelConfig.getEmbeddingDimension() == null) {
+                if (existingModelConfig == null || existingModelConfig.getEmbeddingDimension() == null) {
+                    throw new IllegalArgumentException("Embedding dimension must be provided for remote text embedding model");
+                }
+            }
+            if (baseModelConfig.getFrameworkType() == null) {
+                if (existingModelConfig == null || existingModelConfig.getFrameworkType() == null) {
+                    throw new IllegalArgumentException("Framework type must be provided for remote text embedding model");
+                }
+            }
+            Map<String, Object> additionalConfig = baseModelConfig.getAdditionalConfig();
+            if (additionalConfig == null || !additionalConfig.containsKey("space_type")) {
+                if (existingModelConfig == null
+                    || existingModelConfig.getAdditionalConfig() == null
+                    || !existingModelConfig.getAdditionalConfig().containsKey("space_type")) {
+                    throw new IllegalArgumentException("Space type must be provided in additional_config for remote text embedding model");
+                }
+            }
         }
     }
 
