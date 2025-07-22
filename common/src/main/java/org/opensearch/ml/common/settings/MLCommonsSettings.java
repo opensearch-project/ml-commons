@@ -350,4 +350,14 @@ public final class MLCommonsSettings {
     // Feature flag for enabling telemetry static metric collection job -- MLStatsJobProcessor
     public static final Setting<Boolean> ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED = Setting
         .boolSetting("plugins.ml_commons.metrics_static_collection_enabled", false, Setting.Property.NodeScope, Setting.Property.Final);
+
+    // Model ID for Index Insight feature
+    public static final Setting<String> ML_COMMONS_INDEX_INSIGHT_MODEL_ID = Setting
+        .simpleString(
+            "plugins.ml_commons.index_insight.model_id",
+            Setting.Property.NodeScope,
+            Setting.Property.Dynamic
+        );
+
+
 }

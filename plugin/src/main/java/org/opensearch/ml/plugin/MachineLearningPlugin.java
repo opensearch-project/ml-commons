@@ -11,6 +11,7 @@ import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_CONFIG_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_CONTROLLER_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_JOBS_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_MESSAGE_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_META_INDEX;
@@ -795,7 +796,7 @@ public class MachineLearningPlugin extends Plugin
 
         MLJobRunner
             .getInstance()
-            .initialize(clusterService, threadPool, client, sdkClient, connectorAccessControlHelper, mlFeatureEnabledSetting);
+            .initialize(clusterService, threadPool, client, sdkClient, connectorAccessControlHelper, mlFeatureEnabledSetting, mlIndicesHandler);
 
         if (mlFeatureEnabledSetting.isMetricCollectionEnabled()) {
             MLOperationalMetricsCounter.initialize(clusterService.getClusterName().toString(), metricsRegistry, mlFeatureEnabledSetting);
@@ -1158,7 +1159,8 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED,
                 MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED,
                 MLCommonsSettings.ML_COMMONS_METRIC_COLLECTION_ENABLED,
-                MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED
+                MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED,
+                MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_MODEL_ID
             );
         return settings;
     }
@@ -1280,6 +1282,7 @@ public class MachineLearningPlugin extends Plugin
         systemIndexDescriptors.add(new SystemIndexDescriptor(MCP_SESSION_MANAGEMENT_INDEX, "ML Commons MCP session management Index"));
         systemIndexDescriptors.add(new SystemIndexDescriptor(MCP_TOOLS_INDEX, "ML Commons MCP tools Index"));
         systemIndexDescriptors.add(new SystemIndexDescriptor(ML_JOBS_INDEX, "ML Commons Jobs Index"));
+        systemIndexDescriptors.add(new SystemIndexDescriptor(ML_INDEX_INSIGHT_INDEX, "ML Commons Index Insight Index"));
         return systemIndexDescriptors;
     }
 

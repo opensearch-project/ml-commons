@@ -593,6 +593,40 @@ public class MLTaskManager {
             log.error("Failed to index stats collection job", e);
         }
     }
+    
+
+    
+    private boolean indexInsightJobStarted = false;
+    
+    public void startIndexInsightJob() {
+        if (indexInsightJobStarted) {
+            return;
+        }
+
+        try {
+            MLJobParameter jobParameter = new MLJobParameter(
+                MLJobType.INDEX_INSIGHT.name(),
+                new IntervalSchedule(Instant.now(), 5, ChronoUnit.MINUTES),
+                500L,
+                null,
+                MLJobType.INDEX_INSIGHT
+            );
+            
+            // Add params to the job parameter's XContent
+
+            IndexRequest indexRequest = new IndexRequest()
+                .index(CommonValue.ML_JOBS_INDEX)
+                .id(MLJobType.INDEX_INSIGHT.name())
+                .source(jobParameter.toXContent(JsonXContent.contentBuilder(), null))
+                .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+
+            startJob(indexRequest, MLJobType.INDEX_INSIGHT, () -> this.indexInsightJobStarted = true);
+        } catch (IOException e) {
+            log.error("Failed to index index insight job", e);
+        }
+    }
+    
+
 
     /**
      * Start a job by indexing the job parameter to ML jobs index.
