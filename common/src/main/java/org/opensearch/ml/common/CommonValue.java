@@ -51,6 +51,7 @@ public class CommonValue {
     public static final String MCP_TOOLS_INDEX = ".plugins-ml-mcp-tools";
     // index created in 3.1 to track all ml jobs created via job scheduler
     public static final String ML_JOBS_INDEX = ".plugins-ml-jobs";
+    public static final String ML_INDEX_INSIGHT_INDEX = ".plugins-ml-index-insight";
     public static final Set<String> stopWordsIndices = ImmutableSet.of(".plugins-ml-stop-words");
     public static final String TOOL_PARAMETERS_PREFIX = "tools.parameters.";
 
@@ -68,6 +69,7 @@ public class CommonValue {
     public static final String ML_MCP_SESSION_MANAGEMENT_INDEX_MAPPING_PATH = "index-mappings/ml_mcp_session_management.json";
     public static final String ML_MCP_TOOLS_INDEX_MAPPING_PATH = "index-mappings/ml_mcp_tools.json";
     public static final String ML_JOBS_INDEX_MAPPING_PATH = "index-mappings/ml_jobs.json";
+    public static final String ML_INDEX_INSIGHT_INDEX_MAPPING_PATH = "index-mappings/ml_index_insight.json";
 
     // Calculate Versions independently of OpenSearch core version
     public static final Version VERSION_2_11_0 = Version.fromString("2.11.0");
