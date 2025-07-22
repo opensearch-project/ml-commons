@@ -71,7 +71,6 @@ import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.spi.tools.Tool;
-import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.algorithms.remote.McpConnectorExecutor;
@@ -1137,11 +1136,6 @@ public class AgentUtils {
         result.input = actionInput;
 
         try {
-            // Unwrap MLTaskResponse
-            if (toolOutput instanceof MLTaskResponse) {
-                return extractToolCallInfo(((MLTaskResponse) toolOutput).getOutput(), actionInput);
-            }
-
             // ModelTensorOutput
             if (toolOutput instanceof ModelTensorOutput) {
                 ModelTensorOutput mto = (ModelTensorOutput) toolOutput;
@@ -1174,66 +1168,12 @@ public class AgentUtils {
                 }
                 return result;
             }
-
-            // String: try to parse as JSON, or extract JSON from markdown
-            if (toolOutput instanceof String) {
-                String str = (String) toolOutput;
-                String json = extractJsonBlock(str);
-                if (json != null) {
-                    Map<String, Object> map = StringUtils.fromJson(json, "response");
-                    if (map.containsKey("final_answer")) {
-                        result.output = map.get("final_answer").toString();
-                    } else if (map.containsKey("action")) {
-                        result.output = map.get("action").toString();
-                    } else {
-                        result.output = json;
-                    }
-                } else {
-                    result.output = str;
-                }
-                return result;
-            }
-
-            // Map: use as is
-            if (toolOutput instanceof Map) {
-                Map<?, ?> map = (Map<?, ?>) toolOutput;
-                if (map.containsKey("response")) {
-                    result.output = map.get("response").toString();
-                } else if (map.containsKey("final_answer")) {
-                    result.output = map.get("final_answer").toString();
-                } else {
-                    result.output = StringUtils.toJson(map);
-                }
-                return result;
-            }
-
             // Fallback: toString
             result.output = toolOutput != null ? toolOutput.toString() : null;
         } catch (Exception e) {
             result.output = toolOutput != null ? toolOutput.toString() : null;
         }
         return result;
-    }
-
-    // Helper to extract JSON block from markdown or plain string
-    private static String extractJsonBlock(String str) {
-        if (str == null)
-            return null;
-        int start = str.indexOf("```json");
-        if (start >= 0) {
-            start += "```json".length();
-            int end = str.indexOf("```", start);
-            if (end > start) {
-                return str.substring(start, end).trim();
-            }
-        }
-        // Try to find first '{' and last '}'
-        int first = str.indexOf('{');
-        int last = str.lastIndexOf('}');
-        if (first >= 0 && last > first) {
-            return str.substring(first, last + 1);
-        }
-        return null;
     }
 
     public static void updateSpanWithResultAttributes(
