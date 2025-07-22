@@ -99,6 +99,10 @@ public class MLIndicesHandler {
     public void initMLAgentIndex(ActionListener<Boolean> listener) {
         initMLIndexIfAbsent(MLIndex.AGENT, listener);
     }
+    
+    public void initMLIndexInsightIndex(ActionListener<Boolean> listener) {
+        initMLIndexIfAbsent(MLIndex.INDEX_INSIGHT, listener);
+    }
 
     public void initMLIndexIfAbsent(MLIndex index, ActionListener<Boolean> listener) {
         String indexName = index.getIndexName();

@@ -1,0 +1,21 @@
+{
+  "_meta": {
+    "schema_version": 1
+  },
+  "properties": {
+    "index_name": {
+      "type": "keyword"
+    },
+    "index_description": {
+      "type": "text"
+    },
+    "field_description": {
+      "type": "object",
+      "dynamic": true
+    },
+    "last_updated_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    }
+  }
+}

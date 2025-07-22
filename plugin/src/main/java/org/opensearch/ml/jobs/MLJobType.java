@@ -7,7 +7,8 @@ package org.opensearch.ml.jobs;
 
 public enum MLJobType {
     STATS_COLLECTOR("Job to collect static metrics and push to Metrics Registry"),
-    BATCH_TASK_UPDATE("Job to poll and update status of running batch prediction tasks for remote models");
+    BATCH_TASK_UPDATE("Job to poll and update status of running batch prediction tasks for remote models"),
+    INDEX_INSIGHT("Job to analyze and summarize indices structure and content");
 
     private final String description;
 
