@@ -16,7 +16,6 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_OPENAI_V1_CHAT_COMPLETIONS;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_FILTER;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.cleanUpResource;
-import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createAgentTaskAttributes;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTools;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMcpToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
@@ -248,7 +247,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
     @Override
     public void run(MLAgent mlAgent, Map<String, String> apiParams, ActionListener<Object> listener) {
-        Map<String, String> agentAttributes = createAgentTaskAttributes(mlAgent.getName(), apiParams.get(QUESTION_FIELD));
+        Map<String, String> agentAttributes = MLAgentTracer.createAgentTaskAttributes(mlAgent.getName(), apiParams.get(QUESTION_FIELD));
         Span agentTaskSpan = MLAgentTracer.getInstance().startSpan(MLAgentTracer.AGENT_TASK_PER_SPAN, agentAttributes, null);
 
         try {
@@ -408,7 +407,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     ) {
         final Span finalPlanSpan = planSpan;
 
-        Map<String, String> planStepAttributes = AgentUtils.createPlanAttributes(stepsExecuted);
+        Map<String, String> planStepAttributes = MLAgentTracer.createPlanAttributes(stepsExecuted);
         String planStepSpanName;
         if (stepsExecuted == 0) {
             planStepSpanName = MLAgentTracer.AGENT_PLAN_SPAN;
@@ -464,7 +463,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                 allParams.get(TENANT_ID_FIELD)
             );
 
-            Map<String, String> llmCallAttrs = AgentUtils.createLLMCallAttributes("", 0, null, allParams);
+            Map<String, String> llmCallAttrs = MLAgentTracer.createLLMCallAttributes("", 0, null, allParams);
             Span llmCallSpan = MLAgentTracer.getInstance().startSpan(MLAgentTracer.AGENT_LLM_CALL_SPAN, llmCallAttrs, planStepSpan);
 
             long llmStartTime = System.currentTimeMillis();
@@ -478,13 +477,13 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
                     long llmLatency = System.currentTimeMillis() - llmStartTime;
                     String completion = extractCompletionFromModelOutput(modelTensorOutput, allParams);
-                    Map<String, String> updatedLLMCallAttrs = AgentUtils
+                    Map<String, String> updatedLLMCallAttrs = MLAgentTracer
                         .createLLMCallAttributes(completion, llmLatency, modelTensorOutput, allParams);
 
                     AtomicReference<Double> phaseInputTokens = new AtomicReference<>(0.0);
                     AtomicReference<Double> phaseOutputTokens = new AtomicReference<>(0.0);
                     AtomicReference<Double> phaseTotalTokens = new AtomicReference<>(0.0);
-                    AgentUtils.ToolCallExtractionResult planResultInfo = AgentUtils.extractToolCallInfo(modelTensorOutput, null);
+                    MLAgentTracer.ToolCallExtractionResult planResultInfo = MLAgentTracer.extractToolCallInfo(modelTensorOutput, null);
                     Double inputTokens = planResultInfo.usage != null && planResultInfo.usage.get("inputTokens") instanceof Number
                         ? ((Number) planResultInfo.usage.get("inputTokens")).doubleValue()
                         : null;
@@ -516,7 +515,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                             .addAttribute(MLAgentTracer.ATTR_TASK, allParams.get(PROMPT_FIELD) != null ? allParams.get(PROMPT_FIELD) : "");
                         planStepSpan.addAttribute(MLAgentTracer.ATTR_RESULT, finalResult != null ? finalResult : "");
 
-                        AgentUtils
+                        MLAgentTracer
                             .updateSpanWithResultAttributes(
                                 planStepSpan,
                                 null,
@@ -528,7 +527,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         agentInputTokens.set(agentInputTokens.get() + phaseInputTokens.get());
                         agentOutputTokens.set(agentOutputTokens.get() + phaseOutputTokens.get());
                         agentTotalTokens.set(agentTotalTokens.get() + phaseTotalTokens.get());
-                        AgentUtils
+                        MLAgentTracer
                             .updateSpanWithResultAttributes(
                                 agentTaskSpan,
                                 null,
@@ -585,7 +584,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                             .addAttribute(MLAgentTracer.ATTR_TASK, allParams.get(PROMPT_FIELD) != null ? allParams.get(PROMPT_FIELD) : "");
                         planStepSpan.addAttribute(MLAgentTracer.ATTR_RESULT, completion);
 
-                        AgentUtils
+                        MLAgentTracer
                             .updateSpanWithResultAttributes(
                                 planStepSpan,
                                 null,
@@ -597,7 +596,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         agentInputTokens.set(agentInputTokens.get() + phaseInputTokens.get());
                         agentOutputTokens.set(agentOutputTokens.get() + phaseOutputTokens.get());
                         agentTotalTokens.set(agentTotalTokens.get() + phaseTotalTokens.get());
-                        AgentUtils
+                        MLAgentTracer
                             .updateSpanWithResultAttributes(
                                 agentTaskSpan,
                                 null,
@@ -615,7 +614,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
                         int currentStep = stepsExecuted + 1;
                         String executeStepSpanName = String.format(MLAgentTracer.AGENT_EXECUTE_STEP_SPAN + "_%d", currentStep);
-                        Map<String, String> executeStepAttrs = AgentUtils.createExecuteStepAttributes(currentStep);
+                        Map<String, String> executeStepAttrs = MLAgentTracer.createExecuteStepAttributes(currentStep);
                         Span executeStepSpan = MLAgentTracer.getInstance().startSpan(executeStepSpanName, executeStepAttrs, agentTaskSpan);
 
                         // Inject parent SpanContext using TracingContextPropagator
@@ -751,7 +750,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                                 executeStepSpan.addAttribute(MLAgentTracer.ATTR_TASK, stepToExecute);
                                 executeStepSpan.addAttribute(MLAgentTracer.ATTR_RESULT, results.get(STEP_RESULT_FIELD));
 
-                                AgentUtils
+                                MLAgentTracer
                                     .updateSpanWithResultAttributes(
                                         executeStepSpan,
                                         null,
@@ -763,7 +762,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                                 agentInputTokens.set(agentInputTokens.get() + phaseInputTokens.get());
                                 agentOutputTokens.set(agentOutputTokens.get() + phaseOutputTokens.get());
                                 agentTotalTokens.set(agentTotalTokens.get() + phaseTotalTokens.get());
-                                AgentUtils
+                                MLAgentTracer
                                     .updateSpanWithResultAttributes(
                                         agentTaskSpan,
                                         null,
@@ -894,7 +893,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         return response;
     }
 
-    private String extractCompletionFromModelOutput(ModelTensorOutput modelTensorOutput, Map<String, String> allParams) {
+    public String extractCompletionFromModelOutput(ModelTensorOutput modelTensorOutput, Map<String, String> allParams) {
         if (modelTensorOutput == null || modelTensorOutput.getMlModelOutputs() == null || modelTensorOutput.getMlModelOutputs().isEmpty()) {
             return "";
         }
