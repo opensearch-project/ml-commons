@@ -808,7 +808,7 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             IllegalArgumentException.class,
             () -> mlPlanExecuteAndReflectAgentRunner.parseLLMOutput(allParams, modelTensorOutput)
         );
-        assertTrue(ex.getMessage().contains("original_llm_response_filter not found"));
+        assertTrue(ex.getMessage().contains("llm_response_filter not found. Please provide the path to the model output."));
     }
 
     @Test

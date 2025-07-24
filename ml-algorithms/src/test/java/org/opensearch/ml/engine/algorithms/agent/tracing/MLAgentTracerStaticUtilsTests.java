@@ -17,23 +17,23 @@ public class MLAgentTracerStaticUtilsTests {
     @Test
     public void testCreateAgentTaskAttributes() {
         Map<String, String> attrs = MLAgentTracer.createAgentTaskAttributes("agent1", "task1");
-        assertEquals("agent1", attrs.get("gen_ai.agent.name"));
-        assertEquals("task1", attrs.get("gen_ai.agent.task"));
-        assertEquals("create_agent", attrs.get("gen_ai.operation.name"));
+        assertEquals("agent1", attrs.get(MLAgentTracer.ATTR_NAME));
+        assertEquals("task1", attrs.get(MLAgentTracer.ATTR_TASK));
+        assertEquals("create_agent", attrs.get(MLAgentTracer.ATTR_OPERATION_NAME));
     }
 
     @Test
     public void testCreatePlanAttributes() {
         Map<String, String> attrs = MLAgentTracer.createPlanAttributes(5);
-        assertEquals("planner", attrs.get("gen_ai.agent.phase"));
-        assertEquals("5", attrs.get("gen_ai.agent.step.number"));
+        assertEquals("planner", attrs.get(MLAgentTracer.ATTR_PHASE));
+        assertEquals("5", attrs.get(MLAgentTracer.ATTR_STEP_NUMBER));
     }
 
     @Test
     public void testCreateExecuteStepAttributes() {
         Map<String, String> attrs = MLAgentTracer.createExecuteStepAttributes(2);
-        assertEquals("executor", attrs.get("gen_ai.agent.phase"));
-        assertEquals("2", attrs.get("gen_ai.agent.step.number"));
+        assertEquals("executor", attrs.get(MLAgentTracer.ATTR_PHASE));
+        assertEquals("2", attrs.get(MLAgentTracer.ATTR_STEP_NUMBER));
     }
 
     @Test
@@ -58,11 +58,11 @@ public class MLAgentTracerStaticUtilsTests {
     public void testUpdateSpanWithResultAttributes() {
         Span mockSpan = org.mockito.Mockito.mock(Span.class);
         MLAgentTracer.updateSpanWithResultAttributes(mockSpan, "result", 1.0, 2.0, 3.0, 4.0);
-        org.mockito.Mockito.verify(mockSpan).addAttribute("gen_ai.agent.result", "result");
-        org.mockito.Mockito.verify(mockSpan).addAttribute("gen_ai.usage.input_tokens", "1");
-        org.mockito.Mockito.verify(mockSpan).addAttribute("gen_ai.usage.output_tokens", "2");
-        org.mockito.Mockito.verify(mockSpan).addAttribute("gen_ai.usage.total_tokens", "3");
-        org.mockito.Mockito.verify(mockSpan).addAttribute("gen_ai.agent.latency", "4");
+        org.mockito.Mockito.verify(mockSpan).addAttribute(MLAgentTracer.ATTR_RESULT, "result");
+        org.mockito.Mockito.verify(mockSpan).addAttribute(MLAgentTracer.ATTR_USAGE_INPUT_TOKENS, "1");
+        org.mockito.Mockito.verify(mockSpan).addAttribute(MLAgentTracer.ATTR_USAGE_OUTPUT_TOKENS, "2");
+        org.mockito.Mockito.verify(mockSpan).addAttribute(MLAgentTracer.ATTR_USAGE_TOTAL_TOKENS, "3");
+        org.mockito.Mockito.verify(mockSpan).addAttribute(MLAgentTracer.ATTR_LATENCY, "4");
     }
 
     @Test
@@ -83,10 +83,10 @@ public class MLAgentTracerStaticUtilsTests {
         Map<String, String> params = new HashMap<>();
         params.put("_llm_interface", "bedrock/converse/claude");
         Map<String, String> attrs = MLAgentTracer.createLLMCallAttributes("result", 100L, mockOutput, params);
-        assertEquals("aws.bedrock", attrs.get("gen_ai.system"));
-        assertEquals("10", attrs.get("gen_ai.usage.input_tokens"));
-        assertEquals("20", attrs.get("gen_ai.usage.output_tokens"));
-        assertEquals("30", attrs.get("gen_ai.usage.total_tokens"));
+        assertEquals("aws.bedrock", attrs.get(MLAgentTracer.ATTR_SYSTEM));
+        assertEquals("10", attrs.get(MLAgentTracer.ATTR_USAGE_INPUT_TOKENS));
+        assertEquals("20", attrs.get(MLAgentTracer.ATTR_USAGE_OUTPUT_TOKENS));
+        assertEquals("30", attrs.get(MLAgentTracer.ATTR_USAGE_TOTAL_TOKENS));
     }
 
     @Test
@@ -108,10 +108,10 @@ public class MLAgentTracerStaticUtilsTests {
         Map<String, String> params = new HashMap<>();
         params.put("_llm_interface", "openai/v1/chat/completions");
         Map<String, String> attrs = MLAgentTracer.createLLMCallAttributes("result", 100L, mockOutput, params);
-        assertEquals("openai", attrs.get("gen_ai.system"));
-        assertEquals("5", attrs.get("gen_ai.usage.input_tokens"));
-        assertEquals("7", attrs.get("gen_ai.usage.output_tokens"));
-        assertEquals("12", attrs.get("gen_ai.usage.total_tokens"));
+        assertEquals("openai", attrs.get(MLAgentTracer.ATTR_SYSTEM));
+        assertEquals("5", attrs.get(MLAgentTracer.ATTR_USAGE_INPUT_TOKENS));
+        assertEquals("7", attrs.get(MLAgentTracer.ATTR_USAGE_OUTPUT_TOKENS));
+        assertEquals("12", attrs.get(MLAgentTracer.ATTR_USAGE_TOTAL_TOKENS));
     }
 
     @Test
