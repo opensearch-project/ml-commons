@@ -327,7 +327,6 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                 addToolsToPrompt(tools, allParams);
 
                 AtomicInteger traceNumber = new AtomicInteger(0);
-
                 AtomicReference<Double> agentInputTokens = new AtomicReference<>(0.0);
                 AtomicReference<Double> agentOutputTokens = new AtomicReference<>(0.0);
                 AtomicReference<Double> agentTotalTokens = new AtomicReference<>(0.0);
@@ -380,7 +379,6 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         AtomicReference<Double> agentTotalTokens
     ) {
         final Span finalPlanSpan = planSpan;
-
         Span planStepSpan = MLAgentTracer.getInstance().startPlanOrReflectStepSpan(stepsExecuted, agentTaskSpan);
 
         try {
@@ -616,7 +614,6 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
                                 resetPhaseTokens(phaseInputTokens, phaseOutputTokens, phaseTotalTokens);
                                 extractTokensFromReActOutput(reactResult, phaseInputTokens, phaseOutputTokens, phaseTotalTokens);
-
                                 setSpanTaskAndResult(executeStepSpan, stepToExecute, results.get(STEP_RESULT_FIELD));
 
                                 MLAgentTracer
@@ -647,7 +644,6 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                                     );
 
                                 resetPhaseTokens(phaseInputTokens, phaseOutputTokens, phaseTotalTokens);
-
                                 MLAgentTracer.getInstance().endSpan(executeStepSpan);
 
                                 executePlanningLoop(
@@ -674,7 +670,6 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     handleSpanError(planStepSpan, "Error in plan listener", e, finalListener);
                 }
             }, e -> { handleSpanError(planStepSpan, "Failed to run deep research agent", e, finalListener); });
-
             client.execute(MLPredictionTaskAction.INSTANCE, request, planListener);
         } catch (Exception e) {
             handleSpanError(planStepSpan, "Error in executePlanningLoop", e, finalListener);
@@ -868,11 +863,9 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         AtomicReference<Double> agentOutputTokens,
         AtomicReference<Double> agentTotalTokens
     ) {
-        // Update span with phase tokens
         MLAgentTracer
             .updateSpanWithResultAttributes(span, null, phaseInputTokens.get(), phaseOutputTokens.get(), phaseTotalTokens.get(), null);
 
-        // Accumulate tokens to agent totals
         accumulateTokensToAgent(
             phaseInputTokens,
             phaseOutputTokens,
@@ -882,7 +875,6 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             agentTotalTokens
         );
 
-        // Update agent task span
         MLAgentTracer
             .updateSpanWithResultAttributes(
                 agentTaskSpan,
@@ -893,7 +885,6 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                 null
             );
 
-        // Reset phase tokens
         resetPhaseTokens(phaseInputTokens, phaseOutputTokens, phaseTotalTokens);
     }
 

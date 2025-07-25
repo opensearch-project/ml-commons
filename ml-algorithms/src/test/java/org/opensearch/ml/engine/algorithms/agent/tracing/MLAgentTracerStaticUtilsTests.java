@@ -1,7 +1,9 @@
 package org.opensearch.ml.engine.algorithms.agent.tracing;
 
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -12,8 +14,15 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.telemetry.tracing.Span;
 
+/**
+ * Unit tests for static utility methods in MLAgentTracer.
+ * These tests cover attribute creation, provider detection, tool call extraction, and span attribute updates.
+ */
 public class MLAgentTracerStaticUtilsTests {
 
+    /**
+     * Tests that createAgentTaskAttributes returns correct attributes for agent name and task.
+     */
     @Test
     public void testCreateAgentTaskAttributes() {
         Map<String, String> attrs = MLAgentTracer.createAgentTaskAttributes("agent1", "task1");
@@ -22,6 +31,9 @@ public class MLAgentTracerStaticUtilsTests {
         assertEquals("create_agent", attrs.get(MLAgentTracer.ATTR_OPERATION_NAME));
     }
 
+    /**
+     * Tests that createPlanAttributes returns correct attributes for a plan step.
+     */
     @Test
     public void testCreatePlanAttributes() {
         Map<String, String> attrs = MLAgentTracer.createPlanAttributes(5);
@@ -29,6 +41,9 @@ public class MLAgentTracerStaticUtilsTests {
         assertEquals("5", attrs.get(MLAgentTracer.ATTR_STEP_NUMBER));
     }
 
+    /**
+     * Tests that createExecuteStepAttributes returns correct attributes for an execute step.
+     */
     @Test
     public void testCreateExecuteStepAttributes() {
         Map<String, String> attrs = MLAgentTracer.createExecuteStepAttributes(2);
@@ -36,6 +51,9 @@ public class MLAgentTracerStaticUtilsTests {
         assertEquals("2", attrs.get(MLAgentTracer.ATTR_STEP_NUMBER));
     }
 
+    /**
+     * Tests provider detection logic for various LLM interface strings.
+     */
     @Test
     public void testDetectProviderFromParameters() {
         Map<String, String> params = new HashMap<>();
@@ -47,6 +65,9 @@ public class MLAgentTracerStaticUtilsTests {
         assertEquals("unknown", MLAgentTracer.detectProviderFromParameters(params));
     }
 
+    /**
+     * Tests that extractToolCallInfo returns correct input and null output when given null tool output.
+     */
     @Test
     public void testExtractToolCallInfoWithNull() {
         MLAgentTracer.ToolCallExtractionResult result = MLAgentTracer.extractToolCallInfo(null, "input");
@@ -54,6 +75,9 @@ public class MLAgentTracerStaticUtilsTests {
         assertNull(result.output);
     }
 
+    /**
+     * Tests that updateSpanWithResultAttributes sets the correct attributes on a mock span.
+     */
     @Test
     public void testUpdateSpanWithResultAttributes() {
         Span mockSpan = org.mockito.Mockito.mock(Span.class);
@@ -65,6 +89,9 @@ public class MLAgentTracerStaticUtilsTests {
         org.mockito.Mockito.verify(mockSpan).addAttribute(MLAgentTracer.ATTR_LATENCY, "4");
     }
 
+    /**
+     * Tests LLM call attribute creation for AWS Bedrock provider.
+     */
     @Test
     @SuppressWarnings({ "unchecked", "rawtypes" })
     public void testCreateLLMCallAttributesAwsBedrock() {
@@ -89,6 +116,9 @@ public class MLAgentTracerStaticUtilsTests {
         assertEquals("30", attrs.get(MLAgentTracer.ATTR_USAGE_TOTAL_TOKENS));
     }
 
+    /**
+     * Tests LLM call attribute creation for OpenAI provider.
+     */
     @Test
     @SuppressWarnings({ "unchecked", "rawtypes" })
     public void testCreateLLMCallAttributesOpenAI() {
@@ -114,6 +144,9 @@ public class MLAgentTracerStaticUtilsTests {
         assertEquals("12", attrs.get(MLAgentTracer.ATTR_USAGE_TOTAL_TOKENS));
     }
 
+    /**
+     * Tests provider detection for all supported LLM interface branches.
+     */
     @Test
     public void testDetectProviderFromParametersAllBranches() {
         Map<String, String> params = new HashMap<>();
@@ -151,6 +184,9 @@ public class MLAgentTracerStaticUtilsTests {
         assertEquals("ibm.watsonx.ai", MLAgentTracer.detectProviderFromParameters(params));
     }
 
+    /**
+     * Tests tool call extraction from a tensor with dataAsMap containing response, usage, and metrics.
+     */
     @Test
     @SuppressWarnings({ "unchecked", "rawtypes" })
     public void testExtractToolCallInfoDataAsMapBranch() {
@@ -172,6 +208,9 @@ public class MLAgentTracerStaticUtilsTests {
         assertEquals(1, result.metrics.get("baz"));
     }
 
+    /**
+     * Tests that updateSpanWithResultAttributes does not throw when span is null.
+     */
     @Test
     public void testUpdateSpanWithResultAttributesNullSpan() {
         // Should not throw

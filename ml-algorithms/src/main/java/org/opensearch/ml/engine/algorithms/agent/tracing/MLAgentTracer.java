@@ -141,7 +141,7 @@ public class MLAgentTracer extends MLTracer {
      */
     public static Map<String, String> createAgentTaskAttributes(String agentName, String userTask) {
         Map<String, String> attributes = new HashMap<>();
-        attributes.put(ATTR_SERVICE_TYPE, "agent");
+        attributes.put(ATTR_SERVICE_TYPE, "tracer");
         attributes.put(ATTR_NAME, agentName != null ? agentName : "");
         attributes.put(ATTR_TASK, userTask != null ? userTask : "");
         attributes.put(ATTR_OPERATION_NAME, "create_agent");
@@ -155,7 +155,7 @@ public class MLAgentTracer extends MLTracer {
      */
     public static Map<String, String> createPlanAttributes(int stepNumber) {
         Map<String, String> attributes = new HashMap<>();
-        attributes.put(ATTR_SERVICE_TYPE, "agent");
+        attributes.put(ATTR_SERVICE_TYPE, "tracer");
         attributes.put(ATTR_PHASE, "planner");
         attributes.put(ATTR_STEP_NUMBER, String.valueOf(stepNumber));
         attributes.put(ATTR_OPERATION_NAME, "create_agent");
@@ -170,7 +170,7 @@ public class MLAgentTracer extends MLTracer {
      */
     public static Map<String, String> createExecuteStepAttributes(int stepNumber) {
         Map<String, String> attributes = new HashMap<>();
-        attributes.put(ATTR_SERVICE_TYPE, "agent");
+        attributes.put(ATTR_SERVICE_TYPE, "tracer");
         attributes.put(ATTR_PHASE, "executor");
         attributes.put(ATTR_STEP_NUMBER, String.valueOf(stepNumber));
         attributes.put(ATTR_OPERATION_NAME, "invoke_agent");
@@ -194,7 +194,7 @@ public class MLAgentTracer extends MLTracer {
         Map<String, String> attributes = new HashMap<>();
 
         String provider = detectProviderFromParameters(parameters);
-        attributes.put(ATTR_SERVICE_TYPE, "agent");
+        attributes.put(ATTR_SERVICE_TYPE, "tracer");
         attributes.put(ATTR_SYSTEM, provider);
         // TODO: get actual request model
         attributes.put(ATTR_OPERATION_NAME, "chat");
@@ -205,105 +205,88 @@ public class MLAgentTracer extends MLTracer {
         attributes.put(ATTR_SYSTEM_MESSAGE, parameters.get("system_prompt") != null ? parameters.get("system_prompt") : "");
         attributes.put(ATTR_TOOL_DESCRIPTION, parameters.get("tools_prompt") != null ? parameters.get("tools_prompt") : "");
 
-        if (modelTensorOutput != null
-            && modelTensorOutput.getMlModelOutputs() != null
-            && !modelTensorOutput.getMlModelOutputs().isEmpty()) {
-            for (int i = 0; i < modelTensorOutput.getMlModelOutputs().size(); i++) {
-                var output = modelTensorOutput.getMlModelOutputs().get(i);
-                if (output.getMlModelTensors() != null) {
-                    for (int j = 0; j < output.getMlModelTensors().size(); j++) {
-                        var tensor = output.getMlModelTensors().get(j);
-                        if (tensor.getDataAsMap() != null) {
-                            Map<String, ?> dataAsMap = tensor.getDataAsMap();
-                            if (dataAsMap.containsKey("usage")) {
-                                Object usageObj = dataAsMap.get("usage");
-                                if (usageObj instanceof Map) {
-                                    @SuppressWarnings("unchecked")
-                                    Map<String, Object> usage = (Map<String, Object>) usageObj;
+        if (modelTensorOutput == null || modelTensorOutput.getMlModelOutputs() == null || modelTensorOutput.getMlModelOutputs().isEmpty()) {
+            log.info("[AGENT_TRACE] ModelTensorOutput is null or empty");
+            return attributes;
+        }
+        for (var output : modelTensorOutput.getMlModelOutputs()) {
+            if (output.getMlModelTensors() == null)
+                continue;
+            for (var tensor : output.getMlModelTensors()) {
+                if (tensor.getDataAsMap() == null)
+                    continue;
+                Map<String, ?> dataAsMap = tensor.getDataAsMap();
+                if (!dataAsMap.containsKey("usage"))
+                    continue;
+                Object usageObj = dataAsMap.get("usage");
+                if (!(usageObj instanceof Map))
+                    continue;
+                @SuppressWarnings("unchecked")
+                Map<String, Object> usage = (Map<String, Object>) usageObj;
 
-                                    if ("aws.bedrock".equalsIgnoreCase(provider)) {
-                                        // Bedrock/Claude format: input_tokens, output_tokens (or inputTokens, outputTokens)
-                                        Object inputTokens = null;
-                                        if (usage.containsKey("input_tokens")) {
-                                            inputTokens = usage.get("input_tokens");
-                                        } else if (usage.containsKey("inputTokens")) {
-                                            inputTokens = usage.get("inputTokens");
-                                        }
-                                        if (inputTokens != null) {
-                                            attributes.put(ATTR_USAGE_INPUT_TOKENS, inputTokens.toString());
-                                        }
-
-                                        Object outputTokens = null;
-                                        if (usage.containsKey("output_tokens")) {
-                                            outputTokens = usage.get("output_tokens");
-                                        } else if (usage.containsKey("outputTokens")) {
-                                            outputTokens = usage.get("outputTokens");
-                                        }
-                                        if (outputTokens != null) {
-                                            attributes.put(ATTR_USAGE_OUTPUT_TOKENS, outputTokens.toString());
-                                        }
-
-                                        Double inputTokensValue = null;
-                                        Double outputTokensValue = null;
-                                        try {
-                                            if (inputTokens != null) {
-                                                inputTokensValue = Double.parseDouble(inputTokens.toString());
-                                            }
-                                            if (outputTokens != null) {
-                                                outputTokensValue = Double.parseDouble(outputTokens.toString());
-                                            }
-                                        } catch (NumberFormatException e) {}
-                                        if (inputTokensValue != null && outputTokensValue != null) {
-                                            double totalTokens = inputTokensValue + outputTokensValue;
-                                            attributes.put(ATTR_USAGE_TOTAL_TOKENS, String.valueOf((int) totalTokens));
-                                        }
-                                    } else if ("openai".equalsIgnoreCase(provider)) {
-                                        // OpenAI format: prompt_tokens, completion_tokens, total_tokens
-                                        Object promptTokens = null;
-                                        if (usage.containsKey("prompt_tokens")) {
-                                            promptTokens = usage.get("prompt_tokens");
-                                            if (promptTokens != null) {
-                                                attributes.put(ATTR_USAGE_INPUT_TOKENS, promptTokens.toString());
-                                            }
-                                        }
-
-                                        Object completionTokens = null;
-                                        if (usage.containsKey("completion_tokens")) {
-                                            completionTokens = usage.get("completion_tokens");
-                                            if (completionTokens != null) {
-                                                attributes.put(ATTR_USAGE_OUTPUT_TOKENS, completionTokens.toString());
-                                            }
-                                        }
-
-                                        Object totalTokens = null;
-                                        if (usage.containsKey("total_tokens")) {
-                                            totalTokens = usage.get("total_tokens");
-                                            if (totalTokens != null) {
-                                                try {
-                                                    Double.parseDouble(totalTokens.toString());
-                                                    attributes.put(ATTR_USAGE_TOTAL_TOKENS, totalTokens.toString());
-                                                } catch (NumberFormatException e) {}
-                                            }
-                                        }
-                                    } else {
-                                        // TODO: find general method for all providers
-                                    }
-                                }
-                            } else {
-                                log.info("[AGENT_TRACE] No usage information found in dataAsMap. Available keys: {}", dataAsMap.keySet());
-
-                                for (Map.Entry<String, ?> entry : dataAsMap.entrySet()) {
-                                    if (entry.getValue() instanceof Map) {
-                                        log.info("[AGENT_TRACE] Found nested map in key '{}': {}", entry.getKey(), entry.getValue());
-                                    }
-                                }
-                            }
+                if (provider != null && provider.toLowerCase().contains("bedrock")) {
+                    Object inputTokens = null;
+                    Object outputTokens = null;
+                    for (String key : usage.keySet()) {
+                        if (key.equalsIgnoreCase("input_tokens") || key.equalsIgnoreCase("inputTokens")) {
+                            inputTokens = usage.get(key);
+                        }
+                        if (key.equalsIgnoreCase("output_tokens") || key.equalsIgnoreCase("outputTokens")) {
+                            outputTokens = usage.get(key);
                         }
                     }
+                    if (inputTokens != null) {
+                        attributes.put(ATTR_USAGE_INPUT_TOKENS, inputTokens.toString());
+                    }
+                    if (outputTokens != null) {
+                        attributes.put(ATTR_USAGE_OUTPUT_TOKENS, outputTokens.toString());
+                    }
+
+                    Double inputTokensValue = null;
+                    Double outputTokensValue = null;
+                    try {
+                        if (inputTokens != null) {
+                            inputTokensValue = Double.parseDouble(inputTokens.toString());
+                        }
+                        if (outputTokens != null) {
+                            outputTokensValue = Double.parseDouble(outputTokens.toString());
+                        }
+                    } catch (NumberFormatException e) {}
+                    if (inputTokensValue != null && outputTokensValue != null) {
+                        double totalTokens = inputTokensValue + outputTokensValue;
+                        attributes.put(ATTR_USAGE_TOTAL_TOKENS, String.valueOf((int) totalTokens));
+                    }
+                } else if (provider != null && provider.toLowerCase().contains("openai")) {
+                    Object promptTokens = null;
+                    Object completionTokens = null;
+                    Object totalTokens = null;
+                    for (String key : usage.keySet()) {
+                        if (key.equalsIgnoreCase("prompt_tokens")) {
+                            promptTokens = usage.get(key);
+                        }
+                        if (key.equalsIgnoreCase("completion_tokens")) {
+                            completionTokens = usage.get(key);
+                        }
+                        if (key.equalsIgnoreCase("total_tokens")) {
+                            totalTokens = usage.get(key);
+                        }
+                    }
+                    if (promptTokens != null) {
+                        attributes.put(ATTR_USAGE_INPUT_TOKENS, promptTokens.toString());
+                    }
+                    if (completionTokens != null) {
+                        attributes.put(ATTR_USAGE_OUTPUT_TOKENS, completionTokens.toString());
+                    }
+                    if (totalTokens != null) {
+                        try {
+                            Double.parseDouble(totalTokens.toString());
+                            attributes.put(ATTR_USAGE_TOTAL_TOKENS, totalTokens.toString());
+                        } catch (NumberFormatException e) {}
+                    }
+                } else {
+                    // TODO: find general method for all providers
                 }
             }
-        } else {
-            log.info("[AGENT_TRACE] ModelTensorOutput is null or empty");
         }
 
         return attributes;
@@ -368,62 +351,58 @@ public class MLAgentTracer extends MLTracer {
         ToolCallExtractionResult result = new ToolCallExtractionResult();
         result.input = actionInput;
 
+        if (!(toolOutput instanceof ModelTensorOutput)) {
+            result.output = toolOutput != null ? toolOutput.toString() : null;
+            return result;
+        }
+        ModelTensorOutput mto = (ModelTensorOutput) toolOutput;
+        if (mto.getMlModelOutputs() == null || mto.getMlModelOutputs().isEmpty())
+            return result;
+        var tensors = mto.getMlModelOutputs().get(0).getMlModelTensors();
+        if (tensors == null || tensors.isEmpty())
+            return result;
+        var tensor = tensors.get(0);
+        // Try result
+        if (tensor.getResult() != null) {
+            result.output = tensor.getResult();
+        }
+        // Try dataAsMap
+        Map<String, ?> map = null;
         try {
-            // ModelTensorOutput
-            if (toolOutput instanceof ModelTensorOutput) {
-                ModelTensorOutput mto = (ModelTensorOutput) toolOutput;
-                if (mto.getMlModelOutputs() != null && !mto.getMlModelOutputs().isEmpty()) {
-                    var tensors = mto.getMlModelOutputs().get(0).getMlModelTensors();
-                    if (tensors != null && !tensors.isEmpty()) {
-                        var tensor = tensors.get(0);
-                        // Try result
-                        if (tensor.getResult() != null) {
-                            result.output = tensor.getResult();
-                        }
-                        // Try dataAsMap
-                        Map<String, ?> map = null;
-                        try {
-                            map = tensor.getDataAsMap();
-                        } catch (Exception e) {
-                            log.warn("[AGENT_TRACE] Exception getting dataAsMap from tensor: {}", e.getMessage());
-                        }
-                        if (map != null) {
-                            if (map.containsKey("response")) {
-                                Object resp = map.get("response");
-                                result.output = (resp instanceof String) ? (String) resp : StringUtils.toJson(resp);
-                            } else if (map.containsKey("output")) {
-                                Object out = map.get("output");
-                                result.output = (out instanceof String) ? (String) out : StringUtils.toJson(out);
-                            } else if (result.output == null && !map.isEmpty()) {
-                                Object firstValue = map.values().iterator().next();
-                                result.output = (firstValue instanceof String) ? (String) firstValue : StringUtils.toJson(firstValue);
-                            }
-                            if (map.containsKey("usage")) {
-                                try {
-                                    result.usage = (Map<String, Object>) map.get("usage");
-                                } catch (ClassCastException e) {
-                                    log.warn("[AGENT_TRACE] 'usage' field is not a Map: {}", e.getMessage());
-                                }
-                            }
-                            if (map.containsKey("metrics")) {
-                                try {
-                                    result.metrics = (Map<String, Object>) map.get("metrics");
-                                } catch (ClassCastException e) {
-                                    log.warn("[AGENT_TRACE] 'metrics' field is not a Map: {}", e.getMessage());
-                                }
-                            }
-                        } else if (result.output == null) {
-                            result.output = tensor.toString();
-                            log.warn("[AGENT_TRACE] tensor.getDataAsMap() is null; using tensor.toString() as output");
-                        }
-                    }
-                }
-                return result;
-            }
-            // Fallback: toString
-            result.output = toolOutput != null ? toolOutput.toString() : null;
+            map = tensor.getDataAsMap();
         } catch (Exception e) {
-            result.output = toolOutput != null ? toolOutput.toString() : null;
+            log.warn("[AGENT_TRACE] Exception getting dataAsMap from tensor: {}", e.getMessage());
+        }
+        if (map == null) {
+            if (result.output == null) {
+                result.output = tensor.toString();
+                log.warn("[AGENT_TRACE] tensor.getDataAsMap() is null; using tensor.toString() as output");
+            }
+            return result;
+        }
+        if (map.containsKey("response")) {
+            Object resp = map.get("response");
+            result.output = (resp instanceof String) ? (String) resp : StringUtils.toJson(resp);
+        } else if (map.containsKey("output")) {
+            Object out = map.get("output");
+            result.output = (out instanceof String) ? (String) out : StringUtils.toJson(out);
+        } else if (result.output == null && !map.isEmpty()) {
+            Object firstValue = map.values().iterator().next();
+            result.output = (firstValue instanceof String) ? (String) firstValue : StringUtils.toJson(firstValue);
+        }
+        if (map.containsKey("usage")) {
+            try {
+                result.usage = (Map<String, Object>) map.get("usage");
+            } catch (ClassCastException e) {
+                log.warn("[AGENT_TRACE] 'usage' field is not a Map: {}", e.getMessage());
+            }
+        }
+        if (map.containsKey("metrics")) {
+            try {
+                result.metrics = (Map<String, Object>) map.get("metrics");
+            } catch (ClassCastException e) {
+                log.warn("[AGENT_TRACE] 'metrics' field is not a Map: {}", e.getMessage());
+            }
         }
         return result;
     }
