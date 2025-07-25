@@ -16,6 +16,12 @@
     "last_updated_time": {
       "type": "date",
       "format": "strict_date_time||epoch_millis"
+    },
+    "statistical_data": {
+      "type": "text"
+    },
+    "highLevel_feature": {
+      "type": "text"
     }
   }
 }
