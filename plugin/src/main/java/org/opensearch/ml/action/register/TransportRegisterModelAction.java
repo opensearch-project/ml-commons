@@ -55,7 +55,6 @@ import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelRequest;
 import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
 import org.opensearch.ml.engine.ModelHelper;
-import org.opensearch.ml.engine.algorithms.agent.tracing.MLConnectorTracer;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
@@ -69,7 +68,6 @@ import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.tasks.Task;
-import org.opensearch.telemetry.tracing.Span;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -163,90 +161,48 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLRegisterModelResponse> listener) {
         MLRegisterModelRequest registerModelRequest = MLRegisterModelRequest.fromActionRequest(request);
         MLRegisterModelInput registerModelInput = registerModelRequest.getRegisterModelInput();
-        final Span parentSpan = MLConnectorTracer
-            .getInstance()
-            .startSpan(
-                "model.register",
-                MLConnectorTracer
-                    .createModelRegisterAttributes(
-                        registerModelInput.getModelName(),
-                        registerModelInput.getVersion(),
-                        registerModelInput.getFunctionName() != null ? registerModelInput.getFunctionName().toString() : null
-                    )
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, registerModelInput.getTenantId(), listener)) {
+            return;
+        }
+        if (FunctionName.isDLModel(registerModelInput.getFunctionName()) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
+            throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
+        }
+        if (registerModelInput.getUrl() != null && !isModelUrlAllowed) {
+            throw new IllegalArgumentException(
+                "To upload custom model user needs to enable allow_registering_model_via_url settings. Otherwise please use OpenSearch pre-trained models."
             );
-
-        try {
-            Span validateSpan = MLConnectorTracer
-                .getInstance()
-                .startSpan(
-                    "model.validate",
-                    MLConnectorTracer
-                        .createModelRegisterAttributes(
-                            registerModelInput.getModelName(),
-                            registerModelInput.getVersion(),
-                            registerModelInput.getFunctionName() != null ? registerModelInput.getFunctionName().toString() : null
-                        ),
-                    parentSpan
+        }
+        boolean isSuperAdmin = isSuperAdminUserWrapper(clusterService, client);
+        registerModelInput.setIsHidden(isSuperAdmin);
+        if (StringUtils.isEmpty(registerModelInput.getModelGroupId())) {
+            mlModelGroupManager
+                .validateUniqueModelGroupName(
+                    registerModelInput.getModelName(),
+                    registerModelInput.getTenantId(),
+                    ActionListener.wrap(modelGroups -> {
+                        if (modelGroups != null
+                            && modelGroups.getHits().getTotalHits() != null
+                            && modelGroups.getHits().getTotalHits().value() != 0) {
+                            String modelGroupIdOfTheNameProvided = modelGroups.getHits().getAt(0).getId();
+                            registerModelInput.setModelGroupId(modelGroupIdOfTheNameProvided);
+                            checkUserAccess(registerModelInput, listener, true);
+                        } else {
+                            doRegister(registerModelInput, listener);
+                        }
+                    }, e -> {
+                        log.error("Failed to search model group index", e);
+                        listener.onFailure(e);
+                    })
                 );
-            try {
-                if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, registerModelInput.getTenantId(), listener)) {
-                    return;
-                }
-                if (FunctionName.isDLModel(registerModelInput.getFunctionName()) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
-                    throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
-                }
-                if (registerModelInput.getUrl() != null && !isModelUrlAllowed) {
-                    throw new IllegalArgumentException(
-                        "To upload custom model user needs to enable allow_registering_model_via_url settings. Otherwise please use OpenSearch pre-trained models."
-                    );
-                }
-            } catch (Exception e) {
-                log.error("Error in model.validate span", e);
-                validateSpan.setError(e);
-                MLConnectorTracer.getInstance().endSpan(validateSpan);
-            }
-
-            boolean isSuperAdmin = isSuperAdminUserWrapper(clusterService, client);
-            registerModelInput.setIsHidden(isSuperAdmin);
-            if (StringUtils.isEmpty(registerModelInput.getModelGroupId())) {
-                MLConnectorTracer.getInstance().endSpan(validateSpan);
-                mlModelGroupManager
-                    .validateUniqueModelGroupName(
-                        registerModelInput.getModelName(),
-                        registerModelInput.getTenantId(),
-                        ActionListener.wrap(modelGroups -> {
-                            if (modelGroups != null
-                                && modelGroups.getHits().getTotalHits() != null
-                                && modelGroups.getHits().getTotalHits().value() != 0) {
-                                String modelGroupIdOfTheNameProvided = modelGroups.getHits().getAt(0).getId();
-                                registerModelInput.setModelGroupId(modelGroupIdOfTheNameProvided);
-                                checkUserAccess(registerModelInput, listener, true, parentSpan);
-                            } else {
-                                doRegister(registerModelInput, listener, parentSpan);
-                            }
-                        }, e -> {
-                            log.error("Failed to search model group index", e);
-                            parentSpan.setError(e);
-                            MLConnectorTracer.getInstance().endSpan(parentSpan);
-                            listener.onFailure(e);
-                        })
-                    );
-            } else {
-                MLConnectorTracer.getInstance().endSpan(validateSpan);
-                checkUserAccess(registerModelInput, listener, false, parentSpan);
-            }
-        } catch (Exception e) {
-            log.error("Error in model.register span", e);
-            parentSpan.setError(e);
-            MLConnectorTracer.getInstance().endSpan(parentSpan);
+        } else {
+            checkUserAccess(registerModelInput, listener, false);
         }
     }
 
     private void checkUserAccess(
         MLRegisterModelInput registerModelInput,
         ActionListener<MLRegisterModelResponse> listener,
-        Boolean isModelNameAlreadyExisting,
-        Span parentSpan
+        Boolean isModelNameAlreadyExisting
     ) {
         User user = RestActionUtils.getUserContext(client);
         modelAccessControlHelper
@@ -259,7 +215,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                 sdkClient,
                 ActionListener.wrap(access -> {
                     if (access) {
-                        doRegister(registerModelInput, listener, parentSpan);
+                        doRegister(registerModelInput, listener);
                         return;
                     }
                     // if the user does not have access, we need to check three more conditions before throwing exception.
@@ -304,19 +260,10 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             );
     }
 
-    private void doRegister(MLRegisterModelInput registerModelInput, ActionListener<MLRegisterModelResponse> listener, Span parentSpan) {
+    private void doRegister(MLRegisterModelInput registerModelInput, ActionListener<MLRegisterModelResponse> listener) {
         FunctionName functionName = registerModelInput.getFunctionName();
         if (FunctionName.REMOTE == functionName) {
             if (Strings.isNotBlank(registerModelInput.getConnectorId())) {
-                // model.connector_resolve span for connector ID
-                final Span connectorSpan = MLConnectorTracer
-                    .getInstance()
-                    .startSpan(
-                        "model.connector_resolve",
-                        MLConnectorTracer.createTaskAttributes("CONNECTOR_RESOLVE", null, null, null),
-                        parentSpan
-                    );
-
                 connectorAccessControlHelper
                     .validateConnectorAccess(
                         sdkClient,
@@ -340,23 +287,16 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                                                                     + registerModelInput.getConnectorId()
                                                             )
                                                         );
-                                                    MLConnectorTracer.getInstance().endSpan(connectorSpan);
                                                     return;
                                                 }
                                                 updateRegisterModelInputModelInterfaceFieldsByConnector(registerModelInput, connector);
-                                                MLConnectorTracer.getInstance().endSpan(connectorSpan);
-                                                createModelGroup(registerModelInput, listener, parentSpan);
-                                            }, e -> {
-                                                MLConnectorTracer.getInstance().endSpan(connectorSpan);
-                                                listener.onFailure(e);
-                                            })
+                                                createModelGroup(registerModelInput, listener);
+                                            }, listener::onFailure)
                                         );
                                 } else {
-                                    MLConnectorTracer.getInstance().endSpan(connectorSpan);
-                                    createModelGroup(registerModelInput, listener, parentSpan);
+                                    createModelGroup(registerModelInput, listener);
                                 }
                             } else {
-                                MLConnectorTracer.getInstance().endSpan(connectorSpan);
                                 listener
                                     .onFailure(
                                         new IllegalArgumentException(
@@ -366,7 +306,6 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                                     );
                             }
                         }, e -> {
-                            MLConnectorTracer.getInstance().endSpan(connectorSpan);
                             log
                                 .error(
                                     "You don't have permission to use the connector provided, connector id: {}",
@@ -377,25 +316,14 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                         })
                     );
             } else {
-                // model.connector_resolve span for dry-run
-                final Span connectorSpan = MLConnectorTracer
-                    .getInstance()
-                    .startSpan(
-                        "model.connector_resolve",
-                        MLConnectorTracer.createTaskAttributes("CONNECTOR_RESOLVE", null, null, null),
-                        parentSpan
-                    );
-
                 validateInternalConnector(registerModelInput);
                 ActionListener<MLCreateConnectorResponse> dryRunResultListener = ActionListener.wrap(res -> {
                     log.info("Dry run create connector successfully");
                     if (registerModelInput.getModelInterface() == null) {
                         updateRegisterModelInputModelInterfaceFieldsByConnector(registerModelInput);
                     }
-                    MLConnectorTracer.getInstance().endSpan(connectorSpan);
-                    createModelGroup(registerModelInput, listener, parentSpan);
+                    createModelGroup(registerModelInput, listener);
                 }, e -> {
-                    MLConnectorTracer.getInstance().endSpan(connectorSpan);
                     log.error(e.getMessage(), e);
                     listener.onFailure(e);
                 });
@@ -403,35 +331,24 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                 client.execute(MLCreateConnectorAction.INSTANCE, mlCreateConnectorRequest, dryRunResultListener);
             }
         } else {
-            createModelGroup(registerModelInput, listener, parentSpan);
+            createModelGroup(registerModelInput, listener);
         }
     }
 
-    private void createModelGroup(
-        MLRegisterModelInput registerModelInput,
-        ActionListener<MLRegisterModelResponse> listener,
-        Span parentSpan
-    ) {
+    private void createModelGroup(MLRegisterModelInput registerModelInput, ActionListener<MLRegisterModelResponse> listener) {
         if (Strings.isEmpty(registerModelInput.getModelGroupId())) {
-            // model.group_create span
-            final Span groupSpan = MLConnectorTracer
-                .getInstance()
-                .startSpan("model.group_create", MLConnectorTracer.createTaskAttributes("GROUP_CREATE", null, null, null), parentSpan);
-
             MLRegisterModelGroupInput mlRegisterModelGroupInput = createRegisterModelGroupRequest(registerModelInput);
             mlModelGroupManager.createModelGroup(mlRegisterModelGroupInput, ActionListener.wrap(modelGroupId -> {
                 registerModelInput.setModelGroupId(modelGroupId);
                 registerModelInput.setDoesVersionCreateModelGroup(true);
-                MLConnectorTracer.getInstance().endSpan(groupSpan);
-                registerModel(registerModelInput, listener, parentSpan);
+                registerModel(registerModelInput, listener);
             }, e -> {
-                MLConnectorTracer.getInstance().endSpan(groupSpan);
                 logException("Failed to create Model Group", e, log);
                 listener.onFailure(e);
             }));
         } else {
             registerModelInput.setDoesVersionCreateModelGroup(false);
-            registerModel(registerModelInput, listener, parentSpan);
+            registerModel(registerModelInput, listener);
         }
     }
 
@@ -460,28 +377,15 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         }
     }
 
-    private void registerModel(MLRegisterModelInput registerModelInput, ActionListener<MLRegisterModelResponse> listener, Span parentSpan) {
-        // model.guardrails span (if present)
-        Span guardrailsSpan = null;
-        if (registerModelInput.getGuardrails() != null) {
-            guardrailsSpan = MLConnectorTracer
-                .getInstance()
-                .startSpan("model.guardrails", MLConnectorTracer.createTaskAttributes("GUARDRAILS", null, null, null), parentSpan);
-        }
-
+    private void registerModel(MLRegisterModelInput registerModelInput, ActionListener<MLRegisterModelResponse> listener) {
         Pattern pattern = Pattern.compile(trustedUrlRegex);
         String url = registerModelInput.getUrl();
         if (url != null) {
             boolean validUrl = pattern.matcher(url).find();
             if (!validUrl) {
-                if (guardrailsSpan != null)
-                    MLConnectorTracer.getInstance().endSpan(guardrailsSpan);
                 throw new IllegalArgumentException("URL can't match trusted url regex");
             }
         }
-        Span taskSpan = MLConnectorTracer
-            .getInstance()
-            .startSpan("model.register_task", MLConnectorTracer.createTaskAttributes("REGISTER_MODEL", null, null, null), parentSpan);
 
         boolean isAsync = registerModelInput.getFunctionName() != FunctionName.REMOTE;
         MLTask mlTask = MLTask
@@ -495,117 +399,70 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
             .workerNodes(ImmutableList.of(clusterService.localNode().getId()))
             .tenantId(registerModelInput.getTenantId())
             .build();
-        Span indexSpan = MLConnectorTracer
-            .getInstance()
-            .startSpan(
-                "model.index",
-                MLConnectorTracer
-                    .createModelIndexAttributes(
-                        "ml_model_index",
-                        registerModelInput.getModelName(),
-                        registerModelInput.getVersion(),
-                        registerModelInput.getFunctionName() != null ? registerModelInput.getFunctionName().toString() : null
-                    ),
-                parentSpan
-            );
-        try {
-            if (guardrailsSpan != null)
-                MLConnectorTracer.getInstance().endSpan(guardrailsSpan);
-            if (!isAsync) {
-                mlTaskManager.createMLTask(mlTask, ActionListener.wrap(response -> {
-                    String taskId = response.getId();
-                    mlTask.setTaskId(taskId);
-                    if (taskSpan != null)
-                        MLConnectorTracer.getInstance().endSpan(taskSpan);
-                    if (indexSpan != null)
-                        MLConnectorTracer.getInstance().endSpan(indexSpan);
-                    MLConnectorTracer.getInstance().endSpan(parentSpan);
-                    mlModelManager.registerMLRemoteModel(sdkClient, registerModelInput, mlTask, listener);
-                }, e -> {
-                    if (taskSpan != null)
-                        MLConnectorTracer.getInstance().endSpan(taskSpan);
-                    if (indexSpan != null)
-                        MLConnectorTracer.getInstance().endSpan(indexSpan);
-                    MLConnectorTracer.getInstance().endSpan(parentSpan);
-                    logException("Failed to register model", e, log);
-                    listener.onFailure(e);
-                }));
-                return;
-            }
-            mlTaskDispatcher.dispatch(registerModelInput.getFunctionName(), ActionListener.wrap(node -> {
-                String nodeId = node.getId();
-                mlTask.setWorkerNodes(ImmutableList.of(nodeId));
 
-                mlTaskManager.createMLTask(mlTask, ActionListener.wrap(response -> {
-                    String taskId = response.getId();
-                    mlTask.setTaskId(taskId);
-                    if (taskSpan != null)
-                        MLConnectorTracer.getInstance().endSpan(taskSpan);
-                    if (indexSpan != null)
-                        MLConnectorTracer.getInstance().endSpan(indexSpan);
-                    listener.onResponse(new MLRegisterModelResponse(taskId, MLTaskState.CREATED.name()));
-
-                    ActionListener<MLForwardResponse> forwardActionListener = ActionListener.wrap(res -> {
-                        log.debug("Register model response: {}", res);
-                        if (!clusterService.localNode().getId().equals(nodeId)) {
-                            mlTaskManager.remove(taskId);
-                        }
-                    }, ex -> {
-                        logException("Failed to register model", ex, log);
-                        mlTaskManager
-                            .updateMLTask(
-                                taskId,
-                                registerModelInput.getTenantId(),
-                                ImmutableMap.of(MLTask.ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(ex), STATE_FIELD, FAILED),
-                                TASK_SEMAPHORE_TIMEOUT,
-                                true
-                            );
-                    });
-                    try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                        mlTaskManager.add(mlTask, Arrays.asList(nodeId));
-                        MLForwardInput forwardInput = MLForwardInput
-                            .builder()
-                            .requestType(MLForwardRequestType.REGISTER_MODEL)
-                            .registerModelInput(registerModelInput)
-                            .mlTask(mlTask)
-                            .build();
-                        MLForwardRequest forwardRequest = new MLForwardRequest(forwardInput);
-                        transportService
-                            .sendRequest(
-                                node,
-                                MLForwardAction.NAME,
-                                forwardRequest,
-                                new ActionListenerResponseHandler<>(forwardActionListener, MLForwardResponse::new)
-                            );
-                    } catch (Exception e) {
-                        forwardActionListener.onFailure(e);
-                    }
-                }, e -> {
-                    if (taskSpan != null)
-                        MLConnectorTracer.getInstance().endSpan(taskSpan);
-                    if (indexSpan != null)
-                        MLConnectorTracer.getInstance().endSpan(indexSpan);
-                    MLConnectorTracer.getInstance().endSpan(parentSpan);
-                    logException("Failed to register model", e, log);
-                    listener.onFailure(e);
-                }));
+        if (!isAsync) {
+            mlTaskManager.createMLTask(mlTask, ActionListener.wrap(response -> {
+                String taskId = response.getId();
+                mlTask.setTaskId(taskId);
+                mlModelManager.registerMLRemoteModel(sdkClient, registerModelInput, mlTask, listener);
             }, e -> {
-                if (taskSpan != null)
-                    MLConnectorTracer.getInstance().endSpan(taskSpan);
-                if (indexSpan != null)
-                    MLConnectorTracer.getInstance().endSpan(indexSpan);
-                MLConnectorTracer.getInstance().endSpan(parentSpan);
                 logException("Failed to register model", e, log);
                 listener.onFailure(e);
             }));
-        } finally {
-            // Defensive: ensure spans are closed if not already
-            if (taskSpan != null)
-                MLConnectorTracer.getInstance().endSpan(taskSpan);
-            if (indexSpan != null)
-                MLConnectorTracer.getInstance().endSpan(indexSpan);
-            MLConnectorTracer.getInstance().endSpan(parentSpan);
+            return;
         }
+        mlTaskDispatcher.dispatch(registerModelInput.getFunctionName(), ActionListener.wrap(node -> {
+            String nodeId = node.getId();
+            mlTask.setWorkerNodes(ImmutableList.of(nodeId));
+
+            mlTaskManager.createMLTask(mlTask, ActionListener.wrap(response -> {
+                String taskId = response.getId();
+                mlTask.setTaskId(taskId);
+                listener.onResponse(new MLRegisterModelResponse(taskId, MLTaskState.CREATED.name()));
+
+                ActionListener<MLForwardResponse> forwardActionListener = ActionListener.wrap(res -> {
+                    log.debug("Register model response: {}", res);
+                    if (!clusterService.localNode().getId().equals(nodeId)) {
+                        mlTaskManager.remove(taskId);
+                    }
+                }, ex -> {
+                    logException("Failed to register model", ex, log);
+                    mlTaskManager
+                        .updateMLTask(
+                            taskId,
+                            registerModelInput.getTenantId(),
+                            ImmutableMap.of(MLTask.ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(ex), STATE_FIELD, FAILED),
+                            TASK_SEMAPHORE_TIMEOUT,
+                            true
+                        );
+                });
+                try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                    mlTaskManager.add(mlTask, Arrays.asList(nodeId));
+                    MLForwardInput forwardInput = MLForwardInput
+                        .builder()
+                        .requestType(MLForwardRequestType.REGISTER_MODEL)
+                        .registerModelInput(registerModelInput)
+                        .mlTask(mlTask)
+                        .build();
+                    MLForwardRequest forwardRequest = new MLForwardRequest(forwardInput);
+                    transportService
+                        .sendRequest(
+                            node,
+                            MLForwardAction.NAME,
+                            forwardRequest,
+                            new ActionListenerResponseHandler<>(forwardActionListener, MLForwardResponse::new)
+                        );
+                } catch (Exception e) {
+                    forwardActionListener.onFailure(e);
+                }
+            }, e -> {
+                logException("Failed to register model", e, log);
+                listener.onFailure(e);
+            }));
+        }, e -> {
+            logException("Failed to register model", e, log);
+            listener.onFailure(e);
+        }));
     }
 
     private MLRegisterModelGroupInput createRegisterModelGroupRequest(MLRegisterModelInput registerModelInput) {
