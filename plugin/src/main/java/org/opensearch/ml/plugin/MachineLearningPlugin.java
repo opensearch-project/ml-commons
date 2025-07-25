@@ -808,7 +808,7 @@ public class MachineLearningPlugin extends Plugin
         McpAsyncServerHolder.init(mlIndicesHandler, mcpToolsHelper);
 
         MLAgentTracer.initialize(tracer, mlFeatureEnabledSetting, clusterService);
-        MLConnectorTracer.initialize(tracer, mlFeatureEnabledSetting);
+        MLConnectorTracer.initialize(tracer, mlFeatureEnabledSetting, clusterService);
 
         return ImmutableList
             .of(
@@ -1163,7 +1163,8 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_METRIC_COLLECTION_ENABLED,
                 MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED,
                 MLCommonsSettings.ML_COMMONS_TRACING_ENABLED,
-                MLCommonsSettings.ML_COMMONS_AGENT_TRACING_ENABLED
+                MLCommonsSettings.ML_COMMONS_AGENT_TRACING_ENABLED,
+                MLCommonsSettings.ML_COMMONS_CONNECTOR_TRACING_ENABLED
             );
         return settings;
     }

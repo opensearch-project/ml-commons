@@ -10,6 +10,7 @@ package org.opensearch.ml.common.settings;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_TRACING_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_TRACING_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONTROLLER_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED;
@@ -55,6 +56,7 @@ public class MLFeatureEnabledSetting {
 
     private volatile Boolean isTracingEnabled;
     private volatile Boolean isAgentTracingEnabled;
+    private volatile Boolean isConnectorTracingEnabled;
 
     private final List<SettingsChangeListener> listeners = new ArrayList<>();
 
@@ -73,6 +75,7 @@ public class MLFeatureEnabledSetting {
         isStaticMetricCollectionEnabled = ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED.get(settings);
         isTracingEnabled = ML_COMMONS_TRACING_ENABLED.get(settings);
         isAgentTracingEnabled = ML_COMMONS_AGENT_TRACING_ENABLED.get(settings);
+        isConnectorTracingEnabled = ML_COMMONS_CONNECTOR_TRACING_ENABLED.get(settings);
 
         clusterService
             .getClusterSettings()
@@ -98,6 +101,9 @@ public class MLFeatureEnabledSetting {
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_AGENT_TRACING_ENABLED, it -> isAgentTracingEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_CONNECTOR_TRACING_ENABLED, it -> isConnectorTracingEnabled = it);
     }
 
     /**
@@ -194,6 +200,10 @@ public class MLFeatureEnabledSetting {
 
     public boolean isAgentTracingEnabled() {
         return isAgentTracingEnabled;
+    }
+
+    public boolean isConnectorTracingEnabled() {
+        return isConnectorTracingEnabled;
     }
 
     @VisibleForTesting
