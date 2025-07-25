@@ -38,6 +38,7 @@ import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorRequest;
 import org.opensearch.ml.engine.MLEngine;
+import org.opensearch.ml.engine.algorithms.agent.tracing.MLConnectorTracer;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.utils.TenantAwareHelper;
@@ -51,6 +52,7 @@ import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
+import org.opensearch.telemetry.tracing.Span;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
 
@@ -100,59 +102,67 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
     protected void doExecute(Task task, ActionRequest request, ActionListener<UpdateResponse> listener) {
         MLUpdateConnectorRequest mlUpdateConnectorAction = MLUpdateConnectorRequest.fromActionRequest(request);
         MLCreateConnectorInput mlCreateConnectorInput = mlUpdateConnectorAction.getUpdateContent();
-        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, mlCreateConnectorInput.getTenantId(), listener)) {
-            return;
-        }
         String connectorId = mlUpdateConnectorAction.getConnectorId();
-        String tenantId = mlCreateConnectorInput.getTenantId();
-        FetchSourceContext fetchSourceContext = new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);
-        GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
-            .builder()
-            .index(ML_CONNECTOR_INDEX)
-            .id(connectorId)
-            .tenantId(tenantId)
-            .fetchSourceContext(fetchSourceContext)
-            .build();
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            connectorAccessControlHelper
-                .getConnector(sdkClient, client, context, getDataObjectRequest, connectorId, ActionListener.wrap(connector -> {
-                    // context is already restored here
-                    if (TenantAwareHelper.validateTenantResource(mlFeatureEnabledSetting, tenantId, connector.getTenantId(), listener)) {
-                        boolean hasPermission = connectorAccessControlHelper.validateConnectorAccess(client, connector);
-                        if (hasPermission) {
-                            connector.update(mlUpdateConnectorAction.getUpdateContent(), mlEngine::encrypt);
-                            connector.validateConnectorURL(trustedConnectorEndpointsRegex);
-                            connector.setLastUpdateTime(Instant.now());
-                            UpdateDataObjectRequest updateDataObjectRequest = UpdateDataObjectRequest
-                                .builder()
-                                .index(ML_CONNECTOR_INDEX)
-                                .id(connectorId)
-                                .tenantId(tenantId)
-                                .dataObject(connector)
-                                .build();
-                            try (ThreadContext.StoredContext innerContext = client.threadPool().getThreadContext().stashContext()) {
-                                updateUndeployedConnector(
-                                    connectorId,
-                                    updateDataObjectRequest,
-                                    ActionListener.runBefore(listener, innerContext::restore)
-                                );
+        Span updateSpan = MLConnectorTracer
+            .getInstance()
+            .startSpan(MLConnectorTracer.CONNECTOR_UPDATE_SPAN, MLConnectorTracer.createConnectorAttributes(connectorId, null));
+        try {
+            if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, mlCreateConnectorInput.getTenantId(), listener)) {
+                return;
+            }
+            String tenantId = mlCreateConnectorInput.getTenantId();
+            FetchSourceContext fetchSourceContext = new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);
+            GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
+                .builder()
+                .index(ML_CONNECTOR_INDEX)
+                .id(connectorId)
+                .tenantId(tenantId)
+                .fetchSourceContext(fetchSourceContext)
+                .build();
+            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                connectorAccessControlHelper
+                    .getConnector(sdkClient, client, context, getDataObjectRequest, connectorId, ActionListener.wrap(connector -> {
+                        // context is already restored here
+                        if (TenantAwareHelper
+                            .validateTenantResource(mlFeatureEnabledSetting, tenantId, connector.getTenantId(), listener)) {
+                            boolean hasPermission = connectorAccessControlHelper.validateConnectorAccess(client, connector);
+                            if (hasPermission) {
+                                connector.update(mlUpdateConnectorAction.getUpdateContent(), mlEngine::encrypt);
+                                connector.validateConnectorURL(trustedConnectorEndpointsRegex);
+                                connector.setLastUpdateTime(Instant.now());
+                                UpdateDataObjectRequest updateDataObjectRequest = UpdateDataObjectRequest
+                                    .builder()
+                                    .index(ML_CONNECTOR_INDEX)
+                                    .id(connectorId)
+                                    .tenantId(tenantId)
+                                    .dataObject(connector)
+                                    .build();
+                                try (ThreadContext.StoredContext innerContext = client.threadPool().getThreadContext().stashContext()) {
+                                    updateUndeployedConnector(
+                                        connectorId,
+                                        updateDataObjectRequest,
+                                        ActionListener.runBefore(listener, innerContext::restore)
+                                    );
+                                }
+                            } else {
+                                listener
+                                    .onFailure(
+                                        new IllegalArgumentException(
+                                            "You don't have permission to update the connector, connector id: " + connectorId
+                                        )
+                                    );
                             }
-                        } else {
-                            listener
-                                .onFailure(
-                                    new IllegalArgumentException(
-                                        "You don't have permission to update the connector, connector id: " + connectorId
-                                    )
-                                );
                         }
-                    }
-                }, exception -> {
-                    log.error("Permission denied: Unable to update the connector with ID {}. Details: {}", connectorId, exception);
-                    listener.onFailure(exception);
-                }));
+                    }, exception -> {
+                        log.error("Permission denied: Unable to update the connector with ID {}. Details: {}", connectorId, exception);
+                        listener.onFailure(exception);
+                    }));
+            }
         } catch (Exception e) {
             log.error("Failed to update ML connector for connector id {}. Details {}:", connectorId, e);
             listener.onFailure(e);
+        } finally {
+            MLConnectorTracer.getInstance().endSpan(updateSpan);
         }
     }
 
