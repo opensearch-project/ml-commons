@@ -38,6 +38,8 @@ import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.CONNECTOR_P
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.GUARDRAILS;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.RATE_LIMITER;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.SCRIPT_SERVICE;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.SDK_CLIENT;
+import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.SETTINGS;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.USER_RATE_LIMITER_MAP;
 import static org.opensearch.ml.engine.algorithms.remote.RemoteModel.XCONTENT_REGISTRY;
 import static org.opensearch.ml.engine.algorithms.text_embedding.TextEmbeddingDenseModel.ML_ENGINE;
@@ -179,6 +181,7 @@ public class MLModelManager {
     private final ThreadPool threadPool;
     private final NamedXContentRegistry xContentRegistry;
     private final ModelHelper modelHelper;
+    private Settings settings;
 
     private final MLModelCacheHelper modelCacheHelper;
     private final MLStats mlStats;
@@ -228,6 +231,7 @@ public class MLModelManager {
         this.threadPool = threadPool;
         this.xContentRegistry = xContentRegistry;
         this.modelHelper = modelHelper;
+        this.settings = settings;
         this.clusterService = clusterService;
         this.scriptService = scriptService;
         this.modelCacheHelper = modelCacheHelper;
@@ -1497,6 +1501,8 @@ public class MLModelManager {
             log.info("Setting up ML guard parameter for ML predictor.");
         }
         params.put(CONNECTOR_PRIVATE_IP_ENABLED, mlFeatureEnabledSetting.isConnectorPrivateIpEnabled());
+        params.put(SDK_CLIENT, sdkClient);
+        params.put(SETTINGS, settings);
         return Collections.unmodifiableMap(params);
     }
 
@@ -1989,7 +1995,12 @@ public class MLModelManager {
                 return;
             }
 
-            parseAndReturnModel(getResponse, response.source().get(ALGORITHM_FIELD).toString(), modelId, listener);
+            parseAndReturnModel(
+                getResponse,
+                Optional.ofNullable(response.source().get(FUNCTION_NAME_FIELD)).orElse(response.source().get(ALGORITHM_FIELD)).toString(),
+                modelId,
+                listener
+            );
         } catch (Exception e) {
             listener.onFailure(e);
         }

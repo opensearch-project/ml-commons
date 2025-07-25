@@ -6,15 +6,18 @@
 package org.opensearch.ml.engine.algorithms.remote;
 
 import static org.opensearch.ml.common.connector.ConnectorAction.ActionType.PREDICT;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.REMOTE_METADATA_GLOBAL_TENANT_ID;
 
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.TokenBucket;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.Connector;
 import org.opensearch.ml.common.connector.ConnectorAction.ActionType;
@@ -28,6 +31,7 @@ import org.opensearch.ml.engine.MLEngineClassLoader;
 import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.encryptor.Encryptor;
+import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.script.ScriptService;
 import org.opensearch.transport.client.Client;
 
@@ -47,6 +51,8 @@ public class RemoteModel implements Predictable {
     public static final String USER_RATE_LIMITER_MAP = "user_rate_limiter_map";
     public static final String GUARDRAILS = "guardrails";
     public static final String CONNECTOR_PRIVATE_IP_ENABLED = "connectorPrivateIpEnabled";
+    public static final String SDK_CLIENT = "sdk_client";
+    public static final String SETTINGS = "settings";
 
     private RemoteConnectorExecutor connectorExecutor;
 
@@ -100,9 +106,12 @@ public class RemoteModel implements Predictable {
     @Override
     public void initModel(MLModel model, Map<String, Object> params, Encryptor encryptor) {
         try {
+            SdkClient sdkClient = (SdkClient) params.get(SDK_CLIENT);
+            String globalTenantId = REMOTE_METADATA_GLOBAL_TENANT_ID.get((Settings) params.get(SETTINGS));
             Connector connector = model.getConnector().cloneConnector();
-            connector
-                .decrypt(PREDICT.name(), (credential, tenantId) -> encryptor.decrypt(credential, model.getTenantId()), model.getTenantId());
+            boolean isGlobalResource = sdkClient.isGlobalResource(MLIndex.MODEL.getIndexName(), model.getModelId());
+            String decryptTenantId = isGlobalResource ? globalTenantId : model.getTenantId();
+            connector.decrypt(PREDICT.name(), (credential, tenantId) -> encryptor.decrypt(credential, decryptTenantId), decryptTenantId);
             // This situation can only happen for inline connector where we don't provide tenant id.
             if (connector.getTenantId() == null && model.getTenantId() != null) {
                 connector.setTenantId(model.getTenantId());

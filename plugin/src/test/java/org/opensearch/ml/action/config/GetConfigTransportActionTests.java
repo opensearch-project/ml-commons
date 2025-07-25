@@ -43,6 +43,7 @@ import org.opensearch.ml.common.MLConfig;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.config.MLConfigGetRequest;
 import org.opensearch.ml.common.transport.config.MLConfigGetResponse;
+import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
@@ -55,6 +56,9 @@ public class GetConfigTransportActionTests extends OpenSearchTestCase {
 
     @Mock
     Client client;
+
+    @Mock
+    SdkClient sdkClient;
 
     @Mock
     NamedXContentRegistry xContentRegistry;
@@ -84,7 +88,7 @@ public class GetConfigTransportActionTests extends OpenSearchTestCase {
         mlConfigGetRequest = MLConfigGetRequest.builder().configId("test_id").build();
 
         getConfigTransportAction = spy(
-            new GetConfigTransportAction(transportService, actionFilters, client, xContentRegistry, mlFeatureEnabledSetting)
+            new GetConfigTransportAction(transportService, actionFilters, client, sdkClient, xContentRegistry, mlFeatureEnabledSetting)
         );
 
         Settings settings = Settings.builder().build();
