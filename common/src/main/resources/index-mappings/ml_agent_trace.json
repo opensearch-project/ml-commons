@@ -142,6 +142,21 @@
                   },
                   "gen_ai@tool@description": {
                     "type": "text"
+                  },
+                  "ml@connector@id": {
+                    "type": "keyword"
+                  },
+                  "ml@connector@name": {
+                    "type": "keyword"
+                  },
+                  "ml@model@id": {
+                    "type": "keyword"
+                  },
+                  "ml@model@name": {
+                    "type": "keyword"
+                  },
+                  "ml@model@request_body": {
+                    "type": "text"
                   }
                 }
               }
