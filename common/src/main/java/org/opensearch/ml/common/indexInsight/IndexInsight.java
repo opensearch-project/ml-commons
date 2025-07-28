@@ -21,23 +21,23 @@ import lombok.Getter;
 @Getter
 public class IndexInsight implements ToXContentObject, Writeable {
     public static final String INDEX_NAME_FIELD = "index_name";
-    public static final String STATISTICAL_DATA_FIELD = "statistical_data";
-    public static final String INDEX_DESCRIPTION_FIELD = "index_description";
-    public static final String FIELD_DESCRIPTION_FIELD = "field_description";
     public static final String LAST_UPDATE_FIELD = "last_updated_time";
+    public static final String CONTENT_FIELD = "content";
+    public static final String STATUS_FIELD = "status";
+    public static final String TASK_TYPE_FIELD = "task_type";
 
     private String index;
-    private String indexDescription;
-    private String fieldDescription;
-    private String statisticalData;
+    private String content;
+    private String status;
+    private MLIndexInsightType taskType;
     private Instant lastUpdatedTime;
 
     @Builder(toBuilder = true)
-    public IndexInsight(String index, String indexDescription, String fieldDescription, String statisticalData, Instant lastUpdatedTime) {
+    public IndexInsight(String index, String content, String status, MLIndexInsightType taskType, Instant lastUpdatedTime) {
         this.index = index;
-        this.indexDescription = indexDescription;
-        this.fieldDescription = fieldDescription;
-        this.statisticalData = statisticalData;
+        this.content = content;
+        this.status = status;
+        this.taskType = taskType;
         this.lastUpdatedTime = lastUpdatedTime;
     }
 
@@ -45,23 +45,22 @@ public class IndexInsight implements ToXContentObject, Writeable {
         Version streamInputVersion = input.getVersion();
         index = input.readString();
         if (input.readBoolean()) {
-            indexDescription = input.readString();
+            content = input.readString();
         }
         if (input.readBoolean()) {
-            fieldDescription = input.readString();
+            status = input.readString();
         }
-        if (input.readBoolean()) {
-            statisticalData = input.readString();
-        }
-        lastUpdatedTime = input.readInstant();
+        taskType = MLIndexInsightType.fromString(input.readString());
+
+        lastUpdatedTime = Instant.ofEpochMilli(input.readLong());
 
     }
 
     public static IndexInsight parse(XContentParser parser) throws IOException {
         String indexName = null;
-        String indexDescription = null;
-        String fieldDescription = null;
-        String statisticalData = null;
+        String content = null;
+        String status = null;
+        String taskType = null;
         Instant lastUpdatedTime = null;
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -72,14 +71,14 @@ public class IndexInsight implements ToXContentObject, Writeable {
                 case INDEX_NAME_FIELD:
                     indexName = parser.text();
                     break;
-                case INDEX_DESCRIPTION_FIELD:
-                    indexDescription = parser.text();
+                case CONTENT_FIELD:
+                    content = parser.text();
                     break;
-                case FIELD_DESCRIPTION_FIELD:
-                    fieldDescription = parser.text();
+                case STATUS_FIELD:
+                    status = parser.text();
                     break;
-                case STATISTICAL_DATA_FIELD:
-                    statisticalData = parser.text();
+                case TASK_TYPE_FIELD:
+                    taskType = parser.text();
                     break;
                 case LAST_UPDATE_FIELD:
                     lastUpdatedTime = Instant.ofEpochMilli(parser.longValue());
@@ -91,9 +90,9 @@ public class IndexInsight implements ToXContentObject, Writeable {
         return IndexInsight
             .builder()
             .index(indexName)
-            .indexDescription(indexDescription)
-            .fieldDescription(fieldDescription)
-            .statisticalData(statisticalData)
+            .content(content)
+            .status(status)
+            .taskType(MLIndexInsightType.fromString(taskType))
             .lastUpdatedTime(lastUpdatedTime)
             .build();
     }
@@ -101,24 +100,19 @@ public class IndexInsight implements ToXContentObject, Writeable {
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeString(index);
-        if (indexDescription != null && !indexDescription.isEmpty()) {
+        if (content != null && !content.isEmpty()) {
             out.writeBoolean(true);
-            out.writeString(indexDescription);
+            out.writeString(content);
         } else {
             out.writeBoolean(false);
         }
-        if (fieldDescription != null && !fieldDescription.isEmpty()) {
+        if (status != null && !status.isEmpty()) {
             out.writeBoolean(true);
-            out.writeString(fieldDescription);
+            out.writeString(status);
         } else {
             out.writeBoolean(false);
         }
-        if (statisticalData != null && !statisticalData.isEmpty()) {
-            out.writeBoolean(true);
-            out.writeString(statisticalData);
-        } else {
-            out.writeBoolean(false);
-        }
+        out.writeString(taskType.toString());
         out.writeInstant(lastUpdatedTime);
     }
 
@@ -128,15 +122,13 @@ public class IndexInsight implements ToXContentObject, Writeable {
         if (index != null) {
             builder.field(INDEX_NAME_FIELD, index);
         }
-        if (indexDescription != null && !indexDescription.isEmpty()) {
-            builder.field(INDEX_DESCRIPTION_FIELD, indexDescription);
+        if (content != null && !content.isEmpty()) {
+            builder.field(CONTENT_FIELD, content);
         }
-        if (fieldDescription != null && !fieldDescription.isEmpty()) {
-            builder.field(FIELD_DESCRIPTION_FIELD, indexDescription);
+        if (status != null && !status.isEmpty()) {
+            builder.field(STATUS_FIELD, status);
         }
-        if (statisticalData != null && !statisticalData.isEmpty()) {
-            builder.field(STATISTICAL_DATA_FIELD, statisticalData);
-        }
+        builder.field(TASK_TYPE_FIELD, taskType.toString());
         builder.field(LAST_UPDATE_FIELD, lastUpdatedTime.toEpochMilli());
         builder.endObject();
         return builder;
