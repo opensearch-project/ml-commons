@@ -1,6 +1,10 @@
 package org.opensearch.ml.common.transport.indexInsight;
 
-import lombok.Getter;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+
 import org.opensearch.Version;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
@@ -8,23 +12,23 @@ import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.UncheckedIOException;
+import lombok.Getter;
+import org.opensearch.ml.common.indexInsight.MLIndexInsightType;
 
 @Getter
 public class MLIndexInsightGetRequest extends ActionRequest {
     String indexName;
+    MLIndexInsightType targetIndexInsight;
 
-    public MLIndexInsightGetRequest(String indexName) {
+    public MLIndexInsightGetRequest(String indexName, MLIndexInsightType targetIndexInsight) {
         this.indexName = indexName;
+        this.targetIndexInsight = targetIndexInsight;
     }
 
     public MLIndexInsightGetRequest(StreamInput in) throws IOException {
         super(in);
-        Version streamInputVersion = in.getVersion();
         this.indexName = in.readString();
+        this.targetIndexInsight = MLIndexInsightType.fromString(in.readString());
     }
 
     @Override

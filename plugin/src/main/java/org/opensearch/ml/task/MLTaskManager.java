@@ -593,11 +593,9 @@ public class MLTaskManager {
             log.error("Failed to index stats collection job", e);
         }
     }
-    
 
-    
     private boolean indexInsightJobStarted = false;
-    
+
     public void startIndexInsightJob() {
         if (indexInsightJobStarted) {
             return;
@@ -611,7 +609,7 @@ public class MLTaskManager {
                 null,
                 MLJobType.INDEX_INSIGHT
             );
-            
+
             // Add params to the job parameter's XContent
 
             IndexRequest indexRequest = new IndexRequest()
@@ -625,8 +623,6 @@ public class MLTaskManager {
             log.error("Failed to index index insight job", e);
         }
     }
-    
-
 
     /**
      * Start a job by indexing the job parameter to ML jobs index.

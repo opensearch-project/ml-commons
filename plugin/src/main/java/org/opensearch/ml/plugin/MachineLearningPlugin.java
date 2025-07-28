@@ -839,7 +839,15 @@ public class MachineLearningPlugin extends Plugin
 
         MLJobRunner
             .getInstance()
-            .initialize(clusterService, threadPool, client, sdkClient, connectorAccessControlHelper, mlFeatureEnabledSetting, mlIndicesHandler);
+            .initialize(
+                clusterService,
+                threadPool,
+                client,
+                sdkClient,
+                connectorAccessControlHelper,
+                mlFeatureEnabledSetting,
+                mlIndicesHandler
+            );
 
         if (mlFeatureEnabledSetting.isMetricCollectionEnabled()) {
             MLOperationalMetricsCounter.initialize(clusterService.getClusterName().toString(), metricsRegistry, mlFeatureEnabledSetting);
@@ -1009,7 +1017,7 @@ public class MachineLearningPlugin extends Plugin
                 restMLDeleteModelGroupAction,
                 restMLCreateConnectorAction,
                 restMLGetConnectorAction,
-                    restMLGetIndexInsightAction,
+                restMLGetIndexInsightAction,
                 restMLDeleteConnectorAction,
                 restMLSearchConnectorAction,
                 restCreateConversationAction,
