@@ -1,7 +1,5 @@
 package org.opensearch.ml.common.indexInsight;
 
-import org.opensearch.ml.common.MLAgentType;
-
 import java.util.Locale;
 
 public enum MLIndexInsightType {
