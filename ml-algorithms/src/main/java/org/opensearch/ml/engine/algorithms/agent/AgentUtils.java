@@ -71,10 +71,8 @@ import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.spi.tools.Tool;
-import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.MLEngineClassLoader;
-import org.opensearch.ml.engine.algorithms.agent.tracing.MLAgentTracer;
 import org.opensearch.ml.engine.algorithms.remote.McpConnectorExecutor;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.function_calling.FunctionCalling;
@@ -82,7 +80,6 @@ import org.opensearch.ml.engine.tools.McpSseTool;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
-import org.opensearch.telemetry.tracing.Span;
 import org.opensearch.transport.client.Client;
 
 import com.google.gson.reflect.TypeToken;
@@ -237,7 +234,10 @@ public class AgentUtils {
         toolsBuilder.append(toolsSuffix);
         Map<String, String> toolsPromptMap = new HashMap<>();
         toolsPromptMap.put(TOOL_DESCRIPTIONS, toolsBuilder.toString());
-        toolsPromptMap.put(TOOL_NAMES, toolNamesBuilder.substring(0, toolNamesBuilder.length() - 1));
+
+        // Handle empty tool names case
+        String toolNames = toolNamesBuilder.length() > 0 ? toolNamesBuilder.substring(0, toolNamesBuilder.length() - 1) : "";
+        toolsPromptMap.put(TOOL_NAMES, toolNames);
 
         if (parameters.containsKey(TOOL_DESCRIPTIONS)) {
             toolsPromptMap.put(TOOL_DESCRIPTIONS, parameters.get(TOOL_DESCRIPTIONS));
@@ -623,15 +623,25 @@ public class AgentUtils {
         if (output instanceof ModelTensorOutput) {
             ModelTensor outputModel = ((ModelTensorOutput) output).getMlModelOutputs().get(0).getMlModelTensors().get(0);
             if (outputModel.getDataAsMap() != null) {
-                outputString = AccessController
-                    .doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(outputModel.getDataAsMap()));
+                try {
+                    outputString = AccessController
+                        .doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(outputModel.getDataAsMap()));
+                } catch (Exception e) {
+                    // Fall back to toString if Gson serialization fails (e.g., due to ByteBuffer in Java 21)
+                    outputString = outputModel.getDataAsMap().toString();
+                }
             } else {
                 outputString = outputModel.getResult();
             }
         } else if (output instanceof String) {
             outputString = (String) output;
         } else {
-            outputString = AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(output));
+            try {
+                outputString = AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(output));
+            } catch (Exception e) {
+                // Fall back to toString if Gson serialization fails (e.g., due to ByteBuffer in Java 21)
+                outputString = output != null ? output.toString() : "null";
+            }
         }
         return outputString;
     }
@@ -947,358 +957,6 @@ public class AgentUtils {
                 // TODO: make this more general, avoid checking specific tool type
                 ((McpSseTool) tool).getMcpSyncClient().closeGracefully();
             }
-        }
-    }
-
-    public static Map<String, String> createAgentTaskAttributes(String agentName, String userTask) {
-        Map<String, String> attributes = new HashMap<>();
-        attributes.put(MLAgentTracer.ATTR_SERVICE_TYPE, "agent");
-        attributes.put(MLAgentTracer.ATTR_NAME, agentName != null ? agentName : "");
-        attributes.put(MLAgentTracer.ATTR_TASK, userTask != null ? userTask : "");
-        attributes.put(MLAgentTracer.ATTR_OPERATION_NAME, "create_agent");
-        return attributes;
-    }
-
-    public static Map<String, String> createPlanAttributes(int stepNumber) {
-        Map<String, String> attributes = new HashMap<>();
-        attributes.put(MLAgentTracer.ATTR_SERVICE_TYPE, "agent");
-        attributes.put(MLAgentTracer.ATTR_PHASE, "planner");
-        attributes.put(MLAgentTracer.ATTR_STEP_NUMBER, String.valueOf(stepNumber));
-        attributes.put(MLAgentTracer.ATTR_OPERATION_NAME, "create_agent");
-        // TODO: get LLM system and model
-        return attributes;
-    }
-
-    public static Map<String, String> createExecuteStepAttributes(int stepNumber) {
-        Map<String, String> attributes = new HashMap<>();
-        attributes.put(MLAgentTracer.ATTR_SERVICE_TYPE, "agent");
-        attributes.put(MLAgentTracer.ATTR_PHASE, "executor");
-        attributes.put(MLAgentTracer.ATTR_STEP_NUMBER, String.valueOf(stepNumber));
-        attributes.put(MLAgentTracer.ATTR_OPERATION_NAME, "invoke_agent");
-        return attributes;
-    }
-
-    public static Map<String, String> createLLMCallAttributes(
-        String completion,
-        long latency,
-        ModelTensorOutput modelTensorOutput,
-        Map<String, String> parameters
-    ) {
-        Map<String, String> attributes = new HashMap<>();
-
-        String provider = detectProviderFromParameters(parameters.get("_llm_interface"));
-        attributes.put(MLAgentTracer.ATTR_SERVICE_TYPE, "agent");
-        attributes.put(MLAgentTracer.ATTR_SYSTEM, provider);
-        // TODO: get actual request model
-        attributes.put(MLAgentTracer.ATTR_OPERATION_NAME, "chat");
-        attributes.put(MLAgentTracer.ATTR_TASK, parameters.get("prompt") != null ? parameters.get("prompt") : "");
-        attributes.put(MLAgentTracer.ATTR_RESULT, completion != null ? completion : "");
-        attributes.put(MLAgentTracer.ATTR_LATENCY, String.valueOf(latency));
-        attributes.put(MLAgentTracer.ATTR_PHASE, "planner");
-        attributes.put(MLAgentTracer.ATTR_SYSTEM_MESSAGE, parameters.get("system_prompt") != null ? parameters.get("system_prompt") : "");
-        attributes.put(MLAgentTracer.ATTR_TOOL_DESCRIPTION, parameters.get("tools_prompt") != null ? parameters.get("tools_prompt") : "");
-
-        if (modelTensorOutput != null
-            && modelTensorOutput.getMlModelOutputs() != null
-            && !modelTensorOutput.getMlModelOutputs().isEmpty()) {
-            for (int i = 0; i < modelTensorOutput.getMlModelOutputs().size(); i++) {
-                var output = modelTensorOutput.getMlModelOutputs().get(i);
-                if (output.getMlModelTensors() != null) {
-                    for (int j = 0; j < output.getMlModelTensors().size(); j++) {
-                        var tensor = output.getMlModelTensors().get(j);
-                        if (tensor.getDataAsMap() != null) {
-                            Map<String, ?> dataAsMap = tensor.getDataAsMap();
-                            if (dataAsMap.containsKey("usage")) {
-                                Object usageObj = dataAsMap.get("usage");
-                                if (usageObj instanceof Map) {
-                                    @SuppressWarnings("unchecked")
-                                    Map<String, Object> usage = (Map<String, Object>) usageObj;
-
-                                    if ("aws.bedrock".equalsIgnoreCase(provider)) {
-                                        // Bedrock/Claude format: input_tokens, output_tokens (or inputTokens, outputTokens)
-                                        if (usage.containsKey("input_tokens")) {
-                                            Object inputTokens = usage.get("input_tokens");
-                                            attributes.put(MLAgentTracer.ATTR_USAGE_INPUT_TOKENS, inputTokens.toString());
-                                        } else if (usage.containsKey("inputTokens")) {
-                                            Object inputTokens = usage.get("inputTokens");
-                                            attributes.put(MLAgentTracer.ATTR_USAGE_INPUT_TOKENS, inputTokens.toString());
-                                        }
-
-                                        if (usage.containsKey("output_tokens")) {
-                                            Object outputTokens = usage.get("output_tokens");
-                                            attributes.put(MLAgentTracer.ATTR_USAGE_OUTPUT_TOKENS, outputTokens.toString());
-                                        } else if (usage.containsKey("outputTokens")) {
-                                            Object outputTokens = usage.get("outputTokens");
-                                            attributes.put(MLAgentTracer.ATTR_USAGE_OUTPUT_TOKENS, outputTokens.toString());
-                                        }
-
-                                        if ((usage.containsKey("input_tokens") || usage.containsKey("inputTokens"))
-                                            && (usage.containsKey("output_tokens") || usage.containsKey("outputTokens"))) {
-                                            double inputTokens = 0.0;
-                                            double outputTokens = 0.0;
-
-                                            if (usage.containsKey("input_tokens")) {
-                                                inputTokens = Double.parseDouble(usage.get("input_tokens").toString());
-                                            } else if (usage.containsKey("inputTokens")) {
-                                                inputTokens = Double.parseDouble(usage.get("inputTokens").toString());
-                                            }
-
-                                            if (usage.containsKey("output_tokens")) {
-                                                outputTokens = Double.parseDouble(usage.get("output_tokens").toString());
-                                            } else if (usage.containsKey("outputTokens")) {
-                                                outputTokens = Double.parseDouble(usage.get("outputTokens").toString());
-                                            }
-
-                                            double totalTokens = inputTokens + outputTokens;
-                                            attributes.put(MLAgentTracer.ATTR_USAGE_TOTAL_TOKENS, String.valueOf((int) totalTokens));
-                                        }
-                                    } else if ("openai".equalsIgnoreCase(provider)) {
-                                        // OpenAI format: prompt_tokens, completion_tokens, total_tokens
-                                        if (usage.containsKey("prompt_tokens")) {
-                                            Object promptTokens = usage.get("prompt_tokens");
-                                            attributes.put(MLAgentTracer.ATTR_USAGE_INPUT_TOKENS, promptTokens.toString());
-                                        }
-
-                                        if (usage.containsKey("completion_tokens")) {
-                                            Object completionTokens = usage.get("completion_tokens");
-                                            attributes.put(MLAgentTracer.ATTR_USAGE_OUTPUT_TOKENS, completionTokens.toString());
-                                        }
-
-                                        if (usage.containsKey("total_tokens")) {
-                                            Object totalTokens = usage.get("total_tokens");
-                                            attributes.put(MLAgentTracer.ATTR_USAGE_TOTAL_TOKENS, totalTokens.toString());
-                                        }
-                                    } else {
-                                        // TODO: find general method for all providers
-                                    }
-                                }
-                            } else {
-                                log.info("[AGENT_TRACE] No usage information found in dataAsMap. Available keys: {}", dataAsMap.keySet());
-
-                                for (Map.Entry<String, ?> entry : dataAsMap.entrySet()) {
-                                    if (entry.getValue() instanceof Map) {
-                                        log.info("[AGENT_TRACE] Found nested map in key '{}': {}", entry.getKey(), entry.getValue());
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        } else {
-            log.info("[AGENT_TRACE] ModelTensorOutput is null or empty");
-        }
-
-        return attributes;
-    }
-
-    public static String detectProviderFromParameters(String llmInterface) {
-        if (llmInterface != null) {
-            String lower = llmInterface.toLowerCase();
-            if (lower.contains("bedrock"))
-                return "aws.bedrock";
-            if (lower.contains("openai"))
-                return "openai";
-            if (lower.contains("claude") || lower.contains("anthropic"))
-                return "anthropic";
-            if (lower.contains("gemini") || lower.contains("google"))
-                return "gcp.gemini";
-            if (lower.contains("llama") || lower.contains("meta"))
-                return "meta";
-            if (lower.contains("cohere"))
-                return "cohere";
-            if (lower.contains("deepseek"))
-                return "deepseek";
-            if (lower.contains("groq"))
-                return "groq";
-            if (lower.contains("mistral"))
-                return "mistral_ai";
-            if (lower.contains("perplexity"))
-                return "perplexity";
-            if (lower.contains("xai"))
-                return "xai";
-            if (lower.contains("azure") || lower.contains("az.ai"))
-                return "az.ai.inference";
-            if (lower.contains("ibm") || lower.contains("watson"))
-                return "ibm.watsonx.ai";
-        }
-        return "unknown";
-    }
-
-    public static Map<String, String> createToolCallAttributesWithStep(
-        String actionInput,
-        int stepNumber,
-        String toolName,
-        String toolDescription
-    ) {
-        Map<String, String> attributes = new HashMap<>();
-        attributes.put(MLAgentTracer.ATTR_SERVICE_TYPE, "agent");
-        attributes.put(MLAgentTracer.ATTR_OPERATION_NAME, "execute_tool");
-        attributes.put(MLAgentTracer.ATTR_TASK, actionInput != null ? actionInput : "");
-        attributes.put(MLAgentTracer.ATTR_STEP_NUMBER, String.valueOf(stepNumber));
-        attributes.put(MLAgentTracer.ATTR_TOOL_NAME, toolName != null ? toolName : "");
-        if (toolDescription != null) {
-            attributes.put(MLAgentTracer.ATTR_TOOL_DESCRIPTION, toolDescription);
-        }
-        return attributes;
-    }
-
-    public static Map<String, String> createLLMCallAttributesForConv(
-        String question,
-        int stepNumber,
-        String systemPrompt,
-        String llmInterface
-    ) {
-        Map<String, String> attributes = new HashMap<>();
-        attributes.put(MLAgentTracer.ATTR_SERVICE_TYPE, "agent");
-        attributes.put(MLAgentTracer.ATTR_OPERATION_NAME, "chat");
-        attributes.put(MLAgentTracer.ATTR_TASK, question != null ? question : "");
-        attributes.put(MLAgentTracer.ATTR_STEP_NUMBER, String.valueOf(stepNumber));
-        if (systemPrompt != null) {
-            attributes.put(MLAgentTracer.ATTR_SYSTEM_MESSAGE, systemPrompt);
-        }
-        if (llmInterface != null) {
-            String provider = detectProviderFromParameters(llmInterface);
-            attributes.put(MLAgentTracer.ATTR_SYSTEM, provider);
-        }
-        return attributes;
-    }
-
-    public static class ToolCallExtractionResult {
-        public String input;
-        public String output;
-        public Map<String, Object> usage;
-        public Map<String, Object> metrics;
-    }
-
-    public static ToolCallExtractionResult extractToolCallInfo(Object toolOutput, String actionInput) {
-        ToolCallExtractionResult result = new ToolCallExtractionResult();
-        result.input = actionInput;
-
-        try {
-            // Unwrap MLTaskResponse
-            if (toolOutput instanceof MLTaskResponse) {
-                return extractToolCallInfo(((MLTaskResponse) toolOutput).getOutput(), actionInput);
-            }
-
-            // ModelTensorOutput
-            if (toolOutput instanceof ModelTensorOutput) {
-                ModelTensorOutput mto = (ModelTensorOutput) toolOutput;
-                if (mto.getMlModelOutputs() != null && !mto.getMlModelOutputs().isEmpty()) {
-                    var tensors = mto.getMlModelOutputs().get(0).getMlModelTensors();
-                    if (tensors != null && !tensors.isEmpty()) {
-                        var tensor = tensors.get(0);
-                        // Try result
-                        if (tensor.getResult() != null) {
-                            result.output = tensor.getResult();
-                        }
-                        // Try dataAsMap
-                        if (tensor.getDataAsMap() != null) {
-                            Map<String, ?> map = tensor.getDataAsMap();
-                            if (map.containsKey("response")) {
-                                Object resp = map.get("response");
-                                result.output = (resp instanceof String) ? (String) resp : StringUtils.toJson(resp);
-                            } else if (map.containsKey("output")) {
-                                Object out = map.get("output");
-                                result.output = (out instanceof String) ? (String) out : StringUtils.toJson(out);
-                            }
-                            if (map.containsKey("usage")) {
-                                result.usage = (Map<String, Object>) map.get("usage");
-                            }
-                            if (map.containsKey("metrics")) {
-                                result.metrics = (Map<String, Object>) map.get("metrics");
-                            }
-                        }
-                    }
-                }
-                return result;
-            }
-
-            // String: try to parse as JSON, or extract JSON from markdown
-            if (toolOutput instanceof String) {
-                String str = (String) toolOutput;
-                String json = extractJsonBlock(str);
-                if (json != null) {
-                    Map<String, Object> map = StringUtils.fromJson(json, "response");
-                    if (map.containsKey("final_answer")) {
-                        result.output = map.get("final_answer").toString();
-                    } else if (map.containsKey("action")) {
-                        result.output = map.get("action").toString();
-                    } else {
-                        result.output = json;
-                    }
-                } else {
-                    result.output = str;
-                }
-                return result;
-            }
-
-            // Map: use as is
-            if (toolOutput instanceof Map) {
-                Map<?, ?> map = (Map<?, ?>) toolOutput;
-                if (map.containsKey("response")) {
-                    result.output = map.get("response").toString();
-                } else if (map.containsKey("final_answer")) {
-                    result.output = map.get("final_answer").toString();
-                } else {
-                    result.output = StringUtils.toJson(map);
-                }
-                return result;
-            }
-
-            // Fallback: toString
-            result.output = toolOutput != null ? toolOutput.toString() : null;
-        } catch (Exception e) {
-            result.output = toolOutput != null ? toolOutput.toString() : null;
-        }
-        return result;
-    }
-
-    // Helper to extract JSON block from markdown or plain string
-    private static String extractJsonBlock(String str) {
-        if (str == null)
-            return null;
-        int start = str.indexOf("```json");
-        if (start >= 0) {
-            start += "```json".length();
-            int end = str.indexOf("```", start);
-            if (end > start) {
-                return str.substring(start, end).trim();
-            }
-        }
-        // Try to find first '{' and last '}'
-        int first = str.indexOf('{');
-        int last = str.lastIndexOf('}');
-        if (first >= 0 && last > first) {
-            return str.substring(first, last + 1);
-        }
-        return null;
-    }
-
-    public static void updateSpanWithResultAttributes(
-        Span span,
-        String result,
-        Double inputTokens,
-        Double outputTokens,
-        Double totalTokens,
-        Double latency
-    ) {
-        if (span == null)
-            return;
-        if (result != null) {
-            span.addAttribute(MLAgentTracer.ATTR_RESULT, result);
-        }
-        if (inputTokens != null) {
-            span.addAttribute(MLAgentTracer.ATTR_USAGE_INPUT_TOKENS, String.valueOf(inputTokens.intValue()));
-        }
-        if (outputTokens != null) {
-            span.addAttribute(MLAgentTracer.ATTR_USAGE_OUTPUT_TOKENS, String.valueOf(outputTokens.intValue()));
-        }
-        if (totalTokens != null) {
-            span.addAttribute(MLAgentTracer.ATTR_USAGE_TOTAL_TOKENS, String.valueOf(totalTokens.intValue()));
-        }
-        if (latency != null) {
-            span.addAttribute(MLAgentTracer.ATTR_LATENCY, String.valueOf(latency.intValue()));
         }
     }
 }
