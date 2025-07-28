@@ -1,8 +1,13 @@
 package org.opensearch.ml.action.IndexInsight;
 
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_INDEX;
 import static org.opensearch.ml.common.indexInsight.IndexInsight.INDEX_NAME_FIELD;
+import static org.opensearch.ml.common.indexInsight.IndexInsight.TASK_TYPE_FIELD;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
@@ -15,8 +20,11 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.index.query.BoolQueryBuilder;
+import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.common.indexInsight.IndexInsight;
+import org.opensearch.ml.common.indexInsight.MLIndexInsightType;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetAction;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetRequest;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetResponse;
@@ -50,7 +58,12 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
         String indexName = mlIndexInsightGetRequest.getIndexName();
         SearchRequest searchRequest = new SearchRequest(ML_INDEX_INSIGHT_INDEX);
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-        searchSourceBuilder.query(new TermQueryBuilder(INDEX_NAME_FIELD, indexName));
+        BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
+        boolQueryBuilder.must(new TermQueryBuilder(INDEX_NAME_FIELD, indexName));
+        if (mlIndexInsightGetRequest.getTargetIndexInsight() != MLIndexInsightType.ALL) {
+            boolQueryBuilder.must(new TermQueryBuilder(TASK_TYPE_FIELD, mlIndexInsightGetRequest.getTargetIndexInsight().toString()));
+        }
+        searchSourceBuilder.query(boolQueryBuilder);
         searchRequest.source(searchSourceBuilder);
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
@@ -58,16 +71,23 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
             client.search(searchRequest, ActionListener.wrap(searchResponse -> {
                 SearchHit[] hits = searchResponse.getHits().getHits();
                 if (hits.length == 0) {
-                    wrappedListener.onFailure(new OpenSearchStatusException("The index insight hasn't created, will create now.", RestStatus.FORBIDDEN));
+                    wrappedListener
+                        .onFailure(
+                            new OpenSearchStatusException("The index insight hasn't created, will create now.", RestStatus.FORBIDDEN)
+                        );
                     return;
                 }
-                SearchHit hit = hits[0];
-                try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, hit.getSourceRef())) {
-                    IndexInsight indexInsight = IndexInsight.parse(parser);
-                    wrappedListener.onResponse(MLIndexInsightGetResponse.builder().indexInsight(indexInsight).build());
-                } catch (Exception e) {
-                    wrappedListener.onFailure(e);
+                List<IndexInsight> indexInsights = new ArrayList<>();
+                for (SearchHit hit : hits) {
+                    try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, hit.getSourceRef())) {
+                        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                        IndexInsight indexInsight = IndexInsight.parse(parser);
+                        indexInsights.add(indexInsight);
+                    } catch (Exception e) {
+                        wrappedListener.onFailure(e);
+                    }
                 }
+                wrappedListener.onResponse(MLIndexInsightGetResponse.builder().indexInsights(indexInsights).build());
             }, wrappedListener::onFailure));
 
         } catch (Exception e) {

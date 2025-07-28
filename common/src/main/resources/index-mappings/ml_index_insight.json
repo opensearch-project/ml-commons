@@ -6,13 +6,13 @@
     "index_name": {
       "type": "keyword"
     },
-    "index_description": {
+    "content": {
       "type": "text"
     },
-    "field_description": {
+    "status": {
       "type": "text"
     },
-    "statistical_data": {
+    "task_type": {
       "type": "text"
     },
     "last_updated_time": {
