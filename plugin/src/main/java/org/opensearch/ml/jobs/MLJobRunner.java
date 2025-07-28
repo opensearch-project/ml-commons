@@ -10,11 +10,11 @@ import org.opensearch.jobscheduler.spi.JobExecutionContext;
 import org.opensearch.jobscheduler.spi.ScheduledJobParameter;
 import org.opensearch.jobscheduler.spi.ScheduledJobRunner;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.jobs.processors.MLBatchTaskUpdateProcessor;
 import org.opensearch.ml.jobs.processors.MLIndexInsightJobProcessor;
 import org.opensearch.ml.jobs.processors.MLStatsJobProcessor;
-import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
@@ -59,7 +59,7 @@ public class MLJobRunner implements ScheduledJobRunner {
 
     @Setter
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
-    
+
     @Setter
     private MLIndicesHandler mlIndicesHandler;
 
@@ -110,7 +110,8 @@ public class MLJobRunner implements ScheduledJobRunner {
                 MLBatchTaskUpdateProcessor.getInstance(clusterService, client, threadPool).process(jobParameter, jobExecutionContext);
                 break;
             case INDEX_INSIGHT:
-                MLIndexInsightJobProcessor.getInstance(clusterService, client, threadPool, mlIndicesHandler)
+                MLIndexInsightJobProcessor
+                    .getInstance(clusterService, client, threadPool, mlIndicesHandler)
                     .process(jobParameter, jobExecutionContext);
                 break;
             default:

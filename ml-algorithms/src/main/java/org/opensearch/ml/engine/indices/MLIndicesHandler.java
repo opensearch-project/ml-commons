@@ -103,7 +103,7 @@ public class MLIndicesHandler {
     public void initMLAgentIndex(ActionListener<Boolean> listener) {
         initMLIndexIfAbsent(MLIndex.AGENT, listener);
     }
-    
+
     public void initMLIndexInsightIndex(ActionListener<Boolean> listener) {
         initMLIndexIfAbsent(MLIndex.INDEX_INSIGHT, listener);
     }
