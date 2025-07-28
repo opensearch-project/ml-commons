@@ -70,6 +70,7 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.utils.StringUtils;
+import org.opensearch.ml.engine.algorithms.agent.tracing.MLAgentTracer;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.function_calling.FunctionCalling;
 import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
@@ -77,9 +78,11 @@ import org.opensearch.ml.engine.function_calling.LLMMessage;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.engine.tools.MLModelTool;
+import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.ml.repackage.com.google.common.collect.Lists;
 import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.telemetry.tracing.Span;
 import org.opensearch.transport.client.Client;
 
 import lombok.Data;
@@ -151,97 +154,121 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
     @Override
     public void run(MLAgent mlAgent, Map<String, String> inputParams, ActionListener<Object> listener) {
-        Map<String, String> params = new HashMap<>();
-        if (mlAgent.getParameters() != null) {
-            params.putAll(mlAgent.getParameters());
-            for (String key : mlAgent.getParameters().keySet()) {
-                if (key.startsWith("_")) {
-                    params.put(key, mlAgent.getParameters().get(key));
+        // Check if conversational is run independently or through another agent
+        boolean hasParentSpanContext = inputParams.containsKey("traceparent");
+        final Span agentTaskSpan;
+        if (hasParentSpanContext) {
+            Span parentSpan = MLAgentTracer.getInstance().extractSpanContext(inputParams);
+            agentTaskSpan = MLAgentTracer
+                .getInstance()
+                .startConversationalAgentTaskSpan(mlAgent.getName(), inputParams.get(MLAgentExecutor.QUESTION), parentSpan);
+        } else {
+            agentTaskSpan = MLAgentTracer
+                .getInstance()
+                .startConversationalAgentTaskSpan(mlAgent.getName(), inputParams.get(MLAgentExecutor.QUESTION));
+        }
+
+        try {
+            Map<String, String> params = new HashMap<>();
+            if (mlAgent.getParameters() != null) {
+                params.putAll(mlAgent.getParameters());
+                for (String key : mlAgent.getParameters().keySet()) {
+                    if (key.startsWith("_")) {
+                        params.put(key, mlAgent.getParameters().get(key));
+                    }
                 }
             }
-        }
 
-        params.putAll(inputParams);
+            params.putAll(inputParams);
 
-        String llmInterface = params.get(LLM_INTERFACE);
-        FunctionCalling functionCalling = FunctionCallingFactory.create(llmInterface);
-        if (functionCalling != null) {
-            functionCalling.configure(params);
-        }
+            String llmInterface = params.get(LLM_INTERFACE);
+            FunctionCalling functionCalling = FunctionCallingFactory.create(llmInterface);
+            if (functionCalling != null) {
+                functionCalling.configure(params);
+            }
 
-        String memoryType = mlAgent.getMemory().getType();
-        String memoryId = params.get(MLAgentExecutor.MEMORY_ID);
-        String appType = mlAgent.getAppType();
-        String title = params.get(MLAgentExecutor.QUESTION);
-        String chatHistoryPrefix = params.getOrDefault(PROMPT_CHAT_HISTORY_PREFIX, CHAT_HISTORY_PREFIX);
-        String chatHistoryQuestionTemplate = params.get(CHAT_HISTORY_QUESTION_TEMPLATE);
-        String chatHistoryResponseTemplate = params.get(CHAT_HISTORY_RESPONSE_TEMPLATE);
-        int messageHistoryLimit = getMessageHistoryLimit(params);
+            String memoryType = mlAgent.getMemory().getType();
+            String memoryId = params.get(MLAgentExecutor.MEMORY_ID);
+            String appType = mlAgent.getAppType();
+            String title = params.get(MLAgentExecutor.QUESTION);
+            String chatHistoryPrefix = params.getOrDefault(PROMPT_CHAT_HISTORY_PREFIX, CHAT_HISTORY_PREFIX);
+            String chatHistoryQuestionTemplate = params.get(CHAT_HISTORY_QUESTION_TEMPLATE);
+            String chatHistoryResponseTemplate = params.get(CHAT_HISTORY_RESPONSE_TEMPLATE);
+            int messageHistoryLimit = getMessageHistoryLimit(params);
 
-        ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap.get(memoryType);
-        conversationIndexMemoryFactory.create(title, memoryId, appType, ActionListener.<ConversationIndexMemory>wrap(memory -> {
-            // TODO: call runAgent directly if messageHistoryLimit == 0
-            memory.getMessages(ActionListener.<List<Interaction>>wrap(r -> {
-                List<Message> messageList = new ArrayList<>();
-                for (Interaction next : r) {
-                    String question = next.getInput();
-                    String response = next.getResponse();
-                    // As we store the conversation with empty response first and then update when have final answer,
-                    // filter out those in-flight requests when run in parallel
-                    if (Strings.isNullOrEmpty(response)) {
-                        continue;
-                    }
-                    messageList
-                        .add(
-                            ConversationIndexMessage
-                                .conversationIndexMessageBuilder()
-                                .sessionId(memory.getConversationId())
-                                .question(question)
-                                .response(response)
-                                .build()
-                        );
-                }
-                if (!messageList.isEmpty()) {
-                    if (chatHistoryQuestionTemplate == null) {
-                        StringBuilder chatHistoryBuilder = new StringBuilder();
-                        chatHistoryBuilder.append(chatHistoryPrefix);
-                        for (Message message : messageList) {
-                            chatHistoryBuilder.append(message.toString()).append("\n");
+            ConversationIndexMemory.Factory conversationIndexMemoryFactory = (ConversationIndexMemory.Factory) memoryFactoryMap
+                .get(memoryType);
+            conversationIndexMemoryFactory.create(title, memoryId, appType, ActionListener.<ConversationIndexMemory>wrap(memory -> {
+                // TODO: call runAgent directly if messageHistoryLimit == 0
+                memory.getMessages(ActionListener.<List<Interaction>>wrap(r -> {
+                    List<Message> messageList = new ArrayList<>();
+                    for (Interaction next : r) {
+                        String question = next.getInput();
+                        String response = next.getResponse();
+                        // As we store the conversation with empty response first and then update when have final answer,
+                        // filter out those in-flight requests when run in parallel
+                        if (Strings.isNullOrEmpty(response)) {
+                            continue;
                         }
-                        params.put(CHAT_HISTORY, chatHistoryBuilder.toString());
-
-                        // required for MLChatAgentRunnerTest.java, it requires chatHistory to be added to input params to validate
-                        inputParams.put(CHAT_HISTORY, chatHistoryBuilder.toString());
-                    } else {
-                        List<String> chatHistory = new ArrayList<>();
-                        for (Message message : messageList) {
-                            Map<String, String> messageParams = new HashMap<>();
-                            messageParams.put("question", processTextDoc(((ConversationIndexMessage) message).getQuestion()));
-
-                            StringSubstitutor substitutor = new StringSubstitutor(messageParams, CHAT_HISTORY_MESSAGE_PREFIX, "}");
-                            String chatQuestionMessage = substitutor.replace(chatHistoryQuestionTemplate);
-                            chatHistory.add(chatQuestionMessage);
-
-                            messageParams.clear();
-                            messageParams.put("response", processTextDoc(((ConversationIndexMessage) message).getResponse()));
-                            substitutor = new StringSubstitutor(messageParams, CHAT_HISTORY_MESSAGE_PREFIX, "}");
-                            String chatResponseMessage = substitutor.replace(chatHistoryResponseTemplate);
-                            chatHistory.add(chatResponseMessage);
-                        }
-                        params.put(CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
-                        params.put(NEW_CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
-
-                        // required for MLChatAgentRunnerTest.java, it requires chatHistory to be added to input params to validate
-                        inputParams.put(CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
+                        messageList
+                            .add(
+                                ConversationIndexMessage
+                                    .conversationIndexMessageBuilder()
+                                    .sessionId(memory.getConversationId())
+                                    .question(question)
+                                    .response(response)
+                                    .build()
+                            );
                     }
-                }
+                    if (!messageList.isEmpty()) {
+                        if (chatHistoryQuestionTemplate == null) {
+                            StringBuilder chatHistoryBuilder = new StringBuilder();
+                            chatHistoryBuilder.append(chatHistoryPrefix);
+                            for (Message message : messageList) {
+                                chatHistoryBuilder.append(message.toString()).append("\n");
+                            }
+                            params.put(CHAT_HISTORY, chatHistoryBuilder.toString());
 
-                runAgent(mlAgent, params, listener, memory, memory.getConversationId(), functionCalling);
-            }, e -> {
-                log.error("Failed to get chat history", e);
-                listener.onFailure(e);
-            }), messageHistoryLimit);
-        }, listener::onFailure));
+                            // required for MLChatAgentRunnerTest.java, it requires chatHistory to be added to input params to validate
+                            inputParams.put(CHAT_HISTORY, chatHistoryBuilder.toString());
+                        } else {
+                            List<String> chatHistory = new ArrayList<>();
+                            for (Message message : messageList) {
+                                Map<String, String> messageParams = new HashMap<>();
+                                messageParams.put("question", processTextDoc(((ConversationIndexMessage) message).getQuestion()));
+
+                                StringSubstitutor substitutor = new StringSubstitutor(messageParams, CHAT_HISTORY_MESSAGE_PREFIX, "}");
+                                String chatQuestionMessage = substitutor.replace(chatHistoryQuestionTemplate);
+                                chatHistory.add(chatQuestionMessage);
+
+                                messageParams.clear();
+                                messageParams.put("response", processTextDoc(((ConversationIndexMessage) message).getResponse()));
+                                substitutor = new StringSubstitutor(messageParams, CHAT_HISTORY_MESSAGE_PREFIX, "}");
+                                String chatResponseMessage = substitutor.replace(chatHistoryResponseTemplate);
+                                chatHistory.add(chatResponseMessage);
+                            }
+                            params.put(CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
+                            params.put(NEW_CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
+
+                            // required for MLChatAgentRunnerTest.java, it requires chatHistory to be added to input params to validate
+                            inputParams.put(CHAT_HISTORY, String.join(", ", chatHistory) + ", ");
+                        }
+                    }
+
+                    runAgent(mlAgent, params, ActionListener.wrap(result -> {
+                        MLAgentTracer.getInstance().endSpan(agentTaskSpan);
+                        listener.onResponse(result);
+                    }, e -> { handleSpanError(agentTaskSpan, "Failed to run chat agent", e, listener); }),
+                        memory,
+                        memory.getConversationId(),
+                        functionCalling,
+                        agentTaskSpan
+                    );
+                }, e -> { handleSpanError(agentTaskSpan, "Failed to get chat history", e, listener); }), messageHistoryLimit);
+            }, e -> { handleSpanError(agentTaskSpan, "Failed to create memory", e, listener); }));
+        } catch (Exception e) {
+            handleSpanError(agentTaskSpan, "Error in MLChatAgentRunner", e, listener);
+        }
     }
 
     private void runAgent(
@@ -250,7 +277,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
         ActionListener<Object> listener,
         Memory memory,
         String sessionId,
-        FunctionCalling functionCalling
+        FunctionCalling functionCalling,
+        Span agentTaskSpan
     ) {
         List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, params);
 
@@ -259,7 +287,18 @@ public class MLChatAgentRunner implements MLAgentRunner {
             Map<String, Tool> tools = new HashMap<>();
             Map<String, MLToolSpec> toolSpecMap = new HashMap<>();
             createTools(toolFactories, params, allToolSpecs, tools, toolSpecMap, mlAgent);
-            runReAct(mlAgent.getLlm(), tools, toolSpecMap, params, memory, sessionId, mlAgent.getTenantId(), listener, functionCalling);
+            runReAct(
+                mlAgent.getLlm(),
+                tools,
+                toolSpecMap,
+                params,
+                memory,
+                sessionId,
+                mlAgent.getTenantId(),
+                listener,
+                functionCalling,
+                agentTaskSpan
+            );
         };
 
         // Fetch MCP tools and handle both success and failure cases
@@ -281,7 +320,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
         String sessionId,
         String tenantId,
         ActionListener<Object> listener,
-        FunctionCalling functionCalling
+        FunctionCalling functionCalling,
+        Span agentTaskSpan
     ) {
         Map<String, String> tmpParameters = constructLLMParams(llm, parameters);
         String prompt = constructLLMPrompt(tools, tmpParameters);
@@ -299,16 +339,30 @@ public class MLChatAgentRunner implements MLAgentRunner {
         // Trace number
         AtomicInteger traceNumber = new AtomicInteger(0);
 
-        AtomicReference<StepListener<MLTaskResponse>> lastLlmListener = new AtomicReference<>();
+        AtomicReference<Double> aggInputTokens = new AtomicReference<>(0.0);
+        AtomicReference<Double> aggOutputTokens = new AtomicReference<>(0.0);
+        AtomicReference<Double> aggTotalTokens = new AtomicReference<>(0.0);
+
+        class ListenerWithSpan {
+            final StepListener<MLTaskResponse> listener;
+            final Span span;
+
+            ListenerWithSpan(StepListener<MLTaskResponse> listener, Span span) {
+                this.listener = listener;
+                this.span = span;
+            }
+        }
+
+        AtomicReference<ListenerWithSpan> lastLlmListenerWithSpan = new AtomicReference<>();
         AtomicReference<String> lastThought = new AtomicReference<>();
         AtomicReference<String> lastAction = new AtomicReference<>();
         AtomicReference<String> lastActionInput = new AtomicReference<>();
         AtomicReference<String> lastToolSelectionResponse = new AtomicReference<>();
+        AtomicReference<String> lastToolOutput = new AtomicReference<>();
         Map<String, Object> additionalInfo = new ConcurrentHashMap<>();
 
         StepListener firstListener = new StepListener<MLTaskResponse>();
-        lastLlmListener.set(firstListener);
-        StepListener<?> lastStepListener = firstListener;
+        StepListener<MLTaskResponse> lastStepListener = firstListener;
 
         StringBuilder scratchpadBuilder = new StringBuilder();
         List<String> interactions = new CopyOnWriteArrayList<>();
@@ -319,9 +373,40 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
         List<ModelTensors> traceTensors = createModelTensors(sessionId, parentInteractionId);
         int maxIterations = Integer.parseInt(tmpParameters.getOrDefault(MAX_ITERATION, DEFAULT_MAX_ITERATIONS));
+
+        int llmCallIndex = 0;
+        int toolCallIndex = 0;
+
+        Span llmCallSpan = MLAgentTracer
+            .getInstance()
+            .startConversationalLLMCallSpan(
+                question,
+                llmCallIndex,
+                tmpParameters.get("system_prompt"),
+                tmpParameters.get("_llm_interface"),
+                agentTaskSpan
+            );
+
+        ActionRequest request = new MLPredictionTaskRequest(
+            llm.getModelId(),
+            RemoteInferenceMLInput
+                .builder()
+                .algorithm(FunctionName.REMOTE)
+                .inputDataset(RemoteInferenceInputDataSet.builder().parameters(tmpParameters).build())
+                .build(),
+            null,
+            tenantId
+        );
+
+        ListenerWithSpan firstListenerWithSpan = new ListenerWithSpan(firstListener, llmCallSpan);
+        lastLlmListenerWithSpan.set(firstListenerWithSpan);
+        client.execute(MLPredictionTaskAction.INSTANCE, request, firstListener);
+
         for (int i = 0; i < maxIterations; i++) {
             int finalI = i;
-            StepListener<?> nextStepListener = new StepListener<>();
+            int currentLlmCallIndex = llmCallIndex;
+            int currentToolCallIndex = toolCallIndex;
+            StepListener<MLTaskResponse> nextStepListener = new StepListener<>();
 
             lastStepListener.whenComplete(output -> {
                 StringBuilder sessionMsgAnswerBuilder = new StringBuilder();
@@ -345,8 +430,64 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     String thoughtResponse = modelOutput.get(THOUGHT_RESPONSE);
                     String finalAnswer = modelOutput.get(FINAL_ANSWER);
 
+                    MLAgentTracer.ToolCallExtractionResult llmResultInfo = MLAgentTracer.extractToolCallInfo(tmpModelTensorOutput, null);
+
+                    TokenUsage tokenUsage = extractTokenUsage(llmResultInfo.usage);
+                    if (tokenUsage.inputTokens != null)
+                        aggInputTokens.set(aggInputTokens.get() + tokenUsage.inputTokens);
+                    if (tokenUsage.outputTokens != null)
+                        aggOutputTokens.set(aggOutputTokens.get() + tokenUsage.outputTokens);
+                    if (tokenUsage.totalTokens != null)
+                        aggTotalTokens.set(aggTotalTokens.get() + tokenUsage.totalTokens);
+
+                    ListenerWithSpan currentLlmListenerWithSpan = lastLlmListenerWithSpan.get();
+                    if (currentLlmListenerWithSpan != null && currentLlmListenerWithSpan.span != null) {
+                        Span currentLlmSpan = currentLlmListenerWithSpan.span;
+                        updateSpanWithResultAndAccumulateTokens(
+                            currentLlmSpan,
+                            agentTaskSpan,
+                            (String) llmResultInfo.output,
+                            tokenUsage,
+                            llmResultInfo.metrics != null && llmResultInfo.metrics.get("latencyMs") instanceof Number
+                                ? ((Number) llmResultInfo.metrics.get("latencyMs")).doubleValue()
+                                : null
+                        );
+                        MLAgentTracer.getInstance().endSpan(currentLlmSpan);
+                    }
+
                     if (finalAnswer != null) {
                         finalAnswer = finalAnswer.trim();
+
+                        // Add tool output to additional info if the last action had includeOutputInAgentResponse=true
+                        if (lastAction.get() != null && lastToolOutput.get() != null) {
+                            addToolOutputToAddtionalInfo(toolSpecMap, lastAction, additionalInfo, lastToolOutput.get());
+                        }
+
+                        if (currentLlmListenerWithSpan != null && currentLlmListenerWithSpan.span != null) {
+                            Span currentLlmSpan = currentLlmListenerWithSpan.span;
+                            updateSpanWithResultAndAccumulateTokens(
+                                currentLlmSpan,
+                                agentTaskSpan,
+                                (String) llmResultInfo.output,
+                                tokenUsage,
+                                llmResultInfo.metrics != null && llmResultInfo.metrics.get("latencyMs") instanceof Number
+                                    ? ((Number) llmResultInfo.metrics.get("latencyMs")).doubleValue()
+                                    : null
+                            );
+                            MLAgentTracer.getInstance().endSpan(currentLlmSpan);
+                        }
+                        MLAgentTracer
+                            .updateSpanWithResultAttributes(
+                                agentTaskSpan,
+                                null,
+                                aggInputTokens.get(),
+                                aggOutputTokens.get(),
+                                aggTotalTokens.get(),
+                                null
+                            );
+                        additionalInfo.put("inputTokens", aggInputTokens.get());
+                        additionalInfo.put("outputTokens", aggOutputTokens.get());
+                        additionalInfo.put("totalTokens", aggTotalTokens.get());
                         sendFinalAnswer(
                             sessionId,
                             listener,
@@ -369,6 +510,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     lastAction.set(action);
                     lastActionInput.set(actionInput);
                     lastToolSelectionResponse.set(thoughtResponse);
+                    lastToolOutput.set(thoughtResponse);
 
                     traceTensors
                         .add(
@@ -399,28 +541,92 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             action,
                             actionInput
                         );
-                        runTool(
-                            tools,
-                            toolSpecMap,
-                            tmpParameters,
-                            (ActionListener<Object>) nextStepListener,
-                            action,
-                            actionInput,
-                            toolParams,
-                            interactions,
-                            toolCallId,
-                            functionCalling
-                        );
+
+                        Tool toolObj = tools.get(action);
+                        Span toolCallSpan = MLAgentTracer
+                            .getInstance()
+                            .startConversationalToolCallSpan(
+                                actionInput,
+                                currentToolCallIndex,
+                                action,
+                                toolObj != null ? toolObj.getDescription() : null,
+                                currentLlmListenerWithSpan != null ? currentLlmListenerWithSpan.span : agentTaskSpan
+                            );
+
+                        try {
+                            this.runTool(tools, toolSpecMap, tmpParameters, ActionListener.wrap(result -> {
+                                ModelTensorOutput toolOutput = ModelTensorOutput
+                                    .builder()
+                                    .mlModelOutputs(
+                                        List
+                                            .of(
+                                                ModelTensors
+                                                    .builder()
+                                                    .mlModelTensors(
+                                                        List.of(ModelTensor.builder().name("response").result(result.toString()).build())
+                                                    )
+                                                    .build()
+                                            )
+                                    )
+                                    .build();
+                                MLTaskResponse toolResponse = new MLTaskResponse(toolOutput);
+                                nextStepListener.onResponse(toolResponse);
+                            }, e -> nextStepListener.onFailure(e)),
+                                action,
+                                actionInput,
+                                toolParams,
+                                interactions,
+                                toolCallId,
+                                functionCalling,
+                                toolCallSpan
+                            );
+                        } catch (Exception e) {
+                            handleSpanError(toolCallSpan, e);
+                            throw e;
+                        }
                     } else {
-                        String res = String.format(Locale.ROOT, "Failed to run the tool %s which is unsupported.", action);
-                        StringSubstitutor substitutor = new StringSubstitutor(
-                            Map.of(SCRATCHPAD, scratchpadBuilder.toString()),
-                            "${parameters.",
-                            "}"
-                        );
-                        newPrompt.set(substitutor.replace(finalPrompt));
-                        tmpParameters.put(PROMPT, newPrompt.get());
-                        ((ActionListener<Object>) nextStepListener).onResponse(res);
+                        Span toolCallSpan = MLAgentTracer
+                            .getInstance()
+                            .startConversationalToolCallSpan(
+                                actionInput,
+                                currentToolCallIndex,
+                                action,
+                                null,
+                                currentLlmListenerWithSpan != null ? currentLlmListenerWithSpan.span : agentTaskSpan
+                            );
+
+                        try {
+                            String failureResult = String.format("Failed to run the tool %s which is unsupported.", action);
+                            MLAgentTracer.updateSpanWithResultAttributes(toolCallSpan, failureResult, null, null, null, null);
+                            MLAgentTracer.getInstance().endSpan(toolCallSpan);
+
+                            String res = String.format(Locale.ROOT, "Failed to run the tool %s which is unsupported.", action);
+                            StringSubstitutor substitutor = new StringSubstitutor(
+                                Map.of(SCRATCHPAD, scratchpadBuilder.toString()),
+                                "${parameters.",
+                                "}"
+                            );
+                            newPrompt.set(substitutor.replace(finalPrompt));
+                            tmpParameters.put(PROMPT, newPrompt.get());
+
+                            ModelTensorOutput toolOutput = ModelTensorOutput
+                                .builder()
+                                .mlModelOutputs(
+                                    List
+                                        .of(
+                                            ModelTensors
+                                                .builder()
+                                                .mlModelTensors(List.of(ModelTensor.builder().name("response").result(res).build()))
+                                                .build()
+                                        )
+                                )
+                                .build();
+                            MLTaskResponse toolResponse = new MLTaskResponse(toolOutput);
+                            nextStepListener.onResponse(toolResponse);
+                        } catch (Exception e) {
+                            handleSpanError(toolCallSpan, e);
+                            throw e;
+                        }
                     }
                 } else {
                     addToolOutputToAddtionalInfo(toolSpecMap, lastAction, additionalInfo, output);
@@ -478,7 +684,17 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(finalModelTensors).build());
                         }
                     } else {
-                        ActionRequest request = new MLPredictionTaskRequest(
+                        Span nextLlmCallSpan = MLAgentTracer
+                            .getInstance()
+                            .startConversationalLLMCallSpan(
+                                question,
+                                currentLlmCallIndex,
+                                tmpParameters.get("system_prompt"),
+                                tmpParameters.get("_llm_interface"),
+                                agentTaskSpan
+                            );
+
+                        ActionRequest nextRequest = new MLPredictionTaskRequest(
                             llm.getModelId(),
                             RemoteInferenceMLInput
                                 .builder()
@@ -488,29 +704,40 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             null,
                             tenantId
                         );
-                        client.execute(MLPredictionTaskAction.INSTANCE, request, (ActionListener<MLTaskResponse>) nextStepListener);
+
+                        StepListener<MLTaskResponse> llmListener = new StepListener<>();
+                        ListenerWithSpan llmListenerWithSpan = new ListenerWithSpan(llmListener, nextLlmCallSpan);
+                        lastLlmListenerWithSpan.set(llmListenerWithSpan);
+
+                        // Connect the llmListener to nextStepListener to continue the chain
+                        llmListener
+                            .whenComplete(response -> { nextStepListener.onResponse(response); }, e -> { nextStepListener.onFailure(e); });
+
+                        client.execute(MLPredictionTaskAction.INSTANCE, nextRequest, (ActionListener<MLTaskResponse>) llmListener);
                     }
                 }
             }, e -> {
                 log.error("Failed to run chat agent", e);
+                MLAgentTracer
+                    .updateSpanWithResultAttributes(
+                        agentTaskSpan,
+                        null,
+                        aggInputTokens.get(),
+                        aggOutputTokens.get(),
+                        aggTotalTokens.get(),
+                        null
+                    );
                 listener.onFailure(e);
             });
             if (i < maxIterations - 1) {
                 lastStepListener = nextStepListener;
             }
+            if (finalI % 2 == 0) {
+                llmCallIndex++;
+            } else {
+                toolCallIndex++;
+            }
         }
-
-        ActionRequest request = new MLPredictionTaskRequest(
-            llm.getModelId(),
-            RemoteInferenceMLInput
-                .builder()
-                .algorithm(FunctionName.REMOTE)
-                .inputDataset(RemoteInferenceInputDataSet.builder().parameters(tmpParameters).build())
-                .build(),
-            null,
-            tenantId
-        );
-        client.execute(MLPredictionTaskAction.INSTANCE, request, firstListener);
     }
 
     private static List<ModelTensors> createFinalAnswerTensors(List<ModelTensors> sessionId, List<ModelTensor> lastThought) {
@@ -554,7 +781,13 @@ public class MLChatAgentRunner implements MLAgentRunner {
     ) throws PrivilegedActionException {
         MLToolSpec toolSpec = toolSpecMap.get(lastAction.get());
         if (toolSpec != null && toolSpec.isIncludeOutputInAgentResponse()) {
-            String outputString = outputToOutputString(output);
+            // Extract the actual tool output from MLTaskResponse if needed
+            Object actualOutput = output;
+            if (output instanceof MLTaskResponse) {
+                actualOutput = ((MLTaskResponse) output).getOutput();
+            }
+
+            String outputString = outputToOutputString(actualOutput);
             String toolOutputKey = String.format("%s.output", getToolName(toolSpec));
             if (additionalInfo.get(toolOutputKey) != null) {
                 List<String> list = (List<String>) additionalInfo.get(toolOutputKey);
@@ -565,7 +798,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         }
     }
 
-    private static void runTool(
+    private void runTool(
         Map<String, Tool> tools,
         Map<String, MLToolSpec> toolSpecMap,
         Map<String, String> tmpParameters,
@@ -575,17 +808,22 @@ public class MLChatAgentRunner implements MLAgentRunner {
         Map<String, String> toolParams,
         List<String> interactions,
         String toolCallId,
-        FunctionCalling functionCalling
+        FunctionCalling functionCalling,
+        Span toolCallSpan
     ) {
         if (tools.get(action).validate(toolParams)) {
             try {
                 String finalAction = action;
                 ActionListener<Object> toolListener = ActionListener.wrap(r -> {
+                    MLAgentTracer.ToolCallExtractionResult toolResultInfo = MLAgentTracer.extractToolCallInfo(r, actionInput);
+                    updateToolCallSpanWithResult(toolCallSpan, toolResultInfo);
+
                     if (functionCalling != null) {
                         List<Map<String, Object>> toolResults = List.of(Map.of(TOOL_CALL_ID, toolCallId, TOOL_RESULT, Map.of("text", r)));
                         List<LLMMessage> llmMessages = functionCalling.supply(toolResults);
                         // TODO: support multiple tool calls at the same time so that multiple LLMMessages can be generated here
                         interactions.add(llmMessages.getFirst().getResponse());
+                        MLAgentTracer.getInstance().endSpan(toolCallSpan);
                     } else {
                         interactions
                             .add(
@@ -595,6 +833,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                     INTERACTIONS_PREFIX
                                 )
                             );
+                        MLAgentTracer.getInstance().endSpan(toolCallSpan);
                     }
                     nextStepListener.onResponse(r);
                 }, e -> {
@@ -606,6 +845,10 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                 INTERACTIONS_PREFIX
                             )
                         );
+                    String errorResult = String.format("Failed to run the tool %s with the error message %s.", finalAction, e.getMessage());
+                    MLAgentTracer.updateSpanWithResultAttributes(toolCallSpan, errorResult, null, null, null, null);
+                    toolCallSpan.setError(e);
+                    MLAgentTracer.getInstance().endSpan(toolCallSpan);
                     nextStepListener
                         .onResponse(
                             String
@@ -631,11 +874,17 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 }
             } catch (Exception e) {
                 log.error("Failed to run tool {}", action, e);
+                String errorResult = String.format("Failed to run the tool %s with the error message %s.", action, e.getMessage());
+                MLAgentTracer.updateSpanWithResultAttributes(toolCallSpan, errorResult, null, null, null, null);
+                toolCallSpan.setError(e);
+                MLAgentTracer.getInstance().endSpan(toolCallSpan);
                 nextStepListener
                     .onResponse(String.format(Locale.ROOT, "Failed to run the tool %s with the error message %s.", action, e.getMessage()));
             }
         } else { // TODO: add failure to interaction to let LLM regenerate ?
             String res = String.format(Locale.ROOT, "Failed to run the tool %s due to wrong input %s.", action, actionInput);
+            MLAgentTracer.updateSpanWithResultAttributes(toolCallSpan, res, null, null, null, null);
+            MLAgentTracer.getInstance().endSpan(toolCallSpan);
             nextStepListener.onResponse(res);
         }
     }
@@ -836,6 +1085,93 @@ public class MLChatAgentRunner implements MLAgentRunner {
             listener.onResponse(true);
         } else {
             memory.save(msgTemp, parentInteractionId, traceNumber.addAndGet(1), "LLM", listener);
+        }
+    }
+
+    /**
+     * Handles span error by logging, setting error on span, ending span, and failing listener.
+     * @param span The span to handle error for.
+     * @param errorMessage The error message to log.
+     * @param e The exception that occurred.
+     * @param listener The action listener to fail.
+     */
+    private void handleSpanError(Span span, String errorMessage, Exception e, ActionListener<Object> listener) {
+        log.error(errorMessage, e);
+        span.setError(e);
+        MLAgentTracer.getInstance().endSpan(span);
+        listener.onFailure(e);
+    }
+
+    @VisibleForTesting
+    static Double extractTokenValue(Map<String, Object> usage, String tokenKey) {
+        if (usage == null || !usage.containsKey(tokenKey))
+            return null;
+        Object value = usage.get(tokenKey);
+        return value instanceof Number ? ((Number) value).doubleValue() : null;
+    }
+
+    @VisibleForTesting
+    static TokenUsage extractTokenUsage(Map<String, Object> usage) {
+        return new TokenUsage(
+            extractTokenValue(usage, "inputTokens"),
+            extractTokenValue(usage, "outputTokens"),
+            extractTokenValue(usage, "totalTokens")
+        );
+    }
+
+    @VisibleForTesting
+    static void handleSpanError(Span span, Exception e) {
+        if (span != null) {
+            span.setError(e);
+            MLAgentTracer.getInstance().endSpan(span);
+        }
+    }
+
+    private static void updateSpanWithResultAndAccumulateTokens(
+        Span targetSpan,
+        Span agentSpan,
+        String result,
+        TokenUsage tokenUsage,
+        Double latency
+    ) {
+        MLAgentTracer
+            .updateSpanWithResultAttributes(
+                targetSpan,
+                result,
+                tokenUsage.inputTokens,
+                tokenUsage.outputTokens,
+                tokenUsage.totalTokens,
+                latency
+            );
+        MLAgentTracer.updateSpanWithResultAttributes(agentSpan, result, null, null, null, null);
+    }
+
+    private static void updateToolCallSpanWithResult(Span span, MLAgentTracer.ToolCallExtractionResult result) {
+        Double inputTokens = result.usage != null && result.usage.get("inputTokens") instanceof Number
+            ? ((Number) result.usage.get("inputTokens")).doubleValue()
+            : null;
+        Double outputTokens = result.usage != null && result.usage.get("outputTokens") instanceof Number
+            ? ((Number) result.usage.get("outputTokens")).doubleValue()
+            : null;
+        Double totalTokens = result.usage != null && result.usage.get("totalTokens") instanceof Number
+            ? ((Number) result.usage.get("totalTokens")).doubleValue()
+            : null;
+        Double latency = result.metrics != null && result.metrics.get("latencyMs") instanceof Number
+            ? ((Number) result.metrics.get("latencyMs")).doubleValue()
+            : null;
+        MLAgentTracer.updateSpanWithResultAttributes(span, result.output, inputTokens, outputTokens, totalTokens, latency);
+    }
+
+    @VisibleForTesting
+    static class TokenUsage {
+        public final Double inputTokens;
+        public final Double outputTokens;
+        public final Double totalTokens;
+
+        public TokenUsage(Double inputTokens, Double outputTokens, Double totalTokens) {
+            this.inputTokens = inputTokens;
+            this.outputTokens = outputTokens;
+            this.totalTokens = totalTokens;
         }
     }
 }
