@@ -16,11 +16,9 @@ import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX_MAPPING_PA
 import static org.opensearch.ml.common.CommonValue.ML_CONTROLLER_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_CONTROLLER_INDEX_MAPPING_PATH;
 import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_MAPPING_PATH;
+import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_INDEX_MAPPING_PATH;
 import static org.opensearch.ml.common.CommonValue.ML_JOBS_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_JOBS_INDEX_MAPPING_PATH;
-import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_INDEX_MAPPING_PATH;
 import static org.opensearch.ml.common.CommonValue.ML_MCP_SESSION_MANAGEMENT_INDEX_MAPPING_PATH;
 import static org.opensearch.ml.common.CommonValue.ML_MCP_TOOLS_INDEX_MAPPING_PATH;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
@@ -56,7 +54,6 @@ public enum MLIndex {
     MCP_TOOLS(MCP_TOOLS_INDEX, false, ML_MCP_TOOLS_INDEX_MAPPING_PATH),
     JOBS(ML_JOBS_INDEX, false, ML_JOBS_INDEX_MAPPING_PATH),
     INDEX_INSIGHT(ML_INDEX_INSIGHT_INDEX, false, ML_INDEX_INSIGHT_INDEX_MAPPING_PATH);
-
 
     private final String indexName;
     // whether we use an alias for the index

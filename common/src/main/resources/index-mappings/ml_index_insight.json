@@ -10,18 +10,14 @@
       "type": "text"
     },
     "field_description": {
-      "type": "object",
-      "dynamic": true
-    },
-    "last_updated_time": {
-      "type": "date",
-      "format": "strict_date_time||epoch_millis"
+      "type": "text"
     },
     "statistical_data": {
       "type": "text"
     },
-    "highLevel_feature": {
-      "type": "text"
+    "last_updated_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
     }
   }
 }
