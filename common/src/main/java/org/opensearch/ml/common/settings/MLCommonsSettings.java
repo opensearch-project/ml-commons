@@ -353,11 +353,6 @@ public final class MLCommonsSettings {
 
     // Model ID for Index Insight feature
     public static final Setting<String> ML_COMMONS_INDEX_INSIGHT_MODEL_ID = Setting
-        .simpleString(
-            "plugins.ml_commons.index_insight.model_id",
-            Setting.Property.NodeScope,
-            Setting.Property.Dynamic
-        );
-
+        .simpleString("plugins.ml_commons.index_insight.model_id", Setting.Property.NodeScope, Setting.Property.Dynamic);
 
 }

@@ -96,10 +96,14 @@ public class MLIndicesHandler {
         initMLIndexIfAbsent(MLIndex.JOBS, listener);
     }
 
+    public void initMLIndexInsight(ActionListener<Boolean> listener) {
+        initMLIndexIfAbsent(MLIndex.INDEX_INSIGHT, listener);
+    }
+
     public void initMLAgentIndex(ActionListener<Boolean> listener) {
         initMLIndexIfAbsent(MLIndex.AGENT, listener);
     }
-    
+
     public void initMLIndexInsightIndex(ActionListener<Boolean> listener) {
         initMLIndexIfAbsent(MLIndex.INDEX_INSIGHT, listener);
     }

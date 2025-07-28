@@ -33,6 +33,7 @@ public class CommonValue {
     public static String HOT_BOX_TYPE = "hot";
     // warm node
     public static String WARM_BOX_TYPE = "warm";
+    public static final String ML_INDEX_INSIGHT_INDEX = ".plugins-ml-index-insight";
     public static final String ML_MODEL_GROUP_INDEX = ".plugins-ml-model-group";
     public static final String ML_MODEL_INDEX = ".plugins-ml-model";
     public static final String ML_TASK_INDEX = ".plugins-ml-task";
@@ -50,7 +51,6 @@ public class CommonValue {
     public static final String MCP_TOOLS_INDEX = ".plugins-ml-mcp-tools";
     // index created in 3.1 to track all ml jobs created via job scheduler
     public static final String ML_JOBS_INDEX = ".plugins-ml-jobs";
-    public static final String ML_INDEX_INSIGHT_INDEX = ".plugins-ml-index-insight";
     public static final Set<String> stopWordsIndices = ImmutableSet.of(".plugins-ml-stop-words");
     public static final String TOOL_PARAMETERS_PREFIX = "tools.parameters.";
 

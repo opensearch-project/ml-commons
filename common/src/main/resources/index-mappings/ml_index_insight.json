@@ -10,8 +10,10 @@
       "type": "text"
     },
     "field_description": {
-      "type": "object",
-      "dynamic": true
+      "type": "text"
+    },
+    "statistical_data": {
+      "type": "text"
     },
     "last_updated_time": {
       "type": "date",
