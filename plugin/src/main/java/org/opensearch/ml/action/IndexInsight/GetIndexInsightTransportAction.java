@@ -1,5 +1,6 @@
 package org.opensearch.ml.action.IndexInsight;
 
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_INDEX;
 import static org.opensearch.ml.common.indexInsight.IndexInsight.INDEX_NAME_FIELD;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
@@ -58,11 +59,15 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
             client.search(searchRequest, ActionListener.wrap(searchResponse -> {
                 SearchHit[] hits = searchResponse.getHits().getHits();
                 if (hits.length == 0) {
-                    wrappedListener.onFailure(new OpenSearchStatusException("The index insight hasn't created, will create now.", RestStatus.FORBIDDEN));
+                    wrappedListener
+                        .onFailure(
+                            new OpenSearchStatusException("The index insight hasn't created, will create now.", RestStatus.FORBIDDEN)
+                        );
                     return;
                 }
                 SearchHit hit = hits[0];
                 try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, hit.getSourceRef())) {
+                    ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
                     IndexInsight indexInsight = IndexInsight.parse(parser);
                     wrappedListener.onResponse(MLIndexInsightGetResponse.builder().indexInsight(indexInsight).build());
                 } catch (Exception e) {

@@ -1,11 +1,9 @@
 package org.opensearch.ml.common.indexInsight;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.utils.StringUtils.getParameterMap;
 
 import java.io.IOException;
 import java.time.Instant;
-import java.util.Map;
 
 import org.opensearch.Version;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -35,13 +33,7 @@ public class IndexInsight implements ToXContentObject, Writeable {
     private Instant lastUpdatedTime;
 
     @Builder(toBuilder = true)
-    public IndexInsight(
-        String index,
-        String indexDescription,
-        String fieldDescription,
-        String statisticalData,
-        Instant lastUpdatedTime
-    ) {
+    public IndexInsight(String index, String indexDescription, String fieldDescription, String statisticalData, Instant lastUpdatedTime) {
         this.index = index;
         this.indexDescription = indexDescription;
         this.fieldDescription = fieldDescription;
@@ -71,7 +63,6 @@ public class IndexInsight implements ToXContentObject, Writeable {
         String fieldDescription = null;
         String statisticalData = null;
         Instant lastUpdatedTime = null;
-        parser.nextToken();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
             String fieldName = parser.currentName();

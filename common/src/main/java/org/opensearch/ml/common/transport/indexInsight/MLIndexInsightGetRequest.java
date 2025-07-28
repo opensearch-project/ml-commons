@@ -5,15 +5,14 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 
-import org.opensearch.Version;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
+import org.opensearch.ml.common.indexInsight.MLIndexInsightType;
 
 import lombok.Getter;
-import org.opensearch.ml.common.indexInsight.MLIndexInsightType;
 
 @Getter
 public class MLIndexInsightGetRequest extends ActionRequest {
