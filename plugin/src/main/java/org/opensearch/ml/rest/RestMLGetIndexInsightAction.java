@@ -53,6 +53,6 @@ public class RestMLGetIndexInsightAction extends BaseRestHandler {
     @VisibleForTesting
     MLIndexInsightGetRequest getRequest(RestRequest request) throws IOException {
         String indexName = getParameterId(request, PARAMETER_INDEX_ID);
-        return new MLIndexInsightGetRequest(indexName, MLIndexInsightType.STATISTICAL_DATA);
+        return new MLIndexInsightGetRequest(indexName, MLIndexInsightType.ALL);
     }
 }
