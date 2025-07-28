@@ -24,6 +24,7 @@ import org.opensearch.index.query.BoolQueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.ml.common.indexInsight.IndexInsight;
+import org.opensearch.ml.common.indexInsight.IndexInsightAccessControllerHelper;
 import org.opensearch.ml.common.indexInsight.MLIndexInsightType;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetAction;
 import org.opensearch.ml.common.transport.indexInsight.MLIndexInsightGetRequest;
@@ -50,49 +51,54 @@ public class GetIndexInsightTransportAction extends HandledTransportAction<Actio
     ) {
         super(MLIndexInsightGetAction.NAME, transportService, actionFilters, MLIndexInsightGetRequest::new);
         this.client = client;
+        this.xContentRegistry = xContentRegistry;
     }
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLIndexInsightGetResponse> actionListener) {
         MLIndexInsightGetRequest mlIndexInsightGetRequest = MLIndexInsightGetRequest.fromActionRequest(request);
         String indexName = mlIndexInsightGetRequest.getIndexName();
-        SearchRequest searchRequest = new SearchRequest(ML_INDEX_INSIGHT_INDEX);
-        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
-        BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
-        boolQueryBuilder.must(new TermQueryBuilder(INDEX_NAME_FIELD, indexName));
-        if (mlIndexInsightGetRequest.getTargetIndexInsight() != MLIndexInsightType.ALL) {
-            boolQueryBuilder.must(new TermQueryBuilder(TASK_TYPE_FIELD, mlIndexInsightGetRequest.getTargetIndexInsight().toString()));
-        }
-        searchSourceBuilder.query(boolQueryBuilder);
-        searchRequest.source(searchSourceBuilder);
+        ActionListener<Boolean> actionAfterDryRun = ActionListener.wrap(r -> {
+            SearchRequest searchRequest = new SearchRequest(ML_INDEX_INSIGHT_INDEX);
+            SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+            BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
+            boolQueryBuilder.must(new TermQueryBuilder(INDEX_NAME_FIELD, indexName));
+            if (mlIndexInsightGetRequest.getTargetIndexInsight() != MLIndexInsightType.ALL) {
+                boolQueryBuilder.must(new TermQueryBuilder(TASK_TYPE_FIELD, mlIndexInsightGetRequest.getTargetIndexInsight().toString()));
+            }
+            searchSourceBuilder.query(boolQueryBuilder);
+            searchRequest.source(searchSourceBuilder);
 
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<MLIndexInsightGetResponse> wrappedListener = ActionListener.runBefore(actionListener, () -> context.restore());
-            client.search(searchRequest, ActionListener.wrap(searchResponse -> {
-                SearchHit[] hits = searchResponse.getHits().getHits();
-                if (hits.length == 0) {
-                    wrappedListener
-                        .onFailure(
-                            new OpenSearchStatusException("The index insight hasn't created, will create now.", RestStatus.FORBIDDEN)
-                        );
-                    return;
-                }
-                List<IndexInsight> indexInsights = new ArrayList<>();
-                for (SearchHit hit : hits) {
-                    try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, hit.getSourceRef())) {
-                        ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                        IndexInsight indexInsight = IndexInsight.parse(parser);
-                        indexInsights.add(indexInsight);
-                    } catch (Exception e) {
-                        wrappedListener.onFailure(e);
+            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                ActionListener<MLIndexInsightGetResponse> wrappedListener = ActionListener
+                    .runBefore(actionListener, () -> context.restore());
+                client.search(searchRequest, ActionListener.wrap(searchResponse -> {
+                    SearchHit[] hits = searchResponse.getHits().getHits();
+                    if (hits.length == 0) {
+                        wrappedListener
+                            .onFailure(
+                                new OpenSearchStatusException("The index insight hasn't created, will create now.", RestStatus.FORBIDDEN)
+                            );
+                        return;
                     }
-                }
-                wrappedListener.onResponse(MLIndexInsightGetResponse.builder().indexInsights(indexInsights).build());
-            }, wrappedListener::onFailure));
+                    List<IndexInsight> indexInsights = new ArrayList<>();
+                    for (SearchHit hit : hits) {
+                        try (XContentParser parser = createXContentParserFromRegistry(xContentRegistry, hit.getSourceRef())) {
+                            ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                            IndexInsight indexInsight = IndexInsight.parse(parser);
+                            indexInsights.add(indexInsight);
+                        } catch (Exception e) {
+                            wrappedListener.onFailure(e);
+                        }
+                    }
+                    wrappedListener.onResponse(MLIndexInsightGetResponse.builder().indexInsights(indexInsights).build());
+                }, wrappedListener::onFailure));
 
-        } catch (Exception e) {
-            log.error("fail to get index insight", e);
-            actionListener.onFailure(e);
-        }
+            } catch (Exception e) {
+                log.error("fail to get index insight", e);
+                actionListener.onFailure(e);
+            }
+        }, actionListener::onFailure);
+        IndexInsightAccessControllerHelper.verifyAccessController(client, actionAfterDryRun, indexName);
     }
 }
