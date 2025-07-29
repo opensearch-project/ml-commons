@@ -23,16 +23,18 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.ml.common.output.model.ModelTensor;
-import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Tool;
-import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.transport.client.Client;
 
+/**
+ * Units test for QueryPlanningTools
+ */
 public class QueryPlanningToolTests {
 
     @Mock
@@ -65,22 +67,13 @@ public class QueryPlanningToolTests {
     @Test
     public void testRun() throws ExecutionException, InterruptedException {
         String matchQueryString = "{\"query\":{\"match\":{\"title\":\"wind\"}}}";
-        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", matchQueryString)).build();
-        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(List.of(modelTensor)).build();
-        List<ModelTensors> modelTensorsList = List.of(modelTensors);
-
         doAnswer(invocation -> {
-            ActionListener<List<ModelTensors>> listener = invocation.getArgument(1);
-            listener.onResponse(modelTensorsList);
+            ActionListener<String> listener = invocation.getArgument(1);
+            listener.onResponse(matchQueryString);
             return null;
         }).when(queryGenerationTool).run(any(), any());
 
         QueryPlanningTool tool = new QueryPlanningTool(client, "test_model_id", "llmGenerated", queryGenerationTool);
-        tool.setOutputParser(o -> {
-            List<ModelTensors> outputs = (List<ModelTensors>) o;
-            return outputs.get(0).getMlModelTensors().get(0).getDataAsMap().get("response");
-        });
-
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
         // test try to update the prompt
@@ -90,6 +83,63 @@ public class QueryPlanningToolTests {
         tool.run(validParams, listener);
 
         assertEquals(matchQueryString, future.get());
+    }
+
+    @Test
+    public void testRun_PredictionReturnsList_ThrowsIllegalArgumentException() throws ExecutionException, InterruptedException {
+        thrown.expect(ExecutionException.class);
+        thrown.expectCause(org.hamcrest.Matchers.isA(IllegalArgumentException.class));
+        thrown.expectMessage("Error processing query string: [invalid_query]. Try using response_filter in agent registration if needed.");
+
+        doAnswer(invocation -> {
+            ActionListener<List<String>> listener = invocation.getArgument(1);
+            listener.onResponse(List.of("invalid_query"));
+            return null;
+        }).when(queryGenerationTool).run(any(), any());
+
+        QueryPlanningTool tool = new QueryPlanningTool(client, "test_model_id", "llmGenerated", queryGenerationTool);
+        final CompletableFuture<String> future = new CompletableFuture<>();
+        ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
+        validParams.put("query_text", "help me find some books related to wind");
+        tool.run(validParams, listener);
+
+        future.get();
+    }
+
+    @Test
+    public void testRun_PredictionReturnsNull_ReturnDefaultQuery() throws ExecutionException, InterruptedException {
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(1);
+            listener.onResponse(null);
+            return null;
+        }).when(queryGenerationTool).run(any(), any());
+
+        QueryPlanningTool tool = new QueryPlanningTool(client, "test_model_id", "llmGenerated", queryGenerationTool);
+        final CompletableFuture<String> future = new CompletableFuture<>();
+        ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
+        validParams.put("query_text", "help me find some books related to wind");
+        tool.run(validParams, listener);
+        String multiMatchQueryString =
+            "{ \"query\": { \"multi_match\" : { \"query\":    \"help me find some books related to wind\",  \"fields\": [\"*\"] } } }";
+        assertEquals(multiMatchQueryString, future.get());
+    }
+
+    @Test
+    public void testRun_PredictionReturnsEmpty_ReturnDefaultQuery() throws ExecutionException, InterruptedException {
+        doAnswer(invocation -> {
+            ActionListener<String> listener = invocation.getArgument(1);
+            listener.onResponse("");
+            return null;
+        }).when(queryGenerationTool).run(any(), any());
+
+        QueryPlanningTool tool = new QueryPlanningTool(client, "test_model_id", "llmGenerated", queryGenerationTool);
+        final CompletableFuture<String> future = new CompletableFuture<>();
+        ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
+        validParams.put("query_text", "help me find some books related to wind");
+        tool.run(validParams, listener);
+        String multiMatchQueryString =
+            "{ \"query\": { \"multi_match\" : { \"query\":    \"help me find some books related to wind\",  \"fields\": [\"*\"] } } }";
+        assertEquals(multiMatchQueryString, future.get());
     }
 
     @Test
@@ -114,4 +164,8 @@ public class QueryPlanningToolTests {
         List<String> allModelKeys = QueryPlanningTool.Factory.getInstance().getAllModelKeys();
         assertEquals(List.of(MODEL_ID_FIELD), allModelKeys);
     }
+
+    @Rule
+    public ExpectedException thrown = ExpectedException.none();
+
 }
