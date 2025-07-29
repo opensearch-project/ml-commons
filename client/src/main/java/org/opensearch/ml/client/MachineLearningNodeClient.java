@@ -36,6 +36,9 @@ import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.agent.MLAgentDeleteAction;
 import org.opensearch.ml.common.transport.agent.MLAgentDeleteRequest;
+import org.opensearch.ml.common.transport.agent.MLExecuteAgentAction;
+import org.opensearch.ml.common.transport.agent.MLExecuteAgentRequest;
+import org.opensearch.ml.common.transport.agent.MLExecuteAgentResponse;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentAction;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentRequest;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
@@ -294,7 +297,25 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     @Override
     public void deleteAgent(String agentId, String tenantId, ActionListener<DeleteResponse> listener) {
         MLAgentDeleteRequest agentDeleteRequest = new MLAgentDeleteRequest(agentId, tenantId);
-        client.execute(MLAgentDeleteAction.INSTANCE, agentDeleteRequest, ActionListener.wrap(listener::onResponse, listener::onFailure));
+        client.execute(MLAgentDeleteAction.INSTANCE, agentDeleteRequest, listener);
+    }
+
+    /**
+     * Execute agent
+     * @param agentId The id of the agent to execute
+     * @param method The method of the agent to execute
+     * @param parameters The parameters of the agent to execute
+     * @param listener a listener to be notified of the result
+     */
+    @Override
+    public void executeAgent(
+        String agentId,
+        String method,
+        Map<String, String> parameters,
+        ActionListener<MLExecuteAgentResponse> listener
+    ) {
+        MLExecuteAgentRequest mlExecuteAgentRequest = new MLExecuteAgentRequest(agentId, method, parameters);
+        client.execute(MLExecuteAgentAction.INSTANCE, mlExecuteAgentRequest, listener);
     }
 
     @Override

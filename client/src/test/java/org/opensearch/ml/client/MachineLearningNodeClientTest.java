@@ -87,6 +87,9 @@ import org.opensearch.ml.common.output.execute.metrics_correlation.MetricsCorrel
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.agent.MLAgentDeleteAction;
 import org.opensearch.ml.common.transport.agent.MLAgentDeleteRequest;
+import org.opensearch.ml.common.transport.agent.MLExecuteAgentAction;
+import org.opensearch.ml.common.transport.agent.MLExecuteAgentRequest;
+import org.opensearch.ml.common.transport.agent.MLExecuteAgentResponse;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentAction;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentRequest;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
@@ -209,6 +212,9 @@ public class MachineLearningNodeClientTest {
 
     @Mock
     ActionListener<DeleteResponse> deleteAgentActionListener;
+
+    @Mock
+    ActionListener<MLExecuteAgentResponse> executeAgentActionListener;
 
     @Mock
     ActionListener<List<ToolMetadata>> listToolsActionListener;
@@ -1187,6 +1193,64 @@ public class MachineLearningNodeClientTest {
         verify(client).execute(eq(MLAgentDeleteAction.INSTANCE), isA(MLAgentDeleteRequest.class), any());
         verify(deleteAgentActionListener).onResponse(argumentCaptor.capture());
         assertEquals(agentId, (argumentCaptor.getValue()).getId());
+    }
+
+    @Test
+    public void testExecuteAgent() {
+        String agentId = "879v9YwBjWKCe6Kg12Tx";
+        String method = "POST";
+        Map<String, String> parameters = Map.of("question", "what's the population increase of Seattle from 2021 to 2023");
+        String resultString = """
+            Based on the given context, the key information is:
+
+            The metro area population of Seattle in 2021 was 3,461,000.
+            The metro area population of Seattle in 2023 is 3,519,000.
+
+            To calculate the population increase from 2021 to 2023:
+
+            Population in 2023 (3,519,000) - Population in 2021 (3,461,000) = 58,000
+
+            Therefore, the population increase of Seattle from 2021 to 2023 is 58,000.""";
+
+        Map<String, String> outputMap1 = Collections.singletonMap("result", resultString);
+        List<Map<String, String>> outputList1 = Collections.singletonList(outputMap1);
+        Map<String, List<Map<String, String>>> inferenceResult1 = Collections.singletonMap("output", outputList1);
+
+        String resultString2 =
+            "{\"size\":0.0,\"query\":{\"bool\":{\"must\":[{\"term\":{\"variety\":\"setosa\"}}]}},\"aggs\":{\"setosa_count\":{\"value_count\":{\"field\":\"variety\"}}}}";
+        Map<String, String> outputMap2 = new HashMap<>();
+        outputMap2.put("name", "response");
+        outputMap2.put("result", resultString2);
+        List<Map<String, String>> outputList2 = Collections.singletonList(outputMap2);
+        Map<String, List<Map<String, String>>> inferenceResult2 = Collections.singletonMap("output", outputList2);
+
+        List<Map<String, List<Map<String, String>>>> expectedInferenceResults = Arrays.asList(inferenceResult1, inferenceResult2);
+
+        doAnswer(invocation -> {
+            ActionListener<MLExecuteAgentResponse> actionListener = invocation.getArgument(2);
+            MLExecuteAgentResponse output = new MLExecuteAgentResponse(expectedInferenceResults);
+            actionListener.onResponse(output);
+            return null;
+        }).when(client).execute(eq(MLExecuteAgentAction.INSTANCE), any(), any());
+
+        ArgumentCaptor<MLExecuteAgentResponse> argumentCaptor = ArgumentCaptor.forClass(MLExecuteAgentResponse.class);
+
+        machineLearningNodeClient.executeAgent(agentId, method, parameters, executeAgentActionListener);
+
+        verify(client).execute(eq(MLExecuteAgentAction.INSTANCE), isA(MLExecuteAgentRequest.class), any());
+        verify(executeAgentActionListener).onResponse(argumentCaptor.capture());
+        assertEquals(
+            expectedInferenceResults.get(0).get("output").get(0).get("result"),
+            argumentCaptor.getValue().getInferenceResults().get(0).get("output").get(0).get("result")
+        );
+        assertEquals(
+            expectedInferenceResults.get(1).get("output").get(0).get("name"),
+            argumentCaptor.getValue().getInferenceResults().get(1).get("output").get(0).get("name")
+        );
+        assertEquals(
+            expectedInferenceResults.get(1).get("output").get(0).get("result"),
+            argumentCaptor.getValue().getInferenceResults().get(1).get("output").get(0).get("result")
+        );
     }
 
     @Test

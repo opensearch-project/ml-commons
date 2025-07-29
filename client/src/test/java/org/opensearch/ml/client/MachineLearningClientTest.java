@@ -48,6 +48,7 @@ import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLTrainingOutput;
+import org.opensearch.ml.common.transport.agent.MLExecuteAgentResponse;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
 import org.opensearch.ml.common.transport.config.MLConfigGetResponse;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
@@ -105,6 +106,9 @@ public class MachineLearningClientTest {
 
     @Mock
     MLRegisterAgentResponse registerAgentResponse;
+
+    @Mock
+    MLExecuteAgentResponse executeAgentResponse;
 
     @Mock
     MLConfigGetResponse configGetResponse;
@@ -250,6 +254,16 @@ public class MachineLearningClientTest {
             @Override
             public void deleteAgent(String agentId, String tenantId, ActionListener<DeleteResponse> listener) {
                 listener.onResponse(deleteResponse);
+            }
+
+            @Override
+            public void executeAgent(
+                String agentId,
+                String method,
+                Map<String, String> parameters,
+                ActionListener<MLExecuteAgentResponse> listener
+            ) {
+                listener.onResponse(executeAgentResponse);
             }
 
             @Override
@@ -538,6 +552,25 @@ public class MachineLearningClientTest {
     @Test
     public void deleteAgent() {
         assertEquals(deleteResponse, machineLearningClient.deleteAgent("agentId").actionGet());
+    }
+
+    @Test
+    public void testExecuteAgent() {
+        String agentId = "879v9YwBjWKCe6Kg12Tx";
+        String method = "POST";
+        Map<String, String> parameters = Map.of("question", "what's the population increase of Seattle from 2021 to 2023");
+        String expectedResult = """
+            Based on the given context, the key information is:
+
+            The metro area population of Seattle in 2021 was 3,461,000.
+            The metro area population of Seattle in 2023 is 3,519,000.
+
+            To calculate the population increase from 2021 to 2023:
+
+            Population in 2023 (3,519,000) - Population in 2021 (3,461,000) = 58,000
+
+            Therefore, the population increase of Seattle from 2021 to 2023 is 58,000.""";
+        assertEquals(executeAgentResponse, machineLearningClient.executeAgent(agentId, method, parameters).actionGet());
     }
 
     @Test

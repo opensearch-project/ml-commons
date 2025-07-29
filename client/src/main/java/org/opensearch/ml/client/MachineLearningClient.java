@@ -24,6 +24,7 @@ import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.MLOutput;
+import org.opensearch.ml.common.transport.agent.MLExecuteAgentResponse;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorResponse;
@@ -490,6 +491,28 @@ public interface MachineLearningClient {
      * @param listener a listener to be notified of the result
      */
     void deleteAgent(String agentId, String tenantId, ActionListener<DeleteResponse> listener);
+
+    /**
+     * Execute agent
+     * @param agentId The id of the agent to execute
+     * @param method The method of the agent to execute
+     * @param parameters The parameters of the agent to execute
+     * @return the result future
+     */
+    default ActionFuture<MLExecuteAgentResponse> executeAgent(String agentId, String method, Map<String, String> parameters) {
+        PlainActionFuture<MLExecuteAgentResponse> actionFuture = PlainActionFuture.newFuture();
+        executeAgent(agentId, method, parameters, actionFuture);
+        return actionFuture;
+    }
+
+    /**
+     * Execute agent
+     * @param agentId The id of the agent to execute
+     * @param method The method of the agent to execute
+     * @param parameters The parameters of the agent to execute
+     * @param listener a listener to be notified of the result
+     */
+    void executeAgent(String agentId, String method, Map<String, String> parameters, ActionListener<MLExecuteAgentResponse> listener);
 
     /**
      * Get a list of ToolMetadata and return ActionFuture.
