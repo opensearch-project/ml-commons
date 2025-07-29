@@ -52,6 +52,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
@@ -981,7 +982,7 @@ public class AgentUtils {
         Instant now = Instant.now();
         DateTimeFormatter formatter;
 
-        if (dateFormat != null && !dateFormat.trim().isEmpty()) {
+        if (!StringUtils.isBlank(dateFormat)) {
             try {
                 formatter = DateTimeFormatter.ofPattern(dateFormat).withZone(UTC_ZONE);
             } catch (IllegalArgumentException e) {
