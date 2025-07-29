@@ -782,10 +782,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
         }
 
         boolean injectDate = Boolean.parseBoolean(tmpParameters.getOrDefault(INJECT_DATETIME_FIELD, "false"));
-        String dateFormat = tmpParameters.get(DATETIME_FORMAT_FIELD);
-        String currentDateTime = injectDate ? getCurrentDateTime(dateFormat) : "";
-
-        if (injectDate && !currentDateTime.isEmpty()) {
+        if (injectDate) {
+            String dateFormat = tmpParameters.get(DATETIME_FORMAT_FIELD);
+            String currentDateTime = getCurrentDateTime(dateFormat);
             // If system_prompt exists, inject datetime into it
             if (tmpParameters.containsKey(SYSTEM_PROMPT_FIELD)) {
                 String systemPrompt = tmpParameters.get(SYSTEM_PROMPT_FIELD);

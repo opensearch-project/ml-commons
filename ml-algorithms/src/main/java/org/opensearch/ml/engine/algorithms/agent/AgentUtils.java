@@ -138,6 +138,7 @@ public class AgentUtils {
 
     public static final String DEFAULT_DATETIME_FORMAT = "EEEE, MMMM d, yyyy 'at' h:mm a z";
     public static final String DEFAULT_DATETIME_PREFIX = "Current date and time: ";
+    private static final ZoneId UTC_ZONE = ZoneId.of("UTC");
 
     public static String addExamplesToPrompt(Map<String, String> parameters, String prompt) {
         Map<String, String> examplesMap = new HashMap<>();
@@ -982,13 +983,13 @@ public class AgentUtils {
 
         if (dateFormat != null && !dateFormat.trim().isEmpty()) {
             try {
-                formatter = DateTimeFormatter.ofPattern(dateFormat).withZone(ZoneId.of("UTC"));
+                formatter = DateTimeFormatter.ofPattern(dateFormat).withZone(UTC_ZONE);
             } catch (IllegalArgumentException e) {
                 log.warn("Invalid date format provided: {}. Using default format.", dateFormat);
-                formatter = DateTimeFormatter.ofPattern(DEFAULT_DATETIME_FORMAT).withZone(ZoneId.of("UTC"));
+                formatter = DateTimeFormatter.ofPattern(DEFAULT_DATETIME_FORMAT).withZone(UTC_ZONE);
             }
         } else {
-            formatter = DateTimeFormatter.ofPattern(DEFAULT_DATETIME_FORMAT).withZone(ZoneId.of("UTC"));
+            formatter = DateTimeFormatter.ofPattern(DEFAULT_DATETIME_FORMAT).withZone(UTC_ZONE);
         }
 
         return DEFAULT_DATETIME_PREFIX + formatter.format(now);

@@ -180,14 +180,14 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         String currentDateTime = injectDate ? getCurrentDateTime(dateFormat) : "";
 
         String plannerSystemPrompt = params.getOrDefault(SYSTEM_PROMPT_FIELD, DEFAULT_PLANNER_SYSTEM_PROMPT);
-        if (injectDate && !currentDateTime.isEmpty()) {
-            plannerSystemPrompt = plannerSystemPrompt + "\n\n" + currentDateTime;
+        if (injectDate) {
+            plannerSystemPrompt = String.format("%s\n\n%s", plannerSystemPrompt, currentDateTime);
         }
         params.put(SYSTEM_PROMPT_FIELD, plannerSystemPrompt);
 
         String executorSystemPrompt = params.getOrDefault(EXECUTOR_SYSTEM_PROMPT_FIELD, DEFAULT_EXECUTOR_SYSTEM_PROMPT);
-        if (injectDate && !currentDateTime.isEmpty()) {
-            executorSystemPrompt = executorSystemPrompt + "\n\n" + currentDateTime;
+        if (injectDate) {
+            executorSystemPrompt = String.format("%s\n\n%s", executorSystemPrompt, currentDateTime);
         }
         params.put(EXECUTOR_SYSTEM_PROMPT_FIELD, executorSystemPrompt);
 
