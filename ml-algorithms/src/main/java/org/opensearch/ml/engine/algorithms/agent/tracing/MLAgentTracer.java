@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -53,6 +54,15 @@ public class MLAgentTracer extends MLTracer {
     public static final String ATTR_NAME = "gen_ai.agent.name";
     public static final String ATTR_LATENCY = "gen_ai.agent.latency";
     public static final String ATTR_LLM_START = "llm.start_time";
+    public static final String ATTR_SERVICE_TYPE = "service.type";
+    public static final String ATTR_OPERATION_NAME = "gen_ai.operation.name";
+    public static final String ATTR_SYSTEM = "gen_ai.system";
+    public static final String ATTR_SYSTEM_MESSAGE = "gen_ai.system.message";
+    public static final String ATTR_TOOL_DESCRIPTION = "gen_ai.tool.description";
+    public static final String ATTR_TOOL_NAME = "gen_ai.tool.name";
+    public static final String ATTR_USAGE_INPUT_TOKENS = "gen_ai.usage.input_tokens";
+    public static final String ATTR_USAGE_OUTPUT_TOKENS = "gen_ai.usage.output_tokens";
+    public static final String ATTR_USAGE_TOTAL_TOKENS = "gen_ai.usage.total_tokens";
 
     private static MLAgentTracer instance;
 
@@ -121,9 +131,6 @@ public class MLAgentTracer extends MLTracer {
         if (instance == null) {
             throw new IllegalStateException("MLAgentTracer is not initialized. Call initialize() first before using getInstance().");
         }
-        if (instance == null) {
-            throw new IllegalStateException("MLAgentTracer is not initialized. Call initialize() first before using getInstance().");
-        }
         return instance;
     }
 
@@ -135,10 +142,10 @@ public class MLAgentTracer extends MLTracer {
      */
     public static Map<String, String> createAgentTaskAttributes(String agentName, String userTask) {
         Map<String, String> attributes = new HashMap<>();
-        attributes.put("service.type", "tracer");
-        attributes.put("gen_ai.agent.name", agentName != null ? agentName : "");
-        attributes.put("gen_ai.agent.task", userTask != null ? userTask : "");
-        attributes.put("gen_ai.operation.name", "create_agent");
+        attributes.put(ATTR_SERVICE_TYPE, "tracer");
+        attributes.put(ATTR_NAME, agentName != null ? agentName : "");
+        attributes.put(ATTR_TASK, userTask != null ? userTask : "");
+        attributes.put(ATTR_OPERATION_NAME, "create_agent");
         return attributes;
     }
 
@@ -149,10 +156,10 @@ public class MLAgentTracer extends MLTracer {
      */
     public static Map<String, String> createPlanAttributes(int stepNumber) {
         Map<String, String> attributes = new HashMap<>();
-        attributes.put("service.type", "tracer");
-        attributes.put("gen_ai.agent.phase", "planner");
-        attributes.put("gen_ai.agent.step.number", String.valueOf(stepNumber));
-        attributes.put("gen_ai.operation.name", "create_agent");
+        attributes.put(ATTR_SERVICE_TYPE, "tracer");
+        attributes.put(ATTR_PHASE, "planner");
+        attributes.put(ATTR_STEP_NUMBER, String.valueOf(stepNumber));
+        attributes.put(ATTR_OPERATION_NAME, "create_agent");
         // TODO: get LLM system and model
         return attributes;
     }
@@ -164,10 +171,10 @@ public class MLAgentTracer extends MLTracer {
      */
     public static Map<String, String> createExecuteStepAttributes(int stepNumber) {
         Map<String, String> attributes = new HashMap<>();
-        attributes.put("service.type", "tracer");
-        attributes.put("gen_ai.agent.phase", "executor");
-        attributes.put("gen_ai.agent.step.number", String.valueOf(stepNumber));
-        attributes.put("gen_ai.operation.name", "invoke_agent");
+        attributes.put(ATTR_SERVICE_TYPE, "tracer");
+        attributes.put(ATTR_PHASE, "executor");
+        attributes.put(ATTR_STEP_NUMBER, String.valueOf(stepNumber));
+        attributes.put(ATTR_OPERATION_NAME, "invoke_agent");
         return attributes;
     }
 
@@ -187,117 +194,100 @@ public class MLAgentTracer extends MLTracer {
     ) {
         Map<String, String> attributes = new HashMap<>();
 
-        String provider = detectProviderFromParameters(parameters);
-        attributes.put("service.type", "tracer");
-        attributes.put("gen_ai.system", provider);
+        String provider = detectProviderFromParameters(parameters.get("_llm_interface"));
+        attributes.put(ATTR_SERVICE_TYPE, "tracer");
+        attributes.put(ATTR_SYSTEM, provider);
         // TODO: get actual request model
-        attributes.put("gen_ai.operation.name", "chat");
-        attributes.put("gen_ai.agent.task", parameters.get("prompt") != null ? parameters.get("prompt") : "");
-        attributes.put("gen_ai.agent.result", completion != null ? completion : "");
-        attributes.put("gen_ai.agent.latency", String.valueOf(latency));
-        attributes.put("gen_ai.agent.phase", "planner");
-        attributes.put("gen_ai.system.message", parameters.get("system_prompt") != null ? parameters.get("system_prompt") : "");
-        attributes.put("gen_ai.tool.description", parameters.get("tools_prompt") != null ? parameters.get("tools_prompt") : "");
+        attributes.put(ATTR_OPERATION_NAME, "chat");
+        attributes.put(ATTR_TASK, parameters.get("prompt") != null ? parameters.get("prompt") : "");
+        attributes.put(ATTR_RESULT, completion != null ? completion : "");
+        attributes.put(ATTR_LATENCY, String.valueOf(latency));
+        attributes.put(ATTR_PHASE, "planner");
+        attributes.put(ATTR_SYSTEM_MESSAGE, parameters.get("system_prompt") != null ? parameters.get("system_prompt") : "");
+        attributes.put(ATTR_TOOL_DESCRIPTION, parameters.get("tools_prompt") != null ? parameters.get("tools_prompt") : "");
 
-        if (modelTensorOutput != null
-            && modelTensorOutput.getMlModelOutputs() != null
-            && !modelTensorOutput.getMlModelOutputs().isEmpty()) {
-            for (int i = 0; i < modelTensorOutput.getMlModelOutputs().size(); i++) {
-                var output = modelTensorOutput.getMlModelOutputs().get(i);
-                if (output.getMlModelTensors() != null) {
-                    for (int j = 0; j < output.getMlModelTensors().size(); j++) {
-                        var tensor = output.getMlModelTensors().get(j);
-                        if (tensor.getDataAsMap() != null) {
-                            Map<String, ?> dataAsMap = tensor.getDataAsMap();
-                            if (dataAsMap.containsKey("usage")) {
-                                Object usageObj = dataAsMap.get("usage");
-                                if (usageObj instanceof Map) {
-                                    @SuppressWarnings("unchecked")
-                                    Map<String, Object> usage = (Map<String, Object>) usageObj;
+        if (modelTensorOutput == null || modelTensorOutput.getMlModelOutputs() == null || modelTensorOutput.getMlModelOutputs().isEmpty()) {
+            log.info("[AGENT_TRACE] ModelTensorOutput is null or empty");
+            return attributes;
+        }
+        for (var output : modelTensorOutput.getMlModelOutputs()) {
+            if (output.getMlModelTensors() == null)
+                continue;
+            for (var tensor : output.getMlModelTensors()) {
+                if (tensor.getDataAsMap() == null)
+                    continue;
+                Map<String, ?> dataAsMap = tensor.getDataAsMap();
+                if (!dataAsMap.containsKey("usage"))
+                    continue;
+                Object usageObj = dataAsMap.get("usage");
+                if (!(usageObj instanceof Map))
+                    continue;
+                @SuppressWarnings("unchecked")
+                Map<String, Object> usage = (Map<String, Object>) usageObj;
 
-                                    if ("aws.bedrock".equalsIgnoreCase(provider)) {
-                                        // Bedrock/Claude format: input_tokens, output_tokens (or inputTokens, outputTokens)
-                                        Object inputTokens = null;
-                                        if (usage.containsKey("input_tokens")) {
-                                            inputTokens = usage.get("input_tokens");
-                                        } else if (usage.containsKey("inputTokens")) {
-                                            inputTokens = usage.get("inputTokens");
-                                        }
-                                        if (inputTokens != null) {
-                                            attributes.put("gen_ai.usage.input_tokens", inputTokens.toString());
-                                        }
-
-                                        Object outputTokens = null;
-                                        if (usage.containsKey("output_tokens")) {
-                                            outputTokens = usage.get("output_tokens");
-                                        } else if (usage.containsKey("outputTokens")) {
-                                            outputTokens = usage.get("outputTokens");
-                                        }
-                                        if (outputTokens != null) {
-                                            attributes.put("gen_ai.usage.output_tokens", outputTokens.toString());
-                                        }
-
-                                        Double inputTokensValue = null;
-                                        Double outputTokensValue = null;
-                                        try {
-                                            if (inputTokens != null) {
-                                                inputTokensValue = Double.parseDouble(inputTokens.toString());
-                                            }
-                                            if (outputTokens != null) {
-                                                outputTokensValue = Double.parseDouble(outputTokens.toString());
-                                            }
-                                        } catch (NumberFormatException e) {}
-                                        if (inputTokensValue != null && outputTokensValue != null) {
-                                            double totalTokens = inputTokensValue + outputTokensValue;
-                                            attributes.put("gen_ai.usage.total_tokens", String.valueOf((int) totalTokens));
-                                        }
-                                    } else if ("openai".equalsIgnoreCase(provider)) {
-                                        // OpenAI format: prompt_tokens, completion_tokens, total_tokens
-                                        Object promptTokens = null;
-                                        if (usage.containsKey("prompt_tokens")) {
-                                            promptTokens = usage.get("prompt_tokens");
-                                            if (promptTokens != null) {
-                                                attributes.put("gen_ai.usage.input_tokens", promptTokens.toString());
-                                            }
-                                        }
-
-                                        Object completionTokens = null;
-                                        if (usage.containsKey("completion_tokens")) {
-                                            completionTokens = usage.get("completion_tokens");
-                                            if (completionTokens != null) {
-                                                attributes.put("gen_ai.usage.output_tokens", completionTokens.toString());
-                                            }
-                                        }
-
-                                        Object totalTokens = null;
-                                        if (usage.containsKey("total_tokens")) {
-                                            totalTokens = usage.get("total_tokens");
-                                            if (totalTokens != null) {
-                                                try {
-                                                    Double.parseDouble(totalTokens.toString());
-                                                    attributes.put("gen_ai.usage.total_tokens", totalTokens.toString());
-                                                } catch (NumberFormatException e) {}
-                                            }
-                                        }
-                                    } else {
-                                        // TODO: find general method for all providers
-                                    }
-                                }
-                            } else {
-                                log.info("[AGENT_TRACE] No usage information found in dataAsMap. Available keys: {}", dataAsMap.keySet());
-
-                                for (Map.Entry<String, ?> entry : dataAsMap.entrySet()) {
-                                    if (entry.getValue() instanceof Map) {
-                                        log.info("[AGENT_TRACE] Found nested map in key '{}': {}", entry.getKey(), entry.getValue());
-                                    }
-                                }
-                            }
+                if (provider != null && provider.toLowerCase().contains("bedrock")) {
+                    Object inputTokens = null;
+                    Object outputTokens = null;
+                    for (String key : usage.keySet()) {
+                        if (key.equalsIgnoreCase("input_tokens") || key.equalsIgnoreCase("inputTokens")) {
+                            inputTokens = usage.get(key);
+                        }
+                        if (key.equalsIgnoreCase("output_tokens") || key.equalsIgnoreCase("outputTokens")) {
+                            outputTokens = usage.get(key);
                         }
                     }
+                    if (inputTokens != null) {
+                        attributes.put(ATTR_USAGE_INPUT_TOKENS, inputTokens.toString());
+                    }
+                    if (outputTokens != null) {
+                        attributes.put(ATTR_USAGE_OUTPUT_TOKENS, outputTokens.toString());
+                    }
+
+                    Double inputTokensValue = null;
+                    Double outputTokensValue = null;
+                    try {
+                        if (inputTokens != null) {
+                            inputTokensValue = Double.parseDouble(inputTokens.toString());
+                        }
+                        if (outputTokens != null) {
+                            outputTokensValue = Double.parseDouble(outputTokens.toString());
+                        }
+                    } catch (NumberFormatException e) {}
+                    if (inputTokensValue != null && outputTokensValue != null) {
+                        double totalTokens = inputTokensValue + outputTokensValue;
+                        attributes.put(ATTR_USAGE_TOTAL_TOKENS, String.valueOf((int) totalTokens));
+                    }
+                } else if (provider != null && provider.toLowerCase().contains("openai")) {
+                    Object promptTokens = null;
+                    Object completionTokens = null;
+                    Object totalTokens = null;
+                    for (String key : usage.keySet()) {
+                        if (key.equalsIgnoreCase("prompt_tokens")) {
+                            promptTokens = usage.get(key);
+                        }
+                        if (key.equalsIgnoreCase("completion_tokens")) {
+                            completionTokens = usage.get(key);
+                        }
+                        if (key.equalsIgnoreCase("total_tokens")) {
+                            totalTokens = usage.get(key);
+                        }
+                    }
+                    if (promptTokens != null) {
+                        attributes.put(ATTR_USAGE_INPUT_TOKENS, promptTokens.toString());
+                    }
+                    if (completionTokens != null) {
+                        attributes.put(ATTR_USAGE_OUTPUT_TOKENS, completionTokens.toString());
+                    }
+                    if (totalTokens != null) {
+                        try {
+                            Double.parseDouble(totalTokens.toString());
+                            attributes.put(ATTR_USAGE_TOTAL_TOKENS, totalTokens.toString());
+                        } catch (NumberFormatException e) {}
+                    }
+                } else {
+                    // TODO: find general method for all providers
                 }
             }
-        } else {
-            log.info("[AGENT_TRACE] ModelTensorOutput is null or empty");
         }
 
         return attributes;
@@ -308,8 +298,7 @@ public class MLAgentTracer extends MLTracer {
      * @param parameters The parameters map.
      * @return The provider string (e.g., "openai", "aws.bedrock", etc.), or "unknown" if not detected.
      */
-    public static String detectProviderFromParameters(Map<String, String> parameters) {
-        String llmInterface = parameters.get("_llm_interface");
+    public static String detectProviderFromParameters(String llmInterface) {
         if (llmInterface != null) {
             String lower = llmInterface.toLowerCase();
             if (lower.contains("bedrock"))
@@ -342,6 +331,45 @@ public class MLAgentTracer extends MLTracer {
         return "unknown";
     }
 
+    public static Map<String, String> createToolCallAttributesWithStep(
+        String actionInput,
+        int stepNumber,
+        String toolName,
+        String toolDescription
+    ) {
+        Map<String, String> attributes = new HashMap<>();
+        attributes.put(MLAgentTracer.ATTR_SERVICE_TYPE, "tracer");
+        attributes.put(MLAgentTracer.ATTR_OPERATION_NAME, "execute_tool");
+        attributes.put(MLAgentTracer.ATTR_TASK, actionInput != null ? actionInput : "");
+        attributes.put(MLAgentTracer.ATTR_STEP_NUMBER, String.valueOf(stepNumber));
+        attributes.put(MLAgentTracer.ATTR_TOOL_NAME, toolName != null ? toolName : "");
+        if (toolDescription != null) {
+            attributes.put(MLAgentTracer.ATTR_TOOL_DESCRIPTION, toolDescription);
+        }
+        return attributes;
+    }
+
+    public static Map<String, String> createLLMCallAttributesForConv(
+        String question,
+        int stepNumber,
+        String systemPrompt,
+        String llmInterface
+    ) {
+        Map<String, String> attributes = new HashMap<>();
+        attributes.put(MLAgentTracer.ATTR_SERVICE_TYPE, "tracer");
+        attributes.put(MLAgentTracer.ATTR_OPERATION_NAME, "chat");
+        attributes.put(MLAgentTracer.ATTR_TASK, question != null ? question : "");
+        attributes.put(MLAgentTracer.ATTR_STEP_NUMBER, String.valueOf(stepNumber));
+        if (systemPrompt != null) {
+            attributes.put(MLAgentTracer.ATTR_SYSTEM_MESSAGE, systemPrompt);
+        }
+        if (llmInterface != null) {
+            String provider = detectProviderFromParameters(llmInterface);
+            attributes.put(MLAgentTracer.ATTR_SYSTEM, provider);
+        }
+        return attributes;
+    }
+
     /**
      * Container for tool call extraction results, including input, output, usage, and metrics.
      */
@@ -362,62 +390,58 @@ public class MLAgentTracer extends MLTracer {
         ToolCallExtractionResult result = new ToolCallExtractionResult();
         result.input = actionInput;
 
+        if (!(toolOutput instanceof ModelTensorOutput)) {
+            result.output = toolOutput != null ? toolOutput.toString() : null;
+            return result;
+        }
+        ModelTensorOutput mto = (ModelTensorOutput) toolOutput;
+        if (mto.getMlModelOutputs() == null || mto.getMlModelOutputs().isEmpty())
+            return result;
+        var tensors = mto.getMlModelOutputs().get(0).getMlModelTensors();
+        if (tensors == null || tensors.isEmpty())
+            return result;
+        var tensor = tensors.get(0);
+        // Try result
+        if (tensor.getResult() != null) {
+            result.output = tensor.getResult();
+        }
+        // Try dataAsMap
+        Map<String, ?> map = null;
         try {
-            // ModelTensorOutput
-            if (toolOutput instanceof ModelTensorOutput) {
-                ModelTensorOutput mto = (ModelTensorOutput) toolOutput;
-                if (mto.getMlModelOutputs() != null && !mto.getMlModelOutputs().isEmpty()) {
-                    var tensors = mto.getMlModelOutputs().get(0).getMlModelTensors();
-                    if (tensors != null && !tensors.isEmpty()) {
-                        var tensor = tensors.get(0);
-                        // Try result
-                        if (tensor.getResult() != null) {
-                            result.output = tensor.getResult();
-                        }
-                        // Try dataAsMap
-                        Map<String, ?> map = null;
-                        try {
-                            map = tensor.getDataAsMap();
-                        } catch (Exception e) {
-                            log.warn("[AGENT_TRACE] Exception getting dataAsMap from tensor: {}", e.getMessage());
-                        }
-                        if (map != null) {
-                            if (map.containsKey("response")) {
-                                Object resp = map.get("response");
-                                result.output = (resp instanceof String) ? (String) resp : StringUtils.toJson(resp);
-                            } else if (map.containsKey("output")) {
-                                Object out = map.get("output");
-                                result.output = (out instanceof String) ? (String) out : StringUtils.toJson(out);
-                            } else if (result.output == null && !map.isEmpty()) {
-                                Object firstValue = map.values().iterator().next();
-                                result.output = (firstValue instanceof String) ? (String) firstValue : StringUtils.toJson(firstValue);
-                            }
-                            if (map.containsKey("usage")) {
-                                try {
-                                    result.usage = (Map<String, Object>) map.get("usage");
-                                } catch (ClassCastException e) {
-                                    log.warn("[AGENT_TRACE] 'usage' field is not a Map: {}", e.getMessage());
-                                }
-                            }
-                            if (map.containsKey("metrics")) {
-                                try {
-                                    result.metrics = (Map<String, Object>) map.get("metrics");
-                                } catch (ClassCastException e) {
-                                    log.warn("[AGENT_TRACE] 'metrics' field is not a Map: {}", e.getMessage());
-                                }
-                            }
-                        } else if (result.output == null) {
-                            result.output = tensor.toString();
-                            log.warn("[AGENT_TRACE] tensor.getDataAsMap() is null; using tensor.toString() as output");
-                        }
-                    }
-                }
-                return result;
-            }
-            // Fallback: toString
-            result.output = toolOutput != null ? toolOutput.toString() : null;
+            map = tensor.getDataAsMap();
         } catch (Exception e) {
-            result.output = toolOutput != null ? toolOutput.toString() : null;
+            log.warn("[AGENT_TRACE] Exception getting dataAsMap from tensor: {}", e.getMessage());
+        }
+        if (map == null) {
+            if (result.output == null) {
+                result.output = tensor.toString();
+                log.warn("[AGENT_TRACE] tensor.getDataAsMap() is null; using tensor.toString() as output");
+            }
+            return result;
+        }
+        if (map.containsKey("response")) {
+            Object resp = map.get("response");
+            result.output = (resp instanceof String) ? (String) resp : StringUtils.toJson(resp);
+        } else if (map.containsKey("output")) {
+            Object out = map.get("output");
+            result.output = (out instanceof String) ? (String) out : StringUtils.toJson(out);
+        } else if (result.output == null && !map.isEmpty()) {
+            Object firstValue = map.values().iterator().next();
+            result.output = (firstValue instanceof String) ? (String) firstValue : StringUtils.toJson(firstValue);
+        }
+        if (map.containsKey("usage")) {
+            try {
+                result.usage = (Map<String, Object>) map.get("usage");
+            } catch (ClassCastException e) {
+                log.warn("[AGENT_TRACE] 'usage' field is not a Map: {}", e.getMessage());
+            }
+        }
+        if (map.containsKey("metrics")) {
+            try {
+                result.metrics = (Map<String, Object>) map.get("metrics");
+            } catch (ClassCastException e) {
+                log.warn("[AGENT_TRACE] 'metrics' field is not a Map: {}", e.getMessage());
+            }
         }
         return result;
     }
@@ -442,20 +466,182 @@ public class MLAgentTracer extends MLTracer {
         if (span == null)
             return;
         if (result != null) {
-            span.addAttribute("gen_ai.agent.result", result);
+            span.addAttribute(ATTR_RESULT, result);
         }
         if (inputTokens != null) {
-            span.addAttribute("gen_ai.usage.input_tokens", String.valueOf(inputTokens.intValue()));
+            span.addAttribute(ATTR_USAGE_INPUT_TOKENS, String.valueOf(inputTokens.intValue()));
         }
         if (outputTokens != null) {
-            span.addAttribute("gen_ai.usage.output_tokens", String.valueOf(outputTokens.intValue()));
+            span.addAttribute(ATTR_USAGE_OUTPUT_TOKENS, String.valueOf(outputTokens.intValue()));
         }
         if (totalTokens != null) {
-            span.addAttribute("gen_ai.usage.total_tokens", String.valueOf(totalTokens.intValue()));
+            span.addAttribute(ATTR_USAGE_TOTAL_TOKENS, String.valueOf(totalTokens.intValue()));
         }
         if (latency != null) {
-            span.addAttribute("gen_ai.agent.latency", String.valueOf(latency.intValue()));
+            span.addAttribute(ATTR_LATENCY, String.valueOf(latency.intValue()));
         }
+    }
+
+    /**
+     * Handles span error by logging, setting error on span, ending span, and failing listener.
+     * @param span The span to handle error for.
+     * @param errorMessage The error message to log.
+     * @param e The exception that occurred.
+     * @param listener The action listener to fail.
+     */
+    public void handleSpanError(Span span, String errorMessage, Exception e, ActionListener<Object> listener) {
+        log.error(errorMessage, e);
+        span.setError(e);
+        MLAgentTracer.getInstance().endSpan(span);
+        listener.onFailure(e);
+    }
+
+    /**
+     * Ends the span and responds to the listener with the result.
+     * @param span The span to end.
+     * @param result The result to send to the listener.
+     * @param listener The action listener to respond to.
+     */
+    public void endSpanAndRespond(Span span, Object result, ActionListener<Object> listener) {
+        MLAgentTracer.getInstance().endSpan(span);
+        listener.onResponse(result);
+    }
+
+    /**
+     * Starts an agent task span with the given agent name and user task.
+     * @param agentName The name of the agent.
+     * @param userTask The user task or question.
+     * @return The started Span.
+     */
+    public Span startAgentTaskSpan(String agentName, String userTask) {
+        return startSpan(AGENT_TASK_PER_SPAN, createAgentTaskAttributes(agentName, userTask));
+    }
+
+    /**
+     * Starts a plan or reflect step span based on the step number.
+     * If stepsExecuted is 0, uses AGENT_PLAN_SPAN, otherwise uses AGENT_REFLECT_STEP_SPAN with step number.
+     * @param stepsExecuted The step number in the plan/reflect phase.
+     * @param parentSpan The parent span.
+     * @return The started Span.
+     */
+    public Span startPlanOrReflectStepSpan(int stepsExecuted, Span parentSpan) {
+        String spanName;
+        if (stepsExecuted == 0) {
+            spanName = AGENT_PLAN_SPAN;
+        } else {
+            spanName = String.format(AGENT_REFLECT_STEP_SPAN + "_%d", stepsExecuted);
+        }
+        return startSpan(spanName, createPlanAttributes(stepsExecuted), parentSpan);
+    }
+
+    /**
+     * Starts an execute step span with the given step number and parent span.
+     * @param stepNumber The step number in the execution.
+     * @param parentSpan The parent span.
+     * @return The started Span.
+     */
+    public Span startExecuteStepSpan(int stepNumber, Span parentSpan) {
+        return startSpan(AGENT_EXECUTE_STEP_SPAN + "_" + stepNumber, createExecuteStepAttributes(stepNumber), parentSpan);
+    }
+
+    /**
+     * Starts an LLM call span with the given parameters and parent span.
+     * @param completion The completion string from the LLM.
+     * @param latency The latency of the LLM call.
+     * @param modelTensorOutput The model tensor output.
+     * @param parameters The parameters used for the LLM call.
+     * @param parentSpan The parent span.
+     * @return The started Span.
+     */
+    public Span startLLMCallSpan(
+        String completion,
+        long latency,
+        ModelTensorOutput modelTensorOutput,
+        Map<String, String> parameters,
+        Span parentSpan
+    ) {
+        return startSpan(AGENT_LLM_CALL_SPAN, createLLMCallAttributes(completion, latency, modelTensorOutput, parameters), parentSpan);
+    }
+
+    /**
+     * Starts a conversational agent task span with the given agent name and user task.
+     * @param agentName The name of the agent.
+     * @param userTask The user task or question.
+     * @return The started Span.
+     */
+    public Span startConversationalAgentTaskSpan(String agentName, String userTask) {
+        return startSpan(AGENT_TASK_CONV_SPAN, createAgentTaskAttributes(agentName, userTask));
+    }
+
+    /**
+     * Starts a conversational agent task span with parent span context.
+     * @param agentName The name of the agent.
+     * @param userTask The user task or question.
+     * @param parentSpan The parent span.
+     * @return The started Span.
+     */
+    public Span startConversationalAgentTaskSpan(String agentName, String userTask, Span parentSpan) {
+        return startSpan(AGENT_CONV_TASK_SPAN, createAgentTaskAttributes(agentName, userTask), parentSpan);
+    }
+
+    /**
+     * Starts an LLM call span for conversational agent.
+     * @param question The question being asked.
+     * @param stepNumber The step number in the conversation.
+     * @param systemPrompt The system prompt.
+     * @param llmInterface The LLM interface.
+     * @param parentSpan The parent span.
+     * @return The started Span.
+     */
+    public Span startConversationalLLMCallSpan(String question, int stepNumber, String systemPrompt, String llmInterface, Span parentSpan) {
+        return startSpan(
+            AGENT_LLM_CALL_SPAN + "_" + stepNumber,
+            createLLMCallAttributesForConv(question, stepNumber, systemPrompt, llmInterface),
+            parentSpan
+        );
+    }
+
+    /**
+     * Starts a tool call span for conversational agent.
+     * @param actionInput The action input.
+     * @param stepNumber The step number in the conversation.
+     * @param toolName The tool name.
+     * @param toolDescription The tool description.
+     * @param parentSpan The parent span.
+     * @return The started Span.
+     */
+    public Span startConversationalToolCallSpan(
+        String actionInput,
+        int stepNumber,
+        String toolName,
+        String toolDescription,
+        Span parentSpan
+    ) {
+        return startSpan(
+            AGENT_TOOL_CALL_SPAN + "_" + stepNumber,
+            createToolCallAttributesWithStep(actionInput, stepNumber, toolName, toolDescription),
+            parentSpan
+        );
+    }
+
+    /**
+     * Starts a conversational flow agent task span with the given agent name and user task.
+     * @param agentName The name of the agent.
+     * @param userTask The user task or question.
+     * @return The started Span.
+     */
+    public Span startConversationalFlowAgentTaskSpan(String agentName, String userTask) {
+        return startSpan(AGENT_TASK_CONV_FLOW_SPAN, createAgentTaskAttributes(agentName, userTask));
+    }
+
+    /**
+     * Starts a flow agent task span with the given agent name and user task.
+     * @param agentName The name of the agent.
+     * @param userTask The user task or question.
+     * @return The started Span.
+     */
+    public Span startFlowAgentTaskSpan(String agentName, String userTask) {
+        return startSpan(AGENT_TASK_FLOW_SPAN, createAgentTaskAttributes(agentName, userTask));
     }
 
     /**

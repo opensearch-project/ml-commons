@@ -4,13 +4,36 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
+import org.opensearch.telemetry.tracing.Span;
 import org.opensearch.telemetry.tracing.Tracer;
 import org.opensearch.telemetry.tracing.noop.NoopTracer;
 
 import lombok.extern.log4j.Log4j2;
 
+/**
+ * MLConnectorTracer is a concrete implementation of MLTracer for connector tracing in ML Commons.
+ * It manages the lifecycle of connector-related spans, including creation, context propagation, and completion.
+ * 
+ * <p>This class is implemented as a singleton to ensure that only one tracer is active
+ * for connector tracing at any time. This design provides consistent management of tracing state and configuration,
+ * and avoids issues with multiple tracers being active at once.
+ * The singleton can be dynamically enabled or disabled based on cluster settings.</p>
+ * 
+ * <p>This class is thread-safe: multiple threads can use the singleton instance to start and end spans concurrently.
+ * Each call to {@link #startSpan(String, Map, Span)} creates a new, independent span.</p>
+ * 
+ * <p>Key features:</p>
+ * <ul>
+ *   <li>Connector operation tracing (create, read, update, delete)</li>
+ *   <li>Model operation tracing (predict, execute)</li>
+ *   <li>Dynamic tracing enable/disable based on cluster settings</li>
+ *   <li>Error handling with span context preservation</li>
+ * </ul>
+ */
 @Log4j2
 public class MLConnectorTracer extends MLTracer {
     public static final String SERVICE_TYPE = "service.type";
@@ -82,6 +105,11 @@ public class MLConnectorTracer extends MLTracer {
         }
     }
 
+    /**
+     * Returns the singleton MLConnectorTracer instance.
+     * @return The MLConnectorTracer instance.
+     * @throws IllegalStateException if the tracer is not initialized.
+     */
     public static synchronized MLConnectorTracer getInstance() {
         if (instance == null) {
             throw new IllegalStateException("MLConnectorTracer is not initialized. Call initialize() first before using getInstance().");
@@ -89,6 +117,97 @@ public class MLConnectorTracer extends MLTracer {
         return instance;
     }
 
+    /**
+     * Starts a span for connector creation operations.
+     * @param connectorName The name of the connector being created.
+     * @return A Span object representing the connector creation span.
+     */
+    public static Span startConnectorCreateSpan(String connectorName) {
+        return getInstance().startSpan(CONNECTOR_CREATE_SPAN, createConnectorAttributes(null, connectorName));
+    }
+
+    /**
+     * Starts a span for connector read operations.
+     * @param connectorId The ID of the connector being read.
+     * @return A Span object representing the connector read span.
+     */
+    public static Span startConnectorReadSpan(String connectorId) {
+        return getInstance().startSpan(CONNECTOR_READ_SPAN, createConnectorAttributes(connectorId, null));
+    }
+
+    /**
+     * Starts a span for connector update operations.
+     * @param connectorId The ID of the connector being updated.
+     * @return A Span object representing the connector update span.
+     */
+    public static Span startConnectorUpdateSpan(String connectorId) {
+        return getInstance().startSpan(CONNECTOR_UPDATE_SPAN, createConnectorAttributes(connectorId, null));
+    }
+
+    /**
+     * Starts a span for connector delete operations.
+     * @param connectorId The ID of the connector being deleted.
+     * @return A Span object representing the connector delete span.
+     */
+    public static Span startConnectorDeleteSpan(String connectorId) {
+        return getInstance().startSpan(CONNECTOR_DELETE_SPAN, createConnectorAttributes(connectorId, null));
+    }
+
+    /**
+     * Starts a span for model predict operations.
+     * @param modelId The ID of the model being used for prediction.
+     * @param modelName The name of the model being used for prediction.
+     * @return A Span object representing the model predict span.
+     */
+    public static Span startModelPredictSpan(String modelId, String modelName) {
+        return getInstance().startSpan(MODEL_PREDICT_SPAN, createModelAttributes(modelId, modelName));
+    }
+
+    /**
+     * Starts a span for model execute operations.
+     * @param modelId The ID of the model being executed.
+     * @param modelName The name of the model being executed.
+     * @return A Span object representing the model execute span.
+     */
+    public static Span startModelExecuteSpan(String modelId, String modelName) {
+        return getInstance().startSpan(MODEL_EXECUTE_SPAN, createModelAttributes(modelId, modelName));
+    }
+
+    /**
+     * Handles span error by logging, setting error on span, ending span, and failing listener.
+     * @param span The span to handle error for.
+     * @param errorMessage The error message to log.
+     * @param e The exception that occurred.
+     * @param listener The action listener to fail.
+     */
+    public static void handleSpanError(Span span, String errorMessage, Exception e, ActionListener<?> listener) {
+        log.error(errorMessage, e);
+        span.setError(e);
+        getInstance().endSpan(span);
+        if (listener != null) {
+            listener.onFailure(e);
+        }
+    }
+
+    /**
+     * Ends the span and responds to the listener with the result.
+     * @param span The span to end.
+     * @param result The result to send to the listener.
+     * @param listener The action listener to respond to.
+     */
+    public static <T> void endSpanAndRespond(Span span, T result, ActionListener<T> listener) {
+        getInstance().endSpan(span);
+        if (listener != null) {
+            listener.onResponse(result);
+        }
+    }
+
+    /**
+     * Creates attributes for connector spans.
+     * @param connectorId The ID of the connector.
+     * @param connectorName The name of the connector.
+     * @return A map of attributes for the connector span.
+     */
     public static Map<String, String> createConnectorAttributes(String connectorId, String connectorName) {
         Map<String, String> attributes = new HashMap<>();
         attributes.put(SERVICE_TYPE, "tracer");
@@ -99,6 +218,12 @@ public class MLConnectorTracer extends MLTracer {
         return attributes;
     }
 
+    /**
+     * Creates attributes for model spans.
+     * @param modelId The ID of the model.
+     * @param modelName The name of the model.
+     * @return A map of attributes for the model span.
+     */
     public static Map<String, String> createModelAttributes(String modelId, String modelName) {
         Map<String, String> attributes = new HashMap<>();
         attributes.put(SERVICE_TYPE, "tracer");
@@ -107,5 +232,14 @@ public class MLConnectorTracer extends MLTracer {
         if (modelName != null)
             attributes.put(ML_MODEL_NAME, modelName);
         return attributes;
+    }
+
+    /**
+     * Resets the singleton instance for testing purposes.
+     * This method should only be used in unit tests to ensure a clean state.
+     */
+    @VisibleForTesting
+    public static void resetForTest() {
+        instance = null;
     }
 }

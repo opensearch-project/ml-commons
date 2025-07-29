@@ -51,6 +51,7 @@ import org.opensearch.ml.common.transport.connector.MLCreateConnectorInput;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorRequest;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorResponse;
 import org.opensearch.ml.engine.MLEngine;
+import org.opensearch.ml.engine.algorithms.agent.tracing.MLConnectorTracer;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
@@ -58,6 +59,7 @@ import org.opensearch.remote.metadata.client.PutDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.tasks.Task;
+import org.opensearch.telemetry.tracing.noop.NoopTracer;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -133,6 +135,9 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
+
+        MLConnectorTracer.resetForTest();
+        MLConnectorTracer.initialize(NoopTracer.INSTANCE, mlFeatureEnabledSetting);
 
         settings = Settings
             .builder()
@@ -704,5 +709,181 @@ public class TransportCreateConnectorActionTests extends OpenSearchTestCase {
 
         action.doExecute(task, request, actionListener);
         verify(actionListener).onResponse(any(MLCreateConnectorResponse.class));
+    }
+
+    /**
+     * Test MetaDataException handling during connector creation
+     * Covers: catch (MetaDataException e) { MLConnectorTracer.handleSpanError(createSpan, "The masterKey for credential encryption is missing in connector creation", e, listener); }
+     */
+    public void test_execute_metadataException_handling() {
+        when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
+        input.setAddAllBackendRoles(null);
+        input.setBackendRoles(null);
+
+        // Mock MLEngine to throw MetaDataException during encryption
+        doAnswer(invocation -> {
+            throw new org.opensearch.ml.engine.exceptions.MetaDataException("Master key not found");
+        }).when(mlEngine).encrypt(any(), any());
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConnectorIndex(isA(ActionListener.class));
+
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertTrue(argumentCaptor.getValue() instanceof org.opensearch.ml.engine.exceptions.MetaDataException);
+        assertEquals("Master key not found", argumentCaptor.getValue().getMessage());
+    }
+
+    /**
+     * Test general exception handling during connector creation
+     * Covers: catch (Exception e) { MLConnectorTracer.handleSpanError(createSpan, "Failed to create connector " + connectorNameLocal, e, listener); }
+     */
+    public void test_execute_generalException_handling() {
+        when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
+        input.setAddAllBackendRoles(null);
+        input.setBackendRoles(null);
+
+        // Mock Connector.createConnector to throw RuntimeException by creating invalid input
+        MLCreateConnectorInput malformedInput = MLCreateConnectorInput
+            .builder()
+            .name("test_name")
+            .version("1")
+            .protocol(ConnectorProtocols.HTTP)
+            .actions(null) // Null actions will cause validateConnectorURL to fail
+            .credential(ImmutableMap.of("test", "value")) // Add credential to pass validation
+            .build();
+        MLCreateConnectorRequest malformedRequest = new MLCreateConnectorRequest(malformedInput);
+
+        action.doExecute(task, malformedRequest, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertNotNull(argumentCaptor.getValue());
+    }
+
+    /**
+     * Test outer exception handling during connector creation
+     * Covers: catch (Exception e) { MLConnectorTracer.handleSpanError(createSpan, "Failed to create connector " + connectorName, e, listener); }
+     */
+    public void test_execute_outerException_handling() {
+        when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
+        input.setAddAllBackendRoles(null);
+        input.setBackendRoles(null);
+
+        // Mock RestActionUtils.getUserContext to throw exception
+        doAnswer(invocation -> {
+            throw new RuntimeException("User context retrieval failed");
+        }).when(client).threadPool();
+
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertNotNull(argumentCaptor.getValue());
+    }
+
+    /**
+     * Test index creation failure handling
+     * Covers: if (!indexCreated) { MLConnectorTracer.handleSpanError(createSpan, "No response to create ML Connector index", new RuntimeException("No response to create ML Connector index"), listener); return; }
+     */
+    public void test_execute_indexCreation_failure() {
+        when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
+        input.setAddAllBackendRoles(null);
+        input.setBackendRoles(null);
+
+        // Mock initMLConnectorIndex to return false
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(false); // Index creation failed
+            return null;
+        }).when(mlIndicesHandler).initMLConnectorIndex(isA(ActionListener.class));
+
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("No response to create ML Connector index", argumentCaptor.getValue().getMessage());
+    }
+
+    /**
+     * Test exception handling in index response processing
+     * Covers: catch (Exception e) { MLConnectorTracer.handleSpanError(createSpan, "Failed to create ML connector", e, listener); }
+     */
+    public void test_execute_indexResponse_processing_exception() {
+        when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
+        input.setAddAllBackendRoles(null);
+        input.setBackendRoles(null);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConnectorIndex(isA(ActionListener.class));
+
+        // Mock ThreadContext.stashContext to throw exception
+        doAnswer(invocation -> {
+            throw new RuntimeException("ThreadContext stash failed");
+        }).when(threadPool).getThreadContext();
+
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("ThreadContext stash failed", argumentCaptor.getValue().getMessage());
+    }
+
+    /**
+     * Test exception handling in save ML connector
+     * Covers: catch (Exception e) { MLConnectorTracer.handleSpanError(createSpan, "Failed to save ML connector", e, listener); }
+     */
+    public void test_execute_save_ml_connector_exception() {
+        when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
+        input.setAddAllBackendRoles(null);
+        input.setBackendRoles(null);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLConnectorIndex(isA(ActionListener.class));
+
+        // Mock ThreadContext.stashContext to throw exception
+        doAnswer(invocation -> {
+            throw new RuntimeException("ThreadContext stash failed");
+        }).when(threadPool).getThreadContext();
+
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("ThreadContext stash failed", argumentCaptor.getValue().getMessage());
+    }
+
+    /**
+     * Test exception handling in init ML connector index
+     * Covers: }, e -> { MLConnectorTracer.handleSpanError(createSpan, "Failed to init ML connector index", e, listener); }
+     */
+    public void test_execute_init_ml_connector_index_exception() {
+        when(connectorAccessControlHelper.accessControlNotEnabled(any(User.class))).thenReturn(true);
+        input.setAddAllBackendRoles(null);
+        input.setBackendRoles(null);
+
+        // Mock initMLConnectorIndex to throw exception
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onFailure(new RuntimeException("Index initialization failed"));
+            return null;
+        }).when(mlIndicesHandler).initMLConnectorIndex(isA(ActionListener.class));
+
+        action.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Index initialization failed", argumentCaptor.getValue().getMessage());
     }
 }

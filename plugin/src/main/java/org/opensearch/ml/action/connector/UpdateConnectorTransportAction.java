@@ -103,9 +103,7 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
         MLUpdateConnectorRequest mlUpdateConnectorAction = MLUpdateConnectorRequest.fromActionRequest(request);
         MLCreateConnectorInput mlCreateConnectorInput = mlUpdateConnectorAction.getUpdateContent();
         String connectorId = mlUpdateConnectorAction.getConnectorId();
-        Span updateSpan = MLConnectorTracer
-            .getInstance()
-            .startSpan(MLConnectorTracer.CONNECTOR_UPDATE_SPAN, MLConnectorTracer.createConnectorAttributes(connectorId, null));
+        Span updateSpan = MLConnectorTracer.startConnectorUpdateSpan(connectorId);
         try {
             if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, mlCreateConnectorInput.getTenantId(), listener)) {
                 return;
@@ -137,32 +135,50 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
                                     .tenantId(tenantId)
                                     .dataObject(connector)
                                     .build();
+                                ActionListener<UpdateResponse> spanWrappedListener = ActionListener.wrap(response -> {
+                                    MLConnectorTracer.endSpanAndRespond(updateSpan, response, listener);
+                                },
+                                    exception -> {
+                                        MLConnectorTracer
+                                            .handleSpanError(
+                                                updateSpan,
+                                                "Failed to update ML connector " + connectorId,
+                                                exception,
+                                                listener
+                                            );
+                                    }
+                                );
                                 try (ThreadContext.StoredContext innerContext = client.threadPool().getThreadContext().stashContext()) {
                                     updateUndeployedConnector(
                                         connectorId,
                                         updateDataObjectRequest,
-                                        ActionListener.runBefore(listener, innerContext::restore)
+                                        ActionListener.runBefore(spanWrappedListener, innerContext::restore)
                                     );
                                 }
                             } else {
-                                listener
-                                    .onFailure(
+                                MLConnectorTracer
+                                    .handleSpanError(
+                                        updateSpan,
+                                        "Permission denied: Unable to update the connector with ID " + connectorId,
                                         new IllegalArgumentException(
                                             "You don't have permission to update the connector, connector id: " + connectorId
-                                        )
+                                        ),
+                                        listener
                                     );
                             }
                         }
                     }, exception -> {
-                        log.error("Permission denied: Unable to update the connector with ID {}. Details: {}", connectorId, exception);
-                        listener.onFailure(exception);
+                        MLConnectorTracer
+                            .handleSpanError(
+                                updateSpan,
+                                "Permission denied: Unable to update the connector with ID " + connectorId,
+                                exception,
+                                listener
+                            );
                     }));
             }
         } catch (Exception e) {
-            log.error("Failed to update ML connector for connector id {}. Details {}:", connectorId, e);
-            listener.onFailure(e);
-        } finally {
-            MLConnectorTracer.getInstance().endSpan(updateSpan);
+            MLConnectorTracer.handleSpanError(updateSpan, "Failed to update ML connector for connector id " + connectorId, e, listener);
         }
     }
 

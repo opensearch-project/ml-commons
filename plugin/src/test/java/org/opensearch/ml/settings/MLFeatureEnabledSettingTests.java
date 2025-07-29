@@ -123,6 +123,7 @@ public class MLFeatureEnabledSettingTests {
         // Test initial values (not set, should be false)
         assertFalse(mlFeatureEnabledSetting.isTracingEnabled());
         assertFalse(mlFeatureEnabledSetting.isAgentTracingEnabled());
+        assertFalse(mlFeatureEnabledSetting.isConnectorTracingEnabled());
 
         // Simulate settings change: enable both
         Settings newSettings = Settings
