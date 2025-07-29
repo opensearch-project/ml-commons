@@ -346,7 +346,7 @@ public class MachineLearningNodeClient implements MachineLearningClient {
     }
 
     private ActionListener<MLExecuteTaskResponse> getMLExecuteResponseActionListener(ActionListener<MLExecuteTaskResponse> listener) {
-        return  wrapActionListener(listener, MLExecuteTaskResponse::fromActionResponse);
+        return wrapActionListener(listener, MLExecuteTaskResponse::fromActionResponse);
     }
 
     private ActionListener<MLTaskGetResponse> getMLTaskResponseActionListener(ActionListener<MLTask> listener) {
