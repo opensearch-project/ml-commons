@@ -81,14 +81,18 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
     protected void doExecute(Task task, ActionRequest request, ActionListener<DeleteResponse> actionListener) {
         MLConnectorDeleteRequest mlConnectorDeleteRequest = MLConnectorDeleteRequest.fromActionRequest(request);
         String connectorId = mlConnectorDeleteRequest.getConnectorId();
-        Span deleteSpan = MLConnectorTracer
-            .getInstance()
-            .startSpan(MLConnectorTracer.CONNECTOR_DELETE_SPAN, MLConnectorTracer.createConnectorAttributes(connectorId, null));
+        Span deleteSpan = MLConnectorTracer.startConnectorDeleteSpan(connectorId);
         try {
             String tenantId = mlConnectorDeleteRequest.getTenantId();
             if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
                 return;
             }
+            ActionListener<DeleteResponse> spanWrappedListener = ActionListener.wrap(response -> {
+                MLConnectorTracer.endSpanAndRespond(deleteSpan, response, actionListener);
+            }, exception -> {
+                MLConnectorTracer.handleSpanError(deleteSpan, "Failed to delete ML connector " + connectorId, exception, actionListener);
+            });
+
             connectorAccessControlHelper
                 .validateConnectorAccess(
                     sdkClient,
@@ -98,12 +102,12 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
                     mlFeatureEnabledSetting,
                     ActionListener
                         .wrap(
-                            isAllowed -> handleConnectorAccessValidation(connectorId, tenantId, isAllowed, actionListener),
-                            e -> handleConnectorAccessValidationFailure(connectorId, e, actionListener)
+                            isAllowed -> handleConnectorAccessValidation(connectorId, tenantId, isAllowed, spanWrappedListener),
+                            e -> handleConnectorAccessValidationFailure(connectorId, e, spanWrappedListener, deleteSpan)
                         )
                 );
-        } finally {
-            MLConnectorTracer.getInstance().endSpan(deleteSpan);
+        } catch (Exception e) {
+            MLConnectorTracer.handleSpanError(deleteSpan, "Failed to delete ML connector " + connectorId, e, actionListener);
         }
     }
 
@@ -120,9 +124,13 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
         }
     }
 
-    private void handleConnectorAccessValidationFailure(String connectorId, Exception e, ActionListener<DeleteResponse> actionListener) {
-        log.error("Failed to delete ML connector: {}", connectorId, e);
-        actionListener.onFailure(e);
+    private void handleConnectorAccessValidationFailure(
+        String connectorId,
+        Exception e,
+        ActionListener<DeleteResponse> actionListener,
+        Span deleteSpan
+    ) {
+        MLConnectorTracer.handleSpanError(deleteSpan, "Failed to delete ML connector " + connectorId, e, actionListener);
     }
 
     private void checkForModelsUsingConnector(String connectorId, String tenantId, ActionListener<DeleteResponse> actionListener) {

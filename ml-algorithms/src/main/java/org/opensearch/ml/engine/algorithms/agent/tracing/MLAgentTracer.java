@@ -205,9 +205,6 @@ public class MLAgentTracer extends MLTracer {
         if (instance == null) {
             throw new IllegalStateException("MLAgentTracer is not initialized. Call initialize() first before using getInstance().");
         }
-        if (instance == null) {
-            throw new IllegalStateException("MLAgentTracer is not initialized. Call initialize() first before using getInstance().");
-        }
         return instance;
     }
 

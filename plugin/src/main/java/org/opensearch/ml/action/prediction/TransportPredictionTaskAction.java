@@ -109,20 +109,8 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         MLPredictionTaskRequest mlPredictionTaskRequest = MLPredictionTaskRequest.fromActionRequest(request);
         String modelId = mlPredictionTaskRequest.getModelId();
         String modelName = null;
-        Span predictSpan = MLConnectorTracer
-            .getInstance()
-            .startSpan(MLConnectorTracer.MODEL_PREDICT_SPAN, MLConnectorTracer.createModelAttributes(modelId, modelName));
-        if (predictSpan != null && mlPredictionTaskRequest.getMlInput() != null) {
-            try {
-                String inputBody = mlPredictionTaskRequest
-                    .getMlInput()
-                    .toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS)
-                    .toString();
-                predictSpan.addAttribute(MLConnectorTracer.ML_MODEL_REQUEST_BODY, inputBody);
-            } catch (Exception e) {
-                log.warn("Failed to serialize model input for tracing", e);
-            }
-        }
+        Span predictSpan = MLConnectorTracer.startModelPredictSpan(modelId, modelName);
+        serializeInputForTracing(mlPredictionTaskRequest, predictSpan);
         try {
             String tenantId = mlPredictionTaskRequest.getTenantId();
             if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, listener)) {
@@ -136,8 +124,28 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
             final User userInfo = user;
 
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                ActionListener<MLTaskResponse> wrappedListener = ActionListener.runBefore(listener, context::restore);
+                ActionListener<MLTaskResponse> spanWrappedListener = ActionListener.wrap(response -> {
+                    MLConnectorTracer.endSpanAndRespond(predictSpan, response, listener);
+                }, exception -> {
+                    // Re-throw IllegalStateException to maintain synchronous behavior for tests
+                    if (exception instanceof IllegalStateException) {
+                        MLConnectorTracer.getInstance().endSpan(predictSpan);
+                        throw (IllegalStateException) exception;
+                    }
+                    MLConnectorTracer.handleSpanError(predictSpan, "Error in model.predict span", exception, listener);
+                });
+                ActionListener<MLTaskResponse> wrappedListener = ActionListener.runBefore(spanWrappedListener, context::restore);
                 MLModel cachedMlModel = modelCacheHelper.getModelInfo(modelId);
+
+                // Check for local model disabled synchronously before async call
+                if (cachedMlModel != null) {
+                    FunctionName functionName = cachedMlModel.getAlgorithm();
+                    if (FunctionName.isDLModel(functionName) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
+                        MLConnectorTracer.getInstance().endSpan(predictSpan);
+                        throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
+                    }
+                }
+
                 ActionListener<MLModel> modelActionListener = new ActionListener<>() {
                     @Override
                     public void onResponse(MLModel mlModel) {
@@ -145,9 +153,6 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                         modelCacheHelper.setModelInfo(modelId, mlModel);
                         String actualModelName = mlModel.getName();
                         FunctionName functionName = mlModel.getAlgorithm();
-                        if (FunctionName.isDLModel(functionName) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
-                            throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
-                        }
                         mlPredictionTaskRequest.getMlInput().setAlgorithm(functionName);
                         modelAccessControlHelper
                             .validateModelGroupAccess(
@@ -175,22 +180,28 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                                             if (FunctionName.isDLModel(functionName)) {
                                                 if (modelCacheHelper.getRateLimiter(modelId) != null
                                                     && !modelCacheHelper.getRateLimiter(modelId).request()) {
-                                                    wrappedListener
-                                                        .onFailure(
+                                                    MLConnectorTracer
+                                                        .handleSpanError(
+                                                            predictSpan,
+                                                            "Request is throttled at model level.",
                                                             new OpenSearchStatusException(
                                                                 "Request is throttled at model level.",
                                                                 RestStatus.TOO_MANY_REQUESTS
-                                                            )
+                                                            ),
+                                                            wrappedListener
                                                         );
                                                 } else if (userInfo != null
                                                     && modelCacheHelper.getUserRateLimiter(modelId, userInfo.getName()) != null
                                                     && !modelCacheHelper.getUserRateLimiter(modelId, userInfo.getName()).request()) {
-                                                    wrappedListener
-                                                        .onFailure(
+                                                    MLConnectorTracer
+                                                        .handleSpanError(
+                                                            predictSpan,
+                                                            "Request is throttled at user level.",
                                                             new OpenSearchStatusException(
                                                                 "Request is throttled at user level. If you think there's an issue, please contact your cluster admin.",
                                                                 RestStatus.TOO_MANY_REQUESTS
-                                                            )
+                                                            ),
+                                                            wrappedListener
                                                         );
                                                 } else {
                                                     validateInputSchema(modelId, mlPredictionTaskRequest.getMlInput());
@@ -212,10 +223,13 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                                                     RestStatus.fromCode(((OpenSearchStatusException) e).status().getStatus())
                                                 )
                                             );
+                                        predictSpan.setError(e);
                                     } else if (e instanceof MLResourceNotFoundException) {
                                         wrappedListener.onFailure(new OpenSearchStatusException(e.getMessage(), RestStatus.NOT_FOUND));
+                                        predictSpan.setError(e);
                                     } else if (e instanceof CircuitBreakingException) {
                                         wrappedListener.onFailure(e);
+                                        predictSpan.setError(e);
                                     } else {
                                         wrappedListener
                                             .onFailure(
@@ -224,15 +238,16 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                                                     RestStatus.FORBIDDEN
                                                 )
                                             );
+                                        predictSpan.setError(e);
                                     }
+                                    MLConnectorTracer.getInstance().endSpan(predictSpan);
                                 })
                             );
                     }
 
                     @Override
                     public void onFailure(Exception e) {
-                        log.error("Failed to find model {}", modelId, e);
-                        wrappedListener.onFailure(e);
+                        MLConnectorTracer.handleSpanError(predictSpan, "Failed to find model " + modelId, e, wrappedListener);
                     }
                 };
 
@@ -241,13 +256,19 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                 } else {
                     mlModelManager.getModel(modelId, tenantId, modelActionListener);
                 }
+            } catch (Exception e) {
+                if (e instanceof IllegalStateException) {
+                    MLConnectorTracer.getInstance().endSpan(predictSpan);
+                    throw (IllegalStateException) e;
+                }
+                MLConnectorTracer.handleSpanError(predictSpan, "Failed to find model " + modelId, e, listener);
             }
         } catch (Exception e) {
-            log.error("Error in model.predict span", e);
-            predictSpan.setError(e);
-            throw e;
-        } finally {
-            MLConnectorTracer.getInstance().endSpan(predictSpan);
+            if (e instanceof IllegalStateException) {
+                MLConnectorTracer.getInstance().endSpan(predictSpan);
+                throw (IllegalStateException) e;
+            }
+            MLConnectorTracer.handleSpanError(predictSpan, "Error in model.predict span", e, listener);
         }
     }
 
@@ -257,20 +278,8 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         String modelId,
         String modelName
     ) {
-        Span executeSpan = MLConnectorTracer
-            .getInstance()
-            .startSpan(MLConnectorTracer.MODEL_EXECUTE_SPAN, MLConnectorTracer.createModelAttributes(modelId, modelName));
-        if (executeSpan != null && mlPredictionTaskRequest.getMlInput() != null) {
-            try {
-                String inputBody = mlPredictionTaskRequest
-                    .getMlInput()
-                    .toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS)
-                    .toString();
-                executeSpan.addAttribute(MLConnectorTracer.ML_MODEL_REQUEST_BODY, inputBody);
-            } catch (Exception e) {
-                log.warn("Failed to serialize model input for tracing", e);
-            }
-        }
+        Span executeSpan = MLConnectorTracer.startModelExecuteSpan(modelId, modelName);
+        serializeInputForTracing(mlPredictionTaskRequest, executeSpan);
         try {
             String requestId = mlPredictionTaskRequest.getRequestID();
             log.debug("receive predict request {} for model {}", requestId, mlPredictionTaskRequest.getModelId());
@@ -278,8 +287,12 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
             FunctionName functionName = modelCacheHelper
                 .getOptionalFunctionName(modelId)
                 .orElse(mlPredictionTaskRequest.getMlInput().getAlgorithm());
+            ActionListener<MLTaskResponse> spanWrappedListener = ActionListener.wrap(response -> {
+                MLConnectorTracer.endSpanAndRespond(executeSpan, response, wrappedListener);
+            }, exception -> { MLConnectorTracer.handleSpanError(executeSpan, "Error in model.execute span", exception, wrappedListener); });
+
             mlPredictTaskRunner
-                .run(functionName, mlPredictionTaskRequest, transportService, ActionListener.runAfter(wrappedListener, () -> {
+                .run(functionName, mlPredictionTaskRequest, transportService, ActionListener.runAfter(spanWrappedListener, () -> {
                     long endTime = System.nanoTime();
                     double durationInMs = (endTime - startTime) / 1e6;
                     modelCacheHelper.addPredictRequestDuration(modelId, durationInMs);
@@ -287,11 +300,8 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                     log.debug("completed predict request {} for model {}", requestId, modelId);
                 }));
         } catch (Exception e) {
-            log.error("Error in model.execute span", e);
-            executeSpan.setError(e);
+            MLConnectorTracer.handleSpanError(executeSpan, "Error in model.execute span", e, wrappedListener);
             throw e;
-        } finally {
-            MLConnectorTracer.getInstance().endSpan(executeSpan);
         }
     }
 
@@ -309,6 +319,20 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                         + e.getMessage(),
                     RestStatus.BAD_REQUEST
                 );
+            }
+        }
+    }
+
+    private void serializeInputForTracing(MLPredictionTaskRequest mlPredictionTaskRequest, Span predictSpan) {
+        if (mlPredictionTaskRequest.getMlInput() != null) {
+            try {
+                String inputBody = mlPredictionTaskRequest
+                    .getMlInput()
+                    .toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS)
+                    .toString();
+                predictSpan.addAttribute(MLConnectorTracer.ML_MODEL_REQUEST_BODY, inputBody);
+            } catch (Exception e) {
+                log.warn("Failed to serialize model input for tracing", e);
             }
         }
     }
