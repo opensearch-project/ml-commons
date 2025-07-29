@@ -27,10 +27,7 @@ import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.ml.common.output.model.ModelTensor;
-import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Tool;
-import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.transport.client.Client;
 
 public class QueryPlanningToolTests {
@@ -65,22 +62,13 @@ public class QueryPlanningToolTests {
     @Test
     public void testRun() throws ExecutionException, InterruptedException {
         String matchQueryString = "{\"query\":{\"match\":{\"title\":\"wind\"}}}";
-        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", matchQueryString)).build();
-        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(List.of(modelTensor)).build();
-        List<ModelTensors> modelTensorsList = List.of(modelTensors);
-
         doAnswer(invocation -> {
-            ActionListener<List<ModelTensors>> listener = invocation.getArgument(1);
-            listener.onResponse(modelTensorsList);
+            ActionListener<String> listener = invocation.getArgument(1);
+            listener.onResponse(matchQueryString);
             return null;
         }).when(queryGenerationTool).run(any(), any());
 
         QueryPlanningTool tool = new QueryPlanningTool(client, "test_model_id", "llmGenerated", queryGenerationTool);
-        tool.setOutputParser(o -> {
-            List<ModelTensors> outputs = (List<ModelTensors>) o;
-            return outputs.get(0).getMlModelTensors().get(0).getDataAsMap().get("response");
-        });
-
         final CompletableFuture<String> future = new CompletableFuture<>();
         ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
         // test try to update the prompt

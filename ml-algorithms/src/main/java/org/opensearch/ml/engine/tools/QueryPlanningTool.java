@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.Map;
 
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.spi.tools.WithModelTool;
@@ -48,7 +47,7 @@ public class QueryPlanningTool implements WithModelTool {
     @Setter
     private String description = DEFAULT_DESCRIPTION;
     private String defaultPrompt =
-        "You are an OpenSearch Query DSL generation assistant; using the provided index mapping ${parameters.ListIndexTool.output:-}, specified fields ${parameters.fields:-}, and the given sample queries as examples, generate an OpenSearch Query DSL to retrieve the most relevant documents for the user provided natural language question: ${parameters.query_text}\n";
+        "You are an OpenSearch Query DSL generation assistant; try using the optional provided index mapping ${parameters.indexMapping:-}, specified fields ${parameters.query_fields:-}, and the given sample queries as examples, generate an OpenSearch Query DSL to retrieve the most relevant documents for the user provided natural language question: ${parameters.query_text}, please return the query dsl only in a string format, no other texts.\n";
     @Getter
     private Client client;
     @Getter
@@ -73,11 +72,13 @@ public class QueryPlanningTool implements WithModelTool {
         if (!parameters.containsKey(PROMPT_FIELD)) {
             parameters.put(PROMPT_FIELD, defaultPrompt);
         }
-        ActionListener<List<ModelTensors>> modelListener = ActionListener.wrap(r -> {
+        if (!validate(parameters)) {
+            listener.onFailure(new IllegalArgumentException("Empty parameters for QueryPlanningTool: " + parameters));
+            return;
+        }
+        ActionListener<T> modelListener = ActionListener.wrap(r -> {
             try {
-                @SuppressWarnings("unchecked")
-                T result = (T) outputParser.parse(r);
-                listener.onResponse(result);
+                listener.onResponse(r);
             } catch (Exception e) {
                 listener.onFailure(e);
             }
@@ -145,7 +146,7 @@ public class QueryPlanningTool implements WithModelTool {
                 type = LLM_GENERATED_TYPE_FIELD;
             }
 
-            // TODO to add in , SYSTEM_SEARCH_TEMPLATES_TYPE_FIELD, USER_SEARCH_TEMPLATES_TYPE_FIELD when searchTemplatesTool is
+            // TODO to add in SYSTEM_SEARCH_TEMPLATES_TYPE_FIELD, USER_SEARCH_TEMPLATES_TYPE_FIELD when searchTemplatesTool is
             // implemented.
             if (!LLM_GENERATED_TYPE_FIELD.equals(type)) {
                 throw new IllegalArgumentException("Invalid generation type: " + type + ". The current supported types are llmGenerated.");
