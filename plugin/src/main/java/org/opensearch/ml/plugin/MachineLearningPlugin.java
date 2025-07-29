@@ -519,6 +519,7 @@ public class MachineLearningPlugin extends Plugin
                 new ActionHandler<>(MLAgentGetAction.INSTANCE, GetAgentTransportAction.class),
                 new ActionHandler<>(MLAgentDeleteAction.INSTANCE, DeleteAgentTransportAction.class),
                 new ActionHandler<>(MLAgentUpdateAction.INSTANCE, UpdateAgentTransportAction.class),
+                new ActionHandler<>(MLExecuteAgentAction.INSTANCE, TransportExecuteAgentAction.class),
                 new ActionHandler<>(UpdateConversationAction.INSTANCE, UpdateConversationTransportAction.class),
                 new ActionHandler<>(UpdateInteractionAction.INSTANCE, UpdateInteractionTransportAction.class),
                 new ActionHandler<>(GetTracesAction.INSTANCE, GetTracesTransportAction.class),
@@ -904,6 +905,7 @@ public class MachineLearningPlugin extends Plugin
         RestMLGetAgentAction restMLGetAgentAction = new RestMLGetAgentAction(mlFeatureEnabledSetting);
         RestMLDeleteAgentAction restMLDeleteAgentAction = new RestMLDeleteAgentAction(mlFeatureEnabledSetting);
         RestMLUpdateAgentAction restMLUpdateAgentAction = new RestMLUpdateAgentAction(mlFeatureEnabledSetting);
+        RestMLExecuteAgentAction restMLExecuteAgentAction = new RestMLExecuteAgentAction(mlFeatureEnabledSetting);
         RestMemoryUpdateConversationAction restMemoryUpdateConversationAction = new RestMemoryUpdateConversationAction();
         RestMemoryUpdateInteractionAction restMemoryUpdateInteractionAction = new RestMemoryUpdateInteractionAction();
         RestMemoryGetTracesAction restMemoryGetTracesAction = new RestMemoryGetTracesAction();
@@ -971,6 +973,7 @@ public class MachineLearningPlugin extends Plugin
                 restMLGetAgentAction,
                 restMLDeleteAgentAction,
                 restMLUpdateAgentAction,
+                restMLExecuteAgentAction,
                 restMemoryUpdateConversationAction,
                 restMemoryUpdateInteractionAction,
                 restMemoryGetTracesAction,

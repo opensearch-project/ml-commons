@@ -34,7 +34,7 @@ public class MLExecuteAgentResponse extends ActionResponse implements ToXContent
             List<Map<String, String>> outputList = new ArrayList<>(outputSize);
             for (int j = 0; j < outputSize; j++) {
                 Map<String, String> outputMap = new HashMap<>();
-                if (in.readBoolean()) { // Check if 'name' field exists
+                if (in.readBoolean()) {
                     outputMap.put("name", in.readString());
                 }
                 outputMap.put("result", in.readString());
