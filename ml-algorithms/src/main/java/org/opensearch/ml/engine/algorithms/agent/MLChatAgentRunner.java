@@ -83,6 +83,8 @@ import org.opensearch.ml.repackage.com.google.common.collect.Lists;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.transport.client.Client;
 
+import com.google.common.annotations.VisibleForTesting;
+
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.extern.log4j.Log4j2;
@@ -752,6 +754,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         return prompt;
     }
 
+    @VisibleForTesting
     static Map<String, String> constructLLMParams(LLMSpec llm, Map<String, String> parameters) {
         Map<String, String> tmpParameters = new HashMap<>();
         if (llm.getParameters() != null) {
@@ -795,7 +798,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 tmpParameters.put(PROMPT_PREFIX, promptPrefix);
             }
         }
-        
+
         tmpParameters.putIfAbsent(PROMPT_PREFIX, PromptTemplate.PROMPT_TEMPLATE_PREFIX);
         tmpParameters.putIfAbsent(PROMPT_SUFFIX, PromptTemplate.PROMPT_TEMPLATE_SUFFIX);
         tmpParameters.putIfAbsent(RESPONSE_FORMAT_INSTRUCTION, PromptTemplate.PROMPT_FORMAT_INSTRUCTION);

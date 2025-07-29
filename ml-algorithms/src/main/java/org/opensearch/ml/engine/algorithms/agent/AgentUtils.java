@@ -52,7 +52,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import com.google.common.annotations.VisibleForTesting;
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
@@ -138,6 +137,7 @@ public class AgentUtils {
     public static final String DEFAULT_NO_ESCAPE_PARAMS = "_chat_history,_tools,_interactions,tool_configs";
 
     public static final String DEFAULT_DATETIME_FORMAT = "EEEE, MMMM d, yyyy 'at' h:mm a z";
+    public static final String DEFAULT_DATETIME_PREFIX = "Current date and time: ";
 
     public static String addExamplesToPrompt(Map<String, String> parameters, String prompt) {
         Map<String, String> examplesMap = new HashMap<>();
@@ -985,16 +985,12 @@ public class AgentUtils {
                 formatter = DateTimeFormatter.ofPattern(dateFormat).withZone(ZoneId.of("UTC"));
             } catch (IllegalArgumentException e) {
                 log.warn("Invalid date format provided: {}. Using default format.", dateFormat);
-                formatter = DateTimeFormatter
-                        .ofPattern(DEFAULT_DATETIME_FORMAT)
-                        .withZone(ZoneId.of("UTC"));
+                formatter = DateTimeFormatter.ofPattern(DEFAULT_DATETIME_FORMAT).withZone(ZoneId.of("UTC"));
             }
         } else {
-            formatter = DateTimeFormatter
-                    .ofPattern(DEFAULT_DATETIME_FORMAT)
-                    .withZone(ZoneId.of("UTC"));
+            formatter = DateTimeFormatter.ofPattern(DEFAULT_DATETIME_FORMAT).withZone(ZoneId.of("UTC"));
         }
 
-        return "Current date and time: " + formatter.format(now);
+        return DEFAULT_DATETIME_PREFIX + formatter.format(now);
     }
 }

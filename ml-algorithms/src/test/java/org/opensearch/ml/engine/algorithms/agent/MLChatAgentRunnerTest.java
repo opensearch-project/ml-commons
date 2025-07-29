@@ -16,6 +16,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DEFAULT_DATETIME_PREFIX;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.MESSAGE_HISTORY_LIMIT;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.LAST_N_INTERACTIONS;
 
@@ -977,8 +978,6 @@ public class MLChatAgentRunnerTest {
         };
     }
 
-
-
     @Test
     public void testConstructLLMParams_WithSystemPromptAndDateTimeInjection() {
         LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
@@ -993,7 +992,7 @@ public class MLChatAgentRunnerTest {
         Assert.assertTrue(result.containsKey(MLChatAgentRunner.SYSTEM_PROMPT_FIELD));
         String systemPrompt = result.get(MLChatAgentRunner.SYSTEM_PROMPT_FIELD);
         Assert.assertTrue(systemPrompt.startsWith("You are a helpful assistant."));
-        Assert.assertTrue(systemPrompt.contains("Current date and time:"));
+        Assert.assertTrue(systemPrompt.contains(DEFAULT_DATETIME_PREFIX));
     }
 
     @Test
@@ -1008,7 +1007,7 @@ public class MLChatAgentRunnerTest {
         Assert.assertNotNull(result);
         Assert.assertTrue(result.containsKey(AgentUtils.PROMPT_PREFIX));
         String promptPrefix = result.get(AgentUtils.PROMPT_PREFIX);
-        Assert.assertTrue(promptPrefix.contains("Current date and time:"));
+        Assert.assertTrue(promptPrefix.contains(DEFAULT_DATETIME_PREFIX));
     }
 
     @Test
@@ -1024,7 +1023,7 @@ public class MLChatAgentRunnerTest {
         Assert.assertTrue(result.containsKey(MLChatAgentRunner.SYSTEM_PROMPT_FIELD));
         String systemPrompt = result.get(MLChatAgentRunner.SYSTEM_PROMPT_FIELD);
         Assert.assertEquals("You are a helpful assistant.", systemPrompt);
-        Assert.assertFalse(systemPrompt.contains("Current date and time:"));
+        Assert.assertFalse(systemPrompt.contains(DEFAULT_DATETIME_PREFIX));
     }
 
     @Test

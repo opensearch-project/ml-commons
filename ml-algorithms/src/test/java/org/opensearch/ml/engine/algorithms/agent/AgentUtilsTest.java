@@ -17,6 +17,7 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTOR_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DEFAULT_DATETIME_PREFIX;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_PATH;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_TOOL_USE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_GEN_INPUT;
@@ -1669,36 +1670,36 @@ public class AgentUtilsTest extends MLStaticMockBase {
     @Test
     public void testGetCurrentDateTime_WithNullFormat() {
         String result = AgentUtils.getCurrentDateTime(null);
-        
+
         Assert.assertNotNull(result);
-        Assert.assertTrue(result.startsWith("Current date and time: "));
+        Assert.assertTrue(result.startsWith(DEFAULT_DATETIME_PREFIX));
         Assert.assertTrue(result.contains("UTC"));
     }
 
     @Test
     public void testGetCurrentDateTime_WithEmptyFormat() {
         String result = AgentUtils.getCurrentDateTime("");
-        
+
         Assert.assertNotNull(result);
-        Assert.assertTrue(result.startsWith("Current date and time: "));
+        Assert.assertTrue(result.startsWith(DEFAULT_DATETIME_PREFIX));
         Assert.assertTrue(result.contains("UTC"));
     }
 
     @Test
     public void testGetCurrentDateTime_WithValidFormat() {
         String result = AgentUtils.getCurrentDateTime("yyyy-MM-dd HH:mm:ss");
-        
+
         Assert.assertNotNull(result);
-        Assert.assertTrue(result.startsWith("Current date and time: "));
+        Assert.assertTrue(result.startsWith(DEFAULT_DATETIME_PREFIX));
         Assert.assertFalse(result.contains("UTC"));
     }
 
     @Test
     public void testGetCurrentDateTime_WithInvalidFormat() {
         String result = AgentUtils.getCurrentDateTime("invalid-format");
-        
+
         Assert.assertNotNull(result);
-        Assert.assertTrue(result.startsWith("Current date and time: "));
+        Assert.assertTrue(result.startsWith(DEFAULT_DATETIME_PREFIX));
         Assert.assertTrue(result.contains("UTC"));
     }
 }
