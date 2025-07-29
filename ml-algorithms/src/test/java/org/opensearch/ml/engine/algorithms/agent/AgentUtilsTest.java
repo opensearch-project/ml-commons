@@ -7,10 +7,32 @@ package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
+import static org.opensearch.ml.common.CommonValue.MCP_CONNECTOR_ID_FIELD;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_PATH;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_TOOL_USE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_GEN_INPUT;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_EXCLUDE_PATH;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_RESPONSE_FILTER;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.PROMPT_PREFIX;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.PROMPT_SUFFIX;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOLS;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALLS_PATH;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALLS_TOOL_INPUT;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALLS_TOOL_NAME;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALL_ID;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_CALL_ID_PATH;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_FILTERS_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.TOOL_TEMPLATE;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.ACTION;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.ACTION_INPUT;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.CHAT_HISTORY;
@@ -21,30 +43,72 @@ import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.OS_IND
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.THOUGHT;
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.THOUGHT_RESPONSE;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.common.settings.Settings;
+import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLToolSpec;
+import org.opensearch.ml.common.connector.AwsConnector;
+import org.opensearch.ml.common.connector.Connector;
+import org.opensearch.ml.common.connector.McpConnector;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.engine.MLEngineClassLoader;
+import org.opensearch.ml.engine.MLStaticMockBase;
+import org.opensearch.ml.engine.algorithms.remote.McpConnectorExecutor;
+import org.opensearch.ml.engine.encryptor.Encryptor;
+import org.opensearch.ml.engine.function_calling.FunctionCalling;
+import org.opensearch.ml.engine.function_calling.FunctionCallingFactory;
+import org.opensearch.ml.engine.tools.McpSseTool;
+import org.opensearch.remote.metadata.client.GetDataObjectRequest;
+import org.opensearch.remote.metadata.client.GetDataObjectResponse;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.threadpool.ThreadPool;
+import org.opensearch.transport.client.Client;
 
-public class AgentUtilsTest {
+import com.google.gson.JsonSyntaxException;
+
+public class AgentUtilsTest extends MLStaticMockBase {
 
     @Mock
     private Tool tool1, tool2;
+
+    @Mock
+    private MLAgent mlAgent;
+    @Mock
+    private Client client;
+    @Mock
+    private SdkClient sdkClient;
+    @Mock
+    private Encryptor encryptor;
+
+    private ThreadContext threadContext;
+
+    @Mock
+    private ThreadPool threadPool;
 
     private Map<String, Map<String, String>> llmResponseExpectedParseResults;
 
@@ -495,7 +559,7 @@ public class AgentUtilsTest {
                 )
                 .build();
             Map<String, String> output = AgentUtils
-                .parseLLMOutput(Collections.emptyMap(), modelTensoOutput, null, tools, Collections.emptyList());
+                .parseLLMOutput(Collections.emptyMap(), modelTensoOutput, null, tools, Collections.emptyList(), null);
             for (String key : entry.getValue().keySet()) {
                 Assert.assertEquals(entry.getValue().get(key), output.get(key));
             }
@@ -525,7 +589,7 @@ public class AgentUtilsTest {
             )
             .build();
         Map<String, String> output = AgentUtils
-            .parseLLMOutput(Collections.emptyMap(), modelTensoOutput, null, tools, Collections.emptyList());
+            .parseLLMOutput(Collections.emptyMap(), modelTensoOutput, null, tools, Collections.emptyList(), null);
         Assert.assertEquals(3, output.size());
         Assert.assertEquals(thought, output.get(THOUGHT));
         Assert.assertEquals("VectorDBTool", output.get(ACTION));
@@ -559,7 +623,7 @@ public class AgentUtilsTest {
             )
             .build();
         Map<String, String> output = AgentUtils
-            .parseLLMOutput(Collections.emptyMap(), modelTensoOutput, null, tools, Collections.emptyList());
+            .parseLLMOutput(Collections.emptyMap(), modelTensoOutput, null, tools, Collections.emptyList(), null);
         Assert.assertEquals(2, output.size());
         Assert.assertFalse(output.containsKey(THOUGHT));
         Assert.assertFalse(output.containsKey(ACTION));
@@ -589,7 +653,7 @@ public class AgentUtilsTest {
             )
             .build();
         Map<String, String> output = AgentUtils
-            .parseLLMOutput(Collections.emptyMap(), modelTensoOutput, null, tools, Collections.emptyList());
+            .parseLLMOutput(Collections.emptyMap(), modelTensoOutput, null, tools, Collections.emptyList(), null);
         Assert.assertEquals(3, output.size());
         Assert.assertEquals(thought, output.get(THOUGHT));
         Assert.assertFalse(output.containsKey(ACTION));
@@ -695,6 +759,652 @@ public class AgentUtilsTest {
         Assert.assertEquals(actionInput, toolParams.get(LLM_GEN_INPUT));
     }
 
+    @Test
+    public void testParseLLMOutputWithOpenAIFormat() {
+        Map<String, String> parameters = Map
+            .of(
+                LLM_RESPONSE_FILTER,
+                "$.choices[0].message.content",
+                TOOL_CALLS_PATH,
+                "$.choices[0].message.tool_calls",
+                TOOL_CALLS_TOOL_NAME,
+                "function.name",
+                TOOL_CALLS_TOOL_INPUT,
+                "function.arguments",
+                TOOL_CALL_ID_PATH,
+                "id",
+                LLM_FINISH_REASON_PATH,
+                "$.choices[0].finish_reason",
+                LLM_FINISH_REASON_TOOL_USE,
+                "tool_calls"
+            );
+
+        // Test case 1: Response containing both text and toolUse
+        Map<String, Object> responseData1 = Map
+            .of(
+                "choices",
+                List
+                    .of(
+                        Map
+                            .of(
+                                "message",
+                                Map
+                                    .of(
+                                        "content",
+                                        "I will use ListIndexTool",
+                                        "tool_calls",
+                                        List
+                                            .of(
+                                                Map
+                                                    .of(
+                                                        "function",
+                                                        Map.of("name", "ListIndexTool", "arguments", "{\"indices\":[]}"),
+                                                        "id",
+                                                        "tool_1"
+                                                    )
+                                            )
+                                    ),
+                                "finish_reason",
+                                "tool_calls"
+                            )
+                    )
+            );
+
+        ModelTensorOutput modelTensorOutput1 = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(responseData1).build()))
+                            .build()
+                    )
+            )
+            .build();
+
+        Map<String, String> output1 = AgentUtils
+            .parseLLMOutput(parameters, modelTensorOutput1, null, Set.of("ListIndexTool"), new ArrayList<>(), null);
+
+        Assert.assertEquals("", output1.get(THOUGHT));
+        Assert.assertEquals("ListIndexTool", output1.get(ACTION));
+        Assert.assertEquals("{\"indices\":[]}", output1.get(ACTION_INPUT));
+        Assert.assertEquals("tool_1", output1.get(TOOL_CALL_ID));
+
+        // Test case 2: Response containing only toolUse
+        Map<String, Object> responseData2 = Map
+            .of(
+                "choices",
+                List
+                    .of(
+                        Map
+                            .of(
+                                "message",
+                                Map
+                                    .of(
+                                        "tool_calls",
+                                        List
+                                            .of(
+                                                Map
+                                                    .of(
+                                                        "function",
+                                                        Map.of("name", "IndexMappingTool", "arguments", "{\"index\":[\"test_index\"]}"),
+                                                        "id",
+                                                        "tool_2"
+                                                    )
+                                            )
+                                    ),
+                                "finish_reason",
+                                "tool_calls"
+                            )
+                    )
+            );
+
+        ModelTensorOutput modelTensorOutput2 = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(responseData2).build()))
+                            .build()
+                    )
+            )
+            .build();
+
+        Map<String, String> output2 = AgentUtils
+            .parseLLMOutput(parameters, modelTensorOutput2, null, Set.of("IndexMappingTool"), new ArrayList<>(), null);
+
+        Assert.assertEquals("", output2.get(THOUGHT));
+        Assert.assertEquals("IndexMappingTool", output2.get(ACTION));
+        Assert.assertEquals("{\"index\":[\"test_index\"]}", output2.get(ACTION_INPUT));
+        Assert.assertEquals("tool_2", output2.get(TOOL_CALL_ID));
+
+        // Test case 3: Response containing only text
+        Map<String, Object> responseData3 = Map
+            .of("choices", List.of(Map.of("message", Map.of("content", "This is a test response"), "finish_reason", "stop")));
+
+        ModelTensorOutput modelTensorOutput3 = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(responseData3).build()))
+                            .build()
+                    )
+            )
+            .build();
+
+        Map<String, String> output3 = AgentUtils.parseLLMOutput(parameters, modelTensorOutput3, null, Set.of(), new ArrayList<>(), null);
+
+        Assert.assertNull(output3.get(ACTION));
+        Assert.assertNull(output3.get(ACTION_INPUT));
+        Assert.assertNull(output3.get(TOOL_CALL_ID));
+        Assert.assertTrue(output3.get(FINAL_ANSWER).contains("This is a test response"));
+    }
+
+    @Test
+    public void testParseLLMOutputWithClaudeFormat() {
+        Map<String, String> parameters = Map
+            .of(
+                LLM_RESPONSE_FILTER,
+                "$.output.message.content[0].text",
+                TOOL_CALLS_PATH,
+                "$.output.message.content[*].toolUse",
+                TOOL_CALLS_TOOL_NAME,
+                "name",
+                TOOL_CALLS_TOOL_INPUT,
+                "input",
+                TOOL_CALL_ID_PATH,
+                "toolUseId",
+                LLM_FINISH_REASON_PATH,
+                "$.stopReason",
+                LLM_FINISH_REASON_TOOL_USE,
+                "tool_use"
+            );
+
+        // Test case 1: Response containing both text and toolUse
+        Map<String, Object> responseData1 = Map
+            .of(
+                "output",
+                Map
+                    .of(
+                        "message",
+                        Map
+                            .of(
+                                "content",
+                                List
+                                    .of(
+                                        Map.of("text", "I will use ListIndexTool"),
+                                        Map
+                                            .of(
+                                                "toolUse",
+                                                Map
+                                                    .of(
+                                                        "input",
+                                                        Map.of("indices", List.of()),
+                                                        "name",
+                                                        "ListIndexTool",
+                                                        "toolUseId",
+                                                        "tool_1"
+                                                    )
+                                            )
+                                    )
+                            )
+                    ),
+                "stopReason",
+                "tool_use"
+            );
+
+        ModelTensorOutput modelTensorOutput1 = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(responseData1).build()))
+                            .build()
+                    )
+            )
+            .build();
+
+        Map<String, String> output1 = AgentUtils
+            .parseLLMOutput(parameters, modelTensorOutput1, null, Set.of("ListIndexTool"), new ArrayList<>(), null);
+
+        Assert.assertEquals("", output1.get(THOUGHT));
+        Assert.assertEquals("ListIndexTool", output1.get(ACTION));
+        Assert.assertEquals("{\"indices\":[]}", output1.get(ACTION_INPUT));
+        Assert.assertEquals("tool_1", output1.get(TOOL_CALL_ID));
+
+        // Test case 2: Response containing only toolUse
+        Map<String, Object> responseData2 = Map
+            .of(
+                "output",
+                Map
+                    .of(
+                        "message",
+                        Map
+                            .of(
+                                "content",
+                                List
+                                    .of(
+                                        Map
+                                            .of(
+                                                "toolUse",
+                                                Map
+                                                    .of(
+                                                        "input",
+                                                        Map.of("index", List.of("test_index")),
+                                                        "name",
+                                                        "IndexMappingTool",
+                                                        "toolUseId",
+                                                        "tool_2"
+                                                    )
+                                            )
+                                    )
+                            )
+                    ),
+                "stopReason",
+                "tool_use"
+            );
+
+        ModelTensorOutput modelTensorOutput2 = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(responseData2).build()))
+                            .build()
+                    )
+            )
+            .build();
+
+        Map<String, String> output2 = AgentUtils
+            .parseLLMOutput(parameters, modelTensorOutput2, null, Set.of("IndexMappingTool"), new ArrayList<>(), null);
+
+        Assert.assertEquals("", output2.get(THOUGHT));
+        Assert.assertEquals("IndexMappingTool", output2.get(ACTION));
+        Assert.assertEquals("{\"index\":[\"test_index\"]}", output2.get(ACTION_INPUT));
+        Assert.assertEquals("tool_2", output2.get(TOOL_CALL_ID));
+
+        // Test case 3: Response containing only text
+        Map<String, Object> responseData3 = Map
+            .of("output", Map.of("message", Map.of("content", List.of(Map.of("text", "This is a test response")))), "stopReason", "stop");
+
+        ModelTensorOutput modelTensorOutput3 = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(responseData3).build()))
+                            .build()
+                    )
+            )
+            .build();
+
+        Map<String, String> output3 = AgentUtils.parseLLMOutput(parameters, modelTensorOutput3, null, Set.of(), new ArrayList<>(), null);
+
+        Assert.assertNull(output3.get(ACTION));
+        Assert.assertNull(output3.get(ACTION_INPUT));
+        Assert.assertNull(output3.get(TOOL_CALL_ID));
+        Assert.assertTrue(output3.get(FINAL_ANSWER).contains("This is a test response"));
+    }
+
+    @Test
+    public void testParseLLMOutputWithDeepseekFormat() {
+        Map<String, String> parameters = Map
+            .of(
+                LLM_RESPONSE_FILTER,
+                "$.output.message.content[0].text",
+                TOOL_CALLS_PATH,
+                "_llm_response.tool_calls",
+                TOOL_CALLS_TOOL_NAME,
+                "tool_name",
+                TOOL_CALLS_TOOL_INPUT,
+                "input",
+                TOOL_CALL_ID_PATH,
+                "id",
+                LLM_FINISH_REASON_PATH,
+                "_llm_response.stop_reason",
+                LLM_FINISH_REASON_TOOL_USE,
+                "tool_use"
+            );
+
+        // Test case 1: Response containing both text and tool use
+        Map<String, Object> responseData1 = Map
+            .of(
+                "output",
+                Map
+                    .of(
+                        "message",
+                        Map
+                            .of(
+                                "content",
+                                List
+                                    .of(
+                                        Map
+                                            .of(
+                                                "text",
+                                                "{\"stop_reason\": \"tool_use\", \"tool_calls\": [{\"id\":\"tool_1\",\"tool_name\":\"ListIndexTool\",\"input\": {\"indices\":[]}}]}"
+                                            )
+                                    )
+                            )
+                    )
+            );
+
+        ModelTensorOutput modelTensorOutput1 = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(responseData1).build()))
+                            .build()
+                    )
+            )
+            .build();
+
+        Map<String, String> output1 = AgentUtils
+            .parseLLMOutput(parameters, modelTensorOutput1, null, Set.of("ListIndexTool"), new ArrayList<>(), null);
+
+        Assert.assertEquals("", output1.get(THOUGHT));
+        Assert.assertEquals("ListIndexTool", output1.get(ACTION));
+        Assert.assertEquals("{\"indices\":[]}", output1.get(ACTION_INPUT));
+        Assert.assertEquals("tool_1", output1.get(TOOL_CALL_ID));
+
+        // Test case 2: Response containing only tool use
+        Map<String, Object> responseData2 = Map
+            .of(
+                "output",
+                Map
+                    .of(
+                        "message",
+                        Map
+                            .of(
+                                "content",
+                                List
+                                    .of(
+                                        Map
+                                            .of(
+                                                "text",
+                                                "{\"stop_reason\": \"tool_use\", \"tool_calls\": [{\"id\":\"tool_2\",\"tool_name\":\"IndexMappingTool\",\"input\": {\"index\":[\"test_index\"]}}]}"
+                                            )
+                                    )
+                            )
+                    )
+            );
+
+        ModelTensorOutput modelTensorOutput2 = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(responseData2).build()))
+                            .build()
+                    )
+            )
+            .build();
+
+        Map<String, String> output2 = AgentUtils
+            .parseLLMOutput(parameters, modelTensorOutput2, null, Set.of("IndexMappingTool"), new ArrayList<>(), null);
+
+        Assert.assertEquals("", output2.get(THOUGHT));
+        Assert.assertEquals("IndexMappingTool", output2.get(ACTION));
+        Assert.assertEquals("{\"index\":[\"test_index\"]}", output2.get(ACTION_INPUT));
+        Assert.assertEquals("tool_2", output2.get(TOOL_CALL_ID));
+
+        // Test case 3: Response containing only text (final answer)
+        Map<String, Object> responseData3 = Map
+            .of(
+                "output",
+                Map
+                    .of(
+                        "message",
+                        Map
+                            .of(
+                                "content",
+                                List
+                                    .of(
+                                        Map
+                                            .of(
+                                                "text",
+                                                "{\"stop_reason\": \"end_turn\", \"message\": {\"content\":[{\"text\":\"This is a test response\"}]}}"
+                                            )
+                                    )
+                            )
+                    )
+            );
+
+        ModelTensorOutput modelTensorOutput3 = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(responseData3).build()))
+                            .build()
+                    )
+            )
+            .build();
+
+        Map<String, String> output3 = AgentUtils.parseLLMOutput(parameters, modelTensorOutput3, null, Set.of(), new ArrayList<>(), null);
+
+        Assert.assertNull(output3.get(ACTION));
+        Assert.assertNull(output3.get(ACTION_INPUT));
+        Assert.assertNull(output3.get(TOOL_CALL_ID));
+        Assert.assertTrue(output3.get(FINAL_ANSWER).contains("This is a test response"));
+    }
+
+    @Test
+    public void testAddToolsToFunctionCalling() {
+        Map<String, Tool> tools = new HashMap<>();
+        tools.put("Tool1", tool1);
+        tools.put("Tool2", tool2);
+
+        when(tool1.getName()).thenReturn("Tool1");
+        when(tool1.getDescription()).thenReturn("Description of Tool1");
+        when(tool1.getAttributes()).thenReturn(Map.of("param1", "value1"));
+
+        when(tool2.getName()).thenReturn("Tool2");
+        when(tool2.getDescription()).thenReturn("Description of Tool2");
+        when(tool2.getAttributes()).thenReturn(Map.of("param2", "value2"));
+
+        Map<String, String> parameters = new HashMap<>();
+        String toolTemplate = "{\"name\": \"${tool.name}\", \"description\": \"${tool.description}\"}";
+        parameters.put(TOOL_TEMPLATE, toolTemplate);
+
+        List<String> inputTools = Arrays.asList("Tool1", "Tool2");
+        String prompt = "test prompt";
+
+        String expectedTool1 = "{\"name\": \"Tool1\", \"description\": \"Description of Tool1\"}";
+        String expectedTool2 = "{\"name\": \"Tool2\", \"description\": \"Description of Tool2\"}";
+        String expectedTools = expectedTool1 + ", " + expectedTool2;
+
+        AgentUtils.addToolsToFunctionCalling(tools, parameters, inputTools, prompt);
+
+        assertEquals(expectedTools, parameters.get(TOOLS));
+    }
+
+    @Test
+    public void testAddToolsToFunctionCalling_ToolNotRegistered() {
+        Map<String, Tool> tools = new HashMap<>();
+        tools.put("Tool1", tool1);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(TOOL_TEMPLATE, "template");
+        List<String> inputTools = Arrays.asList("Tool1", "UnregisteredTool");
+        String prompt = "test prompt";
+
+        assertThrows(IllegalArgumentException.class, () -> AgentUtils.addToolsToFunctionCalling(tools, parameters, inputTools, prompt));
+    }
+
+    private static MLToolSpec buildTool(String name) {
+        return MLToolSpec.builder().type(McpSseTool.TYPE).name(name).description("mock").build();
+    }
+
+    private void stubGetConnector() {
+        threadContext = new ThreadContext(Settings.builder().build());
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+
+        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenAnswer(inv -> {
+            String json = "{\"_index\":\"i\",\"_id\":\"j\",\"found\":true,\"_source\":{}}";
+            XContentParser parser = XContentType.JSON.xContent().createParser(NamedXContentRegistry.EMPTY, null, json);
+
+            GetDataObjectResponse resp = mock(GetDataObjectResponse.class);
+            when(resp.parser()).thenReturn(parser);
+
+            CompletionStage<GetDataObjectResponse> stage = mock(CompletionStage.class);
+            when(stage.whenComplete(any())).thenAnswer(cbInv -> {
+                BiConsumer<GetDataObjectResponse, Throwable> cb = cbInv.getArgument(0);
+                cb.accept(resp, null);
+                return stage;
+            });
+
+            return stage;
+        });
+    }
+
+    // create + register a mock McpConnector with Connector.createConnector
+    private void mockMcpConnector(MockedStatic<Connector> connectorStatic) {
+        McpConnector mockConnector = mock(McpConnector.class);
+        when(mockConnector.getProtocol()).thenReturn("mcp_sse");
+        doNothing().when(mockConnector).decrypt(anyString(), any(), anyString());
+        connectorStatic.when(() -> Connector.createConnector(any(XContentParser.class))).thenReturn(mockConnector);
+    }
+
+    // create a mock MLAgent with connector-config JSON
+    private MLAgent mockAgent(String json, String tenant) {
+        MLAgent mockAgent = mock(MLAgent.class);
+        when(mockAgent.getParameters()).thenReturn(Map.of(MCP_CONNECTORS_FIELD, json));
+        when(mockAgent.getTenantId()).thenReturn(tenant);
+        return mockAgent;
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_NoMcpJsonConfig() {
+        when(mlAgent.getParameters()).thenReturn(null);
+
+        ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+        AgentUtils.getMcpToolSpecs(mlAgent, client, sdkClient, encryptor, listener);
+
+        verify(listener).onResponse(Collections.emptyList());
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_SingleConnectorSuccess() throws Exception {
+        stubGetConnector();
+        List<MLToolSpec> expected = List.of(buildTool("Demo"));
+
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            // mock McpConnector, McpConnectorExecutor, agent, and listener
+            mockMcpConnector(connStatic);
+            McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenReturn(expected);
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            MLAgent mlAgent = mockAgent("[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]", "tenant");
+            ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+
+            // run and verify
+            AgentUtils.getMcpToolSpecs(mlAgent, client, sdkClient, null, listener);
+            verify(listener).onResponse(expected);
+        }
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_ToolFilterApplied() throws Exception {
+        stubGetConnector();
+        List<MLToolSpec> repo = List.of(buildTool("FilterTool"), buildTool("TempTool"));
+        List<MLToolSpec> expected = List.of(buildTool("FilterTool"));
+
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            // mock McpConnector, McpConnectorExecutor, agent, and listener
+            mockMcpConnector(connStatic);
+
+            McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenReturn(repo);
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            String mcpJsonConfig = "[{\""
+                + MCP_CONNECTOR_ID_FIELD
+                + "\":\"c1\",\""
+                + TOOL_FILTERS_FIELD
+                + "\":[\"^Filter.*\", \"SecondDemoFilter\"]}]";
+            MLAgent agent = mockAgent(mcpJsonConfig, "tenant");
+
+            ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+
+            // run and verify
+            AgentUtils.getMcpToolSpecs(agent, client, sdkClient, null, listener);
+            verify(listener).onResponse(expected);
+        }
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_MultipleConnectorsMerged() throws Exception {
+        stubGetConnector();                                  // now safe
+
+        List<MLToolSpec> aTools = List.of(buildTool("A1"));
+        List<MLToolSpec> bTools = List.of(buildTool("B1"), buildTool("B2"));
+        List<MLToolSpec> expected = new ArrayList<>();
+        expected.addAll(aTools);
+        expected.addAll(bTools);
+
+        try (
+            MockedStatic<Connector> connStatic = mockStatic(Connector.class);
+            MockedStatic<MLEngineClassLoader> loadStatic = mockStatic(MLEngineClassLoader.class)
+        ) {
+            // mock McpConnector, McpConnectorExecutor, agent, and listener
+            mockMcpConnector(connStatic);
+
+            McpConnectorExecutor exec = mock(McpConnectorExecutor.class);
+            when(exec.getMcpToolSpecs()).thenReturn(aTools, bTools);
+            loadStatic.when(() -> MLEngineClassLoader.initInstance(anyString(), any(), any())).thenReturn(exec);
+
+            String mcpJsonConfig = "[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"A\"}," + "{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"B\"}]";
+            MLAgent agent = mockAgent(mcpJsonConfig, "tenant");
+
+            ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+
+            // run and verify
+            AgentUtils.getMcpToolSpecs(agent, client, sdkClient, null, listener);
+            verify(listener).onResponse(expected);
+        }
+    }
+
+    @Test
+    public void testGetMcpToolSpecs_NonMcpConnectorReturnsEmpty() throws Exception {
+        stubGetConnector();
+        try (MockedStatic<Connector> connStatic = mockStatic(Connector.class)) {
+
+            connStatic.when(() -> Connector.createConnector(any(XContentParser.class))).thenReturn(mock(AwsConnector.class));
+            MLAgent agent = mockAgent("[{\"" + MCP_CONNECTOR_ID_FIELD + "\":\"c1\"}]", "tenant");
+
+            ActionListener<List<MLToolSpec>> listener = mock(ActionListener.class);
+            AgentUtils.getMcpToolSpecs(agent, client, sdkClient, null, listener);
+
+            verify(listener).onResponse(Collections.emptyList());
+        }
+    }
+
     private void verifyConstructToolParams(String question, String actionInput, Consumer<Map<String, String>> verify) {
         Map<String, Tool> tools = Map.of("tool1", tool1);
         Map<String, MLToolSpec> toolSpecMap = Map
@@ -703,5 +1413,256 @@ public class AgentUtilsTest {
         String action = "tool1";
         Map<String, String> toolParams = AgentUtils.constructToolParams(tools, toolSpecMap, question, lastActionInput, action, actionInput);
         verify.accept(toolParams);
+    }
+
+    @Test
+    public void testParseLLMOutput_WithExcludePath() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(LLM_RESPONSE_EXCLUDE_PATH, "[\"$.exclude_field\"]");
+
+        Map<String, Object> dataAsMap = new HashMap<>();
+        dataAsMap.put("exclude_field", "should be excluded");
+        dataAsMap.put("keep_field", "should be kept");
+
+        ModelTensorOutput modelTensorOutput = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(dataAsMap).build()))
+                            .build()
+                    )
+            )
+            .build();
+
+        Map<String, String> output = AgentUtils.parseLLMOutput(parameters, modelTensorOutput, null, Set.of(), new ArrayList<>(), null);
+
+        Assert.assertTrue(output.containsKey(THOUGHT_RESPONSE));
+        Assert.assertFalse(output.get(THOUGHT_RESPONSE).contains("exclude_field"));
+        Assert.assertTrue(output.get(THOUGHT_RESPONSE).contains("keep_field"));
+    }
+
+    @Test
+    public void testParseLLMOutput_EmptyDataAsMap() {
+        Map<String, Object> dataAsMap = new HashMap<>();
+        ModelTensorOutput modelTensorOutput = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(dataAsMap).build()))
+                            .build()
+                    )
+            )
+            .build();
+
+        Map<String, String> output = AgentUtils.parseLLMOutput(new HashMap<>(), modelTensorOutput, null, Set.of(), new ArrayList<>(), null);
+
+        Assert.assertTrue(output.containsKey(THOUGHT_RESPONSE));
+        Assert.assertEquals("{}", output.get(THOUGHT_RESPONSE));
+    }
+
+    @Test
+    public void testParseLLMOutput_ToolUse() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(TOOL_CALLS_PATH, "$.tool_calls");
+        parameters.put(TOOL_CALLS_TOOL_NAME, "name");
+        parameters.put(TOOL_CALLS_TOOL_INPUT, "input");
+        parameters.put(TOOL_CALL_ID_PATH, "id");
+        parameters.put(LLM_RESPONSE_FILTER, "$.response");
+        parameters.put(LLM_FINISH_REASON_PATH, "$.finish_reason");
+        parameters.put(LLM_FINISH_REASON_TOOL_USE, "tool_use");
+
+        Map<String, Object> dataAsMap = new HashMap<>();
+        dataAsMap.put("tool_calls", List.of(Map.of("name", "test_tool", "input", "test_input", "id", "test_id")));
+        dataAsMap.put("response", "test response");
+        dataAsMap.put("finish_reason", "tool_use");
+
+        ModelTensorOutput modelTensorOutput = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(dataAsMap).build()))
+                            .build()
+                    )
+            )
+            .build();
+
+        Map<String, String> output = AgentUtils
+            .parseLLMOutput(parameters, modelTensorOutput, null, Set.of("test_tool"), new ArrayList<>(), null);
+
+        Assert.assertEquals("test_tool", output.get(ACTION));
+        Assert.assertEquals("test_input", output.get(ACTION_INPUT));
+        Assert.assertEquals("test_id", output.get(TOOL_CALL_ID));
+    }
+
+    @Test
+    public void testParseLLMOutput_WithFunctionCalling() {
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(TOOL_CALLS_PATH, "$.tool_calls");
+        parameters.put(TOOL_CALLS_TOOL_NAME, "name");
+        parameters.put(TOOL_CALLS_TOOL_INPUT, "input");
+        parameters.put(TOOL_CALL_ID_PATH, "id");
+        parameters.put(LLM_RESPONSE_FILTER, "$.response");
+        parameters.put(LLM_FINISH_REASON_PATH, "$.finish_reason");
+        parameters.put(LLM_FINISH_REASON_TOOL_USE, "tool_use");
+
+        Map<String, Object> dataAsMap = new HashMap<>();
+        dataAsMap
+            .put(
+                "output",
+                Map
+                    .of(
+                        "message",
+                        Map
+                            .of(
+                                "content",
+                                List
+                                    .of(
+                                        Map.of("text", "test"),
+                                        Map.of("toolUse", Map.of("name", "test_tool", "input", "test_input", "toolUseId", "test_id"))
+                                    )
+                            )
+                    )
+            );
+        dataAsMap.put("stopReason", "tool_use");
+
+        ModelTensorOutput modelTensorOutput = ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").dataAsMap(dataAsMap).build()))
+                            .build()
+                    )
+            )
+            .build();
+
+        FunctionCalling functionCalling = FunctionCallingFactory.create(LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE);
+        Assert.assertNotNull(functionCalling);
+        functionCalling.configure(parameters);
+
+        Map<String, String> output = AgentUtils
+            .parseLLMOutput(parameters, modelTensorOutput, null, Set.of("test_tool"), new ArrayList<>(), functionCalling);
+
+        Assert.assertEquals("test_tool", output.get(ACTION));
+        Assert.assertEquals("test_input", output.get(ACTION_INPUT));
+        Assert.assertEquals("test_id", output.get(TOOL_CALL_ID));
+    }
+
+    @Test
+    public void testRemoveJsonPath_WithStringPaths() {
+        Map<String, Object> json = new HashMap<>();
+        json.put("field1", "value1");
+        json.put("field2", "value2");
+        json.put("nested", Map.of("field3", "value3"));
+        String excludePaths = "[\"$.field1\", \"$.nested.field3\"]";
+        Map<String, ?> result = AgentUtils.removeJsonPath(json, excludePaths, false);
+        Assert.assertFalse(result.containsKey("field1"));
+        Assert.assertTrue(result.containsKey("field2"));
+        Assert.assertTrue(result.containsKey("nested"));
+        Assert.assertFalse(((Map<?, ?>) result.get("nested")).containsKey("field3"));
+    }
+
+    @Test
+    public void testRemoveJsonPath_WithListPaths() {
+        Map<String, Object> json = new HashMap<>();
+        json.put("field1", "value1");
+        json.put("field2", "value2");
+        json.put("nested", Map.of("field3", "value3"));
+        List<String> excludePaths = java.util.Arrays.asList("$.field1", "$.nested.field3");
+        Map<String, ?> result = AgentUtils.removeJsonPath(json, excludePaths, false);
+        Assert.assertFalse(result.containsKey("field1"));
+        Assert.assertTrue(result.containsKey("field2"));
+        Assert.assertTrue(result.containsKey("nested"));
+        Assert.assertFalse(((Map<?, ?>) result.get("nested")).containsKey("field3"));
+    }
+
+    @Test
+    public void testRemoveJsonPath_InPlace() {
+        Map<String, Object> json = new HashMap<>();
+        json.put("field1", "value1");
+        json.put("field2", "value2");
+        json.put("nested", new HashMap<>(Map.of("field3", "value3")));
+        List<String> excludePaths = java.util.Arrays.asList("$.field1", "$.nested.field3");
+        Map<String, ?> result = AgentUtils.removeJsonPath(json, excludePaths, true);
+        Assert.assertFalse(json.containsKey("field1"));
+        Assert.assertTrue(json.containsKey("field2"));
+        Assert.assertTrue(json.containsKey("nested"));
+        Assert.assertFalse(((Map<?, ?>) json.get("nested")).containsKey("field3"));
+        Assert.assertSame(json, result);
+    }
+
+    @Test
+    public void testRemoveJsonPath_WithInvalidJsonPaths() {
+        Map<String, Object> json = new HashMap<>();
+        json.put("field1", "value1");
+        String invalidJsonPaths = "invalid json";
+        Assert.assertThrows(JsonSyntaxException.class, () -> AgentUtils.removeJsonPath(json, invalidJsonPaths, false));
+    }
+
+    @Test
+    public void testSubstitute() {
+        String template = "Hello ${parameters.name}! Welcome to ${parameters.place}.";
+        Map<String, String> params = new HashMap<>();
+        params.put("name", "AI");
+        params.put("place", "OpenSearch");
+        String prefix = "${parameters.";
+
+        String result = AgentUtils.substitute(template, params, prefix);
+
+        Assert.assertEquals("Hello AI! Welcome to OpenSearch.", result);
+    }
+
+    @Test
+    public void testCreateTool_Success() {
+        Map<String, Tool.Factory> toolFactories = new HashMap<>();
+        Tool.Factory factory = mock(Tool.Factory.class);
+        Tool mockTool = mock(Tool.class);
+        when(factory.create(any())).thenReturn(mockTool);
+        toolFactories.put("test_tool", factory);
+
+        MLToolSpec toolSpec = MLToolSpec
+            .builder()
+            .type("test_tool")
+            .name("TestTool")
+            .description("Original description")
+            .parameters(Map.of("param1", "value1"))
+            .runtimeResources(Map.of("resource1", "value2"))
+            .build();
+
+        Map<String, String> params = new HashMap<>();
+        params.put("TestTool.param2", "value3");
+        params.put("TestTool.description", "Custom description");
+
+        AgentUtils.createTool(toolFactories, params, toolSpec, "test_tenant");
+
+        verify(factory).create(argThat(toolParamsMap -> {
+            Map<String, Object> toolParams = (Map<String, Object>) toolParamsMap;
+            return toolParams.get("param1").equals("value1")
+                && toolParams.get("param2").equals("value3")
+                && toolParams.get("resource1").equals("value2")
+                && toolParams.get(TENANT_ID_FIELD).equals("test_tenant");
+        }));
+
+        verify(mockTool).setName("TestTool");
+        verify(mockTool).setDescription("Custom description");
+    }
+
+    @Test
+    public void testCreateTool_ToolNotFound() {
+        Map<String, Tool.Factory> toolFactories = new HashMap<>();
+        MLToolSpec toolSpec = MLToolSpec.builder().type("non_existent_tool").name("TestTool").build();
+
+        assertThrows(IllegalArgumentException.class, () -> AgentUtils.createTool(toolFactories, new HashMap<>(), toolSpec, "test_tenant"));
     }
 }

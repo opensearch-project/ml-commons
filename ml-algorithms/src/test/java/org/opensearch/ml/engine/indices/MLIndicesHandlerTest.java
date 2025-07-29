@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.META;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_JOBS_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_MESSAGE_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_META_INDEX;
 import static org.opensearch.ml.common.CommonValue.SCHEMA_VERSION_FIELD;
@@ -211,6 +212,38 @@ public class MLIndicesHandlerTest {
         }).when(indicesAdminClient).create(any(), any());
         ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
         indicesHandler.initMLConnectorIndex(listener);
+
+        verify(indicesAdminClient).create(isA(CreateIndexRequest.class), any());
+        verify(listener).onResponse(argumentCaptor.capture());
+        assertEquals(true, argumentCaptor.getValue());
+    }
+
+    @Test
+    public void initMLJobsIndex() {
+        ActionListener<Boolean> listener = mock(ActionListener.class);
+        doAnswer(invocation -> {
+            ActionListener<AcknowledgedResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(new AcknowledgedResponse(true));
+            return null;
+        }).when(indicesAdminClient).putMapping(any(), any());
+        ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
+        indicesHandler.initMLJobsIndex(listener);
+
+        verify(listener).onResponse(argumentCaptor.capture());
+        assertEquals(true, argumentCaptor.getValue());
+    }
+
+    @Test
+    public void initMLJobsIndexNoIndex() {
+        ActionListener<Boolean> listener = mock(ActionListener.class);
+        when(metadata.hasIndex(anyString())).thenReturn(false);
+        doAnswer(invocation -> {
+            ActionListener<CreateIndexResponse> actionListener = invocation.getArgument(1);
+            actionListener.onResponse(new CreateIndexResponse(true, true, ML_JOBS_INDEX));
+            return null;
+        }).when(indicesAdminClient).create(any(), any());
+        ArgumentCaptor<Boolean> argumentCaptor = ArgumentCaptor.forClass(Boolean.class);
+        indicesHandler.initMLJobsIndex(listener);
 
         verify(indicesAdminClient).create(isA(CreateIndexRequest.class), any());
         verify(listener).onResponse(argumentCaptor.capture());

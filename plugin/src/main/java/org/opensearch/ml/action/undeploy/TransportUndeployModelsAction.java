@@ -40,6 +40,7 @@ import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.ml.cluster.DiscoveryNodeHelper;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelNodesRequest;
@@ -50,7 +51,6 @@ import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsResponse;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.RestActionUtils;
@@ -129,12 +129,14 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         String[] modelIds = undeployModelsRequest.getModelIds();
         String tenantId = undeployModelsRequest.getTenantId();
         String[] targetNodeIds = undeployModelsRequest.getNodeIds();
+        log.info("Executing undeploy model action for modelIds: {}", Arrays.toString(modelIds));
 
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, listener)) {
             return;
         }
 
         if (modelIds == null) {
+            log.error("No modelIds provided in undeploy.");
             listener.onFailure(new IllegalArgumentException("Must set specific model ids to undeploy"));
             return;
         }
@@ -186,10 +188,12 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
         String tenantId,
         ActionListener<MLUndeployModelsResponse> listener
     ) {
+        log.debug("Initiating undeploy on nodes: {}, for modelIds: {}", Arrays.toString(targetNodeIds), Arrays.toString(modelIds));
         MLUndeployModelNodesRequest mlUndeployModelNodesRequest = new MLUndeployModelNodesRequest(targetNodeIds, modelIds);
         mlUndeployModelNodesRequest.setTenantId(tenantId);
 
         client.execute(MLUndeployModelAction.INSTANCE, mlUndeployModelNodesRequest, ActionListener.wrap(response -> {
+            log.info("Undeploy response received from nodes");
             /*
              * The method TransportUndeployModelsAction.processUndeployModelResponseAndUpdate(...) performs
              * undeploy action of models by removing the models from the nodes cache and updating the index when it's able to find it.
@@ -213,9 +217,11 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
                 return modelCacheMissForModelIds;
             });
             if (response.getNodes().isEmpty() || modelNotFoundInNodesCache) {
+                log.warn("No node found running the model(s): {}", Arrays.toString(modelIds));
                 bulkSetModelIndexToUndeploy(modelIds, listener, response);
                 return;
             }
+            log.info("Successfully undeployed model(s) from nodes: {}", Arrays.toString(modelIds));
             listener.onResponse(new MLUndeployModelsResponse(response));
         }, listener::onFailure));
     }
@@ -354,7 +360,8 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
                     }
                 } else {
                     try {
-                        SearchResponse searchResponse = SearchResponse.fromXContent(r.parser());
+                        SearchResponse searchResponse = r.searchResponse();
+                        // Parsing failure would cause NPE on next line
                         log.info("Model Index search complete: {}", searchResponse.getHits().getTotalHits());
                         listener.onResponse(searchResponse);
                     } catch (Exception e) {

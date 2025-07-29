@@ -8,13 +8,11 @@ package org.opensearch.ml.engine.tools;
 import static org.opensearch.ml.common.CommonValue.*;
 
 import java.io.IOException;
-import java.security.AccessController;
-import java.security.PrivilegedExceptionAction;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 
+import org.apache.commons.lang3.StringUtils;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
@@ -27,13 +25,15 @@ import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
 import org.opensearch.ml.common.transport.model.MLModelSearchAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupSearchAction;
-import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.transport.client.Client;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonSyntaxException;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -61,6 +61,10 @@ public class SearchIndexTool implements Tool {
         + " Valid value:\\n{\\\"query\\\":{\\\"match\\\":{\\\"population_description\\\":\\\"seattle 2023 population\\\"}},\\\"size\\\":2,\\\"_source\\\":\\\"population_description\\\"}\\n"
         + "Invalid value: \\n{\\\"match\\\":{\\\"population_description\\\":\\\"seattle 2023 population\\\"}}\\nThe value is invalid because the match not wrapped by \\\"query\\\".\","
         + "\"additionalProperties\":false}},\"required\":[\"index\",\"query\"],\"additionalProperties\":false}";
+
+    private static final Gson GSON = new GsonBuilder().serializeSpecialFloatingPointValues().create();
+
+    public static final Map<String, Object> DEFAULT_ATTRIBUTES = Map.of(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA, STRICT_FIELD, false);
 
     private String name = TYPE;
     private Map<String, Object> attributes;
@@ -91,7 +95,20 @@ public class SearchIndexTool implements Tool {
 
     @Override
     public boolean validate(Map<String, String> parameters) {
-        return parameters != null && parameters.containsKey(INPUT_FIELD) && parameters.get(INPUT_FIELD) != null;
+        if (parameters == null || parameters.isEmpty()) {
+            return false;
+        }
+        boolean argumentsFromInput = parameters.containsKey(INPUT_FIELD) && !StringUtils.isEmpty(parameters.get(INPUT_FIELD));
+        boolean argumentsFromParameters = parameters.containsKey(INDEX_FIELD)
+            && parameters.containsKey(QUERY_FIELD)
+            && !StringUtils.isEmpty(parameters.get(INDEX_FIELD))
+            && !StringUtils.isEmpty(parameters.get(QUERY_FIELD));
+        boolean validRequest = argumentsFromInput || argumentsFromParameters;
+        if (!validRequest) {
+            log.error("SearchIndexTool's two parameter: index and query are required!");
+            return false;
+        }
+        return true;
     }
 
     private SearchRequest getSearchRequest(String index, String query) throws IOException {
@@ -114,13 +131,36 @@ public class SearchIndexTool implements Tool {
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
         try {
             String input = parameters.get(INPUT_FIELD);
-            JsonObject jsonObject = StringUtils.gson.fromJson(input, JsonObject.class);
-            String index = Optional.ofNullable(jsonObject).map(x -> x.get(INDEX_FIELD)).map(JsonElement::getAsString).orElse(null);
-            String query = Optional.ofNullable(jsonObject).map(x -> x.get(QUERY_FIELD)).map(JsonElement::toString).orElse(null);
-            if (index == null || query == null) {
-                listener.onFailure(new IllegalArgumentException("SearchIndexTool's two parameter: index and query are required!"));
+            String index = null;
+            String query = null;
+            if (!StringUtils.isEmpty(input)) {
+                try {
+                    JsonObject jsonObject = GSON.fromJson(input, JsonObject.class);
+                    if (jsonObject != null && jsonObject.has(INDEX_FIELD) && jsonObject.has(QUERY_FIELD)) {
+                        index = jsonObject.get(INDEX_FIELD).getAsString();
+                        JsonElement queryElement = jsonObject.get(QUERY_FIELD);
+                        query = queryElement == null ? null : queryElement.toString();
+                    }
+                } catch (JsonSyntaxException e) {
+                    log.error("Invalid JSON input: {}", input, e);
+                }
+            }
+            if (StringUtils.isEmpty(index)) {
+                index = parameters.get(INDEX_FIELD);
+            }
+            if (StringUtils.isEmpty(query)) {
+                query = parameters.get(QUERY_FIELD);
+            }
+            if (StringUtils.isEmpty(index) || StringUtils.isEmpty(query)) {
+                listener
+                    .onFailure(
+                        new IllegalArgumentException(
+                            "SearchIndexTool's two parameters: index and query are required and should in valid format!"
+                        )
+                    );
                 return;
             }
+
             SearchRequest searchRequest = getSearchRequest(index, query);
 
             ActionListener<SearchResponse> actionListener = ActionListener.<SearchResponse>wrap(r -> {
@@ -129,10 +169,8 @@ public class SearchIndexTool implements Tool {
                 if (hits != null && hits.length > 0) {
                     StringBuilder contextBuilder = new StringBuilder();
                     for (SearchHit hit : hits) {
-                        String doc = AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> {
-                            Map<String, Object> docContent = processResponse(hit);
-                            return StringUtils.gson.toJson(docContent);
-                        });
+                        Map<String, Object> docContent = processResponse(hit);
+                        String doc = GSON.toJson(docContent);
                         contextBuilder.append(doc).append("\n");
                     }
                     listener.onResponse((T) contextBuilder.toString());
@@ -207,6 +245,11 @@ public class SearchIndexTool implements Tool {
         @Override
         public String getDefaultVersion() {
             return null;
+        }
+
+        @Override
+        public Map<String, Object> getDefaultAttributes() {
+            return DEFAULT_ATTRIBUTES;
         }
     }
 }

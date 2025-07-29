@@ -58,7 +58,7 @@ public class OpenaiV1ChatCompletionsFunctionCallingTests {
     public void configure() {
         Map<String, String> parameters = new HashMap<>();
         functionCalling.configure(parameters);
-        Assert.assertEquals(1, parameters.size());
+        Assert.assertEquals(16, parameters.size());
         Assert.assertEquals(OPENAI_V1_CHAT_COMPLETION_TEMPLATE, parameters.get("tool_template"));
     }
 
@@ -76,7 +76,13 @@ public class OpenaiV1ChatCompletionsFunctionCallingTests {
     @Test
     public void supply() {
         List<LLMMessage> messages = functionCalling
-            .supply(List.of(ImmutableMap.of(TOOL_CALL_ID, "test_tool_call_id", TOOL_RESULT, "test result for openai v1")));
+            .supply(
+                List
+                    .of(
+                        ImmutableMap
+                            .of(TOOL_CALL_ID, "test_tool_call_id", TOOL_RESULT, ImmutableMap.of("text", "test result for openai v1"))
+                    )
+            );
         Assert.assertEquals(1, messages.size());
         OpenaiMessage message = (OpenaiMessage) messages.get(0);
         Assert.assertEquals("tool", message.getRole());

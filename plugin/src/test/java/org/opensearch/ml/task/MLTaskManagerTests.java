@@ -15,14 +15,15 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.CommonValue.ML_JOBS_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
-import static org.opensearch.ml.common.CommonValue.TASK_POLLING_JOB_INDEX;
 
 import java.io.IOException;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 
@@ -47,6 +48,7 @@ import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
+import org.opensearch.ml.jobs.MLJobType;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.test.OpenSearchTestCase;
@@ -348,6 +350,12 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
 
     public void testStartTaskPollingJob() throws IOException {
         doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLJobsIndex(any());
+
+        doAnswer(invocation -> {
             ActionListener<IndexResponse> listener = invocation.getArgument(1);
             listener.onResponse(indexResponse);
             return null;
@@ -359,12 +367,18 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
         verify(client).index(indexRequestCaptor.capture(), any());
 
         IndexRequest capturedRequest = indexRequestCaptor.getValue();
-        assertEquals(TASK_POLLING_JOB_INDEX, capturedRequest.index());
+        assertEquals(ML_JOBS_INDEX, capturedRequest.index());
         assertNotNull(capturedRequest.id());
         assertEquals(WriteRequest.RefreshPolicy.IMMEDIATE, capturedRequest.getRefreshPolicy());
     }
 
     public void testStartTaskPollingJob_IndexException() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLJobsIndex(any());
+
         String errorMessage = "Failed to index task polling job";
         doAnswer(invocation -> {
             ActionListener<IndexResponse> listener = invocation.getArgument(1);
@@ -375,5 +389,84 @@ public class MLTaskManagerTests extends OpenSearchTestCase {
         mlTaskManager.startTaskPollingJob();
 
         verify(client).index(any(), any());
+    }
+
+    public void testStartStatsCollectorJob() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLJobsIndex(any());
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(), any());
+
+        mlTaskManager.startStatsCollectorJob();
+
+        ArgumentCaptor<IndexRequest> indexRequestCaptor = ArgumentCaptor.forClass(IndexRequest.class);
+        verify(client).index(indexRequestCaptor.capture(), any());
+
+        IndexRequest capturedRequest = indexRequestCaptor.getValue();
+        assertEquals(ML_JOBS_INDEX, capturedRequest.index());
+        assertEquals(MLJobType.STATS_COLLECTOR.name(), capturedRequest.id());
+        assertEquals(WriteRequest.RefreshPolicy.IMMEDIATE, capturedRequest.getRefreshPolicy());
+    }
+
+    public void testStartStatsCollectorJob_IndexException() throws IOException {
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLJobsIndex(any());
+
+        String errorMessage = "Failed to index stats collector job";
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new RuntimeException(errorMessage));
+            return null;
+        }).when(client).index(any(), any());
+
+        mlTaskManager.startStatsCollectorJob();
+
+        verify(client).index(any(), any());
+    }
+
+    public void testUpdateMLTaskDirectly_NullTaskId() {
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+        mlTaskManager.updateMLTaskDirectly(null, new HashMap<>(), listener);
+        verify(listener).onFailure(any(IllegalArgumentException.class));
+    }
+
+    public void testUpdateMLTaskDirectly_InvalidStateType() {
+        Map<String, Object> updatedFields = new HashMap<>();
+        updatedFields.put("state", "INVALID_STATE");
+
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+        mlTaskManager.updateMLTaskDirectly("task_id", updatedFields, listener);
+        verify(listener).onFailure(any(IllegalArgumentException.class));
+    }
+
+    public void testUpdateMLTaskDirectly_TaskDoneState() {
+        Map<String, Object> updatedFields = new HashMap<>();
+        updatedFields.put("state", MLTaskState.COMPLETED);
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> actionListener = invocation.getArgument(1);
+            UpdateRequest request = invocation.getArgument(0);
+            // Verify retry policy is set for task done state
+            assertEquals(3, request.retryOnConflict());
+
+            ShardId shardId = new ShardId(new Index(ML_TASK_INDEX, "_na_"), 0);
+            UpdateResponse response = new UpdateResponse(shardId, "task_id", 1, 1, 1, DocWriteResponse.Result.CREATED);
+            actionListener.onResponse(response);
+            return null;
+        }).when(client).update(any(UpdateRequest.class), any());
+
+        ActionListener<UpdateResponse> listener = mock(ActionListener.class);
+        mlTaskManager.updateMLTaskDirectly("task_id", updatedFields, listener);
+        verify(listener).onResponse(any(UpdateResponse.class));
     }
 }

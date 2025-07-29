@@ -26,10 +26,10 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.agent.MLAgentGetAction;
 import org.opensearch.ml.common.transport.agent.MLAgentGetRequest;
 import org.opensearch.ml.common.transport.agent.MLAgentGetResponse;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
@@ -109,7 +109,7 @@ public class GetAgentTransportAction extends HandledTransportAction<ActionReques
                     }
                 } else {
                     try {
-                        GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
+                        GetResponse gr = r.getResponse();
                         if (gr != null && gr.isExists()) {
                             try (
                                 XContentParser parser = jsonXContent

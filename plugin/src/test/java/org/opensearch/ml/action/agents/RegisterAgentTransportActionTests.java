@@ -8,13 +8,17 @@ package org.opensearch.ml.action.agents;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED;
+import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.EXECUTOR_AGENT_ID_FIELD;
 
 import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 
 import org.junit.Before;
@@ -33,14 +37,13 @@ import org.opensearch.commons.ConfigConstants;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentRequest;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.tasks.Task;
@@ -98,8 +101,7 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
         when(clusterService.getSettings()).thenReturn(settings);
-        when(this.clusterService.getClusterSettings())
-            .thenReturn(new ClusterSettings(settings, Set.of(CommonValue.ML_COMMONS_MCP_FEATURE_ENABLED)));
+        when(this.clusterService.getClusterSettings()).thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MCP_CONNECTOR_ENABLED)));
         transportRegisterAgentAction = new TransportRegisterAgentAction(
             transportService,
             actionFilters,
@@ -279,4 +281,89 @@ public class RegisterAgentTransportActionTests extends OpenSearchTestCase {
         assertNotNull(argumentCaptor.getValue());
     }
 
+    @Test
+    public void test_execute_registerAgent_PlanExecuteAndReflect_WithoutExecutorAgentId() {
+        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("tools", "[]");
+        parameters.put("memory", "{}");
+
+        LLMSpec llmSpec = new LLMSpec("test-model-id", new HashMap<>());
+
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("test_agent")
+            .type(MLAgentType.PLAN_EXECUTE_AND_REFLECT.name())
+            .description("Test agent for plan-execute-and-reflect")
+            .parameters(parameters)
+            .llm(llmSpec)
+            .build();
+        when(request.getMlAgent()).thenReturn(mlAgent);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLAgentIndex(any());
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> al = invocation.getArgument(1);
+            al.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(), any());
+
+        transportRegisterAgentAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<MLRegisterAgentResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterAgentResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+
+        MLRegisterAgentResponse response = argumentCaptor.getValue();
+        assertNotNull(response);
+        assertEquals("AGENT_ID", response.getAgentId());
+        verify(client, times(2)).index(any(), any());
+    }
+
+    @Test
+    public void test_execute_registerAgent_PlanExecuteAndReflect_WithExecutorAgentId() {
+        MLRegisterAgentRequest request = mock(MLRegisterAgentRequest.class);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("tools", "[]");
+        parameters.put("memory", "{}");
+        parameters.put(EXECUTOR_AGENT_ID_FIELD, "existing-executor-id");
+
+        LLMSpec llmSpec = new LLMSpec("test-model-id", new HashMap<>());
+
+        MLAgent mlAgent = MLAgent
+            .builder()
+            .name("test_agent")
+            .type(MLAgentType.PLAN_EXECUTE_AND_REFLECT.name())
+            .description("Test agent for plan-execute-and-reflect")
+            .parameters(parameters)
+            .llm(llmSpec)
+            .build();
+        when(request.getMlAgent()).thenReturn(mlAgent);
+
+        doAnswer(invocation -> {
+            ActionListener<Boolean> listener = invocation.getArgument(0);
+            listener.onResponse(true);
+            return null;
+        }).when(mlIndicesHandler).initMLAgentIndex(any());
+
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> al = invocation.getArgument(1);
+            al.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(), any());
+
+        transportRegisterAgentAction.doExecute(task, request, actionListener);
+
+        ArgumentCaptor<MLRegisterAgentResponse> argumentCaptor = ArgumentCaptor.forClass(MLRegisterAgentResponse.class);
+        verify(actionListener).onResponse(argumentCaptor.capture());
+
+        MLRegisterAgentResponse response = argumentCaptor.getValue();
+        assertNotNull(response);
+        assertEquals("AGENT_ID", response.getAgentId());
+
+        verify(client, times(1)).index(any(), any());
+    }
 }

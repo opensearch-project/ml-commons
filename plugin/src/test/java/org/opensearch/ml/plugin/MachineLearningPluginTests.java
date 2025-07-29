@@ -18,10 +18,12 @@
 package org.opensearch.ml.plugin;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -33,10 +35,18 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.opensearch.common.settings.Settings;
+import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.common.xcontent.json.JsonXContent;
+import org.opensearch.core.xcontent.DeprecationHandler;
+import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.jobscheduler.spi.JobDocVersion;
+import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.spi.MLCommonsExtension;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.tools.MLModelTool;
+import org.opensearch.ml.jobs.MLJobParameter;
+import org.opensearch.ml.jobs.MLJobRunner;
 import org.opensearch.ml.processor.MLInferenceSearchRequestProcessor;
 import org.opensearch.ml.processor.MLInferenceSearchResponseProcessor;
 import org.opensearch.ml.searchext.MLInferenceRequestParametersExtBuilder;
@@ -51,7 +61,7 @@ import org.opensearch.transport.client.Client;
 
 public class MachineLearningPluginTests {
 
-    MachineLearningPlugin plugin = new MachineLearningPlugin(Settings.EMPTY);
+    MachineLearningPlugin plugin = new MachineLearningPlugin();
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -144,5 +154,58 @@ public class MachineLearningPluginTests {
             MLModelTool.Factory.getInstance().getDefaultDescription(),
             plugin.externalToolFactories.get("MLModelTool").getDefaultDescription()
         );
+    }
+
+    @Test
+    public void testGetJobType() {
+        assertEquals(MachineLearningPlugin.ML_COMMONS_JOBS_TYPE, plugin.getJobType());
+    }
+
+    @Test
+    public void testGetJobIndex() {
+        assertEquals(CommonValue.ML_JOBS_INDEX, plugin.getJobIndex());
+    }
+
+    @Test
+    public void testGetJobRunner() {
+        assertTrue(plugin.getJobRunner() instanceof MLJobRunner);
+    }
+
+    @Test
+    public void testGetJobParser() {
+        assertNotNull(plugin.getJobParser());
+    }
+
+    @Test
+    public void testGetJobParserWithInvalidJson() throws IOException {
+        String invalidJson = "{ invalid json }";
+        XContentParser parser = JsonXContent.jsonXContent.createParser(null, null, invalidJson);
+        exceptionRule.expect(IOException.class);
+        plugin.getJobParser().parse(parser, "test_id", new JobDocVersion(1, 0, 0));
+    }
+
+    @Test
+    public void testGetJobParserWithValidJson() throws IOException {
+        String json = "{"
+            + "\"name\": \"testJob\","
+            + "\"enabled\": true,"
+            + "\"enabled_time\": 1672531200000,"
+            + "\"last_update_time\": 1672534800000,"
+            + "\"lock_duration_seconds\": 300,"
+            + "\"jitter\": 0.1"
+            + "}";
+
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(NamedXContentRegistry.EMPTY, DeprecationHandler.THROW_UNSUPPORTED_OPERATION, json);
+
+        MLJobParameter parsedJobParameter = (MLJobParameter) plugin.getJobParser().parse(parser, "test_id", new JobDocVersion(1, 0, 0));
+
+        assertEquals("testJob", parsedJobParameter.getName());
+        assertTrue(parsedJobParameter.isEnabled());
+        assertEquals(Long.valueOf(1672531200000L), Long.valueOf(parsedJobParameter.getEnabledTime().toEpochMilli()));
+        assertEquals(Long.valueOf(1672534800000L), Long.valueOf(parsedJobParameter.getLastUpdateTime().toEpochMilli()));
+        assertEquals(Long.valueOf(300L), Long.valueOf(parsedJobParameter.getLockDurationSeconds()));
+        assertEquals(Double.valueOf(0.1), Double.valueOf(parsedJobParameter.getJitter()), 0.0001);
     }
 }

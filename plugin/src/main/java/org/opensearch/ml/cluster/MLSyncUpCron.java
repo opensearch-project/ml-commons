@@ -38,6 +38,7 @@ import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.sync.MLSyncUpAction;
 import org.opensearch.ml.common.transport.sync.MLSyncUpInput;
 import org.opensearch.ml.common.transport.sync.MLSyncUpNodeResponse;
@@ -47,7 +48,6 @@ import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsAction;
 import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsRequest;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.remote.metadata.client.BulkDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
@@ -102,6 +102,7 @@ public class MLSyncUpCron implements Runnable {
         initMLConfig();
         if (!clusterService.state().metadata().indices().containsKey(ML_MODEL_INDEX)) {
             // no need to run sync up job if no model index
+            log.debug("Skipping sync up job - ML model index not found");
             return;
         }
         log.debug("ML sync job starts");
@@ -111,6 +112,7 @@ public class MLSyncUpCron implements Runnable {
 
         // gather running model/tasks on nodes
         client.execute(MLSyncUpAction.INSTANCE, gatherInfoRequest, ActionListener.wrap(r -> {
+            log.debug("Received sync up responses from nodes");
             List<MLSyncUpNodeResponse> responses = r.getNodes();
             if (r.failures() != null && !r.failures().isEmpty()) {
                 log
@@ -130,6 +132,7 @@ public class MLSyncUpCron implements Runnable {
             Map<String, Set<String>> expiredModelToNodes = new HashMap<>();
             for (MLSyncUpNodeResponse response : responses) {
                 String nodeId = response.getNode().getId();
+                log.debug("Processing sync response from node: {}", nodeId);
                 String[] expiredModelIds = response.getExpiredModelIds();
                 if (expiredModelIds != null && expiredModelIds.length > 0) {
                     Arrays
@@ -215,6 +218,7 @@ public class MLSyncUpCron implements Runnable {
         Map<String, Set<String>> deployingModels
     ) {
         String[] targetNodeIds = getAllNodes(clusterService);
+        log.debug("Sending requests to undeploy expired models: {}", expiredModels);
         MLUndeployModelsRequest mlUndeployModelsRequest = new MLUndeployModelsRequest(
             expiredModels.toArray(new String[expiredModels.size()]),
             targetNodeIds,
@@ -279,6 +283,7 @@ public class MLSyncUpCron implements Runnable {
     @VisibleForTesting
     void refreshModelState(Map<String, Set<String>> modelWorkerNodes, Map<String, Set<String>> deployingModels) {
         if (!updateModelStateSemaphore.tryAcquire()) {
+            log.debug("Model state refresh already in progress. Skipping this cycle.");
             return;
         }
         try {
@@ -324,7 +329,8 @@ public class MLSyncUpCron implements Runnable {
             sdkClient.searchDataObjectAsync(searchRequest).whenComplete((r, throwable) -> {
                 if (throwable == null) {
                     try {
-                        SearchResponse res = SearchResponse.fromXContent(r.parser());
+                        SearchResponse res = r.searchResponse();
+                        // Parsing failure would cause NPE on next line
                         SearchHit[] hits = res.getHits().getHits();
                         Map<String, String> tenantIds = new HashMap<>();
                         Map<String, MLModelState> newModelStates = new HashMap<>();

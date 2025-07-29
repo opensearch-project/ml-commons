@@ -1,9 +1,12 @@
 package org.opensearch.ml.common.transport.register;
 
 import static org.junit.Assert.*;
+import static org.opensearch.ml.common.utils.StringUtils.SAFE_INPUT_DESCRIPTION;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -12,6 +15,7 @@ import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.model.BaseModelConfig;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
@@ -22,13 +26,14 @@ public class MLRegisterModelRequestTest {
 
     @Before
     public void setUp() {
+        Map<String, Object> additionalConfig = new HashMap<>();
+        additionalConfig.put("space_type", "l2");
 
-        TextEmbeddingModelConfig config = TextEmbeddingModelConfig
-            .builder()
+        BaseModelConfig config = BaseModelConfig
+            .baseModelConfigBuilder()
             .modelType("testModelType")
             .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
-            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
-            .embeddingDimension(100)
+            .additionalConfig(additionalConfig)
             .build();
 
         mlRegisterModelInput = mlRegisterModelInput
@@ -63,7 +68,7 @@ public class MLRegisterModelRequestTest {
         assertTrue(request.getRegisterModelInput().isDeployModel());
         String[] modelNodeIds = request.getRegisterModelInput().getModelNodeIds();
         assertEquals("modelNodeIds", modelNodeIds[0]);
-        assertEquals("TEXT_EMBEDDING", config1.getWriteableName());
+        assertEquals("base", config1.getWriteableName());
     }
 
     @Test
@@ -81,13 +86,13 @@ public class MLRegisterModelRequestTest {
     }
 
     @Test
-    // MLRegisterModelInput check its parameters when created, so exception is not thrown here
     public void validate_Exception_NullMLModelName() {
         mlRegisterModelInput.setModelName(null);
         MLRegisterModelRequest request = MLRegisterModelRequest.builder().registerModelInput(mlRegisterModelInput).build();
 
-        assertNull(request.validate());
-        assertNull(request.getRegisterModelInput().getModelName());
+        ActionRequestValidationException exception = request.validate();
+        assertNotNull(exception);
+        assertEquals("Validation Failed: 1: Model name is required and cannot be null or blank;", exception.getMessage());
     }
 
     @Test
@@ -134,4 +139,60 @@ public class MLRegisterModelRequestTest {
         };
         MLRegisterModelRequest.fromActionRequest(actionRequest);
     }
+
+    @Test
+    public void validate_Exception_UnsafeModelName() {
+        TextEmbeddingModelConfig config = TextEmbeddingModelConfig
+            .builder()
+            .modelType("testModelType")
+            .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .embeddingDimension(100)
+            .build();
+
+        MLRegisterModelInput unsafeInput = MLRegisterModelInput
+            .builder()
+            .functionName(FunctionName.KMEANS)
+            .modelName("<script>bad</script>")  // unsafe
+            .version("version")
+            .url("url")
+            .modelGroupId("modelGroupId")
+            .modelFormat(MLModelFormat.ONNX)
+            .modelConfig(config)
+            .deployModel(true)
+            .build();
+
+        MLRegisterModelRequest request = MLRegisterModelRequest.builder().registerModelInput(unsafeInput).build();
+        ActionRequestValidationException exception = request.validate();
+        assertEquals("Validation Failed: 1: Model name " + SAFE_INPUT_DESCRIPTION + ";", exception.getMessage());
+    }
+
+    @Test
+    public void validate_Exception_UnsafeDescription() {
+        TextEmbeddingModelConfig config = TextEmbeddingModelConfig
+            .builder()
+            .modelType("testModelType")
+            .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
+            .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
+            .embeddingDimension(100)
+            .build();
+
+        MLRegisterModelInput unsafeInput = MLRegisterModelInput
+            .builder()
+            .functionName(FunctionName.KMEANS)
+            .modelName("SafeModel")
+            .description("<script>bad</script>")  // unsafe
+            .version("version")
+            .url("url")
+            .modelGroupId("modelGroupId")
+            .modelFormat(MLModelFormat.ONNX)
+            .modelConfig(config)
+            .deployModel(true)
+            .build();
+
+        MLRegisterModelRequest request = MLRegisterModelRequest.builder().registerModelInput(unsafeInput).build();
+        ActionRequestValidationException exception = request.validate();
+        assertEquals("Validation Failed: 1: Model description " + SAFE_INPUT_DESCRIPTION + ";", exception.getMessage());
+    }
+
 }

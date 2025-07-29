@@ -22,6 +22,11 @@ import static org.opensearch.ml.common.MLTask.MODEL_ID_FIELD;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTaskState.COMPLETED;
 import static org.opensearch.ml.common.MLTaskState.FAILED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_BATCH_INFERENCE_TASKS;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_BATCH_INGESTION_TASKS;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_MODELS_PER_NODE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE;
 import static org.opensearch.ml.common.utils.StringUtils.getErrorMessage;
 import static org.opensearch.ml.engine.ModelHelper.CHUNK_FILES;
 import static org.opensearch.ml.engine.ModelHelper.CHUNK_SIZE;
@@ -42,11 +47,6 @@ import static org.opensearch.ml.engine.utils.FileUtils.calculateFileHash;
 import static org.opensearch.ml.engine.utils.FileUtils.deleteFileQuietly;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.DEPLOY_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.REGISTER_THREAD_POOL;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_BATCH_INFERENCE_TASKS;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_BATCH_INGESTION_TASKS;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_MODELS_PER_NODE;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE;
 import static org.opensearch.ml.stats.ActionName.REGISTER;
 import static org.opensearch.ml.stats.MLActionLevelStat.ML_ACTION_REQUEST_COUNT;
 import static org.opensearch.ml.utils.MLExceptionUtils.CONTROLLER_DISABLED_ERR_MSG;
@@ -55,7 +55,6 @@ import static org.opensearch.ml.utils.MLNodeUtils.checkOpenCircuitBreaker;
 import static org.opensearch.ml.utils.MLNodeUtils.createXContentParserFromRegistry;
 
 import java.io.File;
-import java.io.IOException;
 import java.nio.file.Path;
 import java.security.PrivilegedActionException;
 import java.time.Instant;
@@ -124,6 +123,7 @@ import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.model.Guardrails;
 import org.opensearch.ml.common.model.MLGuard;
 import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelRequest;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
@@ -137,7 +137,6 @@ import org.opensearch.ml.engine.Predictable;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.engine.utils.FileUtils;
 import org.opensearch.ml.profile.MLModelProfile;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
@@ -408,7 +407,7 @@ public class MLModelManager {
             sdkClient.getDataObjectAsync(getModelGroupRequest).whenComplete((r, throwable) -> {
                 if (throwable == null) {
                     try {
-                        GetResponse getModelGroupResponse = GetResponse.fromXContent(r.parser());
+                        GetResponse getModelGroupResponse = r.getResponse();
                         if (getModelGroupResponse.isExists()) {
                             Map<String, Object> modelGroupSourceMap = getModelGroupResponse.getSourceAsMap();
                             int updatedVersion = incrementLatestVersion(modelGroupSourceMap);
@@ -661,19 +660,7 @@ public class MLModelManager {
                 });
 
                 ThreadedActionListener<IndexResponse> putListener = threadedActionListener(REGISTER_THREAD_POOL, indexListener);
-                sdkClient.putDataObjectAsync(putModelMetaRequest).whenComplete((r, throwable) -> {
-                    if (throwable == null) {
-                        try {
-                            IndexResponse ir = IndexResponse.fromXContent(r.parser());
-                            putListener.onResponse(ir);
-                        } catch (Exception e) {
-                            putListener.onFailure(e);
-                        }
-                    } else {
-                        Exception e = SdkClientUtils.unwrapAndConvertToException(throwable);
-                        putListener.onFailure(e);
-                    }
-                });
+                sdkClient.putDataObjectAsync(putModelMetaRequest).whenComplete(SdkClientUtils.wrapPutCompletion(putListener));
             }, error -> {
                 // failed to initialize the model index
                 log.error("Failed to init model index", error);
@@ -764,19 +751,7 @@ public class MLModelManager {
                 });
 
                 ThreadedActionListener<IndexResponse> putListener = threadedActionListener(REGISTER_THREAD_POOL, indexListener);
-                sdkClient.putDataObjectAsync(putModelMetaRequest).whenComplete((r, throwable) -> {
-                    if (throwable == null) {
-                        try {
-                            IndexResponse ir = IndexResponse.fromXContent(r.parser());
-                            putListener.onResponse(ir);
-                        } catch (Exception e) {
-                            putListener.onFailure(e);
-                        }
-                    } else {
-                        Exception e = SdkClientUtils.unwrapAndConvertToException(throwable);
-                        putListener.onFailure(e);
-                    }
-                });
+                sdkClient.putDataObjectAsync(putModelMetaRequest).whenComplete(SdkClientUtils.wrapPutCompletion(putListener));
 
             }, e -> {
                 log.error("Failed to init model index", e);
@@ -1000,7 +975,9 @@ public class MLModelManager {
      * @param runningTaskLimit limit
      */
     public void checkAndAddRunningTask(MLTask mlTask, Integer runningTaskLimit) {
-        if (Objects.nonNull(mlTask) && mlTask.getFunctionName() != FunctionName.REMOTE) {
+
+        // for agent and remote model prediction we don't need to check circuit breaker
+        if (Objects.nonNull(mlTask) && mlTask.getFunctionName() != FunctionName.REMOTE && mlTask.getFunctionName() != FunctionName.AGENT) {
             checkOpenCircuitBreaker(mlCircuitBreakerService, mlStats);
         }
         mlTaskManager.checkLimitAndAddRunningTask(mlTask, runningTaskLimit);
@@ -1938,7 +1915,7 @@ public class MLModelManager {
         sdkClient.getDataObjectAsync(getRequest).whenComplete((r, throwable) -> {
             if (throwable == null) {
                 try {
-                    GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
+                    GetResponse gr = r.getResponse();
                     if (gr != null && gr.isExists()) {
                         try (
                             XContentParser parser = jsonXContent
@@ -2006,7 +1983,7 @@ public class MLModelManager {
 
     private void processGetResponse(GetDataObjectResponse response, String modelId, ActionListener<MLModel> listener) {
         try {
-            GetResponse getResponse = parseGetResponse(response);
+            GetResponse getResponse = response.getResponse();
             if (getResponse == null || !getResponse.isExists()) {
                 listener.onFailure(new OpenSearchStatusException("Failed to find model", RestStatus.NOT_FOUND));
                 return;
@@ -2016,10 +1993,6 @@ public class MLModelManager {
         } catch (Exception e) {
             listener.onFailure(e);
         }
-    }
-
-    private GetResponse parseGetResponse(GetDataObjectResponse response) throws IOException {
-        return response.parser() == null ? null : GetResponse.fromXContent(response.parser());
     }
 
     private void parseAndReturnModel(GetResponse getResponse, String algorithmName, String modelId, ActionListener<MLModel> listener) {
@@ -2092,7 +2065,7 @@ public class MLModelManager {
                     }
                 } else {
                     try {
-                        GetResponse gr = r.parser() == null ? null : GetResponse.fromXContent(r.parser());
+                        GetResponse gr = r.getResponse();
                         if (gr != null && gr.isExists()) {
                             try (
                                 XContentParser parser = MLNodeUtils
@@ -2299,9 +2272,8 @@ public class MLModelManager {
             updateListener.onFailure(cause);
         } else {
             try {
-                UpdateResponse updateResponse = r.parser() == null ? null : UpdateResponse.fromXContent(r.parser());
-                updateListener.onResponse(updateResponse);
-            } catch (IOException e) {
+                updateListener.onResponse(r.updateResponse());
+            } catch (Exception e) {
                 updateListener.onFailure(e);
             }
         }
@@ -2465,6 +2437,16 @@ public class MLModelManager {
     }
 
     /**
+     * Get target/planning worker node of a specific model.
+     *
+     * @param modelId      model id
+     * @return list of planning worker node ids
+     */
+    public String[] getTargetWorkerNodes(String modelId) {
+        return modelCacheHelper.getTargetWorkerNodes(modelId);
+    }
+
+    /**
      * Get predictable instance with model id.
      *
      * @param modelId model id
@@ -2504,6 +2486,23 @@ public class MLModelManager {
      */
     public synchronized void syncModelWorkerNodes(Map<String, Set<String>> modelWorkerNodes) {
         modelCacheHelper.syncWorkerNodes(modelWorkerNodes);
+
+        syncModelPlanningWorkerNodes(modelWorkerNodes);
+    }
+
+    public synchronized void syncModelPlanningWorkerNodes(Map<String, Set<String>> modelWorkerNodes) {
+        Map<String, Set<String>> modelPlanningWorkerNodes = new HashMap<>();
+        modelWorkerNodes.keySet().forEach(modelId -> {
+            FunctionName functionName = modelCacheHelper.getFunctionName(modelId);
+            boolean isDeployToAll = modelCacheHelper.getDeployToAllNodes(modelId);
+            if (!isDeployToAll) {
+                return;
+            }
+            DiscoveryNode[] eligibleNodes = nodeHelper.getEligibleNodes(functionName);
+            Set<String> eligibleNodeIds = Arrays.stream(eligibleNodes).map(DiscoveryNode::getId).collect(Collectors.toSet());
+            modelPlanningWorkerNodes.put(modelId, eligibleNodeIds);
+        });
+        modelCacheHelper.syncPlanningWorkerNodes(modelPlanningWorkerNodes);
     }
 
     /**

@@ -9,8 +9,6 @@ import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
 
-import java.io.IOException;
-
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
@@ -30,9 +28,9 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.MLTask;
 import org.opensearch.ml.common.MLTaskState;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.task.MLTaskDeleteAction;
 import org.opensearch.ml.common.transport.task.MLTaskDeleteRequest;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.DeleteDataObjectRequest;
 import org.opensearch.remote.metadata.client.DeleteDataObjectResponse;
@@ -192,10 +190,10 @@ public class DeleteTaskTransportAction extends HandledTransportAction<ActionRequ
 
     private void processDeleteResponse(DeleteDataObjectResponse deleteDataObjectResponse, ActionListener<DeleteResponse> actionListener) {
         try {
-            DeleteResponse deleteResponse = DeleteResponse.fromXContent(deleteDataObjectResponse.parser());
+            DeleteResponse deleteResponse = deleteDataObjectResponse.deleteResponse();
             log.info("Task deletion result: {}, task id: {}", deleteResponse.getResult(), deleteResponse.getId());
             actionListener.onResponse(deleteResponse);
-        } catch (IOException e) {
+        } catch (Exception e) {
             actionListener.onFailure(e);
         }
     }

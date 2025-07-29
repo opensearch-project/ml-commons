@@ -6,15 +6,19 @@
 package org.opensearch.ml.common.model;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.function.Function;
 
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
+import org.opensearch.Version;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -31,10 +35,14 @@ public class TextEmbeddingModelConfigTests {
 
     @Before
     public void setUp() {
+        Map<String, Object> additionalConfig = new HashMap<>();
+        additionalConfig.put("space_type", "l2");
+
         config = TextEmbeddingModelConfig
             .builder()
             .modelType("testModelType")
             .allConfig("{\"field1\":\"value1\",\"field2\":\"value2\"}")
+            .additionalConfig(additionalConfig)
             .frameworkType(TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS)
             .embeddingDimension(100)
             .passagePrefix("passage: ")
@@ -55,7 +63,7 @@ public class TextEmbeddingModelConfigTests {
         config.toXContent(builder, EMPTY_PARAMS);
         String configContent = TestHelper.xContentBuilderToString(builder);
         assertEquals(
-            "{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\",\"query_prefix\":\"query: \",\"passage_prefix\":\"passage: \"}",
+            "{\"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\",\"additional_config\":{\"space_type\":\"l2\"},\"query_prefix\":\"query: \",\"passage_prefix\":\"passage: \"}",
             configContent
         );
     }
@@ -84,7 +92,7 @@ public class TextEmbeddingModelConfigTests {
     @Test
     public void parse() throws IOException {
         String content =
-            "{\"wrong_field\":\"test_value\", \"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\",\"query_prefix\":\"query: \",\"passage_prefix\":\"passage: \"}";
+            "{\"wrong_field\":\"test_value\", \"model_type\":\"testModelType\",\"embedding_dimension\":100,\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"all_config\":\"{\\\"field1\\\":\\\"value1\\\",\\\"field2\\\":\\\"value2\\\"}\",\"query_prefix\":\"query: \",\"passage_prefix\":\"passage: \",\"additional_config\":{\"space_type\":\"l2\"}}";
         TestHelper.testParseFromString(config, content, function);
     }
 
@@ -111,5 +119,47 @@ public class TextEmbeddingModelConfigTests {
         assertEquals(config.getEmbeddingDimension(), parsedConfig.getEmbeddingDimension());
         assertEquals(config.getFrameworkType(), parsedConfig.getFrameworkType());
         assertEquals(config.getWriteableName(), parsedConfig.getWriteableName());
+    }
+
+    @Test
+    public void readInputStream_VersionCompatibility() throws IOException {
+        // Test with older version
+        BytesStreamOutput oldOut = new BytesStreamOutput();
+        Version oldVersion = Version.V_3_0_0;
+        oldOut.setVersion(oldVersion);
+        config.writeTo(oldOut);
+
+        StreamInput oldIn = oldOut.bytes().streamInput();
+        oldIn.setVersion(oldVersion);
+        TextEmbeddingModelConfig oldConfig = new TextEmbeddingModelConfig(oldIn);
+
+        // Verify essential fields with old version
+        assertEquals(config.getModelType(), oldConfig.getModelType());
+        assertEquals(config.getAllConfig(), oldConfig.getAllConfig());
+        assertNull(oldConfig.getAdditionalConfig());
+        assertEquals(config.getEmbeddingDimension(), oldConfig.getEmbeddingDimension());
+        assertEquals(config.getFrameworkType(), oldConfig.getFrameworkType());
+        assertEquals(config.getWriteableName(), oldConfig.getWriteableName());
+        assertEquals(config.getQueryPrefix(), oldConfig.getQueryPrefix());
+        assertEquals(config.getPassagePrefix(), oldConfig.getPassagePrefix());
+
+        // Test with newer version
+        BytesStreamOutput currentOut = new BytesStreamOutput();
+        currentOut.setVersion(Version.V_3_1_0);
+        config.writeTo(currentOut);
+
+        StreamInput currentIn = currentOut.bytes().streamInput();
+        currentIn.setVersion(Version.V_3_1_0);
+        TextEmbeddingModelConfig newConfig = new TextEmbeddingModelConfig(currentIn);
+
+        // Verify fields with current version
+        assertEquals(config.getModelType(), newConfig.getModelType());
+        assertEquals(config.getAllConfig(), newConfig.getAllConfig());
+        assertEquals(config.getAdditionalConfig(), newConfig.getAdditionalConfig());
+        assertEquals(config.getEmbeddingDimension(), newConfig.getEmbeddingDimension());
+        assertEquals(config.getFrameworkType(), newConfig.getFrameworkType());
+        assertEquals(config.getWriteableName(), newConfig.getWriteableName());
+        assertEquals(config.getQueryPrefix(), newConfig.getQueryPrefix());
+        assertEquals(config.getPassagePrefix(), newConfig.getPassagePrefix());
     }
 }

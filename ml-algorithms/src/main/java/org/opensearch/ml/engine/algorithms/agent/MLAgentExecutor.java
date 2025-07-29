@@ -9,12 +9,14 @@ import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
-import static org.opensearch.ml.common.CommonValue.ML_COMMONS_MCP_FEATURE_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.CommonValue.ML_TASK_INDEX;
-import static org.opensearch.ml.common.MLTask.LAST_UPDATE_TIME_FIELD;
 import static org.opensearch.ml.common.MLTask.RESPONSE_FIELD;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
+import static org.opensearch.ml.common.MLTask.TASK_ID_FIELD;
 import static org.opensearch.ml.common.output.model.ModelTensorOutput.INFERENCE_RESULT_FIELD;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED;
+import static org.opensearch.ml.common.utils.MLTaskUtils.updateMLTaskDirectly;
 
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
@@ -33,9 +35,6 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
-import org.opensearch.action.support.WriteRequest;
-import org.opensearch.action.update.UpdateRequest;
-import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
@@ -46,7 +45,6 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
-import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.MLTask;
@@ -82,7 +80,6 @@ import org.opensearch.transport.client.Client;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
 import com.google.gson.Gson;
 
 import lombok.Data;
@@ -101,8 +98,6 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     public static final String REGENERATE_INTERACTION_ID = "regenerate_interaction_id";
     public static final String MESSAGE_HISTORY_LIMIT = "message_history_limit";
     public static final String ERROR_MESSAGE = "error_message";
-    public static final ImmutableSet<MLTaskState> TASK_DONE_STATES = ImmutableSet
-        .of(MLTaskState.COMPLETED, MLTaskState.COMPLETED_WITH_ERROR, MLTaskState.FAILED, MLTaskState.CANCELLED);
 
     private Client client;
     private SdkClient sdkClient;
@@ -113,7 +108,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     private Map<String, Memory.Factory> memoryFactoryMap;
     private volatile Boolean isMultiTenancyEnabled;
     private Encryptor encryptor;
-    private static volatile boolean mcpFeatureIsEnabled;
+    private static volatile boolean mcpConnectorIsEnabled;
 
     public MLAgentExecutor(
         Client client,
@@ -135,10 +130,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         this.memoryFactoryMap = memoryFactoryMap;
         this.isMultiTenancyEnabled = isMultiTenancyEnabled;
         this.encryptor = encryptor;
-        this.mcpFeatureIsEnabled = CommonValue.ML_COMMONS_MCP_FEATURE_ENABLED.get(clusterService.getSettings());
-        clusterService
-            .getClusterSettings()
-            .addSettingsUpdateConsumer(CommonValue.ML_COMMONS_MCP_FEATURE_ENABLED, it -> mcpFeatureIsEnabled = it);
+        this.mcpConnectorIsEnabled = ML_COMMONS_MCP_CONNECTOR_ENABLED.get(clusterService.getSettings());
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MCP_CONNECTOR_ENABLED, it -> mcpConnectorIsEnabled = it);
     }
 
     @Override
@@ -396,9 +389,9 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         ActionListener<Output> listener
     ) {
         String mcpConnectorConfigJSON = (mlAgent.getParameters() != null) ? mlAgent.getParameters().get(MCP_CONNECTORS_FIELD) : null;
-        if (mcpConnectorConfigJSON != null && !mcpFeatureIsEnabled) {
+        if (mcpConnectorConfigJSON != null && !mcpConnectorIsEnabled) {
             // MCP connector provided as tools but MCP feature is disabled, so abort.
-            listener.onFailure(new OpenSearchException(ML_COMMONS_MCP_FEATURE_DISABLED_MESSAGE));
+            listener.onFailure(new OpenSearchException(ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE));
             return;
         }
         MLAgentRunner mlAgentRunner = getAgentRunner(mlAgent);
@@ -407,8 +400,15 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             Map<String, Object> agentResponse = new HashMap<>();
             if (memoryId != null && !memoryId.isEmpty()) {
                 agentResponse.put(MEMORY_ID, memoryId);
-                mlTask.setResponse(agentResponse);
             }
+
+            String parentInteractionId = inputDataSet.getParameters().get(PARENT_INTERACTION_ID);
+            if (parentInteractionId != null && !parentInteractionId.isEmpty()) {
+                agentResponse.put(PARENT_INTERACTION_ID, parentInteractionId);
+            }
+            mlTask.setResponse(agentResponse);
+            mlTask.setAsync(true);
+
             indexMLTask(mlTask, ActionListener.wrap(indexResponse -> {
                 String taskId = indexResponse.getId();
                 mlTask.setTaskId(taskId);
@@ -420,6 +420,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 }
                 listener.onResponse(outputBuilder);
                 ActionListener<Object> agentActionListener = createAsyncTaskUpdater(mlTask, outputs, modelTensors);
+                inputDataSet.getParameters().put(TASK_ID_FIELD, taskId);
                 mlAgentRunner.run(mlAgent, inputDataSet.getParameters(), agentActionListener);
             }, e -> {
                 log.error("Failed to create task for agent async execution", e);
@@ -470,6 +471,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             updateMLTaskDirectly(
                 taskId,
                 updatedTask,
+                client,
                 ActionListener
                     .wrap(
                         response -> log.info("Updated ML task {} with agent execution results", taskId),
@@ -486,6 +488,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             updateMLTaskDirectly(
                 taskId,
                 updatedTask,
+                client,
                 ActionListener
                     .wrap(
                         response -> log.info("Updated ML task {} with agent execution failed reason", taskId),
@@ -597,31 +600,6 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                 });
         } catch (Exception e) {
             log.error("Failed to create ML task for {}, {}", mlTask.getFunctionName(), mlTask.getTaskType(), e);
-            listener.onFailure(e);
-        }
-    }
-
-    public void updateMLTaskDirectly(String taskId, Map<String, Object> updatedFields, ActionListener<UpdateResponse> listener) {
-        try {
-            if (updatedFields == null || updatedFields.isEmpty()) {
-                listener.onFailure(new IllegalArgumentException("Updated fields is null or empty"));
-                return;
-            }
-            UpdateRequest updateRequest = new UpdateRequest(ML_TASK_INDEX, taskId);
-            Map<String, Object> updatedContent = new HashMap<>(updatedFields);
-            updatedContent.put(LAST_UPDATE_TIME_FIELD, Instant.now().toEpochMilli());
-            updateRequest.doc(updatedContent);
-            updateRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-            if (updatedFields.containsKey(STATE_FIELD) && TASK_DONE_STATES.contains(updatedFields.containsKey(STATE_FIELD))) {
-                updateRequest.retryOnConflict(3);
-            }
-            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                client.update(updateRequest, ActionListener.runBefore(listener, context::restore));
-            } catch (Exception e) {
-                listener.onFailure(e);
-            }
-        } catch (Exception e) {
-            log.error("Failed to update ML task {}", taskId, e);
             listener.onFailure(e);
         }
     }

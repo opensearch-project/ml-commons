@@ -21,20 +21,21 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.cluster.node.DiscoveryNodeRole.CLUSTER_MANAGER_ROLE;
 import static org.opensearch.ml.common.MLTask.FUNCTION_NAME_FIELD;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_BATCH_INGESTION_BULK_SIZE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_BATCH_INFERENCE_TASKS;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_BATCH_INGESTION_TASKS;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_MODELS_PER_NODE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MONITORING_REQUEST_COUNT;
 import static org.opensearch.ml.engine.ModelHelper.CHUNK_FILES;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_FILE_HASH;
 import static org.opensearch.ml.engine.ModelHelper.MODEL_SIZE_IN_BYTES;
 import static org.opensearch.ml.model.MLModelManager.TIMEOUT_IN_MILLIS;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.DEPLOY_THREAD_POOL;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.REGISTER_THREAD_POOL;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_BATCH_INGESTION_BULK_SIZE;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_BATCH_INFERENCE_TASKS;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_BATCH_INGESTION_TASKS;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_DEPLOY_MODEL_TASKS_PER_NODE;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_MODELS_PER_NODE;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MAX_REGISTER_MODEL_TASKS_PER_NODE;
-import static org.opensearch.ml.settings.MLCommonsSettings.ML_COMMONS_MONITORING_REQUEST_COUNT;
 import static org.opensearch.ml.utils.MockHelper.mock_MLIndicesHandler_initModelIndex;
 import static org.opensearch.ml.utils.MockHelper.mock_MLIndicesHandler_initModelIndex_failure;
 import static org.opensearch.ml.utils.MockHelper.mock_client_ThreadContext;
@@ -50,6 +51,7 @@ import static org.opensearch.ml.utils.TestHelper.clusterSetting;
 import static org.opensearch.ml.utils.TestHelper.copyFile;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -65,6 +67,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import org.junit.Before;
 import org.junit.Ignore;
@@ -75,11 +78,13 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.Version;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.action.update.UpdateResponse;
+import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterApplierService;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.ClusterSettings;
@@ -90,6 +95,7 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.breaker.CircuitBreaker;
 import org.opensearch.core.common.breaker.CircuitBreakingException;
 import org.opensearch.core.common.bytes.BytesReference;
+import org.opensearch.core.common.transport.TransportAddress;
 import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -113,6 +119,7 @@ import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.common.model.MLModelFormat;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.model.TextEmbeddingModelConfig;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.register.MLRegisterModelInput;
 import org.opensearch.ml.common.transport.register.MLRegisterModelResponse;
@@ -122,7 +129,6 @@ import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
-import org.opensearch.ml.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.stats.ActionName;
 import org.opensearch.ml.stats.MLActionLevelStat;
 import org.opensearch.ml.stats.MLNodeLevelStat;
@@ -351,6 +357,18 @@ public class MLModelManagerTests extends OpenSearchTestCase {
     }
 
     public void testRegisterMLModel_CircuitBreakerOpen() {
+        doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
+        when(mlCircuitBreakerService.checkOpenCB()).thenReturn(thresholdCircuitBreaker);
+        when(thresholdCircuitBreaker.getName()).thenReturn("Disk Circuit Breaker");
+        when(thresholdCircuitBreaker.getThreshold()).thenReturn(87);
+        expectedEx.expect(CircuitBreakingException.class);
+        expectedEx.expectMessage("Disk Circuit Breaker is open, please check your resources!");
+        modelManager.registerMLModel(registerModelInput, mlTask);
+        verify(mlTaskManager).updateMLTask(anyString(), any(), anyMap(), anyLong(), anyBoolean());
+    }
+
+    public void testRegisterMLModel_CircuitBreakerNotOpenForAgent() {
+        registerModelInput.setFunctionName(FunctionName.AGENT);
         doNothing().when(mlTaskManager).checkLimitAndAddRunningTask(any(), any());
         when(mlCircuitBreakerService.checkOpenCB()).thenReturn(thresholdCircuitBreaker);
         when(thresholdCircuitBreaker.getName()).thenReturn("Disk Circuit Breaker");
@@ -974,6 +992,28 @@ public class MLModelManagerTests extends OpenSearchTestCase {
         verify(modelCacheHelper).syncWorkerNodes(eq(modelWorkerNodes));
     }
 
+    public void testSyncModelPlanningWorkerNodes() {
+        DiscoveryNode localNode = new DiscoveryNode(
+            "foo1",
+            "node1",
+            new TransportAddress(InetAddress.getLoopbackAddress(), 9300),
+            Collections.emptyMap(),
+            Collections.singleton(CLUSTER_MANAGER_ROLE),
+            Version.CURRENT
+        );
+
+        Map<String, Set<String>> modelWorkerNodes = ImmutableMap.of(modelId, ImmutableSet.of("node1"));
+        when(modelCacheHelper.getFunctionName(modelId)).thenReturn(FunctionName.TEXT_EMBEDDING);
+        when(modelCacheHelper.getDeployToAllNodes(modelId)).thenReturn(true);
+        DiscoveryNode[] planningWorkerNodes = new DiscoveryNode[] { localNode };
+        when(nodeHelper.getEligibleNodes(FunctionName.TEXT_EMBEDDING)).thenReturn(planningWorkerNodes);
+        modelManager.syncModelPlanningWorkerNodes(modelWorkerNodes);
+        verify(modelCacheHelper)
+            .syncPlanningWorkerNodes(
+                Map.of(modelId, Arrays.stream(planningWorkerNodes).map(DiscoveryNode::getId).collect(Collectors.toSet()))
+            );
+    }
+
     public void testClearRoutingTable() {
         modelManager.clearRoutingTable();
         verify(modelCacheHelper).clearWorkerNodes();
@@ -1294,6 +1334,7 @@ public class MLModelManagerTests extends OpenSearchTestCase {
                     123,
                     TextEmbeddingModelConfig.FrameworkType.SENTENCE_TRANSFORMERS,
                     "all config",
+                    null,
                     TextEmbeddingModelConfig.PoolingMode.MEAN,
                     true,
                     512

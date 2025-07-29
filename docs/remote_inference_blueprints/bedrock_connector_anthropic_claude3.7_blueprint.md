@@ -324,7 +324,7 @@ Sample response:
               {
                 "type": "thinking",
                 "thinking": "This is a simple greeting phrase \"hello world\" which is often the first program someone writes when learning a new programming language. The person could be:\n1. Simply greeting me casually\n2. Making a reference to programming\n3. Testing if I'm working\n\nI'll respond with a friendly greeting that acknowledges the \"hello world\" phrase and its connection to programming culture, while being conversational.",
-                "signature": "EqgBCkYQARgCIkBAw8igmzDbjCXk1nLyWHFoS46Pi0VzkRj0IOySgDccftUjmMHmfM7nEWxPnjsgT3SEpFDDcS4Sj5gAiWjbejGTEgyCZKvfxX/J+ss/cM8aDH7t4SO42Cmpg+heNyIw2jyV6CD0lsx+mJAh6CuJtxXrfrp/VAu8FERnH2JTovSm0U3KYf+vRwfJNMdb3AsnKhAFuA24st/+8w6g5Xwxdqce"
+                "signature": "<THOUGHT_SIGNATURE>"
               },
               {
                 "type": "text",
