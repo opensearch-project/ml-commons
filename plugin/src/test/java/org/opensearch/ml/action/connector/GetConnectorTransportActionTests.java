@@ -39,10 +39,12 @@ import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetRequest;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetResponse;
+import org.opensearch.ml.engine.algorithms.agent.tracing.MLConnectorTracer;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
+import org.opensearch.telemetry.tracing.noop.NoopTracer;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -89,6 +91,9 @@ public class GetConnectorTransportActionTests extends OpenSearchTestCase {
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
+
+        MLConnectorTracer.resetForTest();
+        MLConnectorTracer.initialize(NoopTracer.INSTANCE, mlFeatureEnabledSetting);
 
         Settings settings = Settings.builder().build();
         sdkClient = SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap());

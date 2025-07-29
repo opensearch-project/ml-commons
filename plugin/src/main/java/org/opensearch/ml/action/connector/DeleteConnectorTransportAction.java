@@ -32,6 +32,7 @@ import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteRequest;
+import org.opensearch.ml.engine.algorithms.agent.tracing.MLConnectorTracer;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.DeleteDataObjectRequest;
@@ -43,6 +44,7 @@ import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.tasks.Task;
+import org.opensearch.telemetry.tracing.Span;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
 
@@ -79,23 +81,34 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
     protected void doExecute(Task task, ActionRequest request, ActionListener<DeleteResponse> actionListener) {
         MLConnectorDeleteRequest mlConnectorDeleteRequest = MLConnectorDeleteRequest.fromActionRequest(request);
         String connectorId = mlConnectorDeleteRequest.getConnectorId();
-        String tenantId = mlConnectorDeleteRequest.getTenantId();
-        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
-            return;
+        Span deleteSpan = MLConnectorTracer.startConnectorDeleteSpan(connectorId);
+        try {
+            String tenantId = mlConnectorDeleteRequest.getTenantId();
+            if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
+                return;
+            }
+            ActionListener<DeleteResponse> spanWrappedListener = ActionListener.wrap(response -> {
+                MLConnectorTracer.endSpanAndRespond(deleteSpan, response, actionListener);
+            }, exception -> {
+                MLConnectorTracer.handleSpanError(deleteSpan, "Failed to delete ML connector " + connectorId, exception, actionListener);
+            });
+
+            connectorAccessControlHelper
+                .validateConnectorAccess(
+                    sdkClient,
+                    client,
+                    connectorId,
+                    tenantId,
+                    mlFeatureEnabledSetting,
+                    ActionListener
+                        .wrap(
+                            isAllowed -> handleConnectorAccessValidation(connectorId, tenantId, isAllowed, spanWrappedListener),
+                            e -> handleConnectorAccessValidationFailure(connectorId, e, spanWrappedListener, deleteSpan)
+                        )
+                );
+        } catch (Exception e) {
+            MLConnectorTracer.handleSpanError(deleteSpan, "Failed to delete ML connector " + connectorId, e, actionListener);
         }
-        connectorAccessControlHelper
-            .validateConnectorAccess(
-                sdkClient,
-                client,
-                connectorId,
-                tenantId,
-                mlFeatureEnabledSetting,
-                ActionListener
-                    .wrap(
-                        isAllowed -> handleConnectorAccessValidation(connectorId, tenantId, isAllowed, actionListener),
-                        e -> handleConnectorAccessValidationFailure(connectorId, e, actionListener)
-                    )
-            );
     }
 
     private void handleConnectorAccessValidation(
@@ -111,9 +124,13 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
         }
     }
 
-    private void handleConnectorAccessValidationFailure(String connectorId, Exception e, ActionListener<DeleteResponse> actionListener) {
-        log.error("Failed to delete ML connector: {}", connectorId, e);
-        actionListener.onFailure(e);
+    private void handleConnectorAccessValidationFailure(
+        String connectorId,
+        Exception e,
+        ActionListener<DeleteResponse> actionListener,
+        Span deleteSpan
+    ) {
+        MLConnectorTracer.handleSpanError(deleteSpan, "Failed to delete ML connector " + connectorId, e, actionListener);
     }
 
     private void checkForModelsUsingConnector(String connectorId, String tenantId, ActionListener<DeleteResponse> actionListener) {

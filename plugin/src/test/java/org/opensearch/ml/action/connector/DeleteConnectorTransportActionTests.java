@@ -47,6 +47,7 @@ import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.connector.HttpConnector;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.connector.MLConnectorDeleteRequest;
+import org.opensearch.ml.engine.algorithms.agent.tracing.MLConnectorTracer;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.utils.TestHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -54,6 +55,7 @@ import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.aggregations.InternalAggregations;
+import org.opensearch.telemetry.tracing.noop.NoopTracer;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -101,6 +103,9 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
+
+        MLConnectorTracer.resetForTest();
+        MLConnectorTracer.initialize(NoopTracer.INSTANCE, mlFeatureEnabledSetting);
 
         sdkClient = SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap());
         mlConnectorDeleteRequest = MLConnectorDeleteRequest.builder().connectorId(CONNECTOR_ID).build();
