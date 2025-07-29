@@ -977,4 +977,67 @@ public class MLChatAgentRunnerTest {
         };
     }
 
+
+
+    @Test
+    public void testConstructLLMParams_WithSystemPromptAndDateTimeInjection() {
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(MLChatAgentRunner.SYSTEM_PROMPT_FIELD, "You are a helpful assistant.");
+        parameters.put(MLChatAgentRunner.INJECT_DATETIME_FIELD, "true");
+        parameters.put(MLChatAgentRunner.DATETIME_FORMAT_FIELD, "yyyy-MM-dd HH:mm:ss");
+
+        Map<String, String> result = MLChatAgentRunner.constructLLMParams(llmSpec, parameters);
+
+        Assert.assertNotNull(result);
+        Assert.assertTrue(result.containsKey(MLChatAgentRunner.SYSTEM_PROMPT_FIELD));
+        String systemPrompt = result.get(MLChatAgentRunner.SYSTEM_PROMPT_FIELD);
+        Assert.assertTrue(systemPrompt.startsWith("You are a helpful assistant."));
+        Assert.assertTrue(systemPrompt.contains("Current date and time:"));
+    }
+
+    @Test
+    public void testConstructLLMParams_WithoutSystemPromptAndDateTimeInjection() {
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(MLChatAgentRunner.INJECT_DATETIME_FIELD, "true");
+        parameters.put(MLChatAgentRunner.DATETIME_FORMAT_FIELD, "yyyy-MM-dd HH:mm:ss");
+
+        Map<String, String> result = MLChatAgentRunner.constructLLMParams(llmSpec, parameters);
+
+        Assert.assertNotNull(result);
+        Assert.assertTrue(result.containsKey(AgentUtils.PROMPT_PREFIX));
+        String promptPrefix = result.get(AgentUtils.PROMPT_PREFIX);
+        Assert.assertTrue(promptPrefix.contains("Current date and time:"));
+    }
+
+    @Test
+    public void testConstructLLMParams_DateTimeInjectionDisabled() {
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put(MLChatAgentRunner.INJECT_DATETIME_FIELD, "false");
+        parameters.put(MLChatAgentRunner.SYSTEM_PROMPT_FIELD, "You are a helpful assistant.");
+
+        Map<String, String> result = MLChatAgentRunner.constructLLMParams(llmSpec, parameters);
+
+        Assert.assertNotNull(result);
+        Assert.assertTrue(result.containsKey(MLChatAgentRunner.SYSTEM_PROMPT_FIELD));
+        String systemPrompt = result.get(MLChatAgentRunner.SYSTEM_PROMPT_FIELD);
+        Assert.assertEquals("You are a helpful assistant.", systemPrompt);
+        Assert.assertFalse(systemPrompt.contains("Current date and time:"));
+    }
+
+    @Test
+    public void testConstructLLMParams_DefaultValues() {
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        Map<String, String> parameters = new HashMap<>();
+
+        Map<String, String> result = MLChatAgentRunner.constructLLMParams(llmSpec, parameters);
+
+        Assert.assertNotNull(result);
+        Assert.assertTrue(result.containsKey(AgentUtils.PROMPT_PREFIX));
+        Assert.assertTrue(result.containsKey(AgentUtils.PROMPT_SUFFIX));
+        Assert.assertTrue(result.containsKey(AgentUtils.RESPONSE_FORMAT_INSTRUCTION));
+        Assert.assertTrue(result.containsKey(AgentUtils.TOOL_RESPONSE));
+    }
 }

@@ -22,6 +22,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.VERBOSE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.cleanUpResource;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.constructToolParams;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTools;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getCurrentDateTime;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMcpToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMessageHistoryLimit;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
@@ -117,6 +118,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
     public static final String CHAT_HISTORY_RESPONSE_TEMPLATE = "chat_history_template.ai_response";
     public static final String CHAT_HISTORY_MESSAGE_PREFIX = "${_chat_history.message.";
     public static final String LLM_INTERFACE = "_llm_interface";
+    public static final String INJECT_DATETIME_FIELD = "inject_datetime";
+    public static final String DATETIME_FORMAT_FIELD = "datetime_format";
+    public static final String SYSTEM_PROMPT_FIELD = "system_prompt";
 
     private static final String DEFAULT_MAX_ITERATIONS = "10";
 
@@ -748,7 +752,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         return prompt;
     }
 
-    private static Map<String, String> constructLLMParams(LLMSpec llm, Map<String, String> parameters) {
+    static Map<String, String> constructLLMParams(LLMSpec llm, Map<String, String> parameters) {
         Map<String, String> tmpParameters = new HashMap<>();
         if (llm.getParameters() != null) {
             tmpParameters.putAll(llm.getParameters());
@@ -774,6 +778,24 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 );
         }
 
+        boolean injectDate = Boolean.parseBoolean(tmpParameters.getOrDefault(INJECT_DATETIME_FIELD, "false"));
+        String dateFormat = tmpParameters.get(DATETIME_FORMAT_FIELD);
+        String currentDateTime = injectDate ? getCurrentDateTime(dateFormat) : "";
+
+        if (injectDate && !currentDateTime.isEmpty()) {
+            // If system_prompt exists, inject datetime into it
+            if (tmpParameters.containsKey(SYSTEM_PROMPT_FIELD)) {
+                String systemPrompt = tmpParameters.get(SYSTEM_PROMPT_FIELD);
+                systemPrompt = systemPrompt + "\n\n" + currentDateTime;
+                tmpParameters.put(SYSTEM_PROMPT_FIELD, systemPrompt);
+            } else {
+                // Otherwise inject datetime into prompt_prefix
+                String promptPrefix = tmpParameters.getOrDefault(PROMPT_PREFIX, PromptTemplate.PROMPT_TEMPLATE_PREFIX);
+                promptPrefix = promptPrefix + "\n\n" + currentDateTime;
+                tmpParameters.put(PROMPT_PREFIX, promptPrefix);
+            }
+        }
+        
         tmpParameters.putIfAbsent(PROMPT_PREFIX, PromptTemplate.PROMPT_TEMPLATE_PREFIX);
         tmpParameters.putIfAbsent(PROMPT_SUFFIX, PromptTemplate.PROMPT_TEMPLATE_SUFFIX);
         tmpParameters.putIfAbsent(RESPONSE_FORMAT_INSTRUCTION, PromptTemplate.PROMPT_FORMAT_INSTRUCTION);

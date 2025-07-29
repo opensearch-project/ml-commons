@@ -9,6 +9,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -371,6 +372,55 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT,
             testParams.get(MLPlanExecuteAndReflectAgentRunner.PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT_FIELD)
         );
+    }
+
+    @Test
+    public void testSetupPromptParametersWithDateInjection() {
+        Map<String, String> testParams = new HashMap<>();
+        testParams.put(MLPlanExecuteAndReflectAgentRunner.QUESTION_FIELD, "test question");
+        testParams.put(MLPlanExecuteAndReflectAgentRunner.INJECT_DATETIME_FIELD, "true");
+
+        mlPlanExecuteAndReflectAgentRunner.setupPromptParameters(testParams);
+
+        assertEquals("test question", testParams.get(MLPlanExecuteAndReflectAgentRunner.USER_PROMPT_FIELD));
+        
+        // Verify planner system prompt contains date/time
+        String plannerSystemPrompt = testParams.get(MLPlanExecuteAndReflectAgentRunner.SYSTEM_PROMPT_FIELD);
+        assertTrue(plannerSystemPrompt.contains("Current date and time:"));
+        assertTrue(plannerSystemPrompt.contains(MLPlanExecuteAndReflectAgentRunner.DEFAULT_PLANNER_SYSTEM_PROMPT));
+        
+        // Verify executor system prompt contains date/time
+        String executorSystemPrompt = testParams.get(MLPlanExecuteAndReflectAgentRunner.EXECUTOR_SYSTEM_PROMPT_FIELD);
+        assertTrue(executorSystemPrompt.contains("Current date and time:"));
+        assertTrue(executorSystemPrompt.contains(MLPlanExecuteAndReflectAgentRunner.DEFAULT_EXECUTOR_SYSTEM_PROMPT));
+        
+        assertNotNull(testParams.get(MLPlanExecuteAndReflectAgentRunner.PLANNER_PROMPT_FIELD));
+        assertNotNull(testParams.get(MLPlanExecuteAndReflectAgentRunner.REFLECT_PROMPT_FIELD));
+        assertEquals(
+            PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT,
+            testParams.get(MLPlanExecuteAndReflectAgentRunner.PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT_FIELD)
+        );
+    }
+
+    @Test
+    public void testSetupPromptParametersWithoutDateInjection() {
+        Map<String, String> testParams = new HashMap<>();
+        testParams.put(MLPlanExecuteAndReflectAgentRunner.QUESTION_FIELD, "test question");
+        testParams.put(MLPlanExecuteAndReflectAgentRunner.INJECT_DATETIME_FIELD, "false");
+
+        mlPlanExecuteAndReflectAgentRunner.setupPromptParameters(testParams);
+
+        assertEquals("test question", testParams.get(MLPlanExecuteAndReflectAgentRunner.USER_PROMPT_FIELD));
+        
+        // Verify planner system prompt does NOT contain date/time
+        String plannerSystemPrompt = testParams.get(MLPlanExecuteAndReflectAgentRunner.SYSTEM_PROMPT_FIELD);
+        assertFalse(plannerSystemPrompt.contains("Current date and time:"));
+        assertEquals(MLPlanExecuteAndReflectAgentRunner.DEFAULT_PLANNER_SYSTEM_PROMPT, plannerSystemPrompt);
+        
+        // Verify executor system prompt does NOT contain date/time
+        String executorSystemPrompt = testParams.get(MLPlanExecuteAndReflectAgentRunner.EXECUTOR_SYSTEM_PROMPT_FIELD);
+        assertFalse(executorSystemPrompt.contains("Current date and time:"));
+        assertEquals(MLPlanExecuteAndReflectAgentRunner.DEFAULT_EXECUTOR_SYSTEM_PROMPT, executorSystemPrompt);
     }
 
     @Test

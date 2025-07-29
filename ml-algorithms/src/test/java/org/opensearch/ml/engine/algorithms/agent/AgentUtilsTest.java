@@ -1665,4 +1665,40 @@ public class AgentUtilsTest extends MLStaticMockBase {
 
         assertThrows(IllegalArgumentException.class, () -> AgentUtils.createTool(toolFactories, new HashMap<>(), toolSpec, "test_tenant"));
     }
+
+    @Test
+    public void testGetCurrentDateTime_WithNullFormat() {
+        String result = AgentUtils.getCurrentDateTime(null);
+        
+        Assert.assertNotNull(result);
+        Assert.assertTrue(result.startsWith("Current date and time: "));
+        Assert.assertTrue(result.contains("UTC"));
+    }
+
+    @Test
+    public void testGetCurrentDateTime_WithEmptyFormat() {
+        String result = AgentUtils.getCurrentDateTime("");
+        
+        Assert.assertNotNull(result);
+        Assert.assertTrue(result.startsWith("Current date and time: "));
+        Assert.assertTrue(result.contains("UTC"));
+    }
+
+    @Test
+    public void testGetCurrentDateTime_WithValidFormat() {
+        String result = AgentUtils.getCurrentDateTime("yyyy-MM-dd HH:mm:ss");
+        
+        Assert.assertNotNull(result);
+        Assert.assertTrue(result.startsWith("Current date and time: "));
+        Assert.assertFalse(result.contains("UTC"));
+    }
+
+    @Test
+    public void testGetCurrentDateTime_WithInvalidFormat() {
+        String result = AgentUtils.getCurrentDateTime("invalid-format");
+        
+        Assert.assertNotNull(result);
+        Assert.assertTrue(result.startsWith("Current date and time: "));
+        Assert.assertTrue(result.contains("UTC"));
+    }
 }

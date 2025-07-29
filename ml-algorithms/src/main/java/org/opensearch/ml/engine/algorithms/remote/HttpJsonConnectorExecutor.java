@@ -96,7 +96,7 @@ public class HttpJsonConnectorExecutor extends AbstractConnectorExecutor {
             SdkHttpFullRequest request;
             switch (connector.getActionHttpMethod(action).toUpperCase(Locale.ROOT)) {
                 case "POST":
-                    log.debug("original payload to remote model: " + payload);
+                    log.info("\n\n\n\noriginal payload to remote model: " + payload);
                     validateHttpClientParameters(action, parameters);
                     request = ConnectorUtils.buildSdkRequest(action, connector, parameters, payload, POST);
                     break;
