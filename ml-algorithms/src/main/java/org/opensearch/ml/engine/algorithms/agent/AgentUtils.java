@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
+import static org.apache.commons.lang3.StringUtils.isBlank;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTOR_ID_FIELD;
@@ -52,7 +53,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
@@ -137,7 +137,7 @@ public class AgentUtils {
     // For function calling, do not escape the below params in connector by default
     public static final String DEFAULT_NO_ESCAPE_PARAMS = "_chat_history,_tools,_interactions,tool_configs";
 
-    public static final String DEFAULT_DATETIME_FORMAT = "EEEE, MMMM d, yyyy 'at' h:mm a z";
+    public static final String DEFAULT_DATETIME_FORMAT = "yyyy-MM-dd'T'HH:mm:ss'Z'";
     public static final String DEFAULT_DATETIME_PREFIX = "Current date and time: ";
     private static final ZoneId UTC_ZONE = ZoneId.of("UTC");
 
@@ -960,7 +960,7 @@ public class AgentUtils {
      * 
      * <p>This method returns the current date and time formatted according to the provided pattern.
      * If no format is provided or the format is invalid, it uses the default format:
-     * "EEEE, MMMM d, yyyy 'at' h:mm a z" (e.g., "Monday, January 15, 2024 at 2:30 PM UTC").
+     * "yyyy-MM-dd'T'HH:mm:ss'Z'" (e.g., "2024-01-15T14:30:00Z").
      * 
      * <p>The method always returns the time in UTC timezone regardless of the system's local timezone.
      * 
@@ -982,7 +982,7 @@ public class AgentUtils {
         Instant now = Instant.now();
         DateTimeFormatter formatter;
 
-        if (!StringUtils.isBlank(dateFormat)) {
+        if (!isBlank(dateFormat)) {
             try {
                 formatter = DateTimeFormatter.ofPattern(dateFormat).withZone(UTC_ZONE);
             } catch (IllegalArgumentException e) {
