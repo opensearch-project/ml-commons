@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.algorithms.sparse_encoding;
 
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.input.parameter.MLAlgoParams;
 import org.opensearch.ml.common.model.MLModelConfig;
 import org.opensearch.ml.engine.algorithms.TextEmbeddingModel;
 import org.opensearch.ml.engine.annotation.Function;
@@ -30,4 +31,8 @@ public class TextEmbeddingSparseEncodingModel extends TextEmbeddingModel {
         return null;
     }
 
+    @Override
+    protected boolean isAsymmetricModel(MLAlgoParams mlParams) {
+        return false;
+    }
 }

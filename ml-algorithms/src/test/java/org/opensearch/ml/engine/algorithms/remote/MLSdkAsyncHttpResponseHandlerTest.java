@@ -221,7 +221,7 @@ public class MLSdkAsyncHttpResponseHandlerTest {
         ArgumentCaptor<Exception> captor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener, times(1)).onFailure(captor.capture());
         assert captor.getValue() instanceof OpenSearchStatusException;
-        assert captor.getValue().getMessage().equals("No response from model");
+        assert captor.getValue().getMessage().equals("Remote service returned error status 500 with empty body");
     }
 
     @Test
@@ -302,7 +302,7 @@ public class MLSdkAsyncHttpResponseHandlerTest {
         mlSdkAsyncHttpResponseHandler.onStream(stream);
         ArgumentCaptor<OpenSearchStatusException> captor = ArgumentCaptor.forClass(OpenSearchStatusException.class);
         verify(actionListener, times(1)).onFailure(captor.capture());
-        assert captor.getValue().getMessage().equals("No response from model");
+        assert captor.getValue().getMessage().equals("Remote service returned empty response body");
     }
 
     @Test
