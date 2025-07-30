@@ -984,7 +984,6 @@ public class MLChatAgentRunnerTest {
         Map<String, String> parameters = new HashMap<>();
         parameters.put(MLChatAgentRunner.SYSTEM_PROMPT_FIELD, "You are a helpful assistant.");
         parameters.put(MLChatAgentRunner.INJECT_DATETIME_FIELD, "true");
-        parameters.put(MLChatAgentRunner.DATETIME_FORMAT_FIELD, "yyyy-MM-dd HH:mm:ss");
 
         Map<String, String> result = MLChatAgentRunner.constructLLMParams(llmSpec, parameters);
 
@@ -1000,7 +999,6 @@ public class MLChatAgentRunnerTest {
         LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
         Map<String, String> parameters = new HashMap<>();
         parameters.put(MLChatAgentRunner.INJECT_DATETIME_FIELD, "true");
-        parameters.put(MLChatAgentRunner.DATETIME_FORMAT_FIELD, "yyyy-MM-dd HH:mm:ss");
 
         Map<String, String> result = MLChatAgentRunner.constructLLMParams(llmSpec, parameters);
 

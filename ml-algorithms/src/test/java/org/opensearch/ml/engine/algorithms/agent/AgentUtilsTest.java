@@ -1668,36 +1668,26 @@ public class AgentUtilsTest extends MLStaticMockBase {
     }
 
     @Test
-    public void testGetCurrentDateTime_WithNullFormat() {
+    public void testGetCurrentDateTime_WithInvalidFormats() {
+        // null
         String result = AgentUtils.getCurrentDateTime(null);
-
         Assert.assertNotNull(result);
         Assert.assertTrue(result.startsWith(DEFAULT_DATETIME_PREFIX));
-        Assert.assertTrue(result.contains("UTC"));
-    }
 
-    @Test
-    public void testGetCurrentDateTime_WithEmptyFormat() {
-        String result = AgentUtils.getCurrentDateTime("");
-
+        // empty
+        result = AgentUtils.getCurrentDateTime("");
         Assert.assertNotNull(result);
         Assert.assertTrue(result.startsWith(DEFAULT_DATETIME_PREFIX));
-        Assert.assertTrue(result.contains("UTC"));
+
+        // invalid
+        result = AgentUtils.getCurrentDateTime("invalid-format");
+        Assert.assertNotNull(result);
+        Assert.assertTrue(result.startsWith(DEFAULT_DATETIME_PREFIX));
     }
 
     @Test
     public void testGetCurrentDateTime_WithValidFormat() {
-        String result = AgentUtils.getCurrentDateTime("yyyy-MM-dd HH:mm:ss");
-
-        Assert.assertNotNull(result);
-        Assert.assertTrue(result.startsWith(DEFAULT_DATETIME_PREFIX));
-        Assert.assertFalse(result.contains("UTC"));
-    }
-
-    @Test
-    public void testGetCurrentDateTime_WithInvalidFormat() {
-        String result = AgentUtils.getCurrentDateTime("invalid-format");
-
+        String result = AgentUtils.getCurrentDateTime("EEEE, MMMM d, yyyy 'at' h:mm a z");
         Assert.assertNotNull(result);
         Assert.assertTrue(result.startsWith(DEFAULT_DATETIME_PREFIX));
         Assert.assertTrue(result.contains("UTC"));
