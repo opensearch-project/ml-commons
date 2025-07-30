@@ -193,6 +193,22 @@ public class MLCommonsClassLoaderTests {
         MLCommonsClassLoader.initConnector("Connector", new Object[] { initParam1 }, String.class);
     }
 
+    @Test(expected = JsonParseException.class)
+    public void testInitMLInput_JsonParseException() throws IOException {
+        String invalidJsonStr = "invalid-json";
+        XContentParser parser = XContentType.JSON
+            .xContent()
+            .createParser(
+                new NamedXContentRegistry(new SearchModule(Settings.EMPTY, Collections.emptyList()).getNamedXContents()),
+                null,
+                invalidJsonStr
+            );
+        parser.nextToken();
+
+        MLCommonsClassLoader
+            .initMLInput(FunctionName.AGENT, new Object[] { parser, FunctionName.AGENT }, XContentParser.class, FunctionName.class);
+    }
+
     public enum TestEnum {
         TEST
     }
