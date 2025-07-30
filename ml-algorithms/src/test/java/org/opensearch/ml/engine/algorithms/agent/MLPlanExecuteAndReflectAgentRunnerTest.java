@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -48,6 +49,7 @@ import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.transport.MLTaskResponse;
@@ -58,11 +60,13 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.common.utils.MLTaskUtils;
 import org.opensearch.ml.engine.MLStaticMockBase;
+import org.opensearch.ml.engine.algorithms.agent.tracing.MLAgentTracer;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.telemetry.tracing.noop.NoopTracer;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableMap;
@@ -126,6 +130,11 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
     @SuppressWarnings("unchecked")
     public void setup() {
         MockitoAnnotations.openMocks(this);
+        // Initialize MLAgentTracer with NoopTracer for tests
+        MLFeatureEnabledSetting mockFeatureSetting = mock(MLFeatureEnabledSetting.class);
+        when(mockFeatureSetting.isTracingEnabled()).thenReturn(false); // disables tracing, uses NoopTracer
+        MLAgentTracer.resetForTest();
+        MLAgentTracer.initialize(NoopTracer.INSTANCE, mockFeatureSetting);
         settings = Settings.builder().build();
         toolFactories = ImmutableMap.of(FIRST_TOOL, firstToolFactory, SECOND_TOOL, secondToolFactory);
 
@@ -644,5 +653,153 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
 
             mlTaskUtilsMockedStatic.verify(() -> MLTaskUtils.updateMLTaskDirectly(eq(taskId), eq(taskUpdates), eq(client), any()));
         }
+    }
+
+    @Test
+    public void testLLMResponseFilterDefaultsAndException() {
+        final Map<String, String> params1 = new HashMap<>();
+        params1.put("_llm_interface", "bedrock/converse/claude");
+        mlPlanExecuteAndReflectAgentRunner.setupPromptParameters(params1);
+        System.out.println("llm_response_filter: " + params1.get("llm_response_filter"));
+        assertEquals("$.output.message.content[0].text", params1.get("llm_response_filter"));
+
+        final Map<String, String> params2 = new HashMap<>();
+        params2.put("_llm_interface", "openai/v1/chat/completions");
+        mlPlanExecuteAndReflectAgentRunner.setupPromptParameters(params2);
+        assertEquals("$.choices[0].message.content", params2.get("llm_response_filter"));
+
+        final Map<String, String> params3 = new HashMap<>();
+        params3.put("_llm_interface", "unsupported/interface");
+        Exception ex = assertThrows(Exception.class, () -> mlPlanExecuteAndReflectAgentRunner.setupPromptParameters(params3));
+        assertTrue(ex.getMessage().contains("Unsupported llm interface"));
+    }
+
+    @Test
+    public void testErrorHandlingMemoryCreation() {
+        MLAgent mlAgent = createMLAgentWithTools();
+        // Simulate memory factory throwing error
+        doAnswer(invocation -> {
+            ActionListener<ConversationIndexMemory> listener = invocation.getArgument(3);
+            listener.onFailure(new RuntimeException("memory creation failed"));
+            return null;
+        }).when(memoryFactory).create(any(), any(), any(), any());
+        Map<String, String> params = new HashMap<>();
+        params.put("question", "test question");
+        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
+        verify(agentActionListener).onFailure(any(Exception.class));
+    }
+
+    @Test
+    public void testErrorHandlingChatHistory() {
+        MLAgent mlAgent = createMLAgentWithTools();
+        // Simulate chat history throwing error
+        doAnswer(invocation -> {
+            ActionListener<List<Interaction>> listener = invocation.getArgument(0);
+            listener.onFailure(new RuntimeException("chat history failed"));
+            return null;
+        }).when(conversationIndexMemory).getMessages(any(), anyInt());
+        Map<String, String> params = new HashMap<>();
+        params.put("question", "test question");
+        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
+        verify(agentActionListener).onFailure(any(Exception.class));
+    }
+
+    @Test
+    public void testErrorHandlingSetToolsAndRunAgent() {
+        MLAgent mlAgent = createMLAgentWithTools();
+        // Simulate toolFactories throwing error
+        toolFactories = null;
+        mlPlanExecuteAndReflectAgentRunner = new MLPlanExecuteAndReflectAgentRunner(
+            client,
+            settings,
+            clusterService,
+            xContentRegistry,
+            toolFactories,
+            memoryMap,
+            sdkClient,
+            encryptor
+        );
+        Map<String, String> params = new HashMap<>();
+        params.put("question", "test question");
+        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
+        verify(agentActionListener).onFailure(any(Exception.class));
+    }
+
+    @Test
+    public void testTokenExtractionLogic() {
+        // Simulate planResultInfo.usage with valid and invalid token values
+        Map<String, Object> usage = new HashMap<>();
+        usage.put("inputTokens", 5.0);
+        usage.put("outputTokens", 3.0);
+        usage.put("totalTokens", 8.0);
+        MLAgentTracer.ToolCallExtractionResult planResultInfo = new MLAgentTracer.ToolCallExtractionResult();
+        planResultInfo.usage = usage;
+        AtomicReference<Double> phaseInputTokens = new AtomicReference<>(0.0);
+        AtomicReference<Double> phaseOutputTokens = new AtomicReference<>(0.0);
+        AtomicReference<Double> phaseTotalTokens = new AtomicReference<>(0.0);
+        Double inputTokens = planResultInfo.usage != null && planResultInfo.usage.get("inputTokens") instanceof Number
+            ? ((Number) planResultInfo.usage.get("inputTokens")).doubleValue()
+            : null;
+        Double outputTokens = planResultInfo.usage != null && planResultInfo.usage.get("outputTokens") instanceof Number
+            ? ((Number) planResultInfo.usage.get("outputTokens")).doubleValue()
+            : null;
+        Double totalTokens = planResultInfo.usage != null && planResultInfo.usage.get("totalTokens") instanceof Number
+            ? ((Number) planResultInfo.usage.get("totalTokens")).doubleValue()
+            : null;
+        if (inputTokens != null)
+            phaseInputTokens.set(phaseInputTokens.get() + inputTokens);
+        if (outputTokens != null)
+            phaseOutputTokens.set(phaseOutputTokens.get() + outputTokens);
+        if (totalTokens != null)
+            phaseTotalTokens.set(phaseTotalTokens.get() + totalTokens);
+        assertEquals(5.0, phaseInputTokens.get(), 0.01);
+        assertEquals(3.0, phaseOutputTokens.get(), 0.01);
+        assertEquals(8.0, phaseTotalTokens.get(), 0.01);
+    }
+
+    @Test
+    public void testAdditionalInfoTokenExtraction() {
+        // Simulate reactResult with additional_info and additionalInfo
+        Map<String, Object> addInfo = new HashMap<>();
+        addInfo.put("inputTokens", 2.0);
+        addInfo.put("outputTokens", 4.0);
+        addInfo.put("totalTokens", 6.0);
+        Map<String, Object> dataMap = new HashMap<>();
+        dataMap.put("additional_info", addInfo);
+        ModelTensor tensor = ModelTensor.builder().dataAsMap(dataMap).build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
+        ModelTensorOutput reactResult = ModelTensorOutput.builder().mlModelOutputs(List.of(modelTensors)).build();
+        Double execInput = null, execOutput = null, execTotal = null;
+        List<ModelTensor> tensors = reactResult.getMlModelOutputs().getLast().getMlModelTensors();
+        if (tensors != null && !tensors.isEmpty()) {
+            Map<String, ?> map = tensors.getLast().getDataAsMap();
+            Object addInfoObj = map.get("additional_info");
+            if (addInfoObj == null)
+                addInfoObj = map.get("additionalInfo");
+            if (addInfoObj instanceof Map) {
+                Map<?, ?> addInfoMap = (Map<?, ?>) addInfoObj;
+                execInput = addInfoMap.get("inputTokens") instanceof Number ? ((Number) addInfoMap.get("inputTokens")).doubleValue() : null;
+                execOutput = addInfoMap.get("outputTokens") instanceof Number
+                    ? ((Number) addInfoMap.get("outputTokens")).doubleValue()
+                    : null;
+                execTotal = addInfoMap.get("totalTokens") instanceof Number ? ((Number) addInfoMap.get("totalTokens")).doubleValue() : null;
+            }
+        }
+        assertEquals(2.0, execInput, 0.01);
+        assertEquals(4.0, execOutput, 0.01);
+        assertEquals(6.0, execTotal, 0.01);
+    }
+
+    @Test
+    public void testParseLLMOutputMissingOriginalLLMResponseFilter() {
+        Map<String, String> allParams = new HashMap<>();
+        ModelTensor modelTensor = ModelTensor.builder().dataAsMap(Map.of("foo", "bar")).build();
+        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(List.of(modelTensor)).build();
+        ModelTensorOutput modelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(List.of(modelTensors)).build();
+        Exception ex = assertThrows(
+            IllegalArgumentException.class,
+            () -> mlPlanExecuteAndReflectAgentRunner.parseLLMOutput(allParams, modelTensorOutput)
+        );
+        assertTrue(ex.getMessage().contains("llm_response_filter not found. Please provide the path to the model output."));
     }
 }
