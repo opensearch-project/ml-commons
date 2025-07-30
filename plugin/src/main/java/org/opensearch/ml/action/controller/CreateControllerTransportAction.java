@@ -124,7 +124,7 @@ public class CreateControllerTransportAction extends HandledTransportAction<Acti
                         .validateModelGroupAccess(
                             user,
                             mlModel.getModelGroupId(),
-                            ModelAccessControlHelper.WRITE_ACCESS,
+                            MLCreateControllerAction.NAME,
                             client,
                             resourceSharingClient,
                             ActionListener.wrap(hasPermission -> {

@@ -177,7 +177,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                                         mlFeatureEnabledSetting,
                                         tenantId,
                                         mlModel.getModelGroupId(),
-                                        ModelAccessControlHelper.WRITE_ACCESS,
+                                        MLUpdateModelAction.NAME,
                                         client,
                                         sdkClient,
                                         resourceSharingClient,
@@ -445,7 +445,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                 .validateModelGroupAccess(
                     user,
                     newModelGroupId,
-                    ModelAccessControlHelper.WRITE_ACCESS,
+                    MLUpdateModelAction.NAME,
                     client,
                     resourceSharingClient,
                     ActionListener.wrap(hasNewModelGroupPermission -> {

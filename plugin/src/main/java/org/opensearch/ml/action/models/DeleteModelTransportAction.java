@@ -220,7 +220,7 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                         .validateModelGroupAccess(
                                             user,
                                             mlModel.getModelGroupId(),
-                                            ModelAccessControlHelper.DELETE_ACCESS,
+                                            MLModelDeleteAction.NAME,
                                             client,
                                             resourceSharingClient,
                                             ActionListener.wrap(access -> {

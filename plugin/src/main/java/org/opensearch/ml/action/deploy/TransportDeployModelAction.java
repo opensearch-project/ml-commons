@@ -185,7 +185,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                         .validateModelGroupAccess(
                             user,
                             mlModel.getModelGroupId(),
-                            ModelAccessControlHelper.DEPLOY_ACCESS,
+                            MLDeployModelAction.NAME,
                             client,
                             resourceSharingClient,
                             ActionListener.wrap(access -> {

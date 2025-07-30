@@ -378,7 +378,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
                             mlFeatureEnabledSetting,
                             tenantId,
                             model.getModelGroupId(),
-                            ModelAccessControlHelper.READ_ACCESS,
+                            MLTaskGetAction.NAME,
                             client,
                             sdkClient,
                             resourceSharingClient,

@@ -104,7 +104,7 @@ public class GetControllerTransportAction extends HandledTransportAction<ActionR
                                 .validateModelGroupAccess(
                                     user,
                                     mlModel.getModelGroupId(),
-                                    ModelAccessControlHelper.READ_ACCESS,
+                                    MLControllerGetAction.NAME,
                                     client,
                                     resourceSharingClient,
                                     ActionListener.wrap(hasPermission -> {

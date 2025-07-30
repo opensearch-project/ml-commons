@@ -216,7 +216,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                 mlFeatureEnabledSetting,
                 registerModelInput.getTenantId(),
                 registerModelInput.getModelGroupId(),
-                ModelAccessControlHelper.WRITE_ACCESS,
+                MLRegisterModelAction.NAME,
                 client,
                 sdkClient,
                 resourceSharingClient,

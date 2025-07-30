@@ -11,14 +11,10 @@ import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.utils.MLExceptionUtils.logException;
 
 import java.time.Instant;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import org.apache.commons.lang3.StringUtils;
-import org.apache.commons.lang3.tuple.Pair;
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
@@ -58,9 +54,6 @@ import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.security.spi.resources.client.ResourceSharingClient;
-import org.opensearch.security.spi.resources.sharing.Recipient;
-import org.opensearch.security.spi.resources.sharing.Recipients;
-import org.opensearch.security.spi.resources.sharing.ShareWith;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -202,54 +195,6 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
             logException("Failed to Update model group", e, log);
             listener.onFailure(e);
         }
-    }
-
-    @SuppressWarnings("unchecked")
-    private Pair<ShareWith, ShareWith> buildShareAndRevokeEntities(
-        Map<String, Object> source,
-        MLUpdateModelGroupInput updateModelGroupInput,
-        User user
-    ) {
-        Map<Recipient, Set<String>> shareMap = new HashMap<>();
-        Map<Recipient, Set<String>> revokeMap = new HashMap<>();
-        if (updateModelGroupInput.getModelAccessMode() != null) {
-            Set<String> sourceBRs = new HashSet<>((List<String>) (source.getOrDefault(MLModelGroup.BACKEND_ROLES_FIELD, List.of())));
-            switch (updateModelGroupInput.getModelAccessMode()) {
-                case PRIVATE -> {
-                    // revoke all accesses
-                    revokeMap.put(Recipient.BACKEND_ROLES, sourceBRs);
-                }
-                case RESTRICTED -> {
-                    // share with new entries
-                    Set<String> updateBRs = new HashSet<>(updateModelGroupInput.getBackendRoles());
-                    Set<String> toShare = new HashSet<>(updateBRs);
-                    toShare.removeAll(sourceBRs);
-
-                    // Revoke those that are not present in the update but were already shared with
-                    Set<String> toRevoke = new HashSet<>(sourceBRs);
-                    toRevoke.removeAll(updateBRs);
-
-                    shareMap = Map.of(Recipient.BACKEND_ROLES, toShare);
-                    revokeMap = Map.of(Recipient.BACKEND_ROLES, toRevoke);
-                }
-                case PUBLIC -> // share with *
-                    shareMap = Map.of(Recipient.USERS, Set.of("*"), Recipient.ROLES, Set.of("*"), Recipient.BACKEND_ROLES, Set.of("*"));
-                default -> {
-
-                }
-            }
-        }
-        if (updateModelGroupInput.getBackendRoles() != null) {
-            source.put(MLModelGroup.BACKEND_ROLES_FIELD, updateModelGroupInput.getBackendRoles());
-        }
-        if (Boolean.TRUE.equals(updateModelGroupInput.getIsAddAllBackendRoles())) {
-            source.put(MLModelGroup.BACKEND_ROLES_FIELD, user.getBackendRoles());
-        }
-
-        ShareWith share = new ShareWith(Map.of(ModelAccessControlHelper.READ_ACCESS, new Recipients(shareMap)));
-        ShareWith revoke = new ShareWith(Map.of(ModelAccessControlHelper.READ_ACCESS, new Recipients(revokeMap)));
-
-        return Pair.of(share, revoke);
     }
 
     private void updateModelGroup(

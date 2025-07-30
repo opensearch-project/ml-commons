@@ -66,12 +66,6 @@ public class ModelAccessControlHelper {
 
     private volatile Boolean modelAccessControlEnabled;
 
-    public static final String READ_ACCESS = "read"; // TODO verify this name
-    public static final String WRITE_ACCESS = "write"; // TODO verify this name
-    public static final String DELETE_ACCESS = "delete"; // TODO verify this name
-    public static final String DEPLOY_ACCESS = "deploy"; // TODO verify this name
-    public static final String FULL_ACCESS = "full"; // TODO verify this name
-
     public ModelAccessControlHelper(ClusterService clusterService, Settings settings) {
         modelAccessControlEnabled = ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED.get(settings);
         clusterService
@@ -95,7 +89,7 @@ public class ModelAccessControlHelper {
     public void validateModelGroupAccess(
         User user,
         String modelGroupId,
-        String accessLevel,
+        String action,
         Client client,
         ResourceSharingClient resourceSharingClient,
         ActionListener<Boolean> listener
@@ -105,7 +99,7 @@ public class ModelAccessControlHelper {
             return;
         }
         if (resourceSharingClient != null) {
-            resourceSharingClient.verifyAccess(modelGroupId, ML_MODEL_GROUP_INDEX, accessLevel, ActionListener.wrap(isAuthorized -> {
+            resourceSharingClient.verifyAccess(modelGroupId, ML_MODEL_GROUP_INDEX, action, ActionListener.wrap(isAuthorized -> {
                 if (!isAuthorized) {
                     listener
                         .onFailure(
@@ -164,7 +158,7 @@ public class ModelAccessControlHelper {
         MLFeatureEnabledSetting mlFeatureEnabledSetting,
         String tenantId,
         String modelGroupId,
-        String accessLevel,
+        String action,
         Client client,
         SdkClient sdkClient,
         ResourceSharingClient resourceSharingClient,
@@ -175,7 +169,7 @@ public class ModelAccessControlHelper {
             return;
         }
         if (resourceSharingClient != null) {
-            resourceSharingClient.verifyAccess(modelGroupId, ML_MODEL_GROUP_INDEX, accessLevel, ActionListener.wrap(isAuthorized -> {
+            resourceSharingClient.verifyAccess(modelGroupId, ML_MODEL_GROUP_INDEX, action, ActionListener.wrap(isAuthorized -> {
                 if (!isAuthorized) {
                     listener
                         .onFailure(

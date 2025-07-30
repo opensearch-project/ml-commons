@@ -112,7 +112,7 @@ public class UpdateControllerTransportAction extends HandledTransportAction<Acti
                         .validateModelGroupAccess(
                             user,
                             mlModel.getModelGroupId(),
-                            ModelAccessControlHelper.WRITE_ACCESS,
+                            MLUpdateControllerAction.NAME,
                             client,
                             resourceSharingClient,
                             ActionListener.wrap(hasPermission -> {

@@ -30,6 +30,7 @@ import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.model.MLModelState;
+import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkAction;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkInput;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkResponse;
 import org.opensearch.ml.engine.ModelHelper;
@@ -88,7 +89,7 @@ public class MLModelChunkUploader {
                             .validateModelGroupAccess(
                                 user,
                                 existingModel.getModelGroupId(),
-                                ModelAccessControlHelper.READ_ACCESS,
+                                MLUploadModelChunkAction.NAME,
                                 client,
                                 resourceSharingClient,
                                 ActionListener.wrap(access -> {

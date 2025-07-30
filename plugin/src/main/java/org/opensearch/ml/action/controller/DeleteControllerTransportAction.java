@@ -106,7 +106,7 @@ public class DeleteControllerTransportAction extends HandledTransportAction<Acti
                     .validateModelGroupAccess(
                         user,
                         mlModel.getModelGroupId(),
-                        ModelAccessControlHelper.DELETE_ACCESS,
+                        MLControllerDeleteAction.NAME,
                         client,
                         resourceSharingClient,
                         ActionListener.wrap(hasPermission -> {

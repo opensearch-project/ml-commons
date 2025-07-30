@@ -201,7 +201,7 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
                     .validateModelGroupAccess(
                         user,
                         model.getModelGroupId(),
-                        ModelAccessControlHelper.WRITE_ACCESS,
+                        MLCancelBatchJobAction.NAME,
                         client,
                         resourceSharingClient,
                         ActionListener.wrap(access -> {

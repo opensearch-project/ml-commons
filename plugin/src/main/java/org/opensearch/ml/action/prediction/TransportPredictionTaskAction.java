@@ -141,7 +141,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                             mlFeatureEnabledSetting,
                             tenantId,
                             mlModel.getModelGroupId(),
-                            ModelAccessControlHelper.READ_ACCESS,
+                            MLPredictionTaskAction.NAME,
                             client,
                             sdkClient,
                             resourceSharingClient,

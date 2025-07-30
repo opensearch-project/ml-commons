@@ -306,7 +306,7 @@ public class TransportUndeployModelsAction extends HandledTransportAction<Action
                             mlFeatureEnabledSetting,
                             tenantId,
                             mlModel.getModelGroupId(),
-                            ModelAccessControlHelper.DEPLOY_ACCESS,
+                            MLUndeployModelsAction.NAME,
                             client,
                             sdkClient,
                             resourceSharingClient,

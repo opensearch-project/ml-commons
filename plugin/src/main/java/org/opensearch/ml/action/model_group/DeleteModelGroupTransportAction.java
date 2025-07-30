@@ -116,7 +116,7 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
                 mlFeatureEnabledSetting,
                 tenantId,
                 modelGroupId,
-                ModelAccessControlHelper.DELETE_ACCESS,
+                MLModelGroupDeleteAction.NAME,
                 client,
                 sdkClient,
                 resourceSharingClient,

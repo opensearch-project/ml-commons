@@ -101,7 +101,7 @@ public class TransportRegisterModelMetaAction extends HandledTransportAction<Act
             .validateModelGroupAccess(
                 user,
                 mlUploadInput.getModelGroupId(),
-                ModelAccessControlHelper.WRITE_ACCESS,
+                MLRegisterModelMetaAction.NAME,
                 client,
                 resourceSharingClient,
                 ActionListener.wrap(access -> {
