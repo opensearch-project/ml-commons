@@ -98,7 +98,13 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
-            validateAndDeleteModelGroup(modelGroupId, tenantId, wrappedListener);
+
+            // if resource sharing feature is enabled, access will be automatically checked by security plugin, so no need to check again
+            if (resourceSharingClient != null) {
+                checkForAssociatedModels(modelGroupId, tenantId, wrappedListener);
+            } else {
+                validateAndDeleteModelGroup(modelGroupId, tenantId, wrappedListener);
+            }
         }
     }
 

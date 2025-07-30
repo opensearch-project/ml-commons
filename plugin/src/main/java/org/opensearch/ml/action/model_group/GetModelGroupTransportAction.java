@@ -188,6 +188,12 @@ public class GetModelGroupTransportAction extends HandledTransportAction<ActionR
         MLModelGroup mlModelGroup,
         ActionListener<MLModelGroupGetResponse> wrappedListener
     ) {
+        // if resource sharing feature is enabled, security plugin will have automatically evaluated access to this model group, hence no
+        // need to validate again
+        if (resourceSharingClient != null) {
+            wrappedListener.onResponse(MLModelGroupGetResponse.builder().mlModelGroup(mlModelGroup).build());
+            return;
+        }
         modelAccessControlHelper
             .validateModelGroupAccess(
                 user,

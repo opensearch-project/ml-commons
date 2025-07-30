@@ -87,9 +87,10 @@ public class SearchModelGroupTransportAction extends HandledTransportAction<MLSe
             final ActionListener<SearchResponse> doubleWrappedListener = ActionListener
                 .wrap(wrappedListener::onResponse, e -> wrapListenerToHandleSearchIndexNotFound(e, wrappedListener));
 
-            // TODO: Remove this feature flag check once feature is GA, as it will be enabled by default
+            // If resource-sharing feature is enabled, we fetch accessible model-groups and restrict the search to those model-groups only.
             if (resourceSharingClient != null) {
-                // User will be fetched from thread context using persistent header, so stash context will not stash user info
+                // If a model-group is shared, then it will have been shared at-least at read access, hence the final result is guaranteed
+                // to only contain model-groups that the user at-least has read access to.
                 modelAccessControlHelper.addAccessibleModelGroupsFilter(resourceSharingClient, request.source());
             } else if (!modelAccessControlHelper.skipModelAccessControl(user)) {
                 // Security is enabled, filter is enabled and user isn't admin
