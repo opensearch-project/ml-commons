@@ -207,8 +207,12 @@ public class MLAgentTracer extends MLTracer {
     public static Map<String, String> createAgentTaskAttributes(String agentName, String userTask) {
         Map<String, String> attributes = new HashMap<>();
         attributes.put(ATTR_SERVICE_TYPE, SERVICE_TYPE_TRACER);
-        attributes.put(ATTR_NAME, agentName != null ? agentName : "");
-        attributes.put(ATTR_TASK, userTask != null ? userTask : "");
+        if (agentName != null && !agentName.isEmpty()) {
+            attributes.put(ATTR_NAME, agentName);
+        }
+        if (userTask != null && !userTask.isEmpty()) {
+            attributes.put(ATTR_TASK, userTask);
+        }
         attributes.put(ATTR_OPERATION_NAME, OperationType.CREATE_AGENT.getValue());
         return attributes;
     }
@@ -263,26 +267,30 @@ public class MLAgentTracer extends MLTracer {
         attributes.put(ATTR_SYSTEM, provider);
         // TODO: get actual request model
         attributes.put(ATTR_OPERATION_NAME, OperationType.CHAT.getValue());
-        attributes.put(ATTR_TASK, parameters.getOrDefault(PARAM_PROMPT, ""));
-        attributes.put(ATTR_RESULT, completion != null ? completion : "");
+        if (parameters.containsKey(PARAM_PROMPT)) {
+            attributes.put(ATTR_TASK, parameters.get(PARAM_PROMPT));
+        }
+        if (completion != null) {
+            attributes.put(ATTR_RESULT, completion);
+        }
         attributes.put(ATTR_LATENCY, String.valueOf(latency));
         attributes.put(ATTR_PHASE, PhaseType.PLANNER.getValue());
-        attributes.put(ATTR_SYSTEM_MESSAGE, parameters.getOrDefault(PARAM_SYSTEM_PROMPT, ""));
-        attributes.put(ATTR_TOOL_DESCRIPTION, parameters.getOrDefault(PARAM_TOOLS_PROMPT, ""));
+        if (parameters.containsKey(PARAM_SYSTEM_PROMPT)) {
+            attributes.put(ATTR_SYSTEM_MESSAGE, parameters.get(PARAM_SYSTEM_PROMPT));
+        }
+        if (parameters.containsKey(PARAM_TOOLS_PROMPT)) {
+            attributes.put(ATTR_TOOL_DESCRIPTION, parameters.get(PARAM_TOOLS_PROMPT));
+        }
 
         if (extractedTokens != null && !extractedTokens.isEmpty()) {
-            Double inputTokens = extractedTokens.get(TOKEN_FIELD_INPUT_TOKENS);
-            Double outputTokens = extractedTokens.get(TOKEN_FIELD_OUTPUT_TOKENS);
-            Double totalTokens = extractedTokens.get(TOKEN_FIELD_TOTAL_TOKENS);
-
-            if (inputTokens != null) {
-                attributes.put(ATTR_USAGE_INPUT_TOKENS, String.valueOf(inputTokens.intValue()));
+            if (extractedTokens.containsKey(TOKEN_FIELD_INPUT_TOKENS)) {
+                attributes.put(ATTR_USAGE_INPUT_TOKENS, String.valueOf(extractedTokens.get(TOKEN_FIELD_INPUT_TOKENS).intValue()));
             }
-            if (outputTokens != null) {
-                attributes.put(ATTR_USAGE_OUTPUT_TOKENS, String.valueOf(outputTokens.intValue()));
+            if (extractedTokens.containsKey(TOKEN_FIELD_OUTPUT_TOKENS)) {
+                attributes.put(ATTR_USAGE_OUTPUT_TOKENS, String.valueOf(extractedTokens.get(TOKEN_FIELD_OUTPUT_TOKENS).intValue()));
             }
-            if (totalTokens != null) {
-                attributes.put(ATTR_USAGE_TOTAL_TOKENS, String.valueOf(totalTokens.intValue()));
+            if (extractedTokens.containsKey(TOKEN_FIELD_TOTAL_TOKENS)) {
+                attributes.put(ATTR_USAGE_TOTAL_TOKENS, String.valueOf(extractedTokens.get(TOKEN_FIELD_TOTAL_TOKENS).intValue()));
             }
         }
 
@@ -342,11 +350,13 @@ public class MLAgentTracer extends MLTracer {
         } catch (Exception e) {
             log.warn("[AGENT_TRACE] Exception getting dataAsMap from tensor: {}", e.getMessage());
         }
+
+        if (map == null && result.output.isEmpty()) {
+            result.output = tensor.toString();
+            log.warn("[AGENT_TRACE] tensor.getDataAsMap() is null; using tensor.toString() as output");
+            return result;
+        }
         if (map == null) {
-            if (result.output.isEmpty()) {
-                result.output = tensor.toString();
-                log.warn("[AGENT_TRACE] tensor.getDataAsMap() is null; using tensor.toString() as output");
-            }
             return result;
         }
         if (map.containsKey(RESPONSE_FIELD)) {
@@ -360,17 +370,21 @@ public class MLAgentTracer extends MLTracer {
             result.output = (firstValue instanceof String) ? (String) firstValue : StringUtils.toJson(firstValue);
         }
 
-        Object usageObj = map.get(USAGE_FIELD);
-        if (usageObj instanceof Map) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> usageMap = (Map<String, Object>) usageObj;
-            result.usage = usageMap;
+        if (map.containsKey(USAGE_FIELD)) {
+            Object usageObj = map.get(USAGE_FIELD);
+            if (usageObj instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> usageMap = (Map<String, Object>) usageObj;
+                result.usage = usageMap;
+            }
         }
-        Object metricsObj = map.get(METRICS_FIELD);
-        if (metricsObj instanceof Map) {
-            @SuppressWarnings("unchecked")
-            Map<String, Object> metricsMap = (Map<String, Object>) metricsObj;
-            result.metrics = metricsMap;
+        if (map.containsKey(METRICS_FIELD)) {
+            Object metricsObj = map.get(METRICS_FIELD);
+            if (metricsObj instanceof Map) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> metricsMap = (Map<String, Object>) metricsObj;
+                result.metrics = metricsMap;
+            }
         }
 
         return result;
@@ -384,19 +398,19 @@ public class MLAgentTracer extends MLTracer {
     public static void updateSpanWithResultAttributes(Span span, AgentExecutionContext context) {
         if (span == null)
             return;
-        if (context.getCurrentResult().get() != null) {
+        if (!context.getCurrentResult().get().isEmpty()) {
             span.addAttribute(ATTR_RESULT, context.getCurrentResult().get());
         }
-        if (context.getPhaseInputTokens().get() != null) {
+        if (context.getPhaseInputTokens().get() > 0.0) {
             span.addAttribute(ATTR_USAGE_INPUT_TOKENS, String.valueOf(context.getPhaseInputTokens().get().intValue()));
         }
-        if (context.getPhaseOutputTokens().get() != null) {
+        if (context.getPhaseOutputTokens().get() > 0.0) {
             span.addAttribute(ATTR_USAGE_OUTPUT_TOKENS, String.valueOf(context.getPhaseOutputTokens().get().intValue()));
         }
-        if (context.getPhaseTotalTokens().get() != null) {
+        if (context.getPhaseTotalTokens().get() > 0.0) {
             span.addAttribute(ATTR_USAGE_TOTAL_TOKENS, String.valueOf(context.getPhaseTotalTokens().get().intValue()));
         }
-        if (context.getCurrentLatency().get() != null) {
+        if (context.getCurrentLatency().get() > 0L) {
             span.addAttribute(ATTR_LATENCY, String.valueOf(context.getCurrentLatency().get().intValue()));
         }
     }
@@ -408,17 +422,17 @@ public class MLAgentTracer extends MLTracer {
     public static void updateAgentTaskSpanWithCumulativeTokens(AgentExecutionContext context) {
         if (context.getAgentTaskSpan() == null)
             return;
-        if (context.getAgentInputTokens().get() != null) {
+        if (context.getAgentInputTokens().get() > 0.0) {
             context
                 .getAgentTaskSpan()
                 .addAttribute(ATTR_USAGE_INPUT_TOKENS, String.valueOf(context.getAgentInputTokens().get().intValue()));
         }
-        if (context.getAgentOutputTokens().get() != null) {
+        if (context.getAgentOutputTokens().get() > 0.0) {
             context
                 .getAgentTaskSpan()
                 .addAttribute(ATTR_USAGE_OUTPUT_TOKENS, String.valueOf(context.getAgentOutputTokens().get().intValue()));
         }
-        if (context.getAgentTotalTokens().get() != null) {
+        if (context.getAgentTotalTokens().get() > 0.0) {
             context
                 .getAgentTaskSpan()
                 .addAttribute(ATTR_USAGE_TOTAL_TOKENS, String.valueOf(context.getAgentTotalTokens().get().intValue()));
@@ -728,10 +742,7 @@ public class MLAgentTracer extends MLTracer {
 
     private static void processTensorForTokens(ModelTensor tensor, String provider, Map<String, Double> extractedTokens) {
         Map<String, ?> dataAsMap = tensor.getDataAsMap();
-        if (dataAsMap == null) {
-            return;
-        }
-        if (!dataAsMap.containsKey(USAGE_FIELD)) {
+        if (dataAsMap == null || !dataAsMap.containsKey(USAGE_FIELD)) {
             return;
         }
         Object usageObj = dataAsMap.get(USAGE_FIELD);
@@ -885,7 +896,9 @@ public class MLAgentTracer extends MLTracer {
      * @param task The task value to set.
      */
     public static void setSpanTask(Span span, String task) {
-        span.addAttribute(ATTR_TASK, task != null ? task : "");
+        if (task != null && !task.isEmpty()) {
+            span.addAttribute(ATTR_TASK, task);
+        }
     }
 
     /**
