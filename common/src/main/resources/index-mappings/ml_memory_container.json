@@ -1,0 +1,54 @@
+{
+  "_meta": {
+    "schema_version": 1
+  },
+  "properties": {
+    "container_id": {
+      "type": "keyword"
+    },
+    "container_name": {
+      "type": "text",
+      "fields": {
+        "keyword": {
+          "type": "keyword",
+          "ignore_above": 256
+        }
+      }
+    },
+    "description": {
+      "type": "text"
+    },
+    "created_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "last_updated_time": {
+      "type": "date",
+      "format": "strict_date_time||epoch_millis"
+    },
+    "index_name": {
+      "type": "keyword"
+    },
+    "semantic_storage": {
+      "type": "object",
+      "properties": {
+        "semanticStorageEnabled": {
+          "type": "boolean"
+        },
+        "modelType": {
+          "type": "keyword"
+        },
+        "modelId": {
+          "type": "keyword"
+        },
+        "dimension": {
+          "type": "integer"
+        }
+      }
+    },
+    "owner": USER_MAPPING_PLACEHOLDER,
+    "tenant_id": {
+      "type": "keyword"
+    }
+  }
+}

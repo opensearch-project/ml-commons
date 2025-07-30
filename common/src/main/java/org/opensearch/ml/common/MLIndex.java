@@ -19,6 +19,8 @@ import static org.opensearch.ml.common.CommonValue.ML_JOBS_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_JOBS_INDEX_MAPPING_PATH;
 import static org.opensearch.ml.common.CommonValue.ML_MCP_SESSION_MANAGEMENT_INDEX_MAPPING_PATH;
 import static org.opensearch.ml.common.CommonValue.ML_MCP_TOOLS_INDEX_MAPPING_PATH;
+import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
+import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX_MAPPING_PATH;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_MESSAGE_INDEX;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_MESSAGE_INDEX_MAPPING_PATH;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_META_INDEX;
@@ -45,6 +47,7 @@ public enum MLIndex {
     AGENT(ML_AGENT_INDEX, false, ML_AGENT_INDEX_MAPPING_PATH),
     MEMORY_META(ML_MEMORY_META_INDEX, false, ML_MEMORY_META_INDEX_MAPPING_PATH),
     MEMORY_MESSAGE(ML_MEMORY_MESSAGE_INDEX, false, ML_MEMORY_MESSAGE_INDEX_MAPPING_PATH),
+    MEMORY_CONTAINER(ML_MEMORY_CONTAINER_INDEX, false, ML_MEMORY_CONTAINER_INDEX_MAPPING_PATH),
     MCP_SESSION_MANAGEMENT(MCP_SESSION_MANAGEMENT_INDEX, false, ML_MCP_SESSION_MANAGEMENT_INDEX_MAPPING_PATH),
     MCP_TOOLS(MCP_TOOLS_INDEX, false, ML_MCP_TOOLS_INDEX_MAPPING_PATH),
     JOBS(ML_JOBS_INDEX, false, ML_JOBS_INDEX_MAPPING_PATH);
