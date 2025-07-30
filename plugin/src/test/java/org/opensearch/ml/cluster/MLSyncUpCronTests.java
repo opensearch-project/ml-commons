@@ -428,6 +428,35 @@ public class MLSyncUpCronTests extends OpenSearchTestCase {
         verify(client, never()).bulk(any(), any());
     }
 
+    public void testRun_NoMLModelIndex_RefreshMLKey() {
+        Metadata metadata = new Metadata.Builder().indices(Map.of()).build();
+        DiscoveryNode node = new DiscoveryNode(
+            "node",
+            new TransportAddress(TransportAddress.META_ADDRESS, new AtomicInteger().incrementAndGet()),
+            new HashMap<>(),
+            ImmutableSet.of(DiscoveryNodeRole.DATA_ROLE),
+            Version.CURRENT
+        );
+        ClusterState state = new ClusterState(
+            new ClusterName("test cluster"),
+            123l,
+            "111111",
+            metadata,
+            null,
+            DiscoveryNodes.builder().add(node).build(),
+            null,
+            Map.of(),
+            0,
+            false
+        );
+        ;
+        when(clusterService.state()).thenReturn(state);
+        when(mlFeatureEnabledSetting.isKeyRefreshEnabled()).thenReturn(true);
+
+        syncUpCron.run();
+        verify(client, times(1)).execute(eq(MLSyncUpAction.INSTANCE), any(), any());
+    }
+
     private void mockSyncUp_GatherRunningTasks() {
         doAnswer(invocation -> {
             ActionListener<MLSyncUpNodesResponse> listener = invocation.getArgument(2);
