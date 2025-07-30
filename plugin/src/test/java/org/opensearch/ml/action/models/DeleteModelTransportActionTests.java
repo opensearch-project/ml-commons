@@ -81,6 +81,7 @@ import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.utils.AgentModelsSearcher;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.search.SearchHit;
@@ -152,6 +153,9 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
     @Mock
     GetPipelineResponse getIngestionPipelineResponse;
 
+    @Mock
+    MLResourceSharingExtension mlResourceSharingExtension;
+
     private BulkByScrollResponse emptyBulkByScrollResponse;
 
     private Map<String, Object> configDataMap;
@@ -182,7 +186,8 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
                 clusterService,
                 modelAccessControlHelper,
                 agentModelsSearcher,
-                mlFeatureEnabledSetting
+                mlFeatureEnabledSetting,
+                mlResourceSharingExtension
             )
         );
 
@@ -190,7 +195,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<Boolean> listener = invocation.getArgument(3);
             listener.onResponse(true);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any());
 
         threadContext = new ThreadContext(settings);
         when(clusterService.getSettings()).thenReturn(settings);
@@ -420,7 +425,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<Boolean> listener = invocation.getArgument(3);
             listener.onResponse(false);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any());
 
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
 
@@ -501,7 +506,7 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
             ActionListener<Boolean> listener = invocation.getArgument(3);
             listener.onFailure(new Exception("Failed to validate access"));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any());
 
         deleteModelTransportAction.doExecute(null, mlModelDeleteRequest, actionListener);
 
@@ -935,7 +940,8 @@ public class DeleteModelTransportActionTests extends OpenSearchTestCase {
                 clusterService,
                 modelAccessControlHelper,
                 agentModelsSearcher,
-                mlFeatureEnabledSetting
+                mlFeatureEnabledSetting,
+                mlResourceSharingExtension
             )
         );
 

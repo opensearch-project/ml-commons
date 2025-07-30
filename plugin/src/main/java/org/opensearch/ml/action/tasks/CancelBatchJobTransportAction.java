@@ -26,7 +26,6 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
-import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
@@ -59,9 +58,11 @@ import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.script.ScriptService;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -73,7 +74,6 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
 
     Client client;
     NamedXContentRegistry xContentRegistry;
-    Settings settings;
 
     ClusterService clusterService;
     ScriptService scriptService;
@@ -85,13 +85,13 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
 
     MLTaskManager mlTaskManager;
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private final ResourceSharingClient resourceSharingClient;
 
     @Inject
     public CancelBatchJobTransportAction(
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
-        Settings settings,
         NamedXContentRegistry xContentRegistry,
         ClusterService clusterService,
         ScriptService scriptService,
@@ -100,7 +100,8 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
         EncryptorImpl encryptor,
         MLTaskManager mlTaskManager,
         MLModelManager mlModelManager,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        MLResourceSharingExtension mlResourceSharingExtension
     ) {
         super(MLCancelBatchJobAction.NAME, transportService, actionFilters, MLCancelBatchJobRequest::new);
         this.client = client;
@@ -113,7 +114,7 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
         this.mlTaskManager = mlTaskManager;
         this.mlModelManager = mlModelManager;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
-        this.settings = settings;
+        this.resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
     }
 
     @Override
@@ -197,35 +198,45 @@ public class CancelBatchJobTransportAction extends HandledTransportAction<Action
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<MLModel> getModelListener = ActionListener.wrap(model -> {
                 modelAccessControlHelper
-                    .validateModelGroupAccess(user, model.getModelGroupId(), client, settings, ActionListener.wrap(access -> {
-                        if (!access) {
-                            actionListener.onFailure(new MLValidationException("You don't have permission to cancel this batch job"));
-                        } else {
-                            if (model.getConnector() != null) {
-                                Connector connector = model.getConnector();
-                                executeConnector(connector, mlInput, actionListener);
-                            } else if (clusterService.state().metadata().hasIndex(ML_CONNECTOR_INDEX)) {
-                                ActionListener<Connector> listener = ActionListener
-                                    .wrap(connector -> { executeConnector(connector, mlInput, actionListener); }, e -> {
-                                        log.error("Failed to get connector {}", model.getConnectorId(), e);
-                                        actionListener.onFailure(e);
-                                    });
-                                try (ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()) {
-                                    connectorAccessControlHelper
-                                        .getConnector(
-                                            client,
-                                            model.getConnectorId(),
-                                            ActionListener.runBefore(listener, threadContext::restore)
-                                        );
-                                }
+                    .validateModelGroupAccess(
+                        user,
+                        model.getModelGroupId(),
+                        ModelAccessControlHelper.WRITE_ACCESS,
+                        client,
+                        resourceSharingClient,
+                        ActionListener.wrap(access -> {
+                            if (!access) {
+                                actionListener.onFailure(new MLValidationException("You don't have permission to cancel this batch job"));
                             } else {
-                                actionListener.onFailure(new ResourceNotFoundException("Can't find connector " + model.getConnectorId()));
+                                if (model.getConnector() != null) {
+                                    Connector connector = model.getConnector();
+                                    executeConnector(connector, mlInput, actionListener);
+                                } else if (clusterService.state().metadata().hasIndex(ML_CONNECTOR_INDEX)) {
+                                    ActionListener<Connector> listener = ActionListener
+                                        .wrap(connector -> { executeConnector(connector, mlInput, actionListener); }, e -> {
+                                            log.error("Failed to get connector {}", model.getConnectorId(), e);
+                                            actionListener.onFailure(e);
+                                        });
+                                    try (
+                                        ThreadContext.StoredContext threadContext = client.threadPool().getThreadContext().stashContext()
+                                    ) {
+                                        connectorAccessControlHelper
+                                            .getConnector(
+                                                client,
+                                                model.getConnectorId(),
+                                                ActionListener.runBefore(listener, threadContext::restore)
+                                            );
+                                    }
+                                } else {
+                                    actionListener
+                                        .onFailure(new ResourceNotFoundException("Can't find connector " + model.getConnectorId()));
+                                }
                             }
-                        }
-                    }, e -> {
-                        log.error("Failed to validate Access for Model Group " + model.getModelGroupId(), e);
-                        actionListener.onFailure(e);
-                    }));
+                        }, e -> {
+                            log.error("Failed to validate Access for Model Group " + model.getModelGroupId(), e);
+                            actionListener.onFailure(e);
+                        })
+                    );
             }, e -> {
                 log.error("Failed to retrieve the ML model with the given ID", e);
                 actionListener

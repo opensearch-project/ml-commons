@@ -86,6 +86,7 @@ import org.opensearch.ml.engine.utils.S3Utils;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
@@ -95,6 +96,7 @@ import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.script.ScriptService;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -111,7 +113,6 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
     Client client;
     SdkClient sdkClient;
     NamedXContentRegistry xContentRegistry;
-    Settings settings;
 
     ClusterService clusterService;
     ScriptService scriptService;
@@ -132,6 +133,8 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
     volatile Pattern remoteJobFailedStatusRegexPattern;
     private final MLEngine mlEngine;
 
+    private final ResourceSharingClient resourceSharingClient;
+
     // private Map<String, String> decryptedCredential;
 
     @Inject
@@ -150,7 +153,8 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         MLModelManager mlModelManager,
         MLFeatureEnabledSetting mlFeatureEnabledSetting,
         Settings settings,
-        MLEngine mlEngine
+        MLEngine mlEngine,
+        MLResourceSharingExtension mlResourceSharingExtension
     ) {
         super(MLTaskGetAction.NAME, transportService, actionFilters, MLTaskGetRequest::new);
         this.client = client;
@@ -165,7 +169,7 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
         this.mlModelManager = mlModelManager;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         this.mlEngine = mlEngine;
-        this.settings = settings;
+        this.resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
 
         remoteJobStatusFields = ML_COMMONS_REMOTE_JOB_STATUS_FIELD.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_REMOTE_JOB_STATUS_FIELD, it -> remoteJobStatusFields = it);
@@ -374,9 +378,10 @@ public class GetTaskTransportAction extends HandledTransportAction<ActionRequest
                             mlFeatureEnabledSetting,
                             tenantId,
                             model.getModelGroupId(),
+                            ModelAccessControlHelper.READ_ACCESS,
                             client,
                             sdkClient,
-                            settings,
+                            resourceSharingClient,
                             ActionListener.wrap(access -> {
                                 if (!access) {
                                     actionListener

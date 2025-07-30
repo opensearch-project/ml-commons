@@ -17,7 +17,6 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
-import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.commons.authuser.User;
@@ -33,6 +32,7 @@ import org.opensearch.ml.common.transport.model_group.MLModelGroupGetAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetRequest;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupGetResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
+import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
@@ -40,6 +40,7 @@ import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -53,33 +54,33 @@ import lombok.extern.log4j.Log4j2;
 public class GetModelGroupTransportAction extends HandledTransportAction<ActionRequest, MLModelGroupGetResponse> {
 
     final Client client;
-    final Settings settings;
     final SdkClient sdkClient;
     final NamedXContentRegistry xContentRegistry;
     final ClusterService clusterService;
     final ModelAccessControlHelper modelAccessControlHelper;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private final ResourceSharingClient resourceSharingClient;
 
     @Inject
     public GetModelGroupTransportAction(
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
-        Settings settings,
         SdkClient sdkClient,
         NamedXContentRegistry xContentRegistry,
         ClusterService clusterService,
         ModelAccessControlHelper modelAccessControlHelper,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        MLResourceSharingExtension mlResourceSharingExtension
     ) {
         super(MLModelGroupGetAction.NAME, transportService, actionFilters, MLModelGroupGetRequest::new);
         this.client = client;
-        this.settings = settings;
         this.sdkClient = sdkClient;
         this.xContentRegistry = xContentRegistry;
         this.clusterService = clusterService;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+        this.resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
     }
 
     @Override
@@ -187,21 +188,29 @@ public class GetModelGroupTransportAction extends HandledTransportAction<ActionR
         MLModelGroup mlModelGroup,
         ActionListener<MLModelGroupGetResponse> wrappedListener
     ) {
-        modelAccessControlHelper.validateModelGroupAccess(user, modelGroupId, client, settings, ActionListener.wrap(access -> {
-            if (!access) {
-                wrappedListener
-                    .onFailure(
-                        new OpenSearchStatusException(
-                            "User doesn't have privilege to perform this operation on this model group",
-                            RestStatus.FORBIDDEN
-                        )
-                    );
-            } else {
-                wrappedListener.onResponse(MLModelGroupGetResponse.builder().mlModelGroup(mlModelGroup).build());
-            }
-        }, e -> {
-            log.error("Failed to validate access for Model Group {}", modelGroupId, e);
-            wrappedListener.onFailure(e);
-        }));
+        modelAccessControlHelper
+            .validateModelGroupAccess(
+                user,
+                modelGroupId,
+                ModelAccessControlHelper.READ_ACCESS,
+                client,
+                resourceSharingClient,
+                ActionListener.wrap(access -> {
+                    if (!access) {
+                        wrappedListener
+                            .onFailure(
+                                new OpenSearchStatusException(
+                                    "User doesn't have privilege to perform this operation on this model group",
+                                    RestStatus.FORBIDDEN
+                                )
+                            );
+                    } else {
+                        wrappedListener.onResponse(MLModelGroupGetResponse.builder().mlModelGroup(mlModelGroup).build());
+                    }
+                }, e -> {
+                    log.error("Failed to validate access for Model Group {}", modelGroupId, e);
+                    wrappedListener.onFailure(e);
+                })
+            );
     }
 }

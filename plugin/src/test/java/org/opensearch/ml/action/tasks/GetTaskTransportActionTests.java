@@ -79,6 +79,7 @@ import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
@@ -133,6 +134,9 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
 
     @Mock
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
+    @Mock
+    MLResourceSharingExtension mlResourceSharingExtension;
 
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
@@ -199,7 +203,8 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
                 mlModelManager,
                 mlFeatureEnabledSetting,
                 settings,
-                mlEngine
+                mlEngine,
+                mlResourceSharingExtension
             )
         );
 
@@ -247,7 +252,7 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
             ActionListener<Boolean> listener = invocation.getArgument(3);
             listener.onResponse(true);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ActionListener<Connector> listener = invocation.getArgument(2);
@@ -337,7 +342,7 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
             ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onResponse(false);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         GetResponse getResponse = prepareMLTask(FunctionName.REMOTE, MLTaskType.BATCH_PREDICTION, remoteJob);
 
@@ -362,7 +367,7 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
             ActionListener<Boolean> listener = invocation.getArgument(3);
             listener.onResponse(false);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any());
 
         GetResponse getResponse = prepareMLTask(FunctionName.REMOTE, MLTaskType.BATCH_PREDICTION, remoteJob);
 
@@ -391,7 +396,7 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
             ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onResponse(true);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ActionListener<Connector> listener = invocation.getArgument(2);
@@ -422,7 +427,7 @@ public class GetTaskTransportActionTests extends OpenSearchTestCase {
             ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onResponse(true);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ActionListener<Connector> listener = invocation.getArgument(2);

@@ -46,6 +46,7 @@ import org.opensearch.ml.common.transport.controller.MLControllerGetRequest;
 import org.opensearch.ml.common.transport.controller.MLControllerGetResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -85,6 +86,9 @@ public class GetControllerTransportActionTests extends OpenSearchTestCase {
     @Mock
     MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
+    @Mock
+    MLResourceSharingExtension mlResourceSharingExtension;
+
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
@@ -103,12 +107,12 @@ public class GetControllerTransportActionTests extends OpenSearchTestCase {
                 transportService,
                 actionFilters,
                 client,
-                settings,
                 xContentRegistry,
                 clusterService,
                 mlModelManager,
                 modelAccessControlHelper,
-                mlFeatureEnabledSetting
+                mlFeatureEnabledSetting,
+                mlResourceSharingExtension
             )
         );
         mlControllerGetRequest = MLControllerGetRequest.builder().modelId("testModelId").build();
@@ -123,7 +127,7 @@ public class GetControllerTransportActionTests extends OpenSearchTestCase {
             ActionListener<Boolean> listener = invocation.getArgument(3);
             listener.onResponse(true);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any());
 
         GetResponse getResponse = prepareControllerGetResponse();
         doAnswer(invocation -> {
@@ -161,7 +165,7 @@ public class GetControllerTransportActionTests extends OpenSearchTestCase {
             ActionListener<Boolean> listener = invocation.getArgument(3);
             listener.onResponse(false);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any());
 
         getControllerTransportAction.doExecute(null, mlControllerGetRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -178,7 +182,7 @@ public class GetControllerTransportActionTests extends OpenSearchTestCase {
             ActionListener<Boolean> listener = invocation.getArgument(3);
             listener.onFailure(new RuntimeException("Exception occurred. Please check log for more details."));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any());
 
         getControllerTransportAction.doExecute(null, mlControllerGetRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);

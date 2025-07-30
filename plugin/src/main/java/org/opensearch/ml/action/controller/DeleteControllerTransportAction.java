@@ -27,7 +27,6 @@ import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
-import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
@@ -43,7 +42,9 @@ import org.opensearch.ml.common.transport.controller.MLUndeployControllerNodesRe
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -56,26 +57,26 @@ import lombok.extern.log4j.Log4j2;
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class DeleteControllerTransportAction extends HandledTransportAction<ActionRequest, DeleteResponse> {
     Client client;
-    Settings settings;
     NamedXContentRegistry xContentRegistry;
     ClusterService clusterService;
     MLModelManager mlModelManager;
     MLModelCacheHelper mlModelCacheHelper;
     ModelAccessControlHelper modelAccessControlHelper;
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private final ResourceSharingClient resourceSharingClient;
 
     @Inject
     public DeleteControllerTransportAction(
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
-        Settings settings,
         NamedXContentRegistry xContentRegistry,
         ClusterService clusterService,
         MLModelManager mlModelManager,
         MLModelCacheHelper mlModelCacheHelper,
         ModelAccessControlHelper modelAccessControlHelper,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        MLResourceSharingExtension mlResourceSharingExtension
     ) {
         super(MLControllerDeleteAction.NAME, transportService, actionFilters, MLControllerDeleteRequest::new);
         this.client = client;
@@ -85,6 +86,7 @@ public class DeleteControllerTransportAction extends HandledTransportAction<Acti
         this.mlModelCacheHelper = mlModelCacheHelper;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+        this.resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
     }
 
     @Override
@@ -101,49 +103,56 @@ public class DeleteControllerTransportAction extends HandledTransportAction<Acti
             mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
                 Boolean isHidden = mlModel.getIsHidden();
                 modelAccessControlHelper
-                    .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, settings, ActionListener.wrap(hasPermission -> {
-                        if (hasPermission) {
-                            mlModelManager
-                                .getController(
-                                    modelId,
-                                    ActionListener
-                                        .wrap(
-                                            controller -> deleteControllerWithDeployedModel(
+                    .validateModelGroupAccess(
+                        user,
+                        mlModel.getModelGroupId(),
+                        ModelAccessControlHelper.DELETE_ACCESS,
+                        client,
+                        resourceSharingClient,
+                        ActionListener.wrap(hasPermission -> {
+                            if (hasPermission) {
+                                mlModelManager
+                                    .getController(
+                                        modelId,
+                                        ActionListener
+                                            .wrap(
+                                                controller -> deleteControllerWithDeployedModel(
+                                                    modelId,
+                                                    mlModel.getIsHidden(),
+                                                    wrappedListener
+                                                ),
+                                                deleteException -> {
+                                                    log.error(deleteException);
+                                                    wrappedListener.onFailure(deleteException);
+                                                }
+                                            )
+                                    );
+                            } else {
+                                wrappedListener
+                                    .onFailure(
+                                        new OpenSearchStatusException(
+                                            getErrorMessage(
+                                                "User doesn't have privilege to perform this operation on this model controller.",
                                                 modelId,
-                                                mlModel.getIsHidden(),
-                                                wrappedListener
+                                                isHidden
                                             ),
-                                            deleteException -> {
-                                                log.error(deleteException);
-                                                wrappedListener.onFailure(deleteException);
-                                            }
+                                            RestStatus.FORBIDDEN
                                         )
+                                    );
+                            }
+                        }, exception -> {
+                            log
+                                .error(
+                                    getErrorMessage(
+                                        "Permission denied: Unable to delete the model controller with the provided model. Details: ",
+                                        modelId,
+                                        isHidden
+                                    ),
+                                    exception
                                 );
-                        } else {
-                            wrappedListener
-                                .onFailure(
-                                    new OpenSearchStatusException(
-                                        getErrorMessage(
-                                            "User doesn't have privilege to perform this operation on this model controller.",
-                                            modelId,
-                                            isHidden
-                                        ),
-                                        RestStatus.FORBIDDEN
-                                    )
-                                );
-                        }
-                    }, exception -> {
-                        log
-                            .error(
-                                getErrorMessage(
-                                    "Permission denied: Unable to delete the model controller with the provided model. Details: ",
-                                    modelId,
-                                    isHidden
-                                ),
-                                exception
-                            );
-                        wrappedListener.onFailure(exception);
-                    }));
+                            wrappedListener.onFailure(exception);
+                        })
+                    );
             }, e -> {
                 log
                     .warn(

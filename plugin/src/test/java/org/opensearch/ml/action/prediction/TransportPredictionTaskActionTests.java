@@ -54,6 +54,7 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.task.MLPredictTaskRunner;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
@@ -111,6 +112,9 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
     @Mock
     ThreadPool threadPool;
 
+    @Mock
+    MLResourceSharingExtension mlResourceSharingExtension;
+
     private MLInput mlInput;
 
     @Before
@@ -156,7 +160,8 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
                 mlModelManager,
                 modelAccessControlHelper,
                 mlFeatureEnabledSetting,
-                settings
+                settings,
+                mlResourceSharingExtension
             )
         );
     }
@@ -170,7 +175,7 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
             ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onFailure(new RuntimeException("Exception occurred. Please check log for more details."));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ((ActionListener<MLTaskResponse>) invocation.getArguments()[3]).onResponse(null);
@@ -209,7 +214,7 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
             ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onFailure(new OpenSearchStatusException("Testing OpenSearchStatusException", RestStatus.BAD_REQUEST));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ((ActionListener<MLTaskResponse>) invocation.getArguments()[3]).onResponse(null);
@@ -232,7 +237,7 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
             ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onFailure(new MLResourceNotFoundException("Testing MLResourceNotFoundException"));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ((ActionListener<MLTaskResponse>) invocation.getArguments()[3]).onResponse(null);
@@ -255,7 +260,7 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
             ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onFailure(new CircuitBreakingException("Memory Circuit Breaker is open, please check your resources!", CircuitBreaker.Durability.TRANSIENT));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ((ActionListener<MLTaskResponse>) invocation.getArguments()[3]).onResponse(null);

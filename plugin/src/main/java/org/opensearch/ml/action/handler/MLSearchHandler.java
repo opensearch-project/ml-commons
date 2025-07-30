@@ -66,7 +66,6 @@ public class MLSearchHandler {
     private ModelAccessControlHelper modelAccessControlHelper;
 
     private ClusterService clusterService;
-    private Settings settings;
 
     public MLSearchHandler(
         Client client,
@@ -79,7 +78,6 @@ public class MLSearchHandler {
         this.client = client;
         this.xContentRegistry = xContentRegistry;
         this.clusterService = clusterService;
-        this.settings = settings;
     }
 
     /**
@@ -148,7 +146,7 @@ public class MLSearchHandler {
                     .searchDataObjectAsync(searchDataObjectRequest)
                     .whenComplete(SdkClientUtils.wrapSearchCompletion(doubleWrapperListener));
             } else {
-                SearchSourceBuilder sourceBuilder = modelAccessControlHelper.createSearchSourceBuilder(user, settings);
+                SearchSourceBuilder sourceBuilder = modelAccessControlHelper.createSearchSourceBuilder(user);
                 SearchRequest modelGroupSearchRequest = new SearchRequest();
                 sourceBuilder.fetchSource(new String[] { MLModelGroup.MODEL_GROUP_ID_FIELD, }, null);
                 sourceBuilder.size(10000);

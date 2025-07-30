@@ -9,8 +9,6 @@ import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MODEL_GROUP_INDEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED;
-import static org.opensearch.security.spi.resources.FeatureConfigConstants.OPENSEARCH_RESOURCE_SHARING_ENABLED;
-import static org.opensearch.security.spi.resources.FeatureConfigConstants.OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT;
 
 import java.util.Collections;
 import java.util.HashSet;
@@ -47,7 +45,6 @@ import org.opensearch.index.query.TermQueryBuilder;
 import org.opensearch.index.query.TermsQueryBuilder;
 import org.opensearch.ml.common.AccessMode;
 import org.opensearch.ml.common.MLModelGroup;
-import org.opensearch.ml.common.ResourceSharingClientAccessor;
 import org.opensearch.ml.common.exception.MLResourceNotFoundException;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -69,6 +66,12 @@ public class ModelAccessControlHelper {
 
     private volatile Boolean modelAccessControlEnabled;
 
+    public static final String READ_ACCESS = "read"; // TODO verify this name
+    public static final String WRITE_ACCESS = "write"; // TODO verify this name
+    public static final String DELETE_ACCESS = "delete"; // TODO verify this name
+    public static final String DEPLOY_ACCESS = "deploy"; // TODO verify this name
+    public static final String FULL_ACCESS = "full"; // TODO verify this name
+
     public ModelAccessControlHelper(ClusterService clusterService, Settings settings) {
         modelAccessControlEnabled = ML_COMMONS_MODEL_ACCESS_CONTROL_ENABLED.get(settings);
         clusterService
@@ -88,27 +91,21 @@ public class ModelAccessControlHelper {
             RangeQueryBuilder.class
         );
 
-    private boolean isResourceSharingFeatureEnabled(Settings settings) {
-        return isModelAccessControlEnabled()
-            && settings.getAsBoolean(OPENSEARCH_RESOURCE_SHARING_ENABLED, OPENSEARCH_RESOURCE_SHARING_ENABLED_DEFAULT);
-    }
-
     // TODO Eventually remove this when all usages of it have been migrated to the SdkClient version
     public void validateModelGroupAccess(
         User user,
         String modelGroupId,
+        String accessLevel,
         Client client,
-        Settings settings,
+        ResourceSharingClient resourceSharingClient,
         ActionListener<Boolean> listener
     ) {
         if (modelGroupId == null) {
             listener.onResponse(true);
             return;
         }
-        boolean isResourceSharingFeatureEnabled = isResourceSharingFeatureEnabled(settings);
-        if (isResourceSharingFeatureEnabled) {
-            ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
-            resourceSharingClient.verifyAccess(modelGroupId, ML_MODEL_GROUP_INDEX, ActionListener.wrap(isAuthorized -> {
+        if (resourceSharingClient != null) {
+            resourceSharingClient.verifyAccess(modelGroupId, ML_MODEL_GROUP_INDEX, accessLevel, ActionListener.wrap(isAuthorized -> {
                 if (!isAuthorized) {
                     listener
                         .onFailure(
@@ -167,19 +164,18 @@ public class ModelAccessControlHelper {
         MLFeatureEnabledSetting mlFeatureEnabledSetting,
         String tenantId,
         String modelGroupId,
+        String accessLevel,
         Client client,
         SdkClient sdkClient,
-        Settings settings,
+        ResourceSharingClient resourceSharingClient,
         ActionListener<Boolean> listener
     ) {
         if (modelGroupId == null) {
             listener.onResponse(true);
             return;
         }
-        boolean isResourceSharingFeatureEnabled = isResourceSharingFeatureEnabled(settings);
-        if (isResourceSharingFeatureEnabled) {
-            ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
-            resourceSharingClient.verifyAccess(modelGroupId, ML_MODEL_GROUP_INDEX, ActionListener.wrap(isAuthorized -> {
+        if (resourceSharingClient != null) {
+            resourceSharingClient.verifyAccess(modelGroupId, ML_MODEL_GROUP_INDEX, accessLevel, ActionListener.wrap(isAuthorized -> {
                 if (!isAuthorized) {
                     listener
                         .onFailure(
@@ -371,17 +367,18 @@ public class ModelAccessControlHelper {
         return searchSourceBuilder;
     }
 
-    public SearchSourceBuilder createSearchSourceBuilder(User user, Settings settings) {
-        boolean isResourceSharingFeatureEnabled = isResourceSharingFeatureEnabled(settings);
+    public SearchSourceBuilder createSearchSourceBuilder(User user, ResourceSharingClient resourceSharingClient) {
         // TODO: Remove this feature flag check once feature is GA, as it will be enabled by default
-        if (isResourceSharingFeatureEnabled) {
-            return addAccessibleModelGroupsFilter(new SearchSourceBuilder());
+        if (resourceSharingClient != null) {
+            return addAccessibleModelGroupsFilter(resourceSharingClient, new SearchSourceBuilder());
         }
         return addUserBackendRolesFilter(user, new SearchSourceBuilder());
     }
 
-    public SearchSourceBuilder addAccessibleModelGroupsFilter(SearchSourceBuilder searchSourceBuilder) {
-        ResourceSharingClient resourceSharingClient = ResourceSharingClientAccessor.getInstance().getResourceSharingClient();
+    public SearchSourceBuilder addAccessibleModelGroupsFilter(
+        ResourceSharingClient resourceSharingClient,
+        SearchSourceBuilder searchSourceBuilder
+    ) {
 
         resourceSharingClient.getAccessibleResourceIds(ML_MODEL_GROUP_INDEX, ActionListener.wrap(modelGroupIds -> {
             if (modelGroupIds.isEmpty()) {

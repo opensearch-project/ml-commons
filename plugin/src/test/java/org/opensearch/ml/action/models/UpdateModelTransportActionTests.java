@@ -86,6 +86,7 @@ import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.tasks.Task;
@@ -178,6 +179,9 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
     @Mock
     NamedXContentRegistry xContentRegistry;
 
+    @Mock
+    MLResourceSharingExtension mlResourceSharingExtension;
+
     private static final List<String> TRUSTED_CONNECTOR_ENDPOINTS_REGEXES = ImmutableList.of("^https://api\\.test\\.com/.*$");
 
     @Before
@@ -265,7 +269,8 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
                 settings,
                 clusterService,
                 mlEngine,
-                mlFeatureEnabledSetting
+                mlFeatureEnabledSetting,
+                mlResourceSharingExtension
             )
         );
 
@@ -298,7 +303,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             return null;
         })
             .when(modelAccessControlHelper)
-            .validateModelGroupAccess(any(), eq("test_model_group_id"), any(), any(), isA(ActionListener.class));
+            .validateModelGroupAccess(any(), eq("test_model_group_id"), any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(6);
@@ -312,6 +317,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
                 any(),
                 eq("test_model_group_id"),
                 any(),
+                any(),
                 any(SdkClient.class),
                 any(),
                 isA(ActionListener.class)
@@ -324,7 +330,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             return null;
         })
             .when(modelAccessControlHelper)
-            .validateModelGroupAccess(any(), eq("updated_test_model_group_id"), any(), any(), isA(ActionListener.class));
+            .validateModelGroupAccess(any(), eq("updated_test_model_group_id"), any(), any(), any(), isA(ActionListener.class));
 
         doAnswer(invocation -> {
             ActionListener<Boolean> listener = invocation.getArgument(6);
@@ -337,6 +343,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
                 any(),
                 any(),
                 eq("updated_test_model_group_id"),
+                any(),
                 any(),
                 any(SdkClient.class),
                 any(),
@@ -606,7 +613,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             return null;
         })
             .when(modelAccessControlHelper)
-            .validateModelGroupAccess(any(), any(), any(), any(), any(), any(SdkClient.class), any(), isA(ActionListener.class));
+            .validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(SdkClient.class), any(), isA(ActionListener.class));
 
         CountDownLatch latch = new CountDownLatch(1);
         LatchedActionListener<UpdateResponse> latchedActionListener = new LatchedActionListener<>(actionListener, latch);
@@ -632,7 +639,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
                     )
                 );
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), isA(ActionListener.class));
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), isA(ActionListener.class));
 
         transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -651,7 +658,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             return null;
         })
             .when(modelAccessControlHelper)
-            .validateModelGroupAccess(any(), eq("updated_test_model_group_id"), any(), any(), isA(ActionListener.class));
+            .validateModelGroupAccess(any(), eq("updated_test_model_group_id"), any(), any(), any(), isA(ActionListener.class));
 
         transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -675,7 +682,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
             return null;
         })
             .when(modelAccessControlHelper)
-            .validateModelGroupAccess(any(), eq("updated_test_model_group_id"), any(), any(), isA(ActionListener.class));
+            .validateModelGroupAccess(any(), eq("updated_test_model_group_id"), any(), any(), any(), isA(ActionListener.class));
 
         transportUpdateModelAction.doExecute(task, updateLocalModelRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -840,6 +847,7 @@ public class UpdateModelTransportActionTests extends OpenSearchTestCase {
                 any(),
                 any(),
                 eq("mockUpdateModelGroupId"),
+                any(),
                 any(),
                 eq(sdkClient),
                 any(),

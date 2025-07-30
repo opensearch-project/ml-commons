@@ -66,6 +66,7 @@ import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
@@ -147,6 +148,9 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
     @Mock
     private IndexResponse indexResponse;
 
+    @Mock
+    MLResourceSharingExtension mlResourceSharingExtension;
+
     ThreadContext threadContext;
 
     private TransportRegisterModelAction transportRegisterModelAction;
@@ -203,7 +207,8 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
                 modelAccessControlHelper,
                 connectorAccessControlHelper,
                 mlModelGroupManager,
-                mlFeatureEnabledSetting
+                mlFeatureEnabledSetting,
+                mlResourceSharingExtension
             )
         );
         assertNotNull(transportRegisterModelAction);
@@ -212,7 +217,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onResponse(true);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         MLStat mlStat = mock(MLStat.class);
         when(mlStats.getStat(eq(MLNodeLevelStat.ML_REQUEST_COUNT))).thenReturn(mlStat);
@@ -292,7 +297,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onResponse(false);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         transportRegisterModelAction.doExecute(task, prepareRequest("test url", "testModelGroupsID"), actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -396,7 +401,8 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             modelAccessControlHelper,
             connectorAccessControlHelper,
             mlModelGroupManager,
-            mlFeatureEnabledSetting
+            mlFeatureEnabledSetting,
+            mlResourceSharingExtension
         );
 
         IllegalArgumentException e = assertThrows(
@@ -456,7 +462,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onFailure(new Exception("Failed to validate access"));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         transportRegisterModelAction.doExecute(task, prepareRequest("http://test_url", "modelGroupID"), actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -706,7 +712,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onResponse(false);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         MLRegisterModelInput registerModelInput = MLRegisterModelInput
             .builder()
@@ -754,7 +760,7 @@ public class TransportRegisterModelActionTests extends OpenSearchTestCase {
             ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onResponse(false);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         transportRegisterModelAction.doExecute(task, prepareRequest("Test URL", null), actionListener);
 

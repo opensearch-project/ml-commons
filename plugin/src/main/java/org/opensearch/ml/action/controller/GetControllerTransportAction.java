@@ -19,7 +19,6 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
-import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
@@ -35,8 +34,10 @@ import org.opensearch.ml.common.transport.controller.MLControllerGetRequest;
 import org.opensearch.ml.common.transport.controller.MLControllerGetResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -49,33 +50,33 @@ import lombok.extern.log4j.Log4j2;
 @FieldDefaults(makeFinal = true, level = AccessLevel.PRIVATE)
 public class GetControllerTransportAction extends HandledTransportAction<ActionRequest, MLControllerGetResponse> {
     Client client;
-    Settings settings;
     NamedXContentRegistry xContentRegistry;
     ClusterService clusterService;
     MLModelManager mlModelManager;
     ModelAccessControlHelper modelAccessControlHelper;
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private final ResourceSharingClient resourceSharingClient;
 
     @Inject
     public GetControllerTransportAction(
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
-        Settings settings,
         NamedXContentRegistry xContentRegistry,
         ClusterService clusterService,
         MLModelManager mlModelManager,
         ModelAccessControlHelper modelAccessControlHelper,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        MLResourceSharingExtension mlResourceSharingExtension
     ) {
         super(MLControllerGetAction.NAME, transportService, actionFilters, MLControllerGetRequest::new);
         this.client = client;
-        this.settings = settings;
         this.xContentRegistry = xContentRegistry;
         this.clusterService = clusterService;
         this.mlModelManager = mlModelManager;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+        this.resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
     }
 
     @Override
@@ -103,8 +104,9 @@ public class GetControllerTransportAction extends HandledTransportAction<ActionR
                                 .validateModelGroupAccess(
                                     user,
                                     mlModel.getModelGroupId(),
+                                    ModelAccessControlHelper.READ_ACCESS,
                                     client,
-                                    settings,
+                                    resourceSharingClient,
                                     ActionListener.wrap(hasPermission -> {
                                         if (hasPermission) {
                                             wrappedListener.onResponse(MLControllerGetResponse.builder().controller(controller).build());

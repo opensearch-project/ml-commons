@@ -18,7 +18,6 @@ import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.support.WriteRequest;
 import org.opensearch.common.inject.Inject;
-import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.authuser.User;
@@ -37,6 +36,7 @@ import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.transport.client.Client;
 
 import lombok.extern.log4j.Log4j2;
@@ -46,7 +46,6 @@ public class MLModelChunkUploader {
 
     private final MLIndicesHandler mlIndicesHandler;
     private final Client client;
-    private final Settings settings;
     private final NamedXContentRegistry xContentRegistry;
     ModelAccessControlHelper modelAccessControlHelper;
 
@@ -54,18 +53,20 @@ public class MLModelChunkUploader {
     public MLModelChunkUploader(
         MLIndicesHandler mlIndicesHandler,
         Client client,
-        Settings settings,
         final NamedXContentRegistry xContentRegistry,
         ModelAccessControlHelper modelAccessControlHelper
     ) {
         this.mlIndicesHandler = mlIndicesHandler;
         this.client = client;
-        this.settings = settings;
         this.xContentRegistry = xContentRegistry;
         this.modelAccessControlHelper = modelAccessControlHelper;
     }
 
-    public void uploadModelChunk(MLUploadModelChunkInput uploadModelChunkInput, ActionListener<MLUploadModelChunkResponse> listener) {
+    public void uploadModelChunk(
+        MLUploadModelChunkInput uploadModelChunkInput,
+        ResourceSharingClient resourceSharingClient,
+        ActionListener<MLUploadModelChunkResponse> listener
+    ) {
         final String modelId = uploadModelChunkInput.getModelId();
         GetRequest getRequest = new GetRequest(ML_MODEL_INDEX).id(modelId);
 
@@ -87,8 +88,9 @@ public class MLModelChunkUploader {
                             .validateModelGroupAccess(
                                 user,
                                 existingModel.getModelGroupId(),
+                                ModelAccessControlHelper.READ_ACCESS,
                                 client,
-                                settings,
+                                resourceSharingClient,
                                 ActionListener.wrap(access -> {
                                     if (!access) {
                                         log.error("You don't have permissions to perform this operation on this model.");

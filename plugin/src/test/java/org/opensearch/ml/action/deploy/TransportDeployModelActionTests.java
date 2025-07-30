@@ -70,6 +70,7 @@ import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.encryptor.EncryptorImpl;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.stats.MLNodeLevelStat;
 import org.opensearch.ml.stats.MLStat;
 import org.opensearch.ml.stats.MLStats;
@@ -140,6 +141,9 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
     @Mock
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
+    @Mock
+    MLResourceSharingExtension mlResourceSharingExtension;
+
     private final List<DiscoveryNode> eligibleNodes = mock(List.class);
 
     @Rule
@@ -177,7 +181,7 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
             ActionListener<Boolean> listener = invocation.getArgument(3);
             listener.onResponse(true);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any());
 
         when(mlDeployModelRequest.isUserInitiatedDeployRequest()).thenReturn(true);
 
@@ -202,7 +206,8 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
             mlStats,
             settings,
             modelAccessControlHelper,
-            mlFeatureEnabledSetting
+            mlFeatureEnabledSetting,
+            mlResourceSharingExtension
         );
     }
 
@@ -270,7 +275,8 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
                 mlStats,
                 settings,
                 modelAccessControlHelper,
-                mlFeatureEnabledSetting
+                mlFeatureEnabledSetting,
+                mlResourceSharingExtension
             )
         );
         MLModel mlModel = mock(MLModel.class);
@@ -315,7 +321,8 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
                 mlStats,
                 settings,
                 modelAccessControlHelper,
-                mlFeatureEnabledSetting
+                mlFeatureEnabledSetting,
+                mlResourceSharingExtension
             )
         );
 
@@ -358,7 +365,7 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
             ActionListener<Boolean> listener = invocation.getArgument(3);
             listener.onResponse(false);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any());
 
         ActionListener<MLDeployModelResponse> deployModelResponseListener = mock(ActionListener.class);
         transportDeployModelAction.doExecute(mock(Task.class), mlDeployModelRequest, deployModelResponseListener);
@@ -414,7 +421,7 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
             ActionListener<Boolean> listener = invocation.getArgument(3);
             listener.onFailure(new Exception("Failed to validate access"));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any());
 
         ActionListener<MLDeployModelResponse> deployModelResponseListener = mock(ActionListener.class);
         transportDeployModelAction.doExecute(mock(Task.class), mlDeployModelRequest, deployModelResponseListener);
@@ -449,7 +456,8 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
             mlStats,
             settings,
             modelAccessControlHelper,
-            mlFeatureEnabledSetting
+            mlFeatureEnabledSetting,
+            mlResourceSharingExtension
         );
 
         transportDeployModelAction.doExecute(mock(Task.class), mlDeployModelRequest, mock(ActionListener.class));
@@ -476,7 +484,8 @@ public class TransportDeployModelActionTests extends OpenSearchTestCase {
                 mlStats,
                 settings,
                 modelAccessControlHelper,
-                mlFeatureEnabledSetting
+                mlFeatureEnabledSetting,
+                mlResourceSharingExtension
             )
         );
         MLDeployModelRequest MLDeployModelRequest1 = mock(MLDeployModelRequest.class);

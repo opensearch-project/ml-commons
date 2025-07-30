@@ -53,7 +53,9 @@ import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -73,6 +75,7 @@ public class CreateControllerTransportAction extends HandledTransportAction<Acti
     MLModelCacheHelper mlModelCacheHelper;
     ModelAccessControlHelper modelAccessControlHelper;
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private final ResourceSharingClient resourceSharingClient;
 
     @Inject
     public CreateControllerTransportAction(
@@ -85,7 +88,8 @@ public class CreateControllerTransportAction extends HandledTransportAction<Acti
         ModelAccessControlHelper modelAccessControlHelper,
         MLModelCacheHelper mlModelCacheHelper,
         MLModelManager mlModelManager,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        MLResourceSharingExtension mlResourceSharingExtension
     ) {
         super(MLCreateControllerAction.NAME, transportService, actionFilters, MLCreateControllerRequest::new);
         this.mlIndicesHandler = mlIndicesHandler;
@@ -96,6 +100,7 @@ public class CreateControllerTransportAction extends HandledTransportAction<Acti
         this.mlModelCacheHelper = mlModelCacheHelper;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+        this.resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
     }
 
     @Override
@@ -116,35 +121,42 @@ public class CreateControllerTransportAction extends HandledTransportAction<Acti
                 Boolean isHidden = mlModel.getIsHidden();
                 if (functionName == TEXT_EMBEDDING || functionName == REMOTE) {
                     modelAccessControlHelper
-                        .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, settings, ActionListener.wrap(hasPermission -> {
-                            if (hasPermission) {
-                                if (mlModel.getModelState() != MLModelState.DEPLOYING) {
-                                    indexAndCreateController(mlModel, controller, wrappedListener);
+                        .validateModelGroupAccess(
+                            user,
+                            mlModel.getModelGroupId(),
+                            ModelAccessControlHelper.WRITE_ACCESS,
+                            client,
+                            resourceSharingClient,
+                            ActionListener.wrap(hasPermission -> {
+                                if (hasPermission) {
+                                    if (mlModel.getModelState() != MLModelState.DEPLOYING) {
+                                        indexAndCreateController(mlModel, controller, wrappedListener);
+                                    } else {
+                                        String errorMessage =
+                                            "Creating a model controller during its corresponding model in DEPLOYING state is not allowed, please either create the model controller after it is deployed or before deploying it.";
+                                        errorMessage = getErrorMessage(errorMessage, modelId, isHidden);
+                                        log.error(errorMessage);
+                                        wrappedListener.onFailure(new OpenSearchStatusException(errorMessage, RestStatus.CONFLICT));
+                                    }
                                 } else {
-                                    String errorMessage =
-                                        "Creating a model controller during its corresponding model in DEPLOYING state is not allowed, please either create the model controller after it is deployed or before deploying it.";
+                                    String errorMessage = "User doesn't have privilege to perform this operation on this model controller.";
                                     errorMessage = getErrorMessage(errorMessage, modelId, isHidden);
                                     log.error(errorMessage);
-                                    wrappedListener.onFailure(new OpenSearchStatusException(errorMessage, RestStatus.CONFLICT));
+                                    wrappedListener.onFailure(new OpenSearchStatusException(errorMessage, RestStatus.FORBIDDEN));
                                 }
-                            } else {
-                                String errorMessage = "User doesn't have privilege to perform this operation on this model controller.";
-                                errorMessage = getErrorMessage(errorMessage, modelId, isHidden);
-                                log.error(errorMessage);
-                                wrappedListener.onFailure(new OpenSearchStatusException(errorMessage, RestStatus.FORBIDDEN));
-                            }
-                        }, exception -> {
-                            log
-                                .error(
-                                    getErrorMessage(
-                                        "Permission denied: Unable to create the model controller. Details: {}",
-                                        modelId,
-                                        isHidden
-                                    ),
-                                    exception
-                                );
-                            wrappedListener.onFailure(exception);
-                        }));
+                            }, exception -> {
+                                log
+                                    .error(
+                                        getErrorMessage(
+                                            "Permission denied: Unable to create the model controller. Details: {}",
+                                            modelId,
+                                            isHidden
+                                        ),
+                                        exception
+                                    );
+                                wrappedListener.onFailure(exception);
+                            })
+                        );
                 } else {
                     wrappedListener
                         .onFailure(

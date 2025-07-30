@@ -75,6 +75,7 @@ import org.opensearch.ml.common.transport.model.MLModelDeleteRequest;
 import org.opensearch.ml.common.transport.model.MLModelGetRequest;
 import org.opensearch.ml.engine.utils.AgentModelsSearcher;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
+import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.DeleteDataObjectRequest;
@@ -83,6 +84,7 @@ import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -106,13 +108,13 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
     Boolean isSafeDelete;
 
     final Client client;
-    final Settings settings;
     final SdkClient sdkClient;
     final NamedXContentRegistry xContentRegistry;
     final ClusterService clusterService;
 
     final ModelAccessControlHelper modelAccessControlHelper;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private final ResourceSharingClient resourceSharingClient;
 
     final AgentModelsSearcher agentModelsSearcher;
 
@@ -127,7 +129,8 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         ClusterService clusterService,
         ModelAccessControlHelper modelAccessControlHelper,
         AgentModelsSearcher agentModelsSearcher,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        MLResourceSharingExtension mlResourceSharingExtension
     ) {
         super(MLModelDeleteAction.NAME, transportService, actionFilters, MLModelDeleteRequest::new);
         this.client = client;
@@ -136,10 +139,10 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
         this.clusterService = clusterService;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.agentModelsSearcher = agentModelsSearcher;
-        this.settings = settings;
         isSafeDelete = ML_COMMONS_SAFE_DELETE_WITH_USAGE_CHECK.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_SAFE_DELETE_WITH_USAGE_CHECK, it -> isSafeDelete = it);
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+        this.resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
     }
 
     @Override
@@ -217,8 +220,9 @@ public class DeleteModelTransportAction extends HandledTransportAction<ActionReq
                                         .validateModelGroupAccess(
                                             user,
                                             mlModel.getModelGroupId(),
+                                            ModelAccessControlHelper.DELETE_ACCESS,
                                             client,
-                                            settings,
+                                            resourceSharingClient,
                                             ActionListener.wrap(access -> {
                                                 if (!access) {
                                                     wrappedListener

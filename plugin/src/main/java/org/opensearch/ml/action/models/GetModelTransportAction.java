@@ -20,7 +20,6 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
-import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.commons.authuser.User;
@@ -36,12 +35,14 @@ import org.opensearch.ml.common.transport.model.MLModelGetAction;
 import org.opensearch.ml.common.transport.model.MLModelGetRequest;
 import org.opensearch.ml.common.transport.model.MLModelGetResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
+import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -65,7 +66,7 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
 
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
-    Settings settings;
+    private final ResourceSharingClient resourceSharingClient;
 
     @Inject
     public GetModelTransportAction(
@@ -73,20 +74,20 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
         ActionFilters actionFilters,
         Client client,
         SdkClient sdkClient,
-        Settings settings,
         NamedXContentRegistry xContentRegistry,
         ClusterService clusterService,
         ModelAccessControlHelper modelAccessControlHelper,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        MLResourceSharingExtension mlResourceSharingExtension
     ) {
         super(MLModelGetAction.NAME, transportService, actionFilters, MLModelGetRequest::new);
         this.client = client;
         this.sdkClient = sdkClient;
-        this.settings = settings;
         this.xContentRegistry = xContentRegistry;
         this.clusterService = clusterService;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+        this.resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
     }
 
     @Override
@@ -144,8 +145,9 @@ public class GetModelTransportAction extends HandledTransportAction<ActionReques
                                         .validateModelGroupAccess(
                                             user,
                                             mlModel.getModelGroupId(),
+                                            ModelAccessControlHelper.READ_ACCESS,
                                             client,
-                                            settings,
+                                            resourceSharingClient,
                                             ActionListener.wrap(access -> {
                                                 if (!access) {
                                                     wrappedListener

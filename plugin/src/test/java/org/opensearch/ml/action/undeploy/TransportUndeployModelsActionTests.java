@@ -56,6 +56,7 @@ import org.opensearch.ml.common.transport.undeploy.MLUndeployModelsResponse;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -116,6 +117,9 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
     @Mock
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
+    @Mock
+    MLResourceSharingExtension mlResourceSharingExtension;
+
     TransportUndeployModelsAction transportUndeployModelsAction;
 
     private String[] modelIds = { "modelId1" };
@@ -143,13 +147,13 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
                 threadPool,
                 client,
                 sdkClient,
-                settings,
                 xContentRegistry,
                 nodeFilter,
                 mlTaskDispatcher,
                 mlModelManager,
                 modelAccessControlHelper,
-                mlFeatureEnabledSetting
+                mlFeatureEnabledSetting,
+                mlResourceSharingExtension
             )
         );
         when(modelAccessControlHelper.isModelAccessControlEnabled()).thenReturn(true);
@@ -446,7 +450,7 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
             ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onResponse(true);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         List<MLUndeployModelNodeResponse> responseList = new ArrayList<>();
         List<FailedNodeException> failuresList = new ArrayList<>();
@@ -477,7 +481,7 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
             ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onResponse(true);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         MLUndeployModelsResponse mlUndeployModelsResponse = new MLUndeployModelsResponse(mock(MLUndeployModelNodesResponse.class));
         doAnswer(invocation -> {
@@ -495,7 +499,7 @@ public class TransportUndeployModelsActionTests extends OpenSearchTestCase {
             ActionListener<Boolean> listener = invocation.getArgument(6);
             listener.onResponse(true);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ActionListener<MLUndeployModelsResponse> listener = invocation.getArgument(2);

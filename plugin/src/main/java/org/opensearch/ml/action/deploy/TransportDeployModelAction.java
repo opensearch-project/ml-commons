@@ -56,6 +56,7 @@ import org.opensearch.ml.common.transport.deploy.MLDeployModelResponse;
 import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
@@ -63,6 +64,7 @@ import org.opensearch.ml.utils.MLExceptionUtils;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -92,6 +94,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
     private volatile boolean allowCustomDeploymentPlan;
     private final ModelAccessControlHelper modelAccessControlHelper;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private final ResourceSharingClient resourceSharingClient;
 
     @Inject
     public TransportDeployModelAction(
@@ -110,7 +113,8 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         MLStats mlStats,
         Settings settings,
         ModelAccessControlHelper modelAccessControlHelper,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        MLResourceSharingExtension mlResourceSharingExtension
     ) {
         super(MLDeployModelAction.NAME, transportService, actionFilters, MLDeployModelRequest::new);
         this.transportService = transportService;
@@ -127,6 +131,7 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         this.mlStats = mlStats;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+        this.resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
         this.settings = settings;
         allowCustomDeploymentPlan = ML_COMMONS_ALLOW_CUSTOM_DEPLOYMENT_PLAN.get(settings);
         clusterService
@@ -177,22 +182,29 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                     }
                 } else {
                     modelAccessControlHelper
-                        .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, settings, ActionListener.wrap(access -> {
-                            if (!access) {
-                                wrappedListener
-                                    .onFailure(
-                                        new OpenSearchStatusException(
-                                            "User doesn't have privilege to perform this operation on this model",
-                                            RestStatus.FORBIDDEN
-                                        )
-                                    );
-                            } else {
-                                deployModel(deployModelRequest, mlModel, modelId, tenantId, wrappedListener, listener);
-                            }
-                        }, e -> {
-                            log.error(getErrorMessage("Failed to Validate Access for the given model", modelId, isHidden), e);
-                            wrappedListener.onFailure(e);
-                        }));
+                        .validateModelGroupAccess(
+                            user,
+                            mlModel.getModelGroupId(),
+                            ModelAccessControlHelper.DEPLOY_ACCESS,
+                            client,
+                            resourceSharingClient,
+                            ActionListener.wrap(access -> {
+                                if (!access) {
+                                    wrappedListener
+                                        .onFailure(
+                                            new OpenSearchStatusException(
+                                                "User doesn't have privilege to perform this operation on this model",
+                                                RestStatus.FORBIDDEN
+                                            )
+                                        );
+                                } else {
+                                    deployModel(deployModelRequest, mlModel, modelId, tenantId, wrappedListener, listener);
+                                }
+                            }, e -> {
+                                log.error(getErrorMessage("Failed to Validate Access for the given model", modelId, isHidden), e);
+                                wrappedListener.onFailure(e);
+                            })
+                        );
                 }
 
             }, e -> {

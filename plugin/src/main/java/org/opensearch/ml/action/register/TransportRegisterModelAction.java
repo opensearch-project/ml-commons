@@ -60,6 +60,7 @@ import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.stats.MLStats;
 import org.opensearch.ml.task.MLTaskDispatcher;
 import org.opensearch.ml.task.MLTaskManager;
@@ -67,6 +68,7 @@ import org.opensearch.ml.utils.MLExceptionUtils;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -104,6 +106,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
     ConnectorAccessControlHelper connectorAccessControlHelper;
     MLModelGroupManager mlModelGroupManager;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private final ResourceSharingClient resourceSharingClient;
 
     @Inject
     public TransportRegisterModelAction(
@@ -124,7 +127,8 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         ModelAccessControlHelper modelAccessControlHelper,
         ConnectorAccessControlHelper connectorAccessControlHelper,
         MLModelGroupManager mlModelGroupManager,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        MLResourceSharingExtension mlResourceSharingExtension
     ) {
         super(MLRegisterModelAction.NAME, transportService, actionFilters, MLRegisterModelRequest::new);
         this.transportService = transportService;
@@ -144,6 +148,7 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
         this.mlModelGroupManager = mlModelGroupManager;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         this.settings = settings;
+        this.resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
 
         trustedUrlRegex = ML_COMMONS_TRUSTED_URL_REGEX.get(settings);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_TRUSTED_URL_REGEX, it -> trustedUrlRegex = it);
@@ -211,9 +216,10 @@ public class TransportRegisterModelAction extends HandledTransportAction<ActionR
                 mlFeatureEnabledSetting,
                 registerModelInput.getTenantId(),
                 registerModelInput.getModelGroupId(),
+                ModelAccessControlHelper.WRITE_ACCESS,
                 client,
                 sdkClient,
-                settings,
+                resourceSharingClient,
                 ActionListener.wrap(access -> {
                     if (access) {
                         doRegister(registerModelInput, listener);

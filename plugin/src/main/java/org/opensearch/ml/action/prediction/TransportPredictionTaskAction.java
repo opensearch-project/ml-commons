@@ -34,12 +34,14 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.task.MLPredictTaskRunner;
 import org.opensearch.ml.task.MLTaskRunner;
 import org.opensearch.ml.utils.MLNodeUtils;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -57,7 +59,6 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
 
     Client client;
     SdkClient sdkClient;
-    Settings settings;
 
     ClusterService clusterService;
 
@@ -70,6 +71,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
     private volatile boolean enableAutomaticDeployment;
 
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private final ResourceSharingClient resourceSharingClient;
 
     @Inject
     public TransportPredictionTaskAction(
@@ -84,7 +86,8 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         MLModelManager mlModelManager,
         ModelAccessControlHelper modelAccessControlHelper,
         MLFeatureEnabledSetting mlFeatureEnabledSetting,
-        Settings settings
+        Settings settings,
+        MLResourceSharingExtension mlResourceSharingExtension
     ) {
         super(MLPredictionTaskAction.NAME, transportService, actionFilters, MLPredictionTaskRequest::new);
         this.mlPredictTaskRunner = mlPredictTaskRunner;
@@ -93,12 +96,12 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         this.clusterService = clusterService;
         this.client = client;
         this.sdkClient = sdkClient;
-        this.settings = settings;
         this.xContentRegistry = xContentRegistry;
         this.mlModelManager = mlModelManager;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         enableAutomaticDeployment = ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE.get(settings);
+        this.resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(ML_COMMONS_MODEL_AUTO_DEPLOY_ENABLE, it -> enableAutomaticDeployment = it);
@@ -138,9 +141,10 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                             mlFeatureEnabledSetting,
                             tenantId,
                             mlModel.getModelGroupId(),
+                            ModelAccessControlHelper.READ_ACCESS,
                             client,
                             sdkClient,
-                            settings,
+                            resourceSharingClient,
                             ActionListener.wrap(access -> {
                                 if (!access) {
                                     wrappedListener

@@ -14,6 +14,8 @@ import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkAction;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkInput;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkRequest;
 import org.opensearch.ml.common.transport.upload_chunk.MLUploadModelChunkResponse;
+import org.opensearch.ml.resources.MLResourceSharingExtension;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 
@@ -24,17 +26,20 @@ public class TransportUploadModelChunkAction extends HandledTransportAction<Acti
     TransportService transportService;
     ActionFilters actionFilters;
     MLModelChunkUploader mlModelChunkUploader;
+    private final ResourceSharingClient resourceSharingClient;
 
     @Inject
     public TransportUploadModelChunkAction(
         TransportService transportService,
         ActionFilters actionFilters,
-        MLModelChunkUploader mlModelChunkUploader
+        MLModelChunkUploader mlModelChunkUploader,
+        MLResourceSharingExtension mlResourceSharingExtension
     ) {
         super(MLUploadModelChunkAction.NAME, transportService, actionFilters, MLUploadModelChunkRequest::new);
         this.transportService = transportService;
         this.actionFilters = actionFilters;
         this.mlModelChunkUploader = mlModelChunkUploader;
+        this.resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
     }
 
     @Override
@@ -42,6 +47,6 @@ public class TransportUploadModelChunkAction extends HandledTransportAction<Acti
         MLUploadModelChunkRequest uploadModelRequest = MLUploadModelChunkRequest.fromActionRequest(request);
         MLUploadModelChunkInput mlUploadChunkInput = uploadModelRequest.getUploadModelChunkInput();
 
-        mlModelChunkUploader.uploadModelChunk(mlUploadChunkInput, listener);
+        mlModelChunkUploader.uploadModelChunk(mlUploadChunkInput, resourceSharingClient, listener);
     }
 }

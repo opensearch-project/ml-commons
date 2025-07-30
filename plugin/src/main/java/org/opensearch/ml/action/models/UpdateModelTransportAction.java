@@ -61,11 +61,13 @@ import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.client.UpdateDataObjectRequest;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -81,7 +83,6 @@ import lombok.extern.log4j.Log4j2;
 public class UpdateModelTransportAction extends HandledTransportAction<ActionRequest, UpdateResponse> {
     final Client client;
     private final SdkClient sdkClient;
-    final Settings settings;
     final ClusterService clusterService;
     final ModelAccessControlHelper modelAccessControlHelper;
     final ConnectorAccessControlHelper connectorAccessControlHelper;
@@ -90,6 +91,7 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
     final MLModelGroupManager mlModelGroupManager;
     final MLEngine mlEngine;
     volatile List<String> trustedConnectorEndpointsRegex;
+    private final ResourceSharingClient resourceSharingClient;
 
     @Inject
     public UpdateModelTransportAction(
@@ -104,7 +106,8 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         Settings settings,
         ClusterService clusterService,
         MLEngine mlEngine,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        MLResourceSharingExtension mlResourceSharingExtension
     ) {
         super(MLUpdateModelAction.NAME, transportService, actionFilters, MLUpdateModelRequest::new);
         this.client = client;
@@ -115,8 +118,8 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         this.mlModelGroupManager = mlModelGroupManager;
         this.clusterService = clusterService;
         this.mlEngine = mlEngine;
-        this.settings = settings;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+        this.resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
         trustedConnectorEndpointsRegex = ML_COMMONS_TRUSTED_CONNECTOR_ENDPOINTS_REGEX.get(settings);
         clusterService
             .getClusterSettings()
@@ -174,9 +177,10 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
                                         mlFeatureEnabledSetting,
                                         tenantId,
                                         mlModel.getModelGroupId(),
+                                        ModelAccessControlHelper.WRITE_ACCESS,
                                         client,
                                         sdkClient,
-                                        settings,
+                                        resourceSharingClient,
                                         ActionListener.wrap(hasPermission -> {
                                             if (hasPermission) {
                                                 updateRemoteOrTextEmbeddingModel(
@@ -438,42 +442,50 @@ public class UpdateModelTransportAction extends HandledTransportAction<ActionReq
         UpdateRequest updateRequest = new UpdateRequest(ML_MODEL_INDEX, modelId);
         if (newModelGroupId != null) {
             modelAccessControlHelper
-                .validateModelGroupAccess(user, newModelGroupId, client, settings, ActionListener.wrap(hasNewModelGroupPermission -> {
-                    if (hasNewModelGroupPermission) {
-                        mlModelGroupManager.getModelGroupResponse(sdkClient, newModelGroupId, ActionListener.wrap(newModelGroupResponse -> {
-                            buildUpdateRequest(
-                                modelId,
-                                newModelGroupId,
-                                updateRequest,
-                                updateModelInput,
-                                newModelGroupResponse,
-                                wrappedListener,
-                                isUpdateModelCache
-                            );
-                        },
-                            exception -> wrappedListener
+                .validateModelGroupAccess(
+                    user,
+                    newModelGroupId,
+                    ModelAccessControlHelper.WRITE_ACCESS,
+                    client,
+                    resourceSharingClient,
+                    ActionListener.wrap(hasNewModelGroupPermission -> {
+                        if (hasNewModelGroupPermission) {
+                            mlModelGroupManager
+                                .getModelGroupResponse(sdkClient, newModelGroupId, ActionListener.wrap(newModelGroupResponse -> {
+                                    buildUpdateRequest(
+                                        modelId,
+                                        newModelGroupId,
+                                        updateRequest,
+                                        updateModelInput,
+                                        newModelGroupResponse,
+                                        wrappedListener,
+                                        isUpdateModelCache
+                                    );
+                                },
+                                    exception -> wrappedListener
+                                        .onFailure(
+                                            new OpenSearchStatusException(
+                                                "Failed to find the model group with the provided model group id in the update model input, MODEL_GROUP_ID: "
+                                                    + newModelGroupId,
+                                                RestStatus.NOT_FOUND
+                                            )
+                                        )
+                                ));
+                        } else {
+                            wrappedListener
                                 .onFailure(
                                     new OpenSearchStatusException(
-                                        "Failed to find the model group with the provided model group id in the update model input, MODEL_GROUP_ID: "
+                                        "User Doesn't have privilege to re-link this model to the target model group due to no access to the target model group with model group ID "
                                             + newModelGroupId,
-                                        RestStatus.NOT_FOUND
+                                        RestStatus.FORBIDDEN
                                     )
-                                )
-                        ));
-                    } else {
-                        wrappedListener
-                            .onFailure(
-                                new OpenSearchStatusException(
-                                    "User Doesn't have privilege to re-link this model to the target model group due to no access to the target model group with model group ID "
-                                        + newModelGroupId,
-                                    RestStatus.FORBIDDEN
-                                )
-                            );
-                    }
-                }, exception -> {
-                    log.error("Permission denied: Unable to update the model with ID {}. Details: {}", modelId, exception);
-                    wrappedListener.onFailure(exception);
-                }));
+                                );
+                        }
+                    }, exception -> {
+                        log.error("Permission denied: Unable to update the model with ID {}. Details: {}", modelId, exception);
+                        wrappedListener.onFailure(exception);
+                    })
+                );
         } else {
             buildUpdateRequest(modelId, tenantId, updateRequest, updateModelInput, wrappedListener, isUpdateModelCache);
         }
