@@ -401,7 +401,11 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                 reactParams.put(SYSTEM_PROMPT_FIELD, allParams.getOrDefault(EXECUTOR_SYSTEM_PROMPT_FIELD, DEFAULT_EXECUTOR_SYSTEM_PROMPT));
                 reactParams.put(LLM_RESPONSE_FILTER, allParams.get(LLM_RESPONSE_FILTER));
                 reactParams.put(MAX_ITERATION, allParams.getOrDefault(EXECUTOR_MAX_ITERATIONS_FIELD, DEFAULT_REACT_MAX_ITERATIONS));
-                reactParams.put(MLAgentExecutor.MESSAGE_HISTORY_LIMIT, allParams.getOrDefault(EXECUTOR_MESSAGE_HISTORY_LIMIT, DEFAULT_EXECUTOR_MESSAGE_HISTORY_LIMIT));
+                reactParams
+                    .put(
+                        MLAgentExecutor.MESSAGE_HISTORY_LIMIT,
+                        allParams.getOrDefault(EXECUTOR_MESSAGE_HISTORY_LIMIT, DEFAULT_EXECUTOR_MESSAGE_HISTORY_LIMIT)
+                    );
 
                 AgentMLInput agentInput = AgentMLInput
                     .AgentMLInputBuilder()
