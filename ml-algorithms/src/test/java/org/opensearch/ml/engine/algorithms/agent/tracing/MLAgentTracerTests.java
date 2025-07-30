@@ -9,7 +9,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -193,13 +192,13 @@ public class MLAgentTracerTests {
     }
 
     /**
-     * Tests that extractToolCallInfo returns correct input and null output when given null tool output.
+     * Tests that extractToolCallInfo returns correct input and empty output when given null tool output.
      */
     @Test
     public void testExtractToolCallInfoWithNull() {
         MLAgentTracer.ToolCallExtractionResult result = MLAgentTracer.extractToolCallInfo(null, "input");
         assertEquals("input", result.input);
-        assertNull(result.output);
+        assertEquals("", result.output);
     }
 
     /**

@@ -304,7 +304,7 @@ public class MLAgentTracer extends MLTracer {
      */
     public static class ToolCallExtractionResult {
         public String input;
-        public String output;
+        public String output = "";
         public Map<String, Object> usage;
         public Map<String, Object> metrics;
     }
@@ -320,7 +320,7 @@ public class MLAgentTracer extends MLTracer {
         result.input = actionInput;
 
         if (!(toolOutput instanceof ModelTensorOutput)) {
-            result.output = toolOutput != null ? toolOutput.toString() : null;
+            result.output = toolOutput != null ? toolOutput.toString() : "";
             return result;
         }
         ModelTensorOutput mto = (ModelTensorOutput) toolOutput;
@@ -343,7 +343,7 @@ public class MLAgentTracer extends MLTracer {
             log.warn("[AGENT_TRACE] Exception getting dataAsMap from tensor: {}", e.getMessage());
         }
         if (map == null) {
-            if (result.output == null) {
+            if (result.output.isEmpty()) {
                 result.output = tensor.toString();
                 log.warn("[AGENT_TRACE] tensor.getDataAsMap() is null; using tensor.toString() as output");
             }
@@ -355,7 +355,7 @@ public class MLAgentTracer extends MLTracer {
         } else if (map.containsKey(OUTPUT_FIELD)) {
             Object out = map.get(OUTPUT_FIELD);
             result.output = (out instanceof String) ? (String) out : StringUtils.toJson(out);
-        } else if (result.output == null && !map.isEmpty()) {
+        } else if (result.output.isEmpty() && !map.isEmpty()) {
             Object firstValue = map.values().iterator().next();
             result.output = (firstValue instanceof String) ? (String) firstValue : StringUtils.toJson(firstValue);
         }
@@ -556,24 +556,17 @@ public class MLAgentTracer extends MLTracer {
             Map<?, ?> addInfo = (Map<?, ?>) addInfoObj;
             Double execInput = addInfo.get(TOKEN_FIELD_INPUT_TOKENS) instanceof Number
                 ? ((Number) addInfo.get(TOKEN_FIELD_INPUT_TOKENS)).doubleValue()
-                : null;
+                : 0.0;
             Double execOutput = addInfo.get(TOKEN_FIELD_OUTPUT_TOKENS) instanceof Number
                 ? ((Number) addInfo.get(TOKEN_FIELD_OUTPUT_TOKENS)).doubleValue()
-                : null;
+                : 0.0;
             Double execTotal = addInfo.get(TOKEN_FIELD_TOTAL_TOKENS) instanceof Number
                 ? ((Number) addInfo.get(TOKEN_FIELD_TOTAL_TOKENS)).doubleValue()
-                : null;
+                : 0.0;
 
-            // Update phase tokens
-            if (execInput != null) {
-                context.getPhaseInputTokens().set(context.getPhaseInputTokens().get() + execInput);
-            }
-            if (execOutput != null) {
-                context.getPhaseOutputTokens().set(context.getPhaseOutputTokens().get() + execOutput);
-            }
-            if (execTotal != null) {
-                context.getPhaseTotalTokens().set(context.getPhaseTotalTokens().get() + execTotal);
-            }
+            context.getPhaseInputTokens().set(context.getPhaseInputTokens().get() + execInput);
+            context.getPhaseOutputTokens().set(context.getPhaseOutputTokens().get() + execOutput);
+            context.getPhaseTotalTokens().set(context.getPhaseTotalTokens().get() + execTotal);
         }
     }
 
