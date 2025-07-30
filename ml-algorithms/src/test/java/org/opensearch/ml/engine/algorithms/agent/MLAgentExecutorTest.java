@@ -818,4 +818,116 @@ public class MLAgentExecutorTest {
         return new GetResponse(getResult);
     }
 
+    @Test
+    public void test_InlineAgent_HappyCase_ReturnsResult() {
+        ModelTensor modelTensor = ModelTensor.builder().name("response").dataAsMap(ImmutableMap.of("test_key", "test_value")).build();
+        Mockito.doAnswer(invocation -> {
+            ActionListener<ModelTensor> listener = invocation.getArgument(2);
+            listener.onResponse(modelTensor);
+            return null;
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+
+        MLAgent inlineAgent = MLAgent.builder().name("inline_test_agent").type("flow").description("Inline agent for testing").build();
+
+        Map<String, String> params = new HashMap<>();
+        params.put(MLAgentExecutor.MEMORY_ID, "memoryId");
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
+        AgentMLInput agentMLInput = new AgentMLInput(null, null, FunctionName.AGENT, dataset, false, inlineAgent);
+
+        mlAgentExecutor.execute(agentMLInput, agentActionListener);
+
+        Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
+        ModelTensorOutput output = (ModelTensorOutput) objectCaptor.getValue();
+        Assert.assertEquals(1, output.getMlModelOutputs().size());
+        Assert.assertEquals(1, output.getMlModelOutputs().get(0).getMlModelTensors().size());
+        Assert.assertEquals(modelTensor, output.getMlModelOutputs().get(0).getMlModelTensors().get(0));
+    }
+
+    @Test
+    public void test_InlineAgent_NullAgentId_WithoutInlineAgent_ThrowsException() {
+        Map<String, String> params = new HashMap<>();
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
+        AgentMLInput agentMLInput = new AgentMLInput(null, null, FunctionName.AGENT, dataset);
+
+        mlAgentExecutor.execute(agentMLInput, agentActionListener);
+
+        Mockito.verify(agentActionListener).onFailure(exceptionCaptor.capture());
+        Exception exception = exceptionCaptor.getValue();
+        Assert.assertTrue(exception instanceof IllegalArgumentException);
+        Assert.assertEquals("Agent id is required.", exception.getMessage());
+    }
+
+    @Test
+    public void test_InlineAgent_EmptyAgentId_WithoutInlineAgent_ThrowsException() {
+        Map<String, String> params = new HashMap<>();
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
+        AgentMLInput agentMLInput = new AgentMLInput("", null, FunctionName.AGENT, dataset);
+
+        mlAgentExecutor.execute(agentMLInput, agentActionListener);
+
+        Mockito.verify(agentActionListener).onFailure(exceptionCaptor.capture());
+        Exception exception = exceptionCaptor.getValue();
+        Assert.assertTrue(exception instanceof IllegalArgumentException);
+        Assert.assertEquals("Agent id is required.", exception.getMessage());
+    }
+
+    @Test
+    public void test_InlineAgent_AsyncMode_ReturnsTaskId() {
+        ModelTensor modelTensor = ModelTensor.builder().name("response").result("test").build();
+
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+
+        MLAgent inlineAgent = MLAgent.builder().name("inline_test_agent").type("flow").build();
+
+        Map<String, String> params = new HashMap<>();
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
+        AgentMLInput agentMLInput = new AgentMLInput(null, null, FunctionName.AGENT, dataset, true, inlineAgent);
+
+        agentMLInput.setIsAsync(true);
+
+        indexResponse = new IndexResponse(new ShardId(ML_TASK_INDEX, "_na_", 0), "task_id", 1, 0, 2, true);
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(), any());
+
+        mlAgentExecutor.execute(agentMLInput, agentActionListener);
+
+        Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
+        MLTaskOutput result = (MLTaskOutput) objectCaptor.getValue();
+
+        Assert.assertEquals("task_id", result.getTaskId());
+        Assert.assertEquals("RUNNING", result.getStatus());
+    }
+
+    @Test
+    public void test_InlineAgent_WithChatAgentType_ReturnsResult() {
+        ModelTensor modelTensor = ModelTensor.builder().name("response").dataAsMap(ImmutableMap.of("test_key", "test_value")).build();
+        Mockito.doAnswer(invocation -> {
+            ActionListener<ModelTensor> listener = invocation.getArgument(2);
+            listener.onResponse(modelTensor);
+            return null;
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+
+        LLMSpec llmSpec = LLMSpec.builder().modelId("MODEL_ID").build();
+        MLAgent inlineAgent = MLAgent.builder().name("inline_chat_agent").type(MLAgentType.CONVERSATIONAL.name()).llm(llmSpec).build();
+
+        Map<String, String> params = new HashMap<>();
+        RemoteInferenceInputDataSet dataset = RemoteInferenceInputDataSet.builder().parameters(params).build();
+        AgentMLInput agentMLInput = new AgentMLInput(null, null, FunctionName.AGENT, dataset, false, inlineAgent);
+
+        mlAgentExecutor.execute(agentMLInput, agentActionListener);
+
+        Mockito.verify(agentActionListener).onResponse(objectCaptor.capture());
+        ModelTensorOutput output = (ModelTensorOutput) objectCaptor.getValue();
+        Assert.assertEquals(1, output.getMlModelOutputs().size());
+        Assert.assertEquals(1, output.getMlModelOutputs().get(0).getMlModelTensors().size());
+        Assert.assertEquals(modelTensor, output.getMlModelOutputs().get(0).getMlModelTensors().get(0));
+    }
+
 }

@@ -163,12 +163,14 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         List<ModelTensor> modelTensors = new ArrayList<>();
         outputs.add(ModelTensors.builder().mlModelTensors(modelTensors).build());
 
-        if (mlAgentInline != null) {
+        boolean agentIdNotSet = agentId == null || agentId.isEmpty();
+
+        if (agentIdNotSet && mlAgentInline != null) {
             prepareAndExecute(listener, mlAgentInline, inputDataSet, tenantId, isAsync, outputs, modelTensors);
             return;
         }
         // as we support inline agent, agent id could be empty
-        if (agentId == null || agentId.isEmpty()) {
+        if (agentIdNotSet) {
             listener.onFailure(new IllegalArgumentException("Agent id is required."));
             return;
         }
