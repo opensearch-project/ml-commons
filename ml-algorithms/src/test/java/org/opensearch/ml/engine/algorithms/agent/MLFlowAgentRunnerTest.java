@@ -11,6 +11,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isA;
 import static org.mockito.Mockito.doAnswer;
@@ -18,6 +19,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.MLTask.TASK_ID_FIELD;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.APP_TYPE;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_ID;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_NAME;
@@ -27,12 +29,14 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CancellationException;
 
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
+import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.mockito.stubbing.Answer;
@@ -54,6 +58,8 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
+import org.opensearch.ml.common.utils.MLTaskUtils;
+import org.opensearch.ml.engine.MLStaticMockBase;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
@@ -61,7 +67,7 @@ import org.opensearch.transport.client.Client;
 
 import software.amazon.awssdk.utils.ImmutableMap;
 
-public class MLFlowAgentRunnerTest {
+public class MLFlowAgentRunnerTest extends MLStaticMockBase {
 
     public static final String FIRST_TOOL = "firstTool";
     public static final String SECOND_TOOL = "secondTool";
@@ -497,6 +503,36 @@ public class MLFlowAgentRunnerTest {
         Map<String, Object> additionalInfo = (Map<String, Object>) memoryMapCaptor.getValue().get("additional_info");
         assertEquals(1, additionalInfo.size());
         assertNotNull(additionalInfo.get(SECOND_TOOL + ".output"));
+    }
+
+    @Test
+    public void testTaskCancellation() {
+        MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).type(FIRST_TOOL).build();
+        MLToolSpec secondToolSpec = MLToolSpec.builder().name(SECOND_TOOL).type(SECOND_TOOL).build();
+        final MLAgent mlAgent = MLAgent
+            .builder()
+            .name("TestAgent")
+            .type(MLAgentType.FLOW.name())
+            .tools(Arrays.asList(firstToolSpec, secondToolSpec))
+            .build();
+
+        final Map<String, String> params = new HashMap<>();
+        String taskId = "test-task-id";
+        params.put(TASK_ID_FIELD, taskId);
+
+        try (MockedStatic<MLTaskUtils> mlTaskUtilsMockedStatic = mockStatic(MLTaskUtils.class)) {
+            mlTaskUtilsMockedStatic.when(() -> MLTaskUtils.isTaskMarkedForCancel(taskId, client)).thenReturn(true);
+
+            mlFlowAgentRunner.run(mlAgent, params, agentActionListener);
+
+            verify(agentActionListener)
+                .onFailure(
+                    argThat(
+                        exception -> exception instanceof CancellationException
+                            && exception.getMessage().equals(String.format("Agent execution cancelled for task: %s", taskId))
+                    )
+                );
+        }
     }
 
 }

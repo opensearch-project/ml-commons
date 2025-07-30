@@ -24,6 +24,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Before;
@@ -573,6 +574,9 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
                     return null;
                 });
 
+            // Add mock for isTaskMarkedForCancel
+            mlTaskUtilsMockedStatic.when(() -> MLTaskUtils.isTaskMarkedForCancel(anyString(), any())).thenReturn(false);
+
             doAnswer(invocation -> {
                 ActionListener<Object> listener = invocation.getArgument(2);
                 ModelTensor modelTensor;
@@ -643,6 +647,46 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             assertEquals("test_executor_parent_id", response.get("executor_agent_parent_interaction_id"));
 
             mlTaskUtilsMockedStatic.verify(() -> MLTaskUtils.updateMLTaskDirectly(eq(taskId), eq(taskUpdates), eq(client), any()));
+        }
+    }
+
+    @Test
+    public void testTaskCancellation() {
+        MLAgent mlAgent = createMLAgentWithTools();
+        String taskId = "test-task-id";
+
+        try (MockedStatic<MLTaskUtils> mlTaskUtilsMockedStatic = mockStatic(MLTaskUtils.class)) {
+            mlTaskUtilsMockedStatic.when(() -> MLTaskUtils.isTaskMarkedForCancel(anyString(), any())).thenReturn(true);
+
+            doAnswer(invocation -> {
+                ActionListener<Object> listener = invocation.getArgument(2);
+                ModelTensor modelTensor = ModelTensor
+                    .builder()
+                    .dataAsMap(ImmutableMap.of("response", "{\"steps\":[\"step1\"], \"result\":\"\"}"))
+                    .build();
+                ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+                ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+                when(mlTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
+                listener.onResponse(mlTaskResponse);
+                return null;
+            }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(MLPredictionTaskRequest.class), any());
+
+            Map<String, String> params = new HashMap<>();
+            params.put("question", "test question");
+            params.put("memory_id", "test_memory_id");
+            params.put("parent_interaction_id", "test_parent_interaction_id");
+            params.put("task_id", taskId);
+
+            doAnswer(invocation -> {
+                Throwable throwable = invocation.getArgument(0);
+                assertTrue(throwable instanceof CancellationException);
+                assertEquals(String.format("Agent execution cancelled for task: %s", taskId), throwable.getMessage());
+                return null;
+            }).when(agentActionListener).onFailure(any());
+
+            mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
+
+            verify(agentActionListener).onFailure(any(CancellationException.class));
         }
     }
 }

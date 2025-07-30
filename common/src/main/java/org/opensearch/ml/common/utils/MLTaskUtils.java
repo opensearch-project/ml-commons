@@ -18,6 +18,9 @@ import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.MLTaskState;
+import org.opensearch.ml.common.transport.task.MLTaskGetAction;
+import org.opensearch.ml.common.transport.task.MLTaskGetRequest;
+import org.opensearch.ml.common.transport.task.MLTaskGetResponse;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableSet;
@@ -79,5 +82,23 @@ public class MLTaskUtils {
             log.error("Failed to update ML task {}", taskId, e);
             listener.onFailure(e);
         }
+    }
+
+    /**
+     * Checks if a given ML task is marked for cancellation by querying its current state.
+     * This method verifies if the task's state is set to CANCELLING.
+     *
+     * @param taskId The ID of the ML task to check
+     * @param client The OpenSearch client to use for querying the task state
+     * @return true if the task exists and is in CANCELLING state, false otherwise
+     */
+    public static boolean isTaskMarkedForCancel(String taskId, Client client) {
+        if (taskId != null && !taskId.isEmpty()) {
+            MLTaskGetRequest taskGetRequest = MLTaskGetRequest.builder().taskId(taskId).build();
+            MLTaskGetResponse taskResponse = client.execute(MLTaskGetAction.INSTANCE, taskGetRequest).actionGet();
+            return taskResponse.getMlTask().getState().equals(MLTaskState.CANCELLING);
+        }
+
+        return false;
     }
 }

@@ -5,8 +5,10 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
+import static org.opensearch.ml.common.MLTask.TASK_ID_FIELD;
 import static org.opensearch.ml.common.conversation.ActionConstants.ADDITIONAL_INFO_FIELD;
 import static org.opensearch.ml.common.conversation.ActionConstants.AI_RESPONSE_FIELD;
+import static org.opensearch.ml.common.utils.MLTaskUtils.isTaskMarkedForCancel;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.common.utils.StringUtils.processTextDoc;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DISABLE_TRACE;
@@ -39,6 +41,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -322,6 +325,13 @@ public class MLChatAgentRunner implements MLAgentRunner {
         for (int i = 0; i < maxIterations; i++) {
             int finalI = i;
             StepListener<?> nextStepListener = new StepListener<>();
+
+            // check if task has been marked to cancel
+            String taskId = parameters.get(TASK_ID_FIELD);
+            if (isTaskMarkedForCancel(taskId, client)) {
+                listener.onFailure(new CancellationException(String.format("Agent execution cancelled for task: %s", taskId)));
+                return;
+            }
 
             lastStepListener.whenComplete(output -> {
                 StringBuilder sessionMsgAnswerBuilder = new StringBuilder();

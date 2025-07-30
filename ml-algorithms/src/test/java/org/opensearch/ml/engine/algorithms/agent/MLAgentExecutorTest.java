@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
 
 import javax.naming.Context;
 
@@ -38,9 +39,12 @@ import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.ResourceNotFoundException;
 import org.opensearch.Version;
+import org.opensearch.action.DocWriteResponse;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.index.IndexResponse;
+import org.opensearch.action.update.UpdateRequest;
+import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.metadata.Metadata;
 import org.opensearch.cluster.node.DiscoveryNode;
@@ -60,6 +64,7 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.index.get.GetResult;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLAgentType;
+import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.agent.LLMSpec;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
@@ -772,6 +777,50 @@ public class MLAgentExecutorTest {
 
         Mockito.verify(agentActionListener).onFailure(exceptionCaptor.capture());
         Assert.assertNotNull(exceptionCaptor.getValue());
+    }
+
+    @Test
+    public void test_AsyncMode_CancellationException_SetsCancelledState() throws IOException {
+        GetResponse agentGetResponse = prepareMLAgent("test-agent-id", false, null);
+        sdkClient = SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap());
+
+        Mockito.doAnswer(invocation -> {
+            ActionListener<GetResponse> listener = invocation.getArgument(1);
+            listener.onResponse(agentGetResponse);
+            return null;
+        }).when(client).get(Mockito.any(), Mockito.any());
+
+        Mockito.doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            listener.onFailure(new CancellationException("Task cancelled"));
+            return null;
+        }).when(mlAgentRunner).run(Mockito.any(), Mockito.any(), Mockito.any());
+
+        indexResponse = new IndexResponse(new ShardId(ML_TASK_INDEX, "_na_", 0), "task_id", 1, 0, 2, true);
+        doAnswer(invocation -> {
+            ActionListener<IndexResponse> listener = invocation.getArgument(1);
+            listener.onResponse(indexResponse);
+            return null;
+        }).when(client).index(any(), any());
+
+        ArgumentCaptor<UpdateRequest> updateRequestCaptor = ArgumentCaptor.forClass(UpdateRequest.class);
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(1);
+            listener
+                .onResponse(new UpdateResponse(new ShardId(ML_TASK_INDEX, "_na_", 0), "task_id", 1, 1, 1, DocWriteResponse.Result.UPDATED));
+            return null;
+        }).when(client).update(updateRequestCaptor.capture(), any());
+
+        Mockito.doReturn(mlAgentRunner).when(mlAgentExecutor).getAgentRunner(Mockito.any());
+        AgentMLInput input = getAgentMLInput();
+        input.setIsAsync(true);
+
+        mlAgentExecutor.execute(input, agentActionListener);
+
+        Mockito.verify(client).update(any(), any());
+        UpdateRequest updateRequest = updateRequestCaptor.getValue();
+        Map<String, Object> updatedTask = (Map<String, Object>) updateRequest.doc().sourceAsMap();
+        Assert.assertEquals(MLTaskState.CANCELLED.name(), updatedTask.get("state"));
     }
 
     private AgentMLInput getAgentMLInput() {
