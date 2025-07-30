@@ -675,14 +675,6 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
     }
 
     @Test
-    public void testOriginalLLMResponseFilterAlwaysSet() {
-        Map<String, String> params = new HashMap<>();
-        params.put("llm_response_filter", "some_filter");
-        mlPlanExecuteAndReflectAgentRunner.setupPromptParameters(params);
-        assertEquals("some_filter", params.get("original_llm_response_filter"));
-    }
-
-    @Test
     public void testErrorHandlingMemoryCreation() {
         MLAgent mlAgent = createMLAgentWithTools();
         // Simulate memory factory throwing error
@@ -809,57 +801,5 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             () -> mlPlanExecuteAndReflectAgentRunner.parseLLMOutput(allParams, modelTensorOutput)
         );
         assertTrue(ex.getMessage().contains("llm_response_filter not found. Please provide the path to the model output."));
-    }
-
-    @Test
-    public void testExtractCompletionFromModelOutputAllBranches() {
-        Map<String, String> allParams = new HashMap<>();
-        // Null model output
-        String result = mlPlanExecuteAndReflectAgentRunner.extractCompletionFromModelOutput(null, allParams);
-        assertEquals("", result);
-        // Empty model output
-        ModelTensorOutput emptyOutput = ModelTensorOutput.builder().mlModelOutputs(List.of()).build();
-        result = mlPlanExecuteAndReflectAgentRunner.extractCompletionFromModelOutput(emptyOutput, allParams);
-        assertEquals("", result);
-        // Valid responseFilter, valid JSONPath
-        allParams.put("original_llm_response_filter", "$.foo");
-        Map<String, Object> dataMap = new HashMap<>();
-        dataMap.put("foo", "bar");
-        ModelTensor tensor = ModelTensor.builder().dataAsMap(dataMap).build();
-        ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
-        ModelTensorOutput modelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(List.of(modelTensors)).build();
-        result = mlPlanExecuteAndReflectAgentRunner.extractCompletionFromModelOutput(modelTensorOutput, allParams);
-        assertEquals("bar", result);
-        // Valid responseFilter, invalid JSONPath
-        allParams.put("original_llm_response_filter", "$.notfound");
-        result = mlPlanExecuteAndReflectAgentRunner.extractCompletionFromModelOutput(modelTensorOutput, allParams);
-        assertEquals("LLM response processed successfully", result);
-        // Fallback to RESPONSE_FIELD
-        dataMap = new HashMap<>();
-        dataMap.put("response", "baz");
-        tensor = ModelTensor.builder().dataAsMap(dataMap).build();
-        modelTensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
-        modelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(List.of(modelTensors)).build();
-        result = mlPlanExecuteAndReflectAgentRunner.extractCompletionFromModelOutput(modelTensorOutput, allParams);
-        assertEquals("baz", result);
-        // Fallback to OpenAI choices array
-        Map<String, Object> message = new HashMap<>();
-        message.put("content", "openai content");
-        Map<String, Object> choice = new HashMap<>();
-        choice.put("message", message);
-        dataMap = new HashMap<>();
-        dataMap.put("choices", List.of(choice));
-        tensor = ModelTensor.builder().dataAsMap(dataMap).build();
-        modelTensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
-        modelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(List.of(modelTensors)).build();
-        result = mlPlanExecuteAndReflectAgentRunner.extractCompletionFromModelOutput(modelTensorOutput, allParams);
-        assertEquals("openai content", result);
-        // All fallbacks fail
-        dataMap = new HashMap<>();
-        tensor = ModelTensor.builder().dataAsMap(dataMap).build();
-        modelTensors = ModelTensors.builder().mlModelTensors(List.of(tensor)).build();
-        modelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(List.of(modelTensors)).build();
-        result = mlPlanExecuteAndReflectAgentRunner.extractCompletionFromModelOutput(modelTensorOutput, allParams);
-        assertEquals("LLM response processed successfully", result);
     }
 }

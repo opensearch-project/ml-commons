@@ -104,7 +104,6 @@ public class AgentUtils {
 
     public static final String LLM_RESPONSE_EXCLUDE_PATH = "llm_response_exclude_path";
     public static final String LLM_RESPONSE_FILTER = "llm_response_filter";
-    public static final String LLM_RESPONSE_FILTER_ORIGINAL = "original_llm_response_filter";
     public static final String TOOL_RESULT = "tool_result";
     public static final String TOOL_CALL_ID = "tool_call_id";
     public static final String LLM_INTERFACE_BEDROCK_CONVERSE_CLAUDE = "bedrock/converse/claude";
