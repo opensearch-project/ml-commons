@@ -148,9 +148,6 @@ public final class MLCommonsSettings {
     public static final Setting<Boolean> ML_COMMONS_CONNECTOR_ACCESS_CONTROL_ENABLED = Setting
         .boolSetting("plugins.ml_commons.connector_access_control_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
-    public static final Setting<Boolean> ML_COMMONS_MEMORY_ACCESS_CONTROL_ENABLED = Setting
-        .boolSetting("plugins.ml_commons.memory_access_control_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
-
     public static final Setting<Boolean> ML_COMMONS_OFFLINE_BATCH_INGESTION_ENABLED = Setting
         .boolSetting("plugins.ml_commons.offline_batch_ingestion_enabled", true, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
