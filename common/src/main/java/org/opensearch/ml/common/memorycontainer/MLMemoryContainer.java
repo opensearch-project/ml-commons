@@ -6,15 +6,14 @@
 package org.opensearch.ml.common.memorycontainer;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CONTAINER_ID_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CONTAINER_NAME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREATED_TIME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DESCRIPTION_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.INDEX_NAME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LAST_UPDATED_TIME_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_STORAGE_CONFIG_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEMANTIC_STORAGE_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.TENANT_ID_FIELD;
 
 import java.io.IOException;
 import java.time.Instant;
@@ -43,40 +42,37 @@ import lombok.Setter;
 public class MLMemoryContainer implements ToXContentObject, Writeable {
 
     private String containerId;
-    private String containerName;
+    private String name;
     private String description;
     private User owner;
     private String tenantId;
     private Instant createdTime;
     private Instant lastUpdatedTime;
-    private String indexName;
-    private SemanticStorageConfig semanticStorage;
+    private MemoryStorageConfig memoryStorageConfig;
 
     public MLMemoryContainer(
         String containerId,
-        String containerName,
+        String name,
         String description,
         User owner,
         String tenantId,
         Instant createdTime,
         Instant lastUpdatedTime,
-        String indexName,
-        SemanticStorageConfig semanticStorage
+        MemoryStorageConfig memoryStorageConfig
     ) {
         this.containerId = containerId;
-        this.containerName = containerName;
+        this.name = name;
         this.description = description;
         this.owner = owner;
         this.tenantId = tenantId;
         this.createdTime = createdTime;
         this.lastUpdatedTime = lastUpdatedTime;
-        this.indexName = indexName;
-        this.semanticStorage = semanticStorage;
+        this.memoryStorageConfig = memoryStorageConfig;
     }
 
     public MLMemoryContainer(StreamInput input) throws IOException {
         this.containerId = input.readOptionalString();
-        this.containerName = input.readOptionalString();
+        this.name = input.readOptionalString();
         this.description = input.readOptionalString();
         if (input.readBoolean()) {
             this.owner = new User(input);
@@ -84,16 +80,15 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
         this.tenantId = input.readOptionalString();
         this.createdTime = input.readOptionalInstant();
         this.lastUpdatedTime = input.readOptionalInstant();
-        this.indexName = input.readOptionalString();
         if (input.readBoolean()) {
-            this.semanticStorage = new SemanticStorageConfig(input);
+            this.memoryStorageConfig = new MemoryStorageConfig(input);
         }
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeOptionalString(containerId);
-        out.writeOptionalString(containerName);
+        out.writeOptionalString(name);
         out.writeOptionalString(description);
         if (owner != null) {
             out.writeBoolean(true);
@@ -104,10 +99,9 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
         out.writeOptionalString(tenantId);
         out.writeOptionalInstant(createdTime);
         out.writeOptionalInstant(lastUpdatedTime);
-        out.writeOptionalString(indexName);
-        if (semanticStorage != null) {
+        if (memoryStorageConfig != null) {
             out.writeBoolean(true);
-            semanticStorage.writeTo(out);
+            memoryStorageConfig.writeTo(out);
         } else {
             out.writeBoolean(false);
         }
@@ -119,8 +113,8 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
         if (containerId != null) {
             builder.field(CONTAINER_ID_FIELD, containerId);
         }
-        if (containerName != null) {
-            builder.field(CONTAINER_NAME_FIELD, containerName);
+        if (name != null) {
+            builder.field(NAME_FIELD, name);
         }
         if (description != null) {
             builder.field(DESCRIPTION_FIELD, description);
@@ -137,11 +131,8 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
         if (lastUpdatedTime != null) {
             builder.field(LAST_UPDATED_TIME_FIELD, lastUpdatedTime.toEpochMilli());
         }
-        if (indexName != null) {
-            builder.field(INDEX_NAME_FIELD, indexName);
-        }
-        if (semanticStorage != null) {
-            builder.field(SEMANTIC_STORAGE_FIELD, semanticStorage);
+        if (memoryStorageConfig != null) {
+            builder.field(MEMORY_STORAGE_CONFIG_FIELD, memoryStorageConfig);
         }
         builder.endObject();
         return builder;
@@ -149,14 +140,13 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
 
     public static MLMemoryContainer parse(XContentParser parser) throws IOException {
         String containerId = null;
-        String containerName = null;
+        String name = null;
         String description = null;
         User owner = null;
         String tenantId = null;
         Instant createdTime = null;
         Instant lastUpdatedTime = null;
-        String indexName = null;
-        SemanticStorageConfig semanticStorage = null;
+        MemoryStorageConfig memoryStorageConfig = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -167,8 +157,8 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
                 case CONTAINER_ID_FIELD:
                     containerId = parser.text();
                     break;
-                case CONTAINER_NAME_FIELD:
-                    containerName = parser.text();
+                case NAME_FIELD:
+                    name = parser.text();
                     break;
                 case DESCRIPTION_FIELD:
                     description = parser.text();
@@ -185,11 +175,8 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
                 case LAST_UPDATED_TIME_FIELD:
                     lastUpdatedTime = Instant.ofEpochMilli(parser.longValue());
                     break;
-                case INDEX_NAME_FIELD:
-                    indexName = parser.text();
-                    break;
-                case SEMANTIC_STORAGE_FIELD:
-                    semanticStorage = SemanticStorageConfig.parse(parser);
+                case MEMORY_STORAGE_CONFIG_FIELD:
+                    memoryStorageConfig = MemoryStorageConfig.parse(parser);
                     break;
                 default:
                     parser.skipChildren();
@@ -200,14 +187,13 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
         return MLMemoryContainer
             .builder()
             .containerId(containerId)
-            .containerName(containerName)
+            .name(name)
             .description(description)
             .owner(owner)
             .tenantId(tenantId)
             .createdTime(createdTime)
             .lastUpdatedTime(lastUpdatedTime)
-            .indexName(indexName)
-            .semanticStorage(semanticStorage)
+            .memoryStorageConfig(memoryStorageConfig)
             .build();
     }
 }

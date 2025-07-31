@@ -12,19 +12,19 @@ public class MemoryContainerConstants {
 
     // Field names for MemoryContainer
     public static final String CONTAINER_ID_FIELD = "container_id";
-    public static final String CONTAINER_NAME_FIELD = "container_name";
+    public static final String NAME_FIELD = "name";
     public static final String DESCRIPTION_FIELD = "description";
     public static final String OWNER_FIELD = "owner";
     public static final String CREATED_TIME_FIELD = "created_time";
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
-    public static final String INDEX_NAME_FIELD = "index_name";
-    public static final String SEMANTIC_STORAGE_FIELD = "semantic_storage";
-    public static final String TENANT_ID_FIELD = "tenant_id";
+    public static final String MEMORY_STORAGE_CONFIG_FIELD = "memory_storage_config";
 
-    // Field names for SemanticStorageConfig
+    // Field names for MemoryStorageConfig
+    public static final String MEMORY_INDEX_NAME_FIELD = "memory_index_name";
     public static final String SEMANTIC_STORAGE_ENABLED_FIELD = "semantic_storage_enabled";
-    public static final String MODEL_TYPE_FIELD = "model_type";
-    public static final String MODEL_ID_FIELD = "model_id";
+    public static final String EMBEDDING_MODEL_TYPE_FIELD = "embedding_model_type";
+    public static final String EMBEDDING_MODEL_ID_FIELD = "embedding_model_id";
+    public static final String LLM_MODEL_ID_FIELD = "llm_model_id";
     public static final String DIMENSION_FIELD = "dimension";
 
     // Memory index type prefixes
@@ -58,9 +58,12 @@ public class MemoryContainerConstants {
     public static final String STATUS_FIELD = "status";
 
     // Error messages
-    public static final String SEMANTIC_STORAGE_MODEL_TYPE_REQUIRED_ERROR = "Model type is required when semantic storage is enabled";
-    public static final String SEMANTIC_STORAGE_MODEL_ID_REQUIRED_ERROR = "Model ID is required when semantic storage is enabled";
+    public static final String SEMANTIC_STORAGE_EMBEDDING_MODEL_TYPE_REQUIRED_ERROR =
+        "Embedding model type is required when semantic storage is enabled";
+    public static final String SEMANTIC_STORAGE_EMBEDDING_MODEL_ID_REQUIRED_ERROR =
+        "Embedding model ID is required when semantic storage is enabled";
+    public static final String SEMANTIC_STORAGE_LLM_MODEL_ID_REQUIRED_ERROR = "LLM model ID is required when semantic storage is enabled";
     public static final String TEXT_EMBEDDING_DIMENSION_REQUIRED_ERROR = "Dimension is required for TEXT_EMBEDDING";
     public static final String SPARSE_ENCODING_DIMENSION_NOT_ALLOWED_ERROR = "Dimension is not allowed for SPARSE_ENCODING";
-    public static final String INVALID_MODEL_TYPE_ERROR = "Model type must be either TEXT_EMBEDDING or SPARSE_ENCODING";
+    public static final String INVALID_EMBEDDING_MODEL_TYPE_ERROR = "Embedding model type must be either TEXT_EMBEDDING or SPARSE_ENCODING";
 }
