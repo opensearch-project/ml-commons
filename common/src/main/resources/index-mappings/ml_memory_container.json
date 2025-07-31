@@ -3,10 +3,10 @@
     "schema_version": 1
   },
   "properties": {
-    "container_id": {
+    "memory_container_id": {
       "type": "keyword"
     },
-    "container_name": {
+    "name": {
       "type": "text",
       "fields": {
         "keyword": {
@@ -26,19 +26,22 @@
       "type": "date",
       "format": "strict_date_time||epoch_millis"
     },
-    "index_name": {
-      "type": "keyword"
-    },
-    "semantic_storage": {
+    "memory_storage_config": {
       "type": "object",
       "properties": {
-        "semanticStorageEnabled": {
-          "type": "boolean"
-        },
-        "modelType": {
+        "memory_index_name": {
           "type": "keyword"
         },
-        "modelId": {
+        "semantic_storage_enabled": {
+          "type": "boolean"
+        },
+        "embedding_model_type": {
+          "type": "keyword"
+        },
+        "embedding_model_id": {
+          "type": "keyword"
+        },
+        "llm_model_id": {
           "type": "keyword"
         },
         "dimension": {

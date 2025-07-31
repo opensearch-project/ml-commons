@@ -81,7 +81,7 @@ public class TransportGetMemoryContainerAction extends HandledTransportAction<Ac
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLMemoryContainerGetResponse> actionListener) {
         MLMemoryContainerGetRequest mlMemoryContainerGetRequest = MLMemoryContainerGetRequest.fromActionRequest(request);
-        String containerId = mlMemoryContainerGetRequest.getContainerId();
+        String memoryContainerId = mlMemoryContainerGetRequest.getMemoryContainerId();
         String tenantId = mlMemoryContainerGetRequest.getTenantId();
 
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
@@ -92,7 +92,7 @@ public class TransportGetMemoryContainerAction extends HandledTransportAction<Ac
         GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
             .builder()
             .index(ML_MEMORY_CONTAINER_INDEX)
-            .id(containerId)
+            .id(memoryContainerId)
             .tenantId(tenantId)
             .fetchSourceContext(fetchSourceContext)
             .build();
@@ -104,9 +104,9 @@ public class TransportGetMemoryContainerAction extends HandledTransportAction<Ac
 
             sdkClient
                 .getDataObjectAsync(getDataObjectRequest)
-                .whenComplete((r, throwable) -> handleResponse(r, throwable, containerId, tenantId, user, wrappedListener));
+                .whenComplete((r, throwable) -> handleResponse(r, throwable, memoryContainerId, tenantId, user, wrappedListener));
         } catch (Exception e) {
-            log.error("Failed to get ML memory container {}", containerId, e);
+            log.error("Failed to get ML memory container {}", memoryContainerId, e);
             actionListener.onFailure(e);
         }
     }
@@ -114,33 +114,37 @@ public class TransportGetMemoryContainerAction extends HandledTransportAction<Ac
     private void handleResponse(
         GetDataObjectResponse getDataObjectResponse,
         Throwable throwable,
-        String containerId,
+        String memoryContainerId,
         String tenantId,
         User user,
         ActionListener<MLMemoryContainerGetResponse> wrappedListener
     ) {
-        log.debug("Completed Get Memory Container Request, id:{}", containerId);
+        log.debug("Completed Get Memory Container Request, id:{}", memoryContainerId);
         if (throwable != null) {
-            handleThrowable(throwable, containerId, wrappedListener);
+            handleThrowable(throwable, memoryContainerId, wrappedListener);
         } else {
-            processResponse(getDataObjectResponse, containerId, tenantId, user, wrappedListener);
+            processResponse(getDataObjectResponse, memoryContainerId, tenantId, user, wrappedListener);
         }
     }
 
-    private void handleThrowable(Throwable throwable, String containerId, ActionListener<MLMemoryContainerGetResponse> wrappedListener) {
+    private void handleThrowable(
+        Throwable throwable,
+        String memoryContainerId,
+        ActionListener<MLMemoryContainerGetResponse> wrappedListener
+    ) {
         Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
         if (ExceptionsHelper.unwrap(cause, IndexNotFoundException.class) != null) {
             log.error("Failed to find memory container index", cause);
             wrappedListener.onFailure(new OpenSearchStatusException("Failed to find memory container index", RestStatus.NOT_FOUND));
         } else {
-            log.error("Failed to get ML memory container {}", containerId, cause);
+            log.error("Failed to get ML memory container {}", memoryContainerId, cause);
             wrappedListener.onFailure(cause);
         }
     }
 
     private void processResponse(
         GetDataObjectResponse getDataObjectResponse,
-        String containerId,
+        String memoryContainerId,
         String tenantId,
         User user,
         ActionListener<MLMemoryContainerGetResponse> wrappedListener
@@ -157,7 +161,7 @@ public class TransportGetMemoryContainerAction extends HandledTransportAction<Ac
 
                     if (TenantAwareHelper
                         .validateTenantResource(mlFeatureEnabledSetting, tenantId, mlMemoryContainer.getTenantId(), wrappedListener)) {
-                        validateMemoryContainerAccess(user, containerId, mlMemoryContainer, wrappedListener);
+                        validateMemoryContainerAccess(user, memoryContainerId, mlMemoryContainer, wrappedListener);
                     }
                 } catch (Exception e) {
                     log.error("Failed to parse ml memory container {}", getDataObjectResponse.id(), e);
@@ -167,7 +171,7 @@ public class TransportGetMemoryContainerAction extends HandledTransportAction<Ac
                 wrappedListener
                     .onFailure(
                         new OpenSearchStatusException(
-                            "Failed to find memory container with the provided container id: " + containerId,
+                            "Failed to find memory container with the provided memory container id: " + memoryContainerId,
                             RestStatus.NOT_FOUND
                         )
                     );
@@ -179,7 +183,7 @@ public class TransportGetMemoryContainerAction extends HandledTransportAction<Ac
 
     private void validateMemoryContainerAccess(
         User user,
-        String containerId,
+        String memoryContainerId,
         MLMemoryContainer mlMemoryContainer,
         ActionListener<MLMemoryContainerGetResponse> wrappedListener
     ) {

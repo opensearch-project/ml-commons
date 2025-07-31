@@ -25,27 +25,22 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
-import java.util.UUID;
 
 import org.opensearch.action.DocWriteResponse;
-import org.opensearch.action.index.IndexRequest;
+import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
-import org.opensearch.action.support.WriteRequest;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
-import org.opensearch.common.xcontent.XContentType;
-import org.opensearch.commons.ConfigConstants;
+import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.core.xcontent.ToXContent;
-import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.index.engine.VersionConflictEngineException;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLIndex;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
-import org.opensearch.ml.common.memorycontainer.SemanticStorageConfig;
+import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerAction;
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerInput;
@@ -53,7 +48,11 @@ import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContaine
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerResponse;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
+import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
+import org.opensearch.remote.metadata.client.PutDataObjectRequest;
+import org.opensearch.remote.metadata.client.SdkClient;
+import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -69,6 +68,7 @@ public class TransportCreateMemoryContainerAction extends
 
     private final MLIndicesHandler mlIndicesHandler;
     private final Client client;
+    private final SdkClient sdkClient;
     private final ClusterService clusterService;
     private final ConnectorAccessControlHelper connectorAccessControlHelper;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
@@ -78,6 +78,7 @@ public class TransportCreateMemoryContainerAction extends
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
+        SdkClient sdkClient,
         ClusterService clusterService,
         MLIndicesHandler mlIndicesHandler,
         ConnectorAccessControlHelper connectorAccessControlHelper,
@@ -85,6 +86,7 @@ public class TransportCreateMemoryContainerAction extends
     ) {
         super(MLCreateMemoryContainerAction.NAME, transportService, actionFilters, MLCreateMemoryContainerRequest::new);
         this.client = client;
+        this.sdkClient = sdkClient;
         this.clusterService = clusterService;
         this.mlIndicesHandler = mlIndicesHandler;
         this.connectorAccessControlHelper = connectorAccessControlHelper;
@@ -100,22 +102,36 @@ public class TransportCreateMemoryContainerAction extends
             return;
         }
 
-        User user = parseUserFromThreadContext(client);
+        User user = RestActionUtils.getUserContext(client);
         String tenantId = input.getTenantId();
 
         // Check if memory container index exists, create if not
         ActionListener<Boolean> indexCheckListener = ActionListener.wrap(created -> {
             try {
-                // Generate container ID
-                String containerId = UUID.randomUUID().toString();
+                // Create memory container document without ID (will be auto-generated)
+                MLMemoryContainer memoryContainer = buildMemoryContainer(input, null, user, tenantId);
 
-                // Create memory container document
-                MLMemoryContainer memoryContainer = createMemoryContainer(input, containerId, user, tenantId);
+                // Index the memory container document first to get the generated ID
+                indexMemoryContainer(memoryContainer, ActionListener.wrap(memoryContainerId -> {
+                    // Set the generated container ID
+                    memoryContainer.setMemoryContainerId(memoryContainerId);
 
-                // Create memory data indices based on semantic storage config
-                createMemoryDataIndices(memoryContainer, user, ActionListener.wrap(indicesCreated -> {
-                    // Index the memory container document
-                    indexMemoryContainer(memoryContainer, listener);
+                    // Create memory data indices based on semantic storage config
+                    createMemoryDataIndices(memoryContainer, user, ActionListener.wrap(actualIndexName -> {
+                        // Update the memory container with the actual index name
+                        MemoryStorageConfig config = memoryContainer.getMemoryStorageConfig();
+                        if (config == null) {
+                            config = MemoryStorageConfig.builder().memoryIndexName(actualIndexName).semanticStorageEnabled(false).build();
+                        } else {
+                            config.setMemoryIndexName(actualIndexName);
+                        }
+                        memoryContainer.setMemoryStorageConfig(config);
+
+                        // Update the container document with the index name
+                        updateMemoryContainer(memoryContainer, ActionListener.wrap(updated -> {
+                            listener.onResponse(new MLCreateMemoryContainerResponse(memoryContainerId, "created"));
+                        }, listener::onFailure));
+                    }, listener::onFailure));
                 }, listener::onFailure));
 
             } catch (Exception e) {
@@ -137,44 +153,53 @@ public class TransportCreateMemoryContainerAction extends
         }
     }
 
-    private MLMemoryContainer createMemoryContainer(MLCreateMemoryContainerInput input, String containerId, User user, String tenantId) {
+    private MLMemoryContainer buildMemoryContainer(
+        MLCreateMemoryContainerInput input,
+        String memoryContainerId,
+        User user,
+        String tenantId
+    ) {
         Instant now = Instant.now();
 
         return MLMemoryContainer
             .builder()
-            .containerId(containerId)
-            .containerName(input.getContainerName())
+            .memoryContainerId(memoryContainerId)
+            .name(input.getName())
             .description(input.getDescription())
             .owner(user)
             .tenantId(tenantId)
             .createdTime(now)
             .lastUpdatedTime(now)
-            .indexName(input.getIndexName())
-            .semanticStorage(input.getSemanticStorage())
+            .memoryStorageConfig(input.getMemoryStorageConfig())
             .build();
     }
 
-    private void createMemoryDataIndices(MLMemoryContainer container, User user, ActionListener<Boolean> listener) {
+    private void createMemoryDataIndices(MLMemoryContainer container, User user, ActionListener<String> listener) {
         String userId = user != null ? user.getName() : "default";
-        String baseIndexName = container.getIndexName();
+        MemoryStorageConfig memoryStorageConfig = container.getMemoryStorageConfig();
+        String baseIndexName = memoryStorageConfig != null ? memoryStorageConfig.getMemoryIndexName() : null;
 
         if (baseIndexName == null) {
             // Generate default index name based on semantic storage config
-            SemanticStorageConfig semanticStorage = container.getSemanticStorage();
-            if (semanticStorage == null || !semanticStorage.isSemanticStorageEnabled()) {
-                baseIndexName = STATIC_MEMORY_INDEX_PREFIX + container.getContainerId() + "-" + userId;
-            } else if (semanticStorage.getModelType() == FunctionName.TEXT_EMBEDDING) {
-                baseIndexName = KNN_MEMORY_INDEX_PREFIX + container.getContainerId() + "-" + userId;
-            } else if (semanticStorage.getModelType() == FunctionName.SPARSE_ENCODING) {
-                baseIndexName = SPARSE_MEMORY_INDEX_PREFIX + container.getContainerId() + "-" + userId;
+            if (memoryStorageConfig == null || !memoryStorageConfig.isSemanticStorageEnabled()) {
+                baseIndexName = STATIC_MEMORY_INDEX_PREFIX + container.getMemoryContainerId() + "-" + userId;
+            } else if (memoryStorageConfig.getEmbeddingModelType() == FunctionName.TEXT_EMBEDDING) {
+                baseIndexName = KNN_MEMORY_INDEX_PREFIX + container.getMemoryContainerId() + "-" + userId;
+            } else if (memoryStorageConfig.getEmbeddingModelType() == FunctionName.SPARSE_ENCODING) {
+                baseIndexName = SPARSE_MEMORY_INDEX_PREFIX + container.getMemoryContainerId() + "-" + userId;
             }
         }
 
+        // Convert to lowercase as OpenSearch doesn't support uppercase in index names
+        final String finalIndexName = baseIndexName.toLowerCase(Locale.ROOT);
         // Create the memory data index with appropriate mapping
-        createMemoryDataIndex(baseIndexName, container.getSemanticStorage(), listener);
+        createMemoryDataIndex(finalIndexName, container.getMemoryStorageConfig(), ActionListener.wrap(success -> {
+            // Return the actual index name that was created
+            listener.onResponse(finalIndexName);
+        }, listener::onFailure));
     }
 
-    private void createMemoryDataIndex(String indexName, SemanticStorageConfig semanticStorage, ActionListener<Boolean> listener) {
+    private void createMemoryDataIndex(String indexName, MemoryStorageConfig memoryStorageConfig, ActionListener<Boolean> listener) {
         try {
             Map<String, Object> indexSettings = new HashMap<>();
             Map<String, Object> indexMappings = new HashMap<>();
@@ -189,15 +214,15 @@ public class TransportCreateMemoryContainerAction extends
             properties.put(RAW_MESSAGES_FIELD, Map.of("type", "text"));
             properties.put(TAGS_FIELD, Map.of("type", "flat_object"));
 
-            if (semanticStorage != null && semanticStorage.isSemanticStorageEnabled()) {
+            if (memoryStorageConfig != null && memoryStorageConfig.isSemanticStorageEnabled()) {
                 properties.put(FACT_FIELD, Map.of("type", "text"));
 
-                if (semanticStorage.getModelType() == FunctionName.TEXT_EMBEDDING) {
+                if (memoryStorageConfig.getEmbeddingModelType() == FunctionName.TEXT_EMBEDDING) {
                     // KNN index configuration
                     indexSettings.put("index.knn", true);
                     indexSettings.put("index.knn.algo_param.ef_search", KNN_EF_SEARCH);
 
-                    int dimension = semanticStorage.getDimension();
+                    int dimension = memoryStorageConfig.getDimension();
 
                     Map<String, Object> knnVector = new HashMap<>();
                     knnVector.put("type", "knn_vector");
@@ -212,7 +237,7 @@ public class TransportCreateMemoryContainerAction extends
 
                     properties.put(FACT_ENCODING_FIELD, knnVector);
 
-                } else if (semanticStorage.getModelType() == FunctionName.SPARSE_ENCODING) {
+                } else if (memoryStorageConfig.getEmbeddingModelType() == FunctionName.SPARSE_ENCODING) {
                     // Sparse index configuration
                     properties.put(FACT_ENCODING_FIELD, Map.of("type", "rank_feature"));
                 }
@@ -251,42 +276,76 @@ public class TransportCreateMemoryContainerAction extends
         }
     }
 
-    private void indexMemoryContainer(MLMemoryContainer container, ActionListener<MLCreateMemoryContainerResponse> listener) {
-        try {
-            XContentBuilder builder = XContentType.JSON.contentBuilder();
-            container.toXContent(builder, ToXContent.EMPTY_PARAMS);
-
-            IndexRequest indexRequest = new IndexRequest(ML_MEMORY_CONTAINER_INDEX)
-                .id(container.getContainerId())
-                .source(builder)
-                .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-
-            client.index(indexRequest, ActionListener.wrap(response -> {
-                if (response.getResult() == DocWriteResponse.Result.CREATED) {
-                    log.info("Successfully created memory container with ID: {}", container.getContainerId());
-                    listener.onResponse(new MLCreateMemoryContainerResponse(container.getContainerId(), "created"));
-                } else {
-                    listener.onFailure(new RuntimeException("Failed to create memory container"));
-                }
-            }, e -> {
-                if (e instanceof VersionConflictEngineException) {
-                    listener.onFailure(new IllegalArgumentException("Memory container with ID already exists"));
-                } else {
-                    log.error("Failed to index memory container", e);
-                    listener.onFailure(e);
-                }
-            }));
+    private void updateMemoryContainer(MLMemoryContainer container, ActionListener<Boolean> listener) {
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            sdkClient
+                .putDataObjectAsync(
+                    PutDataObjectRequest
+                        .builder()
+                        .tenantId(container.getTenantId())
+                        .index(ML_MEMORY_CONTAINER_INDEX)
+                        .id(container.getMemoryContainerId())
+                        .dataObject(container)
+                        .build()
+                )
+                .whenComplete((r, throwable) -> {
+                    context.restore();
+                    if (throwable != null) {
+                        Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                        log.error("Failed to update memory container", cause);
+                        listener.onFailure(cause);
+                    } else {
+                        try {
+                            IndexResponse indexResponse = r.indexResponse();
+                            log.info("Successfully updated memory container with ID: {}", container.getMemoryContainerId());
+                            listener.onResponse(true);
+                        } catch (Exception e) {
+                            listener.onFailure(e);
+                        }
+                    }
+                });
         } catch (Exception e) {
-            log.error("Failed to build memory container document", e);
+            log.error("Failed to update memory container", e);
             listener.onFailure(e);
         }
     }
 
-    private User parseUserFromThreadContext(Client client) {
-        String userStr = client.threadPool().getThreadContext().getTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT);
-        if (userStr != null && !userStr.trim().isEmpty()) {
-            return User.parse(userStr);
+    private void indexMemoryContainer(MLMemoryContainer container, ActionListener<String> listener) {
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            sdkClient
+                .putDataObjectAsync(
+                    PutDataObjectRequest
+                        .builder()
+                        .tenantId(container.getTenantId())
+                        .index(ML_MEMORY_CONTAINER_INDEX)
+                        .dataObject(container)
+                        .build()
+                )
+                .whenComplete((r, throwable) -> {
+                    context.restore();
+                    if (throwable != null) {
+                        Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                        log.error("Failed to index memory container", cause);
+                        listener.onFailure(cause);
+                    } else {
+                        try {
+                            IndexResponse indexResponse = r.indexResponse();
+                            if (indexResponse.getResult() == DocWriteResponse.Result.CREATED) {
+                                String generatedId = indexResponse.getId();
+                                log.info("Successfully created memory container with ID: {}", generatedId);
+                                listener.onResponse(generatedId);
+                            } else {
+                                listener.onFailure(new RuntimeException("Failed to create memory container"));
+                            }
+                        } catch (Exception e) {
+                            listener.onFailure(e);
+                        }
+                    }
+                });
+        } catch (Exception e) {
+            log.error("Failed to save memory container", e);
+            listener.onFailure(e);
         }
-        return null;
     }
+
 }
