@@ -30,25 +30,25 @@ import lombok.experimental.FieldDefaults;
 @ToString
 public class MLMemoryContainerGetRequest extends ActionRequest {
 
-    String containerId;
+    String memoryContainerId;
     String tenantId;
 
     @Builder
-    public MLMemoryContainerGetRequest(String containerId, String tenantId) {
-        this.containerId = containerId;
+    public MLMemoryContainerGetRequest(String memoryContainerId, String tenantId) {
+        this.memoryContainerId = memoryContainerId;
         this.tenantId = tenantId;
     }
 
     public MLMemoryContainerGetRequest(StreamInput in) throws IOException {
         super(in);
-        this.containerId = in.readString();
+        this.memoryContainerId = in.readString();
         this.tenantId = in.readOptionalString();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
-        out.writeString(this.containerId);
+        out.writeString(this.memoryContainerId);
         out.writeOptionalString(tenantId);
     }
 
@@ -56,7 +56,7 @@ public class MLMemoryContainerGetRequest extends ActionRequest {
     public ActionRequestValidationException validate() {
         ActionRequestValidationException exception = null;
 
-        if (this.containerId == null) {
+        if (this.memoryContainerId == null) {
             exception = addValidationError("Memory container id can't be null", exception);
         }
 
