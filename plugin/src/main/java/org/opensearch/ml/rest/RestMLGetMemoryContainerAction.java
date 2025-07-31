@@ -6,7 +6,7 @@
 package org.opensearch.ml.rest;
 
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.BASE_MEMORY_CONTAINER_PATH;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_CONTAINER_ID;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_CONTAINER_ID;
 import static org.opensearch.ml.utils.RestActionUtils.getParameterId;
 import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
@@ -45,7 +45,10 @@ public class RestMLGetMemoryContainerAction extends BaseRestHandler {
     public List<Route> routes() {
         return ImmutableList
             .of(
-                new Route(RestRequest.Method.GET, String.format(Locale.ROOT, "%s/{%s}", BASE_MEMORY_CONTAINER_PATH, PARAMETER_CONTAINER_ID))
+                new Route(
+                    RestRequest.Method.GET,
+                    String.format(Locale.ROOT, "%s/{%s}", BASE_MEMORY_CONTAINER_PATH, PARAMETER_MEMORY_CONTAINER_ID)
+                )
             );
     }
 
@@ -64,8 +67,8 @@ public class RestMLGetMemoryContainerAction extends BaseRestHandler {
      */
     @VisibleForTesting
     MLMemoryContainerGetRequest getRequest(RestRequest request) throws IOException {
-        String containerId = getParameterId(request, PARAMETER_CONTAINER_ID);
+        String memoryContainerId = getParameterId(request, PARAMETER_MEMORY_CONTAINER_ID);
         String tenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
-        return new MLMemoryContainerGetRequest(containerId, tenantId);
+        return new MLMemoryContainerGetRequest(memoryContainerId, tenantId);
     }
 }
