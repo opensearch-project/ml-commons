@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.common.transport.memorycontainer;
 
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CONTAINER_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STATUS_FIELD;
 
 import java.io.IOException;
@@ -21,30 +21,30 @@ import lombok.Getter;
 @Getter
 public class MLCreateMemoryContainerResponse extends ActionResponse implements ToXContentObject {
 
-    private String containerId;
+    private String memoryContainerId;
     private String status;
 
-    public MLCreateMemoryContainerResponse(String containerId, String status) {
-        this.containerId = containerId;
+    public MLCreateMemoryContainerResponse(String memoryContainerId, String status) {
+        this.memoryContainerId = memoryContainerId;
         this.status = status;
     }
 
     public MLCreateMemoryContainerResponse(StreamInput in) throws IOException {
         super(in);
-        this.containerId = in.readString();
+        this.memoryContainerId = in.readString();
         this.status = in.readString();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        out.writeString(containerId);
+        out.writeString(memoryContainerId);
         out.writeString(status);
     }
 
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
-        builder.field(CONTAINER_ID_FIELD, containerId);
+        builder.field(MEMORY_CONTAINER_ID_FIELD, memoryContainerId);
         builder.field(STATUS_FIELD, status);
         builder.endObject();
         return builder;

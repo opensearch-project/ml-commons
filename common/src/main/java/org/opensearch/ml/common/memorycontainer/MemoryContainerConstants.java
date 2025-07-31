@@ -52,7 +52,7 @@ public class MemoryContainerConstants {
     // REST API paths
     public static final String BASE_MEMORY_CONTAINER_PATH = "/_plugins/_ml/memory_container";
     public static final String CREATE_MEMORY_CONTAINER_PATH = BASE_MEMORY_CONTAINER_PATH + "/_create";
-    public static final String PARAMETER_CONTAINER_ID = "container_id";
+    public static final String PARAMETER_MEMORY_CONTAINER_ID = "memory_container_id";
 
     // Response fields
     public static final String STATUS_FIELD = "status";

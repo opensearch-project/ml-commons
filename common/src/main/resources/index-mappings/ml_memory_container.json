@@ -3,7 +3,7 @@
     "schema_version": 1
   },
   "properties": {
-    "container_id": {
+    "memory_container_id": {
       "type": "keyword"
     },
     "name": {

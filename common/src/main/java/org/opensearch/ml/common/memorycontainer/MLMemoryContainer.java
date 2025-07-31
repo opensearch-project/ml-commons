@@ -110,8 +110,8 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, ToXContent.Params params) throws IOException {
         builder.startObject();
-        if (containerId != null) {
-            builder.field(CONTAINER_ID_FIELD, containerId);
+        if (memoryContainerId != null) {
+            builder.field(MEMORY_CONTAINER_ID_FIELD, memoryContainerId);
         }
         if (name != null) {
             builder.field(NAME_FIELD, name);
@@ -154,8 +154,8 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
             parser.nextToken();
 
             switch (fieldName) {
-                case CONTAINER_ID_FIELD:
-                    containerId = parser.text();
+                case MEMORY_CONTAINER_ID_FIELD:
+                    memoryContainerId = parser.text();
                     break;
                 case NAME_FIELD:
                     name = parser.text();
