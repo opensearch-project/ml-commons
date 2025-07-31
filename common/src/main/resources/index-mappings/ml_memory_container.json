@@ -6,7 +6,7 @@
     "container_id": {
       "type": "keyword"
     },
-    "container_name": {
+    "name": {
       "type": "text",
       "fields": {
         "keyword": {
@@ -26,19 +26,22 @@
       "type": "date",
       "format": "strict_date_time||epoch_millis"
     },
-    "index_name": {
-      "type": "keyword"
-    },
-    "semantic_storage": {
+    "memory_storage_config": {
       "type": "object",
       "properties": {
+        "memoryIndexName": {
+          "type": "keyword"
+        },
         "semanticStorageEnabled": {
           "type": "boolean"
         },
-        "modelType": {
+        "embeddingModelType": {
           "type": "keyword"
         },
-        "modelId": {
+        "embeddingModelId": {
+          "type": "keyword"
+        },
+        "llmModelId": {
           "type": "keyword"
         },
         "dimension": {

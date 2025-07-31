@@ -6,9 +6,10 @@
 package org.opensearch.ml.common.transport.memorycontainer;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.INVALID_MODEL_TYPE_ERROR;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEMANTIC_STORAGE_MODEL_ID_REQUIRED_ERROR;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEMANTIC_STORAGE_MODEL_TYPE_REQUIRED_ERROR;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.INVALID_EMBEDDING_MODEL_TYPE_ERROR;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEMANTIC_STORAGE_EMBEDDING_MODEL_ID_REQUIRED_ERROR;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEMANTIC_STORAGE_EMBEDDING_MODEL_TYPE_REQUIRED_ERROR;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEMANTIC_STORAGE_LLM_MODEL_ID_REQUIRED_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SPARSE_ENCODING_DIMENSION_NOT_ALLOWED_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.TEXT_EMBEDDING_DIMENSION_REQUIRED_ERROR;
 
@@ -24,7 +25,7 @@ import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.memorycontainer.SemanticStorageConfig;
+import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
 
 import lombok.Builder;
 import lombok.Getter;
@@ -57,31 +58,35 @@ public class MLCreateMemoryContainerRequest extends ActionRequest {
         }
 
         ActionRequestValidationException exception = null;
-        SemanticStorageConfig semanticStorage = mlCreateMemoryContainerInput.getSemanticStorage();
+        MemoryStorageConfig memoryStorageConfig = mlCreateMemoryContainerInput.getMemoryStorageConfig();
 
-        if (semanticStorage != null && semanticStorage.isSemanticStorageEnabled()) {
-            if (semanticStorage.getModelType() == null) {
-                exception = addValidationError(SEMANTIC_STORAGE_MODEL_TYPE_REQUIRED_ERROR, exception);
+        if (memoryStorageConfig != null && memoryStorageConfig.isSemanticStorageEnabled()) {
+            if (memoryStorageConfig.getEmbeddingModelType() == null) {
+                exception = addValidationError(SEMANTIC_STORAGE_EMBEDDING_MODEL_TYPE_REQUIRED_ERROR, exception);
             } else {
-                FunctionName modelType = semanticStorage.getModelType();
-                if (modelType != FunctionName.TEXT_EMBEDDING && modelType != FunctionName.SPARSE_ENCODING) {
-                    exception = addValidationError(INVALID_MODEL_TYPE_ERROR, exception);
+                FunctionName embeddingModelType = memoryStorageConfig.getEmbeddingModelType();
+                if (embeddingModelType != FunctionName.TEXT_EMBEDDING && embeddingModelType != FunctionName.SPARSE_ENCODING) {
+                    exception = addValidationError(INVALID_EMBEDDING_MODEL_TYPE_ERROR, exception);
                 }
 
-                // Model ID is required when semantic storage is enabled
-                if (semanticStorage.getModelId() == null) {
-                    exception = addValidationError(SEMANTIC_STORAGE_MODEL_ID_REQUIRED_ERROR, exception);
+                // Model IDs are required when semantic storage is enabled
+                if (memoryStorageConfig.getEmbeddingModelId() == null) {
+                    exception = addValidationError(SEMANTIC_STORAGE_EMBEDDING_MODEL_ID_REQUIRED_ERROR, exception);
+                }
+
+                if (memoryStorageConfig.getLlmModelId() == null) {
+                    exception = addValidationError(SEMANTIC_STORAGE_LLM_MODEL_ID_REQUIRED_ERROR, exception);
                 }
 
                 // Validate dimension requirements
-                if (modelType == FunctionName.TEXT_EMBEDDING) {
+                if (embeddingModelType == FunctionName.TEXT_EMBEDDING) {
                     // Dimension is required for TEXT_EMBEDDING
-                    if (semanticStorage.getDimension() == null) {
+                    if (memoryStorageConfig.getDimension() == null) {
                         exception = addValidationError(TEXT_EMBEDDING_DIMENSION_REQUIRED_ERROR, exception);
                     }
-                } else if (modelType == FunctionName.SPARSE_ENCODING) {
+                } else if (embeddingModelType == FunctionName.SPARSE_ENCODING) {
                     // Dimension is not allowed for sparse encoding
-                    if (semanticStorage.getDimension() != null) {
+                    if (memoryStorageConfig.getDimension() != null) {
                         exception = addValidationError(SPARSE_ENCODING_DIMENSION_NOT_ALLOWED_ERROR, exception);
                     }
                 }

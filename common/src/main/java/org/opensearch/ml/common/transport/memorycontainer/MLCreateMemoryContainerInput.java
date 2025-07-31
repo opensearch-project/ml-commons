@@ -15,7 +15,7 @@ import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.memorycontainer.SemanticStorageConfig;
+import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
 
 import lombok.Builder;
 import lombok.Data;
@@ -23,56 +23,45 @@ import lombok.Data;
 @Data
 public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable {
 
-    public static final String CONTAINER_NAME_FIELD = "container_name";
+    public static final String NAME_FIELD = "name";
     public static final String DESCRIPTION_FIELD = "description";
-    public static final String INDEX_NAME_FIELD = "index_name";
-    public static final String SEMANTIC_STORAGE_FIELD = "semantic_storage";
+    public static final String MEMORY_STORAGE_CONFIG_FIELD = "memory_storage_config";
     public static final String TENANT_ID_FIELD = "tenant_id";
 
-    private String containerName;
+    private String name;
     private String description;
-    private String indexName;
-    private SemanticStorageConfig semanticStorage;
+    private MemoryStorageConfig memoryStorageConfig;
     private String tenantId;
 
     @Builder(toBuilder = true)
-    public MLCreateMemoryContainerInput(
-        String containerName,
-        String description,
-        String indexName,
-        SemanticStorageConfig semanticStorage,
-        String tenantId
-    ) {
-        if (containerName == null) {
-            throw new IllegalArgumentException("container name is null");
+    public MLCreateMemoryContainerInput(String name, String description, MemoryStorageConfig memoryStorageConfig, String tenantId) {
+        if (name == null) {
+            throw new IllegalArgumentException("name is null");
         }
-        this.containerName = containerName;
+        this.name = name;
         this.description = description;
-        this.indexName = indexName;
-        this.semanticStorage = semanticStorage;
+        this.memoryStorageConfig = memoryStorageConfig;
         this.tenantId = tenantId;
     }
 
     public MLCreateMemoryContainerInput(StreamInput in) throws IOException {
-        this.containerName = in.readString();
+        this.name = in.readString();
         this.description = in.readOptionalString();
-        this.indexName = in.readOptionalString();
         if (in.readBoolean()) {
-            this.semanticStorage = new SemanticStorageConfig(in);
+            this.memoryStorageConfig = new MemoryStorageConfig(in);
         } else {
-            this.semanticStorage = null;
+            this.memoryStorageConfig = null;
         }
         this.tenantId = in.readOptionalString();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        out.writeString(containerName);
+        out.writeString(name);
         out.writeOptionalString(description);
-        out.writeOptionalString(indexName);
-        if (semanticStorage != null) {
+        if (memoryStorageConfig != null) {
             out.writeBoolean(true);
-            semanticStorage.writeTo(out);
+            memoryStorageConfig.writeTo(out);
         } else {
             out.writeBoolean(false);
         }
@@ -82,15 +71,12 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
-        builder.field(CONTAINER_NAME_FIELD, containerName);
+        builder.field(NAME_FIELD, name);
         if (description != null) {
             builder.field(DESCRIPTION_FIELD, description);
         }
-        if (indexName != null) {
-            builder.field(INDEX_NAME_FIELD, indexName);
-        }
-        if (semanticStorage != null) {
-            builder.field(SEMANTIC_STORAGE_FIELD, semanticStorage);
+        if (memoryStorageConfig != null) {
+            builder.field(MEMORY_STORAGE_CONFIG_FIELD, memoryStorageConfig);
         }
         if (tenantId != null) {
             builder.field(TENANT_ID_FIELD, tenantId);
@@ -100,10 +86,9 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
     }
 
     public static MLCreateMemoryContainerInput parse(XContentParser parser) throws IOException {
-        String containerName = null;
+        String name = null;
         String description = null;
-        String indexName = null;
-        SemanticStorageConfig semanticStorage = null;
+        MemoryStorageConfig memoryStorageConfig = null;
         String tenantId = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
@@ -112,17 +97,14 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
             parser.nextToken();
 
             switch (fieldName) {
-                case CONTAINER_NAME_FIELD:
-                    containerName = parser.text();
+                case NAME_FIELD:
+                    name = parser.text();
                     break;
                 case DESCRIPTION_FIELD:
                     description = parser.text();
                     break;
-                case INDEX_NAME_FIELD:
-                    indexName = parser.text();
-                    break;
-                case SEMANTIC_STORAGE_FIELD:
-                    semanticStorage = SemanticStorageConfig.parse(parser);
+                case MEMORY_STORAGE_CONFIG_FIELD:
+                    memoryStorageConfig = MemoryStorageConfig.parse(parser);
                     break;
                 case TENANT_ID_FIELD:
                     tenantId = parser.text();
@@ -135,10 +117,9 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
 
         return MLCreateMemoryContainerInput
             .builder()
-            .containerName(containerName)
+            .name(name)
             .description(description)
-            .indexName(indexName)
-            .semanticStorage(semanticStorage)
+            .memoryStorageConfig(memoryStorageConfig)
             .tenantId(tenantId)
             .build();
     }
