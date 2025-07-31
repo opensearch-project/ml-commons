@@ -6,14 +6,12 @@
 package org.opensearch.ml.common.transport.memorycontainer;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
-import static org.opensearch.ml.common.CommonValue.VERSION_2_19_0;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 
-import org.opensearch.Version;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.ActionRequestValidationException;
 import org.opensearch.core.common.io.stream.InputStreamStreamInput;
@@ -39,19 +37,15 @@ public class MLMemoryContainerDeleteRequest extends ActionRequest {
 
     public MLMemoryContainerDeleteRequest(StreamInput input) throws IOException {
         super(input);
-        Version streamInputVersion = input.getVersion();
         this.containerId = input.readString();
-        this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? input.readOptionalString() : null;
+        this.tenantId = input.readOptionalString();
     }
 
     @Override
     public void writeTo(StreamOutput output) throws IOException {
         super.writeTo(output);
-        Version streamOutputVersion = output.getVersion();
         output.writeString(containerId);
-        if (streamOutputVersion.onOrAfter(VERSION_2_19_0)) {
-            output.writeOptionalString(tenantId);
-        }
+        output.writeOptionalString(tenantId);
     }
 
     @Override

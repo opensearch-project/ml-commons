@@ -3,13 +3,9 @@ package org.opensearch.ml.helper;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MEMORY_ACCESS_CONTROL_ENABLED;
 
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.action.get.GetResponse;
-import org.opensearch.cluster.service.ClusterService;
-import org.opensearch.common.inject.Inject;
-import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.commons.authuser.User;
@@ -33,14 +29,6 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class MemoryAccessControlHelper {
     private volatile Boolean memoryAccessControlEnabled;
-
-    @Inject
-    public MemoryAccessControlHelper(ClusterService clusterService, Settings settings) {
-        memoryAccessControlEnabled = ML_COMMONS_MEMORY_ACCESS_CONTROL_ENABLED.get(settings);
-        clusterService
-            .getClusterSettings()
-            .addSettingsUpdateConsumer(ML_COMMONS_MEMORY_ACCESS_CONTROL_ENABLED, it -> memoryAccessControlEnabled = it);
-    }
 
     public void validateMemoryContainerAccess(
         SdkClient sdkClient,
