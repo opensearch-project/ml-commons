@@ -24,6 +24,7 @@ import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 
 import org.junit.Before;
@@ -131,7 +132,7 @@ public class AwsConnectorExecutorTest {
     }
 
     @Test
-    public void executePredict_RemoteInferenceInput_EmptyIpAddress() {
+    public void executePredict_RemoteInferenceInput_EmptyIpAddress() throws ExecutionException, InterruptedException {
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(PREDICT)
@@ -140,7 +141,12 @@ public class AwsConnectorExecutorTest {
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptor.encrypt("test_key", null).get(),
+                SECRET_KEY_FIELD,
+                encryptor.encrypt("test_secret_key", null).get()
+            );
         Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
@@ -177,7 +183,7 @@ public class AwsConnectorExecutorTest {
     }
 
     @Test
-    public void executePredict_TextDocsInferenceInput() {
+    public void executePredict_TextDocsInferenceInput() throws ExecutionException, InterruptedException {
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(PREDICT)
@@ -187,7 +193,12 @@ public class AwsConnectorExecutorTest {
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptor.encrypt("test_key", null).get(),
+                SECRET_KEY_FIELD,
+                encryptor.encrypt("test_secret_key", null).get()
+            );
         Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
@@ -216,7 +227,7 @@ public class AwsConnectorExecutorTest {
     }
 
     @Test
-    public void executePredict_TextDocsInferenceInput_withStepSize() {
+    public void executePredict_TextDocsInferenceInput_withStepSize() throws ExecutionException, InterruptedException {
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(PREDICT)
@@ -226,7 +237,12 @@ public class AwsConnectorExecutorTest {
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptor.encrypt("test_key", null).get(),
+                SECRET_KEY_FIELD,
+                encryptor.encrypt("test_secret_key", null).get()
+            );
         Map<String, String> parameters = ImmutableMap
             .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "2");
         Connector connector = AwsConnector
@@ -268,7 +284,7 @@ public class AwsConnectorExecutorTest {
     }
 
     @Test
-    public void executePredict_TextDocsInferenceInput_withStepSize_returnOrderedResults() {
+    public void executePredict_TextDocsInferenceInput_withStepSize_returnOrderedResults() throws ExecutionException, InterruptedException {
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(PREDICT)
@@ -278,7 +294,12 @@ public class AwsConnectorExecutorTest {
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptor.encrypt("test_key", null).get(),
+                SECRET_KEY_FIELD,
+                encryptor.encrypt("test_secret_key", null).get()
+            );
         Map<String, String> parameters = ImmutableMap
             .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "1");
         Connector connector = AwsConnector
@@ -328,7 +349,8 @@ public class AwsConnectorExecutorTest {
     }
 
     @Test
-    public void executePredict_TextDocsInferenceInput_withStepSize_partiallyFailed_thenFail() {
+    public void executePredict_TextDocsInferenceInput_withStepSize_partiallyFailed_thenFail() throws ExecutionException,
+        InterruptedException {
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(PREDICT)
@@ -338,7 +360,12 @@ public class AwsConnectorExecutorTest {
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptor.encrypt("test_key", null).get(),
+                SECRET_KEY_FIELD,
+                encryptor.encrypt("test_secret_key", null).get()
+            );
         Map<String, String> parameters = ImmutableMap
             .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "1");
         Connector connector = AwsConnector
@@ -385,7 +412,8 @@ public class AwsConnectorExecutorTest {
     }
 
     @Test
-    public void executePredict_TextDocsInferenceInput_withStepSize_failWithMultipleFailures() {
+    public void executePredict_TextDocsInferenceInput_withStepSize_failWithMultipleFailures() throws ExecutionException,
+        InterruptedException {
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(PREDICT)
@@ -395,7 +423,12 @@ public class AwsConnectorExecutorTest {
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptor.encrypt("test_key", null).get(),
+                SECRET_KEY_FIELD,
+                encryptor.encrypt("test_secret_key", null).get()
+            );
         Map<String, String> parameters = ImmutableMap
             .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "1");
         Connector connector = AwsConnector
@@ -445,7 +478,10 @@ public class AwsConnectorExecutorTest {
     }
 
     @Test
-    public void executePredict_RemoteInferenceInput_nullHttpClient_throwNPException() throws NoSuchFieldException, IllegalAccessException {
+    public void executePredict_RemoteInferenceInput_nullHttpClient_throwNPException() throws NoSuchFieldException,
+        IllegalAccessException,
+        ExecutionException,
+        InterruptedException {
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(PREDICT)
@@ -454,7 +490,12 @@ public class AwsConnectorExecutorTest {
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptor.encrypt("test_key", null).get(),
+                SECRET_KEY_FIELD,
+                encryptor.encrypt("test_secret_key", null).get()
+            );
         Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
@@ -490,7 +531,8 @@ public class AwsConnectorExecutorTest {
     }
 
     @Test
-    public void executePredict_RemoteInferenceInput_negativeStepSize_throwIllegalArgumentException() {
+    public void executePredict_RemoteInferenceInput_negativeStepSize_throwIllegalArgumentException() throws ExecutionException,
+        InterruptedException {
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(PREDICT)
@@ -499,7 +541,12 @@ public class AwsConnectorExecutorTest {
             .requestBody("{\"input\": \"${parameters.input}\"}")
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptor.encrypt("test_key", null).get(),
+                SECRET_KEY_FIELD,
+                encryptor.encrypt("test_secret_key", null).get()
+            );
         Map<String, String> parameters = ImmutableMap
             .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "-1");
         Connector connector = AwsConnector
@@ -532,7 +579,8 @@ public class AwsConnectorExecutorTest {
     }
 
     @Test
-    public void executePredict_TextDocsInferenceInput_withoutStepSize_emptyPredictionAction() {
+    public void executePredict_TextDocsInferenceInput_withoutStepSize_emptyPredictionAction() throws ExecutionException,
+        InterruptedException {
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(PREDICT)
@@ -542,7 +590,12 @@ public class AwsConnectorExecutorTest {
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptor.encrypt("test_key", null).get(),
+                SECRET_KEY_FIELD,
+                encryptor.encrypt("test_secret_key", null).get()
+            );
         Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
@@ -574,7 +627,8 @@ public class AwsConnectorExecutorTest {
     }
 
     @Test
-    public void executePredict_TextDocsInferenceInput_withoutStepSize_userDefinedPreProcessFunction() {
+    public void executePredict_TextDocsInferenceInput_withoutStepSize_userDefinedPreProcessFunction() throws ExecutionException,
+        InterruptedException {
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(PREDICT)
@@ -586,7 +640,12 @@ public class AwsConnectorExecutorTest {
             )
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptor.encrypt("test_key", null).get(),
+                SECRET_KEY_FIELD,
+                encryptor.encrypt("test_secret_key", null).get()
+            );
         Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
@@ -616,7 +675,8 @@ public class AwsConnectorExecutorTest {
     }
 
     @Test
-    public void executePredict_TextDocsInferenceInput_withoutStepSize_bedRockEmbeddingPreProcessFunction() {
+    public void executePredict_TextDocsInferenceInput_withoutStepSize_bedRockEmbeddingPreProcessFunction() throws ExecutionException,
+        InterruptedException {
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(PREDICT)
@@ -626,7 +686,12 @@ public class AwsConnectorExecutorTest {
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_BEDROCK_EMBEDDING_INPUT)
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptor.encrypt("test_key", null).get(),
+                SECRET_KEY_FIELD,
+                encryptor.encrypt("test_secret_key", null).get()
+            );
         Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "bedrock");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
@@ -656,7 +721,8 @@ public class AwsConnectorExecutorTest {
     }
 
     @Test
-    public void executePredict_TextDocsInferenceInput_withoutStepSize_emptyPreprocessFunction() {
+    public void executePredict_TextDocsInferenceInput_withoutStepSize_emptyPreprocessFunction() throws ExecutionException,
+        InterruptedException {
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(ConnectorAction.ActionType.PREDICT)
@@ -665,7 +731,12 @@ public class AwsConnectorExecutorTest {
             .requestBody("{\"input\": ${parameters.input}}")
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptor.encrypt("test_key", null).get(),
+                SECRET_KEY_FIELD,
+                encryptor.encrypt("test_secret_key", null).get()
+            );
         Map<String, String> parameters = ImmutableMap.of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "bedrock");
         Connector connector = AwsConnector
             .awsConnectorBuilder()
@@ -695,7 +766,7 @@ public class AwsConnectorExecutorTest {
     }
 
     @Test
-    public void executePredict_whenRetryEnabled_thenInvokeRemoteServiceWithRetry() {
+    public void executePredict_whenRetryEnabled_thenInvokeRemoteServiceWithRetry() throws ExecutionException, InterruptedException {
         ConnectorAction predictAction = ConnectorAction
             .builder()
             .actionType(PREDICT)
@@ -705,7 +776,12 @@ public class AwsConnectorExecutorTest {
             .preProcessFunction(MLPreProcessFunction.TEXT_DOCS_TO_OPENAI_EMBEDDING_INPUT)
             .build();
         Map<String, String> credential = ImmutableMap
-            .of(ACCESS_KEY_FIELD, encryptor.encrypt("test_key", null), SECRET_KEY_FIELD, encryptor.encrypt("test_secret_key", null));
+            .of(
+                ACCESS_KEY_FIELD,
+                encryptor.encrypt("test_key", null).get(),
+                SECRET_KEY_FIELD,
+                encryptor.encrypt("test_secret_key", null).get()
+            );
         Map<String, String> parameters = ImmutableMap
             .of(REGION_FIELD, "us-west-2", SERVICE_NAME_FIELD, "sagemaker", "input_docs_processed_step_size", "5");
         // execute with retry disabled
