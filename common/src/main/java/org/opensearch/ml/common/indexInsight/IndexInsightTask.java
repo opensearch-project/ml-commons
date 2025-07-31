@@ -24,10 +24,9 @@ import lombok.extern.log4j.Log4j2;
  * Interface representing an index insight execution task
  */
 public interface IndexInsightTask {
-    
-    // Configurable intervals (in milliseconds)
-    long GENERATING_TIMEOUT = 30 * 60 * 1000; // 30 minutes
-    long UPDATE_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
+
+    long GENERATING_TIMEOUT = 30 * 60 * 1000; // 30 minutes - temporary setting
+    long UPDATE_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours - temporary setting
     
     /**
      * Execute the index insight task following the new design:
@@ -58,38 +57,26 @@ public interface IndexInsightTask {
         Long lastUpdateTime = (Long) source.get("last_updated_time");
         long currentTime = Instant.now().toEpochMilli();
         
-        switch (currentStatus) {
-            case "pending":
-                // Pending task, check if should start
-                updateStatusToGenerating();
-                checkPrerequisitesAndRun();
-                break;
-            case "generating":
+        IndexInsightTaskStatus status = IndexInsightTaskStatus.fromString(currentStatus);
+        switch (status) {
+            case GENERATING:
                 // Check if generating timeout
                 if (lastUpdateTime != null && (currentTime - lastUpdateTime) > GENERATING_TIMEOUT) {
-                    checkPrerequisitesAndRun();
-                } else {
-                    setStatus("generating");
+                    setGeneratingAndRun();
                 }
+                // If still generating and not timeout, do nothing
                 break;
-            case "completed":
+            case COMPLETED:
                 // Check if needs update
                 if (lastUpdateTime != null && (currentTime - lastUpdateTime) > UPDATE_INTERVAL) {
-                    updateStatusToGenerating();
-                    checkPrerequisitesAndRun();
-                } else {
-                    setStatus("completed");
+                    setGeneratingAndRun();
                 }
+                // If completed and no update needed, do nothing
                 break;
-            case "failed":
+            case FAILED:
                 // Retry failed task
-                updateStatusToGenerating();
-                checkPrerequisitesAndRun();
+                setGeneratingAndRun();
                 break;
-            default:
-                // Unknown status, treat as pending
-                updateStatusToGenerating();
-                checkPrerequisitesAndRun();
         }
     }
     
@@ -97,7 +84,7 @@ public interface IndexInsightTask {
         Map<String, Object> docMap = new HashMap<>();
         docMap.put("index_name", getTargetIndex());
         docMap.put("task_type", getTaskType().toString());
-        docMap.put("status", "pending");
+        docMap.put("status", IndexInsightTaskStatus.GENERATING.toString());
         docMap.put("last_updated_time", Instant.now().toEpochMilli());
         
         UpdateRequest updateRequest = new UpdateRequest(ML_INDEX_INSIGHT_INDEX, docId)
@@ -105,62 +92,61 @@ public interface IndexInsightTask {
             .docAsUpsert(true);
         
         getClient().update(updateRequest, ActionListener.wrap(r -> {
-            updateStatusToGenerating();
+            setStatus(IndexInsightTaskStatus.GENERATING);
             checkPrerequisitesAndRun();
         }, e -> {
-            setStatus("failed");
+            setStatus(IndexInsightTaskStatus.FAILED);
         }));
     }
     
-    default void updateStatusToGenerating() {
+    default void setGeneratingAndRun() {
         String docId = generateDocId();
         Map<String, Object> docMap = new HashMap<>();
-        docMap.put("status", "generating");
+        docMap.put("status", IndexInsightTaskStatus.GENERATING.toString());
         docMap.put("last_updated_time", Instant.now().toEpochMilli());
         
         UpdateRequest updateRequest = new UpdateRequest(ML_INDEX_INSIGHT_INDEX, docId)
             .doc(docMap, MediaTypeRegistry.JSON);
         
-        getClient().update(updateRequest, ActionListener.wrap(r -> {}, e -> {}));
+        getClient().update(updateRequest, ActionListener.wrap(
+            r -> checkPrerequisitesAndRun(),
+            e -> setStatus(IndexInsightTaskStatus.FAILED)
+        ));
     }
     
     default void checkPrerequisitesAndRun() {
-        List<MLIndexInsightType> dependencies = getDependencies();
-        if (dependencies.isEmpty()) {
+        List<MLIndexInsightType> prerequisites = getPrerequisites();
+        if (prerequisites.isEmpty()) {
             runTaskLogic();
             return;
         }
         
-        // Check all dependencies
-        checkAllDependencies(dependencies);
-    }
-    
-    default void checkAllDependencies(List<MLIndexInsightType> dependencies) {
-        for (MLIndexInsightType dependency : dependencies) {
-            String depDocId = generateDocId(getTargetIndex(), dependency);
-            GetRequest getRequest = new GetRequest(ML_INDEX_INSIGHT_INDEX, depDocId);
+        // Check all prerequisites
+        for (MLIndexInsightType prerequisite : prerequisites) {
+            String prereqDocId = generateDocId(getTargetIndex(), prerequisite);
+            GetRequest getRequest = new GetRequest(ML_INDEX_INSIGHT_INDEX, prereqDocId);
             
             try {
                 GetResponse response = getClient().get(getRequest).actionGet();
                 if (!response.isExists()) {
-                    // Dependency not found, skip execution
+                    // Prerequisite not found, skip execution
                     return;
                 }
                 
                 Map<String, Object> source = response.getSourceAsMap();
-                String depStatus = (String) source.get("status");
+                String prereqStatus = (String) source.get("status");
                 
-                if (!"completed".equals(depStatus)) {
-                    // Dependency not completed, skip execution
+                if (!IndexInsightTaskStatus.COMPLETED.toString().equals(prereqStatus)) {
+                    // Prerequisite not completed, skip execution
                     return;
                 }
             } catch (Exception e) {
-                // Error checking dependency, skip execution
+                // Error checking prerequisite, skip execution
                 return;
             }
         }
         
-        // All dependencies satisfied, run task
+        // All prerequisites satisfied, run task
         runTaskLogic();
     }
     
@@ -170,7 +156,7 @@ public interface IndexInsightTask {
         docMap.put("index_name", getTargetIndex());
         docMap.put("task_type", getTaskType().toString());
         docMap.put("content", content);
-        docMap.put("status", "completed");
+        docMap.put("status", IndexInsightTaskStatus.COMPLETED.toString());
         docMap.put("last_updated_time", Instant.now().toEpochMilli());
         
         UpdateRequest updateRequest = new UpdateRequest(ML_INDEX_INSIGHT_INDEX, docId)
@@ -178,7 +164,7 @@ public interface IndexInsightTask {
             .docAsUpsert(true);
         
         getClient().update(updateRequest, ActionListener.wrap(r -> {
-            setStatus("completed");
+            setStatus(IndexInsightTaskStatus.COMPLETED);
         }, e -> {
             saveFailedStatus();
         }));
@@ -189,7 +175,7 @@ public interface IndexInsightTask {
         Map<String, Object> docMap = new HashMap<>();
         docMap.put("index_name", getTargetIndex());
         docMap.put("task_type", getTaskType().toString());
-        docMap.put("status", "failed");
+        docMap.put("status", IndexInsightTaskStatus.FAILED.toString());
         docMap.put("last_updated_time", Instant.now().toEpochMilli());
         
         UpdateRequest updateRequest = new UpdateRequest(ML_INDEX_INSIGHT_INDEX, docId)
@@ -197,9 +183,9 @@ public interface IndexInsightTask {
             .docAsUpsert(true);
         
         getClient().update(updateRequest, ActionListener.wrap(r -> {
-            setStatus("failed");
+            setStatus(IndexInsightTaskStatus.FAILED);
         }, e -> {
-            setStatus("failed");
+            setStatus(IndexInsightTaskStatus.FAILED);
         }));
     }
     
@@ -219,28 +205,28 @@ public interface IndexInsightTask {
     MLIndexInsightType getTaskType();
     
     /**
-     * Get the target index name
+     * Get the index name
      * @return the index name
      */
     String getTargetIndex();
     
     /**
      * Get the current task status
-     * @return the status string
+     * @return the status enum
      */
-    String getStatus();
+    IndexInsightTaskStatus getStatus();
     
     /**
      * Set the current task status
-     * @param status the status string
+     * @param status the status enum
      */
-    void setStatus(String status);
+    void setStatus(IndexInsightTaskStatus status);
     
     /**
-     * Get the dependencies of this task
+     * Get the prerequisites of this task
      * @return list of task types that this task depends on
      */
-    List<MLIndexInsightType> getDependencies();
+    List<MLIndexInsightType> getPrerequisites();
     
     /**
      * Get the client instance

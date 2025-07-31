@@ -15,44 +15,45 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class StatisticalDataTask implements IndexInsightTask {
     
-    private final String targetIndex;
+    private final MLIndexInsightType taskType = MLIndexInsightType.STATISTICAL_DATA;
+    private final String indexName;
     private final Client client;
-    private String status = "pending";
+    private IndexInsightTaskStatus status = IndexInsightTaskStatus.GENERATING;
     private SearchHit[] sampleDocuments;
     
-    public StatisticalDataTask(String targetIndex, Client client) {
-        this.targetIndex = targetIndex;
+    public StatisticalDataTask(String indexName, Client client) {
+        this.indexName = indexName;
         this.client = client;
     }
     
     @Override
     public void runTaskLogic() {
-        status = "generating";
+        status = IndexInsightTaskStatus.GENERATING;
         try {
             collectSampleDocuments();
         } catch (Exception e) {
-            log.error("Failed to execute statistical data task for index {}", targetIndex, e);
+            log.error("Failed to execute statistical data task for index {}", indexName, e);
             saveFailedStatus();
         }
     }
     
     @Override
     public MLIndexInsightType getTaskType() {
-        return MLIndexInsightType.STATISTICAL_DATA;
+        return taskType;
     }
     
     @Override
     public String getTargetIndex() {
-        return targetIndex;
+        return indexName;
     }
     
     @Override
-    public String getStatus() {
+    public IndexInsightTaskStatus getStatus() {
         return status;
     }
     
     @Override
-    public void setStatus(String status) {
+    public void setStatus(IndexInsightTaskStatus status) {
         this.status = status;
     }
     
@@ -62,7 +63,7 @@ public class StatisticalDataTask implements IndexInsightTask {
     }
     
     @Override
-    public List<MLIndexInsightType> getDependencies() {
+    public List<MLIndexInsightType> getPrerequisites() {
         return Collections.emptyList();
     }
     
@@ -73,16 +74,16 @@ public class StatisticalDataTask implements IndexInsightTask {
     private void collectSampleDocuments() {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
         searchSourceBuilder.size(5).query(new MatchAllQueryBuilder());
-        SearchRequest searchRequest = new SearchRequest(new String[] { targetIndex }, searchSourceBuilder);
+        SearchRequest searchRequest = new SearchRequest(new String[] { indexName }, searchSourceBuilder);
         
         client.search(searchRequest, ActionListener.wrap(searchResponse -> {
             sampleDocuments = searchResponse.getHits().getHits();
-            log.info("Collected {} sample documents for index: {}", sampleDocuments.length, targetIndex);
+            log.info("Collected {} sample documents for index: {}", sampleDocuments.length, indexName);
             
             String statisticalContent = generateStatisticalContent();
             saveResult(statisticalContent);
         }, e -> {
-            log.error("Failed to collect sample documents for index: {}", targetIndex, e);
+            log.error("Failed to collect sample documents for index: {}", indexName, e);
             saveFailedStatus();
         }));
     }

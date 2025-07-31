@@ -28,12 +28,12 @@ public class IndexInsight implements ToXContentObject, Writeable {
 
     private String index;
     private String content;
-    private String status;
+    private IndexInsightTaskStatus status;
     private MLIndexInsightType taskType;
     private Instant lastUpdatedTime;
 
     @Builder(toBuilder = true)
-    public IndexInsight(String index, String content, String status, MLIndexInsightType taskType, Instant lastUpdatedTime) {
+    public IndexInsight(String index, String content, IndexInsightTaskStatus status, MLIndexInsightType taskType, Instant lastUpdatedTime) {
         this.index = index;
         this.content = content;
         this.status = status;
@@ -48,7 +48,7 @@ public class IndexInsight implements ToXContentObject, Writeable {
             content = input.readString();
         }
         if (input.readBoolean()) {
-            status = input.readString();
+            status = IndexInsightTaskStatus.fromString(input.readString());
         }
         taskType = MLIndexInsightType.fromString(input.readString());
 
@@ -59,7 +59,7 @@ public class IndexInsight implements ToXContentObject, Writeable {
     public static IndexInsight parse(XContentParser parser) throws IOException {
         String indexName = null;
         String content = null;
-        String status = null;
+        IndexInsightTaskStatus status = null;
         String taskType = null;
         Instant lastUpdatedTime = null;
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
@@ -75,7 +75,7 @@ public class IndexInsight implements ToXContentObject, Writeable {
                     content = parser.text();
                     break;
                 case STATUS_FIELD:
-                    status = parser.text();
+                    status = IndexInsightTaskStatus.fromString(parser.text());
                     break;
                 case TASK_TYPE_FIELD:
                     taskType = parser.text();
@@ -106,9 +106,9 @@ public class IndexInsight implements ToXContentObject, Writeable {
         } else {
             out.writeBoolean(false);
         }
-        if (status != null && !status.isEmpty()) {
+        if (status != null) {
             out.writeBoolean(true);
-            out.writeString(status);
+            out.writeString(status.toString());
         } else {
             out.writeBoolean(false);
         }
@@ -125,8 +125,8 @@ public class IndexInsight implements ToXContentObject, Writeable {
         if (content != null && !content.isEmpty()) {
             builder.field(CONTENT_FIELD, content);
         }
-        if (status != null && !status.isEmpty()) {
-            builder.field(STATUS_FIELD, status);
+        if (status != null) {
+            builder.field(STATUS_FIELD, status.toString());
         }
         builder.field(TASK_TYPE_FIELD, taskType.toString());
         builder.field(LAST_UPDATE_FIELD, lastUpdatedTime.toEpochMilli());

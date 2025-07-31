@@ -25,21 +25,23 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.hash.Hashing;
+import com.jayway.jsonpath.JsonPath;
 
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class IndexDescriptionTask implements IndexInsightTask {
     
-    private final String targetIndex;
+    private final MLIndexInsightType taskType = MLIndexInsightType.INDEX_DESCRIPTION;
+    private final String indexName;
     private final MappingMetadata mappingMetadata;
     private final Client client;
     private final ClusterService clusterService;
-    private String status = "pending";
+    private IndexInsightTaskStatus status = IndexInsightTaskStatus.GENERATING;
     private String indexDescription;
     
-    public IndexDescriptionTask(String targetIndex, MappingMetadata mappingMetadata, Client client, ClusterService clusterService) {
-        this.targetIndex = targetIndex;
+    public IndexDescriptionTask(String indexName, MappingMetadata mappingMetadata, Client client, ClusterService clusterService) {
+        this.indexName = indexName;
         this.mappingMetadata = mappingMetadata;
         this.client = client;
         this.clusterService = clusterService;
@@ -47,7 +49,7 @@ public class IndexDescriptionTask implements IndexInsightTask {
     
     @Override
     public void runTaskLogic() {
-        status = "generating";
+        status = IndexInsightTaskStatus.GENERATING;
         try {
             String statisticalContent = getInsightContent(MLIndexInsightType.STATISTICAL_DATA);
             
@@ -61,28 +63,28 @@ public class IndexDescriptionTask implements IndexInsightTask {
             String prompt = generateIndexDescriptionPrompt(statisticalContent);
             callLLM(prompt, modelId);
         } catch (Exception e) {
-            log.error("Failed to execute index description task for index {}", targetIndex, e);
+            log.error("Failed to execute index description task for index {}", indexName, e);
             saveFailedStatus();
         }
     }
     
     @Override
     public MLIndexInsightType getTaskType() {
-        return MLIndexInsightType.INDEX_DESCRIPTION;
+        return taskType;
     }
     
     @Override
     public String getTargetIndex() {
-        return targetIndex;
+        return indexName;
     }
     
     @Override
-    public String getStatus() {
+    public IndexInsightTaskStatus getStatus() {
         return status;
     }
     
     @Override
-    public void setStatus(String status) {
+    public void setStatus(IndexInsightTaskStatus status) {
         this.status = status;
     }
     
@@ -92,7 +94,7 @@ public class IndexDescriptionTask implements IndexInsightTask {
     }
     
     @Override
-    public List<MLIndexInsightType> getDependencies() {
+    public List<MLIndexInsightType> getPrerequisites() {
         return Collections.singletonList(MLIndexInsightType.STATISTICAL_DATA);
     }
     
@@ -101,7 +103,7 @@ public class IndexDescriptionTask implements IndexInsightTask {
     }
     
     private String getInsightContent(MLIndexInsightType taskType) {
-        String docId = generateDocId(targetIndex, taskType);
+        String docId = generateDocId(indexName, taskType);
         GetRequest getRequest = new GetRequest(ML_INDEX_INSIGHT_INDEX, docId);
         
         try {
@@ -111,7 +113,7 @@ public class IndexDescriptionTask implements IndexInsightTask {
             }
             return "";
         } catch (Exception e) {
-            log.warn("Failed to get insight content for {} task of index {}", taskType, targetIndex, e);
+            log.warn("Failed to get insight content for {} task of index {}", taskType, indexName, e);
             return "";
         }
     }
@@ -119,12 +121,12 @@ public class IndexDescriptionTask implements IndexInsightTask {
     private String generateIndexDescriptionPrompt(String statisticalContent) {
         Map<String, Object> mappingSource = (Map<String, Object>) mappingMetadata.getSourceAsMap().get("properties");
         if (mappingSource == null) {
-            return "No mapping properties found for index: " + targetIndex;
+            return "No mapping properties found for index: " + indexName;
         }
 
         StringBuilder prompt = new StringBuilder();
         prompt.append("Please analyze the following OpenSearch index structure and provide insights:\\n\\n");
-        prompt.append("Index Name: ").append(targetIndex).append("\\n\\n");
+        prompt.append("Index Name: ").append(indexName).append("\\n\\n");
         prompt.append("Index Mapping:\\n");
 
         StringJoiner mappingInfo = new StringJoiner("\\n");
@@ -170,7 +172,7 @@ public class IndexDescriptionTask implements IndexInsightTask {
         );
 
         client.execute(MLPredictionTaskAction.INSTANCE, request, ActionListener.wrap(mlTaskResponse -> {
-            log.info("LLM call successful for index description: {}", targetIndex);
+            log.info("LLM call successful for index description: {}", indexName);
             ModelTensorOutput modelTensorOutput = (ModelTensorOutput) mlTaskResponse.getOutput();
             ModelTensors modelTensors = modelTensorOutput.getMlModelOutputs().get(0);
             ModelTensor modelTensor = modelTensors.getMlModelTensors().get(0);
@@ -179,35 +181,29 @@ public class IndexDescriptionTask implements IndexInsightTask {
             String response = extractModelResponse(dataAsMap);
             indexDescription = parseIndexDescription(response);
             saveResult(indexDescription);
-            log.info("Index description completed for: {}", targetIndex);
+            log.info("Index description completed for: {}", indexName);
         }, e -> {
-            log.error("Failed to call LLM for index description: {}", targetIndex, e);
+            log.error("Failed to call LLM for index description: {}", indexName, e);
             saveFailedStatus();
         }));
     }
     
+    /**
+     * Auto-detects LLM response format and extracts the response text.
+     */
     private String extractModelResponse(Map<String, Object> dataAsMap) {
-        if (dataAsMap == null) {
-            throw new IllegalStateException("Model inference failed");
+        // Try OpenAI format
+        if (dataAsMap.containsKey("choices")) {
+            return JsonPath.read(dataAsMap, "$.choices[0].message.content");
         }
-        
-        Map<String, Object> output = (Map<String, Object>) dataAsMap.get("output");
-        if (output == null) {
-            return (String) dataAsMap.get("response");
+
+        // Try Bedrock Claude format
+        if (dataAsMap.containsKey("output")) {
+            return JsonPath.read(dataAsMap, "$.output.message.content[0].text");
         }
-        
-        Map<String, Object> message = (Map<String, Object>) output.get("message");
-        if (message == null) {
-            throw new IllegalStateException("Model inference failed, incorrect message format");
-        }
-        
-        java.util.ArrayList<?> content = (java.util.ArrayList<?>) message.get("content");
-        if (content == null || content.isEmpty()) {
-            throw new IllegalStateException("Model inference failed, content is empty");
-        }
-        
-        Map<String, Object> firstContent = (Map<String, Object>) content.get(0);
-        return (String) firstContent.get("text");
+
+        // Fallback to generic response field
+        return JsonPath.read(dataAsMap, "$.response");
     }
     
     private String parseIndexDescription(String modelResponse) {
