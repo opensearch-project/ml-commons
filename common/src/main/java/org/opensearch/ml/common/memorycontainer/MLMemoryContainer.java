@@ -7,10 +7,10 @@ package org.opensearch.ml.common.memorycontainer;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREATED_TIME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DESCRIPTION_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LAST_UPDATED_TIME_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_STORAGE_CONFIG_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_FIELD;
@@ -41,7 +41,7 @@ import lombok.Setter;
 @EqualsAndHashCode
 public class MLMemoryContainer implements ToXContentObject, Writeable {
 
-    private String containerId;
+    private String memoryContainerId;
     private String name;
     private String description;
     private User owner;
@@ -51,7 +51,7 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
     private MemoryStorageConfig memoryStorageConfig;
 
     public MLMemoryContainer(
-        String containerId,
+        String memoryContainerId,
         String name,
         String description,
         User owner,
@@ -60,7 +60,7 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
         Instant lastUpdatedTime,
         MemoryStorageConfig memoryStorageConfig
     ) {
-        this.containerId = containerId;
+        this.memoryContainerId = memoryContainerId;
         this.name = name;
         this.description = description;
         this.owner = owner;
@@ -71,7 +71,7 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
     }
 
     public MLMemoryContainer(StreamInput input) throws IOException {
-        this.containerId = input.readOptionalString();
+        this.memoryContainerId = input.readOptionalString();
         this.name = input.readOptionalString();
         this.description = input.readOptionalString();
         if (input.readBoolean()) {
@@ -87,7 +87,7 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        out.writeOptionalString(containerId);
+        out.writeOptionalString(memoryContainerId);
         out.writeOptionalString(name);
         out.writeOptionalString(description);
         if (owner != null) {
@@ -139,7 +139,7 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
     }
 
     public static MLMemoryContainer parse(XContentParser parser) throws IOException {
-        String containerId = null;
+        String memoryContainerId = null;
         String name = null;
         String description = null;
         User owner = null;
@@ -186,7 +186,7 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
 
         return MLMemoryContainer
             .builder()
-            .containerId(containerId)
+            .memoryContainerId(memoryContainerId)
             .name(name)
             .description(description)
             .owner(owner)
