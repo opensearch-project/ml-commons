@@ -10,7 +10,6 @@ import java.util.Map;
 
 import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.ml.common.spi.tools.Parser;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.spi.tools.WithModelTool;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
@@ -18,7 +17,6 @@ import org.opensearch.transport.client.Client;
 
 import lombok.Getter;
 import lombok.Setter;
-import lombok.extern.log4j.Log4j2;
 
 /**
  * This tool supports different types of query planning,
@@ -26,7 +24,7 @@ import lombok.extern.log4j.Log4j2;
  * //TODO only support llmGenerated for now.
  * //TODO to add in systemSearchTemplates or userSearchTemplates when searchTemplatesTool is implemented.
  */
-@Log4j2
+
 @ToolAnnotation(QueryPlanningTool.TYPE)
 public class QueryPlanningTool implements WithModelTool {
     public static final String TYPE = "QueryPlanningTool";
@@ -35,6 +33,7 @@ public class QueryPlanningTool implements WithModelTool {
     public static final String PROMPT_FIELD = "prompt";
     private static final String GENERATION_TYPE_FIELD = "generation_type";
     private static final String LLM_GENERATED_TYPE_FIELD = "llmGenerated";
+    @Getter
     private final String generationType;
     @Setter
     @Getter
@@ -51,38 +50,26 @@ public class QueryPlanningTool implements WithModelTool {
         "{ \"query\": { \"multi_match\" : { \"query\":    \"${parameters.query_text}\",  \"fields\": ${parameters.query_fields:-[\"*\"]} } } }";
     private String defaultPrompt =
         "You are an OpenSearch Query DSL generation assistant; try using the optional provided index mapping ${parameters.index_mapping:-}, specified fields ${parameters.query_fields:-}, and the given sample queries as examples, generate an OpenSearch Query DSL to retrieve the most relevant documents for the user provided natural language question: ${parameters.query_text}, please return the query dsl only in a string format, no other texts.\n";
-    @Getter
-    private Client client;
-    @Getter
-    private String modelId;
-    @Setter
-    @Getter
-    @VisibleForTesting
-    private Parser outputParser;
-    @Setter
-    @Getter
-    private String responseField;
 
-    public QueryPlanningTool(Client client, String modelId, String generationType, MLModelTool queryGenerationTool) {
-        this.client = client;
-        this.modelId = modelId;
+    public QueryPlanningTool(String generationType, MLModelTool queryGenerationTool) {
         this.generationType = generationType;
         this.queryGenerationTool = queryGenerationTool;
     }
 
     @Override
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
-        if (!parameters.containsKey(PROMPT_FIELD)) {
-            parameters.put(PROMPT_FIELD, defaultPrompt);
-        }
+
         if (!validate(parameters)) {
             listener.onFailure(new IllegalArgumentException("Empty parameters for QueryPlanningTool: " + parameters));
             return;
         }
+        if (!parameters.containsKey(PROMPT_FIELD)) {
+            parameters.put(PROMPT_FIELD, defaultPrompt);
+        }
         ActionListener<T> modelListener = ActionListener.wrap(r -> {
             try {
                 String queryString = (String) r;
-                if (queryString == null || queryString.isBlank() || queryString.isEmpty() || queryString.equals("null")) {
+                if (queryString == null || queryString.isBlank() || queryString.equals("null")) {
                     StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
                     String defaultQueryString = substitutor.replace(this.defaultQuery);
                     listener.onResponse((T) defaultQueryString);
@@ -111,16 +98,6 @@ public class QueryPlanningTool implements WithModelTool {
     }
 
     @Override
-    public String getName() {
-        return this.name;
-    }
-
-    @Override
-    public void setName(String s) {
-        this.name = s;
-    }
-
-    @Override
     public boolean validate(Map<String, String> parameters) {
         if (parameters == null || parameters.size() == 0) {
             return false;
@@ -130,8 +107,7 @@ public class QueryPlanningTool implements WithModelTool {
 
     public static class Factory implements WithModelTool.Factory<QueryPlanningTool> {
         private Client client;
-
-        private static Factory INSTANCE;
+        private static volatile Factory INSTANCE;
 
         public static Factory getInstance() {
             if (INSTANCE != null) {
@@ -165,7 +141,7 @@ public class QueryPlanningTool implements WithModelTool {
             if (!LLM_GENERATED_TYPE_FIELD.equals(type)) {
                 throw new IllegalArgumentException("Invalid generation type: " + type + ". The current supported types are llmGenerated.");
             }
-            return new QueryPlanningTool(client, (String) map.get(MODEL_ID_FIELD), type, queryGenerationTool);
+            return new QueryPlanningTool(type, queryGenerationTool);
         }
 
         @Override
