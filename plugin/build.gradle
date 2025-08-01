@@ -128,7 +128,7 @@ publishing {
             mavenCentral()
             maven { url "https://ci.opensearch.org/ci/dbc/snapshots/lucene/" }
             name = "Snapshots"
-            url = "https://aws.oss.sonatype.org/content/repositories/snapshots"
+            url = "https://central.sonatype.com/repository/maven-snapshots/"
             credentials {
                 username "$System.env.SONATYPE_USERNAME"
                 password "$System.env.SONATYPE_PASSWORD"
@@ -670,4 +670,13 @@ task bwcTestSuite(type: StandaloneRestIntegTestTask) {
 forbiddenPatterns {
     exclude '**/*.pdf'
     exclude '**/*.jpg'
+}
+
+configurations {
+    runtimeClasspath {
+        resolutionStrategy {
+            // CVE-48734: tribuo-clustering-kmeans:'4.2.1 causes a transitive dependency on beanutils:1.94
+            force 'commons-beanutils:commons-beanutils:1.11.0'
+        }
+    }
 }

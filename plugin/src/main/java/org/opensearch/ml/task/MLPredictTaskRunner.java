@@ -180,7 +180,9 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                 }
             }, listener::onFailure);
             String[] workerNodes = mlModelManager.getWorkerNodes(modelId, functionName, true);
-            if (workerNodes == null || workerNodes.length == 0) {
+            String[] targetWorkerNodes = mlModelManager.getTargetWorkerNodes(modelId);
+
+            if (requiresAutoDeployment(workerNodes, targetWorkerNodes)) {
                 if (FunctionName.isAutoDeployEnabled(autoDeploymentEnabled, functionName)) {
                     try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
                         mlModelManager.getModel(modelId, request.getTenantId(), ActionListener.runBefore(ActionListener.wrap(model -> {
@@ -650,5 +652,11 @@ public class MLPredictTaskRunner extends MLTaskRunner<MLPredictionTaskRequest, M
                 );
             }
         }
+    }
+
+    private boolean requiresAutoDeployment(String[] workerNodes, String[] targetWorkerNodes) {
+        return workerNodes == null
+            || workerNodes.length == 0
+            || (targetWorkerNodes != null && workerNodes.length < targetWorkerNodes.length);
     }
 }

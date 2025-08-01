@@ -111,7 +111,9 @@ public class BedrockConverseDeepseekR1FunctionCalling implements FunctionCalling
             if (toolUseId == null) {
                 continue;
             }
-            toolMessage.getContent().add(Map.of("text", Map.of(TOOL_CALL_ID, toolUseId, TOOL_RESULT, toolResult.get(TOOL_RESULT))));
+
+            String textJson = StringUtils.toJson(Map.of(TOOL_CALL_ID, toolUseId, TOOL_RESULT, toolResult.get(TOOL_RESULT)));
+            toolMessage.getContent().add(Map.of("text", textJson));
         }
 
         return List.of(toolMessage);

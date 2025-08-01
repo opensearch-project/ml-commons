@@ -34,7 +34,18 @@ public class MLRegisterModelMetaRequestTest {
         Map<String, Object> additionalConfig = new HashMap<>();
         additionalConfig.put("test_key", "test_value");
 
-        config = new BaseModelConfig("Model Type", "\"test_key1\":\"test_value1\"", additionalConfig);
+        config = new BaseModelConfig(
+            "Model Type",
+            "\"test_key1\":\"test_value1\"",
+            additionalConfig,
+            768,
+            BaseModelConfig.FrameworkType.SENTENCE_TRANSFORMERS,
+            BaseModelConfig.PoolingMode.MEAN,
+            false,
+            null,
+            null,
+            null
+        );
         mlRegisterModelMetaInput = new MLRegisterModelMetaInput(
             "Model Name",
             FunctionName.BATCH_RCF,

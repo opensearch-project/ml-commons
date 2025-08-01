@@ -182,7 +182,7 @@ public interface Connector extends ToXContentObject, Writeable {
                 }
             }
             if (!hasMatchedUrl) {
-                throw new IllegalArgumentException("Connector URL is not matching the trusted connector endpoint regex, URL is: " + url);
+                throw new IllegalArgumentException("Connector URL is not matching the trusted connector endpoint regex");
             }
         }
     }

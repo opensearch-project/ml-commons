@@ -44,7 +44,18 @@ public class MLRegisterModelMetaInputTest {
         Map<String, Object> additionalConfig = new HashMap<>();
         additionalConfig.put("test_key", "test_value");
 
-        config = new BaseModelConfig("Model Type", "\"test_key1\":\"test_value1\"", additionalConfig);
+        config = new BaseModelConfig(
+            "Model Type",
+            "\"test_key1\":\"test_value1\"",
+            additionalConfig,
+            768,
+            BaseModelConfig.FrameworkType.SENTENCE_TRANSFORMERS,
+            BaseModelConfig.PoolingMode.MEAN,
+            false,
+            null,
+            null,
+            null
+        );
 
         mLRegisterModelMetaInput = new MLRegisterModelMetaInput(
             "Model Name",
@@ -128,7 +139,8 @@ public class MLRegisterModelMetaInputTest {
             + "\"model_format\":\"TORCH_SCRIPT\",\"model_state\":\"DEPLOYING\","
             + "\"model_content_size_in_bytes\":200,\"model_content_hash_value\":\"123\","
             + "\"model_config\":{\"model_type\":\"Model Type\",\"all_config\":\"\\\"test_key1\\\":\\\"test_value1\\\"\","
-            + "\"additional_config\":{\"test_key\":\"test_value\"}},\"total_chunks\":2,"
+            + "\"additional_config\":{\"test_key\":\"test_value\"},\"embedding_dimension\":768,"
+            + "\"framework_type\":\"SENTENCE_TRANSFORMERS\",\"pooling_mode\":\"MEAN\"},\"total_chunks\":2,"
             + "\"add_all_backend_roles\":false,\"does_version_create_model_group\":false,\"is_hidden\":false}";
         assertEquals(expected, mlModelContent);
     }
