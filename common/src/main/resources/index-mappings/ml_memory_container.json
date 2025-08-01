@@ -29,19 +29,19 @@
     "memory_storage_config": {
       "type": "object",
       "properties": {
-        "memoryIndexName": {
+        "memory_index_name": {
           "type": "keyword"
         },
-        "semanticStorageEnabled": {
+        "semantic_storage_enabled": {
           "type": "boolean"
         },
-        "embeddingModelType": {
+        "embedding_model_type": {
           "type": "keyword"
         },
-        "embeddingModelId": {
+        "embedding_model_id": {
           "type": "keyword"
         },
-        "llmModelId": {
+        "llm_model_id": {
           "type": "keyword"
         },
         "dimension": {
