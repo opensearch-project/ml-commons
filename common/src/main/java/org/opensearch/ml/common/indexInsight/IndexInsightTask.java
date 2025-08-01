@@ -30,9 +30,9 @@ public interface IndexInsightTask {
     
     /**
      * Execute the index insight task following the new design:
-     * 1. Check if record exists in ML_INDEX_INSIGHT_INDEX
-     * 2. Check status and timing
-     * 3. Check prerequisites from storage
+     * 1. Check if record exists in storage
+     * 2. Check status and last updated time
+     * 3. Check prerequisites
      * 4. Run task logic
      * 5. Write back to storage
      */
