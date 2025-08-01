@@ -9,9 +9,22 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DIMENSION_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.EMBEDDING_MODEL_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.EMBEDDING_MODEL_TYPE_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.INVALID_EMBEDDING_MODEL_TYPE_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_MODEL_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MAX_INFER_SIZE_DEFAULT_VALUE;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MAX_INFER_SIZE_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MAX_INFER_SIZE_LIMIT_ERROR;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MAX_RECENT_MESSAGES_DEFAULT_VALUE;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MAX_RECENT_MESSAGES_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MAX_RECENT_MESSAGES_SEMANTIC_LIMIT_ERROR;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MAX_RECENT_MESSAGES_STATIC_LIMIT_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_INDEX_NAME_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEMANTIC_STORAGE_EMBEDDING_MODEL_ID_REQUIRED_ERROR;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEMANTIC_STORAGE_EMBEDDING_MODEL_TYPE_REQUIRED_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEMANTIC_STORAGE_ENABLED_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEMANTIC_STORAGE_LLM_MODEL_ID_REQUIRED_ERROR;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SPARSE_ENCODING_DIMENSION_NOT_ALLOWED_ERROR;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.TEXT_EMBEDDING_DIMENSION_REQUIRED_ERROR;
 
 import java.io.IOException;
 
@@ -44,6 +57,10 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
     private String embeddingModelId;
     private String llmModelId;
     private Integer dimension;
+    @Builder.Default
+    private Integer maxRecentMessages = MAX_RECENT_MESSAGES_DEFAULT_VALUE;
+    @Builder.Default
+    private Integer maxInferSize = MAX_INFER_SIZE_DEFAULT_VALUE;
 
     public MemoryStorageConfig(
         String memoryIndexName,
@@ -51,7 +68,9 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
         FunctionName embeddingModelType,
         String embeddingModelId,
         String llmModelId,
-        Integer dimension
+        Integer dimension,
+        Integer maxRecentMessages,
+        Integer maxInferSize
     ) {
         this.memoryIndexName = memoryIndexName;
         this.semanticStorageEnabled = semanticStorageEnabled;
@@ -59,6 +78,11 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
         this.embeddingModelId = embeddingModelId;
         this.llmModelId = llmModelId;
         this.dimension = dimension;
+        this.maxRecentMessages = maxRecentMessages != null ? maxRecentMessages : MAX_RECENT_MESSAGES_DEFAULT_VALUE;
+        this.maxInferSize = maxInferSize != null ? maxInferSize : MAX_INFER_SIZE_DEFAULT_VALUE;
+
+        // Validate the configuration
+        validate();
     }
 
     public MemoryStorageConfig(StreamInput input) throws IOException {
@@ -69,6 +93,10 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
         this.embeddingModelId = input.readOptionalString();
         this.llmModelId = input.readOptionalString();
         this.dimension = input.readOptionalInt();
+        Integer maxRecentMessagesVal = input.readOptionalInt();
+        this.maxRecentMessages = maxRecentMessagesVal != null ? maxRecentMessagesVal : MAX_RECENT_MESSAGES_DEFAULT_VALUE;
+        Integer maxInferSizeVal = input.readOptionalInt();
+        this.maxInferSize = maxInferSizeVal != null ? maxInferSizeVal : MAX_INFER_SIZE_DEFAULT_VALUE;
     }
 
     @Override
@@ -79,27 +107,48 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
         out.writeOptionalString(embeddingModelId);
         out.writeOptionalString(llmModelId);
         out.writeOptionalInt(dimension);
+        out.writeOptionalInt(maxRecentMessages);
+        out.writeOptionalInt(maxInferSize);
     }
 
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, ToXContent.Params params) throws IOException {
         builder.startObject();
+
+        // Always output these fields
         if (memoryIndexName != null) {
             builder.field(MEMORY_INDEX_NAME_FIELD, memoryIndexName);
         }
         builder.field(SEMANTIC_STORAGE_ENABLED_FIELD, semanticStorageEnabled);
-        if (embeddingModelType != null) {
-            builder.field(EMBEDDING_MODEL_TYPE_FIELD, embeddingModelType.name());
+
+        if (!semanticStorageEnabled) {
+            // When semantic storage is disabled, only output allowed fields
+            if (maxRecentMessages != null) {
+                builder.field(MAX_RECENT_MESSAGES_FIELD, maxRecentMessages);
+            }
+            // Do not output other fields when semantic storage is disabled
+        } else {
+            // When semantic storage is enabled, output all relevant fields
+            if (embeddingModelType != null) {
+                builder.field(EMBEDDING_MODEL_TYPE_FIELD, embeddingModelType.name());
+            }
+            if (embeddingModelId != null) {
+                builder.field(EMBEDDING_MODEL_ID_FIELD, embeddingModelId);
+            }
+            if (llmModelId != null) {
+                builder.field(LLM_MODEL_ID_FIELD, llmModelId);
+            }
+            if (dimension != null) {
+                builder.field(DIMENSION_FIELD, dimension);
+            }
+            if (maxRecentMessages != null) {
+                builder.field(MAX_RECENT_MESSAGES_FIELD, maxRecentMessages);
+            }
+            if (maxInferSize != null) {
+                builder.field(MAX_INFER_SIZE_FIELD, maxInferSize);
+            }
         }
-        if (embeddingModelId != null) {
-            builder.field(EMBEDDING_MODEL_ID_FIELD, embeddingModelId);
-        }
-        if (llmModelId != null) {
-            builder.field(LLM_MODEL_ID_FIELD, llmModelId);
-        }
-        if (dimension != null) {
-            builder.field(DIMENSION_FIELD, dimension);
-        }
+
         builder.endObject();
         return builder;
     }
@@ -111,6 +160,8 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
         String embeddingModelId = null;
         String llmModelId = null;
         Integer dimension = null;
+        Integer maxRecentMessages = null;
+        Integer maxInferSize = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -136,13 +187,19 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
                 case DIMENSION_FIELD:
                     dimension = parser.intValue();
                     break;
+                case MAX_RECENT_MESSAGES_FIELD:
+                    maxRecentMessages = parser.intValue();
+                    break;
+                case MAX_INFER_SIZE_FIELD:
+                    maxInferSize = parser.intValue();
+                    break;
                 default:
                     parser.skipChildren();
                     break;
             }
         }
 
-        return MemoryStorageConfig
+        MemoryStorageConfig config = MemoryStorageConfig
             .builder()
             .memoryIndexName(memoryIndexName)
             .semanticStorageEnabled(semanticStorageEnabled)
@@ -150,6 +207,69 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
             .embeddingModelId(embeddingModelId)
             .llmModelId(llmModelId)
             .dimension(dimension)
+            .maxRecentMessages(maxRecentMessages != null ? maxRecentMessages : MAX_RECENT_MESSAGES_DEFAULT_VALUE)
+            .maxInferSize(maxInferSize != null ? maxInferSize : MAX_INFER_SIZE_DEFAULT_VALUE)
             .build();
+
+        // Note: validation is already called in the constructor
+        return config;
+    }
+
+    /**
+     * Validates the memory storage configuration based on semantic storage settings
+     * and enforces field restrictions and limits.
+     */
+    public void validate() {
+        if (!semanticStorageEnabled) {
+            // When semantic storage is disabled, only allow specific fields
+            // Clear fields that aren't allowed
+            this.embeddingModelType = null;
+            this.embeddingModelId = null;
+            this.llmModelId = null;
+            this.dimension = null;
+            this.maxInferSize = null;
+
+            // Validate max_recent_messages limit for non-semantic storage
+            if (maxRecentMessages != null && maxRecentMessages > 100) {
+                throw new IllegalArgumentException(MAX_RECENT_MESSAGES_STATIC_LIMIT_ERROR);
+            }
+        } else {
+            // When semantic storage is enabled, validate required fields and limits
+            // Validate max_infer_size limit (applies regardless of semantic storage)
+            if (maxInferSize != null && maxInferSize > 10) {
+                throw new IllegalArgumentException(MAX_INFER_SIZE_LIMIT_ERROR);
+            }
+            // Validate max_recent_messages limit for semantic storage
+            if (maxRecentMessages != null && maxRecentMessages > 10) {
+                throw new IllegalArgumentException(MAX_RECENT_MESSAGES_SEMANTIC_LIMIT_ERROR);
+            }
+
+            // Validate required fields for semantic storage
+            if (embeddingModelType == null) {
+                throw new IllegalArgumentException(SEMANTIC_STORAGE_EMBEDDING_MODEL_TYPE_REQUIRED_ERROR);
+            }
+
+            if (embeddingModelId == null) {
+                throw new IllegalArgumentException(SEMANTIC_STORAGE_EMBEDDING_MODEL_ID_REQUIRED_ERROR);
+            }
+
+            if (llmModelId == null) {
+                throw new IllegalArgumentException(SEMANTIC_STORAGE_LLM_MODEL_ID_REQUIRED_ERROR);
+            }
+
+            // Validate embedding model type
+            if (embeddingModelType != FunctionName.TEXT_EMBEDDING && embeddingModelType != FunctionName.SPARSE_ENCODING) {
+                throw new IllegalArgumentException(INVALID_EMBEDDING_MODEL_TYPE_ERROR);
+            }
+
+            // Validate dimension based on embedding type
+            if (embeddingModelType == FunctionName.TEXT_EMBEDDING && dimension == null) {
+                throw new IllegalArgumentException(TEXT_EMBEDDING_DIMENSION_REQUIRED_ERROR);
+            }
+
+            if (embeddingModelType == FunctionName.SPARSE_ENCODING && dimension != null) {
+                throw new IllegalArgumentException(SPARSE_ENCODING_DIMENSION_NOT_ALLOWED_ERROR);
+            }
+        }
     }
 }

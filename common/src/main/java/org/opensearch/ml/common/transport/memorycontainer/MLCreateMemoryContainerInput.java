@@ -8,6 +8,7 @@ package org.opensearch.ml.common.transport.memorycontainer;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 
 import java.io.IOException;
+import java.util.List;
 
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
@@ -27,14 +28,22 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
     public static final String DESCRIPTION_FIELD = "description";
     public static final String MEMORY_STORAGE_CONFIG_FIELD = "memory_storage_config";
     public static final String TENANT_ID_FIELD = "tenant_id";
+    public static final String MODEL_IDS_MONITORING_FIELD = "model_ids_monitoring";
 
     private String name;
     private String description;
     private MemoryStorageConfig memoryStorageConfig;
     private String tenantId;
+    private List<String> modelIdsMonitoring;
 
     @Builder(toBuilder = true)
-    public MLCreateMemoryContainerInput(String name, String description, MemoryStorageConfig memoryStorageConfig, String tenantId) {
+    public MLCreateMemoryContainerInput(
+        String name,
+        String description,
+        MemoryStorageConfig memoryStorageConfig,
+        String tenantId,
+        List<String> modelIdsMonitoring
+    ) {
         if (name == null) {
             throw new IllegalArgumentException("name is null");
         }
@@ -42,6 +51,7 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
         this.description = description;
         this.memoryStorageConfig = memoryStorageConfig;
         this.tenantId = tenantId;
+        this.modelIdsMonitoring = modelIdsMonitoring;
     }
 
     public MLCreateMemoryContainerInput(StreamInput in) throws IOException {
@@ -53,6 +63,7 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
             this.memoryStorageConfig = null;
         }
         this.tenantId = in.readOptionalString();
+        this.modelIdsMonitoring = in.readOptionalStringList();
     }
 
     @Override
@@ -66,6 +77,7 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
             out.writeBoolean(false);
         }
         out.writeOptionalString(tenantId);
+        out.writeOptionalStringCollection(modelIdsMonitoring);
     }
 
     @Override
@@ -81,6 +93,9 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
         if (tenantId != null) {
             builder.field(TENANT_ID_FIELD, tenantId);
         }
+        if (modelIdsMonitoring != null && !modelIdsMonitoring.isEmpty()) {
+            builder.field(MODEL_IDS_MONITORING_FIELD, modelIdsMonitoring);
+        }
         builder.endObject();
         return builder;
     }
@@ -90,6 +105,7 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
         String description = null;
         MemoryStorageConfig memoryStorageConfig = null;
         String tenantId = null;
+        List<String> modelIdsMonitoring = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -109,6 +125,13 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
                 case TENANT_ID_FIELD:
                     tenantId = parser.text();
                     break;
+                case MODEL_IDS_MONITORING_FIELD:
+                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                    modelIdsMonitoring = new java.util.ArrayList<>();
+                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                        modelIdsMonitoring.add(parser.text());
+                    }
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -121,6 +144,7 @@ public class MLCreateMemoryContainerInput implements ToXContentObject, Writeable
             .description(description)
             .memoryStorageConfig(memoryStorageConfig)
             .tenantId(tenantId)
+            .modelIdsMonitoring(modelIdsMonitoring)
             .build();
     }
 }
