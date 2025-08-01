@@ -17,6 +17,7 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTOR_ID_FIELD;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DEFAULT_DATETIME_PREFIX;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_PATH;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_TOOL_USE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_GEN_INPUT;
@@ -1664,5 +1665,31 @@ public class AgentUtilsTest extends MLStaticMockBase {
         MLToolSpec toolSpec = MLToolSpec.builder().type("non_existent_tool").name("TestTool").build();
 
         assertThrows(IllegalArgumentException.class, () -> AgentUtils.createTool(toolFactories, new HashMap<>(), toolSpec, "test_tenant"));
+    }
+
+    @Test
+    public void testGetCurrentDateTime_WithInvalidFormats() {
+        // null
+        String result = AgentUtils.getCurrentDateTime(null);
+        Assert.assertNotNull(result);
+        Assert.assertTrue(result.startsWith(DEFAULT_DATETIME_PREFIX));
+
+        // empty
+        result = AgentUtils.getCurrentDateTime("");
+        Assert.assertNotNull(result);
+        Assert.assertTrue(result.startsWith(DEFAULT_DATETIME_PREFIX));
+
+        // invalid
+        result = AgentUtils.getCurrentDateTime("invalid-format");
+        Assert.assertNotNull(result);
+        Assert.assertTrue(result.startsWith(DEFAULT_DATETIME_PREFIX));
+    }
+
+    @Test
+    public void testGetCurrentDateTime_WithValidFormat() {
+        String result = AgentUtils.getCurrentDateTime("EEEE, MMMM d, yyyy 'at' h:mm a z");
+        Assert.assertNotNull(result);
+        Assert.assertTrue(result.startsWith(DEFAULT_DATETIME_PREFIX));
+        Assert.assertTrue(result.contains("UTC"));
     }
 }
