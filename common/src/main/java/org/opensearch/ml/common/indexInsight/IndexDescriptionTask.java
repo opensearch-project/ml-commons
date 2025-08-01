@@ -39,27 +39,27 @@ public class IndexDescriptionTask implements IndexInsightTask {
     private final ClusterService clusterService;
     private IndexInsightTaskStatus status = IndexInsightTaskStatus.GENERATING;
     private String indexDescription;
-    
+
     public IndexDescriptionTask(String indexName, MappingMetadata mappingMetadata, Client client, ClusterService clusterService) {
         this.indexName = indexName;
         this.mappingMetadata = mappingMetadata;
         this.client = client;
         this.clusterService = clusterService;
     }
-    
+
     @Override
     public void runTaskLogic() {
         status = IndexInsightTaskStatus.GENERATING;
         try {
             String statisticalContent = getInsightContent(MLIndexInsightType.STATISTICAL_DATA);
-            
+
             String modelId = clusterService.getClusterSettings().get(ML_COMMONS_INDEX_INSIGHT_MODEL_ID);
             if (modelId == null || modelId.trim().isEmpty()) {
                 log.error("No model ID configured for index insight");
                 saveFailedStatus();
                 return;
             }
-            
+
             String prompt = generateIndexDescriptionPrompt(statisticalContent);
             callLLM(prompt, modelId);
         } catch (Exception e) {
@@ -67,45 +67,45 @@ public class IndexDescriptionTask implements IndexInsightTask {
             saveFailedStatus();
         }
     }
-    
+
     @Override
     public MLIndexInsightType getTaskType() {
         return taskType;
     }
-    
+
     @Override
     public String getTargetIndex() {
         return indexName;
     }
-    
+
     @Override
     public IndexInsightTaskStatus getStatus() {
         return status;
     }
-    
+
     @Override
     public void setStatus(IndexInsightTaskStatus status) {
         this.status = status;
     }
-    
+
     @Override
     public Client getClient() {
         return client;
     }
-    
+
     @Override
     public List<MLIndexInsightType> getPrerequisites() {
         return Collections.singletonList(MLIndexInsightType.STATISTICAL_DATA);
     }
-    
+
     public String getIndexDescription() {
         return indexDescription;
     }
-    
+
     private String getInsightContent(MLIndexInsightType taskType) {
         String docId = generateDocId(indexName, taskType);
         GetRequest getRequest = new GetRequest(ML_INDEX_INSIGHT_INDEX, docId);
-        
+
         try {
             GetResponse response = client.get(getRequest).actionGet();
             if (response.isExists()) {
@@ -117,7 +117,7 @@ public class IndexDescriptionTask implements IndexInsightTask {
             return "";
         }
     }
-    
+
     private String generateIndexDescriptionPrompt(String statisticalContent) {
         Map<String, Object> mappingSource = (Map<String, Object>) mappingMetadata.getSourceAsMap().get("properties");
         if (mappingSource == null) {
@@ -138,12 +138,11 @@ public class IndexDescriptionTask implements IndexInsightTask {
             prompt.append(statisticalContent).append("\\n\\n");
         }
 
-        prompt.append("Please provide:\\n");
-        prompt.append("<total_summarization>A concise description of what this index appears to store and its purpose</total_summarization>");
+        prompt.append("Please provide a concise description of what this index appears to store and its purpose.");
 
         return prompt.toString();
     }
-    
+
     private void extractFieldsInfo(Map<String, Object> properties, String prefix, StringJoiner joiner) {
         for (Map.Entry<String, Object> entry : properties.entrySet()) {
             String fieldName = prefix.isEmpty() ? entry.getKey() : prefix + "." + entry.getKey();
@@ -157,7 +156,7 @@ public class IndexDescriptionTask implements IndexInsightTask {
             }
         }
     }
-    
+
     private void callLLM(String prompt, String modelId) {
         RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet
             .builder()
@@ -187,7 +186,7 @@ public class IndexDescriptionTask implements IndexInsightTask {
             saveFailedStatus();
         }));
     }
-    
+
     /**
      * Auto-detects LLM response format and extracts the response text.
      */
@@ -205,18 +204,8 @@ public class IndexDescriptionTask implements IndexInsightTask {
         // Fallback to generic response field
         return JsonPath.read(dataAsMap, "$.response");
     }
-    
+
     private String parseIndexDescription(String modelResponse) {
-        String[] tmpList = modelResponse.split("<total_summarization>");
-        if (tmpList.length < 2) {
-            return "No index description provided";
-        }
-
-        String[] descParts = tmpList[tmpList.length - 1].split("</total_summarization>");
-        if (descParts.length < 1) {
-            return "No index description provided";
-        }
-
-        return descParts[0].trim();
+        return modelResponse.trim();
     }
 }

@@ -4,12 +4,16 @@ import static org.opensearch.ml.common.CommonValue.ML_INDEX_INSIGHT_INDEX;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_INDEX_INSIGHT_MODEL_ID;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.StringJoiner;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
@@ -17,6 +21,7 @@ import org.opensearch.cluster.metadata.MappingMetadata;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.connector.ConnectorAction.ActionType;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.output.model.ModelTensor;
@@ -35,6 +40,7 @@ import lombok.extern.log4j.Log4j2;
 @Log4j2
 public class FieldDescriptionTask implements IndexInsightTask {
     
+    private static final int BATCH_SIZE = 50; // Hard-coded value for now
     private final MLIndexInsightType taskType = MLIndexInsightType.FIELD_DESCRIPTION;
     private final String indexName;
     private final MappingMetadata mappingMetadata;
@@ -42,7 +48,6 @@ public class FieldDescriptionTask implements IndexInsightTask {
     private final ClusterService clusterService;
     private IndexInsightTaskStatus status = IndexInsightTaskStatus.GENERATING;
     private Map<String, Object> fieldDescriptions;
-    private SearchHit[] sampleDocuments;
     
     public FieldDescriptionTask(String indexName, MappingMetadata mappingMetadata, Client client, ClusterService clusterService) {
         this.indexName = indexName;
@@ -64,8 +69,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
                 return;
             }
             
-            String prompt = generateFieldDescriptionPrompt(statisticalContent);
-            callLLM(prompt, modelId);
+            batchProcessFields(statisticalContent, modelId);
         } catch (Exception e) {
             log.error("Failed to execute field description task for index {}", indexName, e);
             saveFailedStatus();
@@ -106,10 +110,6 @@ public class FieldDescriptionTask implements IndexInsightTask {
         return fieldDescriptions;
     }
     
-    public void setSampleDocuments(SearchHit[] sampleDocuments) {
-        this.sampleDocuments = sampleDocuments;
-    }
-    
     private String getInsightContent(MLIndexInsightType taskType) {
         String docId = generateDocId(indexName, taskType);
         GetRequest getRequest = new GetRequest(ML_INDEX_INSIGHT_INDEX, docId);
@@ -126,32 +126,7 @@ public class FieldDescriptionTask implements IndexInsightTask {
         }
     }
     
-    private String generateFieldDescriptionPrompt(String statisticalContent) {
-        Map<String, Object> mappingSource = (Map<String, Object>) mappingMetadata.getSourceAsMap().get("properties");
-        if (mappingSource == null) {
-            return "No mapping properties found for index: " + indexName;
-        }
 
-        StringBuilder prompt = new StringBuilder();
-        prompt.append("Please analyze the following OpenSearch index structure and provide insights:\\n\\n");
-        prompt.append("Index Name: ").append(indexName).append("\\n\\n");
-        prompt.append("Index Mapping:\\n");
-
-        StringJoiner mappingInfo = new StringJoiner("\\n");
-        extractFieldsInfo(mappingSource, "", mappingInfo);
-        prompt.append(mappingInfo.toString()).append("\\n\\n");
-
-        if (statisticalContent != null && !statisticalContent.isEmpty()) {
-            prompt.append("Statistical Data:\\n");
-            prompt.append(statisticalContent).append("\\n\\n");
-        }
-
-        prompt.append("Please provide:\\n");
-        prompt.append("<column_summarization>For each field, provide a brief description of what it contains and its purpose\\n");
-        prompt.append("Format as: field_name: description</column_summarization>");
-
-        return prompt.toString();
-    }
     
     private void extractFieldsInfo(Map<String, Object> properties, String prefix, StringJoiner joiner) {
         for (Map.Entry<String, Object> entry : properties.entrySet()) {
@@ -167,10 +142,91 @@ public class FieldDescriptionTask implements IndexInsightTask {
         }
     }
     
-    private void callLLM(String prompt, String modelId) {
+    private void batchProcessFields(String statisticalContent, String modelId) {
+        Map<String, Object> mappingSource = (Map<String, Object>) mappingMetadata.getSourceAsMap().get("properties");
+        if (mappingSource == null) {
+            log.error("No mapping properties found for index: {}", indexName);
+            saveFailedStatus();
+            return;
+        }
+
+        List<String> allFields = new ArrayList<>();
+        extractAllFieldNames(mappingSource, "", allFields);
+        
+        if (allFields.isEmpty()) {
+            log.warn("No fields found for index: {}", indexName);
+            fieldDescriptions = Collections.emptyMap();
+            saveResult("");
+            return;
+        }
+
+        List<List<String>> batches = createBatches(allFields, BATCH_SIZE);
+        CountDownLatch countDownLatch = new CountDownLatch(batches.size());
+        ConcurrentHashMap<String, Object> resultsMap = new ConcurrentHashMap<>();
+        AtomicBoolean hasErrors = new AtomicBoolean(false);
+        AtomicBoolean isCompleted = new AtomicBoolean(false);
+
+        ActionListener<Map<String, Object>> batchListener = ActionListener.wrap(batchResult -> {
+            if (batchResult != null) {
+                resultsMap.putAll(batchResult);
+            }
+            countDownLatch.countDown();
+            if (countDownLatch.getCount() == 0 && isCompleted.compareAndSet(false, true)) {
+                // All-or-nothing strategy: only save results if ALL batches succeed
+                // If any batch fails, the entire task is marked as failed and no partial results are saved in ML_INDEX_INSIGHT_INDEX
+                if (!hasErrors.get()) {
+                    fieldDescriptions = resultsMap;
+                    saveResult(resultsMap.toString());
+                    log.info("Field description completed for: {}", indexName);
+                } else {
+                    saveFailedStatus();
+                }
+            }
+        }, e -> {
+            countDownLatch.countDown();
+            hasErrors.set(true);
+            log.error("Batch processing failed for index {}: {}", indexName, e.getMessage());
+            if (countDownLatch.getCount() == 0 && isCompleted.compareAndSet(false, true)) {
+                saveFailedStatus();
+            }
+        });
+
+        for (List<String> batch : batches) {
+            processBatch(batch, statisticalContent, modelId, batchListener);
+        }
+    }
+
+    private void extractAllFieldNames(Map<String, Object> properties, String prefix, List<String> fieldNames) {
+        for (Map.Entry<String, Object> entry : properties.entrySet()) {
+            String fieldName = prefix.isEmpty() ? entry.getKey() : prefix + "." + entry.getKey();
+            Map<String, Object> fieldProperties = (Map<String, Object>) entry.getValue();
+
+            if (fieldProperties.containsKey("type")) {
+                fieldNames.add(fieldName);
+            }
+
+            if (fieldProperties.containsKey("properties")) {
+                extractAllFieldNames((Map<String, Object>) fieldProperties.get("properties"), fieldName, fieldNames);
+            }
+        }
+    }
+
+    private List<List<String>> createBatches(List<String> fields, int batchSize) {
+        List<List<String>> batches = new ArrayList<>();
+        for (int i = 0; i < fields.size(); i += batchSize) {
+            int end = Math.min(i + batchSize, fields.size());
+            batches.add(fields.subList(i, end));
+        }
+        return batches;
+    }
+
+    private void processBatch(List<String> batchFields, String statisticalContent, String modelId, ActionListener<Map<String, Object>> listener) {
+        String prompt = generateBatchPrompt(batchFields, statisticalContent);
+        
         RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet
             .builder()
             .parameters(Collections.singletonMap("prompt", prompt))
+            .actionType(ActionType.BATCH_PREDICT)
             .build();
 
         MLPredictionTaskRequest request = new MLPredictionTaskRequest(
@@ -181,20 +237,86 @@ public class FieldDescriptionTask implements IndexInsightTask {
         );
 
         client.execute(MLPredictionTaskAction.INSTANCE, request, ActionListener.wrap(mlTaskResponse -> {
-            log.info("LLM call successful for field description: {}", indexName);
+            log.info("Batch LLM call successful for {} fields in index {}", batchFields.size(), indexName);
             ModelTensorOutput modelTensorOutput = (ModelTensorOutput) mlTaskResponse.getOutput();
             ModelTensors modelTensors = modelTensorOutput.getMlModelOutputs().get(0);
             ModelTensor modelTensor = modelTensors.getMlModelTensors().get(0);
             Map<String, Object> dataAsMap = (Map<String, Object>) modelTensor.getDataAsMap();
 
             String response = extractModelResponse(dataAsMap);
-            fieldDescriptions = parseFieldDescription(response);
-            saveResult(response);
-            log.info("Field description completed for: {}", indexName);
+            Map<String, Object> batchResult = parseFieldDescription(response);
+            listener.onResponse(batchResult);
         }, e -> {
-            log.error("Failed to call LLM for field description: {}", indexName, e);
-            saveFailedStatus();
+            log.error("Failed to call LLM for batch in index {}: {}", indexName, e.getMessage());
+            listener.onFailure(e);
         }));
+    }
+
+    private String generateBatchPrompt(List<String> batchFields, String statisticalContent) {
+        StringBuilder prompt = new StringBuilder();
+        prompt.append("Please analyze the following OpenSearch index fields and provide descriptions:\\n\\n");
+        prompt.append("Index Name: ").append(indexName).append("\\n\\n");
+        
+        prompt.append("Fields to describe:\\n");
+        for (String field : batchFields) {
+            prompt.append("- ").append(field).append("\\n");
+        }
+        prompt.append("\\n");
+        // Filter statistical data based on current batch fields
+        String relevantStatisticalData = extractRelevantStatisticalData(statisticalContent, batchFields);
+        if (relevantStatisticalData != null && !relevantStatisticalData.isEmpty()) {
+            prompt.append("Statistical Data:\\n");
+            prompt.append(relevantStatisticalData).append("\\n\\n");
+        }
+
+        prompt.append("For each field listed above, provide a brief description of what it contains and its purpose.\\n");
+        prompt.append("Format as: field_name: description");
+
+        return prompt.toString();
+    }
+    
+    private String extractRelevantStatisticalData(String statisticalContent, List<String> batchFields) {
+        if (statisticalContent == null || statisticalContent.isEmpty() || batchFields.isEmpty()) {
+            return "";
+        }
+        
+        try {
+            // Extract sample document from statistical content (format: line1=count, line2=Sample document: {json})
+            String[] lines = statisticalContent.split("\\n");
+            if (lines.length < 2 || !lines[1].startsWith("Sample document: ")) {
+                return "";
+            }
+            
+            String sampleDocJson = lines[1].substring("Sample document: ".length());
+            // Parse JSON and extract only relevant fields
+            Map<String, Object> sampleDoc = JsonPath.read(sampleDocJson, "$");
+            Map<String, Object> relevantData = new HashMap<>();
+            
+            for (String field : batchFields) {
+                try {
+                    Object value = JsonPath.read(sampleDoc, "$." + field);
+                    relevantData.put(field, value);
+                } catch (Exception e) {
+                    // Field not found in sample document, skip
+                }
+            }
+            
+            if (relevantData.isEmpty()) {
+                return "";
+            }
+            
+            StringBuilder result = new StringBuilder();
+            result.append("Sample data for relevant fields:\\n");
+            for (Map.Entry<String, Object> entry : relevantData.entrySet()) {
+                result.append("- ").append(entry.getKey()).append(": ").append(entry.getValue()).append("\\n");
+            }
+            
+            return result.toString();
+            
+        } catch (Exception e) {
+            log.warn("Failed to extract relevant statistical data for batch fields: {}", e.getMessage());
+            return "";
+        }
     }
     
     /**
@@ -216,19 +338,8 @@ public class FieldDescriptionTask implements IndexInsightTask {
     }
     
     private Map<String, Object> parseFieldDescription(String modelResponse) {
-        String[] tmpList = modelResponse.split("<column_summarization>");
-        if (tmpList.length < 2) {
-            return Collections.emptyMap();
-        }
-
-        String[] contentParts = tmpList[tmpList.length - 1].split("</column_summarization>");
-        if (contentParts.length < 1) {
-            return Collections.emptyMap();
-        }
-
-        String content = contentParts[0].trim();
         Map<String, Object> field2Desc = new HashMap<>();
-        String[] lines = content.split("\\n");
+        String[] lines = modelResponse.trim().split("\\n");
 
         for (String line : lines) {
             line = line.trim();
