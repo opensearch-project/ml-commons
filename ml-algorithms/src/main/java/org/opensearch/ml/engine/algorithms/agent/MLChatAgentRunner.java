@@ -397,26 +397,26 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         "LLM"
                     );
 
-                    if (tools.containsKey(action)) {
-                        if (nextStepListener == null) {
-                            handleMaxIterationsReached(
-                                sessionId,
-                                listener,
-                                question,
-                                parentInteractionId,
-                                verbose,
-                                traceDisabled,
-                                traceTensors,
-                                conversationIndexMemory,
-                                traceNumber,
-                                additionalInfo,
-                                lastThought,
-                                maxIterations,
-                                tools
-                            );
-                            return;
-                        }
+                    if (nextStepListener == null) {
+                        handleMaxIterationsReached(
+                            sessionId,
+                            listener,
+                            question,
+                            parentInteractionId,
+                            verbose,
+                            traceDisabled,
+                            traceTensors,
+                            conversationIndexMemory,
+                            traceNumber,
+                            additionalInfo,
+                            lastThought,
+                            maxIterations,
+                            tools
+                        );
+                        return;
+                    }
 
+                    if (tools.containsKey(action)) {
                         Map<String, String> toolParams = constructToolParams(
                             tools,
                             toolSpecMap,
@@ -438,25 +438,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             functionCalling
                         );
                     } else {
-                        if (nextStepListener == null) {
-                            handleMaxIterationsReached(
-                                sessionId,
-                                listener,
-                                question,
-                                parentInteractionId,
-                                verbose,
-                                traceDisabled,
-                                traceTensors,
-                                conversationIndexMemory,
-                                traceNumber,
-                                additionalInfo,
-                                lastThought,
-                                maxIterations,
-                                tools
-                            );
-                            return;
-                        }
-
                         String res = String.format(Locale.ROOT, "Failed to run the tool %s which is unsupported.", action);
                         StringSubstitutor substitutor = new StringSubstitutor(
                             Map.of(SCRATCHPAD, scratchpadBuilder.toString()),
