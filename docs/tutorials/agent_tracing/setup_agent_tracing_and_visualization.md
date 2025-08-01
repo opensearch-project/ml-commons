@@ -116,7 +116,7 @@ services:
     volumes:
       - ./data-prepper-config.yaml:/usr/share/data-prepper/config/data-prepper-config.yaml
       - ./pipelines.yaml:/usr/share/data-prepper/pipelines/pipelines.yaml
-      - ../common/src/main/resources/index-mappings/ml_agent_trace.json:/usr/share/data-prepper/ml_agent_trace.json
+      - <PATH_TO_INDEX_MAPPING>/ml_agent_trace.json:/usr/share/data-prepper/ml_agent_trace.json
     ports:
       - "21890:21890"
     networks:
@@ -268,8 +268,54 @@ Create `data-prepper-config.yaml`:
 ssl: false
 ```
 
+## 5. Index Mapping Configuration
 
-## 5. Start the Services
+### Custom Index Mapping File
+
+The `ml_agent_trace.json` file contains the custom index mapping for agent traces and connector traces. This file defines the structure and field types for the `otel-v1-apm-span-agent` index where your agent traces will be stored.
+
+#### Locating the Index Mapping File
+
+The `ml_agent_trace.json` file is provided in this tutorial folder at:
+```
+ml-commons/docs/tutorials/agent_tracing/ml_agent_trace.json
+```
+
+#### Copying and Mounting the Index Mapping
+
+1. **Copy the file** from the tutorial folder to your configuration directory:
+   ```bash
+   cp ml-commons/docs/tutorials/agent_tracing/ml_agent_trace.json ./ml_agent_trace.json
+   ```
+
+2. **Update the volume mount** in your `docker-compose.yml`:
+   ```yaml
+   data-prepper:
+     volumes:
+       - ./ml_agent_trace.json:/usr/share/data-prepper/ml_agent_trace.json
+   ```
+
+#### Alternative: Custom Index Mapping
+
+If you need to customize the index mapping for your specific use case, you can:
+
+1. **Create your own mapping file** based on the provided `ml_agent_trace.json` from this tutorial
+2. **Modify the volume mount** to point to your custom file:
+   ```yaml
+   data-prepper:
+     volumes:
+       - ./your-custom-mapping.json:/usr/share/data-prepper/ml_agent_trace.json
+   ```
+
+#### Important Notes
+
+- **File Location**: The file must be mounted at `/usr/share/data-prepper/ml_agent_trace.json` inside the Data Prepper container
+- **Template Reference**: The `pipelines.yaml` references this file in the `template_file` field
+- **Index Creation**: Data Prepper will use this template to create the `otel-v1-apm-span-agent` index with the proper mapping
+- **Field Compatibility**: Ensure your custom mapping includes all required fields for proper trace visualization in OpenSearch Dashboards
+
+
+## 6. Start the Services
 
 Start all services:
 ```bash
@@ -282,15 +328,16 @@ docker-compose ps
 ```
 
 
-## 6. Enable/Disable Agent Tracing at Runtime
+## 7. Enable/Disable Agent Tracing at Runtime
 
-You can enable or disable agent tracing at runtime using the OpenSearch cluster settings API:
+You can enable or disable agent tracing and connector tracing at runtime using the OpenSearch cluster settings API:
 
 ```bash
 curl -X PUT "localhost:9200/_cluster/settings" -H 'Content-Type: application/json' -d'
 {
   "persistent": {
-    "plugins.ml_commons.agent_tracing_enabled": true
+    "plugins.ml_commons.agent_tracing_enabled": true,
+    "plugins.ml_commons.connector_tracing_enabled": true
   }
 }'
 ```
@@ -299,14 +346,14 @@ Note: The `plugins.ml_commons.agent_tracing_enabled` setting only takes effect i
 Use this API to turn agent tracing on or off without restarting your cluster, as long as tracing is enabled globally.
 
 
-## 7. View Traces
+## 8. View Traces
 
 - Open OpenSearch Dashboards at [http://localhost:5601](http://localhost:5601)
 - Navigate to **Observability → Traces**
 - You should see agent traces appearing as you execute agents
 
 
-## 8. Understanding the Visualizations
+## 9. Understanding the Visualizations
 
 The traces visualization provides several main views to help you analyze and understand your trace data:
 
