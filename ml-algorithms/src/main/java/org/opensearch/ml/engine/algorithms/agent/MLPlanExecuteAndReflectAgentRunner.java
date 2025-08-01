@@ -144,7 +144,6 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     public static final String INJECT_DATETIME_FIELD = "inject_datetime";
     public static final String DATETIME_FORMAT_FIELD = "datetime_format";
 
-
     public MLPlanExecuteAndReflectAgentRunner(
         Client client,
         Settings settings,
