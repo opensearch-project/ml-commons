@@ -12,11 +12,13 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LAST_UPDATED_TIME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_STORAGE_CONFIG_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MODEL_IDS_MONITORING_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.NAME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.OWNER_FIELD;
 
 import java.io.IOException;
 import java.time.Instant;
+import java.util.List;
 
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -49,6 +51,7 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
     private Instant createdTime;
     private Instant lastUpdatedTime;
     private MemoryStorageConfig memoryStorageConfig;
+    private List<String> modelIdsMonitoring;
 
     public MLMemoryContainer(
         String memoryContainerId,
@@ -58,7 +61,8 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
         String tenantId,
         Instant createdTime,
         Instant lastUpdatedTime,
-        MemoryStorageConfig memoryStorageConfig
+        MemoryStorageConfig memoryStorageConfig,
+        List<String> modelIdsMonitoring
     ) {
         this.memoryContainerId = memoryContainerId;
         this.name = name;
@@ -68,6 +72,7 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
         this.createdTime = createdTime;
         this.lastUpdatedTime = lastUpdatedTime;
         this.memoryStorageConfig = memoryStorageConfig;
+        this.modelIdsMonitoring = modelIdsMonitoring;
     }
 
     public MLMemoryContainer(StreamInput input) throws IOException {
@@ -83,6 +88,7 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
         if (input.readBoolean()) {
             this.memoryStorageConfig = new MemoryStorageConfig(input);
         }
+        this.modelIdsMonitoring = input.readOptionalStringList();
     }
 
     @Override
@@ -105,6 +111,7 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
         } else {
             out.writeBoolean(false);
         }
+        out.writeOptionalStringCollection(modelIdsMonitoring);
     }
 
     @Override
@@ -134,6 +141,9 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
         if (memoryStorageConfig != null) {
             builder.field(MEMORY_STORAGE_CONFIG_FIELD, memoryStorageConfig);
         }
+        if (modelIdsMonitoring != null && !modelIdsMonitoring.isEmpty()) {
+            builder.field(MODEL_IDS_MONITORING_FIELD, modelIdsMonitoring);
+        }
         builder.endObject();
         return builder;
     }
@@ -147,6 +157,7 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
         Instant createdTime = null;
         Instant lastUpdatedTime = null;
         MemoryStorageConfig memoryStorageConfig = null;
+        List<String> modelIdsMonitoring = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
         while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
@@ -178,6 +189,13 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
                 case MEMORY_STORAGE_CONFIG_FIELD:
                     memoryStorageConfig = MemoryStorageConfig.parse(parser);
                     break;
+                case MODEL_IDS_MONITORING_FIELD:
+                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                    modelIdsMonitoring = new java.util.ArrayList<>();
+                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                        modelIdsMonitoring.add(parser.text());
+                    }
+                    break;
                 default:
                     parser.skipChildren();
                     break;
@@ -194,6 +212,7 @@ public class MLMemoryContainer implements ToXContentObject, Writeable {
             .createdTime(createdTime)
             .lastUpdatedTime(lastUpdatedTime)
             .memoryStorageConfig(memoryStorageConfig)
+            .modelIdsMonitoring(modelIdsMonitoring)
             .build();
     }
 }

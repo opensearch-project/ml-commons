@@ -46,8 +46,17 @@
         },
         "dimension": {
           "type": "integer"
+        },
+        "max_recent_messages": {
+          "type": "integer"
+        },
+        "max_infer_size": {
+          "type": "integer"
         }
       }
+    },
+    "model_ids_monitoring": {
+      "type": "keyword"
     },
     "owner": USER_MAPPING_PLACEHOLDER,
     "tenant_id": {
