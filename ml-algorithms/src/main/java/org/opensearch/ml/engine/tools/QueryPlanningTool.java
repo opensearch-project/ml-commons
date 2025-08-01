@@ -42,7 +42,7 @@ public class QueryPlanningTool implements WithModelTool {
     @Setter
     private Map<String, Object> attributes;
     @VisibleForTesting
-    static String DEFAULT_DESCRIPTION = "Use this tool to generate query plans for a given query text.";
+    static String DEFAULT_DESCRIPTION = "Use this tool to generate opensearch query dsl for a given natural language question.";
     @Getter
     @Setter
     private String description = DEFAULT_DESCRIPTION;
