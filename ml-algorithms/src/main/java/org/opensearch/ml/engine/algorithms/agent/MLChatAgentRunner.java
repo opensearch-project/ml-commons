@@ -119,6 +119,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
     public static final String LLM_INTERFACE = "_llm_interface";
 
     private static final String DEFAULT_MAX_ITERATIONS = "10";
+    private static final String MAX_ITERATIONS_MESSAGE = "Agent reached maximum iterations (%d) without completing the task";
 
     private Client client;
     private Settings settings;
@@ -321,7 +322,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         int maxIterations = Integer.parseInt(tmpParameters.getOrDefault(MAX_ITERATION, DEFAULT_MAX_ITERATIONS));
         for (int i = 0; i < maxIterations; i++) {
             int finalI = i;
-            StepListener<?> nextStepListener = new StepListener<>();
+            StepListener<?> nextStepListener = (i == maxIterations - 1) ? null : new StepListener<>();
 
             lastStepListener.whenComplete(output -> {
                 StringBuilder sessionMsgAnswerBuilder = new StringBuilder();
@@ -390,6 +391,25 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         "LLM"
                     );
 
+                    if (nextStepListener == null) {
+                        handleMaxIterationsReached(
+                            sessionId,
+                            listener,
+                            question,
+                            parentInteractionId,
+                            verbose,
+                            traceDisabled,
+                            traceTensors,
+                            conversationIndexMemory,
+                            traceNumber,
+                            additionalInfo,
+                            lastThought,
+                            maxIterations,
+                            tools
+                        );
+                        return;
+                    }
+
                     if (tools.containsKey(action)) {
                         Map<String, String> toolParams = constructToolParams(
                             tools,
@@ -449,7 +469,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     StringSubstitutor substitutor = new StringSubstitutor(Map.of(SCRATCHPAD, scratchpadBuilder), "${parameters.", "}");
                     newPrompt.set(substitutor.replace(finalPrompt));
                     tmpParameters.put(PROMPT, newPrompt.get());
-                    if (interactions.size() > 0) {
+                    if (!interactions.isEmpty()) {
                         tmpParameters.put(INTERACTIONS, ", " + String.join(", ", interactions));
                     }
 
@@ -468,34 +488,41 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         );
 
                     if (finalI == maxIterations - 1) {
-                        if (verbose) {
-                            listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(traceTensors).build());
-                        } else {
-                            List<ModelTensors> finalModelTensors = createFinalAnswerTensors(
-                                createModelTensors(sessionId, parentInteractionId),
-                                List.of(ModelTensor.builder().name("response").dataAsMap(Map.of("response", lastThought.get())).build())
-                            );
-                            listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(finalModelTensors).build());
-                        }
-                    } else {
-                        ActionRequest request = new MLPredictionTaskRequest(
-                            llm.getModelId(),
-                            RemoteInferenceMLInput
-                                .builder()
-                                .algorithm(FunctionName.REMOTE)
-                                .inputDataset(RemoteInferenceInputDataSet.builder().parameters(tmpParameters).build())
-                                .build(),
-                            null,
-                            tenantId
+                        handleMaxIterationsReached(
+                            sessionId,
+                            listener,
+                            question,
+                            parentInteractionId,
+                            verbose,
+                            traceDisabled,
+                            traceTensors,
+                            conversationIndexMemory,
+                            traceNumber,
+                            additionalInfo,
+                            lastThought,
+                            maxIterations,
+                            tools
                         );
-                        client.execute(MLPredictionTaskAction.INSTANCE, request, (ActionListener<MLTaskResponse>) nextStepListener);
+                        return;
                     }
+
+                    ActionRequest request = new MLPredictionTaskRequest(
+                        llm.getModelId(),
+                        RemoteInferenceMLInput
+                            .builder()
+                            .algorithm(FunctionName.REMOTE)
+                            .inputDataset(RemoteInferenceInputDataSet.builder().parameters(tmpParameters).build())
+                            .build(),
+                        null,
+                        tenantId
+                    );
+                    client.execute(MLPredictionTaskAction.INSTANCE, request, (ActionListener<MLTaskResponse>) nextStepListener);
                 }
             }, e -> {
                 log.error("Failed to run chat agent", e);
                 listener.onFailure(e);
             });
-            if (i < maxIterations - 1) {
+            if (nextStepListener != null) {
                 lastStepListener = nextStepListener;
             }
         }
@@ -811,6 +838,40 @@ public class MLChatAgentRunner implements MLAgentRunner {
         } else {
             listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(finalModelTensors).build());
         }
+    }
+
+    private void handleMaxIterationsReached(
+        String sessionId,
+        ActionListener<Object> listener,
+        String question,
+        String parentInteractionId,
+        boolean verbose,
+        boolean traceDisabled,
+        List<ModelTensors> traceTensors,
+        ConversationIndexMemory conversationIndexMemory,
+        AtomicInteger traceNumber,
+        Map<String, Object> additionalInfo,
+        AtomicReference<String> lastThought,
+        int maxIterations,
+        Map<String, Tool> tools
+    ) {
+        String incompleteResponse = (lastThought.get() != null && !lastThought.get().isEmpty() && !"null".equals(lastThought.get()))
+            ? String.format("%s. Last thought: %s", String.format(MAX_ITERATIONS_MESSAGE, maxIterations), lastThought.get())
+            : String.format(MAX_ITERATIONS_MESSAGE, maxIterations);
+        sendFinalAnswer(
+            sessionId,
+            listener,
+            question,
+            parentInteractionId,
+            verbose,
+            traceDisabled,
+            traceTensors,
+            conversationIndexMemory,
+            traceNumber,
+            additionalInfo,
+            incompleteResponse
+        );
+        cleanUpResource(tools);
     }
 
     private void saveMessage(
