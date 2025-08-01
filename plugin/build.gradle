@@ -38,7 +38,7 @@ java {
 }
 
 lombok {
-    version = "1.18.30"
+    version = "1.18.38"
 }
 
 opensearchplugin {
