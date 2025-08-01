@@ -33,12 +33,16 @@ public class MemoryContainerConstants {
     public static final String SPARSE_MEMORY_INDEX_PREFIX = "ml-sparse-memory-";
 
     // Memory data index field names
+    public static final String MEMORY_ID_FIELD = "memory_id";
     public static final String USER_ID_FIELD = "user_id";
     public static final String AGENT_ID_FIELD = "agent_id";
     public static final String SESSION_ID_FIELD = "session_id";
     public static final String RAW_MESSAGES_FIELD = "raw_messages";
     public static final String FACT_FIELD = "fact";
+    public static final String TYPE_FIELD = "type";
+    public static final String SUMMARY_FIELD = "summary";
     public static final String FACT_ENCODING_FIELD = "fact_encoding";
+    public static final String ENCODING_FIELD = "encoding";
     public static final String TAGS_FIELD = "tags";
 
     // KNN index settings
@@ -53,6 +57,10 @@ public class MemoryContainerConstants {
     public static final String BASE_MEMORY_CONTAINER_PATH = "/_plugins/_ml/memory_container";
     public static final String CREATE_MEMORY_CONTAINER_PATH = BASE_MEMORY_CONTAINER_PATH + "/_create";
     public static final String PARAMETER_MEMORY_CONTAINER_ID = "memory_container_id";
+
+    // Memory REST API paths
+    public static final String BASE_MEMORY_PATH = "/_plugins/_ml/memory";
+    public static final String PARAMETER_MEMORY_ID = "memory_id";
 
     // Response fields
     public static final String STATUS_FIELD = "status";
