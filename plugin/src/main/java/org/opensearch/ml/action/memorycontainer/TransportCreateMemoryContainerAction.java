@@ -16,6 +16,8 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_MEMORY_INDEX_PREFIX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_METHOD_NAME;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_SPACE_TYPE;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MODEL_ID_MONITORING_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.RAW_MESSAGES_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SPARSE_MEMORY_INDEX_PREFIX;
@@ -171,6 +173,7 @@ public class TransportCreateMemoryContainerAction extends
             .createdTime(now)
             .lastUpdatedTime(now)
             .memoryStorageConfig(input.getMemoryStorageConfig())
+            .modelIdsMonitoring(input.getModelIdsMonitoring())
             .build();
     }
 
@@ -213,6 +216,8 @@ public class TransportCreateMemoryContainerAction extends
             properties.put(SESSION_ID_FIELD, Map.of("type", "text"));
             properties.put(RAW_MESSAGES_FIELD, Map.of("type", "text"));
             properties.put(TAGS_FIELD, Map.of("type", "flat_object"));
+            properties.put(MEMORY_ID_FIELD, Map.of("type", "text"));
+            properties.put(MODEL_ID_MONITORING_FIELD, Map.of("type", "text"));
 
             if (memoryStorageConfig != null && memoryStorageConfig.isSemanticStorageEnabled()) {
                 properties.put(FACT_FIELD, Map.of("type", "text"));
@@ -234,7 +239,6 @@ public class TransportCreateMemoryContainerAction extends
                     method.put("engine", KNN_ENGINE);
                     method.put("parameters", Map.of("ef_construction", KNN_EF_CONSTRUCTION, "m", KNN_M));
                     knnVector.put("method", method);
-
                     properties.put(FACT_ENCODING_FIELD, knnVector);
 
                 } else if (memoryStorageConfig.getEmbeddingModelType() == FunctionName.SPARSE_ENCODING) {
