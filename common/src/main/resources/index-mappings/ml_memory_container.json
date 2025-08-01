@@ -55,9 +55,6 @@
         }
       }
     },
-    "model_ids_monitoring": {
-      "type": "keyword"
-    },
     "owner": USER_MAPPING_PLACEHOLDER,
     "tenant_id": {
       "type": "keyword"
