@@ -18,7 +18,6 @@ public class MemoryContainerConstants {
     public static final String CREATED_TIME_FIELD = "created_time";
     public static final String LAST_UPDATED_TIME_FIELD = "last_updated_time";
     public static final String MEMORY_STORAGE_CONFIG_FIELD = "memory_storage_config";
-    public static final String MODEL_IDS_MONITORING_FIELD = "model_ids_monitoring";
 
     // Field names for MemoryStorageConfig
     public static final String MEMORY_INDEX_NAME_FIELD = "memory_index_name";
@@ -45,10 +44,11 @@ public class MemoryContainerConstants {
     public static final String SESSION_ID_FIELD = "session_id";
     public static final String RAW_MESSAGES_FIELD = "raw_messages";
     public static final String FACT_FIELD = "fact";
-    public static final String FACT_ENCODING_FIELD = "fact_encoding";
+    public static final String EMBEDDING_FIELD = "embedding";
     public static final String TAGS_FIELD = "tags";
     public static final String MEMORY_ID_FIELD = "memory_id";
-    public static final String MODEL_ID_MONITORING_FIELD = "model_id_monitoring";
+    public static final String MEMORY_TYPE_FIELD = "memory_type";
+    public static final String TIMESTAMP_FIELD = "timestamp";
 
     // KNN index settings
     public static final String KNN_ENGINE = "faiss";
