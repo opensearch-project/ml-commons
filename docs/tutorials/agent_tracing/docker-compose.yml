@@ -68,7 +68,7 @@ services:
     volumes:
       - ./data-prepper-config.yaml:/usr/share/data-prepper/config/data-prepper-config.yaml
       - ./pipelines.yaml:/usr/share/data-prepper/pipelines/pipelines.yaml
-      - ../common/src/main/resources/index-mappings/ml_agent_trace.json:/usr/share/data-prepper/ml_agent_trace.json
+      - <PATH_TO_INDEX_MAPPING>/ml_agent_trace.json:/usr/share/data-prepper/ml_agent_trace.json
     ports:
       - "21890:21890"
     networks:
