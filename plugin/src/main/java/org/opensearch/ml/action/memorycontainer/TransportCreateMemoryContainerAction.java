@@ -111,21 +111,27 @@ public class TransportCreateMemoryContainerAction extends
                 // Create memory container document without ID (will be auto-generated)
                 MLMemoryContainer memoryContainer = buildMemoryContainer(input, null, user, tenantId);
 
-                // Create memory container document
-                MLMemoryContainer memoryContainer = buildMemoryContainer(input, containerId, user, tenantId);
+                // Index the memory container document first to get the generated ID
+                indexMemoryContainer(memoryContainer, ActionListener.wrap(memoryContainerId -> {
+                    // Set the generated container ID
+                    memoryContainer.setMemoryContainerId(memoryContainerId);
 
-                // Create memory data indices based on semantic storage config
-                createMemoryDataIndices(memoryContainer, user, ActionListener.wrap(actualIndexName -> {
-                    // Update the memory container with the actual index name
-                    MemoryStorageConfig config = memoryContainer.getMemoryStorageConfig();
-                    if (config == null) {
-                        config = MemoryStorageConfig.builder().memoryIndexName(actualIndexName).semanticStorageEnabled(false).build();
-                    } else {
-                        config.setMemoryIndexName(actualIndexName);
-                    }
-                    memoryContainer.setMemoryStorageConfig(config);
-                    // Index the memory container document
-                    indexMemoryContainer(memoryContainer, listener);
+                    // Create memory data indices based on semantic storage config
+                    createMemoryDataIndices(memoryContainer, user, ActionListener.wrap(actualIndexName -> {
+                        // Update the memory container with the actual index name
+                        MemoryStorageConfig config = memoryContainer.getMemoryStorageConfig();
+                        if (config == null) {
+                            config = MemoryStorageConfig.builder().memoryIndexName(actualIndexName).semanticStorageEnabled(false).build();
+                        } else {
+                            config.setMemoryIndexName(actualIndexName);
+                        }
+                        memoryContainer.setMemoryStorageConfig(config);
+
+                        // Update the container document with the index name
+                        updateMemoryContainer(memoryContainer, ActionListener.wrap(updated -> {
+                            listener.onResponse(new MLCreateMemoryContainerResponse(memoryContainerId, "created"));
+                        }, listener::onFailure));
+                    }, listener::onFailure));
                 }, listener::onFailure));
 
             } catch (Exception e) {
@@ -147,12 +153,17 @@ public class TransportCreateMemoryContainerAction extends
         }
     }
 
-    private MLMemoryContainer buildMemoryContainer(MLCreateMemoryContainerInput input, String containerId, User user, String tenantId) {
+    private MLMemoryContainer buildMemoryContainer(
+        MLCreateMemoryContainerInput input,
+        String memoryContainerId,
+        User user,
+        String tenantId
+    ) {
         Instant now = Instant.now();
 
         return MLMemoryContainer
             .builder()
-            .containerId(containerId)
+            .memoryContainerId(memoryContainerId)
             .name(input.getName())
             .description(input.getDescription())
             .owner(user)
@@ -171,15 +182,16 @@ public class TransportCreateMemoryContainerAction extends
         if (baseIndexName == null) {
             // Generate default index name based on semantic storage config
             if (memoryStorageConfig == null || !memoryStorageConfig.isSemanticStorageEnabled()) {
-                baseIndexName = STATIC_MEMORY_INDEX_PREFIX + container.getContainerId() + "-" + userId;
+                baseIndexName = STATIC_MEMORY_INDEX_PREFIX + container.getMemoryContainerId() + "-" + userId;
             } else if (memoryStorageConfig.getEmbeddingModelType() == FunctionName.TEXT_EMBEDDING) {
-                baseIndexName = KNN_MEMORY_INDEX_PREFIX + container.getContainerId() + "-" + userId;
+                baseIndexName = KNN_MEMORY_INDEX_PREFIX + container.getMemoryContainerId() + "-" + userId;
             } else if (memoryStorageConfig.getEmbeddingModelType() == FunctionName.SPARSE_ENCODING) {
-                baseIndexName = SPARSE_MEMORY_INDEX_PREFIX + container.getContainerId() + "-" + userId;
+                baseIndexName = SPARSE_MEMORY_INDEX_PREFIX + container.getMemoryContainerId() + "-" + userId;
             }
         }
 
-        final String finalIndexName = baseIndexName;
+        // Convert to lowercase as OpenSearch doesn't support uppercase in index names
+        final String finalIndexName = baseIndexName.toLowerCase(Locale.ROOT);
         // Create the memory data index with appropriate mapping
         createMemoryDataIndex(finalIndexName, container.getMemoryStorageConfig(), ActionListener.wrap(success -> {
             // Return the actual index name that was created
