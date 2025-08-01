@@ -6,8 +6,9 @@
 package org.opensearch.ml.action.memorycontainer;
 
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
+import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.AGENT_ID_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.FACT_ENCODING_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.EMBEDDING_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.FACT_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_EF_CONSTRUCTION;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_EF_SEARCH;
@@ -17,12 +18,13 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_METHOD_NAME;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_SPACE_TYPE;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_ID_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MODEL_ID_MONITORING_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_TYPE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.RAW_MESSAGES_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SPARSE_MEMORY_INDEX_PREFIX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STATIC_MEMORY_INDEX_PREFIX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.TAGS_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.TIMESTAMP_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.USER_ID_FIELD;
 
 import java.time.Instant;
@@ -173,7 +175,6 @@ public class TransportCreateMemoryContainerAction extends
             .createdTime(now)
             .lastUpdatedTime(now)
             .memoryStorageConfig(input.getMemoryStorageConfig())
-            .modelIdsMonitoring(input.getModelIdsMonitoring())
             .build();
     }
 
@@ -217,7 +218,9 @@ public class TransportCreateMemoryContainerAction extends
             properties.put(RAW_MESSAGES_FIELD, Map.of("type", "text"));
             properties.put(TAGS_FIELD, Map.of("type", "flat_object"));
             properties.put(MEMORY_ID_FIELD, Map.of("type", "text"));
-            properties.put(MODEL_ID_MONITORING_FIELD, Map.of("type", "text"));
+            properties.put(TENANT_ID_FIELD, Map.of("type", "keyword"));
+            properties.put(MEMORY_TYPE_FIELD, Map.of("type", "keyword"));
+            properties.put(TIMESTAMP_FIELD, Map.of("type", "date", "format", "strict_date_time||epoch_millis"));
 
             if (memoryStorageConfig != null && memoryStorageConfig.isSemanticStorageEnabled()) {
                 properties.put(FACT_FIELD, Map.of("type", "text"));
@@ -239,11 +242,11 @@ public class TransportCreateMemoryContainerAction extends
                     method.put("engine", KNN_ENGINE);
                     method.put("parameters", Map.of("ef_construction", KNN_EF_CONSTRUCTION, "m", KNN_M));
                     knnVector.put("method", method);
-                    properties.put(FACT_ENCODING_FIELD, knnVector);
+                    properties.put(EMBEDDING_FIELD, knnVector);
 
                 } else if (memoryStorageConfig.getEmbeddingModelType() == FunctionName.SPARSE_ENCODING) {
                     // Sparse index configuration
-                    properties.put(FACT_ENCODING_FIELD, Map.of("type", "rank_feature"));
+                    properties.put(EMBEDDING_FIELD, Map.of("type", "rank_feature"));
                 }
             }
 
