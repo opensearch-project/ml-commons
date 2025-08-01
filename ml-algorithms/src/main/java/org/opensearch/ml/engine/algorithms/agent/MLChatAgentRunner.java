@@ -321,7 +321,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         int maxIterations = Integer.parseInt(tmpParameters.getOrDefault(MAX_ITERATION, DEFAULT_MAX_ITERATIONS));
         for (int i = 0; i < maxIterations; i++) {
             int finalI = i;
-            StepListener<?> nextStepListener = new StepListener<>();
+            StepListener<?> nextStepListener = (i == maxIterations - 1) ? null : new StepListener<>();
 
             lastStepListener.whenComplete(output -> {
                 StringBuilder sessionMsgAnswerBuilder = new StringBuilder();
@@ -391,36 +391,54 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     );
 
                     if (tools.containsKey(action)) {
-                        Map<String, String> toolParams = constructToolParams(
-                            tools,
-                            toolSpecMap,
-                            question,
-                            lastActionInput,
-                            action,
-                            actionInput
-                        );
-                        runTool(
-                            tools,
-                            toolSpecMap,
-                            tmpParameters,
-                            (ActionListener<Object>) nextStepListener,
-                            action,
-                            actionInput,
-                            toolParams,
-                            interactions,
-                            toolCallId,
-                            functionCalling
-                        );
+                        if (nextStepListener != null) {
+                            Map<String, String> toolParams = constructToolParams(
+                                tools,
+                                toolSpecMap,
+                                question,
+                                lastActionInput,
+                                action,
+                                actionInput
+                            );
+                            runTool(
+                                tools,
+                                toolSpecMap,
+                                tmpParameters,
+                                (ActionListener<Object>) nextStepListener,
+                                action,
+                                actionInput,
+                                toolParams,
+                                interactions,
+                                toolCallId,
+                                functionCalling
+                            );
+                        } else {
+                            // Final iteration - send response directly
+                            handleMaxIterationsReached(
+                                sessionId, listener, question, parentInteractionId, verbose, traceDisabled,
+                                traceTensors, conversationIndexMemory, traceNumber, additionalInfo,
+                                lastThought, maxIterations, tools
+                            );
+                        }
                     } else {
-                        String res = String.format(Locale.ROOT, "Failed to run the tool %s which is unsupported.", action);
-                        StringSubstitutor substitutor = new StringSubstitutor(
-                            Map.of(SCRATCHPAD, scratchpadBuilder.toString()),
-                            "${parameters.",
-                            "}"
-                        );
-                        newPrompt.set(substitutor.replace(finalPrompt));
-                        tmpParameters.put(PROMPT, newPrompt.get());
-                        ((ActionListener<Object>) nextStepListener).onResponse(res);
+                        if (nextStepListener != null) {
+                            String res = String.format(Locale.ROOT, "Failed to run the tool %s which is unsupported.", action);
+                            StringSubstitutor substitutor = new StringSubstitutor(
+                                Map.of(SCRATCHPAD, scratchpadBuilder.toString()),
+                                "${parameters.",
+                                "}"
+                            );
+                            newPrompt.set(substitutor.replace(finalPrompt));
+                            tmpParameters.put(PROMPT, newPrompt.get());
+                            ((ActionListener<Object>) nextStepListener).onResponse(res);
+                        } else {
+                            // Final iteration - send response directly
+                            handleMaxIterationsReached(
+                                sessionId, listener, question, parentInteractionId, verbose, traceDisabled,
+                                traceTensors, conversationIndexMemory, traceNumber, additionalInfo,
+                                lastThought, maxIterations, tools
+                            );
+                        }
                     }
                 } else {
                     addToolOutputToAddtionalInfo(toolSpecMap, lastAction, additionalInfo, output);
@@ -468,15 +486,11 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         );
 
                     if (finalI == maxIterations - 1) {
-                        if (verbose) {
-                            listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(traceTensors).build());
-                        } else {
-                            List<ModelTensors> finalModelTensors = createFinalAnswerTensors(
-                                createModelTensors(sessionId, parentInteractionId),
-                                List.of(ModelTensor.builder().name("response").dataAsMap(Map.of("response", lastThought.get())).build())
-                            );
-                            listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(finalModelTensors).build());
-                        }
+                        handleMaxIterationsReached(
+                            sessionId, listener, question, parentInteractionId, verbose, traceDisabled,
+                            traceTensors, conversationIndexMemory, traceNumber, additionalInfo,
+                            lastThought, maxIterations, tools
+                        );
                     } else {
                         ActionRequest request = new MLPredictionTaskRequest(
                             llm.getModelId(),
@@ -495,7 +509,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 log.error("Failed to run chat agent", e);
                 listener.onFailure(e);
             });
-            if (i < maxIterations - 1) {
+            if (nextStepListener != null) {
                 lastStepListener = nextStepListener;
             }
         }
@@ -811,6 +825,40 @@ public class MLChatAgentRunner implements MLAgentRunner {
         } else {
             listener.onResponse(ModelTensorOutput.builder().mlModelOutputs(finalModelTensors).build());
         }
+    }
+
+    private void handleMaxIterationsReached(
+        String sessionId,
+        ActionListener<Object> listener,
+        String question,
+        String parentInteractionId,
+        boolean verbose,
+        boolean traceDisabled,
+        List<ModelTensors> traceTensors,
+        ConversationIndexMemory conversationIndexMemory,
+        AtomicInteger traceNumber,
+        Map<String, Object> additionalInfo,
+        AtomicReference<String> lastThought,
+        int maxIterations,
+        Map<String, Tool> tools
+    ) {
+        String incompleteResponse = (lastThought.get() != null && !lastThought.get().isEmpty() && !"null".equals(lastThought.get())) 
+            ? lastThought.get() 
+            : "Agent reached maximum iterations (" + maxIterations + ") without completing the task.";
+        sendFinalAnswer(
+            sessionId,
+            listener,
+            question,
+            parentInteractionId,
+            verbose,
+            traceDisabled,
+            traceTensors,
+            conversationIndexMemory,
+            traceNumber,
+            additionalInfo,
+            incompleteResponse
+        );
+        cleanUpResource(tools);
     }
 
     private void saveMessage(
