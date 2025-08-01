@@ -415,9 +415,19 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         } else {
                             // Final iteration - send response directly
                             handleMaxIterationsReached(
-                                sessionId, listener, question, parentInteractionId, verbose, traceDisabled,
-                                traceTensors, conversationIndexMemory, traceNumber, additionalInfo,
-                                lastThought, maxIterations, tools
+                                sessionId,
+                                listener,
+                                question,
+                                parentInteractionId,
+                                verbose,
+                                traceDisabled,
+                                traceTensors,
+                                conversationIndexMemory,
+                                traceNumber,
+                                additionalInfo,
+                                lastThought,
+                                maxIterations,
+                                tools
                             );
                         }
                     } else {
@@ -434,9 +444,19 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         } else {
                             // Final iteration - send response directly
                             handleMaxIterationsReached(
-                                sessionId, listener, question, parentInteractionId, verbose, traceDisabled,
-                                traceTensors, conversationIndexMemory, traceNumber, additionalInfo,
-                                lastThought, maxIterations, tools
+                                sessionId,
+                                listener,
+                                question,
+                                parentInteractionId,
+                                verbose,
+                                traceDisabled,
+                                traceTensors,
+                                conversationIndexMemory,
+                                traceNumber,
+                                additionalInfo,
+                                lastThought,
+                                maxIterations,
+                                tools
                             );
                         }
                     }
@@ -487,9 +507,19 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
                     if (finalI == maxIterations - 1) {
                         handleMaxIterationsReached(
-                            sessionId, listener, question, parentInteractionId, verbose, traceDisabled,
-                            traceTensors, conversationIndexMemory, traceNumber, additionalInfo,
-                            lastThought, maxIterations, tools
+                            sessionId,
+                            listener,
+                            question,
+                            parentInteractionId,
+                            verbose,
+                            traceDisabled,
+                            traceTensors,
+                            conversationIndexMemory,
+                            traceNumber,
+                            additionalInfo,
+                            lastThought,
+                            maxIterations,
+                            tools
                         );
                     } else {
                         ActionRequest request = new MLPredictionTaskRequest(
@@ -842,8 +872,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
         int maxIterations,
         Map<String, Tool> tools
     ) {
-        String incompleteResponse = (lastThought.get() != null && !lastThought.get().isEmpty() && !"null".equals(lastThought.get())) 
-            ? lastThought.get() 
+        String incompleteResponse = (lastThought.get() != null && !lastThought.get().isEmpty() && !"null".equals(lastThought.get()))
+            ? lastThought.get()
             : "Agent reached maximum iterations (" + maxIterations + ") without completing the task.";
         sendFinalAnswer(
             sessionId,
