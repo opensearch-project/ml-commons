@@ -34,12 +34,12 @@ public class MemoryAccessControlHelper {
         SdkClient sdkClient,
         Client client,
         User user,
-        String containerId,
+        String memoryContainerId,
         String tenantId,
         MLFeatureEnabledSetting mlFeatureEnabledSetting,
         ActionListener<Boolean> listener
     ) {
-        if (containerId == null
+        if (memoryContainerId == null
             || (!mlFeatureEnabledSetting.isMultiTenancyEnabled()
                 && (isAdmin(user) || !isSecurityEnabledAndMemoryContainerControlEnabled(user)))) {
             listener.onResponse(true);
@@ -49,7 +49,7 @@ public class MemoryAccessControlHelper {
         GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
             .builder()
             .index(ML_MEMORY_CONTAINER_INDEX)
-            .id(containerId)
+            .id(memoryContainerId)
             .tenantId(tenantId)
             .build();
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {

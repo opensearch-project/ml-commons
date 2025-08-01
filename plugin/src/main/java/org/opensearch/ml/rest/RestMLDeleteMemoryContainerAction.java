@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.rest;
 
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_CONTAINER_ID;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_CONTAINER_ID;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
@@ -46,16 +46,16 @@ public class RestMLDeleteMemoryContainerAction extends BaseRestHandler {
             .of(
                 new Route(
                     RestRequest.Method.DELETE,
-                    String.format(Locale.ROOT, "%s/memory_container/{%s}", ML_BASE_URI, PARAMETER_CONTAINER_ID)
+                    String.format(Locale.ROOT, "%s/memory_container/{%s}", ML_BASE_URI, PARAMETER_MEMORY_CONTAINER_ID)
                 )
             );
     }
 
     @Override
     protected RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
-        String containerId = request.param(PARAMETER_CONTAINER_ID);
+        String memoryContainerId = request.param(PARAMETER_MEMORY_CONTAINER_ID);
         String tenantId = getTenantID(mlFeatureEnabledSetting.isMultiTenancyEnabled(), request);
-        MLMemoryContainerDeleteRequest mlMemoryContainerDeleteRequest = new MLMemoryContainerDeleteRequest(containerId, tenantId);
+        MLMemoryContainerDeleteRequest mlMemoryContainerDeleteRequest = new MLMemoryContainerDeleteRequest(memoryContainerId, tenantId);
         return channel -> client
             .execute(MLMemoryContainerDeleteAction.INSTANCE, mlMemoryContainerDeleteRequest, new RestToXContentListener<>(channel));
     }

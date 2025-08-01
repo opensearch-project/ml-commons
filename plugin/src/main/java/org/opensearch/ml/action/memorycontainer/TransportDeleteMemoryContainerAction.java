@@ -7,6 +7,7 @@ package org.opensearch.ml.action.memorycontainer;
 
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
 
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.delete.DeleteResponse;
 import org.opensearch.action.support.ActionFilters;
@@ -16,6 +17,7 @@ import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.exception.MLValidationException;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -70,67 +72,72 @@ public class TransportDeleteMemoryContainerAction extends HandledTransportAction
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<DeleteResponse> actionListener) {
         MLMemoryContainerDeleteRequest deleteRequest = MLMemoryContainerDeleteRequest.fromActionRequest(request);
-        String containerId = deleteRequest.getContainerId();
+        String memoryContainerId = deleteRequest.getMemoryContainerId();
         String tenantId = deleteRequest.getTenantId();
 
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
             return;
         }
+        User user = RestActionUtils.getUserContext(client);
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
-            validateAndDeleteMemoryContainer(containerId, tenantId, wrappedListener);
+            validateAndDeleteMemoryContainer(memoryContainerId, tenantId, user, wrappedListener);
         } catch (Exception e) {
-            log.error("Failed to delete ML memory container {}", containerId, e);
+            log.error("Failed to delete ML memory container {}", memoryContainerId, e);
             actionListener.onFailure(e);
         }
     }
 
-    private void validateAndDeleteMemoryContainer(String containerId, String tenantId, ActionListener<DeleteResponse> listener) {
-        User user = RestActionUtils.getUserContext(client);
+    private void validateAndDeleteMemoryContainer(
+        String memoryContainerId,
+        String tenantId,
+        User user,
+        ActionListener<DeleteResponse> listener
+    ) {
         memoryAccessControlHelper
             .validateMemoryContainerAccess(
                 sdkClient,
                 client,
                 user,
-                containerId,
+                memoryContainerId,
                 tenantId,
                 mlFeatureEnabledSetting,
                 ActionListener
                     .wrap(
-                        isAllowed -> handleMemoryContainerAccessValidation(containerId, tenantId, isAllowed, listener),
-                        e -> handleMemoryContainerAccessValidationFailure(containerId, e, listener)
+                        isAllowed -> handleMemoryContainerAccessValidation(memoryContainerId, tenantId, isAllowed, listener),
+                        e -> handleMemoryContainerAccessValidationFailure(memoryContainerId, e, listener)
                     )
             );
 
     }
 
     private void handleMemoryContainerAccessValidation(
-        String containerId,
+        String memoryContainerId,
         String tenantId,
         boolean isAllowed,
         ActionListener<DeleteResponse> actionListener
     ) {
         if (isAllowed) {
-            deleteMemoryContainer(containerId, tenantId, actionListener);
+            deleteMemoryContainer(memoryContainerId, tenantId, actionListener);
         } else {
             actionListener.onFailure(new MLValidationException("You are not allowed to delete this memory container"));
         }
     }
 
-    private void deleteMemoryContainer(String containerId, String tenantId, ActionListener<DeleteResponse> listener) {
+    private void deleteMemoryContainer(String memoryContainerId, String tenantId, ActionListener<DeleteResponse> listener) {
         try {
             DeleteDataObjectRequest deleteRequest = DeleteDataObjectRequest
                 .builder()
                 .index(ML_MEMORY_CONTAINER_INDEX)
-                .id(containerId)
+                .id(memoryContainerId)
                 .tenantId(tenantId)
                 .build();
             sdkClient
                 .deleteDataObjectAsync(deleteRequest)
                 .whenComplete((deleteResponse, throwable) -> handleDeleteResponse(deleteResponse, throwable, deleteRequest.id(), listener));
         } catch (Exception e) {
-            log.error("Failed to delete Memory Container: {}", containerId, e);
+            log.error("Failed to delete Memory Container: {}", memoryContainerId, e);
             listener.onFailure(e);
         }
     }
@@ -138,13 +145,13 @@ public class TransportDeleteMemoryContainerAction extends HandledTransportAction
     private void handleDeleteResponse(
         DeleteDataObjectResponse response,
         Throwable throwable,
-        String containerId,
+        String memoryContainerId,
         ActionListener<DeleteResponse> actionListener
     ) {
         if (throwable != null) {
             Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-            log.error("Failed to delete ML Memory Container {}", containerId, cause);
-            actionListener.onFailure(cause);
+            log.error("Failed to delete ML Memory Container {}", memoryContainerId, cause);
+            actionListener.onFailure((new OpenSearchStatusException("Failed to find memory container", RestStatus.NOT_FOUND)));
         } else {
             try {
                 DeleteResponse deleteResponse = response.deleteResponse();
@@ -157,11 +164,11 @@ public class TransportDeleteMemoryContainerAction extends HandledTransportAction
     }
 
     private void handleMemoryContainerAccessValidationFailure(
-        String containerId,
+        String memoryContainerId,
         Exception e,
         ActionListener<DeleteResponse> actionListener
     ) {
-        log.error("Failed to delete ML memory container: {}", containerId, e);
+        log.error("Failed to delete ML memory container: {}", memoryContainerId, e);
         actionListener.onFailure(e);
     }
 }

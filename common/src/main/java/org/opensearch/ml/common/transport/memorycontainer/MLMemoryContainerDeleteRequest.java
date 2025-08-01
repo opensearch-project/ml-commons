@@ -24,27 +24,27 @@ import lombok.Getter;
 
 public class MLMemoryContainerDeleteRequest extends ActionRequest {
     @Getter
-    String containerId;
+    String memoryContainerId;
 
     @Getter
     String tenantId;
 
     @Builder
-    public MLMemoryContainerDeleteRequest(String containerId, String tenantId) {
-        this.containerId = containerId;
+    public MLMemoryContainerDeleteRequest(String memoryContainerId, String tenantId) {
+        this.memoryContainerId = memoryContainerId;
         this.tenantId = tenantId;
     }
 
     public MLMemoryContainerDeleteRequest(StreamInput input) throws IOException {
         super(input);
-        this.containerId = input.readString();
+        this.memoryContainerId = input.readString();
         this.tenantId = input.readOptionalString();
     }
 
     @Override
     public void writeTo(StreamOutput output) throws IOException {
         super.writeTo(output);
-        output.writeString(containerId);
+        output.writeString(memoryContainerId);
         output.writeOptionalString(tenantId);
     }
 
@@ -52,7 +52,7 @@ public class MLMemoryContainerDeleteRequest extends ActionRequest {
     public ActionRequestValidationException validate() {
         ActionRequestValidationException exception = null;
 
-        if (this.containerId == null) {
+        if (this.memoryContainerId == null) {
             exception = addValidationError("ML memory container id can't be null", exception);
         }
 
