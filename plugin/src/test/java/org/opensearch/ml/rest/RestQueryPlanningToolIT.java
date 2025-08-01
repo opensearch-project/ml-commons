@@ -30,7 +30,6 @@ public class RestQueryPlanningToolIT extends MLCommonsRestTestCase {
     private static final String AWS_SECRET_ACCESS_KEY = System.getenv("AWS_SECRET_ACCESS_KEY");
     private static final String AWS_SESSION_TOKEN = System.getenv("AWS_SESSION_TOKEN");
     private static final String GITHUB_CI_AWS_REGION = "us-west-2";
-
     private final String bedrockClaudeModelConnectorEntity = "{\n"
         + "    \"name\": \"Amazon Bedrock Claude 3.7-sonnet connector\",\n"
         + "    \"description\": \"connector for base agent with tools\",\n"
@@ -71,6 +70,9 @@ public class RestQueryPlanningToolIT extends MLCommonsRestTestCase {
     @Before
     public void setup() throws IOException, InterruptedException {
         ingestIrisIndexData();
+        if (AWS_ACCESS_KEY_ID == null) {
+            return;
+        }
         queryPlanningModelId = registerQueryPlanningModel();
     }
 
@@ -81,6 +83,9 @@ public class RestQueryPlanningToolIT extends MLCommonsRestTestCase {
 
     @Test
     public void testAgentWithQueryPlanningTool_DefaultPrompt() throws IOException {
+        if (AWS_ACCESS_KEY_ID == null) {
+            return;
+        }
         String agentName = "Test_QueryPlanningAgent_DefaultPrompt";
         String agentId = registerAgentWithQueryPlanningTool(agentName, queryPlanningModelId);
         assertNotNull(agentId);
@@ -186,19 +191,4 @@ public class RestQueryPlanningToolIT extends MLCommonsRestTestCase {
     private void deleteAgent(String agentId) throws IOException {
         TestHelper.makeRequest(client(), "DELETE", "/_plugins/_ml/agents/" + agentId, null, "", List.of());
     }
-
-    public String registerModel(String modelContent) throws IOException {
-        Response response = TestHelper
-            .makeRequest(
-                client(),
-                "POST",
-                "/_plugins/_ml/models/_register",
-                null,
-                new StringEntity(modelContent),
-                List.of(new BasicHeader(HttpHeaders.CONTENT_TYPE, "application/json"))
-            );
-        Map<String, String> responseMap = gson.fromJson(TestHelper.httpEntityToString(response.getEntity()), Map.class);
-        return responseMap.get("task_id");
-    }
-
 }
