@@ -119,6 +119,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
     public static final String LLM_INTERFACE = "_llm_interface";
 
     private static final String DEFAULT_MAX_ITERATIONS = "10";
+    private static final String MAX_ITERATIONS_MESSAGE = "Agent reached maximum iterations (%d) without completing the task";
 
     private Client client;
     private Settings settings;
@@ -391,29 +392,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     );
 
                     if (tools.containsKey(action)) {
-                        if (nextStepListener != null) {
-                            Map<String, String> toolParams = constructToolParams(
-                                tools,
-                                toolSpecMap,
-                                question,
-                                lastActionInput,
-                                action,
-                                actionInput
-                            );
-                            runTool(
-                                tools,
-                                toolSpecMap,
-                                tmpParameters,
-                                (ActionListener<Object>) nextStepListener,
-                                action,
-                                actionInput,
-                                toolParams,
-                                interactions,
-                                toolCallId,
-                                functionCalling
-                            );
-                        } else {
-                            // Final iteration - send response directly
+                        if (nextStepListener == null) {
                             handleMaxIterationsReached(
                                 sessionId,
                                 listener,
@@ -429,20 +408,31 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                 maxIterations,
                                 tools
                             );
+                            return;
                         }
+
+                        Map<String, String> toolParams = constructToolParams(
+                            tools,
+                            toolSpecMap,
+                            question,
+                            lastActionInput,
+                            action,
+                            actionInput
+                        );
+                        runTool(
+                            tools,
+                            toolSpecMap,
+                            tmpParameters,
+                            (ActionListener<Object>) nextStepListener,
+                            action,
+                            actionInput,
+                            toolParams,
+                            interactions,
+                            toolCallId,
+                            functionCalling
+                        );
                     } else {
-                        if (nextStepListener != null) {
-                            String res = String.format(Locale.ROOT, "Failed to run the tool %s which is unsupported.", action);
-                            StringSubstitutor substitutor = new StringSubstitutor(
-                                Map.of(SCRATCHPAD, scratchpadBuilder.toString()),
-                                "${parameters.",
-                                "}"
-                            );
-                            newPrompt.set(substitutor.replace(finalPrompt));
-                            tmpParameters.put(PROMPT, newPrompt.get());
-                            ((ActionListener<Object>) nextStepListener).onResponse(res);
-                        } else {
-                            // Final iteration - send response directly
+                        if (nextStepListener == null) {
                             handleMaxIterationsReached(
                                 sessionId,
                                 listener,
@@ -458,7 +448,18 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                 maxIterations,
                                 tools
                             );
+                            return;
                         }
+
+                        String res = String.format(Locale.ROOT, "Failed to run the tool %s which is unsupported.", action);
+                        StringSubstitutor substitutor = new StringSubstitutor(
+                            Map.of(SCRATCHPAD, scratchpadBuilder.toString()),
+                            "${parameters.",
+                            "}"
+                        );
+                        newPrompt.set(substitutor.replace(finalPrompt));
+                        tmpParameters.put(PROMPT, newPrompt.get());
+                        ((ActionListener<Object>) nextStepListener).onResponse(res);
                     }
                 } else {
                     addToolOutputToAddtionalInfo(toolSpecMap, lastAction, additionalInfo, output);
@@ -487,7 +488,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     StringSubstitutor substitutor = new StringSubstitutor(Map.of(SCRATCHPAD, scratchpadBuilder), "${parameters.", "}");
                     newPrompt.set(substitutor.replace(finalPrompt));
                     tmpParameters.put(PROMPT, newPrompt.get());
-                    if (interactions.size() > 0) {
+                    if (!interactions.isEmpty()) {
                         tmpParameters.put(INTERACTIONS, ", " + String.join(", ", interactions));
                     }
 
@@ -521,19 +522,20 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             maxIterations,
                             tools
                         );
-                    } else {
-                        ActionRequest request = new MLPredictionTaskRequest(
-                            llm.getModelId(),
-                            RemoteInferenceMLInput
-                                .builder()
-                                .algorithm(FunctionName.REMOTE)
-                                .inputDataset(RemoteInferenceInputDataSet.builder().parameters(tmpParameters).build())
-                                .build(),
-                            null,
-                            tenantId
-                        );
-                        client.execute(MLPredictionTaskAction.INSTANCE, request, (ActionListener<MLTaskResponse>) nextStepListener);
+                        return;
                     }
+
+                    ActionRequest request = new MLPredictionTaskRequest(
+                        llm.getModelId(),
+                        RemoteInferenceMLInput
+                            .builder()
+                            .algorithm(FunctionName.REMOTE)
+                            .inputDataset(RemoteInferenceInputDataSet.builder().parameters(tmpParameters).build())
+                            .build(),
+                        null,
+                        tenantId
+                    );
+                    client.execute(MLPredictionTaskAction.INSTANCE, request, (ActionListener<MLTaskResponse>) nextStepListener);
                 }
             }, e -> {
                 log.error("Failed to run chat agent", e);
@@ -873,8 +875,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
         Map<String, Tool> tools
     ) {
         String incompleteResponse = (lastThought.get() != null && !lastThought.get().isEmpty() && !"null".equals(lastThought.get()))
-            ? lastThought.get()
-            : "Agent reached maximum iterations (" + maxIterations + ") without completing the task.";
+            ? String.format("%s. Last thought: %s", String.format(MAX_ITERATIONS_MESSAGE, maxIterations), lastThought.get())
+            : String.format(MAX_ITERATIONS_MESSAGE, maxIterations);
         sendFinalAnswer(
             sessionId,
             listener,
