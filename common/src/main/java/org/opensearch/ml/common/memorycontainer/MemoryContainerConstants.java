@@ -81,4 +81,10 @@ public class MemoryContainerConstants {
         "Maximum recent messages cannot exceed 100 when semantic storage is disabled";
     public static final String MAX_INFER_SIZE_LIMIT_ERROR = "Maximum infer size cannot exceed 10";
     public static final String FIELD_NOT_ALLOWED_SEMANTIC_DISABLED_ERROR = "Field %s is not allowed when semantic storage is disabled";
+
+    // Model validation error messages
+    public static final String LLM_MODEL_NOT_FOUND_ERROR = "LLM model with ID %s not found";
+    public static final String LLM_MODEL_NOT_REMOTE_ERROR = "LLM model must be a REMOTE model, found: %s";
+    public static final String EMBEDDING_MODEL_NOT_FOUND_ERROR = "Embedding model with ID %s not found";
+    public static final String EMBEDDING_MODEL_TYPE_MISMATCH_ERROR = "Embedding model must be of type %s or REMOTE, found: %s";
 }
