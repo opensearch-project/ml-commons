@@ -196,6 +196,11 @@ public class MLChatAgentRunner implements MLAgentRunner {
             functionCalling.configure(params);
         }
 
+        if (mlAgent.getMemory() == null || memoryFactoryMap == null || memoryFactoryMap.isEmpty()) {
+            runAgent(mlAgent, params, listener, null, null, functionCalling);
+            return;
+        }
+
         String memoryType = MLMemoryType.from(mlAgent.getMemory().getType()).name();
         String memoryId = params.get(MLAgentExecutor.MEMORY_ID);
         String appType = mlAgent.getAppType();
@@ -421,7 +426,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
                     saveTraceData(
                         memory,
-                        memory.getType(),
+                        memory != null ? memory.getType() : "ReAct",
                         question,
                         thoughtResponse,
                         sessionId,
@@ -842,20 +847,18 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
     public static List<ModelTensors> createModelTensors(String sessionId, String parentInteractionId) {
         List<ModelTensors> cotModelTensors = new ArrayList<>();
-
-        cotModelTensors
-            .add(
-                ModelTensors
-                    .builder()
-                    .mlModelTensors(
-                        List
-                            .of(
-                                ModelTensor.builder().name(MLAgentExecutor.MEMORY_ID).result(sessionId).build(),
-                                ModelTensor.builder().name(MLAgentExecutor.PARENT_INTERACTION_ID).result(parentInteractionId).build()
-                            )
-                    )
-                    .build()
-            );
+        List<ModelTensor> tensors = new ArrayList<>();
+        
+        if (sessionId != null) {
+            tensors.add(ModelTensor.builder().name(MLAgentExecutor.MEMORY_ID).result(sessionId).build());
+        }
+        if (parentInteractionId != null) {
+            tensors.add(ModelTensor.builder().name(MLAgentExecutor.PARENT_INTERACTION_ID).result(parentInteractionId).build());
+        }
+        
+        if (!tensors.isEmpty()) {
+            cotModelTensors.add(ModelTensors.builder().mlModelTensors(tensors).build());
+        }
         return cotModelTensors;
     }
 
@@ -1013,18 +1016,22 @@ public class MLChatAgentRunner implements MLAgentRunner {
         boolean traceDisabled,
         ActionListener listener
     ) {
-        ConversationIndexMessage msgTemp = ConversationIndexMessage
-            .conversationIndexMessageBuilder()
-            .type(memory.getType())
-            .question(question)
-            .response(finalAnswer)
-            .finalAnswer(isFinalAnswer)
-            .sessionId(sessionId)
-            .build();
-        if (traceDisabled) {
-            listener.onResponse(true);
+        if (memory != null) {
+            ConversationIndexMessage msgTemp = ConversationIndexMessage
+                .conversationIndexMessageBuilder()
+                .type(memory.getType())
+                .question(question)
+                .response(finalAnswer)
+                .finalAnswer(isFinalAnswer)
+                .sessionId(sessionId)
+                .build();
+            if (traceDisabled) {
+                listener.onResponse(true);
+            } else {
+                memory.save(msgTemp, parentInteractionId, traceNumber.addAndGet(1), "LLM", listener);
+            }
         } else {
-            memory.save(msgTemp, parentInteractionId, traceNumber.addAndGet(1), "LLM", listener);
+            listener.onResponse(true);
         }
     }
 
