@@ -275,7 +275,6 @@ public class MLAgentUpdateInput implements ToXContentObject, Writeable {
                     parameters = parser.mapStrings();
                     break;
                 case MEMORY_FIELD:
-                    // Parse memory object into separate fields
                     ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
                     while (parser.nextToken() != XContentParser.Token.END_OBJECT) {
                         String memoryFieldName = parser.currentName();
