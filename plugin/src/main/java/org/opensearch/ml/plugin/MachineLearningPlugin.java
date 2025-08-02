@@ -238,6 +238,7 @@ import org.opensearch.ml.engine.tools.IndexMappingTool;
 import org.opensearch.ml.engine.tools.ListIndexTool;
 import org.opensearch.ml.engine.tools.MLModelTool;
 import org.opensearch.ml.engine.tools.McpSseTool;
+import org.opensearch.ml.engine.tools.QueryPlanningTool;
 import org.opensearch.ml.engine.tools.SearchIndexTool;
 import org.opensearch.ml.engine.tools.VisualizationsTool;
 import org.opensearch.ml.engine.utils.AgentModelsSearcher;
@@ -720,6 +721,7 @@ public class MachineLearningPlugin extends Plugin
         SearchIndexTool.Factory.getInstance().init(client, xContentRegistry);
         VisualizationsTool.Factory.getInstance().init(client);
         ConnectorTool.Factory.getInstance().init(client);
+        QueryPlanningTool.Factory.getInstance().init(client);
 
         toolFactories.put(MLModelTool.TYPE, MLModelTool.Factory.getInstance());
         toolFactories.put(McpSseTool.TYPE, McpSseTool.Factory.getInstance());
@@ -729,7 +731,7 @@ public class MachineLearningPlugin extends Plugin
         toolFactories.put(SearchIndexTool.TYPE, SearchIndexTool.Factory.getInstance());
         toolFactories.put(VisualizationsTool.TYPE, VisualizationsTool.Factory.getInstance());
         toolFactories.put(ConnectorTool.TYPE, ConnectorTool.Factory.getInstance());
-
+        toolFactories.put(QueryPlanningTool.TYPE, QueryPlanningTool.Factory.getInstance());
         if (externalToolFactories != null) {
             toolFactories.putAll(externalToolFactories);
         }
@@ -1158,7 +1160,8 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED,
                 MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED,
                 MLCommonsSettings.ML_COMMONS_METRIC_COLLECTION_ENABLED,
-                MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED
+                MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED,
+                MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_ENABLED
             );
         return settings;
     }
