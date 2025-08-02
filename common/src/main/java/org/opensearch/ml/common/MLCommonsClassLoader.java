@@ -28,6 +28,8 @@ import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.MLOutputType;
 import org.reflections.Reflections;
 
+import com.fasterxml.jackson.core.JsonParseException;
+
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
@@ -255,16 +257,18 @@ public class MLCommonsClassLoader {
         return mlInputClassMap.containsKey(functionName);
     }
 
-    public static <S> S initConnector(String name, Object[] initArgs, Class<?>... constructorParameterTypes) {
+    public static <S> S initConnector(String name, Object[] initArgs, Class<?>... constructorParameterTypes) throws JsonParseException {
         return init(connectorClassMap, name, initArgs, constructorParameterTypes);
     }
 
     @SuppressWarnings("unchecked")
-    public static <T extends Enum<T>, S> S initMLInput(T type, Object[] initArgs, Class<?>... constructorParameterTypes) {
+    public static <T extends Enum<T>, S> S initMLInput(T type, Object[] initArgs, Class<?>... constructorParameterTypes)
+        throws JsonParseException {
         return init(mlInputClassMap, type, initArgs, constructorParameterTypes);
     }
 
-    private static <T, S> S init(Map<T, Class<?>> map, T type, Object[] initArgs, Class<?>... constructorParameterTypes) {
+    private static <T, S> S init(Map<T, Class<?>> map, T type, Object[] initArgs, Class<?>... constructorParameterTypes)
+        throws JsonParseException {
         Class<?> clazz = map.get(type);
         if (clazz == null) {
             throw new IllegalArgumentException("Can't find class for type " + type);
@@ -278,6 +282,8 @@ public class MLCommonsClassLoader {
                 throw (MLException) cause;
             } else if (cause instanceof IllegalArgumentException) {
                 throw (IllegalArgumentException) cause;
+            } else if (cause instanceof JsonParseException) {
+                throw (JsonParseException) cause;
             } else {
                 log.error("Failed to init instance for type " + type, e);
                 return null;
