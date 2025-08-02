@@ -63,7 +63,7 @@ public class MLModelGroupTest {
             .assertEquals(
                 "{\"name\":\"test\",\"latest_version\":1,\"description\":\"this is test group\","
                     + "\"backend_roles\":[\"role1\",\"role2\"],"
-                    + "\"owner\":{\"name\":\"\",\"backend_roles\":[],\"roles\":[],\"custom_attribute_names\":[],\"user_requested_tenant\":null},"
+                    + "\"owner\":{\"name\":\"\",\"backend_roles\":[],\"roles\":[],\"custom_attribute_names\":[],\"user_requested_tenant\":null,\"user_requested_tenant_access\":null},"
                     + "\"access\":\"PUBLIC\"}",
                 content
             );
@@ -166,7 +166,7 @@ public class MLModelGroupTest {
             .assertEquals(
                 "{\"name\":\"test\",\"latest_version\":1,\"description\":\"this is test group\","
                     + "\"backend_roles\":[\"role1\",\"role2\"],"
-                    + "\"owner\":{\"name\":\"\",\"backend_roles\":[],\"roles\":[],\"custom_attribute_names\":[],\"user_requested_tenant\":null},"
+                    + "\"owner\":{\"name\":\"\",\"backend_roles\":[],\"roles\":[],\"custom_attribute_names\":[],\"user_requested_tenant\":null,\"user_requested_tenant_access\":null},"
                     + "\"access\":\"PUBLIC\",\"tenant_id\":\"test_tenant\"}",
                 content
             );
@@ -176,7 +176,7 @@ public class MLModelGroupTest {
     public void parse_WithTenantId() throws IOException {
         String jsonStr = "{\"name\":\"test\",\"latest_version\":1,\"description\":\"this is test group\","
             + "\"backend_roles\":[\"role1\",\"role2\"],"
-            + "\"owner\":{\"name\":\"\",\"backend_roles\":[],\"roles\":[],\"custom_attribute_names\":[],\"user_requested_tenant\":null},"
+            + "\"owner\":{\"name\":\"\",\"backend_roles\":[],\"roles\":[],\"custom_attribute_names\":[],\"user_requested_tenant\":null,\"user_requested_tenant_access\":null},"
             + "\"access\":\"PUBLIC\",\"tenant_id\":\"test_tenant\"}";
 
         XContentParser parser = XContentType.JSON

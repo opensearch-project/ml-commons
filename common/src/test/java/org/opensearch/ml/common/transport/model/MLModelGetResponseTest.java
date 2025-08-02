@@ -67,7 +67,7 @@ public class MLModelGetResponseTest {
                 + "\"algorithm\":\"KMEANS\","
                 + "\"model_version\":\"1.0.0\","
                 + "\"model_content\":\"content\","
-                + "\"user\":{\"name\":\"\",\"backend_roles\":[],\"roles\":[],\"custom_attribute_names\":[],\"user_requested_tenant\":null},\"model_state\":\"TRAINED\"}",
+                + "\"user\":{\"name\":\"\",\"backend_roles\":[],\"roles\":[],\"custom_attribute_names\":[],\"user_requested_tenant\":null,\"user_requested_tenant_access\":null},\"model_state\":\"TRAINED\"}",
             jsonStr
         );
     }
