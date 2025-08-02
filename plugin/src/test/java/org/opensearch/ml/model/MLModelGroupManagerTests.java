@@ -112,6 +112,7 @@ public class MLModelGroupManagerTests extends OpenSearchTestCase {
         mlModelGroupManager = new MLModelGroupManager(
             mlIndicesHandler,
             client,
+            settings,
             sdkClient,
             clusterService,
             modelAccessControlHelper,

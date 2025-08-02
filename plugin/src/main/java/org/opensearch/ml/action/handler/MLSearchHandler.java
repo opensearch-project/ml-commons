@@ -20,6 +20,7 @@ import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.search.SearchResponse;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
@@ -70,7 +71,8 @@ public class MLSearchHandler {
         Client client,
         NamedXContentRegistry xContentRegistry,
         ModelAccessControlHelper modelAccessControlHelper,
-        ClusterService clusterService
+        ClusterService clusterService,
+        Settings settings
     ) {
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.client = client;

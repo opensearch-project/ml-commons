@@ -23,6 +23,7 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.commons.authuser.User;
@@ -43,6 +44,7 @@ import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupRequest;
 import org.opensearch.ml.common.transport.model_group.MLUpdateModelGroupResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
+import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
@@ -51,6 +53,7 @@ import org.opensearch.remote.metadata.client.UpdateDataObjectRequest;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -66,35 +69,41 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
     private final ActionFilters actionFilters;
     private Client client;
     final SdkClient sdkClient;
+    final Settings settings;
     private NamedXContentRegistry xContentRegistry;
     ClusterService clusterService;
 
     ModelAccessControlHelper modelAccessControlHelper;
     MLModelGroupManager mlModelGroupManager;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private final ResourceSharingClient resourceSharingClient;
 
     @Inject
     public TransportUpdateModelGroupAction(
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
+        Settings settings,
         SdkClient sdkClient,
         NamedXContentRegistry xContentRegistry,
         ClusterService clusterService,
         ModelAccessControlHelper modelAccessControlHelper,
         MLModelGroupManager mlModelGroupManager,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        MLResourceSharingExtension mlResourceSharingExtension
     ) {
         super(MLUpdateModelGroupAction.NAME, transportService, actionFilters, MLUpdateModelGroupRequest::new);
         this.actionFilters = actionFilters;
         this.transportService = transportService;
         this.client = client;
+        this.settings = settings;
         this.sdkClient = sdkClient;
         this.xContentRegistry = xContentRegistry;
         this.clusterService = clusterService;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlModelGroupManager = mlModelGroupManager;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+        this.resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
     }
 
     @Override
@@ -146,12 +155,23 @@ public class TransportUpdateModelGroupAction extends HandledTransportAction<Acti
                                         mlModelGroup.getTenantId(),
                                         wrappedListener
                                     )) {
-                                    if (modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(user)) {
-                                        validateRequestForAccessControl(updateModelGroupInput, user, mlModelGroup);
-                                    } else {
-                                        validateSecurityDisabledOrModelAccessControlDisabled(updateModelGroupInput);
+                                    // NOTE all sharing and revoking must happen through share API exposed by security plugin
+                                    // client == null -> feature is disabled, follow old route
+                                    if (resourceSharingClient == null) {
+                                        // TODO: At some point, this call must be replaced by the one above, (i.e. no user info to
+                                        // be stored in model-group index)
+                                        if (modelAccessControlHelper.isSecurityEnabledAndModelAccessControlEnabled(user)) {
+                                            validateRequestForAccessControl(updateModelGroupInput, user, mlModelGroup);
+                                        } else {
+                                            validateSecurityDisabledOrModelAccessControlDisabled(updateModelGroupInput);
+                                        }
+
                                     }
+                                    // For backwards compatibility we still allow storing backend_roles
+                                    // data in ml_model_group
+                                    // index
                                     updateModelGroup(modelGroupId, r.source(), updateModelGroupInput, wrappedListener, user);
+
                                 }
                             } catch (Exception e) {
                                 log.error("Failed to parse ml connector {}", r.id(), e);

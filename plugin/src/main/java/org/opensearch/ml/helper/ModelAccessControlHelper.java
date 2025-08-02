@@ -17,6 +17,7 @@ import java.util.Optional;
 
 import org.apache.lucene.search.join.ScoreMode;
 import org.opensearch.ExceptionsHelper;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.get.GetResponse;
 import org.opensearch.cluster.service.ClusterService;
@@ -26,6 +27,7 @@ import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.util.CollectionUtils;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
@@ -52,6 +54,7 @@ import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.transport.client.Client;
 
 import com.google.common.collect.ImmutableList;
@@ -83,8 +86,35 @@ public class ModelAccessControlHelper {
         );
 
     // TODO Eventually remove this when all usages of it have been migrated to the SdkClient version
-    public void validateModelGroupAccess(User user, String modelGroupId, Client client, ActionListener<Boolean> listener) {
-        if (modelGroupId == null || isAdmin(user) || !isSecurityEnabledAndModelAccessControlEnabled(user)) {
+    public void validateModelGroupAccess(
+        User user,
+        String modelGroupId,
+        String action,
+        Client client,
+        ResourceSharingClient resourceSharingClient,
+        ActionListener<Boolean> listener
+    ) {
+        if (modelGroupId == null) {
+            listener.onResponse(true);
+            return;
+        }
+        if (resourceSharingClient != null) {
+            resourceSharingClient.verifyAccess(modelGroupId, ML_MODEL_GROUP_INDEX, action, ActionListener.wrap(isAuthorized -> {
+                if (!isAuthorized) {
+                    listener
+                        .onFailure(
+                            new OpenSearchStatusException(
+                                "User " + user.getName() + " is not authorized to delete ml-model-group id: " + modelGroupId,
+                                RestStatus.FORBIDDEN
+                            )
+                        );
+                    return;
+                }
+                listener.onResponse(true);
+            }, listener::onFailure));
+            return;
+        }
+        if (isAdmin(user) || !isSecurityEnabledAndModelAccessControlEnabled(user)) {
             listener.onResponse(true);
             return;
         }
@@ -128,13 +158,33 @@ public class ModelAccessControlHelper {
         MLFeatureEnabledSetting mlFeatureEnabledSetting,
         String tenantId,
         String modelGroupId,
+        String action,
         Client client,
         SdkClient sdkClient,
+        ResourceSharingClient resourceSharingClient,
         ActionListener<Boolean> listener
     ) {
-        if (modelGroupId == null
-            || (!mlFeatureEnabledSetting.isMultiTenancyEnabled()
-                && (isAdmin(user) || !isSecurityEnabledAndModelAccessControlEnabled(user)))) {
+        if (modelGroupId == null) {
+            listener.onResponse(true);
+            return;
+        }
+        if (resourceSharingClient != null) {
+            resourceSharingClient.verifyAccess(modelGroupId, ML_MODEL_GROUP_INDEX, action, ActionListener.wrap(isAuthorized -> {
+                if (!isAuthorized) {
+                    listener
+                        .onFailure(
+                            new OpenSearchStatusException(
+                                "User " + user.getName() + " is not authorized to delete ml-model-group id: " + modelGroupId,
+                                RestStatus.FORBIDDEN
+                            )
+                        );
+                    return;
+                }
+                listener.onResponse(true);
+            }, listener::onFailure));
+            return;
+        }
+        if (!mlFeatureEnabledSetting.isMultiTenancyEnabled() && (isAdmin(user) || !isSecurityEnabledAndModelAccessControlEnabled(user))) {
             listener.onResponse(true);
             return;
         }
@@ -311,7 +361,31 @@ public class ModelAccessControlHelper {
         return searchSourceBuilder;
     }
 
-    public SearchSourceBuilder createSearchSourceBuilder(User user) {
+    public SearchSourceBuilder createSearchSourceBuilder(User user, ResourceSharingClient resourceSharingClient) {
+        // TODO: Remove this feature flag check once feature is GA, as it will be enabled by default
+        if (resourceSharingClient != null) {
+            return addAccessibleModelGroupsFilter(resourceSharingClient, new SearchSourceBuilder());
+        }
         return addUserBackendRolesFilter(user, new SearchSourceBuilder());
+    }
+
+    public SearchSourceBuilder addAccessibleModelGroupsFilter(
+        ResourceSharingClient resourceSharingClient,
+        SearchSourceBuilder searchSourceBuilder
+    ) {
+
+        resourceSharingClient.getAccessibleResourceIds(ML_MODEL_GROUP_INDEX, ActionListener.wrap(modelGroupIds -> {
+            if (modelGroupIds.isEmpty()) {
+                // User has no access → return nothing
+                searchSourceBuilder.query(QueryBuilders.boolQuery().mustNot(QueryBuilders.matchAllQuery()));
+            } else {
+                // Restrict search strictly to these ids
+                searchSourceBuilder.query(QueryBuilders.termsQuery(MLModelGroup.MODEL_GROUP_ID_FIELD + ".keyword", modelGroupIds));
+            }
+        }, failure -> {
+            // do nothing to the source or return empty set?
+            searchSourceBuilder.query(QueryBuilders.boolQuery().mustNot(QueryBuilders.matchAllQuery()));
+        }));
+        return searchSourceBuilder;
     }
 }

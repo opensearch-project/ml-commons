@@ -23,7 +23,9 @@ import org.opensearch.ml.common.transport.upload_chunk.MLRegisterModelMetaRespon
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelGroupManager;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -39,6 +41,7 @@ public class TransportRegisterModelMetaAction extends HandledTransportAction<Act
     Client client;
     ModelAccessControlHelper modelAccessControlHelper;
     MLModelGroupManager mlModelGroupManager;
+    private final ResourceSharingClient resourceSharingClient;
 
     @Inject
     public TransportRegisterModelMetaAction(
@@ -47,7 +50,8 @@ public class TransportRegisterModelMetaAction extends HandledTransportAction<Act
         MLModelManager mlModelManager,
         Client client,
         ModelAccessControlHelper modelAccessControlHelper,
-        MLModelGroupManager mlModelGroupManager
+        MLModelGroupManager mlModelGroupManager,
+        MLResourceSharingExtension mlResourceSharingExtension
     ) {
         super(MLRegisterModelMetaAction.NAME, transportService, actionFilters, MLRegisterModelMetaRequest::new);
         this.transportService = transportService;
@@ -56,6 +60,7 @@ public class TransportRegisterModelMetaAction extends HandledTransportAction<Act
         this.client = client;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlModelGroupManager = mlModelGroupManager;
+        this.resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
     }
 
     @Override
@@ -92,30 +97,39 @@ public class TransportRegisterModelMetaAction extends HandledTransportAction<Act
     ) {
 
         User user = RestActionUtils.getUserContext(client);
-        modelAccessControlHelper.validateModelGroupAccess(user, mlUploadInput.getModelGroupId(), client, ActionListener.wrap(access -> {
-            if (access) {
-                createModelGroup(mlUploadInput, listener);
-                return;
-            }
-            if (isModelNameAlreadyExisting) {
-                listener
-                    .onFailure(
-                        new IllegalArgumentException(
-                            "The name {"
-                                + mlUploadInput.getName()
-                                + "} you provided is unavailable because it is used by another model group with id {"
-                                + mlUploadInput.getModelGroupId()
-                                + "} to which you do not have access. Please provide a different name."
-                        )
-                    );
-            } else {
-                log.error("You don't have permissions to perform this operation on this model.");
-                listener.onFailure(new IllegalArgumentException("You don't have permissions to perform this operation on this model."));
-            }
-        }, e -> {
-            logException("Failed to validate model access", e, log);
-            listener.onFailure(e);
-        }));
+        modelAccessControlHelper
+            .validateModelGroupAccess(
+                user,
+                mlUploadInput.getModelGroupId(),
+                MLRegisterModelMetaAction.NAME,
+                client,
+                resourceSharingClient,
+                ActionListener.wrap(access -> {
+                    if (access) {
+                        createModelGroup(mlUploadInput, listener);
+                        return;
+                    }
+                    if (isModelNameAlreadyExisting) {
+                        listener
+                            .onFailure(
+                                new IllegalArgumentException(
+                                    "The name {"
+                                        + mlUploadInput.getName()
+                                        + "} you provided is unavailable because it is used by another model group with id {"
+                                        + mlUploadInput.getModelGroupId()
+                                        + "} to which you do not have access. Please provide a different name."
+                                )
+                            );
+                    } else {
+                        log.error("You don't have permissions to perform this operation on this model.");
+                        listener
+                            .onFailure(new IllegalArgumentException("You don't have permissions to perform this operation on this model."));
+                    }
+                }, e -> {
+                    logException("Failed to validate model access", e, log);
+                    listener.onFailure(e);
+                })
+            );
     }
 
     private void createModelGroup(MLRegisterModelMetaInput mlUploadInput, ActionListener<MLRegisterModelMetaResponse> listener) {

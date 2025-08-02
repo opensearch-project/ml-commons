@@ -30,6 +30,7 @@ import org.opensearch.action.support.WriteRequest;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
+import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.commons.authuser.User;
@@ -52,7 +53,9 @@ import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.utils.RestActionUtils;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -66,11 +69,13 @@ import lombok.extern.log4j.Log4j2;
 public class CreateControllerTransportAction extends HandledTransportAction<ActionRequest, MLCreateControllerResponse> {
     MLIndicesHandler mlIndicesHandler;
     Client client;
+    Settings settings;
     MLModelManager mlModelManager;
     ClusterService clusterService;
     MLModelCacheHelper mlModelCacheHelper;
     ModelAccessControlHelper modelAccessControlHelper;
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private final ResourceSharingClient resourceSharingClient;
 
     @Inject
     public CreateControllerTransportAction(
@@ -78,20 +83,24 @@ public class CreateControllerTransportAction extends HandledTransportAction<Acti
         ActionFilters actionFilters,
         MLIndicesHandler mlIndicesHandler,
         Client client,
+        Settings settings,
         ClusterService clusterService,
         ModelAccessControlHelper modelAccessControlHelper,
         MLModelCacheHelper mlModelCacheHelper,
         MLModelManager mlModelManager,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        MLResourceSharingExtension mlResourceSharingExtension
     ) {
         super(MLCreateControllerAction.NAME, transportService, actionFilters, MLCreateControllerRequest::new);
         this.mlIndicesHandler = mlIndicesHandler;
         this.client = client;
+        this.settings = settings;
         this.mlModelManager = mlModelManager;
         this.clusterService = clusterService;
         this.mlModelCacheHelper = mlModelCacheHelper;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+        this.resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
     }
 
     @Override
@@ -112,35 +121,42 @@ public class CreateControllerTransportAction extends HandledTransportAction<Acti
                 Boolean isHidden = mlModel.getIsHidden();
                 if (functionName == TEXT_EMBEDDING || functionName == REMOTE) {
                     modelAccessControlHelper
-                        .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {
-                            if (hasPermission) {
-                                if (mlModel.getModelState() != MLModelState.DEPLOYING) {
-                                    indexAndCreateController(mlModel, controller, wrappedListener);
+                        .validateModelGroupAccess(
+                            user,
+                            mlModel.getModelGroupId(),
+                            MLCreateControllerAction.NAME,
+                            client,
+                            resourceSharingClient,
+                            ActionListener.wrap(hasPermission -> {
+                                if (hasPermission) {
+                                    if (mlModel.getModelState() != MLModelState.DEPLOYING) {
+                                        indexAndCreateController(mlModel, controller, wrappedListener);
+                                    } else {
+                                        String errorMessage =
+                                            "Creating a model controller during its corresponding model in DEPLOYING state is not allowed, please either create the model controller after it is deployed or before deploying it.";
+                                        errorMessage = getErrorMessage(errorMessage, modelId, isHidden);
+                                        log.error(errorMessage);
+                                        wrappedListener.onFailure(new OpenSearchStatusException(errorMessage, RestStatus.CONFLICT));
+                                    }
                                 } else {
-                                    String errorMessage =
-                                        "Creating a model controller during its corresponding model in DEPLOYING state is not allowed, please either create the model controller after it is deployed or before deploying it.";
+                                    String errorMessage = "User doesn't have privilege to perform this operation on this model controller.";
                                     errorMessage = getErrorMessage(errorMessage, modelId, isHidden);
                                     log.error(errorMessage);
-                                    wrappedListener.onFailure(new OpenSearchStatusException(errorMessage, RestStatus.CONFLICT));
+                                    wrappedListener.onFailure(new OpenSearchStatusException(errorMessage, RestStatus.FORBIDDEN));
                                 }
-                            } else {
-                                String errorMessage = "User doesn't have privilege to perform this operation on this model controller.";
-                                errorMessage = getErrorMessage(errorMessage, modelId, isHidden);
-                                log.error(errorMessage);
-                                wrappedListener.onFailure(new OpenSearchStatusException(errorMessage, RestStatus.FORBIDDEN));
-                            }
-                        }, exception -> {
-                            log
-                                .error(
-                                    getErrorMessage(
-                                        "Permission denied: Unable to create the model controller. Details: {}",
-                                        modelId,
-                                        isHidden
-                                    ),
-                                    exception
-                                );
-                            wrappedListener.onFailure(exception);
-                        }));
+                            }, exception -> {
+                                log
+                                    .error(
+                                        getErrorMessage(
+                                            "Permission denied: Unable to create the model controller. Details: {}",
+                                            modelId,
+                                            isHidden
+                                        ),
+                                        exception
+                                    );
+                                wrappedListener.onFailure(exception);
+                            })
+                        );
                 } else {
                     wrappedListener
                         .onFailure(

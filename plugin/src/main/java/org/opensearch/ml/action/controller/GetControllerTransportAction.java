@@ -34,8 +34,10 @@ import org.opensearch.ml.common.transport.controller.MLControllerGetRequest;
 import org.opensearch.ml.common.transport.controller.MLControllerGetResponse;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -53,6 +55,7 @@ public class GetControllerTransportAction extends HandledTransportAction<ActionR
     MLModelManager mlModelManager;
     ModelAccessControlHelper modelAccessControlHelper;
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private final ResourceSharingClient resourceSharingClient;
 
     @Inject
     public GetControllerTransportAction(
@@ -63,7 +66,8 @@ public class GetControllerTransportAction extends HandledTransportAction<ActionR
         ClusterService clusterService,
         MLModelManager mlModelManager,
         ModelAccessControlHelper modelAccessControlHelper,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        MLResourceSharingExtension mlResourceSharingExtension
     ) {
         super(MLControllerGetAction.NAME, transportService, actionFilters, MLControllerGetRequest::new);
         this.client = client;
@@ -72,6 +76,7 @@ public class GetControllerTransportAction extends HandledTransportAction<ActionR
         this.mlModelManager = mlModelManager;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+        this.resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
     }
 
     @Override
@@ -96,34 +101,41 @@ public class GetControllerTransportAction extends HandledTransportAction<ActionR
                         mlModelManager.getModel(modelId, null, excludes, ActionListener.wrap(mlModel -> {
                             Boolean isHidden = mlModel.getIsHidden();
                             modelAccessControlHelper
-                                .validateModelGroupAccess(user, mlModel.getModelGroupId(), client, ActionListener.wrap(hasPermission -> {
-                                    if (hasPermission) {
-                                        wrappedListener.onResponse(MLControllerGetResponse.builder().controller(controller).build());
-                                    } else {
-                                        wrappedListener
-                                            .onFailure(
-                                                new OpenSearchStatusException(
-                                                    getErrorMessage(
-                                                        "User doesn't have privilege to perform this operation on this model controller.",
-                                                        modelId,
-                                                        isHidden
-                                                    ),
-                                                    RestStatus.FORBIDDEN
-                                                )
+                                .validateModelGroupAccess(
+                                    user,
+                                    mlModel.getModelGroupId(),
+                                    MLControllerGetAction.NAME,
+                                    client,
+                                    resourceSharingClient,
+                                    ActionListener.wrap(hasPermission -> {
+                                        if (hasPermission) {
+                                            wrappedListener.onResponse(MLControllerGetResponse.builder().controller(controller).build());
+                                        } else {
+                                            wrappedListener
+                                                .onFailure(
+                                                    new OpenSearchStatusException(
+                                                        getErrorMessage(
+                                                            "User doesn't have privilege to perform this operation on this model controller.",
+                                                            modelId,
+                                                            isHidden
+                                                        ),
+                                                        RestStatus.FORBIDDEN
+                                                    )
+                                                );
+                                        }
+                                    }, exception -> {
+                                        log
+                                            .error(
+                                                getErrorMessage(
+                                                    "Permission denied: Unable to create the model controller for the given model.",
+                                                    modelId,
+                                                    isHidden
+                                                ),
+                                                exception
                                             );
-                                    }
-                                }, exception -> {
-                                    log
-                                        .error(
-                                            getErrorMessage(
-                                                "Permission denied: Unable to create the model controller for the given model.",
-                                                modelId,
-                                                isHidden
-                                            ),
-                                            exception
-                                        );
-                                    wrappedListener.onFailure(exception);
-                                }));
+                                        wrappedListener.onFailure(exception);
+                                    })
+                                );
                         },
                             e -> wrappedListener
                                 .onFailure(

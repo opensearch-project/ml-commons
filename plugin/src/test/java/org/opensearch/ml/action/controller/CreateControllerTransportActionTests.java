@@ -57,6 +57,7 @@ import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -108,6 +109,9 @@ public class CreateControllerTransportActionTests extends OpenSearchTestCase {
     @Mock
     MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
+    @Mock
+    MLResourceSharingExtension mlResourceSharingExtension;
+
     @Rule
     public ExpectedException exceptionRule = ExpectedException.none();
 
@@ -149,11 +153,13 @@ public class CreateControllerTransportActionTests extends OpenSearchTestCase {
                 actionFilters,
                 mlIndicesHandler,
                 client,
+                Settings.EMPTY,
                 clusterService,
                 modelAccessControlHelper,
                 mlModelCacheHelper,
                 mlModelManager,
-                mlFeatureEnabledSetting
+                mlFeatureEnabledSetting,
+                mlResourceSharingExtension
             )
         );
 
@@ -171,7 +177,7 @@ public class CreateControllerTransportActionTests extends OpenSearchTestCase {
             ActionListener<Boolean> listener = invocation.getArgument(3);
             listener.onResponse(true);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any());
 
         doAnswer(invocation -> {
             ActionListener<MLModel> listener = invocation.getArgument(3);
@@ -236,7 +242,7 @@ public class CreateControllerTransportActionTests extends OpenSearchTestCase {
             ActionListener<Boolean> listener = invocation.getArgument(3);
             listener.onResponse(false);
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any());
 
         createControllerTransportAction.doExecute(null, createControllerRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -253,7 +259,7 @@ public class CreateControllerTransportActionTests extends OpenSearchTestCase {
             ActionListener<Boolean> listener = invocation.getArgument(3);
             listener.onFailure(new RuntimeException("Exception occurred. Please check log for more details."));
             return null;
-        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any());
+        }).when(modelAccessControlHelper).validateModelGroupAccess(any(), any(), any(), any(), any(), any());
 
         createControllerTransportAction.doExecute(null, createControllerRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);

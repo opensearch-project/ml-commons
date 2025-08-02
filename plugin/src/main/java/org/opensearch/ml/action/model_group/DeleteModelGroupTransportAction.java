@@ -32,6 +32,7 @@ import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteAction;
 import org.opensearch.ml.common.transport.model_group.MLModelGroupDeleteRequest;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
+import org.opensearch.ml.resources.MLResourceSharingExtension;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.DeleteDataObjectRequest;
@@ -41,6 +42,7 @@ import org.opensearch.remote.metadata.client.SearchDataObjectRequest;
 import org.opensearch.remote.metadata.client.SearchDataObjectResponse;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.security.spi.resources.client.ResourceSharingClient;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -60,6 +62,7 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
 
     final ModelAccessControlHelper modelAccessControlHelper;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private final ResourceSharingClient resourceSharingClient;
 
     @Inject
     public DeleteModelGroupTransportAction(
@@ -70,7 +73,8 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
         NamedXContentRegistry xContentRegistry,
         ClusterService clusterService,
         ModelAccessControlHelper modelAccessControlHelper,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        MLResourceSharingExtension mlResourceSharingExtension
     ) {
         super(MLModelGroupDeleteAction.NAME, transportService, actionFilters, MLModelGroupDeleteRequest::new);
         this.client = client;
@@ -79,6 +83,7 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
         this.clusterService = clusterService;
         this.modelAccessControlHelper = modelAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+        this.resourceSharingClient = mlResourceSharingExtension.getResourceSharingClient();
     }
 
     @Override
@@ -93,7 +98,13 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
 
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
-            validateAndDeleteModelGroup(modelGroupId, tenantId, wrappedListener);
+
+            // if resource sharing feature is enabled, access will be automatically checked by security plugin, so no need to check again
+            if (resourceSharingClient != null) {
+                checkForAssociatedModels(modelGroupId, tenantId, wrappedListener);
+            } else {
+                validateAndDeleteModelGroup(modelGroupId, tenantId, wrappedListener);
+            }
         }
     }
 
@@ -105,8 +116,10 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
                 mlFeatureEnabledSetting,
                 tenantId,
                 modelGroupId,
+                MLModelGroupDeleteAction.NAME,
                 client,
                 sdkClient,
+                resourceSharingClient,
                 ActionListener
                     .wrap(
                         hasAccess -> handleAccessValidation(hasAccess, modelGroupId, tenantId, listener),
