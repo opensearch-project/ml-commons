@@ -18,6 +18,7 @@ import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.CommonValue;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
@@ -32,8 +33,10 @@ public class AgentMLInput extends MLInput {
     public static final String AGENT_ID_FIELD = "agent_id";
     public static final String PARAMETERS_FIELD = "parameters";
     public static final String ASYNC_FIELD = "isAsync";
+    public static final String AGENT_FIELD = "agent";
 
     public static final Version MINIMAL_SUPPORTED_VERSION_FOR_ASYNC_EXECUTION = CommonValue.VERSION_3_0_0;
+    public static final Version MINIMAL_SUPPORTED_VERSION_FOR_INLINE_AGENT = CommonValue.VERSION_3_2_0;
 
     @Getter
     @Setter
@@ -46,6 +49,10 @@ public class AgentMLInput extends MLInput {
     @Getter
     @Setter
     private Boolean isAsync;
+
+    @Getter
+    @Setter
+    private MLAgent mlAgent;
 
     @Builder(builderMethodName = "AgentMLInputBuilder")
     public AgentMLInput(String agentId, String tenantId, FunctionName functionName, MLInputDataset inputDataset) {
@@ -61,6 +68,23 @@ public class AgentMLInput extends MLInput {
         this.isAsync = isAsync;
     }
 
+    @Builder(builderMethodName = "AgentMLInputBuilder")
+    public AgentMLInput(
+        String agentId,
+        String tenantId,
+        FunctionName functionName,
+        MLInputDataset inputDataset,
+        Boolean isAsync,
+        MLAgent mlAgent
+    ) {
+        this.agentId = agentId;
+        this.tenantId = tenantId;
+        this.algorithm = functionName;
+        this.inputDataset = inputDataset;
+        this.isAsync = isAsync;
+        this.mlAgent = mlAgent;
+    }
+
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
@@ -72,6 +96,9 @@ public class AgentMLInput extends MLInput {
         if (streamOutputVersion.onOrAfter(AgentMLInput.MINIMAL_SUPPORTED_VERSION_FOR_ASYNC_EXECUTION)) {
             out.writeOptionalBoolean(isAsync);
         }
+        if (streamOutputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_INLINE_AGENT)) {
+            mlAgent.writeTo(out);
+        }
     }
 
     public AgentMLInput(StreamInput in) throws IOException {
@@ -81,6 +108,9 @@ public class AgentMLInput extends MLInput {
         this.tenantId = streamInputVersion.onOrAfter(VERSION_2_19_0) ? in.readOptionalString() : null;
         if (streamInputVersion.onOrAfter(AgentMLInput.MINIMAL_SUPPORTED_VERSION_FOR_ASYNC_EXECUTION)) {
             this.isAsync = in.readOptionalBoolean();
+        }
+        if (streamInputVersion.onOrAfter(MINIMAL_SUPPORTED_VERSION_FOR_INLINE_AGENT)) {
+            this.mlAgent = new MLAgent(in);
         }
     }
 
@@ -105,6 +135,9 @@ public class AgentMLInput extends MLInput {
                     break;
                 case ASYNC_FIELD:
                     isAsync = parser.booleanValue();
+                    break;
+                case AGENT_FIELD:
+                    mlAgent = MLAgent.parse(parser);
                     break;
                 default:
                     parser.skipChildren();

@@ -67,7 +67,8 @@ public class RestMLExecuteAction extends BaseRestHandler {
         return ImmutableList
             .of(
                 new Route(RestRequest.Method.POST, String.format(Locale.ROOT, "%s/_execute/{%s}", ML_BASE_URI, PARAMETER_ALGORITHM)),
-                new Route(RestRequest.Method.POST, String.format(Locale.ROOT, "%s/agents/{%s}/_execute", ML_BASE_URI, PARAMETER_AGENT_ID))
+                new Route(RestRequest.Method.POST, String.format(Locale.ROOT, "%s/agents/{%s}/_execute", ML_BASE_URI, PARAMETER_AGENT_ID)),
+                new Route(RestRequest.Method.POST, String.format(Locale.ROOT, "%s/agents/_execute", ML_BASE_URI))
             );
     }
 
