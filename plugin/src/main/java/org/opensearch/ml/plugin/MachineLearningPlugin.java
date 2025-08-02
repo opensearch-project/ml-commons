@@ -221,6 +221,7 @@ import org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor;
 import org.opensearch.ml.engine.algorithms.anomalylocalization.AnomalyLocalizerImpl;
 import org.opensearch.ml.engine.algorithms.metrics_correlation.MetricsCorrelation;
 import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
+import org.opensearch.ml.engine.algorithms.tool.MLToolExecutor;
 import org.opensearch.ml.engine.analysis.DJLUtils;
 import org.opensearch.ml.engine.analysis.HFModelAnalyzer;
 import org.opensearch.ml.engine.analysis.HFModelAnalyzerProvider;
@@ -763,6 +764,19 @@ public class MachineLearningPlugin extends Plugin
 
         MetricsCorrelation metricsCorrelation = new MetricsCorrelation(client, settings, clusterService);
         MLEngineClassLoader.register(FunctionName.METRICS_CORRELATION, metricsCorrelation);
+
+        MLToolExecutor toolExecutor = new MLToolExecutor(
+            client,
+            sdkClient,
+            settings,
+            clusterService,
+            xContentRegistry,
+            toolFactories,
+            memoryFactoryMap,
+            encryptor
+        );
+        MLEngineClassLoader.register(FunctionName.TOOL, toolExecutor);
+
         MLSearchHandler mlSearchHandler = new MLSearchHandler(client, xContentRegistry, modelAccessControlHelper, clusterService);
         MLModelAutoReDeployer mlModelAutoRedeployer = new MLModelAutoReDeployer(
             clusterService,
@@ -1158,7 +1172,8 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED,
                 MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED,
                 MLCommonsSettings.ML_COMMONS_METRIC_COLLECTION_ENABLED,
-                MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED
+                MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED,
+                MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_ENABLED
             );
         return settings;
     }

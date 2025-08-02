@@ -31,7 +31,8 @@ public enum FunctionName {
     TEXT_SIMILARITY,
     QUESTION_ANSWERING,
     AGENT,
-    CONNECTOR;
+    CONNECTOR,
+    TOOL;
 
     public static FunctionName from(String value) {
         try {
