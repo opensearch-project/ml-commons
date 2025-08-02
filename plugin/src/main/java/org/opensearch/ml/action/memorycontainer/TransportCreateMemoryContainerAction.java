@@ -8,6 +8,8 @@ package org.opensearch.ml.action.memorycontainer;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.AGENT_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREATED_TIME_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.EMBEDDING_MODEL_NOT_FOUND_ERROR;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.EMBEDDING_MODEL_TYPE_MISMATCH_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_EF_CONSTRUCTION;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_EF_SEARCH;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_ENGINE;
@@ -16,6 +18,8 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_METHOD_NAME;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_SPACE_TYPE;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LAST_UPDATED_TIME_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_MODEL_NOT_FOUND_ERROR;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_MODEL_NOT_REMOTE_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_EMBEDDING_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_TYPE_FIELD;
@@ -42,6 +46,7 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLIndex;
+import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
@@ -51,6 +56,7 @@ import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContaine
 import org.opensearch.ml.common.transport.memorycontainer.MLCreateMemoryContainerResponse;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
+import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.PutDataObjectRequest;
@@ -75,6 +81,7 @@ public class TransportCreateMemoryContainerAction extends
     private final ClusterService clusterService;
     private final ConnectorAccessControlHelper connectorAccessControlHelper;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
+    private final MLModelManager mlModelManager;
 
     @Inject
     public TransportCreateMemoryContainerAction(
@@ -85,7 +92,8 @@ public class TransportCreateMemoryContainerAction extends
         ClusterService clusterService,
         MLIndicesHandler mlIndicesHandler,
         ConnectorAccessControlHelper connectorAccessControlHelper,
-        MLFeatureEnabledSetting mlFeatureEnabledSetting
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
+        MLModelManager mlModelManager
     ) {
         super(MLCreateMemoryContainerAction.NAME, transportService, actionFilters, MLCreateMemoryContainerRequest::new);
         this.client = client;
@@ -94,6 +102,7 @@ public class TransportCreateMemoryContainerAction extends
         this.mlIndicesHandler = mlIndicesHandler;
         this.connectorAccessControlHelper = connectorAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
+        this.mlModelManager = mlModelManager;
     }
 
     @Override
@@ -353,4 +362,69 @@ public class TransportCreateMemoryContainerAction extends
         }
     }
 
+    private void validateModels(MemoryStorageConfig config, ActionListener<Boolean> listener) {
+        if (config == null || !config.isSemanticStorageEnabled()) {
+            listener.onResponse(true);
+            return;
+        }
+
+        // Validate LLM model first
+        if (config.getLlmModelId() != null) {
+            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                ActionListener<MLModel> wrappedListener = ActionListener.runBefore(ActionListener.wrap(llmModel -> {
+                    if (llmModel.getAlgorithm() != FunctionName.REMOTE) {
+                        listener
+                            .onFailure(new IllegalArgumentException(String.format(LLM_MODEL_NOT_REMOTE_ERROR, llmModel.getAlgorithm())));
+                        return;
+                    }
+                    // LLM model is valid, now validate embedding model
+                    validateEmbeddingModel(config, listener);
+                }, e -> {
+                    log.error("Failed to get LLM model: " + config.getLlmModelId(), e);
+                    listener.onFailure(new IllegalArgumentException(String.format(LLM_MODEL_NOT_FOUND_ERROR, config.getLlmModelId())));
+                }), context::restore);
+
+                mlModelManager.getModel(config.getLlmModelId(), wrappedListener);
+            }
+        } else {
+            // No LLM model specified, just validate embedding model
+            validateEmbeddingModel(config, listener);
+        }
+    }
+
+    private void validateEmbeddingModel(MemoryStorageConfig config, ActionListener<Boolean> listener) {
+        if (config.getEmbeddingModelId() != null) {
+            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+                ActionListener<MLModel> wrappedListener = ActionListener.runBefore(ActionListener.wrap(embeddingModel -> {
+                    FunctionName modelAlgorithm = embeddingModel.getAlgorithm();
+                    FunctionName expectedType = config.getEmbeddingModelType();
+
+                    // Model must be either the expected type or REMOTE
+                    if (modelAlgorithm != expectedType && modelAlgorithm != FunctionName.REMOTE) {
+                        listener
+                            .onFailure(
+                                new IllegalArgumentException(
+                                    String.format(EMBEDDING_MODEL_TYPE_MISMATCH_ERROR, expectedType, modelAlgorithm)
+                                )
+                            );
+                        return;
+                    }
+
+                    // Both models are valid
+                    listener.onResponse(true);
+                }, e -> {
+                    log.error("Failed to get embedding model: " + config.getEmbeddingModelId(), e);
+                    listener
+                        .onFailure(
+                            new IllegalArgumentException(String.format(EMBEDDING_MODEL_NOT_FOUND_ERROR, config.getEmbeddingModelId()))
+                        );
+                }), context::restore);
+
+                mlModelManager.getModel(config.getEmbeddingModelId(), wrappedListener);
+            }
+        } else {
+            // No embedding model specified, validation passes
+            listener.onResponse(true);
+        }
+    }
 }
