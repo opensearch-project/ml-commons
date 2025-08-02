@@ -932,7 +932,14 @@ public class AgentUtils {
                 toolParams.putAll(params);
             }
         } else {
-            toolParams.put("input", actionInput);
+            if (toolParams.containsKey("input")) {
+                String input = toolParams.get("input");
+                StringSubstitutor substitutor = new StringSubstitutor(toolParams, "${parameters.", "}");
+                input = substitutor.replace(input);
+                toolParams.put("input", input);
+            } else {
+                toolParams.put("input", actionInput);
+            }
         }
         return toolParams;
     }
