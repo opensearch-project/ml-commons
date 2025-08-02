@@ -46,27 +46,31 @@ public class MLAgentUpdateInputTest {
     @Before
     public void setUp() throws Exception {
 
-        LLMSpec llmSpec = LLMSpec.builder().modelId("test-model-id").parameters(Map.of("max_iteration", "5")).build();
         MLToolSpec toolSpec = MLToolSpec
             .builder()
             .name("test-tool")
             .type("MLModelTool")
             .parameters(Map.of("model_id", "test-model-id"))
             .build();
-        MLMemorySpec memorySpec = MLMemorySpec.builder().type("conversation_index").build();
 
         Map<String, String> parameters = new HashMap<>();
         parameters.put("_llm_interface", "test");
+
+        Map<String, String> llmParameters = new HashMap<>();
+        llmParameters.put("max_iteration", "5");
 
         updateAgentInput = MLAgentUpdateInput
             .builder()
             .agentId("test-agent-id")
             .name("test-agent")
             .description("test description")
-            .llm(llmSpec)
+            .llmModelId("test-model-id")
+            .llmParameters(llmParameters)
             .tools(Collections.singletonList(toolSpec))
             .parameters(parameters)
-            .memory(memorySpec)
+            .memoryType("conversation_index")
+            .memorySessionId("test-session")
+            .memoryWindowSize(10)
             .appType("rag")
             .lastUpdateTime(Instant.ofEpochMilli(1))
             .build();
@@ -88,8 +92,7 @@ public class MLAgentUpdateInputTest {
     @Test
     public void testValidationWithInvalidMemoryType() {
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> {
-            MLMemorySpec invalidMemorySpec = MLMemorySpec.builder().type("invalid_type").build();
-            MLAgentUpdateInput.builder().agentId("test-agent-id").name("test-agent").memory(invalidMemorySpec).build();
+            MLAgentUpdateInput.builder().agentId("test-agent-id").name("test-agent").memoryType("invalid_type").build();
         });
         assertEquals("Invalid memory type: invalid_type", e.getMessage());
     }
@@ -192,7 +195,9 @@ public class MLAgentUpdateInputTest {
                 "chat_history": "test"
               },
               "memory": {
-                "type": "conversation_index"
+                "type": "conversation_index",
+                "session_id": "test-session",
+                "window_size": 5
               },
               "app_type": "rag"
             }
@@ -200,11 +205,14 @@ public class MLAgentUpdateInputTest {
         testParseFromJsonString(inputStr, parsedInput -> {
             assertEquals("test-agent", parsedInput.getName());
             assertEquals("test description", parsedInput.getDescription());
-            assertEquals("test-model-id", parsedInput.getLlm().getModelId());
+            assertEquals("test-model-id", parsedInput.getLlmModelId());
+            assertEquals("5", parsedInput.getLlmParameters().get("max_iteration"));
             assertEquals(1, parsedInput.getTools().size());
             assertEquals("test-tool", parsedInput.getTools().getFirst().getName());
             assertEquals("test", parsedInput.getParameters().get("chat_history"));
-            assertEquals("conversation_index", parsedInput.getMemory().getType());
+            assertEquals("conversation_index", parsedInput.getMemoryType());
+            assertEquals("test-session", parsedInput.getMemorySessionId());
+            assertEquals(Integer.valueOf(5), parsedInput.getMemoryWindowSize());
             assertEquals("rag", parsedInput.getAppType());
         });
     }
@@ -249,26 +257,46 @@ public class MLAgentUpdateInputTest {
         assertEquals(originalAgent.getIsHidden(), updatedAgent.getIsHidden());
         assertEquals(updateAgentInput.getName(), updatedAgent.getName());
         assertEquals(updateAgentInput.getDescription(), updatedAgent.getDescription());
-        assertEquals(updateAgentInput.getLlm(), updatedAgent.getLlm());
+        // Check LLM fields separately since we now use separate fields
+        assertEquals(updateAgentInput.getLlmModelId(), updatedAgent.getLlm().getModelId());
+        assertEquals(updateAgentInput.getLlmParameters(), updatedAgent.getLlm().getParameters());
         assertEquals(updateAgentInput.getTools(), updatedAgent.getTools());
         assertEquals(updateAgentInput.getParameters(), updatedAgent.getParameters());
-        assertEquals(updateAgentInput.getMemory(), updatedAgent.getMemory());
+        // Check memory fields separately since we now use separate fields
+        assertEquals(updateAgentInput.getMemoryType(), updatedAgent.getMemory().getType());
+        assertEquals(updateAgentInput.getMemorySessionId(), updatedAgent.getMemory().getSessionId());
+        assertEquals(updateAgentInput.getMemoryWindowSize(), updatedAgent.getMemory().getWindowSize());
         assertEquals(updateAgentInput.getLastUpdateTime(), updatedAgent.getLastUpdateTime());
         assertEquals(updateAgentInput.getAppType(), updatedAgent.getAppType());
     }
 
     @Test
     public void testReadInputStreamSuccessWithNullFields() throws IOException {
-        updateAgentInput.setLlm(null);
-        updateAgentInput.setTools(null);
-        updateAgentInput.setParameters(null);
-        updateAgentInput.setMemory(null);
+        // Create a new input with null LLM fields
+        MLAgentUpdateInput inputWithNulls = MLAgentUpdateInput
+            .builder()
+            .agentId("test-agent-id")
+            .name("test-agent")
+            .description("test description")
+            .llmModelId(null)
+            .llmParameters(null)
+            .tools(null)
+            .parameters(null)
+            .memoryType(null)
+            .memorySessionId(null)
+            .memoryWindowSize(null)
+            .appType("rag")
+            .lastUpdateTime(Instant.ofEpochMilli(1))
+            .build();
 
-        readInputStream(updateAgentInput, parsedInput -> {
-            assertNull(parsedInput.getLlm());
+        readInputStream(inputWithNulls, parsedInput -> {
+            assertNull(parsedInput.getLlmModelId());
+            assertNull(parsedInput.getLlmParameters());
             assertNull(parsedInput.getTools());
             assertNull(parsedInput.getParameters());
-            assertNull(parsedInput.getMemory());
+            assertNull(parsedInput.getMemoryType());
+            assertNull(parsedInput.getMemorySessionId());
+            assertNull(parsedInput.getMemoryWindowSize());
         });
     }
 
@@ -278,10 +306,13 @@ public class MLAgentUpdateInputTest {
             assertEquals(updateAgentInput.getAgentId(), parsedInput.getAgentId());
             assertEquals(updateAgentInput.getName(), parsedInput.getName());
             assertEquals(updateAgentInput.getDescription(), parsedInput.getDescription());
-            assertEquals(updateAgentInput.getLlm().getModelId(), parsedInput.getLlm().getModelId());
+            assertEquals(updateAgentInput.getLlmModelId(), parsedInput.getLlmModelId());
+            assertEquals(updateAgentInput.getLlmParameters(), parsedInput.getLlmParameters());
             assertEquals(updateAgentInput.getTools().size(), parsedInput.getTools().size());
             assertEquals(updateAgentInput.getParameters().size(), parsedInput.getParameters().size());
-            assertEquals(updateAgentInput.getMemory().getType(), parsedInput.getMemory().getType());
+            assertEquals(updateAgentInput.getMemoryType(), parsedInput.getMemoryType());
+            assertEquals(updateAgentInput.getMemorySessionId(), parsedInput.getMemorySessionId());
+            assertEquals(updateAgentInput.getMemoryWindowSize(), parsedInput.getMemoryWindowSize());
             assertEquals(updateAgentInput.getAppType(), parsedInput.getAppType());
             assertEquals(updateAgentInput.getLastUpdateTime(), parsedInput.getLastUpdateTime());
         });
@@ -313,7 +344,9 @@ public class MLAgentUpdateInputTest {
                 "chat_history": "test"
               },
               "memory": {
-                "type": "conversation_index"
+                "type": "conversation_index",
+                "session_id": "test-session",
+                "window_size": 5
               },
               "app_type": "rag",
               "last_updated_time": 1234567890,
@@ -323,11 +356,13 @@ public class MLAgentUpdateInputTest {
         testParseFromJsonString(inputStr, parsedInput -> {
             assertEquals("test-agent", parsedInput.getName());
             assertEquals("test description", parsedInput.getDescription());
-            assertEquals("test-model-id", parsedInput.getLlm().getModelId());
+            assertEquals("test-model-id", parsedInput.getLlmModelId());
             assertEquals(1, parsedInput.getTools().size());
             assertEquals("test-tool", parsedInput.getTools().getFirst().getName());
             assertEquals("test", parsedInput.getParameters().get("chat_history"));
-            assertEquals("conversation_index", parsedInput.getMemory().getType());
+            assertEquals("conversation_index", parsedInput.getMemoryType());
+            assertEquals("test-session", parsedInput.getMemorySessionId());
+            assertEquals(Integer.valueOf(5), parsedInput.getMemoryWindowSize());
             assertEquals("rag", parsedInput.getAppType());
             assertEquals(1234567890L, parsedInput.getLastUpdateTime().toEpochMilli());
             assertEquals("test-tenant", parsedInput.getTenantId());
@@ -341,7 +376,8 @@ public class MLAgentUpdateInputTest {
             .agentId("test-agent-id")
             .name("test-agent")
             .description("test description")
-            .llm(LLMSpec.builder().modelId("test-model-id").parameters(Map.of("max_iteration", "5")).build())
+            .llmModelId("test-model-id")
+            .llmParameters(Map.of("max_iteration", "5"))
             .tools(
                 Collections
                     .singletonList(
@@ -349,7 +385,9 @@ public class MLAgentUpdateInputTest {
                     )
             )
             .parameters(Map.of("chat_history", "test"))
-            .memory(MLMemorySpec.builder().type("conversation_index").build())
+            .memoryType("conversation_index")
+            .memorySessionId("test-session")
+            .memoryWindowSize(5)
             .appType("rag")
             .lastUpdateTime(Instant.ofEpochMilli(1234567890))
             .tenantId("test-tenant")
@@ -375,7 +413,8 @@ public class MLAgentUpdateInputTest {
             .agentId("test-agent-id")
             .name("test-agent")
             .description("test description")
-            .llm(LLMSpec.builder().modelId("test-model-id").parameters(Map.of("max_iteration", "5")).build())
+            .llmModelId("test-model-id")
+            .llmParameters(Map.of("max_iteration", "5"))
             .tools(
                 Collections
                     .singletonList(
@@ -383,7 +422,9 @@ public class MLAgentUpdateInputTest {
                     )
             )
             .parameters(Map.of("chat_history", "test"))
-            .memory(MLMemorySpec.builder().type("conversation_index").build())
+            .memoryType("conversation_index")
+            .memorySessionId("test-session")
+            .memoryWindowSize(10)
             .appType("rag")
             .lastUpdateTime(Instant.ofEpochMilli(1234567890))
             .tenantId("test-tenant")
@@ -393,14 +434,16 @@ public class MLAgentUpdateInputTest {
             assertEquals(input.getAgentId(), parsedInput.getAgentId());
             assertEquals(input.getName(), parsedInput.getName());
             assertEquals(input.getDescription(), parsedInput.getDescription());
-            assertEquals(input.getLlm().getModelId(), parsedInput.getLlm().getModelId());
-            assertEquals(input.getLlm().getParameters(), parsedInput.getLlm().getParameters());
+            assertEquals(input.getLlmModelId(), parsedInput.getLlmModelId());
+            assertEquals(input.getLlmParameters(), parsedInput.getLlmParameters());
             assertEquals(input.getTools().size(), parsedInput.getTools().size());
             assertEquals(input.getTools().getFirst().getName(), parsedInput.getTools().getFirst().getName());
             assertEquals(input.getTools().getFirst().getType(), parsedInput.getTools().getFirst().getType());
             assertEquals(input.getTools().getFirst().getParameters(), parsedInput.getTools().getFirst().getParameters());
             assertEquals(input.getParameters(), parsedInput.getParameters());
-            assertEquals(input.getMemory().getType(), parsedInput.getMemory().getType());
+            assertEquals(input.getMemoryType(), parsedInput.getMemoryType());
+            assertEquals(input.getMemorySessionId(), parsedInput.getMemorySessionId());
+            assertEquals(input.getMemoryWindowSize(), parsedInput.getMemoryWindowSize());
             assertEquals(input.getAppType(), parsedInput.getAppType());
             assertEquals(input.getLastUpdateTime(), parsedInput.getLastUpdateTime());
             assertEquals(input.getTenantId(), parsedInput.getTenantId());
@@ -433,5 +476,171 @@ public class MLAgentUpdateInputTest {
         input.toXContent(builder, ToXContent.EMPTY_PARAMS);
         assertNotNull(builder);
         return builder.toString();
+    }
+
+    @Test
+    public void testLLMPartialUpdate() {
+        // Create original agent with LLM configuration
+        Map<String, String> originalParams = new HashMap<>();
+        originalParams.put("temperature", "0.7");
+        originalParams.put("max_tokens", "1000");
+        originalParams.put("top_p", "0.9");
+
+        LLMSpec originalLlm = LLMSpec.builder().modelId("original-model").parameters(originalParams).build();
+
+        MLAgent originalAgent = MLAgent
+            .builder()
+            .name("Test Agent")
+            .description("Test description")
+            .llm(originalLlm)
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .build();
+
+        // Test Case 1: Update only model ID
+        MLAgentUpdateInput updateInput1 = MLAgentUpdateInput
+            .builder()
+            .agentId("test-agent-id")
+            .llmModelId("new-model")
+            // No llmParameters specified - should keep existing ones
+            .build();
+
+        MLAgent updatedAgent1 = updateInput1.toMLAgent(originalAgent);
+
+        assertEquals("new-model", updatedAgent1.getLlm().getModelId());
+        assertEquals(originalParams, updatedAgent1.getLlm().getParameters());
+
+        // Test Case 2: Update only parameters
+        Map<String, String> updateParams2 = new HashMap<>();
+        updateParams2.put("temperature", "0.5"); // Override existing
+        updateParams2.put("frequency_penalty", "0.1"); // Add new
+
+        MLAgentUpdateInput updateInput2 = MLAgentUpdateInput
+            .builder()
+            .agentId("test-agent-id")
+            .llmParameters(updateParams2)
+            // No llmModelId specified - should keep existing one
+            .build();
+
+        MLAgent updatedAgent2 = updateInput2.toMLAgent(originalAgent);
+
+        assertEquals("original-model", updatedAgent2.getLlm().getModelId());
+
+        Map<String, String> expectedParams = new HashMap<>();
+        expectedParams.put("temperature", "0.5");        // Overridden
+        expectedParams.put("max_tokens", "1000");        // Kept from original
+        expectedParams.put("top_p", "0.9");             // Kept from original
+        expectedParams.put("frequency_penalty", "0.1");  // Added
+
+        assertEquals(expectedParams, updatedAgent2.getLlm().getParameters());
+
+        // Test Case 3: Update both model ID and parameters
+        Map<String, String> updateParams3 = new HashMap<>();
+        updateParams3.put("top_p", "0.95"); // Override existing
+        updateParams3.put("presence_penalty", "0.2"); // Add new
+
+        MLAgentUpdateInput updateInput3 = MLAgentUpdateInput
+            .builder()
+            .agentId("test-agent-id")
+            .llmModelId("another-model")
+            .llmParameters(updateParams3)
+            .build();
+
+        MLAgent updatedAgent3 = updateInput3.toMLAgent(originalAgent);
+
+        assertEquals("another-model", updatedAgent3.getLlm().getModelId());
+
+        Map<String, String> expectedParams3 = new HashMap<>();
+        expectedParams3.put("temperature", "0.7");       // Kept from original
+        expectedParams3.put("max_tokens", "1000");       // Kept from original
+        expectedParams3.put("top_p", "0.95");           // Overridden
+        expectedParams3.put("presence_penalty", "0.2");  // Added
+
+        assertEquals(expectedParams3, updatedAgent3.getLlm().getParameters());
+
+        // Test Case 4: No LLM update - should keep original
+        MLAgentUpdateInput updateInput4 = MLAgentUpdateInput
+            .builder()
+            .agentId("test-agent-id")
+            .name("Updated Name")
+            // No LLM fields specified
+            .build();
+
+        MLAgent updatedAgent4 = updateInput4.toMLAgent(originalAgent);
+
+        assertEquals("Updated Name", updatedAgent4.getName());
+        assertEquals(originalLlm.getModelId(), updatedAgent4.getLlm().getModelId());
+        assertEquals(originalLlm.getParameters(), updatedAgent4.getLlm().getParameters());
+    }
+
+    @Test
+    public void testMemoryPartialUpdate() {
+        // Create original agent with memory
+        MLMemorySpec originalMemory = MLMemorySpec.builder().type("conversation_index").sessionId("original-session").windowSize(5).build();
+
+        MLAgent originalAgent = MLAgent
+            .builder()
+            .name("Test Agent")
+            .type(MLAgentType.CONVERSATIONAL.name())
+            .llm(LLMSpec.builder().modelId("test-model").build())
+            .memory(originalMemory)
+            .build();
+
+        // Test Case 1: Update only window size
+        MLAgentUpdateInput updateInput1 = MLAgentUpdateInput
+            .builder()
+            .agentId("test-agent-id")
+            .memoryWindowSize(10)
+            // No memoryType or memorySessionId specified
+            .build();
+
+        MLAgent updatedAgent1 = updateInput1.toMLAgent(originalAgent);
+
+        assertEquals("conversation_index", updatedAgent1.getMemory().getType());      // Preserved
+        assertEquals("original-session", updatedAgent1.getMemory().getSessionId());  // Preserved
+        assertEquals(Integer.valueOf(10), updatedAgent1.getMemory().getWindowSize()); // Updated
+
+        // Test Case 2: Update only session ID
+        MLAgentUpdateInput updateInput2 = MLAgentUpdateInput
+            .builder()
+            .agentId("test-agent-id")
+            .memorySessionId("new-session-123")
+            // No memoryType or memoryWindowSize specified
+            .build();
+
+        MLAgent updatedAgent2 = updateInput2.toMLAgent(originalAgent);
+
+        assertEquals("conversation_index", updatedAgent2.getMemory().getType());        // Preserved
+        assertEquals("new-session-123", updatedAgent2.getMemory().getSessionId());     // Updated
+        assertEquals(Integer.valueOf(5), updatedAgent2.getMemory().getWindowSize());   // Preserved
+
+        // Test Case 3: Update multiple memory fields
+        MLAgentUpdateInput updateInput3 = MLAgentUpdateInput
+            .builder()
+            .agentId("test-agent-id")
+            .memoryType("conversation_index")
+            .memorySessionId("another-session")
+            .memoryWindowSize(15)
+            .build();
+
+        MLAgent updatedAgent3 = updateInput3.toMLAgent(originalAgent);
+
+        assertEquals("conversation_index", updatedAgent3.getMemory().getType());
+        assertEquals("another-session", updatedAgent3.getMemory().getSessionId());
+        assertEquals(Integer.valueOf(15), updatedAgent3.getMemory().getWindowSize());
+
+        // Test Case 4: No memory update - should keep original
+        MLAgentUpdateInput updateInput4 = MLAgentUpdateInput
+            .builder()
+            .agentId("test-agent-id")
+            .name("Updated Name")
+            // No memory fields specified
+            .build();
+
+        MLAgent updatedAgent4 = updateInput4.toMLAgent(originalAgent);
+
+        assertEquals("Updated Name", updatedAgent4.getName());
+        assertEquals(originalMemory.getType(), updatedAgent4.getMemory().getType());
+        assertEquals(originalMemory.getSessionId(), updatedAgent4.getMemory().getSessionId());
+        assertEquals(originalMemory.getWindowSize(), updatedAgent4.getMemory().getWindowSize());
     }
 }
