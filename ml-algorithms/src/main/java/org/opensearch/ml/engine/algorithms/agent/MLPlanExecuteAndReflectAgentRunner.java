@@ -345,10 +345,10 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
             saveAndReturnFinalResult(
                 (ConversationIndexMemory) memory,
                 parentInteractionId,
-                finalResult,
-                completedSteps.get(completedSteps.size() - 2),
                 allParams.get(EXECUTOR_AGENT_MEMORY_ID_FIELD),
                 allParams.get(EXECUTOR_AGENT_PARENT_INTERACTION_ID_FIELD),
+                finalResult,
+                null,
                 finalListener
             );
             return;
