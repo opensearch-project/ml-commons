@@ -47,6 +47,8 @@ import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
 import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.conversation.Interaction;
+import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
+import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
@@ -325,6 +327,58 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         ModelTensor responseTensor = secondModelTensorList.get(0);
         assertEquals("response", responseTensor.getName());
         assertEquals("final result", responseTensor.getDataAsMap().get("response"));
+    }
+
+    @Test
+    public void testMessageHistoryLimits() {
+        MLAgent mlAgent = createMLAgentWithTools();
+
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(2);
+            ModelTensor modelTensor = ModelTensor
+                .builder()
+                .dataAsMap(ImmutableMap.of("response", "{\"steps\":[\"step1\"], \"result\":\"\"}"))
+                .build();
+            ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+            ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+            when(mlTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
+            listener.onResponse(mlTaskResponse);
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(MLPredictionTaskRequest.class), any());
+
+        doAnswer(invocation -> {
+            ActionListener<Object> listener = invocation.getArgument(1);
+            ModelTensor modelTensor = ModelTensor.builder().dataAsMap(ImmutableMap.of("response", "tool execution result")).build();
+            ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
+            ModelTensorOutput mlModelTensorOutput = ModelTensorOutput.builder().mlModelOutputs(Arrays.asList(modelTensors)).build();
+            when(mlExecuteTaskResponse.getOutput()).thenReturn(mlModelTensorOutput);
+            listener.onResponse(mlExecuteTaskResponse);
+            return null;
+        }).when(client).execute(eq(MLExecuteTaskAction.INSTANCE), any(MLExecuteTaskRequest.class), any());
+
+        doAnswer(invocation -> {
+            ActionListener<UpdateResponse> listener = invocation.getArgument(2);
+            listener.onResponse(updateResponse);
+            return null;
+        }).when(mlMemoryManager).updateInteraction(any(), any(), any());
+
+        Map<String, String> params = new HashMap<>();
+        params.put("question", "test question");
+        params.put("memory_id", "test_memory_id");
+        params.put("parent_interaction_id", "test_parent_interaction_id");
+        params.put("message_history_limit", "5");
+        params.put("executor_message_history_limit", "3");
+        mlPlanExecuteAndReflectAgentRunner.run(mlAgent, params, agentActionListener);
+
+        verify(conversationIndexMemory).getMessages(any(), eq(5));
+
+        ArgumentCaptor<MLExecuteTaskRequest> executeCaptor = ArgumentCaptor.forClass(MLExecuteTaskRequest.class);
+        verify(client).execute(eq(MLExecuteTaskAction.INSTANCE), executeCaptor.capture(), any());
+
+        AgentMLInput agentInput = (AgentMLInput) executeCaptor.getValue().getInput();
+        RemoteInferenceInputDataSet dataset = (RemoteInferenceInputDataSet) agentInput.getInputDataset();
+        Map<String, String> executorParams = dataset.getParameters();
+        assertEquals("3", executorParams.get("message_history_limit"));
     }
 
     // ToDo: add test case for when max steps is reached
