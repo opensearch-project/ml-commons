@@ -268,6 +268,12 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         // planner prompt for the first call
         usePlannerPromptTemplate(allParams);
 
+        if (mlAgent.getMemory() == null || memoryFactoryMap == null || memoryFactoryMap.isEmpty()) {
+            List<String> completedSteps = new ArrayList<>();
+            setToolsAndRunAgent(mlAgent, allParams, completedSteps, null, null, listener);
+            return;
+        }
+
         String memoryId = allParams.get(MEMORY_ID_FIELD);
         String memoryType = mlAgent.getMemory().getType();
         String appType = mlAgent.getAppType();
@@ -490,7 +496,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
                     saveTraceData(
                         (ConversationIndexMemory) memory,
-                        memory.getType(),
+                        memory != null ? memory.getType() : "PlanExecuteReflect",
                         stepToExecute,
                         results.get(STEP_RESULT_FIELD),
                         conversationId,
@@ -618,16 +624,38 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         String input,
         ActionListener<Object> finalListener
     ) {
-        Map<String, Object> updateContent = new HashMap<>();
-        updateContent.put(INTERACTIONS_RESPONSE_FIELD, finalResult);
+        if (memory != null) {
+            Map<String, Object> updateContent = new HashMap<>();
+            updateContent.put(INTERACTIONS_RESPONSE_FIELD, finalResult);
 
-        if (input != null) {
-            updateContent.put(INTERACTIONS_INPUT_FIELD, input);
-        }
+            if (input != null) {
+                updateContent.put(INTERACTIONS_INPUT_FIELD, input);
+            }
 
-        memory.getMemoryManager().updateInteraction(parentInteractionId, updateContent, ActionListener.wrap(res -> {
+            memory.getMemoryManager().updateInteraction(parentInteractionId, updateContent, ActionListener.wrap(res -> {
+                List<ModelTensors> finalModelTensors = createModelTensors(
+                    memory.getConversationId(),
+                    parentInteractionId,
+                    reactAgentMemoryId,
+                    reactParentInteractionId
+                );
+                finalModelTensors
+                    .add(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(
+                                List.of(ModelTensor.builder().name(RESPONSE_FIELD).dataAsMap(Map.of(RESPONSE_FIELD, finalResult)).build())
+                            )
+                            .build()
+                    );
+                finalListener.onResponse(ModelTensorOutput.builder().mlModelOutputs(finalModelTensors).build());
+            }, e -> {
+                log.error("Failed to update interaction with final result", e);
+                finalListener.onFailure(e);
+            }));
+        } else {
             List<ModelTensors> finalModelTensors = createModelTensors(
-                memory.getConversationId(),
+                null,
                 parentInteractionId,
                 reactAgentMemoryId,
                 reactParentInteractionId
@@ -642,10 +670,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                         .build()
                 );
             finalListener.onResponse(ModelTensorOutput.builder().mlModelOutputs(finalModelTensors).build());
-        }, e -> {
-            log.error("Failed to update interaction with final result", e);
-            finalListener.onFailure(e);
-        }));
+        }
     }
 
     @VisibleForTesting
@@ -656,25 +681,24 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         String reactParentInteractionId
     ) {
         List<ModelTensors> modelTensors = new ArrayList<>();
-        modelTensors
-            .add(
-                ModelTensors
-                    .builder()
-                    .mlModelTensors(
-                        List
-                            .of(
-                                ModelTensor.builder().name(MLAgentExecutor.MEMORY_ID).result(sessionId).build(),
-                                ModelTensor.builder().name(MLAgentExecutor.PARENT_INTERACTION_ID).result(parentInteractionId).build(),
-                                ModelTensor.builder().name(EXECUTOR_AGENT_MEMORY_ID_FIELD).result(reactAgentMemoryId).build(),
-                                ModelTensor
-                                    .builder()
-                                    .name(EXECUTOR_AGENT_PARENT_INTERACTION_ID_FIELD)
-                                    .result(reactParentInteractionId)
-                                    .build()
-                            )
-                    )
-                    .build()
-            );
+        List<ModelTensor> tensors = new ArrayList<>();
+        
+        if (sessionId != null) {
+            tensors.add(ModelTensor.builder().name(MLAgentExecutor.MEMORY_ID).result(sessionId).build());
+        }
+        if (parentInteractionId != null) {
+            tensors.add(ModelTensor.builder().name(MLAgentExecutor.PARENT_INTERACTION_ID).result(parentInteractionId).build());
+        }
+        if (reactAgentMemoryId != null) {
+            tensors.add(ModelTensor.builder().name(EXECUTOR_AGENT_MEMORY_ID_FIELD).result(reactAgentMemoryId).build());
+        }
+        if (reactParentInteractionId != null) {
+            tensors.add(ModelTensor.builder().name(EXECUTOR_AGENT_PARENT_INTERACTION_ID_FIELD).result(reactParentInteractionId).build());
+        }
+        
+        if (!tensors.isEmpty()) {
+            modelTensors.add(ModelTensors.builder().mlModelTensors(tensors).build());
+        }
         return modelTensors;
     }
 

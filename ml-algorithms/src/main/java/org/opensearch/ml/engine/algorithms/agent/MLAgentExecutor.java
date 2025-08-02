@@ -236,6 +236,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                         }
                                         if (memorySpec != null
                                             && memorySpec.getType() != null
+                                            && memoryFactoryMap != null
+                                            && !memoryFactoryMap.isEmpty()
                                             && memoryFactoryMap.containsKey(memorySpec.getType())
                                             && (memoryId == null || parentInteractionId == null)) {
                                             ConversationIndexMemory.Factory conversationIndexMemoryFactory =
