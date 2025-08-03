@@ -42,6 +42,7 @@ public class MLMemory implements ToXContentObject, Writeable {
     // Optional fields
     private String userId;
     private String agentId;
+    private String role;
     private Map<String, String> tags;
 
     // System fields
@@ -60,6 +61,7 @@ public class MLMemory implements ToXContentObject, Writeable {
         MemoryCharacteristic memoryCharacteristic,
         String userId,
         String agentId,
+        String role,
         Map<String, String> tags,
         Instant createdTime,
         Instant lastUpdatedTime,
@@ -72,6 +74,7 @@ public class MLMemory implements ToXContentObject, Writeable {
         this.memoryCharacteristic = memoryCharacteristic;
         this.userId = userId;
         this.agentId = agentId;
+        this.role = role;
         this.tags = tags;
         this.createdTime = createdTime;
         this.lastUpdatedTime = lastUpdatedTime;
@@ -86,6 +89,7 @@ public class MLMemory implements ToXContentObject, Writeable {
         this.memoryCharacteristic = in.readEnum(MemoryCharacteristic.class);
         this.userId = in.readOptionalString();
         this.agentId = in.readOptionalString();
+        this.role = in.readOptionalString();
         if (in.readBoolean()) {
             this.tags = in.readMap(StreamInput::readString, StreamInput::readString);
         }
@@ -103,6 +107,7 @@ public class MLMemory implements ToXContentObject, Writeable {
         out.writeEnum(memoryCharacteristic);
         out.writeOptionalString(userId);
         out.writeOptionalString(agentId);
+        out.writeOptionalString(role);
         if (tags != null && !tags.isEmpty()) {
             out.writeBoolean(true);
             out.writeMap(tags, StreamOutput::writeString, StreamOutput::writeString);
@@ -129,6 +134,9 @@ public class MLMemory implements ToXContentObject, Writeable {
         if (agentId != null) {
             builder.field(AGENT_ID_FIELD, agentId);
         }
+        if (role != null) {
+            builder.field(ROLE_FIELD, role);
+        }
         if (tags != null && !tags.isEmpty()) {
             builder.field(TAGS_FIELD, tags);
         }
@@ -152,6 +160,7 @@ public class MLMemory implements ToXContentObject, Writeable {
         MemoryCharacteristic memoryCharacteristic = null;
         String userId = null;
         String agentId = null;
+        String role = null;
         Map<String, String> tags = null;
         Instant createdTime = null;
         Instant lastUpdatedTime = null;
@@ -183,6 +192,9 @@ public class MLMemory implements ToXContentObject, Writeable {
                     break;
                 case AGENT_ID_FIELD:
                     agentId = parser.text();
+                    break;
+                case ROLE_FIELD:
+                    role = parser.text();
                     break;
                 case TAGS_FIELD:
                     Map<String, Object> tagsMap = parser.map();
@@ -220,6 +232,7 @@ public class MLMemory implements ToXContentObject, Writeable {
             .memoryCharacteristic(memoryCharacteristic)
             .userId(userId)
             .agentId(agentId)
+            .role(role)
             .tags(tags)
             .createdTime(createdTime)
             .lastUpdatedTime(lastUpdatedTime)
@@ -255,6 +268,9 @@ public class MLMemory implements ToXContentObject, Writeable {
         }
         if (agentId != null) {
             result.put(AGENT_ID_FIELD, agentId);
+        }
+        if (role != null) {
+            result.put(ROLE_FIELD, role);
         }
         if (tags != null && !tags.isEmpty()) {
             result.put(TAGS_FIELD, tags);
