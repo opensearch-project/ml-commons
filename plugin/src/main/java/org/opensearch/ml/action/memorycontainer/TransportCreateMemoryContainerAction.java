@@ -8,8 +8,6 @@ package org.opensearch.ml.action.memorycontainer;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.AGENT_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREATED_TIME_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.EMBEDDING_MODEL_NOT_FOUND_ERROR;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.EMBEDDING_MODEL_TYPE_MISMATCH_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_EF_CONSTRUCTION;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_EF_SEARCH;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_ENGINE;
@@ -18,12 +16,11 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_METHOD_NAME;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_SPACE_TYPE;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LAST_UPDATED_TIME_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_MODEL_NOT_FOUND_ERROR;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_MODEL_NOT_REMOTE_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CHARACTERISTIC_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_EMBEDDING_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_TYPE_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.ROLE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SPARSE_MEMORY_INDEX_PREFIX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STATIC_MEMORY_INDEX_PREFIX;
@@ -117,37 +114,31 @@ public class TransportCreateMemoryContainerAction extends
         User user = RestActionUtils.getUserContext(client);
         String tenantId = input.getTenantId();
 
-        // Validate models before creating memory container
-        validateModels(input.getMemoryStorageConfig(), ActionListener.wrap(isValid -> {
-            // Check if memory container index exists, create if not
-            ActionListener<Boolean> indexCheckListener = ActionListener.wrap(created -> {
-                try {
-                    // Create memory container document without ID (will be auto-generated)
-                    MLMemoryContainer memoryContainer = buildMemoryContainer(input, user, tenantId);
+        // Check if memory container index exists, create if not
+        ActionListener<Boolean> indexCheckListener = ActionListener.wrap(created -> {
+            try {
+                // Create memory container document without ID (will be auto-generated)
+                MLMemoryContainer memoryContainer = buildMemoryContainer(input, user, tenantId);
 
-                    // Index the memory container document first to get the generated ID
-                    indexMemoryContainer(memoryContainer, ActionListener.wrap(memoryContainerId -> {
-                        // Create memory data indices based on semantic storage config
-                        createMemoryDataIndices(memoryContainerId, memoryContainer, user, ActionListener.wrap(actualIndexName -> {
-                            // Update the memory container with the actual index name
-                            MemoryStorageConfig config = memoryContainer.getMemoryStorageConfig();
-                            if (config == null) {
-                                config = MemoryStorageConfig
-                                    .builder()
-                                    .memoryIndexName(actualIndexName)
-                                    .semanticStorageEnabled(false)
-                                    .build();
-                            } else {
-                                config.setMemoryIndexName(actualIndexName);
-                            }
-                            memoryContainer.setMemoryStorageConfig(config);
+                // Index the memory container document first to get the generated ID
+                indexMemoryContainer(memoryContainer, ActionListener.wrap(memoryContainerId -> {
+                    // Create memory data indices based on semantic storage config
+                    createMemoryDataIndices(memoryContainerId, memoryContainer, user, ActionListener.wrap(actualIndexName -> {
+                        // Update the memory container with the actual index name
+                        MemoryStorageConfig config = memoryContainer.getMemoryStorageConfig();
+                        if (config == null) {
+                            config = MemoryStorageConfig.builder().memoryIndexName(actualIndexName).semanticStorageEnabled(false).build();
+                        } else {
+                            config.setMemoryIndexName(actualIndexName);
+                        }
+                        memoryContainer.setMemoryStorageConfig(config);
 
-                            // Update the container document with the index name
-                            updateMemoryContainer(memoryContainerId, memoryContainer, ActionListener.wrap(updated -> {
-                                listener.onResponse(new MLCreateMemoryContainerResponse(memoryContainerId, "created"));
-                            }, listener::onFailure));
+                        // Update the container document with the index name
+                        updateMemoryContainer(memoryContainerId, memoryContainer, ActionListener.wrap(updated -> {
+                            listener.onResponse(new MLCreateMemoryContainerResponse(memoryContainerId, "created"));
                         }, listener::onFailure));
                     }, listener::onFailure));
+                }, listener::onFailure));
 
                 } catch (Exception e) {
                     log.error("Failed to create memory container", e);

@@ -9,7 +9,9 @@ import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedTok
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.*;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.opensearch.core.common.io.stream.StreamInput;
@@ -19,7 +21,6 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.memorycontainer.MemoryType;
 
 import lombok.Builder;
 import lombok.Getter;
@@ -35,53 +36,47 @@ public class MLAddMemoryInput implements ToXContentObject, Writeable {
 
     // Required fields
     private String memoryContainerId;
-    private String memory; // Internally stored as 'memory', but exposed as 'message' in API
+    private List<MessageInput> messages;
 
     // Optional fields
-    private MemoryType memoryType;
-    private String memoryId;
     private String sessionId;
     private String agentId;
-    private String role;
     private Boolean infer;
     private Map<String, String> tags;
 
     public MLAddMemoryInput(
         String memoryContainerId,
-        String memory,
-        MemoryType memoryType,
-        String memoryId,
+        List<MessageInput> messages,
         String sessionId,
         String agentId,
-        String role,
         Boolean infer,
         Map<String, String> tags
     ) {
         // Note: memoryContainerId validation is removed here since it may come from URL path
-        if (memory == null || memory.isEmpty()) {
-            throw new IllegalArgumentException("Message is required");
+        if (messages == null || messages.isEmpty()) {
+            throw new IllegalArgumentException("Messages list cannot be empty");
+        }
+        if (messages.size() > 1) {
+            throw new IllegalArgumentException("Currently only one message per request is supported");
         }
 
         this.memoryContainerId = memoryContainerId;
-        this.memory = memory;
-        this.memoryType = memoryType;
-        this.memoryId = memoryId;
+        this.messages = messages;
         this.sessionId = sessionId;
         this.agentId = agentId;
-        this.role = role;
         this.infer = infer;
         this.tags = tags;
     }
 
     public MLAddMemoryInput(StreamInput in) throws IOException {
         this.memoryContainerId = in.readOptionalString();
-        this.memory = in.readString();
-        String memoryTypeStr = in.readOptionalString();
-        this.memoryType = memoryTypeStr != null ? MemoryType.fromString(memoryTypeStr) : null;
-        this.memoryId = in.readOptionalString();
+        int messagesSize = in.readVInt();
+        this.messages = new ArrayList<>(messagesSize);
+        for (int i = 0; i < messagesSize; i++) {
+            this.messages.add(new MessageInput(in));
+        }
         this.sessionId = in.readOptionalString();
         this.agentId = in.readOptionalString();
-        this.role = in.readOptionalString();
         this.infer = in.readOptionalBoolean();
         if (in.readBoolean()) {
             this.tags = in.readMap(StreamInput::readString, StreamInput::readString);
@@ -91,12 +86,12 @@ public class MLAddMemoryInput implements ToXContentObject, Writeable {
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeOptionalString(memoryContainerId);
-        out.writeString(memory);
-        out.writeOptionalString(memoryType != null ? memoryType.getValue() : null);
-        out.writeOptionalString(memoryId);
+        out.writeVInt(messages.size());
+        for (MessageInput message : messages) {
+            message.writeTo(out);
+        }
         out.writeOptionalString(sessionId);
         out.writeOptionalString(agentId);
-        out.writeOptionalString(role);
         out.writeOptionalBoolean(infer);
         if (tags != null && !tags.isEmpty()) {
             out.writeBoolean(true);
@@ -112,21 +107,16 @@ public class MLAddMemoryInput implements ToXContentObject, Writeable {
         if (memoryContainerId != null) {
             builder.field(MEMORY_CONTAINER_ID_FIELD, memoryContainerId);
         }
-        builder.field(MESSAGE_FIELD, memory);
-        if (memoryType != null) {
-            builder.field(MEMORY_TYPE_FIELD, memoryType.getValue());
+        builder.startArray(MESSAGES_FIELD);
+        for (MessageInput message : messages) {
+            message.toXContent(builder, params);
         }
-        if (memoryId != null) {
-            builder.field(MEMORY_ID_FIELD, memoryId);
-        }
+        builder.endArray();
         if (sessionId != null) {
             builder.field(SESSION_ID_FIELD, sessionId);
         }
         if (agentId != null) {
             builder.field(AGENT_ID_FIELD, agentId);
-        }
-        if (role != null) {
-            builder.field(ROLE_FIELD, role);
         }
         if (infer != null) {
             builder.field(INFER_FIELD, infer);
@@ -140,12 +130,9 @@ public class MLAddMemoryInput implements ToXContentObject, Writeable {
 
     public static MLAddMemoryInput parse(XContentParser parser) throws IOException {
         String memoryContainerId = null;
-        String memory = null;
-        MemoryType memoryType = null;
-        String memoryId = null;
+        List<MessageInput> messages = null;
         String sessionId = null;
         String agentId = null;
-        String role = null;
         Boolean infer = null;
         Map<String, String> tags = null;
 
@@ -158,23 +145,18 @@ public class MLAddMemoryInput implements ToXContentObject, Writeable {
                 case MEMORY_CONTAINER_ID_FIELD:
                     memoryContainerId = parser.text();
                     break;
-                case MESSAGE_FIELD:
-                    memory = parser.text();
-                    break;
-                case MEMORY_TYPE_FIELD:
-                    memoryType = MemoryType.fromString(parser.text());
-                    break;
-                case MEMORY_ID_FIELD:
-                    memoryId = parser.text();
+                case MESSAGES_FIELD:
+                    messages = new ArrayList<>();
+                    ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.currentToken(), parser);
+                    while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
+                        messages.add(MessageInput.parse(parser));
+                    }
                     break;
                 case SESSION_ID_FIELD:
                     sessionId = parser.text();
                     break;
                 case AGENT_ID_FIELD:
                     agentId = parser.text();
-                    break;
-                case ROLE_FIELD:
-                    role = parser.text();
                     break;
                 case INFER_FIELD:
                     infer = parser.booleanValue();
@@ -198,12 +180,9 @@ public class MLAddMemoryInput implements ToXContentObject, Writeable {
         return MLAddMemoryInput
             .builder()
             .memoryContainerId(memoryContainerId)
-            .memory(memory)
-            .memoryType(memoryType)
-            .memoryId(memoryId)
+            .messages(messages)
             .sessionId(sessionId)
             .agentId(agentId)
-            .role(role)
             .infer(infer)
             .tags(tags)
             .build();

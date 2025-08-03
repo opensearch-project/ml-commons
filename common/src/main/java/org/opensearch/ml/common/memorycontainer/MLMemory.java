@@ -33,7 +33,6 @@ import lombok.Setter;
 public class MLMemory implements ToXContentObject, Writeable {
 
     // Core fields
-    private String memoryId;
     private String sessionId;
     private String memory;
     private MemoryType memoryType;
@@ -54,7 +53,6 @@ public class MLMemory implements ToXContentObject, Writeable {
 
     @Builder
     public MLMemory(
-        String memoryId,
         String sessionId,
         String memory,
         MemoryType memoryType,
@@ -67,7 +65,6 @@ public class MLMemory implements ToXContentObject, Writeable {
         Instant lastUpdatedTime,
         Object memoryEmbedding
     ) {
-        this.memoryId = memoryId;
         this.sessionId = sessionId;
         this.memory = memory;
         this.memoryType = memoryType;
@@ -82,7 +79,6 @@ public class MLMemory implements ToXContentObject, Writeable {
     }
 
     public MLMemory(StreamInput in) throws IOException {
-        this.memoryId = in.readString();
         this.sessionId = in.readString();
         this.memory = in.readString();
         this.memoryType = in.readEnum(MemoryType.class);
@@ -100,7 +96,6 @@ public class MLMemory implements ToXContentObject, Writeable {
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        out.writeString(memoryId);
         out.writeString(sessionId);
         out.writeString(memory);
         out.writeEnum(memoryType);
@@ -122,7 +117,6 @@ public class MLMemory implements ToXContentObject, Writeable {
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
-        builder.field(MEMORY_ID_FIELD, memoryId);
         builder.field(SESSION_ID_FIELD, sessionId);
         builder.field(MEMORY_FIELD, memory);
         builder.field(MEMORY_TYPE_FIELD, memoryType.getValue());
@@ -153,7 +147,6 @@ public class MLMemory implements ToXContentObject, Writeable {
     }
 
     public static MLMemory parse(XContentParser parser) throws IOException {
-        String memoryId = null;
         String sessionId = null;
         String memory = null;
         MemoryType memoryType = null;
@@ -172,9 +165,6 @@ public class MLMemory implements ToXContentObject, Writeable {
             parser.nextToken();
 
             switch (fieldName) {
-                case MEMORY_ID_FIELD:
-                    memoryId = parser.text();
-                    break;
                 case SESSION_ID_FIELD:
                     sessionId = parser.text();
                     break;
@@ -225,7 +215,6 @@ public class MLMemory implements ToXContentObject, Writeable {
 
         return MLMemory
             .builder()
-            .memoryId(memoryId)
             .sessionId(sessionId)
             .memory(memory)
             .memoryType(memoryType)
