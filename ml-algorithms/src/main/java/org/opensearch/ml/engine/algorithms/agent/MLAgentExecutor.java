@@ -14,6 +14,8 @@ import static org.opensearch.ml.common.MLTask.RESPONSE_FIELD;
 import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTask.TASK_ID_FIELD;
 import static org.opensearch.ml.common.output.model.ModelTensorOutput.INFERENCE_RESULT_FIELD;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED;
 import static org.opensearch.ml.common.utils.MLTaskUtils.updateMLTaskDirectly;
@@ -52,6 +54,7 @@ import org.opensearch.ml.common.MLTaskState;
 import org.opensearch.ml.common.MLTaskType;
 import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.agent.MLMemorySpec;
+import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.Input;
 import org.opensearch.ml.common.input.execute.agent.AgentMLInput;
@@ -68,6 +71,7 @@ import org.opensearch.ml.engine.annotation.Function;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
+import org.opensearch.ml.engine.tools.QueryPlanningTool;
 import org.opensearch.ml.memory.action.conversation.CreateInteractionResponse;
 import org.opensearch.ml.memory.action.conversation.GetInteractionAction;
 import org.opensearch.ml.memory.action.conversation.GetInteractionRequest;
@@ -109,6 +113,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     private volatile Boolean isMultiTenancyEnabled;
     private Encryptor encryptor;
     private static volatile boolean mcpConnectorIsEnabled;
+    private static volatile boolean agenticSearchIsEnabled;
 
     public MLAgentExecutor(
         Client client,
@@ -132,6 +137,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         this.encryptor = encryptor;
         this.mcpConnectorIsEnabled = ML_COMMONS_MCP_CONNECTOR_ENABLED.get(clusterService.getSettings());
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MCP_CONNECTOR_ENABLED, it -> mcpConnectorIsEnabled = it);
+        this.agenticSearchIsEnabled = ML_COMMONS_AGENTIC_SEARCH_ENABLED.get(clusterService.getSettings());
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_AGENTIC_SEARCH_ENABLED, it -> agenticSearchIsEnabled = it);
     }
 
     @Override
@@ -394,6 +401,18 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             listener.onFailure(new OpenSearchException(ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE));
             return;
         }
+        List<MLToolSpec> tools = mlAgent.getTools();
+        for (MLToolSpec tool : tools) {
+            if (tool.getType().equals(QueryPlanningTool.TYPE)) {
+                if (!agenticSearchIsEnabled) {
+                    listener.onFailure(new OpenSearchException(ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE));
+                    return;
+                } else {
+                    log.info("Searching for tool {}", tool.getName());
+                }
+            }
+        }
+
         MLAgentRunner mlAgentRunner = getAgentRunner(mlAgent);
         // If async is true, index ML task and return the taskID. Also add memoryID to the task if it exists
         if (isAsync) {

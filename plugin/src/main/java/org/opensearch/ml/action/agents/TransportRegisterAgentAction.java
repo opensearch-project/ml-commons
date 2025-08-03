@@ -7,11 +7,14 @@ package org.opensearch.ml.action.agents;
 
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.ML_AGENT_INDEX;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED;
 
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.opensearch.OpenSearchException;
@@ -26,12 +29,14 @@ import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.MLAgentType;
 import org.opensearch.ml.common.agent.MLAgent;
+import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentAction;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentRequest;
 import org.opensearch.ml.common.transport.agent.MLRegisterAgentResponse;
 import org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
+import org.opensearch.ml.engine.tools.QueryPlanningTool;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.PutDataObjectRequest;
@@ -52,6 +57,7 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
 
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
     private volatile boolean mcpConnectorIsEnabled;
+    private volatile boolean agenticSearchIsEnabled;
 
     @Inject
     public TransportRegisterAgentAction(
@@ -71,6 +77,8 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         this.mcpConnectorIsEnabled = ML_COMMONS_MCP_CONNECTOR_ENABLED.get(clusterService.getSettings());
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MCP_CONNECTOR_ENABLED, it -> mcpConnectorIsEnabled = it);
+        this.agenticSearchIsEnabled = ML_COMMONS_AGENTIC_SEARCH_ENABLED.get(clusterService.getSettings());
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_AGENTIC_SEARCH_ENABLED, it -> agenticSearchIsEnabled = it);
     }
 
     @Override
@@ -88,6 +96,19 @@ public class TransportRegisterAgentAction extends HandledTransportAction<ActionR
             listener.onFailure(new OpenSearchException(ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE));
             return;
         }
+
+        List<MLToolSpec> tools = agent.getTools();
+        for (MLToolSpec tool : tools) {
+            if (tool.getType().equals(QueryPlanningTool.TYPE)) {
+                if (!agenticSearchIsEnabled) {
+                    listener.onFailure(new OpenSearchException(ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE));
+                    return;
+                } else {
+                    log.info("Searching for tool {}", tool.getName());
+                }
+            }
+        }
+
         Instant now = Instant.now();
         boolean isHiddenAgent = RestActionUtils.isSuperAdminUser(clusterService, client);
         MLAgent mlAgent = agent.toBuilder().createdTime(now).lastUpdateTime(now).isHidden(isHiddenAgent).build();

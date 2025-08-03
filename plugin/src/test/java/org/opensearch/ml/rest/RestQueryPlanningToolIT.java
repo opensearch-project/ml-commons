@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.rest;
 
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_ENABLED;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.MODEL_ID_FIELD;
 
 import java.io.IOException;
@@ -90,6 +91,8 @@ public class RestQueryPlanningToolIT extends MLCommonsRestTestCase {
         assertNotNull(agentId);
 
         String query = "{\"parameters\": {\"query_text\": \"How many iris flowers of type setosa are there?\"}}";
+        // enable agentic search
+        updateClusterSettings(ML_COMMONS_AGENTIC_SEARCH_ENABLED.getKey(), true);
         Response response = executeAgent(agentId, query);
         String responseBody = TestHelper.httpEntityToString(response.getEntity());
 
