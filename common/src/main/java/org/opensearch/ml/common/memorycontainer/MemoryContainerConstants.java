@@ -48,6 +48,7 @@ public class MemoryContainerConstants {
     public static final String MEMORY_ID_FIELD = "memory_id";
     public static final String MEMORY_TYPE_FIELD = "memory_type";
     public static final String MEMORY_CHARACTERISTIC_FIELD = "memory_characteristic";
+    public static final String ROLE_FIELD = "role";
     // Memory characteristic values are defined in MemoryCharacteristic enum
 
     // Request body field names (different from storage field names)

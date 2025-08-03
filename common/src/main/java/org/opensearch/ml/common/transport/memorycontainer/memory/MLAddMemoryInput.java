@@ -42,6 +42,7 @@ public class MLAddMemoryInput implements ToXContentObject, Writeable {
     private String memoryId;
     private String sessionId;
     private String agentId;
+    private String role;
     private Boolean infer;
     private Map<String, String> tags;
 
@@ -52,6 +53,7 @@ public class MLAddMemoryInput implements ToXContentObject, Writeable {
         String memoryId,
         String sessionId,
         String agentId,
+        String role,
         Boolean infer,
         Map<String, String> tags
     ) {
@@ -66,6 +68,7 @@ public class MLAddMemoryInput implements ToXContentObject, Writeable {
         this.memoryId = memoryId;
         this.sessionId = sessionId;
         this.agentId = agentId;
+        this.role = role;
         this.infer = infer;
         this.tags = tags;
     }
@@ -78,6 +81,7 @@ public class MLAddMemoryInput implements ToXContentObject, Writeable {
         this.memoryId = in.readOptionalString();
         this.sessionId = in.readOptionalString();
         this.agentId = in.readOptionalString();
+        this.role = in.readOptionalString();
         this.infer = in.readOptionalBoolean();
         if (in.readBoolean()) {
             this.tags = in.readMap(StreamInput::readString, StreamInput::readString);
@@ -92,6 +96,7 @@ public class MLAddMemoryInput implements ToXContentObject, Writeable {
         out.writeOptionalString(memoryId);
         out.writeOptionalString(sessionId);
         out.writeOptionalString(agentId);
+        out.writeOptionalString(role);
         out.writeOptionalBoolean(infer);
         if (tags != null && !tags.isEmpty()) {
             out.writeBoolean(true);
@@ -120,6 +125,9 @@ public class MLAddMemoryInput implements ToXContentObject, Writeable {
         if (agentId != null) {
             builder.field(AGENT_ID_FIELD, agentId);
         }
+        if (role != null) {
+            builder.field(ROLE_FIELD, role);
+        }
         if (infer != null) {
             builder.field(INFER_FIELD, infer);
         }
@@ -137,6 +145,7 @@ public class MLAddMemoryInput implements ToXContentObject, Writeable {
         String memoryId = null;
         String sessionId = null;
         String agentId = null;
+        String role = null;
         Boolean infer = null;
         Map<String, String> tags = null;
 
@@ -163,6 +172,9 @@ public class MLAddMemoryInput implements ToXContentObject, Writeable {
                     break;
                 case AGENT_ID_FIELD:
                     agentId = parser.text();
+                    break;
+                case ROLE_FIELD:
+                    role = parser.text();
                     break;
                 case INFER_FIELD:
                     infer = parser.booleanValue();
@@ -191,6 +203,7 @@ public class MLAddMemoryInput implements ToXContentObject, Writeable {
             .memoryId(memoryId)
             .sessionId(sessionId)
             .agentId(agentId)
+            .role(role)
             .infer(infer)
             .tags(tags)
             .build();

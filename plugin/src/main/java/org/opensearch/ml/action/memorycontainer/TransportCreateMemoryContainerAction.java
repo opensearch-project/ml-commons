@@ -225,6 +225,7 @@ public class TransportCreateMemoryContainerAction extends
             properties.put(TAGS_FIELD, Map.of("type", "flat_object"));
             properties.put(MEMORY_TYPE_FIELD, Map.of("type", "keyword"));
             properties.put(MEMORY_CHARACTERISTIC_FIELD, Map.of("type", "keyword"));
+            properties.put(ROLE_FIELD, Map.of("type", "text")); // Text field for role (human/llm)
             properties.put(CREATED_TIME_FIELD, Map.of("type", "date", "format", "strict_date_time||epoch_millis"));
             properties.put(LAST_UPDATED_TIME_FIELD, Map.of("type", "date", "format", "strict_date_time||epoch_millis"));
 
