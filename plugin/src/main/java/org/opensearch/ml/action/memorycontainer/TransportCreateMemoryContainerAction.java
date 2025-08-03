@@ -6,10 +6,10 @@
 package org.opensearch.ml.action.memorycontainer;
 
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
-import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.AGENT_ID_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.EMBEDDING_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.FACT_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREATED_TIME_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.EMBEDDING_MODEL_NOT_FOUND_ERROR;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.EMBEDDING_MODEL_TYPE_MISMATCH_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_EF_CONSTRUCTION;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_EF_SEARCH;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_ENGINE;
@@ -17,14 +17,17 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_MEMORY_INDEX_PREFIX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_METHOD_NAME;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_SPACE_TYPE;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LAST_UPDATED_TIME_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_MODEL_NOT_FOUND_ERROR;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LLM_MODEL_NOT_REMOTE_ERROR;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CHARACTERISTIC_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_EMBEDDING_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_TYPE_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.RAW_MESSAGES_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SPARSE_MEMORY_INDEX_PREFIX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.STATIC_MEMORY_INDEX_PREFIX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.TAGS_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.TIMESTAMP_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.USER_ID_FIELD;
 
 import java.time.Instant;
@@ -109,34 +112,37 @@ public class TransportCreateMemoryContainerAction extends
         User user = RestActionUtils.getUserContext(client);
         String tenantId = input.getTenantId();
 
-        // Check if memory container index exists, create if not
-        ActionListener<Boolean> indexCheckListener = ActionListener.wrap(created -> {
-            try {
-                // Create memory container document without ID (will be auto-generated)
-                MLMemoryContainer memoryContainer = buildMemoryContainer(input, null, user, tenantId);
+        // Validate models before creating memory container
+        validateModels(input.getMemoryStorageConfig(), ActionListener.wrap(isValid -> {
+            // Check if memory container index exists, create if not
+            ActionListener<Boolean> indexCheckListener = ActionListener.wrap(created -> {
+                try {
+                    // Create memory container document without ID (will be auto-generated)
+                    MLMemoryContainer memoryContainer = buildMemoryContainer(input, user, tenantId);
 
-                // Index the memory container document first to get the generated ID
-                indexMemoryContainer(memoryContainer, ActionListener.wrap(memoryContainerId -> {
-                    // Set the generated container ID
-                    memoryContainer.setMemoryContainerId(memoryContainerId);
+                    // Index the memory container document first to get the generated ID
+                    indexMemoryContainer(memoryContainer, ActionListener.wrap(memoryContainerId -> {
+                        // Create memory data indices based on semantic storage config
+                        createMemoryDataIndices(memoryContainerId, memoryContainer, user, ActionListener.wrap(actualIndexName -> {
+                            // Update the memory container with the actual index name
+                            MemoryStorageConfig config = memoryContainer.getMemoryStorageConfig();
+                            if (config == null) {
+                                config = MemoryStorageConfig
+                                    .builder()
+                                    .memoryIndexName(actualIndexName)
+                                    .semanticStorageEnabled(false)
+                                    .build();
+                            } else {
+                                config.setMemoryIndexName(actualIndexName);
+                            }
+                            memoryContainer.setMemoryStorageConfig(config);
 
-                    // Create memory data indices based on semantic storage config
-                    createMemoryDataIndices(memoryContainer, user, ActionListener.wrap(actualIndexName -> {
-                        // Update the memory container with the actual index name
-                        MemoryStorageConfig config = memoryContainer.getMemoryStorageConfig();
-                        if (config == null) {
-                            config = MemoryStorageConfig.builder().memoryIndexName(actualIndexName).semanticStorageEnabled(false).build();
-                        } else {
-                            config.setMemoryIndexName(actualIndexName);
-                        }
-                        memoryContainer.setMemoryStorageConfig(config);
-
-                        // Update the container document with the index name
-                        updateMemoryContainer(memoryContainer, ActionListener.wrap(updated -> {
-                            listener.onResponse(new MLCreateMemoryContainerResponse(memoryContainerId, "created"));
+                            // Update the container document with the index name
+                            updateMemoryContainer(memoryContainerId, memoryContainer, ActionListener.wrap(updated -> {
+                                listener.onResponse(new MLCreateMemoryContainerResponse(memoryContainerId, "created"));
+                            }, listener::onFailure));
                         }, listener::onFailure));
                     }, listener::onFailure));
-                }, listener::onFailure));
 
             } catch (Exception e) {
                 log.error("Failed to create memory container", e);
@@ -157,17 +163,11 @@ public class TransportCreateMemoryContainerAction extends
         }
     }
 
-    private MLMemoryContainer buildMemoryContainer(
-        MLCreateMemoryContainerInput input,
-        String memoryContainerId,
-        User user,
-        String tenantId
-    ) {
+    private MLMemoryContainer buildMemoryContainer(MLCreateMemoryContainerInput input, User user, String tenantId) {
         Instant now = Instant.now();
 
         return MLMemoryContainer
             .builder()
-            .memoryContainerId(memoryContainerId)
             .name(input.getName())
             .description(input.getDescription())
             .owner(user)
@@ -178,7 +178,12 @@ public class TransportCreateMemoryContainerAction extends
             .build();
     }
 
-    private void createMemoryDataIndices(MLMemoryContainer container, User user, ActionListener<String> listener) {
+    private void createMemoryDataIndices(
+        String memoryContainerId,
+        MLMemoryContainer container,
+        User user,
+        ActionListener<String> listener
+    ) {
         String userId = user != null ? user.getName() : "default";
         MemoryStorageConfig memoryStorageConfig = container.getMemoryStorageConfig();
         String baseIndexName = memoryStorageConfig != null ? memoryStorageConfig.getMemoryIndexName() : null;
@@ -186,11 +191,11 @@ public class TransportCreateMemoryContainerAction extends
         if (baseIndexName == null) {
             // Generate default index name based on semantic storage config
             if (memoryStorageConfig == null || !memoryStorageConfig.isSemanticStorageEnabled()) {
-                baseIndexName = STATIC_MEMORY_INDEX_PREFIX + container.getMemoryContainerId() + "-" + userId;
+                baseIndexName = STATIC_MEMORY_INDEX_PREFIX + memoryContainerId + "-" + userId;
             } else if (memoryStorageConfig.getEmbeddingModelType() == FunctionName.TEXT_EMBEDDING) {
-                baseIndexName = KNN_MEMORY_INDEX_PREFIX + container.getMemoryContainerId() + "-" + userId;
+                baseIndexName = KNN_MEMORY_INDEX_PREFIX + memoryContainerId + "-" + userId;
             } else if (memoryStorageConfig.getEmbeddingModelType() == FunctionName.SPARSE_ENCODING) {
-                baseIndexName = SPARSE_MEMORY_INDEX_PREFIX + container.getMemoryContainerId() + "-" + userId;
+                baseIndexName = SPARSE_MEMORY_INDEX_PREFIX + memoryContainerId + "-" + userId;
             }
         }
 
@@ -212,18 +217,18 @@ public class TransportCreateMemoryContainerAction extends
             Map<String, Object> properties = new HashMap<>();
 
             // Common fields for all index types
-            properties.put(USER_ID_FIELD, Map.of("type", "text"));
-            properties.put(AGENT_ID_FIELD, Map.of("type", "text"));
-            properties.put(SESSION_ID_FIELD, Map.of("type", "text"));
-            properties.put(RAW_MESSAGES_FIELD, Map.of("type", "text"));
+            // Use keyword type for ID fields that need exact matching
+            properties.put(USER_ID_FIELD, Map.of("type", "keyword"));
+            properties.put(AGENT_ID_FIELD, Map.of("type", "keyword"));
+            properties.put(SESSION_ID_FIELD, Map.of("type", "keyword"));
+            properties.put(MEMORY_FIELD, Map.of("type", "text")); // Keep as text for full-text search
             properties.put(TAGS_FIELD, Map.of("type", "flat_object"));
-            properties.put(MEMORY_ID_FIELD, Map.of("type", "text"));
-            properties.put(TENANT_ID_FIELD, Map.of("type", "keyword"));
             properties.put(MEMORY_TYPE_FIELD, Map.of("type", "keyword"));
-            properties.put(TIMESTAMP_FIELD, Map.of("type", "date", "format", "strict_date_time||epoch_millis"));
+            properties.put(MEMORY_CHARACTERISTIC_FIELD, Map.of("type", "keyword"));
+            properties.put(CREATED_TIME_FIELD, Map.of("type", "date", "format", "strict_date_time||epoch_millis"));
+            properties.put(LAST_UPDATED_TIME_FIELD, Map.of("type", "date", "format", "strict_date_time||epoch_millis"));
 
             if (memoryStorageConfig != null && memoryStorageConfig.isSemanticStorageEnabled()) {
-                properties.put(FACT_FIELD, Map.of("type", "text"));
 
                 if (memoryStorageConfig.getEmbeddingModelType() == FunctionName.TEXT_EMBEDDING) {
                     // KNN index configuration
@@ -242,11 +247,11 @@ public class TransportCreateMemoryContainerAction extends
                     method.put("engine", KNN_ENGINE);
                     method.put("parameters", Map.of("ef_construction", KNN_EF_CONSTRUCTION, "m", KNN_M));
                     knnVector.put("method", method);
-                    properties.put(EMBEDDING_FIELD, knnVector);
+                    properties.put(MEMORY_EMBEDDING_FIELD, knnVector);
 
                 } else if (memoryStorageConfig.getEmbeddingModelType() == FunctionName.SPARSE_ENCODING) {
-                    // Sparse index configuration
-                    properties.put(EMBEDDING_FIELD, Map.of("type", "rank_feature"));
+                    // Sparse index configuration - use rank_features for sparse embeddings
+                    properties.put(MEMORY_EMBEDDING_FIELD, Map.of("type", "rank_features"));
                 }
             }
 
@@ -283,7 +288,7 @@ public class TransportCreateMemoryContainerAction extends
         }
     }
 
-    private void updateMemoryContainer(MLMemoryContainer container, ActionListener<Boolean> listener) {
+    private void updateMemoryContainer(String memoryContainerId, MLMemoryContainer container, ActionListener<Boolean> listener) {
         try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
             sdkClient
                 .putDataObjectAsync(
@@ -291,7 +296,7 @@ public class TransportCreateMemoryContainerAction extends
                         .builder()
                         .tenantId(container.getTenantId())
                         .index(ML_MEMORY_CONTAINER_INDEX)
-                        .id(container.getMemoryContainerId())
+                        .id(memoryContainerId)
                         .dataObject(container)
                         .build()
                 )
@@ -304,7 +309,7 @@ public class TransportCreateMemoryContainerAction extends
                     } else {
                         try {
                             IndexResponse indexResponse = r.indexResponse();
-                            log.info("Successfully updated memory container with ID: {}", container.getMemoryContainerId());
+                            log.info("Successfully updated memory container with ID: {}", memoryContainerId);
                             listener.onResponse(true);
                         } catch (Exception e) {
                             listener.onFailure(e);

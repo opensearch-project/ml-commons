@@ -5,7 +5,7 @@
 
 package org.opensearch.ml.rest;
 
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.BASE_MEMORY_CONTAINER_PATH;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.BASE_MEMORY_CONTAINERS_PATH;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_CONTAINER_ID;
 import static org.opensearch.ml.utils.RestActionUtils.getParameterId;
 import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
@@ -47,7 +47,7 @@ public class RestMLGetMemoryContainerAction extends BaseRestHandler {
             .of(
                 new Route(
                     RestRequest.Method.GET,
-                    String.format(Locale.ROOT, "%s/{%s}", BASE_MEMORY_CONTAINER_PATH, PARAMETER_MEMORY_CONTAINER_ID)
+                    String.format(Locale.ROOT, "%s/{%s}", BASE_MEMORY_CONTAINERS_PATH, PARAMETER_MEMORY_CONTAINER_ID)
                 )
             );
     }
