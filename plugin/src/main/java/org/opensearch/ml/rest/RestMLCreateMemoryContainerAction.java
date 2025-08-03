@@ -48,7 +48,8 @@ public class RestMLCreateMemoryContainerAction extends BaseRestHandler {
 
     @Override
     public List<Route> routes() {
-        return ImmutableList.of(new Route(RestRequest.Method.POST, String.format(Locale.ROOT, "%s/memory_container/_create", ML_BASE_URI)));
+        return ImmutableList
+            .of(new Route(RestRequest.Method.POST, String.format(Locale.ROOT, "%s/memory_containers/_create", ML_BASE_URI)));
     }
 
     @Override

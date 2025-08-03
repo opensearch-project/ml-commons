@@ -3,9 +3,6 @@
     "schema_version": 1
   },
   "properties": {
-    "memory_container_id": {
-      "type": "keyword"
-    },
     "name": {
       "type": "text",
       "fields": {

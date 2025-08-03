@@ -26,11 +26,11 @@ public class MemoryContainerConstants {
     public static final String EMBEDDING_MODEL_ID_FIELD = "embedding_model_id";
     public static final String LLM_MODEL_ID_FIELD = "llm_model_id";
     public static final String DIMENSION_FIELD = "dimension";
-    public static final String MAX_RECENT_MESSAGES_FIELD = "max_recent_messages";
+    public static final String MAX_SHORT_TERM_MEMORIES_FIELD = "max_short_term_memories";
     public static final String MAX_INFER_SIZE_FIELD = "max_infer_size";
 
     // Default values
-    public static final int MAX_RECENT_MESSAGES_DEFAULT_VALUE = 6;
+    public static final int MAX_SHORT_TERM_MEMORIES_DEFAULT_VALUE = 6;
     public static final int MAX_INFER_SIZE_DEFAULT_VALUE = 5;
 
     // Memory index type prefixes
@@ -42,16 +42,20 @@ public class MemoryContainerConstants {
     public static final String USER_ID_FIELD = "user_id";
     public static final String AGENT_ID_FIELD = "agent_id";
     public static final String SESSION_ID_FIELD = "session_id";
-    public static final String RAW_MESSAGES_FIELD = "raw_messages";
-    public static final String FACT_FIELD = "fact";
-    public static final String EMBEDDING_FIELD = "embedding";
+    public static final String MEMORY_FIELD = "memory";
+    public static final String MEMORY_EMBEDDING_FIELD = "memory_embedding";
     public static final String TAGS_FIELD = "tags";
     public static final String MEMORY_ID_FIELD = "memory_id";
     public static final String MEMORY_TYPE_FIELD = "memory_type";
-    public static final String TIMESTAMP_FIELD = "timestamp";
+    public static final String MEMORY_CHARACTERISTIC_FIELD = "memory_characteristic";
+    // Memory characteristic values are defined in MemoryCharacteristic enum
+
+    // Request body field names (different from storage field names)
+    public static final String MESSAGE_FIELD = "message";
+    public static final String INFER_FIELD = "infer";
 
     // KNN index settings
-    public static final String KNN_ENGINE = "faiss";
+    public static final String KNN_ENGINE = "lucene";
     public static final String KNN_SPACE_TYPE = "cosinesimil";
     public static final String KNN_METHOD_NAME = "hnsw";
     public static final int KNN_EF_SEARCH = 100;
@@ -59,9 +63,12 @@ public class MemoryContainerConstants {
     public static final int KNN_M = 16;
 
     // REST API paths
-    public static final String BASE_MEMORY_CONTAINER_PATH = "/_plugins/_ml/memory_container";
-    public static final String CREATE_MEMORY_CONTAINER_PATH = BASE_MEMORY_CONTAINER_PATH + "/_create";
+    public static final String BASE_MEMORY_CONTAINERS_PATH = "/_plugins/_ml/memory_containers";
+    public static final String CREATE_MEMORY_CONTAINER_PATH = BASE_MEMORY_CONTAINERS_PATH + "/_create";
     public static final String PARAMETER_MEMORY_CONTAINER_ID = "memory_container_id";
+    public static final String MEMORIES_PATH = BASE_MEMORY_CONTAINERS_PATH + "/{" + PARAMETER_MEMORY_CONTAINER_ID + "}/memories";
+
+    // Memory types are defined in MemoryType enum
 
     // Response fields
     public static final String STATUS_FIELD = "status";
@@ -75,10 +82,8 @@ public class MemoryContainerConstants {
     public static final String TEXT_EMBEDDING_DIMENSION_REQUIRED_ERROR = "Dimension is required for TEXT_EMBEDDING";
     public static final String SPARSE_ENCODING_DIMENSION_NOT_ALLOWED_ERROR = "Dimension is not allowed for SPARSE_ENCODING";
     public static final String INVALID_EMBEDDING_MODEL_TYPE_ERROR = "Embedding model type must be either TEXT_EMBEDDING or SPARSE_ENCODING";
-    public static final String MAX_RECENT_MESSAGES_SEMANTIC_LIMIT_ERROR =
-        "Maximum recent messages cannot exceed 10 when semantic storage is enabled";
-    public static final String MAX_RECENT_MESSAGES_STATIC_LIMIT_ERROR =
-        "Maximum recent messages cannot exceed 100 when semantic storage is disabled";
+    public static final String MAX_SHORT_TERM_MEMORIES_SEMANTIC_LIMIT_ERROR =
+        "Maximum short-term memories cannot exceed 10 when semantic storage is enabled";
     public static final String MAX_INFER_SIZE_LIMIT_ERROR = "Maximum infer size cannot exceed 10";
     public static final String FIELD_NOT_ALLOWED_SEMANTIC_DISABLED_ERROR = "Field %s is not allowed when semantic storage is disabled";
 
@@ -87,4 +92,5 @@ public class MemoryContainerConstants {
     public static final String LLM_MODEL_NOT_REMOTE_ERROR = "LLM model must be a REMOTE model, found: %s";
     public static final String EMBEDDING_MODEL_NOT_FOUND_ERROR = "Embedding model with ID %s not found";
     public static final String EMBEDDING_MODEL_TYPE_MISMATCH_ERROR = "Embedding model must be of type %s or REMOTE, found: %s";
+    public static final String INFER_NOT_ALLOWED_NON_SEMANTIC_ERROR = "Infer cannot be true when semantic storage is disabled";
 }
