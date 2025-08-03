@@ -327,6 +327,7 @@ public class TransportAddMemoryAction extends HandledTransportAction<MLAddMemory
             .memoryCharacteristic(memoryCharacteristic)
             .userId(user != null ? user.getName() : null)
             .agentId(input.getAgentId())
+            .role(input.getRole())
             .tags(input.getTags())
             .createdTime(now)
             .lastUpdatedTime(now)
