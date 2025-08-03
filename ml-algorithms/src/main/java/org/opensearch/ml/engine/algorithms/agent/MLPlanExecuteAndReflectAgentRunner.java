@@ -107,8 +107,6 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
         "You are a dedicated helper agent working as part of a plan‑execute‑reflect framework. Your role is to receive a discrete task, execute all necessary internal reasoning or tool calls, and return a single, final response that fully addresses the task. You must never return an empty response. If you are unable to complete the task or retrieve meaningful information, you must respond with a clear explanation of the issue or what was missing. Under no circumstances should you end your reply with a question or ask for more information. If you search any index, always include the raw documents in the final result instead of summarizing the content. This is critical to give visibility into what the query retrieved.";
     private static final String DEFAULT_NO_ESCAPE_PARAMS = "tool_configs,_tools";
     private static final String DEFAULT_MAX_STEPS_EXECUTED = "20";
-    private static final String DEFAULT_MESSAGE_HISTORY_LIMIT = "10";
-    private static final String DEFAULT_EXECUTOR_MESSAGE_HISTORY_LIMIT = "10";
     private static final String DEFAULT_REACT_MAX_ITERATIONS = "20";
 
     // fields
@@ -139,8 +137,16 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     public static final String REFLECT_PROMPT_TEMPLATE_FIELD = "reflect_prompt_template";
     public static final String PLANNER_WITH_HISTORY_TEMPLATE_FIELD = "planner_with_history_template";
     public static final String EXECUTOR_MAX_ITERATIONS_FIELD = "executor_max_iterations";
+
+    // controls how many messages (last x) from planner memory are passed as context during planning phase
+    // these messages are added as completed steps in the reflect prompt
     public static final String PLANNER_MESSAGE_HISTORY_LIMIT = "message_history_limit";
+    private static final String DEFAULT_MESSAGE_HISTORY_LIMIT = "10";
+
+    // controls how many messages from executor memory are passed as context during step execution
     public static final String EXECUTOR_MESSAGE_HISTORY_LIMIT = "executor_message_history_limit";
+    private static final String DEFAULT_EXECUTOR_MESSAGE_HISTORY_LIMIT = "10";
+
     public static final String INJECT_DATETIME_FIELD = "inject_datetime";
     public static final String DATETIME_FORMAT_FIELD = "datetime_format";
 
