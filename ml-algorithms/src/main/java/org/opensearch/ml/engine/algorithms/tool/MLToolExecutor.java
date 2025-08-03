@@ -5,15 +5,11 @@
 
 package org.opensearch.ml.engine.algorithms.tool;
 
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_DISABLED_MESSAGE;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_ENABLED;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.opensearch.OpenSearchException;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
@@ -73,17 +69,10 @@ public class MLToolExecutor implements Executable {
         this.toolFactories = toolFactories;
         this.memoryFactoryMap = memoryFactoryMap;
         this.encryptor = encryptor;
-        this.executeToolEnabled = ML_COMMONS_EXECUTE_TOOL_ENABLED.get(clusterService.getSettings());
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_EXECUTE_TOOL_ENABLED, it -> executeToolEnabled = it);
     }
 
     @Override
     public void execute(Input input, ActionListener<Output> listener) {
-        if (!executeToolEnabled) {
-            listener.onFailure(new OpenSearchException(ML_COMMONS_EXECUTE_TOOL_DISABLED_MESSAGE));
-            return;
-        }
-
         if (!(input instanceof ToolMLInput)) {
             throw new IllegalArgumentException("wrong input");
         }

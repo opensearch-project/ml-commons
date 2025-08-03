@@ -8,6 +8,7 @@ package org.opensearch.ml.common.settings;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONTROLLER_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_METRIC_COLLECTION_ENABLED;
@@ -49,6 +50,8 @@ public class MLFeatureEnabledSetting {
     private volatile Boolean isMetricCollectionEnabled;
     private volatile Boolean isStaticMetricCollectionEnabled;
 
+    private volatile Boolean isExecuteToolEnabled;
+
     private final List<SettingsChangeListener> listeners = new ArrayList<>();
 
     public MLFeatureEnabledSetting(ClusterService clusterService, Settings settings) {
@@ -64,6 +67,7 @@ public class MLFeatureEnabledSetting {
         isRagSearchPipelineEnabled = ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED.get(settings);
         isMetricCollectionEnabled = ML_COMMONS_METRIC_COLLECTION_ENABLED.get(settings);
         isStaticMetricCollectionEnabled = ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED.get(settings);
+        isExecuteToolEnabled = ML_COMMONS_EXECUTE_TOOL_ENABLED.get(settings);
 
         clusterService
             .getClusterSettings()
@@ -86,6 +90,7 @@ public class MLFeatureEnabledSetting {
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED, it -> isRagSearchPipelineEnabled = it);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_EXECUTE_TOOL_ENABLED, it -> isExecuteToolEnabled = it);
     }
 
     /**
@@ -174,6 +179,14 @@ public class MLFeatureEnabledSetting {
 
     public boolean isStaticMetricCollectionEnabled() {
         return isStaticMetricCollectionEnabled;
+    }
+
+    /**
+     * Whether the execute tool API is enabled. If disabled, execute tool API in ml-commons will be blocked
+     * @return whether the execute tool API is enabled.
+     */
+    public boolean isToolExecuteEnabled() {
+        return isExecuteToolEnabled;
     }
 
     @VisibleForTesting

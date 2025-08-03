@@ -8,6 +8,7 @@ package org.opensearch.ml.rest;
 import static org.opensearch.core.rest.RestStatus.BAD_REQUEST;
 import static org.opensearch.core.rest.RestStatus.INTERNAL_SERVER_ERROR;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_DISABLED_MESSAGE;
 import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.utils.MLExceptionUtils.AGENT_FRAMEWORK_DISABLED_ERR_MSG;
 import static org.opensearch.ml.utils.RestActionUtils.PARAMETER_AGENT_ID;
@@ -128,6 +129,9 @@ public class RestMLExecuteAction extends BaseRestHandler {
             ((AgentMLInput) input).setTenantId(tenantId);
             ((AgentMLInput) input).setIsAsync(async);
         } else if (uri.startsWith(ML_BASE_URI + "/tools/")) {
+            if (!mlFeatureEnabledSetting.isToolExecuteEnabled()) {
+                throw new IllegalStateException(ML_COMMONS_EXECUTE_TOOL_DISABLED_MESSAGE);
+            }
             String toolName = request.param(PARAMETER_TOOL_NAME);
             functionName = FunctionName.TOOL;
             input = MLInput.parse(parser, functionName.name());
