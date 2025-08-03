@@ -26,11 +26,9 @@ public class MemoryContainerConstants {
     public static final String EMBEDDING_MODEL_ID_FIELD = "embedding_model_id";
     public static final String LLM_MODEL_ID_FIELD = "llm_model_id";
     public static final String DIMENSION_FIELD = "dimension";
-    public static final String MAX_SHORT_TERM_MEMORIES_FIELD = "max_short_term_memories";
     public static final String MAX_INFER_SIZE_FIELD = "max_infer_size";
 
     // Default values
-    public static final int MAX_SHORT_TERM_MEMORIES_DEFAULT_VALUE = 6;
     public static final int MAX_INFER_SIZE_DEFAULT_VALUE = 5;
 
     // Memory index type prefixes
@@ -47,9 +45,7 @@ public class MemoryContainerConstants {
     public static final String TAGS_FIELD = "tags";
     public static final String MEMORY_ID_FIELD = "memory_id";
     public static final String MEMORY_TYPE_FIELD = "memory_type";
-    public static final String MEMORY_CHARACTERISTIC_FIELD = "memory_characteristic";
     public static final String ROLE_FIELD = "role";
-    // Memory characteristic values are defined in MemoryCharacteristic enum
 
     // Request body field names (different from storage field names)
     public static final String MESSAGE_FIELD = "message";
@@ -85,8 +81,6 @@ public class MemoryContainerConstants {
     public static final String TEXT_EMBEDDING_DIMENSION_REQUIRED_ERROR = "Dimension is required for TEXT_EMBEDDING";
     public static final String SPARSE_ENCODING_DIMENSION_NOT_ALLOWED_ERROR = "Dimension is not allowed for SPARSE_ENCODING";
     public static final String INVALID_EMBEDDING_MODEL_TYPE_ERROR = "Embedding model type must be either TEXT_EMBEDDING or SPARSE_ENCODING";
-    public static final String MAX_SHORT_TERM_MEMORIES_SEMANTIC_LIMIT_ERROR =
-        "Maximum short-term memories cannot exceed 10 when semantic storage is enabled";
     public static final String MAX_INFER_SIZE_LIMIT_ERROR = "Maximum infer size cannot exceed 10";
     public static final String FIELD_NOT_ALLOWED_SEMANTIC_DISABLED_ERROR = "Field %s is not allowed when semantic storage is disabled";
 

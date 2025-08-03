@@ -16,7 +16,6 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_METHOD_NAME;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.KNN_SPACE_TYPE;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LAST_UPDATED_TIME_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CHARACTERISTIC_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_EMBEDDING_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_TYPE_FIELD;
@@ -215,7 +214,6 @@ public class TransportCreateMemoryContainerAction extends
             properties.put(MEMORY_FIELD, Map.of("type", "text")); // Keep as text for full-text search
             properties.put(TAGS_FIELD, Map.of("type", "flat_object"));
             properties.put(MEMORY_TYPE_FIELD, Map.of("type", "keyword"));
-            properties.put(MEMORY_CHARACTERISTIC_FIELD, Map.of("type", "keyword"));
             properties.put(ROLE_FIELD, Map.of("type", "text")); // Text field for role (human/llm)
             properties.put(CREATED_TIME_FIELD, Map.of("type", "date", "format", "strict_date_time||epoch_millis"));
             properties.put(LAST_UPDATED_TIME_FIELD, Map.of("type", "date", "format", "strict_date_time||epoch_millis"));
