@@ -8,7 +8,11 @@ package org.opensearch.ml.action.memorycontainer.memory;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.*;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREATED_TIME_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.INFER_REQUIRES_LLM_MODEL_ERROR;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MAX_SHORT_TERM_MEMORIES_DEFAULT_VALUE;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CHARACTERISTIC_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
 
 import java.time.Instant;
 import java.util.Arrays;
@@ -125,23 +129,20 @@ public class TransportAddMemoryAction extends HandledTransportAction<MLAddMemory
                 return;
             }
 
-            // Validate and determine infer value based on semantic storage
+            // Validate and determine infer value based on LLM model presence
             MemoryStorageConfig storageConfig = container.getMemoryStorageConfig();
-            boolean isSemanticEnabled = storageConfig != null && storageConfig.isSemanticStorageEnabled();
+            boolean hasLlmModel = storageConfig != null && storageConfig.getLlmModelId() != null;
             Boolean infer = input.getInfer();
 
-            if (!isSemanticEnabled) {
-                // Semantic storage disabled: infer must be false or null
-                if (infer != null && infer) {
-                    actionListener.onFailure(new IllegalArgumentException(INFER_NOT_ALLOWED_NON_SEMANTIC_ERROR));
-                    return;
-                }
-                infer = false; // Default to false
-            } else {
-                // Semantic storage enabled: default to true if not specified
-                if (infer == null) {
-                    infer = true;
-                }
+            if (infer != null && infer && !hasLlmModel) {
+                // infer=true requires LLM model
+                actionListener.onFailure(new IllegalArgumentException(INFER_REQUIRES_LLM_MODEL_ERROR));
+                return;
+            }
+
+            // Default infer value based on LLM model presence
+            if (infer == null) {
+                infer = hasLlmModel;
             }
 
             // Get the single message (we only support one for now)

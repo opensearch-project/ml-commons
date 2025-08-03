@@ -21,7 +21,6 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEMANTIC_STORAGE_EMBEDDING_MODEL_ID_REQUIRED_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEMANTIC_STORAGE_EMBEDDING_MODEL_TYPE_REQUIRED_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEMANTIC_STORAGE_ENABLED_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEMANTIC_STORAGE_LLM_MODEL_ID_REQUIRED_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SPARSE_ENCODING_DIMENSION_NOT_ALLOWED_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.TEXT_EMBEDDING_DIMENSION_REQUIRED_ERROR;
 
@@ -72,7 +71,8 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
         Integer maxInferSize
     ) {
         this.memoryIndexName = memoryIndexName;
-        this.semanticStorageEnabled = semanticStorageEnabled;
+        // Auto-determine semantic storage based on embedding configuration
+        this.semanticStorageEnabled = (embeddingModelId != null && embeddingModelType != null);
         this.embeddingModelType = embeddingModelType;
         this.embeddingModelId = embeddingModelId;
         this.llmModelId = llmModelId;
@@ -120,22 +120,24 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
         }
         builder.field(SEMANTIC_STORAGE_ENABLED_FIELD, semanticStorageEnabled);
 
+        // Always output LLM model if present (decoupled from semantic storage)
+        if (llmModelId != null) {
+            builder.field(LLM_MODEL_ID_FIELD, llmModelId);
+        }
+
         if (!semanticStorageEnabled) {
             // When semantic storage is disabled, only output allowed fields
             if (maxShortTermMemories != null) {
                 builder.field(MAX_SHORT_TERM_MEMORIES_FIELD, maxShortTermMemories);
             }
-            // Do not output other fields when semantic storage is disabled
+            // Do not output embedding-related fields when semantic storage is disabled
         } else {
-            // When semantic storage is enabled, output all relevant fields
+            // When semantic storage is enabled, output embedding-related fields
             if (embeddingModelType != null) {
                 builder.field(EMBEDDING_MODEL_TYPE_FIELD, embeddingModelType.name());
             }
             if (embeddingModelId != null) {
                 builder.field(EMBEDDING_MODEL_ID_FIELD, embeddingModelId);
-            }
-            if (llmModelId != null) {
-                builder.field(LLM_MODEL_ID_FIELD, llmModelId);
             }
             if (dimension != null) {
                 builder.field(DIMENSION_FIELD, dimension);
@@ -154,7 +156,6 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
 
     public static MemoryStorageConfig parse(XContentParser parser) throws IOException {
         String memoryIndexName = null;
-        boolean semanticStorageEnabled = false;
         FunctionName embeddingModelType = null;
         String embeddingModelId = null;
         String llmModelId = null;
@@ -172,7 +173,8 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
                     memoryIndexName = parser.text();
                     break;
                 case SEMANTIC_STORAGE_ENABLED_FIELD:
-                    semanticStorageEnabled = parser.booleanValue();
+                    // Skip this field - it's now auto-determined
+                    parser.skipChildren();
                     break;
                 case EMBEDDING_MODEL_TYPE_FIELD:
                     embeddingModelType = FunctionName.from(parser.text());
@@ -201,7 +203,7 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
         MemoryStorageConfig config = MemoryStorageConfig
             .builder()
             .memoryIndexName(memoryIndexName)
-            .semanticStorageEnabled(semanticStorageEnabled)
+            .semanticStorageEnabled(false)  // Will be auto-determined in constructor
             .embeddingModelType(embeddingModelType)
             .embeddingModelId(embeddingModelId)
             .llmModelId(llmModelId)
@@ -219,41 +221,8 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
      * and enforces field restrictions and limits.
      */
     public void validate() {
-        if (!semanticStorageEnabled) {
-            // When semantic storage is disabled, only allow specific fields
-            // Clear fields that aren't allowed
-            this.embeddingModelType = null;
-            this.embeddingModelId = null;
-            this.llmModelId = null;
-            this.dimension = null;
-            this.maxInferSize = null;
-            this.maxShortTermMemories = null;
-
-            // No limit on max_short_term_memories for non-semantic storage since all memories are LONG_TERM
-        } else {
-            // When semantic storage is enabled, validate required fields and limits
-            // Validate max_infer_size limit (applies regardless of semantic storage)
-            if (maxInferSize != null && maxInferSize > 10) {
-                throw new IllegalArgumentException(MAX_INFER_SIZE_LIMIT_ERROR);
-            }
-            // Validate max_short_term_memories limit for semantic storage
-            if (maxShortTermMemories != null && maxShortTermMemories > 10) {
-                throw new IllegalArgumentException(MAX_SHORT_TERM_MEMORIES_SEMANTIC_LIMIT_ERROR);
-            }
-
-            // Validate required fields for semantic storage
-            if (embeddingModelType == null) {
-                throw new IllegalArgumentException(SEMANTIC_STORAGE_EMBEDDING_MODEL_TYPE_REQUIRED_ERROR);
-            }
-
-            if (embeddingModelId == null) {
-                throw new IllegalArgumentException(SEMANTIC_STORAGE_EMBEDDING_MODEL_ID_REQUIRED_ERROR);
-            }
-
-            if (llmModelId == null) {
-                throw new IllegalArgumentException(SEMANTIC_STORAGE_LLM_MODEL_ID_REQUIRED_ERROR);
-            }
-
+        // If both embedding model ID and type are provided, they must be valid
+        if (embeddingModelId != null && embeddingModelType != null) {
             // Validate embedding model type
             if (embeddingModelType != FunctionName.TEXT_EMBEDDING && embeddingModelType != FunctionName.SPARSE_ENCODING) {
                 throw new IllegalArgumentException(INVALID_EMBEDDING_MODEL_TYPE_ERROR);
@@ -267,6 +236,29 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
             if (embeddingModelType == FunctionName.SPARSE_ENCODING && dimension != null) {
                 throw new IllegalArgumentException(SPARSE_ENCODING_DIMENSION_NOT_ALLOWED_ERROR);
             }
+        } else if (embeddingModelId != null || embeddingModelType != null) {
+            // If only one is provided, both are required
+            if (embeddingModelType == null) {
+                throw new IllegalArgumentException(SEMANTIC_STORAGE_EMBEDDING_MODEL_TYPE_REQUIRED_ERROR);
+            }
+            if (embeddingModelId == null) {
+                throw new IllegalArgumentException(SEMANTIC_STORAGE_EMBEDDING_MODEL_ID_REQUIRED_ERROR);
+            }
+        }
+
+        // Validate limits
+        if (maxInferSize != null && maxInferSize > 10) {
+            throw new IllegalArgumentException(MAX_INFER_SIZE_LIMIT_ERROR);
+        }
+
+        // When semantic storage is enabled (embedding config present), limit short-term memories
+        if (semanticStorageEnabled && maxShortTermMemories != null && maxShortTermMemories > 10) {
+            throw new IllegalArgumentException(MAX_SHORT_TERM_MEMORIES_SEMANTIC_LIMIT_ERROR);
+        }
+
+        // Clear fields that shouldn't be present when semantic storage is disabled
+        if (!semanticStorageEnabled) {
+            this.maxInferSize = null;
         }
     }
 }

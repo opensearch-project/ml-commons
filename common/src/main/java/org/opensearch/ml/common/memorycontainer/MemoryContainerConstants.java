@@ -78,9 +78,9 @@ public class MemoryContainerConstants {
 
     // Error messages
     public static final String SEMANTIC_STORAGE_EMBEDDING_MODEL_TYPE_REQUIRED_ERROR =
-        "Embedding model type is required when semantic storage is enabled";
+        "Embedding model type is required when embedding model ID is provided";
     public static final String SEMANTIC_STORAGE_EMBEDDING_MODEL_ID_REQUIRED_ERROR =
-        "Embedding model ID is required when semantic storage is enabled";
+        "Embedding model ID is required when embedding model type is provided";
     public static final String SEMANTIC_STORAGE_LLM_MODEL_ID_REQUIRED_ERROR = "LLM model ID is required when semantic storage is enabled";
     public static final String TEXT_EMBEDDING_DIMENSION_REQUIRED_ERROR = "Dimension is required for TEXT_EMBEDDING";
     public static final String SPARSE_ENCODING_DIMENSION_NOT_ALLOWED_ERROR = "Dimension is not allowed for SPARSE_ENCODING";
@@ -94,6 +94,6 @@ public class MemoryContainerConstants {
     public static final String LLM_MODEL_NOT_FOUND_ERROR = "LLM model with ID %s not found";
     public static final String LLM_MODEL_NOT_REMOTE_ERROR = "LLM model must be a REMOTE model, found: %s";
     public static final String EMBEDDING_MODEL_NOT_FOUND_ERROR = "Embedding model with ID %s not found";
-    public static final String EMBEDDING_MODEL_TYPE_MISMATCH_ERROR = "Embedding model must be of type %s or REMOTE, found: %s";
-    public static final String INFER_NOT_ALLOWED_NON_SEMANTIC_ERROR = "Infer cannot be true when semantic storage is disabled";
+    public static final String EMBEDDING_MODEL_TYPE_MISMATCH_ERROR = "Embedding model must be of type %s or REMOTE, found: %s";                                                                                                          // instead
+    public static final String INFER_REQUIRES_LLM_MODEL_ERROR = "infer=true requires llm_model_id to be configured in memory storage";
 }
