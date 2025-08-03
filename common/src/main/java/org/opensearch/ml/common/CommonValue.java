@@ -43,6 +43,7 @@ public class CommonValue {
     public static final String ML_AGENT_INDEX = ".plugins-ml-agent";
     public static final String ML_MEMORY_META_INDEX = ".plugins-ml-memory-meta";
     public static final String ML_MEMORY_MESSAGE_INDEX = ".plugins-ml-memory-message";
+    public static final String ML_MEMORY_CONTAINER_INDEX = ".plugins-ml-memory-container";
     public static final String ML_STOP_WORDS_INDEX = ".plugins-ml-stop-words";
     // index used in 2.19 to track MlTaskBatchUpdate task
     public static final String TASK_POLLING_JOB_INDEX = ".ml_commons_task_polling_job";
@@ -63,6 +64,7 @@ public class CommonValue {
     public static final String ML_AGENT_INDEX_MAPPING_PATH = "index-mappings/ml_agent.json";
     public static final String ML_MEMORY_META_INDEX_MAPPING_PATH = "index-mappings/ml_memory_meta.json";
     public static final String ML_MEMORY_MESSAGE_INDEX_MAPPING_PATH = "index-mappings/ml_memory_message.json";
+    public static final String ML_MEMORY_CONTAINER_INDEX_MAPPING_PATH = "index-mappings/ml_memory_container.json";
     public static final String ML_MCP_SESSION_MANAGEMENT_INDEX_MAPPING_PATH = "index-mappings/ml_mcp_session_management.json";
     public static final String ML_MCP_TOOLS_INDEX_MAPPING_PATH = "index-mappings/ml_mcp_tools.json";
     public static final String ML_JOBS_INDEX_MAPPING_PATH = "index-mappings/ml_jobs.json";
