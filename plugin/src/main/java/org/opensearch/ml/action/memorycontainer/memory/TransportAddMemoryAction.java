@@ -20,7 +20,6 @@ import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.bulk.BulkRequest;
 import org.opensearch.action.delete.DeleteRequest;
-import org.opensearch.action.get.GetRequest;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.support.ActionFilters;
@@ -55,6 +54,7 @@ import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoryActi
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoryInput;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoryRequest;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoryResponse;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MessageInput;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
@@ -144,38 +144,32 @@ public class TransportAddMemoryAction extends HandledTransportAction<MLAddMemory
                 }
             }
 
+            // Get the single message (we only support one for now)
+            MessageInput message = input.getMessages().get(0);
+
             // Auto-determine memory type and characteristic based on infer
-            MemoryType memoryType = input.getMemoryType();
+            MemoryType memoryType = MemoryType.RAW_MESSAGE; // Always RAW_MESSAGE for now
             MemoryCharacteristic memoryCharacteristic;
 
             if (!infer) {
-                // When infer is false: only RAW_MESSAGE allowed, characteristic is LONG_TERM
-                if (memoryType != null && memoryType != MemoryType.RAW_MESSAGE) {
-                    actionListener.onFailure(new IllegalArgumentException("When infer is false, only RAW_MESSAGE memory type is allowed"));
-                    return;
-                }
-                memoryType = MemoryType.RAW_MESSAGE;
+                // When infer is false: characteristic is LONG_TERM
                 memoryCharacteristic = MemoryCharacteristic.LONG_TERM;
             } else {
-                // When infer is true: default to RAW_MESSAGE, characteristic is SHORT_TERM
-                if (memoryType == null) {
-                    memoryType = MemoryType.RAW_MESSAGE;
-                }
+                // When infer is true: characteristic is SHORT_TERM
                 memoryCharacteristic = MemoryCharacteristic.SHORT_TERM;
             }
 
-            // Generate IDs - memory_id now serves as the unique message identifier
-            String memoryId = input.getMemoryId();
+            // Generate session ID if not provided
             String sessionId = input.getSessionId();
-
-            if (memoryId == null) {
-                memoryId = UUID.randomUUID().toString();
+            if (sessionId == null) {
+                sessionId = "sess_" + UUID.randomUUID().toString();
             }
 
-            // Make memoryId final for lambda usage
-            final String finalMemoryId = memoryId;
+            // Make variables final for lambda usage
+            final String finalSessionId = sessionId;
             final MemoryType finalMemoryType = memoryType;
             final MemoryCharacteristic finalMemoryCharacteristic = memoryCharacteristic;
+            final MessageInput finalMessage = message;
 
             // Get index name from container
             String indexName = getIndexName(container);
@@ -187,52 +181,18 @@ public class TransportAddMemoryAction extends HandledTransportAction<MLAddMemory
                 return;
             }
 
-            // If sessionId not provided but memoryId exists, look up its sessionId
-            if (sessionId == null && input.getMemoryId() != null) {
-                searchSessionId(indexName, finalMemoryId, ActionListener.wrap(existingSessionId -> {
-                    String finalSessionId = existingSessionId != null ? existingSessionId : "sess_" + UUID.randomUUID().toString();
-                    addMemoryWithSessionId(
-                        input,
-                        container,
-                        indexName,
-                        finalMemoryId,
-                        finalSessionId,
-                        user,
-                        finalMemoryType,
-                        finalMemoryCharacteristic,
-                        actionListener
-                    );
-                }, e -> {
-                    // If search fails, generate new session ID
-                    String finalSessionId = "sess_" + UUID.randomUUID().toString();
-                    addMemoryWithSessionId(
-                        input,
-                        container,
-                        indexName,
-                        finalMemoryId,
-                        finalSessionId,
-                        user,
-                        finalMemoryType,
-                        finalMemoryCharacteristic,
-                        actionListener
-                    );
-                }));
-            } else {
-                if (sessionId == null) {
-                    sessionId = "sess_" + UUID.randomUUID().toString();
-                }
-                addMemoryWithSessionId(
-                    input,
-                    container,
-                    indexName,
-                    finalMemoryId,
-                    sessionId,
-                    user,
-                    finalMemoryType,
-                    finalMemoryCharacteristic,
-                    actionListener
-                );
-            }
+            // Process the message
+            addMemoryWithSessionId(
+                input,
+                container,
+                indexName,
+                finalMessage,
+                finalSessionId,
+                user,
+                finalMemoryType,
+                finalMemoryCharacteristic,
+                actionListener
+            );
         }, actionListener::onFailure));
     }
 
@@ -240,7 +200,7 @@ public class TransportAddMemoryAction extends HandledTransportAction<MLAddMemory
         MLAddMemoryInput input,
         MLMemoryContainer container,
         String indexName,
-        String memoryId,
+        MessageInput message,
         String sessionId,
         User user,
         MemoryType memoryType,
@@ -254,12 +214,12 @@ public class TransportAddMemoryAction extends HandledTransportAction<MLAddMemory
 
             if (needsEmbedding) {
                 // Generate embedding first, then save memory
-                generateEmbedding(input.getMemory(), storageConfig, ActionListener.wrap(embedding -> {
+                generateEmbedding(message.getContent(), storageConfig, ActionListener.wrap(embedding -> {
                     saveMemoryWithEmbedding(
                         input,
                         container,
                         indexName,
-                        memoryId,
+                        message,
                         sessionId,
                         user,
                         memoryType,
@@ -274,7 +234,7 @@ public class TransportAddMemoryAction extends HandledTransportAction<MLAddMemory
                         input,
                         container,
                         indexName,
-                        memoryId,
+                        message,
                         sessionId,
                         user,
                         memoryType,
@@ -289,7 +249,7 @@ public class TransportAddMemoryAction extends HandledTransportAction<MLAddMemory
                     input,
                     container,
                     indexName,
-                    memoryId,
+                    message,
                     sessionId,
                     user,
                     memoryType,
@@ -308,7 +268,7 @@ public class TransportAddMemoryAction extends HandledTransportAction<MLAddMemory
         MLAddMemoryInput input,
         MLMemoryContainer container,
         String indexName,
-        String memoryId,
+        MessageInput message,
         String sessionId,
         User user,
         MemoryType memoryType,
@@ -320,34 +280,33 @@ public class TransportAddMemoryAction extends HandledTransportAction<MLAddMemory
         Instant now = Instant.now();
         MLMemory memory = MLMemory
             .builder()
-            .memoryId(memoryId)
             .sessionId(sessionId)
-            .memory(input.getMemory())
+            .memory(message.getContent())
             .memoryType(memoryType)
             .memoryCharacteristic(memoryCharacteristic)
             .userId(user != null ? user.getName() : null)
             .agentId(input.getAgentId())
-            .role(input.getRole())
+            .role(message.getRole())
             .tags(input.getTags())
             .createdTime(now)
             .lastUpdatedTime(now)
             .memoryEmbedding(embedding)
             .build();
 
-        // Index the memory
+        // Index the memory without ID (auto-generate)
         IndexRequest indexRequest = new IndexRequest(indexName)
-            .id(memoryId)
             .source(memory.toIndexMap())
             .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
 
         client.index(indexRequest, ActionListener.wrap(indexResponse -> {
-            log.info("Successfully indexed message {} in session {} to index {}", memoryId, sessionId, indexName);
+            String generatedId = indexResponse.getId();
+            log.info("Successfully indexed message {} in session {} to index {}", generatedId, sessionId, indexName);
             // Check if we need to delete old short-term memories
             int maxShortTermMemories = getMaxShortTermMemories(container);
             checkAndDeleteOldShortTermMemories(indexName, sessionId, maxShortTermMemories, ActionListener.wrap(deleted -> {
                 MLAddMemoryResponse response = MLAddMemoryResponse
                     .builder()
-                    .memoryId(memoryId)
+                    .memoryId(generatedId)
                     .sessionId(sessionId)
                     .status("created")
                     .build();
@@ -357,29 +316,13 @@ public class TransportAddMemoryAction extends HandledTransportAction<MLAddMemory
                 // Still return success as the memory was added
                 MLAddMemoryResponse response = MLAddMemoryResponse
                     .builder()
-                    .memoryId(memoryId)
+                    .memoryId(generatedId)
                     .sessionId(sessionId)
                     .status("created")
                     .build();
                 actionListener.onResponse(response);
             }));
         }, actionListener::onFailure));
-    }
-
-    private void searchSessionId(String indexName, String memoryId, ActionListener<String> listener) {
-        // Use get request with document ID instead of search
-        GetRequest getRequest = new GetRequest(indexName, memoryId)
-            .fetchSourceContext(new FetchSourceContext(true, new String[] { SESSION_ID_FIELD }, null));
-
-        client.get(getRequest, ActionListener.wrap(getResponse -> {
-            if (getResponse.isExists()) {
-                Map<String, Object> source = getResponse.getSourceAsMap();
-                String sessionId = (String) source.get(SESSION_ID_FIELD);
-                listener.onResponse(sessionId);
-            } else {
-                listener.onResponse(null);
-            }
-        }, listener::onFailure));
     }
 
     private void checkAndDeleteOldShortTermMemories(
