@@ -8,11 +8,7 @@ package org.opensearch.ml.action.memorycontainer.memory;
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREATED_TIME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.INFER_REQUIRES_LLM_MODEL_ERROR;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MAX_SHORT_TERM_MEMORIES_DEFAULT_VALUE;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CHARACTERISTIC_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
 
 import java.time.Instant;
 import java.util.Arrays;
@@ -22,10 +18,7 @@ import java.util.UUID;
 
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
-import org.opensearch.action.bulk.BulkRequest;
-import org.opensearch.action.delete.DeleteRequest;
 import org.opensearch.action.index.IndexRequest;
-import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.action.support.WriteRequest;
@@ -40,13 +33,11 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
-import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.memorycontainer.MLMemory;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
-import org.opensearch.ml.common.memorycontainer.MemoryCharacteristic;
 import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
 import org.opensearch.ml.common.memorycontainer.MemoryType;
 import org.opensearch.ml.common.output.MLOutput;
@@ -66,10 +57,7 @@ import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
-import org.opensearch.search.SearchHit;
-import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
-import org.opensearch.search.sort.SortOrder;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -148,17 +136,8 @@ public class TransportAddMemoryAction extends HandledTransportAction<MLAddMemory
             // Get the single message (we only support one for now)
             MessageInput message = input.getMessages().get(0);
 
-            // Auto-determine memory type and characteristic based on infer
+            // Auto-determine memory type
             MemoryType memoryType = MemoryType.RAW_MESSAGE; // Always RAW_MESSAGE for now
-            MemoryCharacteristic memoryCharacteristic;
-
-            if (!infer) {
-                // When infer is false: characteristic is LONG_TERM
-                memoryCharacteristic = MemoryCharacteristic.LONG_TERM;
-            } else {
-                // When infer is true: characteristic is SHORT_TERM
-                memoryCharacteristic = MemoryCharacteristic.SHORT_TERM;
-            }
 
             // Generate session ID if not provided
             String sessionId = input.getSessionId();
@@ -169,7 +148,6 @@ public class TransportAddMemoryAction extends HandledTransportAction<MLAddMemory
             // Make variables final for lambda usage
             final String finalSessionId = sessionId;
             final MemoryType finalMemoryType = memoryType;
-            final MemoryCharacteristic finalMemoryCharacteristic = memoryCharacteristic;
             final MessageInput finalMessage = message;
 
             // Get index name from container
@@ -183,17 +161,7 @@ public class TransportAddMemoryAction extends HandledTransportAction<MLAddMemory
             }
 
             // Process the message
-            addMemoryWithSessionId(
-                input,
-                container,
-                indexName,
-                finalMessage,
-                finalSessionId,
-                user,
-                finalMemoryType,
-                finalMemoryCharacteristic,
-                actionListener
-            );
+            addMemoryWithSessionId(input, container, indexName, finalMessage, finalSessionId, user, finalMemoryType, actionListener);
         }, actionListener::onFailure));
     }
 
@@ -205,7 +173,6 @@ public class TransportAddMemoryAction extends HandledTransportAction<MLAddMemory
         String sessionId,
         User user,
         MemoryType memoryType,
-        MemoryCharacteristic memoryCharacteristic,
         ActionListener<MLAddMemoryResponse> actionListener
     ) {
         try {
@@ -216,48 +183,15 @@ public class TransportAddMemoryAction extends HandledTransportAction<MLAddMemory
             if (needsEmbedding) {
                 // Generate embedding first, then save memory
                 generateEmbedding(message.getContent(), storageConfig, ActionListener.wrap(embedding -> {
-                    saveMemoryWithEmbedding(
-                        input,
-                        container,
-                        indexName,
-                        message,
-                        sessionId,
-                        user,
-                        memoryType,
-                        memoryCharacteristic,
-                        embedding,
-                        actionListener
-                    );
+                    saveMemoryWithEmbedding(input, container, indexName, message, sessionId, user, memoryType, embedding, actionListener);
                 }, e -> {
                     log.error("Failed to generate embedding, saving memory without embedding", e);
                     // Save without embedding on failure
-                    saveMemoryWithEmbedding(
-                        input,
-                        container,
-                        indexName,
-                        message,
-                        sessionId,
-                        user,
-                        memoryType,
-                        memoryCharacteristic,
-                        null,
-                        actionListener
-                    );
+                    saveMemoryWithEmbedding(input, container, indexName, message, sessionId, user, memoryType, null, actionListener);
                 }));
             } else {
                 // No embedding needed, save directly
-                saveMemoryWithEmbedding(
-                    input,
-                    container,
-                    indexName,
-                    message,
-                    sessionId,
-                    user,
-                    memoryType,
-                    memoryCharacteristic,
-                    null,
-                    actionListener
-                );
+                saveMemoryWithEmbedding(input, container, indexName, message, sessionId, user, memoryType, null, actionListener);
             }
         } catch (Exception e) {
             log.error("Failed to add memory", e);
@@ -273,7 +207,6 @@ public class TransportAddMemoryAction extends HandledTransportAction<MLAddMemory
         String sessionId,
         User user,
         MemoryType memoryType,
-        MemoryCharacteristic memoryCharacteristic,
         Object embedding,
         ActionListener<MLAddMemoryResponse> actionListener
     ) {
@@ -284,7 +217,6 @@ public class TransportAddMemoryAction extends HandledTransportAction<MLAddMemory
             .sessionId(sessionId)
             .memory(message.getContent())
             .memoryType(memoryType)
-            .memoryCharacteristic(memoryCharacteristic)
             .userId(user != null ? user.getName() : null)
             .agentId(input.getAgentId())
             .role(message.getRole())
@@ -302,117 +234,15 @@ public class TransportAddMemoryAction extends HandledTransportAction<MLAddMemory
         client.index(indexRequest, ActionListener.wrap(indexResponse -> {
             String generatedId = indexResponse.getId();
             log.info("Successfully indexed message {} in session {} to index {}", generatedId, sessionId, indexName);
-            // Check if we need to delete old short-term memories
-            int maxShortTermMemories = getMaxShortTermMemories(container);
-            checkAndDeleteOldShortTermMemories(indexName, sessionId, maxShortTermMemories, ActionListener.wrap(deleted -> {
-                MLAddMemoryResponse response = MLAddMemoryResponse
-                    .builder()
-                    .memoryId(generatedId)
-                    .sessionId(sessionId)
-                    .status("created")
-                    .build();
-                actionListener.onResponse(response);
-            }, e -> {
-                log.error("Failed to delete old messages but memory was added successfully", e);
-                // Still return success as the memory was added
-                MLAddMemoryResponse response = MLAddMemoryResponse
-                    .builder()
-                    .memoryId(generatedId)
-                    .sessionId(sessionId)
-                    .status("created")
-                    .build();
-                actionListener.onResponse(response);
-            }));
+            // Return success response
+            MLAddMemoryResponse response = MLAddMemoryResponse
+                .builder()
+                .memoryId(generatedId)
+                .sessionId(sessionId)
+                .status("created")
+                .build();
+            actionListener.onResponse(response);
         }, actionListener::onFailure));
-    }
-
-    private void checkAndDeleteOldShortTermMemories(
-        String indexName,
-        String sessionId,
-        int maxShortTermMemories,
-        ActionListener<Boolean> listener
-    ) {
-        log.info("Checking short-term memories for session: {}, max allowed: {}", sessionId, maxShortTermMemories);
-
-        // Count SHORT_TERM messages with this session_id
-        SearchRequest countRequest = new SearchRequest(indexName)
-            .source(
-                new SearchSourceBuilder()
-                    .query(
-                        QueryBuilders
-                            .boolQuery()
-                            .must(QueryBuilders.termQuery(SESSION_ID_FIELD, sessionId))
-                            .must(QueryBuilders.termQuery(MEMORY_CHARACTERISTIC_FIELD, MemoryCharacteristic.SHORT_TERM.getValue()))
-                    )
-                    .size(0)
-            );
-
-        log.debug("Executing count query for session_id: {} on index: {}", sessionId, indexName);
-
-        client.search(countRequest, ActionListener.wrap(countResponse -> {
-            long totalCount = countResponse.getHits().getTotalHits().value();
-            log.info("Found {} short-term memories in session {}", totalCount, sessionId);
-
-            // Delete if we have more short-term memories than allowed
-            if (totalCount > maxShortTermMemories) {
-                // Calculate how many to delete to keep exactly maxShortTermMemories
-                int toDelete = (int) (totalCount - maxShortTermMemories);
-                log.info("Deleting {} oldest short-term memories from session {}", toDelete, sessionId);
-                SearchRequest searchOldest = new SearchRequest(indexName)
-                    .source(
-                        new SearchSourceBuilder()
-                            .query(
-                                QueryBuilders
-                                    .boolQuery()
-                                    .must(QueryBuilders.termQuery(SESSION_ID_FIELD, sessionId))
-                                    .must(QueryBuilders.termQuery(MEMORY_CHARACTERISTIC_FIELD, MemoryCharacteristic.SHORT_TERM.getValue()))
-                            )
-                            .sort(CREATED_TIME_FIELD, SortOrder.ASC)
-                            .size(toDelete)
-                            .fetchSource(false)
-                    );
-
-                client.search(searchOldest, ActionListener.wrap(searchResponse -> {
-                    BulkRequest bulkRequest = new BulkRequest();
-                    bulkRequest.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-
-                    for (SearchHit hit : searchResponse.getHits().getHits()) {
-                        log.debug("Marking short-term memory {} for deletion from session {}", hit.getId(), sessionId);
-                        bulkRequest.add(new DeleteRequest(indexName, hit.getId()));
-                    }
-
-                    if (bulkRequest.numberOfActions() > 0) {
-                        client.bulk(bulkRequest, ActionListener.wrap(bulkResponse -> {
-                            if (bulkResponse.hasFailures()) {
-                                log.error("Some old short-term memories failed to delete: {}", bulkResponse.buildFailureMessage());
-                            } else {
-                                log
-                                    .info(
-                                        "Successfully deleted {} short-term memories from session {}",
-                                        bulkRequest.numberOfActions(),
-                                        sessionId
-                                    );
-                            }
-                            listener.onResponse(true);
-                        }, e -> {
-                            log.error("Failed to delete old messages", e);
-                            listener.onFailure(e);
-                        }));
-                    } else {
-                        listener.onResponse(true);
-                    }
-                }, listener::onFailure));
-            } else {
-                log
-                    .debug(
-                        "No deletion needed for session {}: {} short-term memories <= {} max",
-                        sessionId,
-                        totalCount,
-                        maxShortTermMemories
-                    );
-                listener.onResponse(true);
-            }
-        }, listener::onFailure));
     }
 
     private void generateEmbedding(String message, MemoryStorageConfig storageConfig, ActionListener<Object> listener) {
@@ -566,14 +396,6 @@ public class TransportAddMemoryAction extends HandledTransportAction<MLAddMemory
             return config.getMemoryIndexName();
         }
         return null;
-    }
-
-    private int getMaxShortTermMemories(MLMemoryContainer container) {
-        MemoryStorageConfig config = container.getMemoryStorageConfig();
-        if (config != null && config.getMaxShortTermMemories() != null) {
-            return config.getMaxShortTermMemories();
-        }
-        return MAX_SHORT_TERM_MEMORIES_DEFAULT_VALUE;
     }
 
     private boolean checkMemoryContainerAccess(User user, MLMemoryContainer mlMemoryContainer) {

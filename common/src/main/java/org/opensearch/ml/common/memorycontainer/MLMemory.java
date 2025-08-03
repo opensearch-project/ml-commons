@@ -36,7 +36,6 @@ public class MLMemory implements ToXContentObject, Writeable {
     private String sessionId;
     private String memory;
     private MemoryType memoryType;
-    private MemoryCharacteristic memoryCharacteristic;
 
     // Optional fields
     private String userId;
@@ -56,7 +55,6 @@ public class MLMemory implements ToXContentObject, Writeable {
         String sessionId,
         String memory,
         MemoryType memoryType,
-        MemoryCharacteristic memoryCharacteristic,
         String userId,
         String agentId,
         String role,
@@ -68,7 +66,6 @@ public class MLMemory implements ToXContentObject, Writeable {
         this.sessionId = sessionId;
         this.memory = memory;
         this.memoryType = memoryType;
-        this.memoryCharacteristic = memoryCharacteristic;
         this.userId = userId;
         this.agentId = agentId;
         this.role = role;
@@ -82,7 +79,6 @@ public class MLMemory implements ToXContentObject, Writeable {
         this.sessionId = in.readString();
         this.memory = in.readString();
         this.memoryType = in.readEnum(MemoryType.class);
-        this.memoryCharacteristic = in.readEnum(MemoryCharacteristic.class);
         this.userId = in.readOptionalString();
         this.agentId = in.readOptionalString();
         this.role = in.readOptionalString();
@@ -99,7 +95,6 @@ public class MLMemory implements ToXContentObject, Writeable {
         out.writeString(sessionId);
         out.writeString(memory);
         out.writeEnum(memoryType);
-        out.writeEnum(memoryCharacteristic);
         out.writeOptionalString(userId);
         out.writeOptionalString(agentId);
         out.writeOptionalString(role);
@@ -120,7 +115,6 @@ public class MLMemory implements ToXContentObject, Writeable {
         builder.field(SESSION_ID_FIELD, sessionId);
         builder.field(MEMORY_FIELD, memory);
         builder.field(MEMORY_TYPE_FIELD, memoryType.getValue());
-        builder.field(MEMORY_CHARACTERISTIC_FIELD, memoryCharacteristic.getValue());
 
         if (userId != null) {
             builder.field(USER_ID_FIELD, userId);
@@ -150,7 +144,6 @@ public class MLMemory implements ToXContentObject, Writeable {
         String sessionId = null;
         String memory = null;
         MemoryType memoryType = null;
-        MemoryCharacteristic memoryCharacteristic = null;
         String userId = null;
         String agentId = null;
         String role = null;
@@ -173,9 +166,6 @@ public class MLMemory implements ToXContentObject, Writeable {
                     break;
                 case MEMORY_TYPE_FIELD:
                     memoryType = MemoryType.fromString(parser.text());
-                    break;
-                case MEMORY_CHARACTERISTIC_FIELD:
-                    memoryCharacteristic = MemoryCharacteristic.fromString(parser.text());
                     break;
                 case USER_ID_FIELD:
                     userId = parser.text();
@@ -218,7 +208,6 @@ public class MLMemory implements ToXContentObject, Writeable {
             .sessionId(sessionId)
             .memory(memory)
             .memoryType(memoryType)
-            .memoryCharacteristic(memoryCharacteristic)
             .userId(userId)
             .agentId(agentId)
             .role(role)
@@ -241,8 +230,6 @@ public class MLMemory implements ToXContentObject, Writeable {
                 memory,
                 MEMORY_TYPE_FIELD,
                 memoryType.getValue(),
-                MEMORY_CHARACTERISTIC_FIELD,
-                memoryCharacteristic.getValue(),
                 CREATED_TIME_FIELD,
                 createdTime.toEpochMilli(),
                 LAST_UPDATED_TIME_FIELD,

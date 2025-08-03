@@ -14,9 +14,6 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MAX_INFER_SIZE_DEFAULT_VALUE;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MAX_INFER_SIZE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MAX_INFER_SIZE_LIMIT_ERROR;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MAX_SHORT_TERM_MEMORIES_DEFAULT_VALUE;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MAX_SHORT_TERM_MEMORIES_FIELD;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MAX_SHORT_TERM_MEMORIES_SEMANTIC_LIMIT_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_INDEX_NAME_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEMANTIC_STORAGE_EMBEDDING_MODEL_ID_REQUIRED_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEMANTIC_STORAGE_EMBEDDING_MODEL_TYPE_REQUIRED_ERROR;
@@ -56,8 +53,6 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
     private String llmModelId;
     private Integer dimension;
     @Builder.Default
-    private Integer maxShortTermMemories = MAX_SHORT_TERM_MEMORIES_DEFAULT_VALUE;
-    @Builder.Default
     private Integer maxInferSize = MAX_INFER_SIZE_DEFAULT_VALUE;
 
     public MemoryStorageConfig(
@@ -67,7 +62,6 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
         String embeddingModelId,
         String llmModelId,
         Integer dimension,
-        Integer maxShortTermMemories,
         Integer maxInferSize
     ) {
         this.memoryIndexName = memoryIndexName;
@@ -77,7 +71,6 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
         this.embeddingModelId = embeddingModelId;
         this.llmModelId = llmModelId;
         this.dimension = dimension;
-        this.maxShortTermMemories = maxShortTermMemories != null ? maxShortTermMemories : MAX_SHORT_TERM_MEMORIES_DEFAULT_VALUE;
         this.maxInferSize = maxInferSize != null ? maxInferSize : MAX_INFER_SIZE_DEFAULT_VALUE;
 
         // Validate the configuration
@@ -92,8 +85,6 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
         this.embeddingModelId = input.readOptionalString();
         this.llmModelId = input.readOptionalString();
         this.dimension = input.readOptionalInt();
-        Integer maxShortTermMemoriesVal = input.readOptionalInt();
-        this.maxShortTermMemories = maxShortTermMemoriesVal != null ? maxShortTermMemoriesVal : MAX_SHORT_TERM_MEMORIES_DEFAULT_VALUE;
         Integer maxInferSizeVal = input.readOptionalInt();
         this.maxInferSize = maxInferSizeVal != null ? maxInferSizeVal : MAX_INFER_SIZE_DEFAULT_VALUE;
     }
@@ -106,7 +97,6 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
         out.writeOptionalString(embeddingModelId);
         out.writeOptionalString(llmModelId);
         out.writeOptionalInt(dimension);
-        out.writeOptionalInt(maxShortTermMemories);
         out.writeOptionalInt(maxInferSize);
     }
 
@@ -127,9 +117,6 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
 
         if (!semanticStorageEnabled) {
             // When semantic storage is disabled, only output allowed fields
-            if (maxShortTermMemories != null) {
-                builder.field(MAX_SHORT_TERM_MEMORIES_FIELD, maxShortTermMemories);
-            }
             // Do not output embedding-related fields when semantic storage is disabled
         } else {
             // When semantic storage is enabled, output embedding-related fields
@@ -141,9 +128,6 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
             }
             if (dimension != null) {
                 builder.field(DIMENSION_FIELD, dimension);
-            }
-            if (maxShortTermMemories != null) {
-                builder.field(MAX_SHORT_TERM_MEMORIES_FIELD, maxShortTermMemories);
             }
             if (maxInferSize != null) {
                 builder.field(MAX_INFER_SIZE_FIELD, maxInferSize);
@@ -160,7 +144,6 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
         String embeddingModelId = null;
         String llmModelId = null;
         Integer dimension = null;
-        Integer maxShortTermMemories = null;
         Integer maxInferSize = null;
 
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.currentToken(), parser);
@@ -188,9 +171,6 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
                 case DIMENSION_FIELD:
                     dimension = parser.intValue();
                     break;
-                case MAX_SHORT_TERM_MEMORIES_FIELD:
-                    maxShortTermMemories = parser.intValue();
-                    break;
                 case MAX_INFER_SIZE_FIELD:
                     maxInferSize = parser.intValue();
                     break;
@@ -208,7 +188,6 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
             .embeddingModelId(embeddingModelId)
             .llmModelId(llmModelId)
             .dimension(dimension)
-            .maxShortTermMemories(maxShortTermMemories != null ? maxShortTermMemories : MAX_SHORT_TERM_MEMORIES_DEFAULT_VALUE)
             .maxInferSize(maxInferSize != null ? maxInferSize : MAX_INFER_SIZE_DEFAULT_VALUE)
             .build();
 
@@ -249,11 +228,6 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
         // Validate limits
         if (maxInferSize != null && maxInferSize > 10) {
             throw new IllegalArgumentException(MAX_INFER_SIZE_LIMIT_ERROR);
-        }
-
-        // When semantic storage is enabled (embedding config present), limit short-term memories
-        if (semanticStorageEnabled && maxShortTermMemories != null && maxShortTermMemories > 10) {
-            throw new IllegalArgumentException(MAX_SHORT_TERM_MEMORIES_SEMANTIC_LIMIT_ERROR);
         }
 
         // Clear fields that shouldn't be present when semantic storage is disabled
