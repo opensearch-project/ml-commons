@@ -167,15 +167,20 @@ public class QueryPlanningToolTests {
 
     @Test
     public void testValidate() {
-        Tool tool = QueryPlanningTool.Factory.getInstance().create(Collections.emptyMap());
+        Tool tool = QueryPlanningTool.Factory.getInstance().create(Map.of("model_id", "test_model_id"));
         assertTrue(tool.validate(validParams));
         assertFalse(tool.validate(emptyParams));
         assertFalse(tool.validate(null));
     }
 
     @Test
+    public void testToolCreationFailure() {
+        assertThrows(IllegalArgumentException.class, () -> QueryPlanningTool.Factory.getInstance().create(Collections.emptyMap()));
+    }
+
+    @Test
     public void testToolGetters() {
-        Tool tool = QueryPlanningTool.Factory.getInstance().create(Collections.emptyMap());
+        Tool tool = QueryPlanningTool.Factory.getInstance().create(Map.of("model_id", "test_model_id"));
         assertEquals(QueryPlanningTool.TYPE, tool.getName());
         assertEquals(QueryPlanningTool.TYPE, tool.getType());
         assertEquals(DEFAULT_DESCRIPTION, tool.getDescription());

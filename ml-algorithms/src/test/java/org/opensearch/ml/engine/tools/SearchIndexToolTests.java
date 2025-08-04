@@ -164,7 +164,7 @@ public class SearchIndexToolTests {
         ArgumentCaptor<Exception> argument = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(argument.capture());
         assertEquals(
-            "SearchIndexTool's two parameters: index and query are required and should in valid format!",
+            "SearchIndexTool's two parameters: index and query are required and should be in valid format",
             argument.getValue().getMessage()
         );
     }

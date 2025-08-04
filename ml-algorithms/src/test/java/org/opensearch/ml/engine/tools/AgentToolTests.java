@@ -129,7 +129,7 @@ public class AgentToolTests {
 
     @Test
     public void testTool() {
-        Tool tool = AgentTool.Factory.getInstance().create(Collections.emptyMap());
+        Tool tool = AgentTool.Factory.getInstance().create(Map.of("agent_id", "test_agent_id"));
         assertEquals(AgentTool.TYPE, tool.getName());
         assertEquals(AgentTool.TYPE, tool.getType());
         assertNull(tool.getVersion());
@@ -137,5 +137,10 @@ public class AgentToolTests {
         assertTrue(tool.validate(otherParams));
         assertTrue(tool.validate(emptyParams));
         assertEquals(DEFAULT_DESCRIPTION, tool.getDescription());
+    }
+
+    @Test
+    public void testToolFailure() {
+        assertThrows(IllegalArgumentException.class, () -> AgentTool.Factory.getInstance().create(Collections.emptyMap()));
     }
 }

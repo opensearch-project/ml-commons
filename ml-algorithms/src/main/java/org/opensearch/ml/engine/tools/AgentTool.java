@@ -65,7 +65,7 @@ public class AgentTool implements Tool {
     @Override
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
         try {
-            if (agentId.isBlank()) {
+            if (agentId == null || agentId.isBlank()) {
                 throw new IllegalArgumentException("Agent ID not registered in tool");
             }
 
@@ -169,7 +169,6 @@ public class AgentTool implements Tool {
                 extractedParameters.putAll(chatParameters);
             } catch (Exception exception) {
                 log.error("Fail to extract parameters from key 'input'", exception);
-                throw exception;
             }
         }
 
