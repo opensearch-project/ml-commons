@@ -267,7 +267,7 @@ public class DeleteModelGroupTransportActionTests extends OpenSearchTestCase {
         deleteModelGroupTransportAction.doExecute(null, mlModelGroupDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Failed to find model group index", argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to find model group", argumentCaptor.getValue().getMessage());
     }
 
     public void testDeleteModelGroup_Failure() {

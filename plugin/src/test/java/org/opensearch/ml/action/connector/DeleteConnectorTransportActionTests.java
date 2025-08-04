@@ -279,7 +279,7 @@ public class DeleteConnectorTransportActionTests extends OpenSearchTestCase {
         deleteConnectorTransportAction.doExecute(null, mlConnectorDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(RuntimeException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Failed to find connector index", argumentCaptor.getValue().getMessage());
+        assertEquals("Failed to find connector", argumentCaptor.getValue().getMessage());
     }
 
     public void test_ValidationFailedException() throws IOException {

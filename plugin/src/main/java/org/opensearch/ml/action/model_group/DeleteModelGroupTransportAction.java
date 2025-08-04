@@ -205,11 +205,11 @@ public class DeleteModelGroupTransportAction extends HandledTransportAction<Acti
     ) {
         if (throwable != null) {
             Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+            log.error("Failed to delete ML Model Group {}", modelGroupId, cause);
             if (ExceptionsHelper.unwrap(cause, IndexNotFoundException.class) != null) {
-                actionListener.onFailure(new OpenSearchStatusException("Failed to find model group index", RestStatus.NOT_FOUND));
+                actionListener.onFailure(new OpenSearchStatusException("Failed to find model group", RestStatus.NOT_FOUND));
                 return;
             }
-            log.error("Failed to delete ML Model Group {}", modelGroupId, cause);
             actionListener.onFailure(cause);
         } else {
             try {
