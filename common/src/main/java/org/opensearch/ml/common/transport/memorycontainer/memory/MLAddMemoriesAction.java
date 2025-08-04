@@ -9,7 +9,7 @@ import org.opensearch.action.ActionType;
 
 public class MLAddMemoriesAction extends ActionType<MLAddMemoriesResponse> {
     public static final MLAddMemoriesAction INSTANCE = new MLAddMemoriesAction();
-    public static final String NAME = "cluster:admin/opensearch/ml/memories/add";
+    public static final String NAME = "cluster:admin/opensearch/ml/memory_containers/memories/add";
 
     private MLAddMemoriesAction() {
         super(NAME, MLAddMemoriesResponse::new);
