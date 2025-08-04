@@ -117,40 +117,43 @@ public class TransportCreateMemoryContainerAction extends
         User user = RestActionUtils.getUserContext(client);
         String tenantId = input.getTenantId();
 
-        // Check if memory container index exists, create if not
-        ActionListener<Boolean> indexCheckListener = ActionListener.wrap(created -> {
-            try {
-                // Create memory container document without ID (will be auto-generated)
-                MLMemoryContainer memoryContainer = buildMemoryContainer(input, user, tenantId);
+        // Validate models before creating memory container
+        validateModels(input.getMemoryStorageConfig(), ActionListener.wrap(isValid -> {
+            // Check if memory container index exists, create if not
+            ActionListener<Boolean> indexCheckListener = ActionListener.wrap(created -> {
+                try {
+                    // Create memory container document without ID (will be auto-generated)
+                    MLMemoryContainer memoryContainer = buildMemoryContainer(input, user, tenantId);
 
-                // Index the memory container document first to get the generated ID
-                indexMemoryContainer(memoryContainer, ActionListener.wrap(memoryContainerId -> {
-                    // Create memory data indices based on semantic storage config
-                    createMemoryDataIndices(memoryContainerId, memoryContainer, user, ActionListener.wrap(actualIndexName -> {
-                        // Update the memory container with the actual index name
-                        MemoryStorageConfig config = memoryContainer.getMemoryStorageConfig();
-                        if (config == null) {
-                            config = MemoryStorageConfig.builder().memoryIndexName(actualIndexName).semanticStorageEnabled(false).build();
-                        } else {
-                            config.setMemoryIndexName(actualIndexName);
-                        }
-                        memoryContainer.setMemoryStorageConfig(config);
+                    // Index the memory container document first to get the generated ID
+                    indexMemoryContainer(memoryContainer, ActionListener.wrap(memoryContainerId -> {
+                        // Create memory data indices based on semantic storage config
+                        createMemoryDataIndices(memoryContainerId, memoryContainer, user, ActionListener.wrap(actualIndexName -> {
+                            // Update the memory container with the actual index name
+                            MemoryStorageConfig config = memoryContainer.getMemoryStorageConfig();
+                            if (config == null) {
+                                config = MemoryStorageConfig.builder().memoryIndexName(actualIndexName).build();
+                            } else {
+                                config.setMemoryIndexName(actualIndexName);
+                            }
+                            memoryContainer.setMemoryStorageConfig(config);
 
-                        // Update the container document with the index name
-                        updateMemoryContainer(memoryContainerId, memoryContainer, ActionListener.wrap(updated -> {
-                            listener.onResponse(new MLCreateMemoryContainerResponse(memoryContainerId, "created"));
+                            // Update the container document with the index name
+                            updateMemoryContainer(memoryContainerId, memoryContainer, ActionListener.wrap(updated -> {
+                                listener.onResponse(new MLCreateMemoryContainerResponse(memoryContainerId, "created"));
+                            }, listener::onFailure));
                         }, listener::onFailure));
                     }, listener::onFailure));
-                }, listener::onFailure));
 
-            } catch (Exception e) {
-                log.error("Failed to create memory container", e);
-                listener.onFailure(e);
-            }
-        }, listener::onFailure);
+                } catch (Exception e) {
+                    log.error("Failed to create memory container", e);
+                    listener.onFailure(e);
+                }
+            }, listener::onFailure);
 
-        // Initialize memory container index if it doesn't exist
-        initMemoryContainerIndexIfAbsent(indexCheckListener);
+            // Initialize memory container index if it doesn't exist
+            initMemoryContainerIndexIfAbsent(indexCheckListener);
+        }, listener::onFailure));
     }
 
     private void initMemoryContainerIndexIfAbsent(ActionListener<Boolean> listener) {

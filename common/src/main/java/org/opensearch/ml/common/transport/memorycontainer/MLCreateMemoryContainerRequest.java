@@ -6,11 +6,6 @@
 package org.opensearch.ml.common.transport.memorycontainer;
 
 import static org.opensearch.action.ValidateActions.addValidationError;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.INVALID_EMBEDDING_MODEL_TYPE_ERROR;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEMANTIC_STORAGE_EMBEDDING_MODEL_ID_REQUIRED_ERROR;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SEMANTIC_STORAGE_EMBEDDING_MODEL_TYPE_REQUIRED_ERROR;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SPARSE_ENCODING_DIMENSION_NOT_ALLOWED_ERROR;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.TEXT_EMBEDDING_DIMENSION_REQUIRED_ERROR;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -23,8 +18,6 @@ import org.opensearch.core.common.io.stream.InputStreamStreamInput;
 import org.opensearch.core.common.io.stream.OutputStreamStreamOutput;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
-import org.opensearch.ml.common.FunctionName;
-import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
 
 import lombok.Builder;
 import lombok.Getter;
@@ -56,44 +49,8 @@ public class MLCreateMemoryContainerRequest extends ActionRequest {
             return addValidationError("Memory container input can't be null", null);
         }
 
-        ActionRequestValidationException exception = null;
-        MemoryStorageConfig memoryStorageConfig = mlCreateMemoryContainerInput.getMemoryStorageConfig();
-
-        if (memoryStorageConfig != null) {
-            // Validate embedding configuration if provided
-            if (memoryStorageConfig.getEmbeddingModelId() != null || memoryStorageConfig.getEmbeddingModelType() != null) {
-                // If one is provided, both are required
-                if (memoryStorageConfig.getEmbeddingModelType() == null) {
-                    exception = addValidationError(SEMANTIC_STORAGE_EMBEDDING_MODEL_TYPE_REQUIRED_ERROR, exception);
-                }
-                if (memoryStorageConfig.getEmbeddingModelId() == null) {
-                    exception = addValidationError(SEMANTIC_STORAGE_EMBEDDING_MODEL_ID_REQUIRED_ERROR, exception);
-                }
-
-                // Validate embedding model type if provided
-                FunctionName embeddingModelType = memoryStorageConfig.getEmbeddingModelType();
-                if (embeddingModelType != null) {
-                    if (embeddingModelType != FunctionName.TEXT_EMBEDDING && embeddingModelType != FunctionName.SPARSE_ENCODING) {
-                        exception = addValidationError(INVALID_EMBEDDING_MODEL_TYPE_ERROR, exception);
-                    }
-
-                    // Validate dimension requirements based on embedding type
-                    if (embeddingModelType == FunctionName.TEXT_EMBEDDING) {
-                        // Dimension is required for TEXT_EMBEDDING
-                        if (memoryStorageConfig.getDimension() == null) {
-                            exception = addValidationError(TEXT_EMBEDDING_DIMENSION_REQUIRED_ERROR, exception);
-                        }
-                    } else if (embeddingModelType == FunctionName.SPARSE_ENCODING) {
-                        // Dimension is not allowed for sparse encoding
-                        if (memoryStorageConfig.getDimension() != null) {
-                            exception = addValidationError(SPARSE_ENCODING_DIMENSION_NOT_ALLOWED_ERROR, exception);
-                        }
-                    }
-                }
-            }
-        }
-
-        return exception;
+        // All MemoryStorageConfig validation is handled by MemoryStorageConfig itself
+        return null;
     }
 
     public static MLCreateMemoryContainerRequest fromActionRequest(ActionRequest actionRequest) {

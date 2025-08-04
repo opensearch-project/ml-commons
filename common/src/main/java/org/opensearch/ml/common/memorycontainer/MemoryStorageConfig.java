@@ -64,17 +64,20 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
         Integer dimension,
         Integer maxInferSize
     ) {
-        this.memoryIndexName = memoryIndexName;
+        // Validate first
+        validateInputs(embeddingModelType, embeddingModelId, dimension, maxInferSize);
+
         // Auto-determine semantic storage based on embedding configuration
-        this.semanticStorageEnabled = (embeddingModelId != null && embeddingModelType != null);
+        boolean determinedSemanticStorage = (embeddingModelId != null && embeddingModelType != null);
+
+        // Assign values after validation
+        this.memoryIndexName = memoryIndexName;
+        this.semanticStorageEnabled = determinedSemanticStorage;
         this.embeddingModelType = embeddingModelType;
         this.embeddingModelId = embeddingModelId;
         this.llmModelId = llmModelId;
         this.dimension = dimension;
-        this.maxInferSize = maxInferSize != null ? maxInferSize : MAX_INFER_SIZE_DEFAULT_VALUE;
-
-        // Validate the configuration
-        validate();
+        this.maxInferSize = determinedSemanticStorage ? (maxInferSize != null ? maxInferSize : MAX_INFER_SIZE_DEFAULT_VALUE) : null;
     }
 
     public MemoryStorageConfig(StreamInput input) throws IOException {
@@ -85,8 +88,7 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
         this.embeddingModelId = input.readOptionalString();
         this.llmModelId = input.readOptionalString();
         this.dimension = input.readOptionalInt();
-        Integer maxInferSizeVal = input.readOptionalInt();
-        this.maxInferSize = maxInferSizeVal != null ? maxInferSizeVal : MAX_INFER_SIZE_DEFAULT_VALUE;
+        this.maxInferSize = input.readOptionalInt();
     }
 
     @Override
@@ -115,11 +117,8 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
             builder.field(LLM_MODEL_ID_FIELD, llmModelId);
         }
 
-        if (!semanticStorageEnabled) {
-            // When semantic storage is disabled, only output allowed fields
-            // Do not output embedding-related fields when semantic storage is disabled
-        } else {
-            // When semantic storage is enabled, output embedding-related fields
+        // When semantic storage is enabled, output embedding-related fields
+        if (semanticStorageEnabled) {
             if (embeddingModelType != null) {
                 builder.field(EMBEDDING_MODEL_TYPE_FIELD, embeddingModelType.name());
             }
@@ -180,51 +179,58 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
             }
         }
 
-        MemoryStorageConfig config = MemoryStorageConfig
+        // Note: validation is already called in the constructor
+        return MemoryStorageConfig
             .builder()
             .memoryIndexName(memoryIndexName)
-            .semanticStorageEnabled(false)  // Will be auto-determined in constructor
             .embeddingModelType(embeddingModelType)
             .embeddingModelId(embeddingModelId)
             .llmModelId(llmModelId)
             .dimension(dimension)
-            .maxInferSize(maxInferSize != null ? maxInferSize : MAX_INFER_SIZE_DEFAULT_VALUE)
+            .maxInferSize(maxInferSize)
             .build();
-
-        // Note: validation is already called in the constructor
-        return config;
     }
 
     /**
-     * Validates the memory storage configuration based on semantic storage settings
-     * and enforces field restrictions and limits.
+     * Validates input parameters before construction.
      */
-    public void validate() {
-        validateEmbeddingConfiguration();
-        validateLimits();
-        cleanupDisabledFeatures();
+    private static void validateInputs(FunctionName embeddingModelType, String embeddingModelId, Integer dimension, Integer maxInferSize) {
+        validateEmbeddingConfiguration(embeddingModelType, embeddingModelId, dimension);
+        validateMaxInferSize(maxInferSize);
     }
 
     /**
-     * Validates embedding model configuration.
-     * Ensures that if embedding is configured, both model ID and type are provided,
-     * and validates dimension requirements based on embedding type.
+     * Validates embedding configuration including model pairing and dimension requirements.
      */
-    private void validateEmbeddingConfiguration() {
-        // If both embedding model ID and type are provided, validate them
-        if (embeddingModelId != null && embeddingModelType != null) {
-            validateEmbeddingModelType();
-            validateDimensionRequirements();
-        } else if (embeddingModelId != null || embeddingModelType != null) {
-            // If only one is provided, both are required
-            requireBothEmbeddingFields();
+    private static void validateEmbeddingConfiguration(FunctionName embeddingModelType, String embeddingModelId, Integer dimension) {
+        // Check for partial embedding configuration
+        if (embeddingModelId != null && embeddingModelType == null) {
+            throw new IllegalArgumentException(SEMANTIC_STORAGE_EMBEDDING_MODEL_TYPE_REQUIRED_ERROR);
+        }
+        if (embeddingModelType != null && embeddingModelId == null) {
+            throw new IllegalArgumentException(SEMANTIC_STORAGE_EMBEDDING_MODEL_ID_REQUIRED_ERROR);
+        }
+
+        // If embedding model type is provided, validate it
+        if (embeddingModelType != null) {
+            validateEmbeddingModelType(embeddingModelType);
+            validateDimensionRequirements(embeddingModelType, dimension);
+        }
+    }
+
+    /**
+     * Validates max infer size limit.
+     */
+    private static void validateMaxInferSize(Integer maxInferSize) {
+        if (maxInferSize != null && maxInferSize > 10) {
+            throw new IllegalArgumentException(MAX_INFER_SIZE_LIMIT_ERROR);
         }
     }
 
     /**
      * Validates that the embedding model type is supported.
      */
-    private void validateEmbeddingModelType() {
+    private static void validateEmbeddingModelType(FunctionName embeddingModelType) {
         if (embeddingModelType != FunctionName.TEXT_EMBEDDING && embeddingModelType != FunctionName.SPARSE_ENCODING) {
             throw new IllegalArgumentException(INVALID_EMBEDDING_MODEL_TYPE_ERROR);
         }
@@ -234,43 +240,13 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
      * Validates dimension requirements based on embedding type.
      * TEXT_EMBEDDING requires dimension, SPARSE_ENCODING does not allow dimension.
      */
-    private void validateDimensionRequirements() {
+    private static void validateDimensionRequirements(FunctionName embeddingModelType, Integer dimension) {
         if (embeddingModelType == FunctionName.TEXT_EMBEDDING && dimension == null) {
             throw new IllegalArgumentException(TEXT_EMBEDDING_DIMENSION_REQUIRED_ERROR);
         }
 
         if (embeddingModelType == FunctionName.SPARSE_ENCODING && dimension != null) {
             throw new IllegalArgumentException(SPARSE_ENCODING_DIMENSION_NOT_ALLOWED_ERROR);
-        }
-    }
-
-    /**
-     * Ensures both embedding model ID and type are provided when one is present.
-     */
-    private void requireBothEmbeddingFields() {
-        if (embeddingModelType == null) {
-            throw new IllegalArgumentException(SEMANTIC_STORAGE_EMBEDDING_MODEL_TYPE_REQUIRED_ERROR);
-        }
-        if (embeddingModelId == null) {
-            throw new IllegalArgumentException(SEMANTIC_STORAGE_EMBEDDING_MODEL_ID_REQUIRED_ERROR);
-        }
-    }
-
-    /**
-     * Validates configured limits are within acceptable ranges.
-     */
-    private void validateLimits() {
-        if (maxInferSize != null && maxInferSize > 10) {
-            throw new IllegalArgumentException(MAX_INFER_SIZE_LIMIT_ERROR);
-        }
-    }
-
-    /**
-     * Cleans up fields that shouldn't be present when features are disabled.
-     */
-    private void cleanupDisabledFeatures() {
-        if (!semanticStorageEnabled) {
-            this.maxInferSize = null;
         }
     }
 }
