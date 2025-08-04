@@ -32,7 +32,7 @@ import lombok.Setter;
 @Getter
 @Setter
 @Builder
-public class MLAddMemoryInput implements ToXContentObject, Writeable {
+public class MLAddMemoriesInput implements ToXContentObject, Writeable {
 
     // Required fields
     private String memoryContainerId;
@@ -44,7 +44,7 @@ public class MLAddMemoryInput implements ToXContentObject, Writeable {
     private Boolean infer;
     private Map<String, String> tags;
 
-    public MLAddMemoryInput(
+    public MLAddMemoriesInput(
         String memoryContainerId,
         List<MessageInput> messages,
         String sessionId,
@@ -68,7 +68,7 @@ public class MLAddMemoryInput implements ToXContentObject, Writeable {
         this.tags = tags;
     }
 
-    public MLAddMemoryInput(StreamInput in) throws IOException {
+    public MLAddMemoriesInput(StreamInput in) throws IOException {
         this.memoryContainerId = in.readOptionalString();
         int messagesSize = in.readVInt();
         this.messages = new ArrayList<>(messagesSize);
@@ -128,7 +128,7 @@ public class MLAddMemoryInput implements ToXContentObject, Writeable {
         return builder;
     }
 
-    public static MLAddMemoryInput parse(XContentParser parser) throws IOException {
+    public static MLAddMemoriesInput parse(XContentParser parser) throws IOException {
         String memoryContainerId = null;
         List<MessageInput> messages = null;
         String sessionId = null;
@@ -177,7 +177,7 @@ public class MLAddMemoryInput implements ToXContentObject, Writeable {
             }
         }
 
-        return MLAddMemoryInput
+        return MLAddMemoriesInput
             .builder()
             .memoryContainerId(memoryContainerId)
             .messages(messages)

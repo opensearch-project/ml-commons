@@ -13,9 +13,9 @@ import java.io.IOException;
 import java.util.List;
 
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoryAction;
-import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoryInput;
-import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoryRequest;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesAction;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesInput;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesRequest;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
 import org.opensearch.rest.action.RestToXContentListener;
@@ -26,9 +26,9 @@ import com.google.common.collect.ImmutableList;
 /**
  * REST handler for adding memory to a memory container
  */
-public class RestMLAddMemoryAction extends BaseRestHandler {
+public class RestMLAddMemoriesAction extends BaseRestHandler {
 
-    private static final String ML_ADD_MEMORY_ACTION = "ml_add_memory_action";
+    private static final String ML_ADD_MEMORIES_ACTION = "ml_add_memories_action";
 
     @Override
     public List<Route> routes() {
@@ -37,16 +37,16 @@ public class RestMLAddMemoryAction extends BaseRestHandler {
 
     @Override
     public String getName() {
-        return ML_ADD_MEMORY_ACTION;
+        return ML_ADD_MEMORIES_ACTION;
     }
 
     @Override
     protected RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
-        MLAddMemoryRequest mlAddMemoryRequest = getRequest(request);
-        return channel -> client.execute(MLAddMemoryAction.INSTANCE, mlAddMemoryRequest, new RestToXContentListener<>(channel));
+        MLAddMemoriesRequest mlAddMemoryRequest = getRequest(request);
+        return channel -> client.execute(MLAddMemoriesAction.INSTANCE, mlAddMemoryRequest, new RestToXContentListener<>(channel));
     }
 
-    private MLAddMemoryRequest getRequest(RestRequest request) throws IOException {
+    private MLAddMemoriesRequest getRequest(RestRequest request) throws IOException {
         if (!request.hasContent()) {
             throw new IOException("Add memory request has empty body");
         }
@@ -55,12 +55,12 @@ public class RestMLAddMemoryAction extends BaseRestHandler {
 
         XContentParser parser = request.contentParser();
         ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-        MLAddMemoryInput mlAddMemoryInput = MLAddMemoryInput.parse(parser);
+        MLAddMemoriesInput mlAddMemoryInput = MLAddMemoriesInput.parse(parser);
 
         // Set the container ID from the path
         mlAddMemoryInput.setMemoryContainerId(memoryContainerId);
 
-        return new MLAddMemoryRequest(mlAddMemoryInput);
+        return new MLAddMemoriesRequest(mlAddMemoryInput);
     }
 
     private static void ensureExpectedToken(XContentParser.Token expected, XContentParser.Token actual, XContentParser parser) {

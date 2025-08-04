@@ -9,9 +9,9 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 
 import java.io.IOException;
 
-import org.opensearch.core.action.ActionResponse;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
+import org.opensearch.core.common.io.stream.Writeable;
 import org.opensearch.core.xcontent.ToXContentObject;
 import org.opensearch.core.xcontent.XContentBuilder;
 
@@ -19,41 +19,43 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.ToString;
 
+/**
+ * Represents a single memory result in the MLAddMemoryResponse
+ */
 @Getter
 @ToString
-public class MLAddMemoryResponse extends ActionResponse implements ToXContentObject {
+@Builder
+public class MemoryResult implements ToXContentObject, Writeable {
 
-    private String memoryId;
-    private String sessionId;
-    private String status;
+    private final String memoryId;
+    private final String memory;
+    private final String event;
 
-    @Builder
-    public MLAddMemoryResponse(String memoryId, String sessionId, String status) {
+    public MemoryResult(String memoryId, String memory, String event) {
         this.memoryId = memoryId;
-        this.sessionId = sessionId;
-        this.status = status;
+        this.memory = memory;
+        this.event = event;
     }
 
-    public MLAddMemoryResponse(StreamInput in) throws IOException {
-        super(in);
+    public MemoryResult(StreamInput in) throws IOException {
         this.memoryId = in.readString();
-        this.sessionId = in.readString();
-        this.status = in.readString();
+        this.memory = in.readString();
+        this.event = in.readString();
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeString(memoryId);
-        out.writeString(sessionId);
-        out.writeString(status);
+        out.writeString(memory);
+        out.writeString(event);
     }
 
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
         builder.field(MEMORY_ID_FIELD, memoryId);
-        builder.field(SESSION_ID_FIELD, sessionId);
-        builder.field(STATUS_FIELD, status);
+        builder.field(MEMORY_FIELD, memory);
+        builder.field("event", event);
         builder.endObject();
         return builder;
     }
