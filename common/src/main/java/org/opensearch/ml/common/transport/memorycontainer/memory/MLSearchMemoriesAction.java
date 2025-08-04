@@ -9,7 +9,7 @@ import org.opensearch.action.ActionType;
 
 public class MLSearchMemoriesAction extends ActionType<MLSearchMemoriesResponse> {
     public static final MLSearchMemoriesAction INSTANCE = new MLSearchMemoriesAction();
-    public static final String NAME = "cluster:admin/opensearch/ml/memories/search";
+    public static final String NAME = "cluster:admin/opensearch/ml/memory_containers/memories/search";
 
     private MLSearchMemoriesAction() {
         super(NAME, MLSearchMemoriesResponse::new);

@@ -15,7 +15,7 @@ import java.io.IOException;
 import java.util.List;
 
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoriesAction;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryInput;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryRequest;
 import org.opensearch.rest.BaseRestHandler;
@@ -51,7 +51,7 @@ public class RestMLUpdateMemoryAction extends BaseRestHandler {
     @Override
     protected RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
         MLUpdateMemoryRequest mlUpdateMemoryRequest = getRequest(request);
-        return channel -> client.execute(MLUpdateMemoriesAction.INSTANCE, mlUpdateMemoryRequest, new RestToXContentListener<>(channel));
+        return channel -> client.execute(MLUpdateMemoryAction.INSTANCE, mlUpdateMemoryRequest, new RestToXContentListener<>(channel));
     }
 
     /**

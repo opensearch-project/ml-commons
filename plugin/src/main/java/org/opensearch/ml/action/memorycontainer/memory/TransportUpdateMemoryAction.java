@@ -40,7 +40,7 @@ import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
-import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoriesAction;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLUpdateMemoryRequest;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
@@ -81,7 +81,7 @@ public class TransportUpdateMemoryAction extends HandledTransportAction<ActionRe
         MLFeatureEnabledSetting mlFeatureEnabledSetting,
         MLModelManager mlModelManager
     ) {
-        super(MLUpdateMemoriesAction.NAME, transportService, actionFilters, MLUpdateMemoryRequest::new);
+        super(MLUpdateMemoryAction.NAME, transportService, actionFilters, MLUpdateMemoryRequest::new);
         this.client = client;
         this.sdkClient = sdkClient;
         this.xContentRegistry = xContentRegistry;

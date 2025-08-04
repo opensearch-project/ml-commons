@@ -8,11 +8,11 @@ package org.opensearch.ml.common.transport.memorycontainer.memory;
 import org.opensearch.action.ActionType;
 import org.opensearch.action.update.UpdateResponse;
 
-public class MLUpdateMemoriesAction extends ActionType<UpdateResponse> {
-    public static final MLUpdateMemoriesAction INSTANCE = new MLUpdateMemoriesAction();
-    public static final String NAME = "cluster:admin/opensearch/ml/memory/update";
+public class MLUpdateMemoryAction extends ActionType<UpdateResponse> {
+    public static final MLUpdateMemoryAction INSTANCE = new MLUpdateMemoryAction();
+    public static final String NAME = "cluster:admin/opensearch/ml/memory_containers/memory/update";
 
-    private MLUpdateMemoriesAction() {
+    private MLUpdateMemoryAction() {
         super(NAME, UpdateResponse::new);
     }
 }
