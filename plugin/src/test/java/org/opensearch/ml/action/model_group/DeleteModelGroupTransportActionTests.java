@@ -251,6 +251,25 @@ public class DeleteModelGroupTransportActionTests extends OpenSearchTestCase {
         assertEquals("Failed to validate access", argumentCaptor.getValue().getMessage());
     }
 
+    public void testDeleteModelGroup_IndexNotFoundException() {
+        SearchResponse searchResponse = getEmptySearchResponse();
+        doAnswer(invocation -> {
+            ActionListener<SearchResponse> listener = invocation.getArgument(1);
+            listener.onResponse(searchResponse);
+            return null;
+        }).when(client).search(any(), isA(ActionListener.class));
+
+        doAnswer(invocation -> {
+            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
+            listener.onFailure(new IndexNotFoundException("errorMessage"));
+            return null;
+        }).when(client).delete(any(), any());
+        deleteModelGroupTransportAction.doExecute(null, mlModelGroupDeleteRequest, actionListener);
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+        assertEquals("Failed to find model group", argumentCaptor.getValue().getMessage());
+    }
+
     public void testDeleteModelGroup_Failure() {
         SearchResponse searchResponse = getEmptySearchResponse();
         doAnswer(invocation -> {
