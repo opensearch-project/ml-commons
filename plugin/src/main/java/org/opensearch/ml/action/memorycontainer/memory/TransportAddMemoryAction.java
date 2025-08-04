@@ -99,85 +99,80 @@ public class TransportAddMemoryAction extends HandledTransportAction<MLAddMemory
 
     @Override
     protected void doExecute(Task task, MLAddMemoryRequest request, ActionListener<MLAddMemoryResponse> actionListener) {
+        User user = RestActionUtils.getUserContext(client);
         MLAddMemoryInput input = request.getMlAddMemoryInput();
+
+        if (input == null) {
+            actionListener.onFailure(new IllegalArgumentException("Memory input is required"));
+            return;
+        }
+
         String memoryContainerId = input.getMemoryContainerId();
 
-        // Get memory container first
+        if (memoryContainerId == null || memoryContainerId.isEmpty()) {
+            actionListener.onFailure(new IllegalArgumentException("Memory container ID is required"));
+            return;
+        }
+
+        // Get memory container
         getMemoryContainer(memoryContainerId, ActionListener.wrap(container -> {
-            // Check user has access to container
-            User user = RestActionUtils.getUserContext(client);
+            // Check access
             if (!checkMemoryContainerAccess(user, container)) {
                 actionListener
                     .onFailure(
-                        new OpenSearchStatusException(
-                            "User doesn't have privilege to perform this operation on this memory container",
-                            RestStatus.FORBIDDEN
-                        )
+                        new OpenSearchStatusException("User doesn't have permissions to add memory to this container", RestStatus.FORBIDDEN)
                     );
                 return;
             }
 
-            // Validate and determine infer value based on LLM model presence
+            // Get memory index name
+            String indexName = getIndexName(container);
+            if (indexName == null) {
+                actionListener.onFailure(new IllegalStateException("Memory index not created for this container"));
+                return;
+            }
+
+            processAndIndexMemory(input, container, indexName, user, actionListener);
+        }, actionListener::onFailure));
+    }
+
+    private void processAndIndexMemory(
+        MLAddMemoryInput input,
+        MLMemoryContainer container,
+        String indexName,
+        User user,
+        ActionListener<MLAddMemoryResponse> actionListener
+    ) {
+        try {
+            // Get the first message (currently limited to 1)
+            MessageInput message = input.getMessages().get(0);
+
+            // Generate session ID if not provided
+            final String sessionId;
+            if (input.getSessionId() == null || input.getSessionId().isEmpty()) {
+                sessionId = "sess_" + UUID.randomUUID().toString();
+            } else {
+                sessionId = input.getSessionId();
+            }
+
+            // Determine memory type (currently only RAW_MESSAGE)
+            MemoryType memoryType = MemoryType.RAW_MESSAGE;
+
+            // Validate infer flag
+            Boolean infer = input.getInfer();
             MemoryStorageConfig storageConfig = container.getMemoryStorageConfig();
             boolean hasLlmModel = storageConfig != null && storageConfig.getLlmModelId() != null;
-            Boolean infer = input.getInfer();
 
             if (infer != null && infer && !hasLlmModel) {
-                // infer=true requires LLM model
                 actionListener.onFailure(new IllegalArgumentException(INFER_REQUIRES_LLM_MODEL_ERROR));
                 return;
             }
 
-            // Default infer value based on LLM model presence
+            // Set default infer value based on LLM model presence if not specified
             if (infer == null) {
                 infer = hasLlmModel;
             }
 
-            // Get the single message (we only support one for now)
-            MessageInput message = input.getMessages().get(0);
-
-            // Auto-determine memory type
-            MemoryType memoryType = MemoryType.RAW_MESSAGE; // Always RAW_MESSAGE for now
-
-            // Generate session ID if not provided
-            String sessionId = input.getSessionId();
-            if (sessionId == null) {
-                sessionId = "sess_" + UUID.randomUUID().toString();
-            }
-
-            // Make variables final for lambda usage
-            final String finalSessionId = sessionId;
-            final MemoryType finalMemoryType = memoryType;
-            final MessageInput finalMessage = message;
-
-            // Get index name from container
-            String indexName = getIndexName(container);
-            if (indexName == null) {
-                actionListener
-                    .onFailure(
-                        new OpenSearchStatusException("Memory container does not have a valid index name", RestStatus.INTERNAL_SERVER_ERROR)
-                    );
-                return;
-            }
-
-            // Process the message
-            addMemoryWithSessionId(input, container, indexName, finalMessage, finalSessionId, user, finalMemoryType, actionListener);
-        }, actionListener::onFailure));
-    }
-
-    private void addMemoryWithSessionId(
-        MLAddMemoryInput input,
-        MLMemoryContainer container,
-        String indexName,
-        MessageInput message,
-        String sessionId,
-        User user,
-        MemoryType memoryType,
-        ActionListener<MLAddMemoryResponse> actionListener
-    ) {
-        try {
-            // Check if we need to generate embeddings
-            MemoryStorageConfig storageConfig = container.getMemoryStorageConfig();
             boolean needsEmbedding = storageConfig != null && storageConfig.isSemanticStorageEnabled();
 
             if (needsEmbedding) {
@@ -276,7 +271,14 @@ public class TransportAddMemoryAction extends HandledTransportAction<MLAddMemory
                 MLOutput mlOutput = response.getOutput();
                 if (mlOutput instanceof ModelTensorOutput) {
                     ModelTensorOutput tensorOutput = (ModelTensorOutput) mlOutput;
-                    Object embedding = extractEmbedding(tensorOutput, embeddingModelType);
+                    Object embedding = null;
+
+                    if (embeddingModelType == FunctionName.TEXT_EMBEDDING) {
+                        embedding = buildDenseEmbeddingFromResponse(tensorOutput);
+                    } else if (embeddingModelType == FunctionName.SPARSE_ENCODING) {
+                        embedding = buildSparseEmbeddingFromResponse(tensorOutput);
+                    }
+
                     listener.onResponse(embedding);
                 } else {
                     log.error("Unexpected ML output type: {}", mlOutput.getClass().getName());
@@ -292,7 +294,7 @@ public class TransportAddMemoryAction extends HandledTransportAction<MLAddMemory
         }));
     }
 
-    private Object extractEmbedding(ModelTensorOutput tensorOutput, FunctionName embeddingModelType) {
+    private float[] buildDenseEmbeddingFromResponse(ModelTensorOutput tensorOutput) {
         if (tensorOutput.getMlModelOutputs() == null || tensorOutput.getMlModelOutputs().isEmpty()) {
             log.debug("No model outputs found in tensor output");
             return null;
@@ -304,47 +306,57 @@ public class TransportAddMemoryAction extends HandledTransportAction<MLAddMemory
             return null;
         }
 
-        if (embeddingModelType == FunctionName.TEXT_EMBEDDING) {
-            // For dense embeddings, look for the sentence_embedding tensor
-            for (ModelTensor tensor : modelTensors.getMlModelTensors()) {
-                if ("sentence_embedding".equals(tensor.getName()) && tensor.getData() != null) {
-                    Number[] data = tensor.getData();
-                    log.debug("Found sentence_embedding tensor with dimension: {}", data.length);
+        // For dense embeddings, look for the sentence_embedding tensor
+        for (ModelTensor tensor : modelTensors.getMlModelTensors()) {
+            if ("sentence_embedding".equals(tensor.getName()) && tensor.getData() != null) {
+                Number[] data = tensor.getData();
+                log.debug("Found sentence_embedding tensor with dimension: {}", data.length);
 
-                    // Convert Number[] to float[] for proper storage
-                    float[] floatData = new float[data.length];
-                    for (int i = 0; i < data.length; i++) {
-                        floatData[i] = data[i].floatValue();
-                    }
-                    return floatData;
+                // Convert Number[] to float[] for proper storage
+                float[] floatData = new float[data.length];
+                for (int i = 0; i < data.length; i++) {
+                    floatData[i] = data[i].floatValue();
                 }
+                return floatData;
             }
-            log.error("No sentence_embedding tensor found for dense embedding");
-            return null;
+        }
 
-        } else if (embeddingModelType == FunctionName.SPARSE_ENCODING) {
-            // For sparse embeddings, find the tensor with dataAsMap
-            for (ModelTensor tensor : modelTensors.getMlModelTensors()) {
-                Map<String, ?> dataMap = tensor.getDataAsMap();
-                if (dataMap != null) {
-                    // Check if sparse embedding is nested in a response field
-                    if (dataMap.containsKey("response") && dataMap.get("response") instanceof List) {
-                        List<?> responseList = (List<?>) dataMap.get("response");
-                        if (!responseList.isEmpty() && responseList.get(0) instanceof Map) {
-                            Map<String, ?> sparseMap = (Map<String, ?>) responseList.get(0);
-                            log.debug("Extracted sparse embedding from nested response with {} tokens", sparseMap.size());
-                            return sparseMap;
-                        }
-                    }
-                    // Otherwise return the direct map
-                    log.debug("Using direct sparse embedding with {} tokens", dataMap.size());
-                    return dataMap;
-                }
-            }
-            log.error("No sparse embedding data found");
+        log.error("No sentence_embedding tensor found for dense embedding");
+        return null;
+    }
+
+    private Map<String, ?> buildSparseEmbeddingFromResponse(ModelTensorOutput tensorOutput) {
+        if (tensorOutput.getMlModelOutputs() == null || tensorOutput.getMlModelOutputs().isEmpty()) {
+            log.debug("No model outputs found in tensor output");
             return null;
         }
 
+        ModelTensors modelTensors = tensorOutput.getMlModelOutputs().get(0);
+        if (modelTensors.getMlModelTensors() == null || modelTensors.getMlModelTensors().isEmpty()) {
+            log.debug("No model tensors found in model output");
+            return null;
+        }
+
+        // For sparse embeddings, find the tensor with dataAsMap
+        for (ModelTensor tensor : modelTensors.getMlModelTensors()) {
+            Map<String, ?> dataMap = tensor.getDataAsMap();
+            if (dataMap != null) {
+                // Check if sparse embedding is nested in a response field
+                if (dataMap.containsKey("response") && dataMap.get("response") instanceof List) {
+                    List<?> responseList = (List<?>) dataMap.get("response");
+                    if (!responseList.isEmpty() && responseList.get(0) instanceof Map) {
+                        Map<String, ?> sparseMap = (Map<String, ?>) responseList.get(0);
+                        log.debug("Extracted sparse embedding from nested response with {} tokens", sparseMap.size());
+                        return sparseMap;
+                    }
+                }
+                // Otherwise return the direct map
+                log.debug("Using direct sparse embedding with {} tokens", dataMap.size());
+                return dataMap;
+            }
+        }
+
+        log.error("No sparse embedding data found");
         return null;
     }
 
