@@ -767,16 +767,7 @@ public class MachineLearningPlugin extends Plugin
         MetricsCorrelation metricsCorrelation = new MetricsCorrelation(client, settings, clusterService);
         MLEngineClassLoader.register(FunctionName.METRICS_CORRELATION, metricsCorrelation);
 
-        MLToolExecutor toolExecutor = new MLToolExecutor(
-            client,
-            sdkClient,
-            settings,
-            clusterService,
-            xContentRegistry,
-            toolFactories,
-            memoryFactoryMap,
-            encryptor
-        );
+        MLToolExecutor toolExecutor = new MLToolExecutor(client, sdkClient, settings, clusterService, xContentRegistry, toolFactories);
         MLEngineClassLoader.register(FunctionName.TOOL, toolExecutor);
 
         MLSearchHandler mlSearchHandler = new MLSearchHandler(client, xContentRegistry, modelAccessControlHelper, clusterService);

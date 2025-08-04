@@ -43,7 +43,8 @@ public class MLFeatureEnabledSettingTests {
                     MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED,
                     MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED,
                     MLCommonsSettings.ML_COMMONS_METRIC_COLLECTION_ENABLED,
-                    MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED
+                    MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_ENABLED
                 )
         );
         when(mockClusterService.getClusterSettings()).thenReturn(mockClusterSettings);

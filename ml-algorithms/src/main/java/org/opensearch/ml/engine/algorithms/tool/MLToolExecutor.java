@@ -22,12 +22,10 @@ import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
-import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.Executable;
 import org.opensearch.ml.engine.annotation.Function;
-import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.transport.client.Client;
 
@@ -47,9 +45,6 @@ public class MLToolExecutor implements Executable {
     private ClusterService clusterService;
     private NamedXContentRegistry xContentRegistry;
     private Map<String, Tool.Factory> toolFactories;
-    private Map<String, Memory.Factory> memoryFactoryMap;
-    private Encryptor encryptor;
-    private static volatile boolean executeToolEnabled;
 
     public MLToolExecutor(
         Client client,
@@ -57,9 +52,7 @@ public class MLToolExecutor implements Executable {
         Settings settings,
         ClusterService clusterService,
         NamedXContentRegistry xContentRegistry,
-        Map<String, Tool.Factory> toolFactories,
-        Map<String, Memory.Factory> memoryFactoryMap,
-        Encryptor encryptor
+        Map<String, Tool.Factory> toolFactories
     ) {
         this.client = client;
         this.sdkClient = sdkClient;
@@ -67,8 +60,6 @@ public class MLToolExecutor implements Executable {
         this.clusterService = clusterService;
         this.xContentRegistry = xContentRegistry;
         this.toolFactories = toolFactories;
-        this.memoryFactoryMap = memoryFactoryMap;
-        this.encryptor = encryptor;
     }
 
     @Override

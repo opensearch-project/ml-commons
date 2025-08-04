@@ -31,7 +31,6 @@ import org.opensearch.ml.common.input.execute.tool.ToolMLInput;
 import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
-import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.transport.client.Client;
@@ -49,8 +48,6 @@ public class MLToolExecutorTest {
     private NamedXContentRegistry xContentRegistry;
     @Mock
     private Map<String, Tool.Factory> toolFactories;
-    @Mock
-    private Map<String, Memory.Factory> memoryFactoryMap;
     @Mock
     private Tool.Factory toolFactory;
     @Mock
@@ -86,8 +83,7 @@ public class MLToolExecutorTest {
         when(clusterService.getClusterSettings())
             .thenReturn(new ClusterSettings(settings, Set.of(MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_ENABLED)));
 
-        mlToolExecutor = Mockito
-            .spy(new MLToolExecutor(client, sdkClient, settings, clusterService, xContentRegistry, toolFactories, memoryFactoryMap, null));
+        mlToolExecutor = Mockito.spy(new MLToolExecutor(client, sdkClient, settings, clusterService, xContentRegistry, toolFactories));
     }
 
     @Test
