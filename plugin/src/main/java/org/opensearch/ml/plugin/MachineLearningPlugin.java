@@ -931,7 +931,7 @@ public class MachineLearningPlugin extends Plugin
         );
         RestMLGetMemoryContainerAction restMLGetMemoryContainerAction = new RestMLGetMemoryContainerAction(mlFeatureEnabledSetting);
         RestMLDeleteMemoryContainerAction restMLDeleteMemoryContainerAction = new RestMLDeleteMemoryContainerAction(
-                mlFeatureEnabledSetting
+            mlFeatureEnabledSetting
         );
         RestMLAddMemoriesAction restMLAddMemoriesAction = new RestMLAddMemoriesAction();
         RestMLSearchMemoriesAction restMLSearchMemoriesAction = new RestMLSearchMemoriesAction(mlFeatureEnabledSetting);
