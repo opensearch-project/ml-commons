@@ -36,6 +36,8 @@ public class DiscoveryNodeHelper {
     private volatile Set<String> remoteModelEligibleNodeRoles;
     private volatile Set<String> localModelEligibleNodeRoles;
 
+    private static final Set<FunctionName> NON_LOCAL_FUNCTIONS = Set.of(FunctionName.REMOTE, FunctionName.AGENT, FunctionName.TOOL);
+
     public DiscoveryNodeHelper(ClusterService clusterService, Settings settings) {
         this.clusterService = clusterService;
         eligibleNodeFilter = new HotDataNodePredicate();
@@ -73,7 +75,7 @@ public class DiscoveryNodeHelper {
             if (excludedNodeNames != null && excludedNodeNames.contains(node.getName())) {
                 continue;
             }
-            if (functionName == FunctionName.REMOTE || functionName == FunctionName.AGENT) {// non-local model (remote model, agent)
+            if (NON_LOCAL_FUNCTIONS.contains(functionName)) {
                 getEligibleNode(remoteModelEligibleNodeRoles, eligibleNodes, node);
             } else { // local model
                 if (onlyRunOnMLNode) {
