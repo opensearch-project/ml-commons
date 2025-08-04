@@ -155,7 +155,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
     public void run(MLAgent mlAgent, Map<String, String> inputParams, ActionListener<Object> listener) {
         Span agentTaskSpan = MLAgentTracer
             .getInstance()
-            .startConversationalAgentTaskSpanLogic(mlAgent.getName(), inputParams.get(MLAgentExecutor.QUESTION), inputParams);
+            .startConversationalAgentTaskSpanLogic(mlAgent.getName(), inputParams);
 
         try {
             Map<String, String> params = new HashMap<>();
@@ -399,16 +399,12 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     String finalAnswer = modelOutput.get(FINAL_ANSWER);
 
                     MLAgentTracer.ToolCallExtractionResult llmResultInfo = MLAgentTracer.extractToolCallInfo(tmpModelTensorOutput, null);
-
                     MLAgentTracer.extractAndAccumulateTokensToAgent(llmResultInfo.usage, context);
                     MLAgentTracer.updateAndEndLLMSpan(lastLlmListenerWithSpan.get(), llmResultInfo, context);
 
                     if (finalAnswer != null) {
                         finalAnswer = finalAnswer.trim();
 
-                        if (lastAction.get() != null && lastToolOutput.get() != null) {
-                            addToolOutputToAddtionalInfo(toolSpecMap, lastAction, additionalInfo, lastToolOutput.get());
-                        }
                         MLAgentTracer.updateAndEndLLMSpan(lastLlmListenerWithSpan.get(), llmResultInfo, context);
                         MLAgentTracer.updateAgentTaskSpanWithCumulativeTokens(context);
                         MLAgentTracer.updateAdditionalInfoWithTokens(context, additionalInfo);
@@ -467,14 +463,13 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             actionInput
                         );
 
-                        Tool toolObj = tools.get(action);
                         Span toolCallSpan = MLAgentTracer
                             .getInstance()
                             .startConversationalToolCallSpan(
                                 actionInput,
                                 currentToolCallIndex,
                                 action,
-                                toolObj != null ? toolObj.getDescription() : null,
+                                tools.get(action) != null ? tools.get(action).getDescription() : null,
                                 lastLlmListenerWithSpan.get() != null ? lastLlmListenerWithSpan.get().span : agentTaskSpan
                             );
 
@@ -507,11 +502,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             );
 
                         try {
-                            String failureResult = String.format("Failed to run the tool %s which is unsupported.", action);
-                            MLAgentTracer.setSpanResult(toolCallSpan, failureResult);
-                            MLAgentTracer.getInstance().endSpan(toolCallSpan);
-
                             String res = String.format(Locale.ROOT, "Failed to run the tool %s which is unsupported.", action);
+                            MLAgentTracer.setSpanResult(toolCallSpan, res);
+                            MLAgentTracer.getInstance().endSpan(toolCallSpan);
                             StringSubstitutor substitutor = new StringSubstitutor(
                                 Map.of(SCRATCHPAD, scratchpadBuilder.toString()),
                                 "${parameters.",
@@ -745,10 +738,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                                 INTERACTIONS_PREFIX
                             )
                         );
-                    String errorResult = String.format("Failed to run the tool %s with the error message %s.", finalAction, e.getMessage());
-                    MLAgentTracer.setSpanResult(toolCallSpan, errorResult);
-                    toolCallSpan.setError(e);
-                    MLAgentTracer.getInstance().endSpan(toolCallSpan);
+                    MLAgentTracer.handleSpanError(toolCallSpan, "Failed to run tool", e);
                     nextStepListener
                         .onResponse(
                             String
@@ -774,10 +764,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 }
             } catch (Exception e) {
                 log.error("Failed to run tool {}", action, e);
-                String errorResult = String.format("Failed to run the tool %s with the error message %s.", action, e.getMessage());
-                MLAgentTracer.setSpanResult(toolCallSpan, errorResult);
-                toolCallSpan.setError(e);
-                MLAgentTracer.getInstance().endSpan(toolCallSpan);
+                MLAgentTracer.handleSpanError(toolCallSpan, "Failed to run tool", e);
                 nextStepListener
                     .onResponse(String.format(Locale.ROOT, "Failed to run the tool %s with the error message %s.", action, e.getMessage()));
             }

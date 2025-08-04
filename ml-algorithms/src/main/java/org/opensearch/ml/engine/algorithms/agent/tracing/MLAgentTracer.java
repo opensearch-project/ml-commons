@@ -85,10 +85,16 @@ public class MLAgentTracer extends MLTracer {
     public static final String ADDITIONAL_INFO_FIELD = "additional_info";
     public static final String ADDITIONAL_INFO_FIELD_ALT = "additionalInfo";
     public static final String PROVIDER_UNKNOWN = "unknown";
+    public static final String TRACE_PARENT_FIELD = "traceparent";
+    public static final String QUESTION_FIELD = "question";
+    public static final String PROVIDER_BEDROCK = "bedrock";
+    public static final String PROVIDER_OPENAI = "openai";
+    public static final String MODEL_TENSOR_NAME_RESPONSE = "response";
 
     public static final String TOKEN_FIELD_INPUT_TOKENS = "inputTokens";
     public static final String TOKEN_FIELD_OUTPUT_TOKENS = "outputTokens";
     public static final String TOKEN_FIELD_TOTAL_TOKENS = "totalTokens";
+    public static final String METRIC_FIELD_LATENCY_MS = "latencyMs";
     public static final String TOKEN_FIELD_INPUT_TOKENS_ALT = "input_tokens";
     public static final String TOKEN_FIELD_OUTPUT_TOKENS_ALT = "output_tokens";
     public static final String TOKEN_FIELD_PROMPT_TOKENS = "prompt_tokens";
@@ -432,10 +438,10 @@ public class MLAgentTracer extends MLTracer {
     }
 
     public static void updateToolCallSpanWithResult(Span span, ToolCallExtractionResult result) {
-        Double inputTokens = extractTokenValue(result.usage, "inputTokens");
-        Double outputTokens = extractTokenValue(result.usage, "outputTokens");
-        Double totalTokens = extractTokenValue(result.usage, "totalTokens");
-        Double latency = extractTokenValue(result.metrics, "latencyMs");
+        Double inputTokens = extractTokenValue(result.usage, TOKEN_FIELD_INPUT_TOKENS);
+        Double outputTokens = extractTokenValue(result.usage, TOKEN_FIELD_OUTPUT_TOKENS);
+        Double totalTokens = extractTokenValue(result.usage, TOKEN_FIELD_TOTAL_TOKENS);
+        Double latency = extractTokenValue(result.metrics, METRIC_FIELD_LATENCY_MS);
         MLAgentTracer.AgentExecutionContext context = new MLAgentTracer.AgentExecutionContext(span, null);
         context.getCurrentResult().set(result.output);
         if (latency != null) {
@@ -794,9 +800,10 @@ public class MLAgentTracer extends MLTracer {
      * @param hasParentSpanContext Whether the conversational agent is run through another agent.
      * @return The started Span.
      */
-    public Span startConversationalAgentTaskSpanLogic(String agentName, String userTask, Map<String, String> inputParams) {
+    public Span startConversationalAgentTaskSpanLogic(String agentName, Map<String, String> inputParams) {
         // Check if conversational is run independently or through another agent
-        boolean hasParentSpanContext = inputParams.containsKey("traceparent");
+        boolean hasParentSpanContext = inputParams.containsKey(TRACE_PARENT_FIELD);
+        String userTask = inputParams.get(QUESTION_FIELD);
         final Span agentTaskSpan;
         if (hasParentSpanContext) {
             Span parentSpan = MLAgentTracer.getInstance().extractSpanContext(inputParams);
@@ -902,9 +909,9 @@ public class MLAgentTracer extends MLTracer {
         @SuppressWarnings("unchecked")
         Map<String, Object> usage = (Map<String, Object>) usageObj;
 
-        if (provider.toLowerCase().contains("bedrock")) {
+        if (provider.toLowerCase().contains(PROVIDER_BEDROCK)) {
             extractBedrockTokens(usage, extractedTokens);
-        } else if (provider.toLowerCase().contains("openai")) {
+        } else if (provider.toLowerCase().contains(PROVIDER_OPENAI)) {
             extractOpenAITokens(usage, extractedTokens);
         } else {
             // TODO: find general method for all providers
@@ -1030,9 +1037,9 @@ public class MLAgentTracer extends MLTracer {
         if (usage == null)
             return;
 
-        Double inputTokens = extractTokenValue(usage, "inputTokens");
-        Double outputTokens = extractTokenValue(usage, "outputTokens");
-        Double totalTokens = extractTokenValue(usage, "totalTokens");
+        Double inputTokens = extractTokenValue(usage, TOKEN_FIELD_INPUT_TOKENS);
+        Double outputTokens = extractTokenValue(usage, TOKEN_FIELD_OUTPUT_TOKENS);
+        Double totalTokens = extractTokenValue(usage, TOKEN_FIELD_TOTAL_TOKENS);
 
         if (inputTokens != null)
             context.getAgentInputTokens().set(context.getAgentInputTokens().get() + inputTokens);
@@ -1051,9 +1058,9 @@ public class MLAgentTracer extends MLTracer {
         if (usage == null)
             return;
 
-        Double inputTokens = extractTokenValue(usage, "inputTokens");
-        Double outputTokens = extractTokenValue(usage, "outputTokens");
-        Double totalTokens = extractTokenValue(usage, "totalTokens");
+        Double inputTokens = extractTokenValue(usage, TOKEN_FIELD_INPUT_TOKENS);
+        Double outputTokens = extractTokenValue(usage, TOKEN_FIELD_OUTPUT_TOKENS);
+        Double totalTokens = extractTokenValue(usage, TOKEN_FIELD_TOTAL_TOKENS);
 
         context.getPhaseInputTokens().set(inputTokens != null ? inputTokens : 0.0);
         context.getPhaseOutputTokens().set(outputTokens != null ? outputTokens : 0.0);
@@ -1069,7 +1076,7 @@ public class MLAgentTracer extends MLTracer {
         if (metrics == null)
             return;
 
-        Double latency = extractTokenValue(metrics, "latencyMs");
+        Double latency = extractTokenValue(metrics, METRIC_FIELD_LATENCY_MS);
         if (latency != null) {
             context.getCurrentLatency().set(latency.longValue());
         }
@@ -1113,7 +1120,7 @@ public class MLAgentTracer extends MLTracer {
                     .of(
                         ModelTensors
                             .builder()
-                            .mlModelTensors(List.of(ModelTensor.builder().name("response").result(response).build()))
+                            .mlModelTensors(List.of(ModelTensor.builder().name(MODEL_TENSOR_NAME_RESPONSE).result(response).build()))
                             .build()
                     )
             )
@@ -1135,9 +1142,9 @@ public class MLAgentTracer extends MLTracer {
      * @param additionalInfo The additional info map to update.
      */
     public static void updateAdditionalInfoWithTokens(AgentExecutionContext context, Map<String, Object> additionalInfo) {
-        additionalInfo.put("inputTokens", context.getAgentInputTokens().get());
-        additionalInfo.put("outputTokens", context.getAgentOutputTokens().get());
-        additionalInfo.put("totalTokens", context.getAgentTotalTokens().get());
+        additionalInfo.put(TOKEN_FIELD_INPUT_TOKENS, context.getAgentInputTokens().get());
+        additionalInfo.put(TOKEN_FIELD_OUTPUT_TOKENS, context.getAgentOutputTokens().get());
+        additionalInfo.put(TOKEN_FIELD_TOTAL_TOKENS, context.getAgentTotalTokens().get());
     }
 
     /**
