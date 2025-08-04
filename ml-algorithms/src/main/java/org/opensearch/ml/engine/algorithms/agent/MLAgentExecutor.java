@@ -15,9 +15,7 @@ import static org.opensearch.ml.common.MLTask.STATE_FIELD;
 import static org.opensearch.ml.common.MLTask.TASK_ID_FIELD;
 import static org.opensearch.ml.common.output.model.ModelTensorOutput.INFERENCE_RESULT_FIELD;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE;
-import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED;
 import static org.opensearch.ml.common.utils.MLTaskUtils.updateMLTaskDirectly;
 
 import java.security.AccessController;
@@ -63,6 +61,7 @@ import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.settings.SettingsChangeListener;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
@@ -112,8 +111,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     private Map<String, Memory.Factory> memoryFactoryMap;
     private volatile Boolean isMultiTenancyEnabled;
     private Encryptor encryptor;
-    private static volatile boolean mcpConnectorIsEnabled;
-    private static volatile boolean agenticSearchIsEnabled;
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     public MLAgentExecutor(
         Client client,
@@ -123,7 +121,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         NamedXContentRegistry xContentRegistry,
         Map<String, Tool.Factory> toolFactories,
         Map<String, Memory.Factory> memoryFactoryMap,
-        Boolean isMultiTenancyEnabled,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting,
         Encryptor encryptor
     ) {
         this.client = client;
@@ -133,12 +131,9 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         this.xContentRegistry = xContentRegistry;
         this.toolFactories = toolFactories;
         this.memoryFactoryMap = memoryFactoryMap;
-        this.isMultiTenancyEnabled = isMultiTenancyEnabled;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         this.encryptor = encryptor;
-        this.mcpConnectorIsEnabled = ML_COMMONS_MCP_CONNECTOR_ENABLED.get(clusterService.getSettings());
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_MCP_CONNECTOR_ENABLED, it -> mcpConnectorIsEnabled = it);
-        this.agenticSearchIsEnabled = ML_COMMONS_AGENTIC_SEARCH_ENABLED.get(clusterService.getSettings());
-        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_AGENTIC_SEARCH_ENABLED, it -> agenticSearchIsEnabled = it);
+        this.isMultiTenancyEnabled = mlFeatureEnabledSetting.isMultiTenancyEnabled();
     }
 
     @Override
@@ -396,7 +391,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         ActionListener<Output> listener
     ) {
         String mcpConnectorConfigJSON = (mlAgent.getParameters() != null) ? mlAgent.getParameters().get(MCP_CONNECTORS_FIELD) : null;
-        if (mcpConnectorConfigJSON != null && !mcpConnectorIsEnabled) {
+        if (mcpConnectorConfigJSON != null && !mlFeatureEnabledSetting.isMcpConnectorEnabled()) {
             // MCP connector provided as tools but MCP feature is disabled, so abort.
             listener.onFailure(new OpenSearchException(ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE));
             return;
@@ -404,7 +399,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
         List<MLToolSpec> tools = mlAgent.getTools();
         if (tools != null) {
             for (MLToolSpec tool : tools) {
-                if (tool.getType().equals(QueryPlanningTool.TYPE) && !agenticSearchIsEnabled) {
+                if (tool.getType().equals(QueryPlanningTool.TYPE) && !mlFeatureEnabledSetting.isAgenticSearchEnabled()) {
                     listener.onFailure(new OpenSearchException(ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE));
                     return;
                 }

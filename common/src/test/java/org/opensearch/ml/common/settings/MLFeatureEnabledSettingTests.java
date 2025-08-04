@@ -44,7 +44,9 @@ public class MLFeatureEnabledSettingTests {
                     MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED,
                     MLCommonsSettings.ML_COMMONS_METRIC_COLLECTION_ENABLED,
                     MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED,
-                    MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_ENABLED
+                    MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_ENABLED,
+                    MLCommonsSettings.ML_COMMONS_MCP_CONNECTOR_ENABLED
                 )
         );
         when(mockClusterService.getClusterSettings()).thenReturn(mockClusterSettings);
@@ -66,6 +68,8 @@ public class MLFeatureEnabledSettingTests {
             .put("plugins.ml_commons.rag_pipeline_feature_enabled", true)
             .put("plugins.ml_commons.metrics_collection_enabled", true)
             .put("plugins.ml_commons.metrics_static_collection_enabled", true)
+            .put("plugins.ml_commons.mcp_connector_enabled", true)
+            .put("plugins.ml_commons.agentic_search_enabled", true)
             .build();
 
         MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
@@ -82,6 +86,8 @@ public class MLFeatureEnabledSettingTests {
         assertTrue(setting.isRagSearchPipelineEnabled());
         assertTrue(setting.isMetricCollectionEnabled());
         assertTrue(setting.isStaticMetricCollectionEnabled());
+        assertTrue(setting.isMcpConnectorEnabled());
+        assertTrue(setting.isAgenticSearchEnabled());
     }
 
     @Test
@@ -100,6 +106,8 @@ public class MLFeatureEnabledSettingTests {
             .put("plugins.ml_commons.rag_pipeline_feature_enabled", false)
             .put("plugins.ml_commons.metrics_collection_enabled", false)
             .put("plugins.ml_commons.metrics_static_collection_enabled", false)
+            .put("plugins.ml_commons.mcp_connector_enabled", false)
+            .put("plugins.ml_commons.agentic_search_enabled", false)
             .build();
 
         MLFeatureEnabledSetting setting = new MLFeatureEnabledSetting(mockClusterService, settings);
@@ -116,6 +124,8 @@ public class MLFeatureEnabledSettingTests {
         assertFalse(setting.isRagSearchPipelineEnabled());
         assertFalse(setting.isMetricCollectionEnabled());
         assertFalse(setting.isStaticMetricCollectionEnabled());
+        assertFalse(setting.isMcpConnectorEnabled());
+        assertFalse(setting.isAgenticSearchEnabled());
     }
 
     @Test

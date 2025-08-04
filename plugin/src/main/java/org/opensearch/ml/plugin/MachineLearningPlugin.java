@@ -763,7 +763,7 @@ public class MachineLearningPlugin extends Plugin
             xContentRegistry,
             toolFactories,
             memoryFactoryMap,
-            mlFeatureEnabledSetting.isMultiTenancyEnabled(),
+            mlFeatureEnabledSetting,
             encryptor
         );
         MLEngineClassLoader.register(FunctionName.LOCAL_SAMPLE_CALCULATOR, localSampleCalculator);
