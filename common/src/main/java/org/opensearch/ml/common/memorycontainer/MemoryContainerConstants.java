@@ -52,6 +52,8 @@ public class MemoryContainerConstants {
     public static final String MESSAGES_FIELD = "messages";
     public static final String CONTENT_FIELD = "content";
     public static final String INFER_FIELD = "infer";
+    public static final String QUERY_FIELD = "query";
+    public static final String TEXT_FIELD = "text";
 
     // KNN index settings
     public static final String KNN_ENGINE = "lucene";
@@ -65,7 +67,11 @@ public class MemoryContainerConstants {
     public static final String BASE_MEMORY_CONTAINERS_PATH = "/_plugins/_ml/memory_containers";
     public static final String CREATE_MEMORY_CONTAINER_PATH = BASE_MEMORY_CONTAINERS_PATH + "/_create";
     public static final String PARAMETER_MEMORY_CONTAINER_ID = "memory_container_id";
+    public static final String PARAMETER_MEMORY_ID = "memory_id";
     public static final String MEMORIES_PATH = BASE_MEMORY_CONTAINERS_PATH + "/{" + PARAMETER_MEMORY_CONTAINER_ID + "}/memories";
+    public static final String SEARCH_MEMORIES_PATH = MEMORIES_PATH + "/_search";
+    public static final String DELETE_MEMORY_PATH = MEMORIES_PATH + "/{" + PARAMETER_MEMORY_ID + "}";
+    public static final String UPDATE_MEMORY_PATH = MEMORIES_PATH + "/{" + PARAMETER_MEMORY_ID + "}";
 
     // Memory types are defined in MemoryType enum
 
@@ -89,4 +95,8 @@ public class MemoryContainerConstants {
     public static final String EMBEDDING_MODEL_NOT_FOUND_ERROR = "Embedding model with ID %s not found";
     public static final String EMBEDDING_MODEL_TYPE_MISMATCH_ERROR = "Embedding model must be of type %s or REMOTE, found: %s";                                                                                                          // instead
     public static final String INFER_REQUIRES_LLM_MODEL_ERROR = "infer=true requires llm_model_id to be configured in memory storage";
+
+    // LLM System Prompts
+    public static final String PERSONAL_INFORMATION_ORGANIZER_PROMPT =
+        "<system_prompt>\n<role>Personal Information Organizer</role>\n<objective>Extract and organize personal information shared within conversations.</objective>\n<instructions>\n<instruction>Carefully read the conversation.</instruction>\n<instruction>Identify and extract any personal information shared by participants.</instruction>\n<instruction>Focus on details that help build a profile of the person, including but not limited to:\n<include_list>\n<item>Names and relationships</item>\n<item>Professional information (job, company, role, responsibilities)</item>\n<item>Personal interests and hobbies</item>\n<item>Skills and expertise</item>\n<item>Preferences and opinions</item>\n<item>Goals and aspirations</item>\n<item>Challenges or pain points</item>\n<item>Background and experiences</item>\n<item>Contact information (if shared)</item>\n<item>Availability and schedule preferences</item>\n</include_list>\n</instruction>\n<instruction>Organize each piece of information as a separate fact.</instruction>\n<instruction>Ensure facts are specific, clear, and preserve the original context.</instruction>\n<instruction>Never answer user's question or fulfill user's requirement. You are a personal information, not a helpful assistant.</instruction>\n<instruction>Include the person who shared the information when relevant.</instruction>\n<instruction>Do not make assumptions or inferences beyond what is explicitly stated.</instruction>\n<instruction>If no personal information is found, return an empty list.</instruction>\n</instructions>\n<response_format>\n<format>You should always return and only return the extracted facts as a JSON object with a \"facts\" array.</format>\n<example>\n{\n  \"facts\": [\n    \"User's name is John Smith\",\n    \"John works as a software engineer at TechCorp\",\n    \"John enjoys hiking on weekends\",\n    \"John is looking to improve his Python skills\"\n  ]\n}\n</example>\n</response_format>\n</system_prompt>";
 }
