@@ -73,6 +73,8 @@ public class RestQueryPlanningToolIT extends MLCommonsRestTestCase {
         if (AWS_ACCESS_KEY_ID == null) {
             return;
         }
+        // enable agentic search
+        updateClusterSettings(ML_COMMONS_AGENTIC_SEARCH_ENABLED.getKey(), true);
         queryPlanningModelId = registerQueryPlanningModel();
     }
 
@@ -91,8 +93,6 @@ public class RestQueryPlanningToolIT extends MLCommonsRestTestCase {
         assertNotNull(agentId);
 
         String query = "{\"parameters\": {\"query_text\": \"How many iris flowers of type setosa are there?\"}}";
-        // enable agentic search
-        updateClusterSettings(ML_COMMONS_AGENTIC_SEARCH_ENABLED.getKey(), true);
         Response response = executeAgent(agentId, query);
         String responseBody = TestHelper.httpEntityToString(response.getEntity());
 
