@@ -5,8 +5,8 @@
 
 package org.opensearch.ml.rest;
 
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.BASE_MEMORY_CONTAINERS_PATH;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_CONTAINER_ID;
-import static org.opensearch.ml.plugin.MachineLearningPlugin.ML_BASE_URI;
 import static org.opensearch.ml.utils.TenantAwareHelper.getTenantID;
 
 import java.io.IOException;
@@ -46,7 +46,7 @@ public class RestMLDeleteMemoryContainerAction extends BaseRestHandler {
             .of(
                 new Route(
                     RestRequest.Method.DELETE,
-                    String.format(Locale.ROOT, "%s/memory_container/{%s}", ML_BASE_URI, PARAMETER_MEMORY_CONTAINER_ID)
+                    String.format(Locale.ROOT, "%s/{%s}", BASE_MEMORY_CONTAINERS_PATH, PARAMETER_MEMORY_CONTAINER_ID)
                 )
             );
     }

@@ -94,7 +94,7 @@ public class RestMLDeleteMemoryContainerActionTests extends OpenSearchTestCase {
         assertFalse(routes.isEmpty());
         RestHandler.Route route = routes.get(0);
         assertEquals(RestRequest.Method.DELETE, route.getMethod());
-        assertEquals("/_plugins/_ml/memory_container/{memory_container_id}", route.getPath());
+        assertEquals("/_plugins/_ml/memory_containers/{memory_container_id}", route.getPath());
     }
 
     public void test_PrepareRequest() throws Exception {

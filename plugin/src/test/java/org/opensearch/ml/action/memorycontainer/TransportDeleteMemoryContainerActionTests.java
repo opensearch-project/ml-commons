@@ -8,23 +8,23 @@ package org.opensearch.ml.action.memorycontainer;
 import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
 
 import java.io.IOException;
-import java.util.Collections;
+import java.util.concurrent.CompletableFuture;
 
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.delete.DeleteResponse;
+import org.opensearch.action.get.GetResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
@@ -35,8 +35,9 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerDeleteRequest;
 import org.opensearch.ml.helper.MemoryAccessControlHelper;
+import org.opensearch.remote.metadata.client.DeleteDataObjectResponse;
+import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
-import org.opensearch.remote.metadata.client.impl.SdkClientFactory;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
@@ -60,6 +61,7 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
     @Mock
     Client client;
 
+    @Mock
     SdkClient sdkClient;
 
     @Mock
@@ -80,22 +82,36 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
     @Mock
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
+    @Mock
+    private MemoryAccessControlHelper memoryAccessControlHelper;
 
     TransportDeleteMemoryContainerAction transportDeleteMemoryContainerAction;
     MLMemoryContainerDeleteRequest mlMemoryContainerDeleteRequest;
     ThreadContext threadContext;
-
-    @Mock
-    private MemoryAccessControlHelper memoryAccessControlHelper;
+    private GetDataObjectResponse getDataObjectResponse;
+    private DeleteDataObjectResponse deleteDataObjectResponse;
+    private GetResponse getResponse;
 
     @Before
     public void setup() throws IOException {
         MockitoAnnotations.openMocks(this);
 
+        // Setup GetResponse
+        getResponse = mock(GetResponse.class);
+        when(getResponse.isExists()).thenReturn(true);
+        when(getResponse.getSourceAsString()).thenReturn("{\"name\":\"test_container\"}");
+
+        // Setup GetDataObjectResponse
+        getDataObjectResponse = mock(GetDataObjectResponse.class);
+        when(getDataObjectResponse.getResponse()).thenReturn(getResponse);
+        when(getDataObjectResponse.id()).thenReturn(MEMORY_CONTAINER_ID);
+
+        // Setup DeleteDataObjectResponse
+        deleteDataObjectResponse = mock(DeleteDataObjectResponse.class);
+        when(deleteDataObjectResponse.deleteResponse()).thenReturn(deleteResponse);
+        when(deleteDataObjectResponse.id()).thenReturn(MEMORY_CONTAINER_ID);
+
         Settings settings = Settings.builder().build();
-        sdkClient = SdkClientFactory.createSdkClient(client, NamedXContentRegistry.EMPTY, Collections.emptyMap());
         mlMemoryContainerDeleteRequest = MLMemoryContainerDeleteRequest.builder().memoryContainerId("test_id").build();
         transportDeleteMemoryContainerAction = spy(
             new TransportDeleteMemoryContainerAction(
@@ -110,12 +126,6 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
             )
         );
 
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(6);
-            listener.onResponse(true);
-            return null;
-        }).when(memoryAccessControlHelper).validateMemoryContainerAccess(any(), any(), any(), any(), any(), any(), any());
-
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
@@ -123,12 +133,12 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
 
     @Test
     public void testDeleteMemoryContainer_Success() throws InterruptedException {
+        CompletableFuture<GetDataObjectResponse> getFuture = CompletableFuture.completedFuture(getDataObjectResponse);
+        when(sdkClient.getDataObjectAsync(any())).thenReturn(getFuture);
+        when(memoryAccessControlHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
 
-        doAnswer(invocation -> {
-            ActionListener<DeleteResponse> listener = invocation.getArgument(1);
-            listener.onResponse(deleteResponse);
-            return null;
-        }).when(client).delete(any(), any());
+        CompletableFuture<DeleteDataObjectResponse> deleteFuture = CompletableFuture.completedFuture(deleteDataObjectResponse);
+        when(sdkClient.deleteDataObjectAsync(any())).thenReturn(deleteFuture);
 
         transportDeleteMemoryContainerAction.doExecute(null, mlMemoryContainerDeleteRequest, actionListener);
 
@@ -146,33 +156,27 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
 
     @Test
     public void test_UserHasNoAccessException() throws IOException {
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(6);
-            listener.onResponse(false);
-            return null;
-        }).when(memoryAccessControlHelper).validateMemoryContainerAccess(any(), any(), any(), any(), any(), any(), any());
+        CompletableFuture<GetDataObjectResponse> getFuture = CompletableFuture.completedFuture(getDataObjectResponse);
+        when(sdkClient.getDataObjectAsync(any())).thenReturn(getFuture);
+
+        // Mock access control to return false
+        when(memoryAccessControlHelper.checkMemoryContainerAccess(any(), any())).thenReturn(false);
 
         transportDeleteMemoryContainerAction.doExecute(null, mlMemoryContainerDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("You are not allowed to delete this memory container", argumentCaptor.getValue().getMessage());
-    }
-
-    @Test
-    public void test_ValidationFailedException() {
-        doAnswer(invocation -> {
-            ActionListener<Boolean> listener = invocation.getArgument(6);
-            listener.onFailure(new Exception("Failed to validate access"));
-            return null;
-        }).when(memoryAccessControlHelper).validateMemoryContainerAccess(any(), any(), any(), any(), any(), any(), any());
-
-        transportDeleteMemoryContainerAction.doExecute(null, mlMemoryContainerDeleteRequest, actionListener);
-        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
-        verify(actionListener).onFailure(argumentCaptor.capture());
-        assertEquals("Failed to validate access", argumentCaptor.getValue().getMessage());
+        assertEquals("User doesn't have permissions to delete this memory container", argumentCaptor.getValue().getMessage());
     }
 
     public void testDeleteMemoryContainer_Failure() {
+        CompletableFuture<GetDataObjectResponse> getFuture = CompletableFuture.completedFuture(getDataObjectResponse);
+        when(sdkClient.getDataObjectAsync(any())).thenReturn(getFuture);
+        when(memoryAccessControlHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
+
+        CompletableFuture<DeleteDataObjectResponse> deleteFuture = new CompletableFuture<>();
+        deleteFuture.completeExceptionally(new Exception("errorMessage"));
+        when(sdkClient.deleteDataObjectAsync(any())).thenReturn(deleteFuture);
+
         doAnswer(invocation -> {
             ActionListener<DeleteResponse> listener = invocation.getArgument(1);
             listener.onFailure(new Exception("errorMessage"));

@@ -5,8 +5,11 @@
 
 package org.opensearch.ml.action.memorycontainer;
 
+import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
+import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
 
+import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
 import org.opensearch.action.delete.DeleteResponse;
@@ -15,11 +18,14 @@ import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.inject.Inject;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
-import org.opensearch.ml.common.exception.MLValidationException;
+import org.opensearch.core.xcontent.XContentParser;
+import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerDeleteAction;
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerDeleteRequest;
@@ -28,8 +34,10 @@ import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.DeleteDataObjectRequest;
 import org.opensearch.remote.metadata.client.DeleteDataObjectResponse;
+import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
+import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -80,48 +88,63 @@ public class TransportDeleteMemoryContainerAction extends HandledTransportAction
         }
         User user = RestActionUtils.getUserContext(client);
 
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<DeleteResponse> wrappedListener = ActionListener.runBefore(actionListener, context::restore);
-            validateAndDeleteMemoryContainer(memoryContainerId, tenantId, user, wrappedListener);
-        } catch (Exception e) {
-            log.error("Failed to delete ML memory container {}", memoryContainerId, e);
-            actionListener.onFailure(e);
-        }
-    }
+        // Get memory container and validate access
+        getMemoryContainer(memoryContainerId, ActionListener.wrap(container -> {
+            // Validate access permissions
+            if (!memoryAccessControlHelper.checkMemoryContainerAccess(user, container)) {
+                actionListener
+                    .onFailure(
+                        new OpenSearchStatusException("User doesn't have permissions to delete this memory container", RestStatus.FORBIDDEN)
+                    );
+                return;
+            }
 
-    private void validateAndDeleteMemoryContainer(
-        String memoryContainerId,
-        String tenantId,
-        User user,
-        ActionListener<DeleteResponse> listener
-    ) {
-        memoryAccessControlHelper
-            .validateMemoryContainerAccess(
-                sdkClient,
-                client,
-                user,
-                memoryContainerId,
-                tenantId,
-                mlFeatureEnabledSetting,
-                ActionListener
-                    .wrap(
-                        isAllowed -> handleMemoryContainerAccessValidation(memoryContainerId, tenantId, isAllowed, listener),
-                        e -> handleMemoryContainerAccessValidationFailure(memoryContainerId, e, listener)
-                    )
-            );
-
-    }
-
-    private void handleMemoryContainerAccessValidation(
-        String memoryContainerId,
-        String tenantId,
-        boolean isAllowed,
-        ActionListener<DeleteResponse> actionListener
-    ) {
-        if (isAllowed) {
+            // Delete memory container
             deleteMemoryContainer(memoryContainerId, tenantId, actionListener);
-        } else {
-            actionListener.onFailure(new MLValidationException("You are not allowed to delete this memory container"));
+        }, actionListener::onFailure));
+    }
+
+    private void getMemoryContainer(String memoryContainerId, ActionListener<MLMemoryContainer> listener) {
+        FetchSourceContext fetchSourceContext = new FetchSourceContext(true);
+        GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
+            .builder()
+            .index(ML_MEMORY_CONTAINER_INDEX)
+            .id(memoryContainerId)
+            .fetchSourceContext(fetchSourceContext)
+            .build();
+
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<MLMemoryContainer> wrappedListener = ActionListener.runBefore(listener, context::restore);
+
+            sdkClient.getDataObjectAsync(getDataObjectRequest).whenComplete((r, throwable) -> {
+                if (throwable != null) {
+                    Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                    if (ExceptionsHelper.unwrap(cause, IndexNotFoundException.class) != null) {
+                        wrappedListener.onFailure(new OpenSearchStatusException("Failed to find memory container", RestStatus.NOT_FOUND));
+                    } else {
+                        wrappedListener.onFailure(cause);
+                    }
+                } else {
+                    try {
+                        if (r.getResponse() != null && r.getResponse().isExists()) {
+                            try (
+                                XContentParser parser = jsonXContent
+                                    .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, r.getResponse().getSourceAsString())
+                            ) {
+                                ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
+                                MLMemoryContainer container = MLMemoryContainer.parse(parser);
+                                wrappedListener.onResponse(container);
+                            }
+                        } else {
+                            listener.onFailure(new OpenSearchStatusException("Failed to find memory container", RestStatus.NOT_FOUND));
+                        }
+                    } catch (Exception e) {
+                        wrappedListener.onFailure(e);
+                    }
+                }
+            });
+        } catch (Exception e) {
+            listener.onFailure(e);
         }
     }
 
@@ -161,14 +184,5 @@ public class TransportDeleteMemoryContainerAction extends HandledTransportAction
                 actionListener.onFailure(e);
             }
         }
-    }
-
-    private void handleMemoryContainerAccessValidationFailure(
-        String memoryContainerId,
-        Exception e,
-        ActionListener<DeleteResponse> actionListener
-    ) {
-        log.error("Failed to delete ML memory container: {}", memoryContainerId, e);
-        actionListener.onFailure(e);
     }
 }
