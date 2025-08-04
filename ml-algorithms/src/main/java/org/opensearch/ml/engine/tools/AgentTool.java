@@ -21,6 +21,7 @@ import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.spi.tools.ToolAnnotation;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskRequest;
+import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.transport.client.Client;
 
@@ -53,7 +54,7 @@ public class AgentTool implements Tool {
     private Map<String, Object> attributes;
 
     public AgentTool(Client client, String agentId) {
-        if (agentId.isBlank()) {
+        if (agentId != null && !agentId.isBlank()) {
             throw new IllegalArgumentException("Agent ID cannot be null or empty");
         }
 
