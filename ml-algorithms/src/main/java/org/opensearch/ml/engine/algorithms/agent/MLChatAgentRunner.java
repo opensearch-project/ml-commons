@@ -153,9 +153,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
     @Override
     public void run(MLAgent mlAgent, Map<String, String> inputParams, ActionListener<Object> listener) {
-        Span agentTaskSpan = MLAgentTracer
-            .getInstance()
-            .startConversationalAgentTaskSpanLogic(mlAgent.getName(), inputParams);
+        Span agentTaskSpan = MLAgentTracer.getInstance().startConversationalAgentTaskSpanLogic(mlAgent.getName(), inputParams);
 
         try {
             Map<String, String> params = new HashMap<>();
