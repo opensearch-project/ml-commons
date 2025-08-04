@@ -25,7 +25,7 @@ import lombok.Getter;
 @Getter
 public class MLCreateMemoryContainerRequest extends ActionRequest {
 
-    private MLCreateMemoryContainerInput mlCreateMemoryContainerInput;
+    private final MLCreateMemoryContainerInput mlCreateMemoryContainerInput;
 
     @Builder
     public MLCreateMemoryContainerRequest(MLCreateMemoryContainerInput mlCreateMemoryContainerInput) {
