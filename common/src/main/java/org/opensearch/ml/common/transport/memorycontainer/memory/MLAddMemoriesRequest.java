@@ -21,18 +21,18 @@ import lombok.experimental.FieldDefaults;
 @Getter
 @FieldDefaults(level = AccessLevel.PRIVATE)
 @ToString
-public class MLAddMemoryRequest extends ActionRequest {
+public class MLAddMemoriesRequest extends ActionRequest {
 
-    MLAddMemoryInput mlAddMemoryInput;
+    MLAddMemoriesInput mlAddMemoryInput;
 
     @Builder
-    public MLAddMemoryRequest(MLAddMemoryInput mlAddMemoryInput) {
+    public MLAddMemoriesRequest(MLAddMemoriesInput mlAddMemoryInput) {
         this.mlAddMemoryInput = mlAddMemoryInput;
     }
 
-    public MLAddMemoryRequest(StreamInput in) throws IOException {
+    public MLAddMemoriesRequest(StreamInput in) throws IOException {
         super(in);
-        this.mlAddMemoryInput = new MLAddMemoryInput(in);
+        this.mlAddMemoryInput = new MLAddMemoriesInput(in);
     }
 
     @Override
