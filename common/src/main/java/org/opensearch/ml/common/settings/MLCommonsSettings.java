@@ -237,6 +237,12 @@ public final class MLCommonsSettings {
     public static final Setting<Boolean> ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED = Setting
         .boolSetting("plugins.ml_commons.connector.private_ip_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
 
+    // Feature flag for execute tool API
+    public static final Setting<Boolean> ML_COMMONS_EXECUTE_TOOL_ENABLED = Setting
+        .boolSetting("plugins.ml_commons.execute_tools_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
+    public static final String ML_COMMONS_EXECUTE_TOOL_DISABLED_MESSAGE =
+        "The Execute Tool API is not enabled. To enable, please update the setting " + ML_COMMONS_EXECUTE_TOOL_ENABLED.getKey();
+
     public static final Setting<List<String>> ML_COMMONS_REMOTE_JOB_STATUS_FIELD = Setting
         .listSetting(
             "plugins.ml_commons.remote_job.status_field",
