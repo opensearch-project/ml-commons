@@ -29,9 +29,9 @@ public class MemoryResult implements ToXContentObject, Writeable {
 
     private final String memoryId;
     private final String memory;
-    private final String event;
+    private final MemoryEvent event;
 
-    public MemoryResult(String memoryId, String memory, String event) {
+    public MemoryResult(String memoryId, String memory, MemoryEvent event) {
         this.memoryId = memoryId;
         this.memory = memory;
         this.event = event;
@@ -40,14 +40,14 @@ public class MemoryResult implements ToXContentObject, Writeable {
     public MemoryResult(StreamInput in) throws IOException {
         this.memoryId = in.readString();
         this.memory = in.readString();
-        this.event = in.readString();
+        this.event = MemoryEvent.fromString(in.readString());
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         out.writeString(memoryId);
         out.writeString(memory);
-        out.writeString(event);
+        out.writeString(event.getValue());
     }
 
     @Override
@@ -55,7 +55,7 @@ public class MemoryResult implements ToXContentObject, Writeable {
         builder.startObject();
         builder.field(MEMORY_ID_FIELD, memoryId);
         builder.field(MEMORY_FIELD, memory);
-        builder.field("event", event);
+        builder.field("event", event.getValue());
         builder.endObject();
         return builder;
     }
