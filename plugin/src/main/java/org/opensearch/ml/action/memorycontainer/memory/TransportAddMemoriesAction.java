@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import org.opensearch.ExceptionsHelper;
+import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.index.IndexRequest;
 import org.opensearch.action.support.ActionFilters;
@@ -56,6 +57,7 @@ import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesAc
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesInput;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesRequest;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLAddMemoriesResponse;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryEvent;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemoryResult;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MessageInput;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
@@ -266,9 +268,9 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                             actionListener
                         );
                     }, e -> {
-                        log.error("Failed to generate embedding, saving memory without embedding", e);
-                        // Save without embedding on failure
-                        saveMemoryWithEmbedding(input, container, indexName, message, sessionId, user, memoryType, null, actionListener);
+                        log.error("Failed to generate embedding for memory", e);
+                        // For infer=false, propagate the error
+                        actionListener.onFailure(new OpenSearchException("Failed to generate embedding: " + e.getMessage(), e));
                     }));
                 } else {
                     // No embedding needed, save directly
@@ -319,7 +321,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
 
             // Build response with single result
             List<MemoryResult> results = new ArrayList<>();
-            results.add(MemoryResult.builder().memoryId(generatedId).memory(message.getContent()).event("ADD").build());
+            results.add(MemoryResult.builder().memoryId(generatedId).memory(message.getContent()).event(MemoryEvent.ADD).build());
 
             MLAddMemoriesResponse response = MLAddMemoriesResponse.builder().results(results).sessionId(sessionId).build();
             actionListener.onResponse(response);
@@ -389,11 +391,11 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                 listener.onResponse(facts);
             } catch (Exception e) {
                 log.error("Failed to parse facts from LLM response", e);
-                listener.onResponse(new ArrayList<>());
+                listener.onFailure(new IllegalArgumentException("Failed to parse facts from LLM response", e));
             }
         }, e -> {
             log.error("Failed to call LLM for fact extraction", e);
-            listener.onResponse(new ArrayList<>());
+            listener.onFailure(new OpenSearchException("Failed to extract facts using LLM model: " + e.getMessage(), e));
         }));
     }
 
@@ -477,11 +479,16 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                                     }
                                 } catch (Exception e) {
                                     log.error("Failed to parse facts from LLM JSON response: {}", responseStr, e);
+                                    throw new IllegalArgumentException(
+                                        "Failed to parse JSON facts from LLM response. Response: " + responseStr,
+                                        e
+                                    );
                                 }
                             }
                         }
                     } catch (Exception e) {
                         log.error("Failed to extract content from dataMap", e);
+                        throw new IllegalArgumentException("Failed to extract content from LLM response", e);
                     }
                     break;
                 }
@@ -575,9 +582,9 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                 // Execute bulk index with memory infos
                 bulkIndexMemoriesWithResults(indexRequests, memoryInfos, sessionId, indexName, actionListener);
             }, e -> {
-                log.error("Failed to generate embeddings for memories, saving without embeddings", e);
-                // Execute bulk index without embeddings
-                bulkIndexMemoriesWithResults(indexRequests, memoryInfos, sessionId, indexName, actionListener);
+                log.error("Failed to generate embeddings for memories", e);
+                // Propagate the error for infer=true
+                actionListener.onFailure(new OpenSearchException("Failed to generate embeddings for memories: " + e.getMessage(), e));
             }));
         } else {
             // No embeddings needed, execute bulk index directly
@@ -637,19 +644,19 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                         listener.onResponse(embeddings);
                     } else {
                         log.error("Unexpected ML output type: {}", mlOutput.getClass().getName());
-                        listener.onResponse(new ArrayList<>());
+                        listener.onFailure(new IllegalStateException("Unexpected ML output type: " + mlOutput.getClass().getName()));
                     }
                 } catch (Exception e) {
                     log.error("Failed to extract embeddings from ML output", e);
-                    listener.onResponse(new ArrayList<>());
+                    listener.onFailure(new IllegalStateException("Failed to extract embeddings from ML output", e));
                 }
             }, e -> {
                 log.error("Failed to generate embeddings", e);
-                listener.onResponse(new ArrayList<>());
+                listener.onFailure(new OpenSearchException("Failed to generate embeddings: " + e.getMessage(), e));
             }));
         }, e -> {
             log.error("Failed to validate embedding model state", e);
-            listener.onResponse(new ArrayList<>());
+            listener.onFailure(e);
         }));
     }
 
@@ -735,7 +742,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
 
             // Add to results if this memory should be included in response
             if (info.includeInResponse) {
-                results.add(MemoryResult.builder().memoryId(memoryId).memory(info.content).event("ADD").build());
+                results.add(MemoryResult.builder().memoryId(memoryId).memory(info.content).event(MemoryEvent.ADD).build());
             }
 
             // Continue with next memory

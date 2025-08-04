@@ -52,6 +52,7 @@ public class MemoryContainerConstants {
     public static final String MESSAGES_FIELD = "messages";
     public static final String CONTENT_FIELD = "content";
     public static final String INFER_FIELD = "infer";
+    public static final String QUERY_FIELD = "query";
 
     // KNN index settings
     public static final String KNN_ENGINE = "lucene";
@@ -66,6 +67,7 @@ public class MemoryContainerConstants {
     public static final String CREATE_MEMORY_CONTAINER_PATH = BASE_MEMORY_CONTAINERS_PATH + "/_create";
     public static final String PARAMETER_MEMORY_CONTAINER_ID = "memory_container_id";
     public static final String MEMORIES_PATH = BASE_MEMORY_CONTAINERS_PATH + "/{" + PARAMETER_MEMORY_CONTAINER_ID + "}/memories";
+    public static final String SEARCH_MEMORIES_PATH = MEMORIES_PATH + "/_search";
 
     // Memory types are defined in MemoryType enum
 
