@@ -76,6 +76,7 @@ import org.opensearch.ml.common.output.Output;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
@@ -130,6 +131,9 @@ public class MLAgentExecutorTest {
     private MLMemoryManager memoryManager;
     private MLAgentExecutor mlAgentExecutor;
 
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Captor
     private ArgumentCaptor<Output> objectCaptor;
 
@@ -177,9 +181,26 @@ public class MLAgentExecutorTest {
         when(this.clusterService.getClusterSettings())
             .thenReturn(new ClusterSettings(settings, Set.of(ML_COMMONS_MCP_CONNECTOR_ENABLED, ML_COMMONS_AGENTIC_SEARCH_ENABLED)));
 
+        // Mock MLFeatureEnabledSetting
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
+        when(mlFeatureEnabledSetting.isMcpConnectorEnabled()).thenReturn(true);
+        when(mlFeatureEnabledSetting.isAgenticSearchEnabled()).thenReturn(true);
+
         settings = Settings.builder().build();
         mlAgentExecutor = Mockito
-            .spy(new MLAgentExecutor(client, sdkClient, settings, clusterService, xContentRegistry, toolFactories, memoryMap, false, null));
+            .spy(
+                new MLAgentExecutor(
+                    client,
+                    sdkClient,
+                    settings,
+                    clusterService,
+                    xContentRegistry,
+                    toolFactories,
+                    memoryMap,
+                    mlFeatureEnabledSetting,
+                    null
+                )
+            );
 
     }
 
@@ -816,8 +837,25 @@ public class MLAgentExecutorTest {
         GetResponse agentGetResponse = new GetResponse(getResult);
 
         // Create a new MLAgentExecutor with agentic search disabled
+        MLFeatureEnabledSetting disabledSearchSetting = Mockito.mock(MLFeatureEnabledSetting.class);
+        when(disabledSearchSetting.isMultiTenancyEnabled()).thenReturn(false);
+        when(disabledSearchSetting.isMcpConnectorEnabled()).thenReturn(true);
+        when(disabledSearchSetting.isAgenticSearchEnabled()).thenReturn(false);
+
         MLAgentExecutor mlAgentExecutorWithDisabledSearch = Mockito
-            .spy(new MLAgentExecutor(client, sdkClient, settings, clusterService, xContentRegistry, toolFactories, memoryMap, false, null));
+            .spy(
+                new MLAgentExecutor(
+                    client,
+                    sdkClient,
+                    settings,
+                    clusterService,
+                    xContentRegistry,
+                    toolFactories,
+                    memoryMap,
+                    disabledSearchSetting,
+                    null
+                )
+            );
 
         // Mock the agent get response
         Mockito.doAnswer(invocation -> {
