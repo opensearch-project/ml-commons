@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.common.settings;
 
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENT_FRAMEWORK_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONNECTOR_PRIVATE_IP_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CONTROLLER_ENABLED;
@@ -52,6 +53,8 @@ public class MLFeatureEnabledSetting {
 
     private volatile Boolean isExecuteToolEnabled;
 
+    private volatile Boolean isAgenticSearchEnabled;
+
     private final List<SettingsChangeListener> listeners = new ArrayList<>();
 
     public MLFeatureEnabledSetting(ClusterService clusterService, Settings settings) {
@@ -68,6 +71,7 @@ public class MLFeatureEnabledSetting {
         isMetricCollectionEnabled = ML_COMMONS_METRIC_COLLECTION_ENABLED.get(settings);
         isStaticMetricCollectionEnabled = ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED.get(settings);
         isExecuteToolEnabled = ML_COMMONS_EXECUTE_TOOL_ENABLED.get(settings);
+        isAgenticSearchEnabled = ML_COMMONS_AGENTIC_SEARCH_ENABLED.get(settings);
 
         clusterService
             .getClusterSettings()
@@ -91,6 +95,7 @@ public class MLFeatureEnabledSetting {
             .getClusterSettings()
             .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_RAG_PIPELINE_FEATURE_ENABLED, it -> isRagSearchPipelineEnabled = it);
         clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_EXECUTE_TOOL_ENABLED, it -> isExecuteToolEnabled = it);
+        clusterService.getClusterSettings().addSettingsUpdateConsumer(ML_COMMONS_AGENTIC_SEARCH_ENABLED, it -> isAgenticSearchEnabled = it);
     }
 
     /**
@@ -194,5 +199,9 @@ public class MLFeatureEnabledSetting {
         for (SettingsChangeListener listener : listeners) {
             listener.onMultiTenancyEnabledChanged(isEnabled);
         }
+    }
+
+    public boolean isAgenticSearchEnabled() {
+        return isAgenticSearchEnabled;
     }
 }

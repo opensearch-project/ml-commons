@@ -219,7 +219,8 @@ public final class MLCommonsSettings {
     public static final Setting<Boolean> ML_COMMONS_AGENTIC_SEARCH_ENABLED = Setting
         .boolSetting("plugins.ml_commons.agentic_search_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);
     public static final String ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE =
-        "The Agentic Search feature is not enabled. To enable, please update the setting " + ML_COMMONS_AGENTIC_SEARCH_ENABLED.getKey();
+        "The QueryPlanningTool tool for Agentic Search is not enabled. To enable, please update the setting "
+            + ML_COMMONS_AGENTIC_SEARCH_ENABLED.getKey();
 
     public static final Setting<Boolean> ML_COMMONS_MCP_CONNECTOR_ENABLED = Setting
         .boolSetting("plugins.ml_commons.mcp_connector_enabled", false, Setting.Property.NodeScope, Setting.Property.Dynamic);

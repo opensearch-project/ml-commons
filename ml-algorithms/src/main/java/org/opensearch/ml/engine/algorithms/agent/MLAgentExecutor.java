@@ -402,13 +402,11 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
             return;
         }
         List<MLToolSpec> tools = mlAgent.getTools();
-        for (MLToolSpec tool : tools) {
-            if (tool.getType().equals(QueryPlanningTool.TYPE)) {
-                if (!agenticSearchIsEnabled) {
+        if (tools != null) {
+            for (MLToolSpec tool : tools) {
+                if (tool.getType().equals(QueryPlanningTool.TYPE) && !agenticSearchIsEnabled) {
                     listener.onFailure(new OpenSearchException(ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE));
                     return;
-                } else {
-                    log.info("Searching for tool {}", tool.getName());
                 }
             }
         }
