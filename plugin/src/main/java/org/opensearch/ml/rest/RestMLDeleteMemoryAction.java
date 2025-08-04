@@ -13,7 +13,7 @@ import static org.opensearch.ml.utils.RestActionUtils.getParameterId;
 import java.io.IOException;
 import java.util.List;
 
-import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteMemoriesAction;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteMemoryAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteMemoryRequest;
 import org.opensearch.rest.BaseRestHandler;
 import org.opensearch.rest.RestRequest;
@@ -48,7 +48,7 @@ public class RestMLDeleteMemoryAction extends BaseRestHandler {
     @Override
     protected RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
         MLDeleteMemoryRequest mlDeleteMemoryRequest = getRequest(request);
-        return channel -> client.execute(MLDeleteMemoriesAction.INSTANCE, mlDeleteMemoryRequest, new RestToXContentListener<>(channel));
+        return channel -> client.execute(MLDeleteMemoryAction.INSTANCE, mlDeleteMemoryRequest, new RestToXContentListener<>(channel));
     }
 
     /**

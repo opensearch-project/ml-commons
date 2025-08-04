@@ -6,7 +6,16 @@
 package org.opensearch.ml.common.memorycontainer;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.*;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.AGENT_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.CREATED_TIME_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LAST_UPDATED_TIME_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_EMBEDDING_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_TYPE_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.ROLE_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.TAGS_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.USER_ID_FIELD;
 
 import java.io.IOException;
 import java.time.Instant;
