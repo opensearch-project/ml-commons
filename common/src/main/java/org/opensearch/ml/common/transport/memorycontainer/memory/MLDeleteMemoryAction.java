@@ -8,11 +8,11 @@ package org.opensearch.ml.common.transport.memorycontainer.memory;
 import org.opensearch.action.ActionType;
 import org.opensearch.action.delete.DeleteResponse;
 
-public class MLDeleteMemoriesAction extends ActionType<DeleteResponse> {
-    public static final MLDeleteMemoriesAction INSTANCE = new MLDeleteMemoriesAction();
-    public static final String NAME = "cluster:admin/opensearch/ml/memory/delete";
+public class MLDeleteMemoryAction extends ActionType<DeleteResponse> {
+    public static final MLDeleteMemoryAction INSTANCE = new MLDeleteMemoryAction();
+    public static final String NAME = "cluster:admin/opensearch/ml/memory_containers/memory/delete";
 
-    private MLDeleteMemoriesAction() {
+    private MLDeleteMemoryAction() {
         super(NAME, DeleteResponse::new);
     }
 }
