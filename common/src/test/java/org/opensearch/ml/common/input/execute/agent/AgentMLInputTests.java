@@ -24,6 +24,7 @@ import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.FunctionName;
+import org.opensearch.ml.common.agent.MLAgent;
 import org.opensearch.ml.common.dataset.MLInputDataset;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 
@@ -84,6 +85,28 @@ public class AgentMLInputTests {
     }
 
     @Test
+    public void testConstructorWithMLAgent() {
+        // Arrange
+        String agentId = "testAgentId";
+        String tenantId = "testTenantId";
+        FunctionName functionName = FunctionName.AGENT;
+        MLInputDataset dataset = mock(MLInputDataset.class);
+        Boolean isAsync = true;
+        MLAgent mlAgent = mock(MLAgent.class);
+
+        // Act
+        AgentMLInput input = new AgentMLInput(agentId, tenantId, functionName, dataset, isAsync, mlAgent);
+
+        // Assert
+        assertEquals(agentId, input.getAgentId());
+        assertEquals(tenantId, input.getTenantId());
+        assertEquals(functionName, input.getAlgorithm());
+        assertEquals(dataset, input.getInputDataset());
+        assertEquals(isAsync, input.getIsAsync());
+        assertEquals(mlAgent, input.getMlAgent());
+    }
+
+    @Test
     public void testWriteTo_WithTenantId_VersionCompatibility() throws IOException {
         // Arrange
         String agentId = "testAgentId";
@@ -107,6 +130,33 @@ public class AgentMLInputTests {
         // Verify tenantId is written
         verify(newVersionOut).writeString(agentId);
         verify(newVersionOut).writeOptionalString(tenantId);
+    }
+
+    @Test
+    public void testWriteTo_WithMLAgent_VersionCompatibility() throws IOException {
+        // Arrange
+        String agentId = "testAgentId";
+        String tenantId = "testTenantId";
+        MLAgent mlAgent = mock(MLAgent.class);
+        AgentMLInput input = new AgentMLInput(agentId, tenantId, FunctionName.AGENT, null, false, mlAgent);
+
+        // Act and Assert for version before MINIMAL_SUPPORTED_VERSION_FOR_INLINE_AGENT
+        StreamOutput oldVersionOut = mock(StreamOutput.class);
+        when(oldVersionOut.getVersion()).thenReturn(Version.V_3_1_0); // Version before 3.2.0
+        input.writeTo(oldVersionOut);
+
+        // Verify MLAgent is NOT written for older versions
+        verify(oldVersionOut).writeString(agentId);
+        verify(mlAgent, never()).writeTo(oldVersionOut);
+
+        // Act and Assert for MINIMAL_SUPPORTED_VERSION_FOR_INLINE_AGENT and above
+        StreamOutput newVersionOut = mock(StreamOutput.class);
+        when(newVersionOut.getVersion()).thenReturn(Version.V_3_2_0); // Version 3.2.0 and above
+        input.writeTo(newVersionOut);
+
+        // Verify MLAgent is written for newer versions
+        verify(newVersionOut).writeString(agentId);
+        verify(mlAgent).writeTo(newVersionOut);
     }
 
     @Test
