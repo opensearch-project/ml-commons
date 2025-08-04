@@ -54,7 +54,7 @@ public class AgentTool implements Tool {
     private Map<String, Object> attributes;
 
     public AgentTool(Client client, String agentId) {
-        if (agentId != null && !agentId.isBlank()) {
+        if (agentId == null || agentId.isBlank()) {
             throw new IllegalArgumentException("Agent ID cannot be null or empty");
         }
 
