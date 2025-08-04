@@ -217,6 +217,10 @@ public class DeleteConnectorTransportAction extends HandledTransportAction<Actio
         if (throwable != null) {
             Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
             log.error("Failed to delete ML connector: {}", connectorId, cause);
+            if (ExceptionsHelper.unwrap(cause, IndexNotFoundException.class) != null) {
+                actionListener.onFailure(new OpenSearchStatusException("Failed to find connector", RestStatus.NOT_FOUND));
+                return;
+            }
             actionListener.onFailure(cause);
         } else {
             try {
