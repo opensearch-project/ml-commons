@@ -5,18 +5,17 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
-import static org.apache.commons.text.StringEscapeUtils.escapeJson;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.conversation.ActionConstants.ADDITIONAL_INFO_FIELD;
 import static org.opensearch.ml.common.conversation.ActionConstants.AI_RESPONSE_FIELD;
 import static org.opensearch.ml.common.conversation.ActionConstants.MEMORY_ID;
 import static org.opensearch.ml.common.conversation.ActionConstants.PARENT_INTERACTION_ID_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DISABLE_TRACE;
-import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.createTool;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMessageHistoryLimit;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getToolName;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.QUESTION;
+import static org.opensearch.ml.engine.tools.ToolUtils.filterToolOutput;
 
 import java.io.IOException;
 import java.security.AccessController;
@@ -53,6 +52,7 @@ import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
+import org.opensearch.ml.engine.tools.ToolUtils;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.transport.client.Client;
@@ -183,7 +183,8 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         for (int i = 0; i <= toolSpecs.size(); i++) {
             if (i == 0) {
                 MLToolSpec toolSpec = toolSpecs.get(i);
-                Tool tool = createTool(toolFactories, params, toolSpec, mlAgent.getTenantId());
+                Map<String, String> executeParams = ToolUtils.buildToolParameters(params, toolSpec, mlAgent.getTenantId());
+                Tool tool = ToolUtils.createTool(toolFactories, executeParams, toolSpec);
                 firstStepListener = new StepListener<>();
                 previousStepListener = firstStepListener;
                 firstTool = tool;
@@ -264,8 +265,8 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         PrivilegedActionException {
         String toolName = getToolName(previousToolSpec);
         String outputKey = toolName + ".output";
-        String outputResponse = parseResponse(output);
-        params.put(outputKey, escapeJson(outputResponse));
+        String outputResponse = filterToolOutput(previousToolSpec.getParameters(), parseResponse(output));
+        params.put(outputKey, StringUtils.escapeString(outputResponse));
         boolean traceDisabled = params.containsKey(DISABLE_TRACE) && Boolean.parseBoolean(params.get(DISABLE_TRACE));
 
         if (previousToolSpec.isIncludeOutputInAgentResponse() || finalI == toolSpecs.size()) {
@@ -351,9 +352,10 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         StepListener<Object> nextStepListener
     ) {
         MLToolSpec toolSpec = toolSpecs.get(finalI);
-        Tool tool = createTool(toolFactories, params, toolSpec, tenantId);
+        Map<String, String> executeParams = ToolUtils.buildToolParameters(params, toolSpec, tenantId);
+        Tool tool = ToolUtils.createTool(toolFactories, executeParams, toolSpec);
         if (finalI < toolSpecs.size()) {
-            tool.run(getToolExecuteParams(toolSpec, params, tenantId), nextStepListener);
+            tool.run(getToolExecuteParams(toolSpec, executeParams, tenantId), nextStepListener);
         }
     }
 

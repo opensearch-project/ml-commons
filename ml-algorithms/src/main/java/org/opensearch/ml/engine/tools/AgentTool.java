@@ -8,7 +8,6 @@ package org.opensearch.ml.engine.tools;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
 
-import java.util.HashMap;
 import java.util.Map;
 
 import org.opensearch.action.ActionRequest;
@@ -148,8 +147,7 @@ public class AgentTool implements Tool {
     }
 
     private Map<String, String> extractInputParameters(Map<String, String> parameters) {
-        Map<String, String> extractedParameters = new HashMap<>();
-        extractedParameters.putAll(parameters);
+        Map<String, String> extractedParameters = ToolUtils.extractRequiredParameters(parameters, attributes);
         if (parameters.containsKey("input")) {
             try {
                 Map<String, String> chatParameters = gson.fromJson(parameters.get("input"), Map.class);

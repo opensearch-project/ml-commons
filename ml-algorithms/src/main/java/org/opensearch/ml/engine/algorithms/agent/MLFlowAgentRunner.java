@@ -5,10 +5,10 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
-import static org.apache.commons.text.StringEscapeUtils.escapeJson;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getToolName;
+import static org.opensearch.ml.engine.tools.ToolUtils.filterToolOutput;
 
 import java.io.IOException;
 import java.security.AccessController;
@@ -39,6 +39,7 @@ import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
+import org.opensearch.ml.engine.tools.ToolUtils;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -104,7 +105,8 @@ public class MLFlowAgentRunner implements MLAgentRunner {
         for (int i = 0; i <= toolSpecs.size(); i++) {
             if (i == 0) {
                 MLToolSpec toolSpec = toolSpecs.get(i);
-                Tool tool = createTool(toolSpec, mlAgent.getTenantId());
+                Map<String, String> executeParams = ToolUtils.buildToolParameters(params, toolSpec, mlAgent.getTenantId());
+                Tool tool = ToolUtils.createTool(toolFactories, executeParams, toolSpec);
                 firstStepListener = new StepListener<>();
                 previousStepListener = firstStepListener;
                 firstTool = tool;
@@ -118,8 +120,8 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                     String outputKey = key + ".output";
 
                     String outputResponse = parseResponse(output);
-                    params.put(outputKey, escapeJson(outputResponse));
-
+                    outputResponse = filterToolOutput(previousToolSpec.getParameters(), outputResponse);
+                    params.put(outputKey, StringUtils.escapeString(outputResponse));
                     if (previousToolSpec.isIncludeOutputInAgentResponse() || finalI == toolSpecs.size()) {
                         if (output instanceof ModelTensorOutput) {
                             flowAgentOutput.addAll(((ModelTensorOutput) output).getMlModelOutputs().get(0).getMlModelTensors());
@@ -152,9 +154,10 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                     }
 
                     MLToolSpec toolSpec = toolSpecs.get(finalI);
-                    Tool tool = createTool(toolSpec, mlAgent.getTenantId());
+                    Map<String, String> executeParams = ToolUtils.buildToolParameters(params, toolSpec, mlAgent.getTenantId());
+                    Tool tool = ToolUtils.createTool(toolFactories, executeParams, toolSpec);
                     if (finalI < toolSpecs.size()) {
-                        tool.run(getToolExecuteParams(toolSpec, params, mlAgent.getTenantId()), nextStepListener);
+                        tool.run(getToolExecuteParams(toolSpec, executeParams, mlAgent.getTenantId()), nextStepListener);
                     }
 
                 }, e -> {
@@ -254,27 +257,6 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                 return StringUtils.toJson(output);
             }
         }
-    }
-
-    @VisibleForTesting
-    Tool createTool(MLToolSpec toolSpec, String tenantId) {
-        Map<String, String> toolParams = new HashMap<>();
-        if (toolSpec.getParameters() != null) {
-            toolParams.putAll(toolSpec.getParameters());
-        }
-        toolParams.put(TENANT_ID_FIELD, tenantId);
-        if (!toolFactories.containsKey(toolSpec.getType())) {
-            throw new IllegalArgumentException("Tool not found: " + toolSpec.getType());
-        }
-        Tool tool = toolFactories.get(toolSpec.getType()).create(toolParams);
-        if (toolSpec.getName() != null) {
-            tool.setName(toolSpec.getName());
-        }
-
-        if (toolSpec.getDescription() != null) {
-            tool.setDescription(toolSpec.getDescription());
-        }
-        return tool;
     }
 
     @VisibleForTesting

@@ -32,6 +32,7 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.outputToOutpu
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.parseLLMOutput;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.substitute;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.CHAT_HISTORY_PREFIX;
+import static org.opensearch.ml.engine.tools.ToolUtils.filterToolOutput;
 
 import java.security.PrivilegedActionException;
 import java.util.ArrayList;
@@ -615,7 +616,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 String finalAction = action;
                 ActionListener<Object> toolListener = ActionListener.wrap(r -> {
                     if (functionCalling != null) {
-                        List<Map<String, Object>> toolResults = List.of(Map.of(TOOL_CALL_ID, toolCallId, TOOL_RESULT, Map.of("text", r)));
+                        String outputResponse = filterToolOutput(toolParams, r);
+                        List<Map<String, Object>> toolResults = List
+                            .of(Map.of(TOOL_CALL_ID, toolCallId, TOOL_RESULT, Map.of("text", outputResponse)));
                         List<LLMMessage> llmMessages = functionCalling.supply(toolResults);
                         // TODO: support multiple tool calls at the same time so that multiple LLMMessages can be generated here
                         interactions.add(llmMessages.getFirst().getResponse());

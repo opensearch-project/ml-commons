@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.common.utils;
 
+import static org.apache.commons.text.StringEscapeUtils.escapeJson;
 import static org.opensearch.action.ValidateActions.addValidationError;
 
 import java.nio.ByteBuffer;
@@ -40,6 +41,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonSyntaxException;
+import com.google.gson.reflect.TypeToken;
 import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.PathNotFoundException;
 import com.networknt.schema.JsonSchema;
@@ -109,6 +111,13 @@ public class StringUtils {
         } catch (JsonSyntaxException ex) {
             return false;
         }
+    }
+
+    public static String escapeString(String input) {
+        if (isJson(input)) {
+            return input;
+        }
+        return escapeJson(input);
     }
 
     public static String toUTF8(String rawString) {
@@ -552,4 +561,7 @@ public class StringUtils {
         return SAFE_INPUT_PATTERN.matcher(value).matches();
     }
 
+    public static List<String> parseStringArrayToList(String jsonArrayString) {
+        return gson.fromJson(jsonArrayString, TypeToken.getParameterized(List.class, String.class).getType());
+    }
 }

@@ -356,16 +356,6 @@ public class MLFlowAgentRunnerTest {
     }
 
     @Test
-    public void testCreateTool() {
-        MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).description("description").type(FIRST_TOOL).build();
-        Tool result = mlFlowAgentRunner.createTool(firstToolSpec, null);
-
-        assertNotNull(result);
-        assertEquals(FIRST_TOOL, result.getName());
-        assertEquals(FIRST_TOOL_DESC, result.getDescription());
-    }
-
-    @Test
     public void testParseResponse() throws IOException {
 
         String outputString = "testOutput";
