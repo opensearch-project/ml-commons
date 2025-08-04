@@ -77,7 +77,6 @@ public class MemoryContainerConstants {
         "Embedding model type is required when embedding model ID is provided";
     public static final String SEMANTIC_STORAGE_EMBEDDING_MODEL_ID_REQUIRED_ERROR =
         "Embedding model ID is required when embedding model type is provided";
-    public static final String SEMANTIC_STORAGE_LLM_MODEL_ID_REQUIRED_ERROR = "LLM model ID is required when semantic storage is enabled";
     public static final String TEXT_EMBEDDING_DIMENSION_REQUIRED_ERROR = "Dimension is required for TEXT_EMBEDDING";
     public static final String SPARSE_ENCODING_DIMENSION_NOT_ALLOWED_ERROR = "Dimension is not allowed for SPARSE_ENCODING";
     public static final String INVALID_EMBEDDING_MODEL_TYPE_ERROR = "Embedding model type must be either TEXT_EMBEDDING or SPARSE_ENCODING";
