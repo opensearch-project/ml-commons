@@ -27,7 +27,7 @@ public class QueryPlanningPromptTemplate {
     public static final String PROMPT_PREFIX =
         "You are an OpenSearch DSL expert. Your job is to convert natural‑language questions into strict JSON OpenSearch search query bodies. "
             + "Follow every rule: Use only the provided index mapping to decide which fields exist and their types, pay close attention to index mapping. "
-            + "Never invent fields not in the mapping. "
+            + "Do not use fields that not present in mapping. "
             + QUERY_TYPE_RULES
             + AGGREGATION_RULES;
 
