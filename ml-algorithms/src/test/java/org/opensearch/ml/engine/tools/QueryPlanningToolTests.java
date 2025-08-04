@@ -15,6 +15,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.DEFAULT_DESCRIPTION;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.INDEX_MAPPING_FIELD;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.MODEL_ID_FIELD;
@@ -35,7 +37,9 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchException;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.transport.client.Client;
 
@@ -50,6 +54,9 @@ public class QueryPlanningToolTests {
     @Mock
     private MLModelTool queryGenerationTool;
 
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     private Map<String, String> validParams;
     private Map<String, String> emptyParams;
 
@@ -59,7 +66,14 @@ public class QueryPlanningToolTests {
     public void setup() {
         MockitoAnnotations.openMocks(this);
         MLModelTool.Factory.getInstance().init(client);
-        factory = new QueryPlanningTool.Factory();
+
+        // Mock the MLFeatureEnabledSetting to return true for agentic search
+        when(mlFeatureEnabledSetting.isAgenticSearchEnabled()).thenReturn(true);
+
+        // Initialize the factory with mocked dependencies
+        factory = QueryPlanningTool.Factory.getInstance();
+        factory.init(client, mlFeatureEnabledSetting);
+
         validParams = new HashMap<>();
         validParams.put(SYSTEM_PROMPT_FIELD, "test prompt");
         emptyParams = Collections.emptyMap();
@@ -308,5 +322,17 @@ public class QueryPlanningToolTests {
         // Processed parameters should be JSON strings
         assertTrue(capturedParams.get(INDEX_MAPPING_FIELD).startsWith("\""));
         assertTrue(capturedParams.get(QUERY_FIELDS_FIELD).startsWith("\""));
+    }
+
+    @Test
+    public void testFactoryCreateWhenAgenticSearchDisabled() {
+        // Mock the MLFeatureEnabledSetting to return false for agentic search
+        when(mlFeatureEnabledSetting.isAgenticSearchEnabled()).thenReturn(false);
+
+        Map<String, Object> map = new HashMap<>();
+        map.put(QueryPlanningTool.MODEL_ID_FIELD, "modelId");
+
+        Exception exception = assertThrows(OpenSearchException.class, () -> factory.create(map));
+        assertEquals(ML_COMMONS_AGENTIC_SEARCH_DISABLED_MESSAGE, exception.getMessage());
     }
 }
