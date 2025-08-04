@@ -234,10 +234,7 @@ public class AgentUtils {
         toolsBuilder.append(toolsSuffix);
         Map<String, String> toolsPromptMap = new HashMap<>();
         toolsPromptMap.put(TOOL_DESCRIPTIONS, toolsBuilder.toString());
-
-        // Handle empty tool names case
-        String toolNames = toolNamesBuilder.length() > 0 ? toolNamesBuilder.substring(0, toolNamesBuilder.length() - 1) : "";
-        toolsPromptMap.put(TOOL_NAMES, toolNames);
+        toolsPromptMap.put(TOOL_NAMES, toolNamesBuilder.substring(0, toolNamesBuilder.length() - 1));
 
         if (parameters.containsKey(TOOL_DESCRIPTIONS)) {
             toolsPromptMap.put(TOOL_DESCRIPTIONS, parameters.get(TOOL_DESCRIPTIONS));
@@ -623,25 +620,15 @@ public class AgentUtils {
         if (output instanceof ModelTensorOutput) {
             ModelTensor outputModel = ((ModelTensorOutput) output).getMlModelOutputs().get(0).getMlModelTensors().get(0);
             if (outputModel.getDataAsMap() != null) {
-                try {
-                    outputString = AccessController
-                        .doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(outputModel.getDataAsMap()));
-                } catch (Exception e) {
-                    // Fall back to toString if Gson serialization fails (e.g., due to ByteBuffer in Java 21)
-                    outputString = outputModel.getDataAsMap().toString();
-                }
+                outputString = AccessController
+                    .doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(outputModel.getDataAsMap()));
             } else {
                 outputString = outputModel.getResult();
             }
         } else if (output instanceof String) {
             outputString = (String) output;
         } else {
-            try {
-                outputString = AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(output));
-            } catch (Exception e) {
-                // Fall back to toString if Gson serialization fails (e.g., due to ByteBuffer in Java 21)
-                outputString = output != null ? output.toString() : "null";
-            }
+            outputString = AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> gson.toJson(output));
         }
         return outputString;
     }

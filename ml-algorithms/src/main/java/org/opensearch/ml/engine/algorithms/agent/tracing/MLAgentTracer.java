@@ -84,12 +84,11 @@ public class MLAgentTracer extends MLTracer {
     public static final String OUTPUT_FIELD = "output";
     public static final String ADDITIONAL_INFO_FIELD = "additional_info";
     public static final String ADDITIONAL_INFO_FIELD_ALT = "additionalInfo";
+    public static final String PROVIDER_BEDROCK = "bedrock";
+    public static final String PROVIDER_OPENAI = "openai";
     public static final String PROVIDER_UNKNOWN = "unknown";
     public static final String TRACE_PARENT_FIELD = "traceparent";
     public static final String QUESTION_FIELD = "question";
-    public static final String PROVIDER_BEDROCK = "bedrock";
-    public static final String PROVIDER_OPENAI = "openai";
-    public static final String MODEL_TENSOR_NAME_RESPONSE = "response";
 
     public static final String TOKEN_FIELD_INPUT_TOKENS = "inputTokens";
     public static final String TOKEN_FIELD_OUTPUT_TOKENS = "outputTokens";
@@ -650,9 +649,15 @@ public class MLAgentTracer extends MLTracer {
             Double execOutput = extractTokenValue(addInfo, TOKEN_FIELD_OUTPUT_TOKENS);
             Double execTotal = extractTokenValue(addInfo, TOKEN_FIELD_TOTAL_TOKENS);
 
-            context.getPhaseInputTokens().set(context.getPhaseInputTokens().get() + execInput);
-            context.getPhaseOutputTokens().set(context.getPhaseOutputTokens().get() + execOutput);
-            context.getPhaseTotalTokens().set(context.getPhaseTotalTokens().get() + execTotal);
+            if (execInput != null) {
+                context.getPhaseInputTokens().set(context.getPhaseInputTokens().get() + execInput);
+            }
+            if (execOutput != null) {
+                context.getPhaseOutputTokens().set(context.getPhaseOutputTokens().get() + execOutput);
+            }
+            if (execTotal != null) {
+                context.getPhaseTotalTokens().set(context.getPhaseTotalTokens().get() + execTotal);
+            }
         }
     }
 
@@ -1120,7 +1125,7 @@ public class MLAgentTracer extends MLTracer {
                     .of(
                         ModelTensors
                             .builder()
-                            .mlModelTensors(List.of(ModelTensor.builder().name(MODEL_TENSOR_NAME_RESPONSE).result(response).build()))
+                            .mlModelTensors(List.of(ModelTensor.builder().name(RESPONSE_FIELD).result(response).build()))
                             .build()
                     )
             )

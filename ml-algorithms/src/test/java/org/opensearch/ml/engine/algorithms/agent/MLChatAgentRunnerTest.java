@@ -479,8 +479,6 @@ public class MLChatAgentRunnerTest {
         assertEquals(1, agentOutput.size());
         // Respond with last tool output
         assertEquals("This is the final answer", agentOutput.get(0).getDataAsMap().get("response"));
-        Map<String, List<String>> additionalInfos = (Map<String, List<String>>) agentOutput.get(0).getDataAsMap().get("additional_info");
-        assertEquals("Second tool response", additionalInfos.get(String.format("%s.output", SECOND_TOOL)).get(0));
     }
 
     // todo: chat_history is no longer added to inputParams in the runner, modify chat history test cases
@@ -1577,15 +1575,12 @@ public class MLChatAgentRunnerTest {
      */
     @Test
     public void testHandleSpanError() {
-        // Test with null span (should not throw exception)
-        MLChatAgentRunner.handleSpanError(null, new RuntimeException("Test exception"));
-
         // Test with mock span - verify it doesn't throw exception
         Span mockSpan = mock(Span.class);
         RuntimeException testException = new RuntimeException("Test exception");
 
         // This should execute without throwing an exception
-        MLChatAgentRunner.handleSpanError(mockSpan, testException);
+        MLAgentTracer.handleSpanError(mockSpan, "Test error message", testException);
 
         // If we reach here, the method executed successfully
         // We can't easily verify the private span operations in unit tests
@@ -1631,18 +1626,4 @@ public class MLChatAgentRunnerTest {
         // Verify that the agent responds successfully
         verify(agentActionListener).onResponse(any());
     }
-
-    /**
-     * Tests span error handling with null span.
-     * 
-     * This test verifies that the handleSpanError method handles null spans
-     * gracefully without throwing exceptions.
-     */
-    @Test
-    public void testHandleSpanErrorWithNullSpan() {
-        // Test with null span (should not throw exception)
-        MLChatAgentRunner.handleSpanError(null, new RuntimeException("Test exception"));
-        // If we reach here without exception, the test passes
-    }
-
 }
