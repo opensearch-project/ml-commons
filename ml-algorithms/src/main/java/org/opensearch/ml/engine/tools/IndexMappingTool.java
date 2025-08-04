@@ -32,7 +32,9 @@ import org.opensearch.transport.client.Client;
 
 import lombok.Getter;
 import lombok.Setter;
+import lombok.extern.log4j.Log4j2;
 
+@Log4j2
 @ToolAnnotation(IndexMappingTool.TYPE)
 public class IndexMappingTool implements Tool {
     public static final String TYPE = "IndexMappingTool";
@@ -40,10 +42,9 @@ public class IndexMappingTool implements Tool {
     private static final String DEFAULT_DESCRIPTION = String
         .join(
             " ",
-            "This tool gets index mapping information from a certain index.",
-            "It takes 1 required argument named 'index' which is a comma-delimited list of one or more indices to get mapping information from, which expands wildcards.",
-            "It takes 1 optional argument named 'local' which means whether to return information from the local node only instead of the cluster manager node (Default is false).",
-            "The tool returns a list of index mappings and settings for each index.",
+            "This tool returns a list of index mappings and settings for each index.",
+            "Required argument: 'index', a comma-delimited list of one or more indices to get mapping information (expands wildcards).",
+            "Optional argument: 'local' whether to return information from the local node only instead of the cluster manager node (Default is false)",
             "The mappings are in JSON format under the key 'properties' which includes the field name as a key and a JSON object with field type under the key 'type'.",
             "The settings are in flattened map with 'index' as the top element and key-value pairs for each setting."
         );
@@ -169,6 +170,7 @@ public class IndexMappingTool implements Tool {
 
             client.admin().indices().getIndex(getIndexRequest, internalListener);
         } catch (Exception e) {
+            log.error("Failed to run IndexMappingTool", e);
             listener.onFailure(e);
         }
     }
@@ -180,7 +182,7 @@ public class IndexMappingTool implements Tool {
 
     @Override
     public boolean validate(Map<String, String> parameters) {
-        return parameters != null && parameters.containsKey("index");
+        return parameters != null && !parameters.isEmpty() && parameters.containsKey("index");
     }
 
     /**

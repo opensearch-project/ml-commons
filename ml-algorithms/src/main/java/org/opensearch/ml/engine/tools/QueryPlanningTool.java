@@ -17,6 +17,7 @@ import org.opensearch.transport.client.Client;
 
 import lombok.Getter;
 import lombok.Setter;
+import lombok.extern.log4j.Log4j2;
 
 /**
  * This tool supports different types of query planning,
@@ -25,6 +26,7 @@ import lombok.Setter;
  * //TODO to add in systemSearchTemplates or userSearchTemplates when searchTemplatesTool is implemented.
  */
 
+@Log4j2
 @ToolAnnotation(QueryPlanningTool.TYPE)
 public class QueryPlanningTool implements WithModelTool {
     public static final String TYPE = "QueryPlanningTool";
@@ -58,33 +60,39 @@ public class QueryPlanningTool implements WithModelTool {
 
     @Override
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
-
-        if (!validate(parameters)) {
-            listener.onFailure(new IllegalArgumentException("Empty parameters for QueryPlanningTool: " + parameters));
-            return;
-        }
-        if (!parameters.containsKey(PROMPT_FIELD)) {
-            parameters.put(PROMPT_FIELD, defaultPrompt);
-        }
-        ActionListener<T> modelListener = ActionListener.wrap(r -> {
-            try {
-                String queryString = (String) r;
-                if (queryString == null || queryString.isBlank() || queryString.equals("null")) {
-                    StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
-                    String defaultQueryString = substitutor.replace(this.defaultQuery);
-                    listener.onResponse((T) defaultQueryString);
-                } else {
-                    listener.onResponse((T) queryString);
-                }
-            } catch (Exception e) {
-                IllegalArgumentException parsingException = new IllegalArgumentException(
-                    "Error processing query string: " + r + ". Try using response_filter in agent registration if needed.",
-                    e
-                );
-                listener.onFailure(parsingException);
+        try {
+            if (!validate(parameters)) {
+                listener.onFailure(new IllegalArgumentException("Empty parameters for QueryPlanningTool: " + parameters));
+                return;
             }
-        }, listener::onFailure);
-        queryGenerationTool.run(parameters, modelListener);
+
+            if (!parameters.containsKey(PROMPT_FIELD)) {
+                parameters.put(PROMPT_FIELD, defaultPrompt);
+            }
+
+            ActionListener<T> modelListener = ActionListener.wrap(r -> {
+                try {
+                    String queryString = (String) r;
+                    if (queryString == null || queryString.isBlank() || queryString.equals("null")) {
+                        StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
+                        String defaultQueryString = substitutor.replace(this.defaultQuery);
+                        listener.onResponse((T) defaultQueryString);
+                    } else {
+                        listener.onResponse((T) queryString);
+                    }
+                } catch (Exception e) {
+                    IllegalArgumentException parsingException = new IllegalArgumentException(
+                        "Error processing query string: " + r + ". Try using response_filter in agent registration if needed.",
+                        e
+                    );
+                    listener.onFailure(parsingException);
+                }
+            }, listener::onFailure);
+            queryGenerationTool.run(parameters, modelListener);
+        } catch (Exception e) {
+            log.error("Failed to run QueryPlanningTool", e);
+            listener.onFailure(e);
+        }
     }
 
     @Override
@@ -99,10 +107,7 @@ public class QueryPlanningTool implements WithModelTool {
 
     @Override
     public boolean validate(Map<String, String> parameters) {
-        if (parameters == null || parameters.size() == 0) {
-            return false;
-        }
-        return true;
+        return parameters != null && !parameters.isEmpty();
     }
 
     public static class Factory implements WithModelTool.Factory<QueryPlanningTool> {

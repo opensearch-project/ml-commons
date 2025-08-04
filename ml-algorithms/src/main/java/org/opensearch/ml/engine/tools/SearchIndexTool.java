@@ -53,7 +53,8 @@ public class SearchIndexTool implements Tool {
 
     public static final String TYPE = "SearchIndexTool";
     private static final String DEFAULT_DESCRIPTION =
-        "Use this tool to search an index by providing two parameters: 'index' for the index name, and 'query' for the OpenSearch DSL formatted query. Only use this tool when both index name and DSL query is available.";
+        "Use this tool to search an index by providing two parameters: 'index' for the index name, and 'query' for the OpenSearch DSL formatted query. Only use this tool when both index name and DSL query is available. "
+            + "Returns documents matching the query in the provided index.";
 
     public static final String DEFAULT_INPUT_SCHEMA = "{\"type\":\"object\","
         + "\"properties\":{\"index\":{\"type\":\"string\",\"description\":\"OpenSearch index name. for example: index1\"},"
@@ -145,17 +146,20 @@ public class SearchIndexTool implements Tool {
                     log.error("Invalid JSON input: {}", input, e);
                 }
             }
+
             if (StringUtils.isEmpty(index)) {
                 index = parameters.get(INDEX_FIELD);
             }
+
             if (StringUtils.isEmpty(query)) {
                 query = parameters.get(QUERY_FIELD);
             }
+
             if (StringUtils.isEmpty(index) || StringUtils.isEmpty(query)) {
                 listener
                     .onFailure(
                         new IllegalArgumentException(
-                            "SearchIndexTool's two parameters: index and query are required and should in valid format!"
+                            "SearchIndexTool's two parameters: index and query are required and should be in valid format"
                         )
                     );
                 return;
@@ -194,7 +198,7 @@ public class SearchIndexTool implements Tool {
                 client.search(searchRequest, actionListener);
             }
         } catch (Exception e) {
-            log.error("Failed to search index", e);
+            log.error("Failed to run SearchIndexTool", e);
             listener.onFailure(e);
         }
     }
