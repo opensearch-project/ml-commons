@@ -200,37 +200,75 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
      * and enforces field restrictions and limits.
      */
     public void validate() {
-        // If both embedding model ID and type are provided, they must be valid
+        validateEmbeddingConfiguration();
+        validateLimits();
+        cleanupDisabledFeatures();
+    }
+
+    /**
+     * Validates embedding model configuration.
+     * Ensures that if embedding is configured, both model ID and type are provided,
+     * and validates dimension requirements based on embedding type.
+     */
+    private void validateEmbeddingConfiguration() {
+        // If both embedding model ID and type are provided, validate them
         if (embeddingModelId != null && embeddingModelType != null) {
-            // Validate embedding model type
-            if (embeddingModelType != FunctionName.TEXT_EMBEDDING && embeddingModelType != FunctionName.SPARSE_ENCODING) {
-                throw new IllegalArgumentException(INVALID_EMBEDDING_MODEL_TYPE_ERROR);
-            }
-
-            // Validate dimension based on embedding type
-            if (embeddingModelType == FunctionName.TEXT_EMBEDDING && dimension == null) {
-                throw new IllegalArgumentException(TEXT_EMBEDDING_DIMENSION_REQUIRED_ERROR);
-            }
-
-            if (embeddingModelType == FunctionName.SPARSE_ENCODING && dimension != null) {
-                throw new IllegalArgumentException(SPARSE_ENCODING_DIMENSION_NOT_ALLOWED_ERROR);
-            }
+            validateEmbeddingModelType();
+            validateDimensionRequirements();
         } else if (embeddingModelId != null || embeddingModelType != null) {
             // If only one is provided, both are required
-            if (embeddingModelType == null) {
-                throw new IllegalArgumentException(SEMANTIC_STORAGE_EMBEDDING_MODEL_TYPE_REQUIRED_ERROR);
-            }
-            if (embeddingModelId == null) {
-                throw new IllegalArgumentException(SEMANTIC_STORAGE_EMBEDDING_MODEL_ID_REQUIRED_ERROR);
-            }
+            requireBothEmbeddingFields();
+        }
+    }
+
+    /**
+     * Validates that the embedding model type is supported.
+     */
+    private void validateEmbeddingModelType() {
+        if (embeddingModelType != FunctionName.TEXT_EMBEDDING && embeddingModelType != FunctionName.SPARSE_ENCODING) {
+            throw new IllegalArgumentException(INVALID_EMBEDDING_MODEL_TYPE_ERROR);
+        }
+    }
+
+    /**
+     * Validates dimension requirements based on embedding type.
+     * TEXT_EMBEDDING requires dimension, SPARSE_ENCODING does not allow dimension.
+     */
+    private void validateDimensionRequirements() {
+        if (embeddingModelType == FunctionName.TEXT_EMBEDDING && dimension == null) {
+            throw new IllegalArgumentException(TEXT_EMBEDDING_DIMENSION_REQUIRED_ERROR);
         }
 
-        // Validate limits
+        if (embeddingModelType == FunctionName.SPARSE_ENCODING && dimension != null) {
+            throw new IllegalArgumentException(SPARSE_ENCODING_DIMENSION_NOT_ALLOWED_ERROR);
+        }
+    }
+
+    /**
+     * Ensures both embedding model ID and type are provided when one is present.
+     */
+    private void requireBothEmbeddingFields() {
+        if (embeddingModelType == null) {
+            throw new IllegalArgumentException(SEMANTIC_STORAGE_EMBEDDING_MODEL_TYPE_REQUIRED_ERROR);
+        }
+        if (embeddingModelId == null) {
+            throw new IllegalArgumentException(SEMANTIC_STORAGE_EMBEDDING_MODEL_ID_REQUIRED_ERROR);
+        }
+    }
+
+    /**
+     * Validates configured limits are within acceptable ranges.
+     */
+    private void validateLimits() {
         if (maxInferSize != null && maxInferSize > 10) {
             throw new IllegalArgumentException(MAX_INFER_SIZE_LIMIT_ERROR);
         }
+    }
 
-        // Clear fields that shouldn't be present when semantic storage is disabled
+    /**
+     * Cleans up fields that shouldn't be present when features are disabled.
+     */
+    private void cleanupDisabledFeatures() {
         if (!semanticStorageEnabled) {
             this.maxInferSize = null;
         }
