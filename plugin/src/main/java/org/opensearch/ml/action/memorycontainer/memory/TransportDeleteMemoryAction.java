@@ -27,7 +27,7 @@ import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
-import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteMemoriesAction;
+import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteMemoryAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLDeleteMemoryRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.utils.RestActionUtils;
@@ -63,7 +63,7 @@ public class TransportDeleteMemoryAction extends HandledTransportAction<ActionRe
         ConnectorAccessControlHelper connectorAccessControlHelper,
         MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
-        super(MLDeleteMemoriesAction.NAME, transportService, actionFilters, MLDeleteMemoryRequest::new);
+        super(MLDeleteMemoryAction.NAME, transportService, actionFilters, MLDeleteMemoryRequest::new);
         this.client = client;
         this.sdkClient = sdkClient;
         this.xContentRegistry = xContentRegistry;
