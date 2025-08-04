@@ -108,7 +108,7 @@ public class RestSearchIndexToolIT extends RestBaseAgentToolsIT {
         MatcherAssert
             .assertThat(
                 exception.getMessage(),
-                containsString("SearchIndexTool's two parameters: index and query are required and should in valid format!")
+                containsString("SearchIndexTool's two parameters: index and query are required and should be in valid format")
             );
     }
 
@@ -125,7 +125,7 @@ public class RestSearchIndexToolIT extends RestBaseAgentToolsIT {
         MatcherAssert
             .assertThat(
                 exception.getMessage(),
-                containsString("SearchIndexTool's two parameters: index and query are required and should in valid format!")
+                containsString("SearchIndexTool's two parameters: index and query are required and should be in valid format")
             );
     }
 
