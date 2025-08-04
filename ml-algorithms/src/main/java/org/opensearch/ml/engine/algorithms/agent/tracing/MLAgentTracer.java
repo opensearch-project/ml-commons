@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.opensearch.action.StepListener;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.output.model.ModelTensor;
@@ -17,6 +18,7 @@ import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
+import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.telemetry.tracing.Span;
 import org.opensearch.telemetry.tracing.Tracer;
@@ -307,6 +309,45 @@ public class MLAgentTracer extends MLTracer {
         return llmInterface.isEmpty() ? PROVIDER_UNKNOWN : MLModel.identifyServiceProviderFromUrl(llmInterface.toLowerCase());
     }
 
+    public static Map<String, String> createToolCallAttributesWithStep(
+        String actionInput,
+        int stepNumber,
+        String toolName,
+        String toolDescription
+    ) {
+        Map<String, String> attributes = new HashMap<>();
+        attributes.put(MLAgentTracer.ATTR_SERVICE_TYPE, SERVICE_TYPE_TRACER);
+        attributes.put(MLAgentTracer.ATTR_OPERATION_NAME, OperationType.EXECUTE_TOOL.getValue());
+        attributes.put(MLAgentTracer.ATTR_TASK, actionInput != null ? actionInput : "");
+        attributes.put(MLAgentTracer.ATTR_STEP_NUMBER, String.valueOf(stepNumber));
+        attributes.put(MLAgentTracer.ATTR_TOOL_NAME, toolName != null ? toolName : "");
+        if (toolDescription != null) {
+            attributes.put(MLAgentTracer.ATTR_TOOL_DESCRIPTION, toolDescription);
+        }
+        return attributes;
+    }
+
+    public static Map<String, String> createLLMCallAttributesForConv(
+        String question,
+        int stepNumber,
+        String systemPrompt,
+        String llmInterface
+    ) {
+        Map<String, String> attributes = new HashMap<>();
+        attributes.put(MLAgentTracer.ATTR_SERVICE_TYPE, SERVICE_TYPE_TRACER);
+        attributes.put(MLAgentTracer.ATTR_OPERATION_NAME, OperationType.CHAT.getValue());
+        attributes.put(MLAgentTracer.ATTR_TASK, question != null ? question : "");
+        attributes.put(MLAgentTracer.ATTR_STEP_NUMBER, String.valueOf(stepNumber));
+        if (systemPrompt != null) {
+            attributes.put(MLAgentTracer.ATTR_SYSTEM_MESSAGE, systemPrompt);
+        }
+        if (llmInterface != null) {
+            String provider = MLModel.identifyServiceProviderFromUrl(llmInterface.toLowerCase());
+            attributes.put(MLAgentTracer.ATTR_SYSTEM, provider);
+        }
+        return attributes;
+    }
+
     /**
      * Container for tool call extraction results, including input, output, usage, and metrics.
      */
@@ -390,6 +431,28 @@ public class MLAgentTracer extends MLTracer {
         return result;
     }
 
+    public static void updateToolCallSpanWithResult(Span span, ToolCallExtractionResult result) {
+        Double inputTokens = extractTokenValue(result.usage, "inputTokens");
+        Double outputTokens = extractTokenValue(result.usage, "outputTokens");
+        Double totalTokens = extractTokenValue(result.usage, "totalTokens");
+        Double latency = extractTokenValue(result.metrics, "latencyMs");
+        MLAgentTracer.AgentExecutionContext context = new MLAgentTracer.AgentExecutionContext(span, null);
+        context.getCurrentResult().set(result.output);
+        if (latency != null) {
+            context.getCurrentLatency().set(latency.longValue());
+        }
+        if (inputTokens != null) {
+            context.getPhaseInputTokens().set(inputTokens);
+        }
+        if (outputTokens != null) {
+            context.getPhaseOutputTokens().set(outputTokens);
+        }
+        if (totalTokens != null) {
+            context.getPhaseTotalTokens().set(totalTokens);
+        }
+        MLAgentTracer.updateSpanWithResultAttributes(span, context);
+    }
+
     /**
      * Updates the given span with result attributes such as result, input tokens, output tokens, total tokens, and latency.
      * @param span The span to update.
@@ -437,6 +500,14 @@ public class MLAgentTracer extends MLTracer {
                 .getAgentTaskSpan()
                 .addAttribute(ATTR_USAGE_TOTAL_TOKENS, String.valueOf(context.getAgentTotalTokens().get().intValue()));
         }
+    }
+
+    public static void updateSpanWithResultAndAccumulateTokens(Span span, AgentExecutionContext context) {
+        if (span == null) {
+            return;
+        }
+        updateSpanWithResultAttributes(span, context);
+        setSpanResult(context.getAgentTaskSpan(), context.getCurrentResult().get());
     }
 
     /**
@@ -567,16 +638,11 @@ public class MLAgentTracer extends MLTracer {
         }
 
         if (addInfoObj instanceof Map) {
-            Map<?, ?> addInfo = (Map<?, ?>) addInfoObj;
-            Double execInput = addInfo.get(TOKEN_FIELD_INPUT_TOKENS) instanceof Number
-                ? ((Number) addInfo.get(TOKEN_FIELD_INPUT_TOKENS)).doubleValue()
-                : 0.0;
-            Double execOutput = addInfo.get(TOKEN_FIELD_OUTPUT_TOKENS) instanceof Number
-                ? ((Number) addInfo.get(TOKEN_FIELD_OUTPUT_TOKENS)).doubleValue()
-                : 0.0;
-            Double execTotal = addInfo.get(TOKEN_FIELD_TOTAL_TOKENS) instanceof Number
-                ? ((Number) addInfo.get(TOKEN_FIELD_TOTAL_TOKENS)).doubleValue()
-                : 0.0;
+            @SuppressWarnings("unchecked")
+            Map<String, Object> addInfo = (Map<String, Object>) addInfoObj;
+            Double execInput = extractTokenValue(addInfo, TOKEN_FIELD_INPUT_TOKENS);
+            Double execOutput = extractTokenValue(addInfo, TOKEN_FIELD_OUTPUT_TOKENS);
+            Double execTotal = extractTokenValue(addInfo, TOKEN_FIELD_TOTAL_TOKENS);
 
             context.getPhaseInputTokens().set(context.getPhaseInputTokens().get() + execInput);
             context.getPhaseOutputTokens().set(context.getPhaseOutputTokens().get() + execOutput);
@@ -716,6 +782,90 @@ public class MLAgentTracer extends MLTracer {
         Span parentSpan
     ) {
         return startSpan(AGENT_LLM_CALL_SPAN, createLLMCallAttributes(completion, latency, parameters, extractedTokens), parentSpan);
+    }
+
+    /**
+     * Starts a conversational agent task span with the given agent name and user task.
+     * If the conversational agent is run independently, it will start a new span.
+     * If the conversational agent is run through another agent, it will use the parent span context.
+     * @param agentName The name of the agent.
+     * @param userTask The user task or question.
+     * @param inputParams The input parameters.
+     * @param hasParentSpanContext Whether the conversational agent is run through another agent.
+     * @return The started Span.
+     */
+    public Span startConversationalAgentTaskSpanLogic(String agentName, String userTask, Map<String, String> inputParams) {
+        // Check if conversational is run independently or through another agent
+        boolean hasParentSpanContext = inputParams.containsKey("traceparent");
+        final Span agentTaskSpan;
+        if (hasParentSpanContext) {
+            Span parentSpan = MLAgentTracer.getInstance().extractSpanContext(inputParams);
+            agentTaskSpan = MLAgentTracer.getInstance().startConversationalAgentTaskSpan(agentName, userTask, parentSpan);
+        } else {
+            agentTaskSpan = MLAgentTracer.getInstance().startConversationalAgentTaskSpan(agentName, userTask);
+        }
+        return agentTaskSpan;
+    }
+
+    /**
+     * Starts a conversational agent task span with the given agent name and user task.
+     * @param agentName The name of the agent.
+     * @param userTask The user task or question.
+     * @return The started Span.
+     */
+    public Span startConversationalAgentTaskSpan(String agentName, String userTask) {
+        return startSpan(AGENT_TASK_CONV_SPAN, createAgentTaskAttributes(agentName, userTask));
+    }
+
+    /**
+     * Starts a conversational agent task span with parent span context.
+     * @param agentName The name of the agent.
+     * @param userTask The user task or question.
+     * @param parentSpan The parent span.
+     * @return The started Span.
+     */
+    public Span startConversationalAgentTaskSpan(String agentName, String userTask, Span parentSpan) {
+        return startSpan(AGENT_CONV_TASK_SPAN, createAgentTaskAttributes(agentName, userTask), parentSpan);
+    }
+
+    /**
+     * Starts an LLM call span for conversational agent.
+     * @param question The question being asked.
+     * @param stepNumber The step number in the conversation.
+     * @param systemPrompt The system prompt.
+     * @param llmInterface The LLM interface.
+     * @param parentSpan The parent span.
+     * @return The started Span.
+     */
+    public Span startConversationalLLMCallSpan(String question, int stepNumber, String systemPrompt, String llmInterface, Span parentSpan) {
+        return startSpan(
+            AGENT_LLM_CALL_SPAN + "_" + stepNumber,
+            createLLMCallAttributesForConv(question, stepNumber, systemPrompt, llmInterface),
+            parentSpan
+        );
+    }
+
+    /**
+     * Starts a tool call span for conversational agent.
+     * @param actionInput The action input.
+     * @param stepNumber The step number in the conversation.
+     * @param toolName The tool name.
+     * @param toolDescription The tool description.
+     * @param parentSpan The parent span.
+     * @return The started Span.
+     */
+    public Span startConversationalToolCallSpan(
+        String actionInput,
+        int stepNumber,
+        String toolName,
+        String toolDescription,
+        Span parentSpan
+    ) {
+        return startSpan(
+            AGENT_TOOL_CALL_SPAN + "_" + stepNumber,
+            createToolCallAttributesWithStep(actionInput, stepNumber, toolName, toolDescription),
+            parentSpan
+        );
     }
 
     /**
@@ -859,6 +1009,149 @@ public class MLAgentTracer extends MLTracer {
     }
 
     /**
+     * Extracts a token value from a usage map.
+     * @param usage The usage map containing token information.
+     * @param tokenKey The key to extract the token value for.
+     * @return The extracted token value as a Double, or null if not found or invalid.
+     */
+    public static Double extractTokenValue(Map<String, Object> usage, String tokenKey) {
+        if (usage == null || !usage.containsKey(tokenKey))
+            return null;
+        Object value = usage.get(tokenKey);
+        return value instanceof Number ? ((Number) value).doubleValue() : null;
+    }
+
+    /**
+     * Extracts and accumulates token values to agent context.
+     * @param usage The usage map containing token information.
+     * @param context The agent execution context to update.
+     */
+    public static void extractAndAccumulateTokensToAgent(Map<String, Object> usage, AgentExecutionContext context) {
+        if (usage == null)
+            return;
+
+        Double inputTokens = extractTokenValue(usage, "inputTokens");
+        Double outputTokens = extractTokenValue(usage, "outputTokens");
+        Double totalTokens = extractTokenValue(usage, "totalTokens");
+
+        if (inputTokens != null)
+            context.getAgentInputTokens().set(context.getAgentInputTokens().get() + inputTokens);
+        if (outputTokens != null)
+            context.getAgentOutputTokens().set(context.getAgentOutputTokens().get() + outputTokens);
+        if (totalTokens != null)
+            context.getAgentTotalTokens().set(context.getAgentTotalTokens().get() + totalTokens);
+    }
+
+    /**
+     * Extracts and sets token values to phase context.
+     * @param usage The usage map containing token information.
+     * @param context The agent execution context to update.
+     */
+    public static void extractAndSetPhaseTokens(Map<String, Object> usage, AgentExecutionContext context) {
+        if (usage == null)
+            return;
+
+        Double inputTokens = extractTokenValue(usage, "inputTokens");
+        Double outputTokens = extractTokenValue(usage, "outputTokens");
+        Double totalTokens = extractTokenValue(usage, "totalTokens");
+
+        context.getPhaseInputTokens().set(inputTokens != null ? inputTokens : 0.0);
+        context.getPhaseOutputTokens().set(outputTokens != null ? outputTokens : 0.0);
+        context.getPhaseTotalTokens().set(totalTokens != null ? totalTokens : 0.0);
+    }
+
+    /**
+     * Extracts latency from metrics and sets it in context.
+     * @param metrics The metrics map containing latency information.
+     * @param context The agent execution context to update.
+     */
+    public static void extractAndSetLatency(Map<String, Object> metrics, AgentExecutionContext context) {
+        if (metrics == null)
+            return;
+
+        Double latency = extractTokenValue(metrics, "latencyMs");
+        if (latency != null) {
+            context.getCurrentLatency().set(latency.longValue());
+        }
+    }
+
+    /**
+     * Updates LLM span with result and ends it.
+     * @param currentLlmListenerWithSpan The listener with span to update.
+     * @param llmResultInfo The LLM result information.
+     * @param context The agent execution context.
+     */
+    public static void updateAndEndLLMSpan(
+        ListenerWithSpan currentLlmListenerWithSpan,
+        ToolCallExtractionResult llmResultInfo,
+        AgentExecutionContext context
+    ) {
+        if (currentLlmListenerWithSpan == null || currentLlmListenerWithSpan.span == null)
+            return;
+
+        Span currentLlmSpan = currentLlmListenerWithSpan.span;
+        context.getCurrentResult().set(llmResultInfo.output);
+
+        extractAndSetPhaseTokens(llmResultInfo.usage, context);
+        extractAndSetLatency(llmResultInfo.metrics, context);
+
+        updateSpanWithResultAttributes(currentLlmSpan, context);
+        updateSpanWithResultAndAccumulateTokens(currentLlmSpan, context);
+        getInstance().endSpan(currentLlmSpan);
+    }
+
+    /**
+     * Creates a ModelTensorOutput with a simple response.
+     * @param response The response string.
+     * @return The ModelTensorOutput.
+     */
+    public static ModelTensorOutput createModelTensorOutput(String response) {
+        return ModelTensorOutput
+            .builder()
+            .mlModelOutputs(
+                List
+                    .of(
+                        ModelTensors
+                            .builder()
+                            .mlModelTensors(List.of(ModelTensor.builder().name("response").result(response).build()))
+                            .build()
+                    )
+            )
+            .build();
+    }
+
+    /**
+     * Creates a MLTaskResponse with a simple response.
+     * @param response The response string.
+     * @return The MLTaskResponse.
+     */
+    public static MLTaskResponse createMLTaskResponse(String response) {
+        return new MLTaskResponse(createModelTensorOutput(response));
+    }
+
+    /**
+     * Updates additional info with token usage from context.
+     * @param context The agent execution context.
+     * @param additionalInfo The additional info map to update.
+     */
+    public static void updateAdditionalInfoWithTokens(AgentExecutionContext context, Map<String, Object> additionalInfo) {
+        additionalInfo.put("inputTokens", context.getAgentInputTokens().get());
+        additionalInfo.put("outputTokens", context.getAgentOutputTokens().get());
+        additionalInfo.put("totalTokens", context.getAgentTotalTokens().get());
+    }
+
+    /**
+     * Safely gets a value from a map with a default.
+     * @param map The map to get the value from.
+     * @param key The key to look for.
+     * @param defaultValue The default value if key is not found.
+     * @return The value or default.
+     */
+    public static String getOrDefault(Map<String, String> map, String key, String defaultValue) {
+        return map != null ? map.getOrDefault(key, defaultValue) : defaultValue;
+    }
+
+    /**
      * Handles span errors by logging, setting span error, and ending the span.
      * @param span The span to handle the error for.
      * @param errorMessage The error message to log.
@@ -910,6 +1203,19 @@ public class MLAgentTracer extends MLTracer {
     public static void setSpanTaskAndResult(Span span, String task, String result) {
         setSpanTask(span, task);
         setSpanResult(span, result);
+    }
+
+    /**
+     * Encapsulates a listener with its associated span for tracking.
+     */
+    public static class ListenerWithSpan {
+        public final StepListener<MLTaskResponse> listener;
+        public final Span span;
+
+        public ListenerWithSpan(StepListener<MLTaskResponse> listener, Span span) {
+            this.listener = listener;
+            this.span = span;
+        }
     }
 
     /**

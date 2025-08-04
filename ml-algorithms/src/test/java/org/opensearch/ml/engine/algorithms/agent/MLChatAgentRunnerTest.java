@@ -1545,27 +1545,27 @@ public class MLChatAgentRunnerTest {
     @Test
     public void testExtractTokenValue() {
         // Test with null usage
-        assertNull(MLChatAgentRunner.extractTokenValue(null, "inputTokens"));
+        assertNull(MLAgentTracer.extractTokenValue(null, "inputTokens"));
 
         // Test with missing key
         Map<String, Object> usage = new HashMap<>();
-        assertNull(MLChatAgentRunner.extractTokenValue(usage, "inputTokens"));
+        assertNull(MLAgentTracer.extractTokenValue(usage, "inputTokens"));
 
         // Test with Integer value
         usage.put("inputTokens", 100);
-        assertEquals(100.0, MLChatAgentRunner.extractTokenValue(usage, "inputTokens"), 0.001);
+        assertEquals(100.0, MLAgentTracer.extractTokenValue(usage, "inputTokens"), 0.001);
 
         // Test with Long value
         usage.put("outputTokens", 200L);
-        assertEquals(200.0, MLChatAgentRunner.extractTokenValue(usage, "outputTokens"), 0.001);
+        assertEquals(200.0, MLAgentTracer.extractTokenValue(usage, "outputTokens"), 0.001);
 
         // Test with Double value
         usage.put("totalTokens", 300.5);
-        assertEquals(300.5, MLChatAgentRunner.extractTokenValue(usage, "totalTokens"), 0.001);
+        assertEquals(300.5, MLAgentTracer.extractTokenValue(usage, "totalTokens"), 0.001);
 
         // Test with non-number value
         usage.put("invalid", "not a number");
-        assertNull(MLChatAgentRunner.extractTokenValue(usage, "invalid"));
+        assertNull(MLAgentTracer.extractTokenValue(usage, "invalid"));
     }
 
     /**
