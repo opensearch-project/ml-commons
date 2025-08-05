@@ -347,26 +347,22 @@ public class MLChatAgentRunner implements MLAgentRunner {
         List<ModelTensors> traceTensors = createModelTensors(sessionId, parentInteractionId);
         int maxIterations = Integer.parseInt(tmpParameters.getOrDefault(MAX_ITERATION, DEFAULT_MAX_ITERATIONS));
 
-        int llmCallIndex = 0;
-        int toolCallIndex = 0;
-
         Span llmCallSpan = MLAgentTracer
             .getInstance()
             .startConversationalLLMCallSpan(
                 question,
-                llmCallIndex,
+                context.getLlmCallIndex().get(),
                 tmpParameters.get("system_prompt"),
                 tmpParameters.get("_llm_interface"),
                 agentTaskSpan
             );
-
         MLAgentTracer.ListenerWithSpan firstListenerWithSpan = new MLAgentTracer.ListenerWithSpan(firstListener, llmCallSpan);
         lastLlmListenerWithSpan.set(firstListenerWithSpan);
 
         for (int i = 0; i < maxIterations; i++) {
             int finalI = i;
-            int currentLlmCallIndex = llmCallIndex;
-            int currentToolCallIndex = toolCallIndex;
+            int currentLlmCallIndex = context.getLlmCallIndex().get();
+            int currentToolCallIndex = context.getToolCallIndex().get();
             StepListener<MLTaskResponse> nextStepListener = (i == maxIterations - 1) ? null : new StepListener<>();
 
             lastStepListener.whenComplete(output -> {
@@ -391,16 +387,13 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     String thoughtResponse = modelOutput.get(THOUGHT_RESPONSE);
                     String finalAnswer = modelOutput.get(FINAL_ANSWER);
 
-                    MLAgentTracer.ToolCallExtractionResult llmResultInfo = MLAgentTracer.extractToolCallInfo(tmpModelTensorOutput, null);
-                    MLAgentTracer.extractAndAccumulateTokensToAgent(llmResultInfo.usage, context);
-                    MLAgentTracer.updateAndEndLLMSpan(lastLlmListenerWithSpan.get(), llmResultInfo, context);
+                    MLAgentTracer.ToolCallExtractionResult llmResultInfo = MLAgentTracer
+                        .processLLMToolCall(tmpModelTensorOutput, context, lastLlmListenerWithSpan.get());
 
                     if (finalAnswer != null) {
                         finalAnswer = finalAnswer.trim();
 
-                        MLAgentTracer.updateAndEndLLMSpan(lastLlmListenerWithSpan.get(), llmResultInfo, context);
-                        MLAgentTracer.updateAgentTaskSpanWithCumulativeTokens(context);
-                        MLAgentTracer.updateAdditionalInfoWithTokens(context, additionalInfo);
+                        MLAgentTracer.processFinalAnswer(lastLlmListenerWithSpan.get(), llmResultInfo, context, additionalInfo);
 
                         sendFinalAnswer(
                             sessionId,
@@ -465,6 +458,16 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         return;
                     }
 
+                    Span toolCallSpan = MLAgentTracer
+                        .getInstance()
+                        .startConversationalToolCallSpan(
+                            actionInput,
+                            currentToolCallIndex,
+                            action,
+                            tools.containsKey(action) && tools.get(action) != null ? tools.get(action).getDescription() : null,
+                            lastLlmListenerWithSpan.get() != null ? lastLlmListenerWithSpan.get().span() : agentTaskSpan
+                        );
+
                     if (tools.containsKey(action)) {
                         Map<String, String> toolParams = constructToolParams(
                             tools,
@@ -475,62 +478,30 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             actionInput
                         );
 
-                        Span toolCallSpan = MLAgentTracer
-                            .getInstance()
-                            .startConversationalToolCallSpan(
-                                actionInput,
-                                currentToolCallIndex,
-                                action,
-                                tools.get(action) != null ? tools.get(action).getDescription() : null,
-                                lastLlmListenerWithSpan.get() != null ? lastLlmListenerWithSpan.get().span : agentTaskSpan
-                            );
-
-                        try {
-                            this.runTool(tools, toolSpecMap, tmpParameters, ActionListener.wrap(result -> {
-                                MLTaskResponse toolResponse = MLAgentTracer.createMLTaskResponse(result.toString());
-                                nextStepListener.onResponse(toolResponse);
-                            }, e -> nextStepListener.onFailure(e)),
-                                action,
-                                actionInput,
-                                toolParams,
-                                interactions,
-                                toolCallId,
-                                functionCalling,
-                                toolCallSpan
-                            );
-                        } catch (Exception e) {
-                            MLAgentTracer.handleSpanError(toolCallSpan, "Failed to run tool", e);
-                            throw e;
-                        }
+                        this.runTool(tools, toolSpecMap, tmpParameters, ActionListener.wrap(result -> {
+                            nextStepListener.onResponse(new MLTaskResponse(MLAgentTracer.createModelTensorOutput(result.toString())));
+                        }, e -> nextStepListener.onFailure(e)),
+                            action,
+                            actionInput,
+                            toolParams,
+                            interactions,
+                            toolCallId,
+                            functionCalling,
+                            toolCallSpan
+                        );
                     } else {
-                        Span toolCallSpan = MLAgentTracer
-                            .getInstance()
-                            .startConversationalToolCallSpan(
-                                actionInput,
-                                currentToolCallIndex,
-                                action,
-                                null,
-                                lastLlmListenerWithSpan.get() != null ? lastLlmListenerWithSpan.get().span : agentTaskSpan
-                            );
+                        String res = String.format(Locale.ROOT, "Failed to run the tool %s which is unsupported.", action);
+                        MLAgentTracer.setSpanResult(toolCallSpan, res);
+                        MLAgentTracer.getInstance().endSpan(toolCallSpan);
+                        StringSubstitutor substitutor = new StringSubstitutor(
+                            Map.of(SCRATCHPAD, scratchpadBuilder.toString()),
+                            "${parameters.",
+                            "}"
+                        );
+                        newPrompt.set(substitutor.replace(finalPrompt));
+                        tmpParameters.put(PROMPT, newPrompt.get());
 
-                        try {
-                            String res = String.format(Locale.ROOT, "Failed to run the tool %s which is unsupported.", action);
-                            MLAgentTracer.setSpanResult(toolCallSpan, res);
-                            MLAgentTracer.getInstance().endSpan(toolCallSpan);
-                            StringSubstitutor substitutor = new StringSubstitutor(
-                                Map.of(SCRATCHPAD, scratchpadBuilder.toString()),
-                                "${parameters.",
-                                "}"
-                            );
-                            newPrompt.set(substitutor.replace(finalPrompt));
-                            tmpParameters.put(PROMPT, newPrompt.get());
-
-                            MLTaskResponse toolResponse = MLAgentTracer.createMLTaskResponse(res);
-                            nextStepListener.onResponse(toolResponse);
-                        } catch (Exception e) {
-                            MLAgentTracer.handleSpanError(toolCallSpan, "Failed to run tool", e);
-                            throw e;
-                        }
+                        nextStepListener.onResponse(new MLTaskResponse(MLAgentTracer.createModelTensorOutput(res)));
                     }
                 } else {
                     addToolOutputToAddtionalInfo(toolSpecMap, lastAction, additionalInfo, output);
@@ -617,14 +588,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         tenantId
                     );
 
-                    StepListener<MLTaskResponse> llmListener = new StepListener<>();
-                    MLAgentTracer.ListenerWithSpan llmListenerWithSpan = new MLAgentTracer.ListenerWithSpan(llmListener, nextLlmCallSpan);
-                    lastLlmListenerWithSpan.set(llmListenerWithSpan);
-
-                    // Connect the llmListener to nextStepListener to continue the chain
-                    llmListener
-                        .whenComplete(response -> { nextStepListener.onResponse(response); }, e -> { nextStepListener.onFailure(e); });
-
+                    StepListener<MLTaskResponse> llmListener = MLAgentTracer
+                        .createAndConnectLLMListener(nextLlmCallSpan, nextStepListener, lastLlmListenerWithSpan);
                     client.execute(MLPredictionTaskAction.INSTANCE, nextRequest, (ActionListener<MLTaskResponse>) llmListener);
                 }
             }, e -> {
@@ -635,11 +600,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
             if (nextStepListener != null) {
                 lastStepListener = nextStepListener;
             }
-            if (finalI % 2 == 0) {
-                llmCallIndex++;
-            } else {
-                toolCallIndex++;
-            }
+            MLAgentTracer.incrementIndexForIteration(context, finalI);
         }
 
         ActionRequest request = new MLPredictionTaskRequest(

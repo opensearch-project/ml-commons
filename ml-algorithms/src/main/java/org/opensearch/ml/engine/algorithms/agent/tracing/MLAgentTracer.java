@@ -527,6 +527,8 @@ public class MLAgentTracer extends MLTracer {
         private final AtomicReference<Double> phaseTotalTokens;
         private final AtomicReference<String> currentResult;
         private final AtomicReference<Long> currentLatency;
+        private final AtomicReference<Integer> llmCallIndex;
+        private final AtomicReference<Integer> toolCallIndex;
         private final Span agentTaskSpan;
         private final Span planSpan;
 
@@ -539,6 +541,8 @@ public class MLAgentTracer extends MLTracer {
             this.phaseTotalTokens = new AtomicReference<>(0.0);
             this.currentResult = new AtomicReference<>("");
             this.currentLatency = new AtomicReference<>(0L);
+            this.llmCallIndex = new AtomicReference<>(0);
+            this.toolCallIndex = new AtomicReference<>(0);
             this.agentTaskSpan = agentTaskSpan;
             this.planSpan = planSpan;
         }
@@ -581,6 +585,14 @@ public class MLAgentTracer extends MLTracer {
 
         public Span getPlanSpan() {
             return planSpan;
+        }
+
+        public AtomicReference<Integer> getLlmCallIndex() {
+            return llmCallIndex;
+        }
+
+        public AtomicReference<Integer> getToolCallIndex() {
+            return toolCallIndex;
         }
     }
 
@@ -742,6 +754,88 @@ public class MLAgentTracer extends MLTracer {
         Map<String, String> updatedLLMCallAttrs = createLLMCallAttributes(completion, llmLatency, allParams, extractedTokens);
         setSpanAttributes(llmCallSpan, updatedLLMCallAttrs);
         getInstance().endSpan(llmCallSpan);
+    }
+
+    /**
+     * Processes LLM tool call extraction and updates all related spans and token tracking.
+     * This method combines multiple operations: extracting tool call info, accumulating tokens,
+     * and updating and ending LLM span.
+     * 
+     * @param tmpModelTensorOutput The model tensor output from LLM.
+     * @param context The agent execution context.
+     * @param lastLlmListenerWithSpan The listener with span to update.
+     * @return The extracted tool call result.
+     */
+    public static ToolCallExtractionResult processLLMToolCall(
+        ModelTensorOutput tmpModelTensorOutput,
+        AgentExecutionContext context,
+        ListenerWithSpan lastLlmListenerWithSpan
+    ) {
+        ToolCallExtractionResult llmResultInfo = extractToolCallInfo(tmpModelTensorOutput, null);
+        extractAndAccumulateTokensToAgent(llmResultInfo.usage, context);
+        updateAndEndLLMSpan(lastLlmListenerWithSpan, llmResultInfo, context);
+        return llmResultInfo;
+    }
+
+    /**
+     * Processes final answer with comprehensive tracing updates.
+     * This method combines multiple operations: updating and ending LLM span,
+     * updating agent task span with cumulative tokens, and updating additional info with tokens.
+     * 
+     * @param lastLlmListenerWithSpan The listener with span to update.
+     * @param llmResultInfo The LLM result info.
+     * @param context The agent execution context.
+     * @param additionalInfo The additional info map to update with tokens.
+     */
+    public static void processFinalAnswer(
+        ListenerWithSpan lastLlmListenerWithSpan,
+        ToolCallExtractionResult llmResultInfo,
+        AgentExecutionContext context,
+        Map<String, Object> additionalInfo
+    ) {
+        updateAndEndLLMSpan(lastLlmListenerWithSpan, llmResultInfo, context);
+        updateAgentTaskSpanWithCumulativeTokens(context);
+        updateAdditionalInfoWithTokens(context, additionalInfo);
+    }
+
+    /**
+     * Creates and connects an LLM listener with span for the next iteration.
+     * This method combines listener creation, span association, and connection to next step listener.
+     * 
+     * @param nextLlmCallSpan The next LLM call span.
+     * @param nextStepListener The next step listener to connect to.
+     * @param lastLlmListenerWithSpan The atomic reference to update with the new listener.
+     * @return The created LLM listener.
+     */
+    public static StepListener<MLTaskResponse> createAndConnectLLMListener(
+        Span nextLlmCallSpan,
+        StepListener<MLTaskResponse> nextStepListener,
+        AtomicReference<ListenerWithSpan> lastLlmListenerWithSpan
+    ) {
+        StepListener<MLTaskResponse> llmListener = new StepListener<>();
+        ListenerWithSpan llmListenerWithSpan = new ListenerWithSpan(llmListener, nextLlmCallSpan);
+        lastLlmListenerWithSpan.set(llmListenerWithSpan);
+
+        if (nextStepListener != null) {
+            llmListener.whenComplete(response -> { nextStepListener.onResponse(response); }, e -> { nextStepListener.onFailure(e); });
+        }
+
+        return llmListener;
+    }
+
+    /**
+     * Increments the appropriate index based on the iteration number.
+     * This method handles the alternating pattern of LLM calls and tool calls.
+     * 
+     * @param context The agent execution context.
+     * @param iterationNumber The current iteration number.
+     */
+    public static void incrementIndexForIteration(AgentExecutionContext context, int iterationNumber) {
+        if (iterationNumber % 2 == 0) {
+            context.getLlmCallIndex().set(context.getLlmCallIndex().get() + 1);
+        } else {
+            context.getToolCallIndex().set(context.getToolCallIndex().get() + 1);
+        }
     }
 
     /**
@@ -1133,15 +1227,6 @@ public class MLAgentTracer extends MLTracer {
     }
 
     /**
-     * Creates a MLTaskResponse with a simple response.
-     * @param response The response string.
-     * @return The MLTaskResponse.
-     */
-    public static MLTaskResponse createMLTaskResponse(String response) {
-        return new MLTaskResponse(createModelTensorOutput(response));
-    }
-
-    /**
      * Updates additional info with token usage from context.
      * @param context The agent execution context.
      * @param additionalInfo The additional info map to update.
@@ -1150,17 +1235,6 @@ public class MLAgentTracer extends MLTracer {
         additionalInfo.put(TOKEN_FIELD_INPUT_TOKENS, context.getAgentInputTokens().get());
         additionalInfo.put(TOKEN_FIELD_OUTPUT_TOKENS, context.getAgentOutputTokens().get());
         additionalInfo.put(TOKEN_FIELD_TOTAL_TOKENS, context.getAgentTotalTokens().get());
-    }
-
-    /**
-     * Safely gets a value from a map with a default.
-     * @param map The map to get the value from.
-     * @param key The key to look for.
-     * @param defaultValue The default value if key is not found.
-     * @return The value or default.
-     */
-    public static String getOrDefault(Map<String, String> map, String key, String defaultValue) {
-        return map != null ? map.getOrDefault(key, defaultValue) : defaultValue;
     }
 
     /**
@@ -1220,14 +1294,7 @@ public class MLAgentTracer extends MLTracer {
     /**
      * Encapsulates a listener with its associated span for tracking.
      */
-    public static class ListenerWithSpan {
-        public final StepListener<MLTaskResponse> listener;
-        public final Span span;
-
-        public ListenerWithSpan(StepListener<MLTaskResponse> listener, Span span) {
-            this.listener = listener;
-            this.span = span;
-        }
+    public record ListenerWithSpan(StepListener<MLTaskResponse> listener, Span span) {
     }
 
     /**
