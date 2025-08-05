@@ -89,13 +89,13 @@ public class MemoryContainerConstantsTest {
         assertEquals("/_plugins/_ml/memory_containers/_create", MemoryContainerConstants.CREATE_MEMORY_CONTAINER_PATH);
         assertEquals("memory_container_id", MemoryContainerConstants.PARAMETER_MEMORY_CONTAINER_ID);
         assertEquals("memory_id", MemoryContainerConstants.PARAMETER_MEMORY_ID);
-        
+
         String expectedMemoriesPath = "/_plugins/_ml/memory_containers/{memory_container_id}/memories";
         assertEquals(expectedMemoriesPath, MemoryContainerConstants.MEMORIES_PATH);
-        
+
         String expectedSearchPath = expectedMemoriesPath + "/_search";
         assertEquals(expectedSearchPath, MemoryContainerConstants.SEARCH_MEMORIES_PATH);
-        
+
         String expectedDeletePath = expectedMemoriesPath + "/{memory_id}";
         assertEquals(expectedDeletePath, MemoryContainerConstants.DELETE_MEMORY_PATH);
         assertEquals(expectedDeletePath, MemoryContainerConstants.UPDATE_MEMORY_PATH);
@@ -118,25 +118,27 @@ public class MemoryContainerConstantsTest {
     @Test
     public void testApiLimits() {
         assertEquals(10, MemoryContainerConstants.MAX_MESSAGES_PER_REQUEST);
-        assertEquals("Cannot process more than 10 messages in a single request", 
-                     MemoryContainerConstants.MAX_MESSAGES_EXCEEDED_ERROR);
+        assertEquals("Cannot process more than 10 messages in a single request", MemoryContainerConstants.MAX_MESSAGES_EXCEEDED_ERROR);
     }
 
     @Test
     public void testErrorMessages() {
         // Test semantic storage error messages
-        assertEquals("Embedding model type is required when embedding model ID is provided",
-                     MemoryContainerConstants.SEMANTIC_STORAGE_EMBEDDING_MODEL_TYPE_REQUIRED_ERROR);
-        assertEquals("Embedding model ID is required when embedding model type is provided",
-                     MemoryContainerConstants.SEMANTIC_STORAGE_EMBEDDING_MODEL_ID_REQUIRED_ERROR);
-        assertEquals("Dimension is required for TEXT_EMBEDDING",
-                     MemoryContainerConstants.TEXT_EMBEDDING_DIMENSION_REQUIRED_ERROR);
-        assertEquals("Dimension is not allowed for SPARSE_ENCODING",
-                     MemoryContainerConstants.SPARSE_ENCODING_DIMENSION_NOT_ALLOWED_ERROR);
-        assertEquals("Embedding model type must be either TEXT_EMBEDDING or SPARSE_ENCODING",
-                     MemoryContainerConstants.INVALID_EMBEDDING_MODEL_TYPE_ERROR);
-        assertEquals("Maximum infer size cannot exceed 10",
-                     MemoryContainerConstants.MAX_INFER_SIZE_LIMIT_ERROR);
+        assertEquals(
+            "Embedding model type is required when embedding model ID is provided",
+            MemoryContainerConstants.SEMANTIC_STORAGE_EMBEDDING_MODEL_TYPE_REQUIRED_ERROR
+        );
+        assertEquals(
+            "Embedding model ID is required when embedding model type is provided",
+            MemoryContainerConstants.SEMANTIC_STORAGE_EMBEDDING_MODEL_ID_REQUIRED_ERROR
+        );
+        assertEquals("Dimension is required for TEXT_EMBEDDING", MemoryContainerConstants.TEXT_EMBEDDING_DIMENSION_REQUIRED_ERROR);
+        assertEquals("Dimension is not allowed for SPARSE_ENCODING", MemoryContainerConstants.SPARSE_ENCODING_DIMENSION_NOT_ALLOWED_ERROR);
+        assertEquals(
+            "Embedding model type must be either TEXT_EMBEDDING or SPARSE_ENCODING",
+            MemoryContainerConstants.INVALID_EMBEDDING_MODEL_TYPE_ERROR
+        );
+        assertEquals("Maximum infer size cannot exceed 10", MemoryContainerConstants.MAX_INFER_SIZE_LIMIT_ERROR);
         assertTrue(MemoryContainerConstants.FIELD_NOT_ALLOWED_SEMANTIC_DISABLED_ERROR.contains("%s"));
 
         // Test model validation error messages
@@ -144,8 +146,10 @@ public class MemoryContainerConstantsTest {
         assertTrue(MemoryContainerConstants.LLM_MODEL_NOT_REMOTE_ERROR.contains("%s"));
         assertTrue(MemoryContainerConstants.EMBEDDING_MODEL_NOT_FOUND_ERROR.contains("%s"));
         assertTrue(MemoryContainerConstants.EMBEDDING_MODEL_TYPE_MISMATCH_ERROR.contains("%s"));
-        assertEquals("infer=true requires llm_model_id to be configured in memory storage",
-                     MemoryContainerConstants.INFER_REQUIRES_LLM_MODEL_ERROR);
+        assertEquals(
+            "infer=true requires llm_model_id to be configured in memory storage",
+            MemoryContainerConstants.INFER_REQUIRES_LLM_MODEL_ERROR
+        );
     }
 
     @Test
@@ -190,7 +194,7 @@ public class MemoryContainerConstantsTest {
     public void testConstantsConsistency() {
         // Verify that DELETE and UPDATE paths use the same pattern
         assertEquals(MemoryContainerConstants.DELETE_MEMORY_PATH, MemoryContainerConstants.UPDATE_MEMORY_PATH);
-        
+
         // Verify that parameter names are used in path construction
         assertTrue(MemoryContainerConstants.MEMORIES_PATH.contains("{" + MemoryContainerConstants.PARAMETER_MEMORY_CONTAINER_ID + "}"));
         assertTrue(MemoryContainerConstants.DELETE_MEMORY_PATH.contains("{" + MemoryContainerConstants.PARAMETER_MEMORY_ID + "}"));

@@ -33,48 +33,25 @@ public class MemoryDecisionRequestTest {
     @Before
     public void setUp() {
         // Create test old memories
-        testOldMemories = Arrays.asList(
-            MemoryDecisionRequest.OldMemory.builder()
-                .id("mem-1")
-                .text("User's name is John")
-                .score(0.95f)
-                .build(),
-            MemoryDecisionRequest.OldMemory.builder()
-                .id("mem-2")
-                .text("Lives in Boston")
-                .score(0.87f)
-                .build(),
-            MemoryDecisionRequest.OldMemory.builder()
-                .id("mem-3")
-                .text("Works at TechCorp")
-                .score(0.76f)
-                .build()
-        );
+        testOldMemories = Arrays
+            .asList(
+                MemoryDecisionRequest.OldMemory.builder().id("mem-1").text("User's name is John").score(0.95f).build(),
+                MemoryDecisionRequest.OldMemory.builder().id("mem-2").text("Lives in Boston").score(0.87f).build(),
+                MemoryDecisionRequest.OldMemory.builder().id("mem-3").text("Works at TechCorp").score(0.76f).build()
+            );
 
         // Create test retrieved facts
-        testRetrievedFacts = Arrays.asList(
-            "User's name is John",
-            "Lives in San Francisco",
-            "Works at TechCorp",
-            "Has 10 years of experience"
-        );
+        testRetrievedFacts = Arrays
+            .asList("User's name is John", "Lives in San Francisco", "Works at TechCorp", "Has 10 years of experience");
 
         // Request with all fields
-        requestWithAllFields = MemoryDecisionRequest.builder()
-            .oldMemory(testOldMemories)
-            .retrievedFacts(testRetrievedFacts)
-            .build();
+        requestWithAllFields = MemoryDecisionRequest.builder().oldMemory(testOldMemories).retrievedFacts(testRetrievedFacts).build();
 
         // Minimal request (only retrieved facts)
-        requestMinimal = MemoryDecisionRequest.builder()
-            .retrievedFacts(Arrays.asList("Single fact"))
-            .build();
+        requestMinimal = MemoryDecisionRequest.builder().retrievedFacts(Arrays.asList("Single fact")).build();
 
         // Empty request
-        requestEmpty = MemoryDecisionRequest.builder()
-            .oldMemory(new ArrayList<>())
-            .retrievedFacts(new ArrayList<>())
-            .build();
+        requestEmpty = MemoryDecisionRequest.builder().oldMemory(new ArrayList<>()).retrievedFacts(new ArrayList<>()).build();
     }
 
     @Test
@@ -103,7 +80,8 @@ public class MemoryDecisionRequestTest {
 
     @Test
     public void testOldMemoryBuilder() {
-        MemoryDecisionRequest.OldMemory oldMemory = MemoryDecisionRequest.OldMemory.builder()
+        MemoryDecisionRequest.OldMemory oldMemory = MemoryDecisionRequest.OldMemory
+            .builder()
             .id("test-id")
             .text("test memory text")
             .score(0.89f)
@@ -174,10 +152,7 @@ public class MemoryDecisionRequestTest {
 
     @Test
     public void testToXContentWithNullFields() throws IOException {
-        MemoryDecisionRequest requestNulls = MemoryDecisionRequest.builder()
-            .oldMemory(null)
-            .retrievedFacts(null)
-            .build();
+        MemoryDecisionRequest requestNulls = MemoryDecisionRequest.builder().oldMemory(null).retrievedFacts(null).build();
 
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         requestNulls.toXContent(builder, EMPTY_PARAMS);
@@ -212,12 +187,14 @@ public class MemoryDecisionRequestTest {
     @Test
     public void testDataAnnotationMethods() {
         // Test @Data generated methods
-        MemoryDecisionRequest request1 = MemoryDecisionRequest.builder()
+        MemoryDecisionRequest request1 = MemoryDecisionRequest
+            .builder()
             .oldMemory(testOldMemories)
             .retrievedFacts(testRetrievedFacts)
             .build();
 
-        MemoryDecisionRequest request2 = MemoryDecisionRequest.builder()
+        MemoryDecisionRequest request2 = MemoryDecisionRequest
+            .builder()
             .oldMemory(testOldMemories)
             .retrievedFacts(testRetrievedFacts)
             .build();
@@ -239,17 +216,9 @@ public class MemoryDecisionRequestTest {
 
     @Test
     public void testOldMemoryDataAnnotations() {
-        MemoryDecisionRequest.OldMemory memory1 = MemoryDecisionRequest.OldMemory.builder()
-            .id("id-1")
-            .text("text-1")
-            .score(0.9f)
-            .build();
+        MemoryDecisionRequest.OldMemory memory1 = MemoryDecisionRequest.OldMemory.builder().id("id-1").text("text-1").score(0.9f).build();
 
-        MemoryDecisionRequest.OldMemory memory2 = MemoryDecisionRequest.OldMemory.builder()
-            .id("id-1")
-            .text("text-1")
-            .score(0.9f)
-            .build();
+        MemoryDecisionRequest.OldMemory memory2 = MemoryDecisionRequest.OldMemory.builder().id("id-1").text("text-1").score(0.9f).build();
 
         // Test equals
         assertEquals(memory1, memory2);
@@ -267,21 +236,20 @@ public class MemoryDecisionRequestTest {
 
     @Test
     public void testSpecialCharactersInFields() throws IOException {
-        List<MemoryDecisionRequest.OldMemory> specialMemories = Arrays.asList(
-            MemoryDecisionRequest.OldMemory.builder()
-                .id("id-with-special-🔥")
-                .text("Text with\n\ttabs and \"quotes\"")
-                .score(0.99f)
-                .build()
-        );
+        List<MemoryDecisionRequest.OldMemory> specialMemories = Arrays
+            .asList(
+                MemoryDecisionRequest.OldMemory
+                    .builder()
+                    .id("id-with-special-🔥")
+                    .text("Text with\n\ttabs and \"quotes\"")
+                    .score(0.99f)
+                    .build()
+            );
 
-        List<String> specialFacts = Arrays.asList(
-            "Fact with 'quotes'",
-            "Fact with\nnewlines",
-            "Fact with unicode ✨"
-        );
+        List<String> specialFacts = Arrays.asList("Fact with 'quotes'", "Fact with\nnewlines", "Fact with unicode ✨");
 
-        MemoryDecisionRequest specialRequest = MemoryDecisionRequest.builder()
+        MemoryDecisionRequest specialRequest = MemoryDecisionRequest
+            .builder()
             .oldMemory(specialMemories)
             .retrievedFacts(specialFacts)
             .build();
@@ -305,18 +273,11 @@ public class MemoryDecisionRequestTest {
         List<String> manyFacts = new ArrayList<>();
 
         for (int i = 0; i < 100; i++) {
-            manyMemories.add(MemoryDecisionRequest.OldMemory.builder()
-                .id("mem-" + i)
-                .text("Memory text " + i)
-                .score(i / 100.0f)
-                .build());
+            manyMemories.add(MemoryDecisionRequest.OldMemory.builder().id("mem-" + i).text("Memory text " + i).score(i / 100.0f).build());
             manyFacts.add("Fact number " + i);
         }
 
-        MemoryDecisionRequest largeRequest = MemoryDecisionRequest.builder()
-            .oldMemory(manyMemories)
-            .retrievedFacts(manyFacts)
-            .build();
+        MemoryDecisionRequest largeRequest = MemoryDecisionRequest.builder().oldMemory(manyMemories).retrievedFacts(manyFacts).build();
 
         String jsonString = largeRequest.toJsonString();
         assertNotNull(jsonString);

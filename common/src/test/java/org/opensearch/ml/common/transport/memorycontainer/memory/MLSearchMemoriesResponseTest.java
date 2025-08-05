@@ -40,52 +40,42 @@ public class MLSearchMemoriesResponseTest {
     public void setUp() {
         Map<String, String> tags = new HashMap<>();
         tags.put("topic", "ML");
-        
-        testHits = Arrays.asList(
-            MemorySearchResult.builder()
-                .memoryId("mem-1")
-                .memory("Machine learning is a subset of AI")
-                .score(0.95f)
-                .sessionId("session-123")
-                .userId("user-456")
-                .memoryType(MemoryType.RAW_MESSAGE)
-                .role("assistant")
-                .tags(tags)
-                .createdTime(Instant.now())
-                .lastUpdatedTime(Instant.now())
-                .build(),
-            MemorySearchResult.builder()
-                .memoryId("mem-2")
-                .memory("Deep learning uses neural networks")
-                .score(0.87f)
-                .sessionId("session-123")
-                .memoryType(MemoryType.FACT)
-                .build(),
-            MemorySearchResult.builder()
-                .memoryId("mem-3")
-                .memory("Neural networks have multiple layers")
-                .score(0.75f)
-                .build()
-        );
+
+        testHits = Arrays
+            .asList(
+                MemorySearchResult
+                    .builder()
+                    .memoryId("mem-1")
+                    .memory("Machine learning is a subset of AI")
+                    .score(0.95f)
+                    .sessionId("session-123")
+                    .userId("user-456")
+                    .memoryType(MemoryType.RAW_MESSAGE)
+                    .role("assistant")
+                    .tags(tags)
+                    .createdTime(Instant.now())
+                    .lastUpdatedTime(Instant.now())
+                    .build(),
+                MemorySearchResult
+                    .builder()
+                    .memoryId("mem-2")
+                    .memory("Deep learning uses neural networks")
+                    .score(0.87f)
+                    .sessionId("session-123")
+                    .memoryType(MemoryType.FACT)
+                    .build(),
+                MemorySearchResult.builder().memoryId("mem-3").memory("Neural networks have multiple layers").score(0.75f).build()
+            );
 
         // Response with hits
-        responseWithHits = MLSearchMemoriesResponse.builder()
-            .hits(testHits)
-            .totalHits(25L)
-            .maxScore(0.95f)
-            .timedOut(false)
-            .build();
+        responseWithHits = MLSearchMemoriesResponse.builder().hits(testHits).totalHits(25L).maxScore(0.95f).timedOut(false).build();
 
         // Empty response
-        responseEmpty = MLSearchMemoriesResponse.builder()
-            .hits(new ArrayList<>())
-            .totalHits(0L)
-            .maxScore(0.0f)
-            .timedOut(false)
-            .build();
+        responseEmpty = MLSearchMemoriesResponse.builder().hits(new ArrayList<>()).totalHits(0L).maxScore(0.0f).timedOut(false).build();
 
         // Timed out response
-        responseTimedOut = MLSearchMemoriesResponse.builder()
+        responseTimedOut = MLSearchMemoriesResponse
+            .builder()
             .hits(Arrays.asList(testHits.get(0)))
             .totalHits(1L)
             .maxScore(0.95f)
@@ -214,14 +204,11 @@ public class MLSearchMemoriesResponseTest {
         // Test with many hits
         List<MemorySearchResult> manyHits = new ArrayList<>();
         for (int i = 0; i < 100; i++) {
-            manyHits.add(MemorySearchResult.builder()
-                .memoryId("mem-" + i)
-                .memory("Memory content " + i)
-                .score(1.0f - (i * 0.01f))
-                .build());
+            manyHits.add(MemorySearchResult.builder().memoryId("mem-" + i).memory("Memory content " + i).score(1.0f - (i * 0.01f)).build());
         }
 
-        MLSearchMemoriesResponse largeResponse = MLSearchMemoriesResponse.builder()
+        MLSearchMemoriesResponse largeResponse = MLSearchMemoriesResponse
+            .builder()
             .hits(manyHits)
             .totalHits(1000L)
             .maxScore(1.0f)
@@ -242,14 +229,16 @@ public class MLSearchMemoriesResponseTest {
     @Test
     public void testDifferentScoreValues() {
         // Test various score configurations
-        MLSearchMemoriesResponse response1 = MLSearchMemoriesResponse.builder()
+        MLSearchMemoriesResponse response1 = MLSearchMemoriesResponse
+            .builder()
             .hits(new ArrayList<>())
             .totalHits(0L)
             .maxScore(Float.NaN)
             .timedOut(false)
             .build();
 
-        MLSearchMemoriesResponse response2 = MLSearchMemoriesResponse.builder()
+        MLSearchMemoriesResponse response2 = MLSearchMemoriesResponse
+            .builder()
             .hits(testHits)
             .totalHits(100L)
             .maxScore(Float.POSITIVE_INFINITY)
@@ -269,15 +258,8 @@ public class MLSearchMemoriesResponseTest {
         MLSearchMemoriesResponse deserialized = new MLSearchMemoriesResponse(in);
 
         for (int i = 0; i < responseWithHits.getHits().size(); i++) {
-            assertEquals(
-                responseWithHits.getHits().get(i).getMemoryId(),
-                deserialized.getHits().get(i).getMemoryId()
-            );
-            assertEquals(
-                responseWithHits.getHits().get(i).getScore(),
-                deserialized.getHits().get(i).getScore(),
-                0.001f
-            );
+            assertEquals(responseWithHits.getHits().get(i).getMemoryId(), deserialized.getHits().get(i).getMemoryId());
+            assertEquals(responseWithHits.getHits().get(i).getScore(), deserialized.getHits().get(i).getScore(), 0.001f);
         }
     }
 
@@ -299,7 +281,8 @@ public class MLSearchMemoriesResponseTest {
     @Test
     public void testPartialResults() {
         // Test response with partial results (timed out but has some hits)
-        MLSearchMemoriesResponse partialResponse = MLSearchMemoriesResponse.builder()
+        MLSearchMemoriesResponse partialResponse = MLSearchMemoriesResponse
+            .builder()
             .hits(Arrays.asList(testHits.get(0), testHits.get(1)))
             .totalHits(50L) // More than returned hits
             .maxScore(0.95f)
@@ -314,16 +297,19 @@ public class MLSearchMemoriesResponseTest {
 
     @Test
     public void testSpecialCharactersInHits() throws IOException {
-        List<MemorySearchResult> specialHits = Arrays.asList(
-            MemorySearchResult.builder()
-                .memoryId("mem-special-🚀")
-                .memory("Memory with\n\ttabs and \"quotes\"")
-                .score(0.9f)
-                .sessionId("session-✨")
-                .build()
-        );
+        List<MemorySearchResult> specialHits = Arrays
+            .asList(
+                MemorySearchResult
+                    .builder()
+                    .memoryId("mem-special-🚀")
+                    .memory("Memory with\n\ttabs and \"quotes\"")
+                    .score(0.9f)
+                    .sessionId("session-✨")
+                    .build()
+            );
 
-        MLSearchMemoriesResponse specialResponse = MLSearchMemoriesResponse.builder()
+        MLSearchMemoriesResponse specialResponse = MLSearchMemoriesResponse
+            .builder()
             .hits(specialHits)
             .totalHits(1L)
             .maxScore(0.9f)
@@ -343,15 +329,11 @@ public class MLSearchMemoriesResponseTest {
     @Test
     public void testZeroMaxScore() throws IOException {
         // Test when all hits have 0 score
-        List<MemorySearchResult> zeroScoreHits = Arrays.asList(
-            MemorySearchResult.builder()
-                .memoryId("mem-zero-1")
-                .memory("Memory with zero score")
-                .score(0.0f)
-                .build()
-        );
+        List<MemorySearchResult> zeroScoreHits = Arrays
+            .asList(MemorySearchResult.builder().memoryId("mem-zero-1").memory("Memory with zero score").score(0.0f).build());
 
-        MLSearchMemoriesResponse zeroScoreResponse = MLSearchMemoriesResponse.builder()
+        MLSearchMemoriesResponse zeroScoreResponse = MLSearchMemoriesResponse
+            .builder()
             .hits(zeroScoreHits)
             .totalHits(1L)
             .maxScore(0.0f)

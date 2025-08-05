@@ -11,6 +11,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 
 import java.io.IOException;
 
+import org.apache.commons.lang3.StringUtils;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -34,7 +35,7 @@ public class MessageInput implements ToXContentObject, Writeable {
     private String content; // Required
 
     public MessageInput(String role, String content) {
-        if (content == null || content.isEmpty()) {
+        if (StringUtils.isBlank(content)) {
             throw new IllegalArgumentException("Content is required");
         }
         this.role = role;

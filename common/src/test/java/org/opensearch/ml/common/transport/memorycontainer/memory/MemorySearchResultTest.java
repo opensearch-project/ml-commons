@@ -39,13 +39,14 @@ public class MemorySearchResultTest {
     public void setUp() {
         testCreatedTime = Instant.now();
         testUpdatedTime = Instant.now().plusSeconds(60);
-        
+
         testTags = new HashMap<>();
         testTags.put("topic", "machine learning");
         testTags.put("priority", "high");
 
         // Result with all fields
-        resultWithAllFields = MemorySearchResult.builder()
+        resultWithAllFields = MemorySearchResult
+            .builder()
             .memoryId("memory-123")
             .memory("This is a test memory content")
             .score(0.95f)
@@ -60,11 +61,7 @@ public class MemorySearchResultTest {
             .build();
 
         // Minimal result (only required fields)
-        resultMinimal = MemorySearchResult.builder()
-            .memoryId("memory-minimal")
-            .memory("Minimal memory")
-            .score(0.5f)
-            .build();
+        resultMinimal = MemorySearchResult.builder().memoryId("memory-minimal").memory("Minimal memory").score(0.5f).build();
 
         // Result without optional fields
         resultNoOptionals = new MemorySearchResult(
@@ -119,7 +116,7 @@ public class MemorySearchResultTest {
         Map<String, String> tags = new HashMap<>();
         tags.put("key", "value");
         Instant now = Instant.now();
-        
+
         MemorySearchResult result = new MemorySearchResult(
             "id-1",
             "memory-1",
@@ -192,7 +189,8 @@ public class MemorySearchResultTest {
     @Test
     public void testStreamInputOutputEmptyTags() throws IOException {
         // Test with empty tags
-        MemorySearchResult resultEmptyTags = MemorySearchResult.builder()
+        MemorySearchResult resultEmptyTags = MemorySearchResult
+            .builder()
             .memoryId("memory-empty-tags")
             .memory("Memory with empty tags")
             .score(0.8f)
@@ -275,7 +273,8 @@ public class MemorySearchResultTest {
     @Test
     public void testDifferentMemoryTypes() throws IOException {
         // Test with FACT type
-        MemorySearchResult factResult = MemorySearchResult.builder()
+        MemorySearchResult factResult = MemorySearchResult
+            .builder()
             .memoryId("fact-123")
             .memory("User's name is John")
             .score(0.9f)
@@ -299,15 +298,11 @@ public class MemorySearchResultTest {
     @Test
     public void testScoreValues() {
         // Test various score values
-        float[] scores = {0.0f, 0.5f, 0.999f, 1.0f, 100.0f};
-        
+        float[] scores = { 0.0f, 0.5f, 0.999f, 1.0f, 100.0f };
+
         for (float score : scores) {
-            MemorySearchResult result = MemorySearchResult.builder()
-                .memoryId("id-" + score)
-                .memory("memory-" + score)
-                .score(score)
-                .build();
-            
+            MemorySearchResult result = MemorySearchResult.builder().memoryId("id-" + score).memory("memory-" + score).score(score).build();
+
             assertEquals(score, result.getScore(), 0.001f);
         }
     }
@@ -318,7 +313,8 @@ public class MemorySearchResultTest {
         specialTags.put("key with spaces", "value with\nnewlines");
         specialTags.put("unicode_key_🔥", "unicode_value_✨");
 
-        MemorySearchResult specialResult = MemorySearchResult.builder()
+        MemorySearchResult specialResult = MemorySearchResult
+            .builder()
             .memoryId("id-with-special-chars-🚀")
             .memory("Memory with\n\ttabs and\nnewlines and \"quotes\"")
             .score(0.99f)
