@@ -5,9 +5,6 @@
 
 package org.opensearch.ml.action.memorycontainer.memory;
 
-import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
-import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.*;
 
 import java.io.IOException;
@@ -16,7 +13,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.search.SearchRequest;
@@ -24,16 +20,11 @@ import org.opensearch.action.search.SearchResponse;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.common.inject.Inject;
-import org.opensearch.common.util.concurrent.ThreadContext;
-import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
-import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
@@ -45,15 +36,12 @@ import org.opensearch.ml.common.transport.memorycontainer.memory.MLSearchMemorie
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLSearchMemoriesResponse;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemorySearchResult;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
+import org.opensearch.ml.helper.MemoryContainerHelper;
 import org.opensearch.ml.utils.MemorySearchQueryBuilder;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
-import org.opensearch.remote.metadata.client.GetDataObjectRequest;
-import org.opensearch.remote.metadata.client.SdkClient;
-import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
-import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -64,27 +52,27 @@ import lombok.extern.log4j.Log4j2;
 public class TransportSearchMemoriesAction extends HandledTransportAction<MLSearchMemoriesRequest, MLSearchMemoriesResponse> {
 
     private final Client client;
-    private final SdkClient sdkClient;
     private final ConnectorAccessControlHelper connectorAccessControlHelper;
     private final MLFeatureEnabledSetting mlFeatureEnabledSetting;
     private final NamedXContentRegistry xContentRegistry;
+    private final MemoryContainerHelper memoryContainerHelper;
 
     @Inject
     public TransportSearchMemoriesAction(
         TransportService transportService,
         ActionFilters actionFilters,
         Client client,
-        SdkClient sdkClient,
         ConnectorAccessControlHelper connectorAccessControlHelper,
         MLFeatureEnabledSetting mlFeatureEnabledSetting,
-        NamedXContentRegistry xContentRegistry
+        NamedXContentRegistry xContentRegistry,
+        MemoryContainerHelper memoryContainerHelper
     ) {
         super(MLSearchMemoriesAction.NAME, transportService, actionFilters, MLSearchMemoriesRequest::new);
         this.client = client;
-        this.sdkClient = sdkClient;
         this.connectorAccessControlHelper = connectorAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         this.xContentRegistry = xContentRegistry;
+        this.memoryContainerHelper = memoryContainerHelper;
     }
 
     @Override
@@ -107,10 +95,10 @@ public class TransportSearchMemoriesAction extends HandledTransportAction<MLSear
         }
 
         // Get memory container first to validate access and get search configuration
-        getMemoryContainer(input.getMemoryContainerId(), tenantId, ActionListener.wrap(container -> {
+        memoryContainerHelper.getMemoryContainer(input.getMemoryContainerId(), tenantId, ActionListener.wrap(container -> {
             // Validate access permissions
             User user = RestActionUtils.getUserContext(client);
-            if (!checkMemoryContainerAccess(user, container)) {
+            if (!memoryContainerHelper.checkMemoryContainerAccess(user, container)) {
                 actionListener
                     .onFailure(
                         new OpenSearchStatusException(
@@ -125,52 +113,6 @@ public class TransportSearchMemoriesAction extends HandledTransportAction<MLSear
             searchMemories(input, container, actionListener);
 
         }, actionListener::onFailure));
-    }
-
-    private void getMemoryContainer(String memoryContainerId, String tenantId, ActionListener<MLMemoryContainer> listener) {
-        FetchSourceContext fetchSourceContext = new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);
-        GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
-            .builder()
-            .index(ML_MEMORY_CONTAINER_INDEX)
-            .id(memoryContainerId)
-            .tenantId(tenantId)
-            .fetchSourceContext(fetchSourceContext)
-            .build();
-
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<MLMemoryContainer> wrappedListener = ActionListener.runBefore(listener, context::restore);
-
-            sdkClient.getDataObjectAsync(getDataObjectRequest).whenComplete((r, throwable) -> {
-                if (throwable != null) {
-                    Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                    if (ExceptionsHelper.unwrap(cause, IndexNotFoundException.class) != null) {
-                        wrappedListener.onFailure(new OpenSearchStatusException("Memory container not found", RestStatus.NOT_FOUND));
-                    } else {
-                        wrappedListener.onFailure(cause);
-                    }
-                } else {
-                    try {
-                        if (r.getResponse() != null && r.getResponse().isExists()) {
-                            try (
-                                XContentParser parser = jsonXContent
-                                    .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, r.getResponse().getSourceAsString())
-                            ) {
-                                ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                                MLMemoryContainer container = MLMemoryContainer.parse(parser);
-                                wrappedListener.onResponse(container);
-                            }
-                        } else {
-                            wrappedListener.onFailure(new OpenSearchStatusException("Memory container not found", RestStatus.NOT_FOUND));
-                        }
-                    } catch (Exception e) {
-                        wrappedListener.onFailure(e);
-                    }
-                }
-            });
-        } catch (Exception e) {
-            log.error("Failed to get memory container {}", memoryContainerId, e);
-            listener.onFailure(e);
-        }
     }
 
     private void searchMemories(
@@ -297,30 +239,5 @@ public class TransportSearchMemoriesAction extends HandledTransportAction<MLSear
             .maxScore(maxScore)
             .timedOut(searchResponse.isTimedOut())
             .build();
-    }
-
-    private boolean checkMemoryContainerAccess(User user, MLMemoryContainer mlMemoryContainer) {
-        // If security is disabled (user is null), allow access
-        if (user == null) {
-            return true;
-        }
-
-        // If user is admin (has all_access role), allow access
-        if (user.getRoles() != null && user.getRoles().contains("all_access")) {
-            return true;
-        }
-
-        // Check if user is the owner
-        User owner = mlMemoryContainer.getOwner();
-        if (owner != null && owner.getName() != null && owner.getName().equals(user.getName())) {
-            return true;
-        }
-
-        // Check if user has matching backend roles
-        if (owner != null && owner.getBackendRoles() != null && user.getBackendRoles() != null) {
-            return owner.getBackendRoles().stream().anyMatch(role -> user.getBackendRoles().contains(role));
-        }
-
-        return false;
     }
 }
