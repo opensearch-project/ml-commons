@@ -103,7 +103,8 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     private String plannerWithHistoryPromptTemplate;
 
     @VisibleForTesting
-    static final String DEFAULT_PLANNER_SYSTEM_PROMPT = PLANNER_RESPONSIBILITY + PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT + FINAL_RESULT_RESPONSE_INSTRUCTIONS;
+    static final String DEFAULT_PLANNER_SYSTEM_PROMPT = PLANNER_RESPONSIBILITY + PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT
+        + FINAL_RESULT_RESPONSE_INSTRUCTIONS;
 
     @VisibleForTesting
     static final String DEFAULT_EXECUTOR_SYSTEM_PROMPT = EXECUTOR_RESPONSIBILITY;
@@ -608,7 +609,9 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
     @VisibleForTesting
     void addToolsToPrompt(Map<String, Tool> tools, Map<String, String> allParams) {
-        StringBuilder toolsPrompt = new StringBuilder("In this environment, the executor agent only has access to the below tools. You must choose from only the following tools — no other tools are available. Do not use tools not listed here. \n");
+        StringBuilder toolsPrompt = new StringBuilder(
+            "In this environment, the executor agent only has access to the below tools. You must choose from only the following tools — no other tools are available. Do not use tools not listed here. \n"
+        );
         int toolNumber = 0;
         for (Map.Entry<String, Tool> entry : tools.entrySet()) {
             String toolName = entry.getKey();
