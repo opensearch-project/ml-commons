@@ -285,7 +285,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
     ) {
         List<MessageInput> messages = input.getMessages();
 
-        log.info("Processing {} messages for fact extraction", messages.size());
+        log.debug("Processing {} messages for fact extraction", messages.size());
 
         // Extract facts from provided messages with single LLM call
         extractFactsFromConversation(messages, storageConfig, ActionListener.wrap(facts -> {
@@ -348,10 +348,10 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
 
         // 2. Search for similar facts and make memory decisions
         if (userProvidedSessionId && facts.size() > 0 && storageConfig != null && storageConfig.getLlmModelId() != null) {
-            log.info("Searching for similar facts in session {} to make memory decisions", sessionId);
+            log.debug("Searching for similar facts in session to make memory decisions");
             searchSimilarFactsForSession(facts, sessionId, indexName, storageConfig, ActionListener.wrap(allSearchResults -> {
                 // Log the consolidated search results
-                log.info("Found {} total similar facts across all {} new facts", allSearchResults.size(), facts.size());
+                log.debug("Found {} total similar facts across all {} new facts", allSearchResults.size(), facts.size());
                 for (FactSearchResult similar : allSearchResults) {
                     log.debug("  Similar fact: id={}, text='{}', score={}", similar.getId(), similar.getText(), similar.getScore());
                 }
@@ -391,11 +391,11 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
         } else {
             // No memory decisions needed
             if (!userProvidedSessionId) {
-                log.info("Skipping memory decisions - session ID was auto-generated");
+                log.debug("Skipping memory decisions - session ID was auto-generated");
             } else if (facts.isEmpty()) {
-                log.info("Skipping memory decisions - no facts extracted");
+                log.debug("Skipping memory decisions - no facts extracted");
             } else if (storageConfig == null || storageConfig.getLlmModelId() == null) {
-                log.info("Skipping memory decisions - LLM model not configured");
+                log.debug("Skipping memory decisions - LLM model not configured");
             }
             createFactMemoriesFromList(facts, input, indexName, sessionId, user, now, indexRequests, memoryInfos);
             processEmbeddingsAndIndex(messages, facts, storageConfig, indexRequests, memoryInfos, sessionId, indexName, actionListener);
@@ -574,7 +574,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
 
         client.index(indexRequest, ActionListener.wrap(indexResponse -> {
             String generatedId = indexResponse.getId();
-            log.info("Successfully indexed message {} in session {} to index {}", generatedId, sessionId, indexName);
+            log.debug("Successfully indexed message {} to index {}", generatedId, indexName);
 
             // Build response with single result
             List<MemoryResult> results = new ArrayList<>();
@@ -627,10 +627,8 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
             String messagesJson = messagesBuilder.toString();
             stringParameters.put("messages", messagesJson);
 
-            log.info("LLM request - processing {} messages", messages.size());
-            log.info("LLM request - system_prompt length: {}", PERSONAL_INFORMATION_ORGANIZER_PROMPT.length());
-            log.info("LLM request - messages JSON: {}", messagesJson);
-            log.info("LLM request - full parameters: {}", stringParameters);
+            log.debug("LLM request - processing {} messages", messages.size());
+            log.debug("LLM request - system_prompt length: {}", PERSONAL_INFORMATION_ORGANIZER_PROMPT.length());
         } catch (Exception e) {
             log.error("Failed to build messages JSON", e);
             listener.onResponse(new ArrayList<>());
@@ -644,7 +642,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
             .inputDataset(RemoteInferenceInputDataSet.builder().parameters(stringParameters).build())
             .build();
 
-        log.info("Created MLInput for LLM model: {}", llmModelId);
+        log.debug("Created MLInput for LLM model: {}", llmModelId);
 
         // Create prediction request
         MLPredictionTaskRequest predictionRequest = MLPredictionTaskRequest.builder().modelId(llmModelId).mlInput(mlInput).build();
@@ -652,12 +650,11 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
         // Execute LLM call
         client.execute(MLPredictionTaskAction.INSTANCE, predictionRequest, ActionListener.wrap(response -> {
             try {
-                log.info("Received LLM response, parsing facts...");
+                log.debug("Received LLM response, parsing facts...");
                 MLOutput mlOutput = response.getOutput();
-                log.info("LLM response output type: {}", mlOutput != null ? mlOutput.getClass().getName() : "null");
 
                 List<String> facts = parseFactsFromLLMResponse(mlOutput);
-                log.info("Extracted {} facts from LLM response", facts.size());
+                log.debug("Extracted {} facts from LLM response", facts.size());
                 listener.onResponse(facts);
             } catch (Exception e) {
                 log.error("Failed to parse facts from LLM response", e);
@@ -679,7 +676,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
 
         ModelTensorOutput tensorOutput = (ModelTensorOutput) mlOutput;
         log
-            .info(
+            .debug(
                 "ModelTensorOutput - outputs count: {}",
                 tensorOutput.getMlModelOutputs() != null ? tensorOutput.getMlModelOutputs().size() : 0
             );
@@ -691,7 +688,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
 
         ModelTensors modelTensors = tensorOutput.getMlModelOutputs().get(0);
         log
-            .info(
+            .debug(
                 "ModelTensors - tensors count: {}",
                 modelTensors.getMlModelTensors() != null ? modelTensors.getMlModelTensors().size() : 0
             );
@@ -704,26 +701,26 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
         // Look for the response tensor
         for (int i = 0; i < modelTensors.getMlModelTensors().size(); i++) {
             ModelTensor tensor = modelTensors.getMlModelTensors().get(i);
-            log.info("Tensor[{}] - name: {}, dataType: {}", i, tensor.getName(), tensor.getDataType());
+            log.debug("Tensor[{}] - name: {}, dataType: {}", i, tensor.getName(), tensor.getDataType());
 
             Map<String, ?> dataMap = tensor.getDataAsMap();
             if (dataMap != null) {
-                log.info("Tensor[{}] - dataMap keys: {}", i, dataMap.keySet());
+                log.debug("Tensor[{}] - dataMap keys: {}", i, dataMap.keySet());
 
                 // Check for content field which contains the actual response
                 if (dataMap.containsKey("content")) {
-                    log.info("Found content field in tensor dataMap");
+                    log.debug("Found content field in tensor dataMap");
 
                     try {
                         List<?> contentList = (List<?>) dataMap.get("content");
                         if (contentList != null && !contentList.isEmpty()) {
-                            log.info("Content list size: {}", contentList.size());
+                            log.debug("Content list size: {}", contentList.size());
 
                             // Get the first content item
                             Map<String, ?> contentItem = (Map<String, ?>) contentList.get(0);
                             if (contentItem != null && contentItem.containsKey("text")) {
                                 String responseStr = String.valueOf(contentItem.get("text"));
-                                log.info("Found text in content item: {}", responseStr);
+                                log.debug("Found text in content item, length: {}", responseStr.length());
 
                                 // Parse JSON response to extract facts
                                 try (
@@ -740,7 +737,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                                             ensureExpectedToken(XContentParser.Token.START_ARRAY, parser.nextToken(), parser);
                                             while (parser.nextToken() != XContentParser.Token.END_ARRAY) {
                                                 String fact = parser.text();
-                                                log.info("Found fact: {}", fact);
+                                                log.debug("Found fact: {}", fact);
                                                 facts.add(fact);
                                             }
                                         } else {
@@ -763,11 +760,11 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                     break;
                 }
             } else {
-                log.info("Tensor[{}] - dataMap is null", i);
+                log.debug("Tensor[{}] - dataMap is null", i);
             }
         }
 
-        log.info("Total facts extracted from LLM response: {}", facts.size());
+        log.debug("Total facts extracted from LLM response: {}", facts.size());
         return facts;
     }
 
@@ -808,10 +805,10 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
 
         // Search for similar facts only if user provided session ID and LLM model is configured
         if (userProvidedSessionId && storageConfig != null && storageConfig.getLlmModelId() != null) {
-            log.info("Searching for similar facts in session {} (user provided)", sessionId);
+            log.debug("Searching for similar facts in session (user provided)");
             searchSimilarFactsForSession(facts, sessionId, indexName, storageConfig, ActionListener.wrap(similarFacts -> {
                 // Log the search results
-                log.info("Found {} similar facts across all {} new facts", similarFacts.size(), facts.size());
+                log.debug("Found {} similar facts across all {} new facts", similarFacts.size(), facts.size());
                 for (FactSearchResult similar : similarFacts) {
                     log.debug("  Similar fact: id={}, text='{}', score={}", similar.getId(), similar.getText(), similar.getScore());
                 }
@@ -852,9 +849,9 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
         } else {
             // Skip search if no session ID or LLM model not configured
             if (!userProvidedSessionId) {
-                log.info("Skipping fact search - session ID was auto-generated");
+                log.debug("Skipping fact search - session ID was auto-generated");
             } else if (storageConfig == null || storageConfig.getLlmModelId() == null) {
-                log.info("Skipping fact search - LLM model not configured");
+                log.debug("Skipping fact search - LLM model not configured");
             }
             createFactMemoriesAndIndex(
                 input,
@@ -1074,7 +1071,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
     ) {
         if (currentIndex >= indexRequests.size()) {
             // All memories indexed successfully
-            log.info("Successfully indexed {} memories for session {} in index {}", indexRequests.size(), sessionId, indexName);
+            log.debug("Successfully indexed {} memories in index {}", indexRequests.size(), indexName);
             MLAddMemoriesResponse response = MLAddMemoriesResponse.builder().results(results).sessionId(sessionId).build();
             actionListener.onResponse(response);
             return;
@@ -1350,7 +1347,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
     ) {
         // Skip search if no session ID provided
         if (sessionId == null || facts.isEmpty()) {
-            log.info("Skipping fact search: sessionId={}, facts count={}", sessionId, facts.size());
+            log.debug("Skipping fact search: facts count={}", facts.size());
             listener.onResponse(new ArrayList<>());
             return;
         }
@@ -1472,7 +1469,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
             stringParameters.put("messages", messagesJson);
 
             log
-                .info(
+                .debug(
                     "Making memory decisions for {} extracted facts and {} existing memories",
                     extractedFacts.size(),
                     allSearchResults.size()
@@ -1487,7 +1484,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
             client.execute(MLPredictionTaskAction.INSTANCE, predictionRequest, ActionListener.wrap(response -> {
                 try {
                     List<MemoryDecision> decisions = parseMemoryDecisions(response);
-                    log.info("LLM made {} memory decisions", decisions.size());
+                    log.debug("LLM made {} memory decisions", decisions.size());
                     listener.onResponse(decisions);
                 } catch (Exception e) {
                     log.error("Failed to parse memory decisions from LLM response", e);
@@ -1680,7 +1677,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
         }
 
         if (bulkRequest.requests().isEmpty()) {
-            log.info("No memory operations to execute");
+            log.debug("No memory operations to execute");
             listener.onResponse(results);
             return;
         }
@@ -1692,7 +1689,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                 // Still return partial results
             }
 
-            log.info("Executed {} memory operations successfully", bulkResponse.getItems().length);
+            log.debug("Executed {} memory operations successfully", bulkResponse.getItems().length);
 
             // Process bulk response to get actual IDs for ADD operations
             BulkItemResponse[] items = bulkResponse.getItems();
