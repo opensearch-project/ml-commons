@@ -35,7 +35,6 @@ import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.QueryBuilders;
-import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
 import org.opensearch.ml.common.memorycontainer.MemoryType;
@@ -46,6 +45,7 @@ import org.opensearch.ml.common.transport.memorycontainer.memory.MLSearchMemorie
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLSearchMemoriesResponse;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MemorySearchResult;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
+import org.opensearch.ml.utils.MemorySearchQueryBuilder;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.ml.utils.TenantAwareHelper;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
@@ -211,40 +211,8 @@ public class TransportSearchMemoriesAction extends HandledTransportAction<MLSear
         // Note: Size limit removed - search will return all matching results
         // int maxResults = storageConfig != null ? storageConfig.getMaxInferSize() : MAX_INFER_SIZE_DEFAULT_VALUE;
 
-        XContentBuilder queryBuilder;
-
-        if (storageConfig != null && storageConfig.isSemanticStorageEnabled()) {
-            if (storageConfig.getEmbeddingModelType() == FunctionName.TEXT_EMBEDDING) {
-                // Build neural query for dense embeddings
-                queryBuilder = jsonXContent
-                    .contentBuilder()
-                    .startObject()
-                    .startObject("neural")
-                    .startObject("memory_embedding")
-                    .field("query_text", query)
-                    .field("model_id", storageConfig.getEmbeddingModelId())
-                    .endObject()
-                    .endObject()
-                    .endObject();
-            } else if (storageConfig.getEmbeddingModelType() == FunctionName.SPARSE_ENCODING) {
-                // Build neural_sparse query for sparse embeddings
-                queryBuilder = jsonXContent
-                    .contentBuilder()
-                    .startObject()
-                    .startObject("neural_sparse")
-                    .startObject("memory_embedding")
-                    .field("query_text", query)
-                    .field("model_id", storageConfig.getEmbeddingModelId())
-                    .endObject()
-                    .endObject()
-                    .endObject();
-            } else {
-                throw new IllegalStateException("Unsupported embedding model type: " + storageConfig.getEmbeddingModelType());
-            }
-        } else {
-            // Build match query for non-semantic search
-            queryBuilder = jsonXContent.contentBuilder().startObject().startObject("match").field("memory", query).endObject().endObject();
-        }
+        // Use utility class to build the appropriate query
+        XContentBuilder queryBuilder = MemorySearchQueryBuilder.buildQueryByStorageType(query, storageConfig);
 
         // Build search source with exclusions
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
