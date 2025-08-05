@@ -40,13 +40,13 @@ public class IndexMappingTool implements Tool {
     public static final String TYPE = "IndexMappingTool";
     public static final String STRICT_FIELD = "strict";
     private static final String DEFAULT_DESCRIPTION = String
-            .join(
-                    " ",
-                    "This tool returns index mappings and settings for specified indices.",
-                    "Required argument: 'index' - comma-delimited list of one or more indices (supports wildcards like 'my-index-*').",
-                    "Optional argument: 'local' - if true, returns info from local node only instead of cluster manager (default: false).",
-                    "Response format: For each index, 'mappings' contains field definitions under 'properties' (each field has a 'type'), and 'settings' contains configuration as a flattened key-value map."
-            );
+        .join(
+            " ",
+            "This tool returns index mappings and settings for specified indices.",
+            "Required argument: 'index' - comma-delimited list of one or more indices (supports wildcards like 'my-index-*').",
+            "Optional argument: 'local' - if true, returns info from local node only instead of cluster manager (default: false).",
+            "Response format: For each index, 'mappings' contains field definitions under 'properties' (each field has a 'type'), and 'settings' contains configuration as a flattened key-value map."
+        );
     public static final String DEFAULT_INPUT_SCHEMA = "{\"type\":\"object\",\""
         + "properties\":{\"index\":{\"type\":\"array\",\"description\":\"OpenSearch index name list, separated by comma. "
         + "for example: [\\\"index1\\\", \\\"index2\\\"]\","
