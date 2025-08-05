@@ -75,9 +75,9 @@ public class ListIndexTool implements Tool {
     public static final String DEFAULT_DESCRIPTION = String
         .join(
             " ",
-            "This tool returns index information from the OpenSearch cluster including `health`, `status`, `index`, `uuid`, `pri`, `rep`, `docs.count`, `docs.deleted`, `store.size`, `pri.store. size `, `pri.store.size`, `pri.store`.",
-            "Optional arguments: `indices`, a comma-delimited list of one or more indices to get information from (default is an empty list meaning all indices),",
-            "and `local`, whether to return information from the local node only instead of the cluster manager node (Default is false)"
+            "This tool returns information about indices in the OpenSearch cluster along with the index `health`, `status`, `index`, `uuid`, `pri`, `rep`, `docs.count`, `docs.deleted`, `store.size`, `pri.store. size `, `pri.store.size`, `pri.store`.",
+            "Optional arguments: 1. `indices`, a comma-delimited list of one or more indices to get information from (default is an empty list meaning all indices). Use only valid index names.",
+            "2. `local`, whether to return information from the local node only instead of the cluster manager node (Default is false)"
         );
     public static final String DEFAULT_INPUT_SCHEMA = "{\"type\":\"object\","
         + "\"properties\":{\"indices\":{\"type\":\"array\",\"items\": {\"type\": \"string\"},"

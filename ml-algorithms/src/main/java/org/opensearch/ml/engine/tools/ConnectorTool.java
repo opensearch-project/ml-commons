@@ -78,7 +78,7 @@ public class ConnectorTool implements Tool {
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
         try {
             if (connectorId.isBlank()) {
-                throw new IllegalArgumentException("Connector not registered in tool");
+                throw new IllegalArgumentException("Connector is not registered in tool");
             }
 
             RemoteInferenceInputDataSet inputDataSet = RemoteInferenceInputDataSet.builder().parameters(parameters).build();
