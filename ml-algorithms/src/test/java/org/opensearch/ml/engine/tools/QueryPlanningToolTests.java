@@ -14,8 +14,10 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.DEFAULT_DESCRIPTION;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.MODEL_ID_FIELD;
+import static org.opensearch.ml.engine.tools.QueryPlanningTool.SYSTEM_PROMPT_FIELD;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -124,9 +126,8 @@ public class QueryPlanningToolTests {
         ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
         validParams.put("query_text", "help me find some books related to wind");
         tool.run(validParams, listener);
-        String multiMatchQueryString =
-            "{ \"query\": { \"multi_match\" : { \"query\":    \"help me find some books related to wind\",  \"fields\": [\"*\"] } } }";
-        assertEquals(multiMatchQueryString, future.get());
+        String defaultQueryString = "{\"size\":10,\"query\":{\"match_all\":{}}}";
+        assertEquals(defaultQueryString, future.get());
     }
 
     @Test
@@ -142,9 +143,8 @@ public class QueryPlanningToolTests {
         ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
         validParams.put("query_text", "help me find some books related to wind");
         tool.run(validParams, listener);
-        String multiMatchQueryString =
-            "{ \"query\": { \"multi_match\" : { \"query\":    \"help me find some books related to wind\",  \"fields\": [\"*\"] } } }";
-        assertEquals(multiMatchQueryString, future.get());
+        String defaultQueryString = "{\"size\":10,\"query\":{\"match_all\":{}}}";
+        assertEquals(defaultQueryString, future.get());
     }
 
     @Test
@@ -160,9 +160,8 @@ public class QueryPlanningToolTests {
         ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
         validParams.put("query_text", "help me find some books related to wind");
         tool.run(validParams, listener);
-        String multiMatchQueryString =
-            "{ \"query\": { \"multi_match\" : { \"query\":    \"help me find some books related to wind\",  \"fields\": [\"*\"] } } }";
-        assertEquals(multiMatchQueryString, future.get());
+        String defaultQueryString = "{\"size\":10,\"query\":{\"match_all\":{}}}";
+        assertEquals(defaultQueryString, future.get());
     }
 
     @Test
@@ -268,5 +267,43 @@ public class QueryPlanningToolTests {
 
         Exception exception = assertThrows(IllegalArgumentException.class, () -> factory.create(map));
         assertEquals("Invalid generation type: invalid. The current supported types are llmGenerated.", exception.getMessage());
+    }
+
+
+
+    @Test
+    public void testAllParameterProcessing() {
+        QueryPlanningTool tool = new QueryPlanningTool("llmGenerated", queryGenerationTool);
+        Map<String, String> parameters = new HashMap<>();
+        parameters.put("query_text", "test query");
+        parameters.put("index_mapping", "{\"properties\":{\"title\":{\"type\":\"text\"}}}");
+        parameters.put("query_fields", "[\"title\", \"content\"]");
+        // No system_prompt - should use default
+        
+        @SuppressWarnings("unchecked")
+        ActionListener<String> listener = mock(ActionListener.class);
+        
+        doAnswer(invocation -> {
+            ActionListener<String> modelListener = invocation.getArgument(1);
+            modelListener.onResponse("{\"query\":{\"match\":{\"title\":\"test\"}}}");
+            return null;
+        }).when(queryGenerationTool).run(any(), any());
+        
+        tool.run(parameters, listener);
+        
+        ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(queryGenerationTool).run(captor.capture(), any());
+        
+        Map<String, String> capturedParams = captor.getValue();
+        
+        // All parameters should be processed
+        assertTrue(capturedParams.containsKey("query_text"));
+        assertTrue(capturedParams.containsKey("index_mapping"));
+        assertTrue(capturedParams.containsKey("query_fields"));
+        assertTrue(capturedParams.containsKey(SYSTEM_PROMPT_FIELD));
+        
+        // Processed parameters should be JSON strings
+        assertTrue(capturedParams.get("index_mapping").startsWith("\""));
+        assertTrue(capturedParams.get("query_fields").startsWith("\""));
     }
 }

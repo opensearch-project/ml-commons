@@ -2,8 +2,7 @@ package org.opensearch.ml.engine.tools;
 
 public class QueryPlanningPromptTemplate {
 
-    public static final String DEFAULT_QUERY =
-        "{ \"query\": { \"multi_match\" : { \"query\":    \"${parameters.query_text}\",  \"fields\": ${parameters.query_fields:-[\"*\"]} } } }";
+    public static final String DEFAULT_QUERY = "{\"size\":10,\"query\":{\"match_all\":{}}}";
 
     public static final String QUERY_TYPE_RULES = "\nChoose query types based on user intent and fields: \n"
         + "match: single-token full‑text searches on analyzed text fields, \n"
@@ -31,6 +30,9 @@ public class QueryPlanningPromptTemplate {
             + QUERY_TYPE_RULES
             + AGGREGATION_RULES;
 
+    public static final String USE_QUERY_FIELDS_INSTRUCTION =
+        "When Query Fields are provided, prioritize incorporating them into the generated query.";
+
     public static final String OUTPUT_FORMAT_INSTRUCTIONS = "Output format: Output only a valid escaped JSON string or the literal \n"
         + DEFAULT_QUERY
         + " \nReturn exactly one JSON object. "
@@ -38,6 +40,7 @@ public class QueryPlanningPromptTemplate {
         + "Use valid JSON only (standard double quotes \"; no comments; no trailing commas). "
         + "This applies to formatting only, string values inside the JSON may contain any needed Unicode characters. \n"
         + "Follow the examples below. \n"
+        + USE_QUERY_FIELDS_INSTRUCTION
         + "Fallback: If the request cannot be fulfilled with the mapping (missing field, unsupported feature, etc.), \n"
         + "output the literal string: "
         + DEFAULT_QUERY;
@@ -45,12 +48,14 @@ public class QueryPlanningPromptTemplate {
     // Individual example constants for better maintainability
     public static final String EXAMPLE_1 = "Example 1 — numeric range \n"
         + "Input: Show all products that cost more than 50 dollars. \n"
-        + "Mapping: \"{ \"properties\": { \"price\": { \"type\": \"float\" } } }\" \n"
+        + "Mapping: { \"properties\": { \"price\": { \"type\": \"float\" }, \"cost\": { \"type\": \"float\" } } }\n"
+        + "query_fields: [price]"
         + "Output: \"{ \"query\": { \"range\": { \"price\": { \"gt\": 50 } } } }\" \n";
 
     public static final String EXAMPLE_2 = "Example 2 — text match + exact filter \n"
         + "Input: Find employees in London who are active. \n"
         + "Mapping: \"{ \"properties\": { \"city\": { \"type\": \"text\", \"fields\": { \"keyword\": { \"type\": \"keyword\" } } }, \"status\": { \"type\": \"keyword\" } } }\" \n"
+        + "query_fields: [city, status]"
         + "Output: \"{ \"query\": { \"bool\": { \"must\": [ { \"match\": { \"city\": \"London\" } } ], \"filter\": [ { \"term\": { \"status\": \"active\" } } ] } } }\" \n";
 
     public static final String EXAMPLE_3 =
@@ -117,7 +122,8 @@ public class QueryPlanningPromptTemplate {
 
     public static final String PROMPT_SUFFIX = "GIVE THE OUTPUT PART ONLY IN YOUR RESPONSE \n"
         + "Question: asked by user \n"
-        + "Mapping:${parameters.index_mapping:-} \n"
+        + "Mapping :${parameters.index_mapping:-} \n"
+        + "Query Fields: ${parameters.query_fields:-} "
         + "Output:";
 
     public static final String DEFAULT_SYSTEM_PROMPT = PROMPT_PREFIX

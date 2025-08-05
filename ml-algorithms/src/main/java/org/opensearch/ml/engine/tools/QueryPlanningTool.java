@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.engine.tools;
 
+import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT_QUERY;
 import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT_SYSTEM_PROMPT;
 
@@ -64,6 +65,12 @@ public class QueryPlanningTool implements WithModelTool {
         }
         if (!parameters.containsKey(SYSTEM_PROMPT_FIELD)) {
             parameters.put(SYSTEM_PROMPT_FIELD, DEFAULT_SYSTEM_PROMPT);
+        }
+        if (parameters.containsKey("index_mapping")) {
+            parameters.put("index_mapping", gson.toJson(parameters.get("index_mapping")));
+        }
+        if (parameters.containsKey("query_fields")) {
+            parameters.put("query_fields", gson.toJson(parameters.get("query_fields")));
         }
         ActionListener<T> modelListener = ActionListener.wrap(r -> {
             try {
