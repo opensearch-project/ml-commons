@@ -48,7 +48,7 @@ public class VisualizationsTool implements Tool {
      */
     private static final int DEFAULT_SIZE = 3;
     private static final String DEFAULT_DESCRIPTION =
-        "Finds saved visualizations. Required: 'input' (visualization name). Returns: title and ID matches.";
+        "Searches for saved visualizations by name. Required: 'input' (visualization name, supports partial matches). Returns: list of matching visualizations with their titles and IDs.";
     public static final String DEFAULT_INPUT_SCHEMA = "{\"type\":\"object\","
         + "\"properties\":{\"input\":{\"type\":\"string\",\"description\":\"Visualization name to search for\"}},"
         + "\"required\":[\"input\"],"
