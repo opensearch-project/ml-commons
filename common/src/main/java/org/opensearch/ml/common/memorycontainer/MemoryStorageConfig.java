@@ -77,7 +77,7 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
         this.embeddingModelId = embeddingModelId;
         this.llmModelId = llmModelId;
         this.dimension = dimension;
-        this.maxInferSize = determinedSemanticStorage ? (maxInferSize != null ? maxInferSize : MAX_INFER_SIZE_DEFAULT_VALUE) : null;
+        this.maxInferSize = (llmModelId != null) ? (maxInferSize != null ? maxInferSize : MAX_INFER_SIZE_DEFAULT_VALUE) : null;
     }
 
     public MemoryStorageConfig(StreamInput input) throws IOException {
@@ -128,9 +128,11 @@ public class MemoryStorageConfig implements ToXContentObject, Writeable {
             if (dimension != null) {
                 builder.field(DIMENSION_FIELD, dimension);
             }
-            if (maxInferSize != null) {
-                builder.field(MAX_INFER_SIZE_FIELD, maxInferSize);
-            }
+        }
+
+        // Output maxInferSize when LLM model is configured
+        if (llmModelId != null && maxInferSize != null) {
+            builder.field(MAX_INFER_SIZE_FIELD, maxInferSize);
         }
 
         builder.endObject();
