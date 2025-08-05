@@ -87,7 +87,10 @@ public class QueryPlanningToolTests {
         ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
         // test try to update the prompt
         validParams
-            .put(SYSTEM_PROMPT_FIELD, "You are a query generation agent. Generate a dsl query for the following question: ${parameters.query_text}");
+            .put(
+                SYSTEM_PROMPT_FIELD,
+                "You are a query generation agent. Generate a dsl query for the following question: ${parameters.query_text}"
+            );
         validParams.put("query_text", "help me find some books related to wind");
         tool.run(validParams, listener);
 
