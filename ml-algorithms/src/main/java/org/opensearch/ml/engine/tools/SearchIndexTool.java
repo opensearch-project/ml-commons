@@ -74,7 +74,7 @@ public class SearchIndexTool implements Tool {
     private static final Gson GSON = new GsonBuilder().serializeSpecialFloatingPointValues().create();
 
     public static final Map<String, Object> DEFAULT_ATTRIBUTES = Map.of(TOOL_INPUT_SCHEMA_FIELD, DEFAULT_INPUT_SCHEMA, STRICT_FIELD, false);
-    public static final String RETURN_FULL_RESPONSE = "return_full_response";
+    public static final String RETURN_RAW_RESPONSE = "return_raw_response";
 
     private String name = TYPE;
     private Map<String, Object> attributes;
@@ -137,6 +137,13 @@ public class SearchIndexTool implements Tool {
         return docContent;
     }
 
+    /**
+     * Converts a SearchResponse to a Map representation for easier processing.
+     *
+     * @param searchResponse The search response to convert
+     * @return Map representation of the search response
+     * @throws IOException if conversion fails
+     */
     public Map<String, Object> convertSearchResponseToMap(SearchResponse searchResponse) throws IOException {
         XContentBuilder builder = XContentFactory.jsonBuilder();
         searchResponse.toXContent(builder, ToXContent.EMPTY_PARAMS);
@@ -159,7 +166,7 @@ public class SearchIndexTool implements Tool {
             String input = parameters.get(INPUT_FIELD);
             String index = null;
             String query = null;
-            boolean returnFullResponse = Boolean.parseBoolean(parameters.getOrDefault(RETURN_FULL_RESPONSE, "false"));
+            boolean returnFullResponse = Boolean.parseBoolean(parameters.getOrDefault(RETURN_RAW_RESPONSE, "false"));
             if (!StringUtils.isEmpty(input)) {
                 try {
                     JsonObject jsonObject = GSON.fromJson(input, JsonObject.class);

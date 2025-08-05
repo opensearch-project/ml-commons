@@ -24,9 +24,14 @@ import org.opensearch.ml.common.utils.StringUtils;
 
 import com.google.gson.reflect.TypeToken;
 import com.jayway.jsonpath.JsonPath;
+import com.jayway.jsonpath.PathNotFoundException;
 
 import lombok.extern.log4j.Log4j2;
 
+/**
+ * Utility class for tool-related operations including parameter extraction,
+ * tool creation, and output filtering.
+ */
 @Log4j2
 public class ToolUtils {
 
@@ -127,7 +132,10 @@ public class ToolUtils {
                 String output = parseResponse(response);
                 Object filteredOutput = JsonPath.read(output, toolParams.get(TOOL_OUTPUT_FILTERS_FIELD));
                 return StringUtils.toJson(filteredOutput);
+            } catch (PathNotFoundException e) {
+                log.error("JSONPath not found: [{}]", toolParams.get(TOOL_OUTPUT_FILTERS_FIELD), e);
             } catch (Exception e) {
+                // TODO: another option is returning error if failed to parse, need test to check which option is better.
                 log.error("Failed to read tool response from path [{}]", toolParams.get(TOOL_OUTPUT_FILTERS_FIELD), e);
             }
         }

@@ -17,6 +17,7 @@ import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -113,7 +114,24 @@ public class StringUtils {
         }
     }
 
-    public static String escapeString(String input) {
+    /**
+     * Ensures that a string is properly JSON escaped.
+     *
+     * <p>This method examines the input string and determines whether it already represents
+     * valid JSON content. If the input is valid JSON, it is returned unchanged. Otherwise,
+     * the input is treated as a plain string and escaped according to JSON string literal
+     * rules.</p>
+     *
+     * <p>Examples:</p>
+     * <pre>
+     *   prepareJsonValue("hello")        → "\"hello\""
+     *   prepareJsonValue("\"hello\"")        → "\\\"hello\\\""
+     *   prepareJsonValue("{\"key\":123}") → {\"key\":123} (valid JSON object, unchanged)
+     * </pre>
+     * @param input
+     * @return
+     */
+    public static String prepareJsonValue(String input) {
         if (isJson(input)) {
             return input;
         }
@@ -561,7 +579,22 @@ public class StringUtils {
         return SAFE_INPUT_PATTERN.matcher(value).matches();
     }
 
+    /**
+     * Parses a JSON array string into a List of Strings.
+     *
+     * @param jsonArrayString JSON array string to parse (e.g., "[\"item1\", \"item2\"]")
+     * @return List of strings parsed from the JSON array, or an empty list if the input is
+     *         null, empty, or invalid JSON
+     */
     public static List<String> parseStringArrayToList(String jsonArrayString) {
-        return gson.fromJson(jsonArrayString, TypeToken.getParameterized(List.class, String.class).getType());
+        if (jsonArrayString == null || jsonArrayString.trim().isEmpty()) {
+            return Collections.emptyList();
+        }
+        try {
+            return gson.fromJson(jsonArrayString, TypeToken.getParameterized(List.class, String.class).getType());
+        } catch (JsonSyntaxException e) {
+            log.error("Failed to parse JSON array string: {}", jsonArrayString, e);
+            return Collections.emptyList();
+        }
     }
 }

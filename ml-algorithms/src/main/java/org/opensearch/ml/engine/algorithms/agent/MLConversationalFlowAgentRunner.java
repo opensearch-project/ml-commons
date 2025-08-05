@@ -261,7 +261,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         String outputKey = toolName + ".output";
         Map<String, String> toolParameters = ToolUtils.buildToolParameters(params, previousToolSpec, tenantId);
         String filteredOutput = parseResponse(filterToolOutput(toolParameters, output));
-        params.put(outputKey, StringUtils.escapeString(filteredOutput));
+        params.put(outputKey, StringUtils.prepareJsonValue(filteredOutput));
         boolean traceDisabled = params.containsKey(DISABLE_TRACE) && Boolean.parseBoolean(params.get(DISABLE_TRACE));
 
         if (previousToolSpec.isIncludeOutputInAgentResponse() || finalI == toolSpecs.size()) {
@@ -349,10 +349,10 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         StepListener<Object> nextStepListener
     ) {
         MLToolSpec toolSpec = toolSpecs.get(finalI);
-        Map<String, String> executeParams = ToolUtils.buildToolParameters(params, toolSpec, tenantId);
-        Tool tool = ToolUtils.createTool(toolFactories, executeParams, toolSpec);
+        Map<String, String> toolExecutionParameters = ToolUtils.buildToolParameters(params, toolSpec, tenantId);
+        Tool tool = ToolUtils.createTool(toolFactories, toolExecutionParameters, toolSpec);
         if (finalI < toolSpecs.size()) {
-            tool.run(executeParams, nextStepListener);
+            tool.run(toolExecutionParameters, nextStepListener);
         }
     }
 

@@ -31,7 +31,6 @@ import org.junit.Test;
 import org.opensearch.OpenSearchParseException;
 import org.opensearch.action.ActionRequestValidationException;
 
-import com.google.gson.JsonSyntaxException;
 import com.jayway.jsonpath.JsonPath;
 
 public class StringUtilsTest {
@@ -856,16 +855,16 @@ public class StringUtilsTest {
     }
 
     @Test
-    public void escapeString_returnsRawIfJson() {
+    public void prepareJsonValue_returnsRawIfJson() {
         String json = "{\"key\": 123}";
-        String result = StringUtils.escapeString(json);
+        String result = StringUtils.prepareJsonValue(json);
         assertSame(json, result);  // branch where isJson(input)==true
     }
 
     @Test
-    public void escapeString_escapesBadCharsOtherwise() {
+    public void prepareJsonValue_escapesBadCharsOtherwise() {
         String input = "Tom & Jerry \"<script>";
-        String escaped = StringUtils.escapeString(input);
+        String escaped = StringUtils.prepareJsonValue(input);
         assertNotEquals(input, escaped);
         assertFalse(StringUtils.isJson(escaped));
         assertEquals("Tom & Jerry \\\"<script>", escaped);
@@ -940,7 +939,14 @@ public class StringUtilsTest {
         String nonArrayJson = "{\"key\": \"value\"}";
 
         // Act & Assert
-        assertThrows(JsonSyntaxException.class, () -> { parseStringArrayToList(nonArrayJson); });
+        List<String> array = parseStringArrayToList(nonArrayJson);
+        assertEquals(0, array.size());
+    }
+
+    @Test
+    public void testParseStringArrayToList_Null() {
+        List<String> array = parseStringArrayToList(null);
+        assertEquals(0, array.size());
     }
 
 }

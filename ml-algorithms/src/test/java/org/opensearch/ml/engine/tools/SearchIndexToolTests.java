@@ -298,7 +298,7 @@ public class SearchIndexToolTests {
 
         Map<String, String> parameters = new HashMap<>();
         parameters.put("input", inputString);
-        parameters.put(SearchIndexTool.RETURN_FULL_RESPONSE, "true");
+        parameters.put(SearchIndexTool.RETURN_RAW_RESPONSE, "true");
 
         mockedSearchIndexTool.run(parameters, listener);
 
@@ -341,7 +341,7 @@ public class SearchIndexToolTests {
 
         Map<String, String> parameters = new HashMap<>();
         parameters.put("input", inputString);
-        parameters.put(SearchIndexTool.RETURN_FULL_RESPONSE, "false");
+        parameters.put(SearchIndexTool.RETURN_RAW_RESPONSE, "false");
 
         mockedSearchIndexTool.run(parameters, listener);
 
