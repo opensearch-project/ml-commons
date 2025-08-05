@@ -30,17 +30,20 @@ public class MemoryResult implements ToXContentObject, Writeable {
     private final String memoryId;
     private final String memory;
     private final MemoryEvent event;
+    private final String oldMemory;
 
-    public MemoryResult(String memoryId, String memory, MemoryEvent event) {
+    public MemoryResult(String memoryId, String memory, MemoryEvent event, String oldMemory) {
         this.memoryId = memoryId;
         this.memory = memory;
         this.event = event;
+        this.oldMemory = oldMemory;
     }
 
     public MemoryResult(StreamInput in) throws IOException {
         this.memoryId = in.readString();
         this.memory = in.readString();
         this.event = MemoryEvent.fromString(in.readString());
+        this.oldMemory = in.readOptionalString();
     }
 
     @Override
@@ -48,14 +51,18 @@ public class MemoryResult implements ToXContentObject, Writeable {
         out.writeString(memoryId);
         out.writeString(memory);
         out.writeString(event.getValue());
+        out.writeOptionalString(oldMemory);
     }
 
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
-        builder.field(MEMORY_ID_FIELD, memoryId);
-        builder.field(MEMORY_FIELD, memory);
+        builder.field("id", memoryId);
+        builder.field("text", memory);
         builder.field("event", event.getValue());
+        if (oldMemory != null) {
+            builder.field("old_memory", oldMemory);
+        }
         builder.endObject();
         return builder;
     }
