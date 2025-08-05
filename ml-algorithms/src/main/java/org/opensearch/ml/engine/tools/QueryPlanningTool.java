@@ -5,6 +5,10 @@
 
 package org.opensearch.ml.engine.tools;
 
+import static org.opensearch.ml.common.utils.StringUtils.gson;
+import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT_QUERY;
+import static org.opensearch.ml.engine.tools.QueryPlanningPromptTemplate.DEFAULT_SYSTEM_PROMPT;
+
 import java.util.List;
 import java.util.Map;
 
@@ -30,7 +34,9 @@ public class QueryPlanningTool implements WithModelTool {
     public static final String TYPE = "QueryPlanningTool";
     public static final String MODEL_ID_FIELD = "model_id";
     private final MLModelTool queryGenerationTool;
-    public static final String PROMPT_FIELD = "prompt";
+    public static final String SYSTEM_PROMPT_FIELD = "system_prompt";
+    public static final String INDEX_MAPPING_FIELD = "index_mapping";
+    public static final String QUERY_FIELDS_FIELD = "query_fields";
     private static final String GENERATION_TYPE_FIELD = "generation_type";
     private static final String LLM_GENERATED_TYPE_FIELD = "llmGenerated";
     @Getter
@@ -46,10 +52,6 @@ public class QueryPlanningTool implements WithModelTool {
     @Getter
     @Setter
     private String description = DEFAULT_DESCRIPTION;
-    private String defaultQuery =
-        "{ \"query\": { \"multi_match\" : { \"query\":    \"${parameters.query_text}\",  \"fields\": ${parameters.query_fields:-[\"*\"]} } } }";
-    private String defaultPrompt =
-        "You are an OpenSearch Query DSL generation assistant; try using the optional provided index mapping ${parameters.index_mapping:-}, specified fields ${parameters.query_fields:-}, and the given sample queries as examples, generate an OpenSearch Query DSL to retrieve the most relevant documents for the user provided natural language question: ${parameters.query_text}, please return the query dsl only in a string format, no other texts.\n";
 
     public QueryPlanningTool(String generationType, MLModelTool queryGenerationTool) {
         this.generationType = generationType;
@@ -63,15 +65,21 @@ public class QueryPlanningTool implements WithModelTool {
             listener.onFailure(new IllegalArgumentException("Empty parameters for QueryPlanningTool: " + parameters));
             return;
         }
-        if (!parameters.containsKey(PROMPT_FIELD)) {
-            parameters.put(PROMPT_FIELD, defaultPrompt);
+        if (!parameters.containsKey(SYSTEM_PROMPT_FIELD)) {
+            parameters.put(SYSTEM_PROMPT_FIELD, DEFAULT_SYSTEM_PROMPT);
+        }
+        if (parameters.containsKey(INDEX_MAPPING_FIELD)) {
+            parameters.put(INDEX_MAPPING_FIELD, gson.toJson(parameters.get(INDEX_MAPPING_FIELD)));
+        }
+        if (parameters.containsKey(QUERY_FIELDS_FIELD)) {
+            parameters.put(QUERY_FIELDS_FIELD, gson.toJson(parameters.get(QUERY_FIELDS_FIELD)));
         }
         ActionListener<T> modelListener = ActionListener.wrap(r -> {
             try {
                 String queryString = (String) r;
                 if (queryString == null || queryString.isBlank() || queryString.equals("null")) {
                     StringSubstitutor substitutor = new StringSubstitutor(parameters, "${parameters.", "}");
-                    String defaultQueryString = substitutor.replace(this.defaultQuery);
+                    String defaultQueryString = substitutor.replace(DEFAULT_QUERY);
                     listener.onResponse((T) defaultQueryString);
                 } else {
                     listener.onResponse((T) queryString);
