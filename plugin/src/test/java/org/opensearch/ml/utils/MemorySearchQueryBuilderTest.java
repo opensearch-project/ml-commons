@@ -5,7 +5,6 @@
 
 package org.opensearch.ml.utils;
 
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -66,7 +65,8 @@ public class MemorySearchQueryBuilderTest {
     @Test
     public void testBuildQueryByStorageTypeWithTextEmbedding() throws IOException {
         String queryText = "AI research topics";
-        MemoryStorageConfig config = MemoryStorageConfig.builder()
+        MemoryStorageConfig config = MemoryStorageConfig
+            .builder()
             .semanticStorageEnabled(true)
             .embeddingModelType(FunctionName.TEXT_EMBEDDING)
             .embeddingModelId("dense-model-789")
@@ -84,7 +84,8 @@ public class MemorySearchQueryBuilderTest {
     @Test
     public void testBuildQueryByStorageTypeWithSparseEncoding() throws IOException {
         String queryText = "computer vision";
-        MemoryStorageConfig config = MemoryStorageConfig.builder()
+        MemoryStorageConfig config = MemoryStorageConfig
+            .builder()
             .semanticStorageEnabled(true)
             .embeddingModelType(FunctionName.SPARSE_ENCODING)
             .embeddingModelId("sparse-model-999")
@@ -101,9 +102,7 @@ public class MemorySearchQueryBuilderTest {
     @Test
     public void testBuildQueryByStorageTypeWithNonSemanticStorage() throws IOException {
         String queryText = "reinforcement learning";
-        MemoryStorageConfig config = MemoryStorageConfig.builder()
-            .semanticStorageEnabled(false)
-            .build();
+        MemoryStorageConfig config = MemoryStorageConfig.builder().semanticStorageEnabled(false).build();
 
         XContentBuilder builder = MemorySearchQueryBuilder.buildQueryByStorageType(queryText, config);
         String jsonString = builder.toString();
@@ -127,7 +126,8 @@ public class MemorySearchQueryBuilderTest {
     @Test
     public void testBuildQueryByStorageTypeWithUnsupportedType() {
         String queryText = "test query";
-        MemoryStorageConfig config = MemoryStorageConfig.builder()
+        MemoryStorageConfig config = MemoryStorageConfig
+            .builder()
             .semanticStorageEnabled(true)
             .embeddingModelType(FunctionName.KMEANS) // Unsupported type
             .embeddingModelId("model-123")
@@ -145,7 +145,8 @@ public class MemorySearchQueryBuilderTest {
     public void testBuildFactSearchQueryWithTextEmbedding() throws IOException {
         String fact = "User's name is John";
         String sessionId = "session-123";
-        MemoryStorageConfig config = MemoryStorageConfig.builder()
+        MemoryStorageConfig config = MemoryStorageConfig
+            .builder()
             .semanticStorageEnabled(true)
             .embeddingModelType(FunctionName.TEXT_EMBEDDING)
             .embeddingModelId("text-model-456")
@@ -174,7 +175,8 @@ public class MemorySearchQueryBuilderTest {
     public void testBuildFactSearchQueryWithSparseEncoding() throws IOException {
         String fact = "Works at TechCorp";
         String sessionId = "session-456";
-        MemoryStorageConfig config = MemoryStorageConfig.builder()
+        MemoryStorageConfig config = MemoryStorageConfig
+            .builder()
             .semanticStorageEnabled(true)
             .embeddingModelType(FunctionName.SPARSE_ENCODING)
             .embeddingModelId("sparse-model-789")
@@ -197,9 +199,7 @@ public class MemorySearchQueryBuilderTest {
     public void testBuildFactSearchQueryWithNonSemanticStorage() throws IOException {
         String fact = "Lives in San Francisco";
         String sessionId = "session-789";
-        MemoryStorageConfig config = MemoryStorageConfig.builder()
-            .semanticStorageEnabled(false)
-            .build();
+        MemoryStorageConfig config = MemoryStorageConfig.builder().semanticStorageEnabled(false).build();
 
         XContentBuilder builder = MemorySearchQueryBuilder.buildFactSearchQuery(fact, sessionId, config);
         String jsonString = builder.toString();
@@ -235,7 +235,8 @@ public class MemorySearchQueryBuilderTest {
     public void testBuildFactSearchQueryWithUnsupportedType() {
         String fact = "test fact";
         String sessionId = "session-test";
-        MemoryStorageConfig config = MemoryStorageConfig.builder()
+        MemoryStorageConfig config = MemoryStorageConfig
+            .builder()
             .semanticStorageEnabled(true)
             .embeddingModelType(FunctionName.LINEAR_REGRESSION) // Unsupported type
             .embeddingModelId("model-test")
@@ -274,7 +275,8 @@ public class MemorySearchQueryBuilderTest {
         // Test the exact structure of the fact search query
         String fact = "Simple fact";
         String sessionId = "sess-123";
-        MemoryStorageConfig config = MemoryStorageConfig.builder()
+        MemoryStorageConfig config = MemoryStorageConfig
+            .builder()
             .semanticStorageEnabled(true)
             .embeddingModelType(FunctionName.TEXT_EMBEDDING)
             .embeddingModelId("model-123")
@@ -285,10 +287,10 @@ public class MemorySearchQueryBuilderTest {
 
         // Verify the query doesn't have a "query" wrapper (as per comment in code)
         assertFalse(jsonString.startsWith("{\"query\":"));
-        
+
         // Verify it starts with bool
         assertTrue(jsonString.startsWith("{\"bool\":"));
-        
+
         // Verify both filter and must sections exist
         assertTrue(jsonString.contains("\"filter\":{\"bool\":{\"must\":["));
         assertTrue(jsonString.contains("],\"must\":[{"));
@@ -298,7 +300,7 @@ public class MemorySearchQueryBuilderTest {
     public void testBuildNeuralQueryWithEmptyText() throws IOException {
         XContentBuilder builder = MemorySearchQueryBuilder.buildNeuralQuery("", "model-123");
         String jsonString = builder.toString();
-        
+
         assertTrue(jsonString.contains("\"query_text\":\"\""));
         assertTrue(jsonString.contains("\"model_id\":\"model-123\""));
     }
@@ -307,7 +309,7 @@ public class MemorySearchQueryBuilderTest {
     public void testBuildMatchQueryWithEmptyText() throws IOException {
         XContentBuilder builder = MemorySearchQueryBuilder.buildMatchQuery("");
         String jsonString = builder.toString();
-        
+
         assertTrue(jsonString.contains("\"memory\":\"\""));
     }
 

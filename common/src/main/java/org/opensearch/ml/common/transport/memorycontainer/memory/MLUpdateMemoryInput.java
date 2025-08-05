@@ -10,6 +10,7 @@ import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.
 
 import java.io.IOException;
 
+import org.apache.commons.lang3.StringUtils;
 import org.opensearch.core.common.io.stream.StreamInput;
 import org.opensearch.core.common.io.stream.StreamOutput;
 import org.opensearch.core.common.io.stream.Writeable;
@@ -32,7 +33,7 @@ public class MLUpdateMemoryInput implements ToXContentObject, Writeable {
 
     @Builder
     public MLUpdateMemoryInput(String text) {
-        if (text == null || text.trim().isEmpty()) {
+        if (StringUtils.isBlank(text)) {
             throw new IllegalArgumentException("Text cannot be null or empty");
         }
         this.text = text.trim();

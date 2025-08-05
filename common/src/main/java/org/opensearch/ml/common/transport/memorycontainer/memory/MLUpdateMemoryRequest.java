@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.common.transport.memorycontainer.memory;
 
+import static org.opensearch.action.ValidateActions.addValidationError;
+
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -54,20 +56,13 @@ public class MLUpdateMemoryRequest extends ActionRequest {
     public ActionRequestValidationException validate() {
         ActionRequestValidationException exception = null;
         if (mlUpdateMemoryInput == null) {
-            exception = new ActionRequestValidationException();
-            exception.addValidationError("Update memory input can't be null");
+            exception = addValidationError("Update memory input can't be null", exception);
         }
         if (memoryContainerId == null) {
-            if (exception == null) {
-                exception = new ActionRequestValidationException();
-            }
-            exception.addValidationError("Memory container id can't be null");
+            exception = addValidationError("Memory container id can't be null", exception);
         }
         if (memoryId == null) {
-            if (exception == null) {
-                exception = new ActionRequestValidationException();
-            }
-            exception.addValidationError("Memory id can't be null");
+            exception = addValidationError("Memory id can't be null", exception);
         }
         return exception;
     }

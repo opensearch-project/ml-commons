@@ -34,7 +34,8 @@ public class MemoryResultTest {
     @Before
     public void setUp() {
         // UPDATE result with all fields including oldMemory
-        resultWithAllFields = MemoryResult.builder()
+        resultWithAllFields = MemoryResult
+            .builder()
             .memoryId("memory-123")
             .memory("Updated memory text")
             .event(MemoryEvent.UPDATE)
@@ -42,11 +43,7 @@ public class MemoryResultTest {
             .build();
 
         // Minimal result (no oldMemory)
-        resultMinimal = MemoryResult.builder()
-            .memoryId("memory-456")
-            .memory("New memory text")
-            .event(MemoryEvent.ADD)
-            .build();
+        resultMinimal = MemoryResult.builder().memoryId("memory-456").memory("New memory text").event(MemoryEvent.ADD).build();
 
         // Different event types
         addResult = new MemoryResult("add-789", "Adding new memory", MemoryEvent.ADD, null);
@@ -122,8 +119,8 @@ public class MemoryResultTest {
     @Test
     public void testStreamInputOutputAllEventTypes() throws IOException {
         // Test all event types
-        MemoryResult[] results = {addResult, updateResult, deleteResult, noneResult};
-        
+        MemoryResult[] results = { addResult, updateResult, deleteResult, noneResult };
+
         for (MemoryResult original : results) {
             BytesStreamOutput out = new BytesStreamOutput();
             original.writeTo(out);
@@ -204,7 +201,8 @@ public class MemoryResultTest {
 
     @Test
     public void testSpecialCharactersInFields() throws IOException {
-        MemoryResult specialResult = MemoryResult.builder()
+        MemoryResult specialResult = MemoryResult
+            .builder()
             .memoryId("id-with-special-chars-🚀")
             .memory("Text with\n\ttabs and\nnewlines and \"quotes\"")
             .event(MemoryEvent.UPDATE)
@@ -225,7 +223,7 @@ public class MemoryResultTest {
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         specialResult.toXContent(builder, EMPTY_PARAMS);
         String jsonString = TestHelper.xContentBuilderToString(builder);
-        
+
         assertTrue(jsonString.contains("id-with-special-chars-"));
         assertTrue(jsonString.contains("Text with"));
         assertTrue(jsonString.contains("tabs"));
@@ -250,11 +248,7 @@ public class MemoryResultTest {
     @Test
     public void testBuilderDefaults() {
         // Test builder with only required fields
-        MemoryResult result = MemoryResult.builder()
-            .memoryId("test-id")
-            .memory("test memory")
-            .event(MemoryEvent.ADD)
-            .build();
+        MemoryResult result = MemoryResult.builder().memoryId("test-id").memory("test memory").event(MemoryEvent.ADD).build();
 
         assertEquals("test-id", result.getMemoryId());
         assertEquals("test memory", result.getMemory());

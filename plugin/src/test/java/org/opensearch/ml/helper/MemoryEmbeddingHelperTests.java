@@ -7,8 +7,6 @@ package org.opensearch.ml.helper;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -16,7 +14,6 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -36,17 +33,15 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
-import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
-import org.opensearch.ml.common.input.MLInput;
 import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
 import org.opensearch.ml.common.model.MLModelState;
 import org.opensearch.ml.common.output.MLOutput;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
 import org.opensearch.ml.common.output.model.ModelTensors;
+import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
-import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.client.Client;
@@ -85,17 +80,18 @@ public class MemoryEmbeddingHelperTests {
     @Before
     public void setUp() {
         MockitoAnnotations.openMocks(this);
-        
+
         // Create real ThreadContext since it's final and can't be mocked
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
-        
+
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
 
         helper = new MemoryEmbeddingHelper(client, mlModelManager);
 
-        storageConfig = MemoryStorageConfig.builder()
+        storageConfig = MemoryStorageConfig
+            .builder()
             .embeddingModelId("model-123")
             .embeddingModelType(FunctionName.TEXT_EMBEDDING)
             .dimension(768)
@@ -107,7 +103,7 @@ public class MemoryEmbeddingHelperTests {
     public void testGenerateEmbeddingSuccess() {
         String text = "Test text for embedding";
         Number[] embeddingData = { 0.1f, 0.2f, 0.3f };
-        
+
         setupMockMLModel(MLModelState.DEPLOYED);
         setupMockPredictionResponse(createDenseEmbeddingOutput(embeddingData));
 
@@ -142,7 +138,8 @@ public class MemoryEmbeddingHelperTests {
         sparseData.put("token1", 0.5f);
         sparseData.put("token2", 0.8f);
 
-        storageConfig = MemoryStorageConfig.builder()
+        storageConfig = MemoryStorageConfig
+            .builder()
             .embeddingModelId("sparse-model-123")
             .embeddingModelType(FunctionName.SPARSE_ENCODING)
             .semanticStorageEnabled(true)
@@ -172,9 +169,7 @@ public class MemoryEmbeddingHelperTests {
 
     @Test
     public void testGenerateEmbeddingWithSemanticStorageDisabled() {
-        storageConfig = MemoryStorageConfig.builder()
-            .semanticStorageEnabled(false)
-            .build();
+        storageConfig = MemoryStorageConfig.builder().semanticStorageEnabled(false).build();
 
         helper.generateEmbedding("test text", storageConfig, objectListener);
         verify(objectListener).onResponse(null);
@@ -183,11 +178,7 @@ public class MemoryEmbeddingHelperTests {
 
     @Test
     public void testGenerateEmbeddingWithMissingModelConfig() {
-        storageConfig = MemoryStorageConfig.builder()
-            .semanticStorageEnabled(true)
-            .embeddingModelId(null)
-            .embeddingModelType(null)
-            .build();
+        storageConfig = MemoryStorageConfig.builder().semanticStorageEnabled(true).embeddingModelId(null).embeddingModelType(null).build();
 
         helper.generateEmbedding("test text", storageConfig, objectListener);
         verify(objectListener).onResponse(null);
@@ -236,10 +227,10 @@ public class MemoryEmbeddingHelperTests {
     @Test
     public void testGenerateEmbeddingUnexpectedOutputType() {
         setupMockMLModel(MLModelState.DEPLOYED);
-        
+
         MLOutput unexpectedOutput = mock(MLOutput.class);
         when(predictionResponse.getOutput()).thenReturn(unexpectedOutput);
-        
+
         doAnswer(invocation -> {
             ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
             listener.onResponse(predictionResponse);
@@ -269,7 +260,7 @@ public class MemoryEmbeddingHelperTests {
 
         List<Object> embeddings = responseCaptor.getValue();
         assertEquals(3, embeddings.size());
-        
+
         float[] emb1 = (float[]) embeddings.get(0);
         assertArrayEquals(new float[] { 0.1f, 0.2f }, emb1, 0.001f);
     }
@@ -347,7 +338,8 @@ public class MemoryEmbeddingHelperTests {
         sparseData.put("word1", 1.5f);
         sparseData.put("word2", 2.5f);
 
-        storageConfig = MemoryStorageConfig.builder()
+        storageConfig = MemoryStorageConfig
+            .builder()
             .embeddingModelId("sparse-model")
             .embeddingModelType(FunctionName.SPARSE_ENCODING)
             .semanticStorageEnabled(true)
@@ -370,19 +362,19 @@ public class MemoryEmbeddingHelperTests {
     @Test
     public void testGenerateEmbeddingWithNullTensorData() {
         setupMockMLModel(MLModelState.DEPLOYED);
-        
+
         ModelTensor tensor = mock(ModelTensor.class);
         when(tensor.getName()).thenReturn("sentence_embedding");
         when(tensor.getData()).thenReturn(null);
-        
+
         ModelTensors modelTensors = mock(ModelTensors.class);
         when(modelTensors.getMlModelTensors()).thenReturn(Arrays.asList(tensor));
-        
+
         ModelTensorOutput tensorOutput = mock(ModelTensorOutput.class);
         when(tensorOutput.getMlModelOutputs()).thenReturn(Arrays.asList(modelTensors));
-        
+
         when(predictionResponse.getOutput()).thenReturn(tensorOutput);
-        
+
         doAnswer(invocation -> {
             ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
             listener.onResponse(predictionResponse);
@@ -419,13 +411,13 @@ public class MemoryEmbeddingHelperTests {
         ModelTensor tensor = mock(ModelTensor.class);
         when(tensor.getName()).thenReturn("sentence_embedding");
         when(tensor.getData()).thenReturn(data);
-        
+
         ModelTensors modelTensors = mock(ModelTensors.class);
         when(modelTensors.getMlModelTensors()).thenReturn(Arrays.asList(tensor));
-        
+
         ModelTensorOutput output = mock(ModelTensorOutput.class);
         when(output.getMlModelOutputs()).thenReturn(Arrays.asList(modelTensors));
-        
+
         return output;
     }
 
@@ -433,50 +425,50 @@ public class MemoryEmbeddingHelperTests {
         ModelTensor tensor = mock(ModelTensor.class);
         // Use doReturn to avoid generic type issues
         doReturn(data).when(tensor).getDataAsMap();
-        
+
         ModelTensors modelTensors = mock(ModelTensors.class);
         when(modelTensors.getMlModelTensors()).thenReturn(Arrays.asList(tensor));
-        
+
         ModelTensorOutput output = mock(ModelTensorOutput.class);
         when(output.getMlModelOutputs()).thenReturn(Arrays.asList(modelTensors));
-        
+
         return output;
     }
 
     private ModelTensorOutput createNestedSparseEmbeddingOutput(Map<String, Float> data) {
         Map<String, Object> nestedData = new HashMap<>();
         nestedData.put("response", Arrays.asList(data));
-        
+
         ModelTensor tensor = mock(ModelTensor.class);
         // Use doReturn to avoid generic type issues
         doReturn(nestedData).when(tensor).getDataAsMap();
-        
+
         ModelTensors modelTensors = mock(ModelTensors.class);
         when(modelTensors.getMlModelTensors()).thenReturn(Arrays.asList(tensor));
-        
+
         ModelTensorOutput output = mock(ModelTensorOutput.class);
         when(output.getMlModelOutputs()).thenReturn(Arrays.asList(modelTensors));
-        
+
         return output;
     }
 
     private ModelTensorOutput createMultipleDenseEmbeddingOutput(List<Number[]> embeddings) {
         List<ModelTensors> modelTensorsList = new ArrayList<>();
-        
+
         for (Number[] data : embeddings) {
             ModelTensor tensor = mock(ModelTensor.class);
             when(tensor.getName()).thenReturn("sentence_embedding");
             when(tensor.getData()).thenReturn(data);
-            
+
             ModelTensors modelTensors = mock(ModelTensors.class);
             when(modelTensors.getMlModelTensors()).thenReturn(Arrays.asList(tensor));
-            
+
             modelTensorsList.add(modelTensors);
         }
-        
+
         ModelTensorOutput output = mock(ModelTensorOutput.class);
         when(output.getMlModelOutputs()).thenReturn(modelTensorsList);
-        
+
         return output;
     }
 }

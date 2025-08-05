@@ -13,7 +13,6 @@ import static org.opensearch.core.xcontent.ToXContent.EMPTY_PARAMS;
 
 import java.io.IOException;
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -43,19 +42,20 @@ public class MLMemoryTest {
     public void setUp() {
         testCreatedTime = Instant.now();
         testUpdatedTime = Instant.now().plusSeconds(60);
-        
+
         testTags = new HashMap<>();
         testTags.put("topic", "machine learning");
         testTags.put("priority", "high");
-        
-        testEmbedding = new float[]{0.1f, 0.2f, 0.3f};
-        
+
+        testEmbedding = new float[] { 0.1f, 0.2f, 0.3f };
+
         sparseEmbedding = new HashMap<>();
         sparseEmbedding.put("token1", 0.5f);
         sparseEmbedding.put("token2", 0.8f);
 
         // Memory with all fields
-        memoryWithAllFields = MLMemory.builder()
+        memoryWithAllFields = MLMemory
+            .builder()
             .sessionId("session-123")
             .memory("This is a test memory content")
             .memoryType(MemoryType.RAW_MESSAGE)
@@ -69,7 +69,8 @@ public class MLMemoryTest {
             .build();
 
         // Minimal memory (only required fields)
-        memoryMinimal = MLMemory.builder()
+        memoryMinimal = MLMemory
+            .builder()
             .sessionId("session-minimal")
             .memory("Minimal memory")
             .memoryType(MemoryType.FACT)
@@ -152,7 +153,8 @@ public class MLMemoryTest {
     @Test
     public void testStreamInputOutputEmptyTags() throws IOException {
         // Test with empty tags
-        MLMemory memoryEmptyTags = MLMemory.builder()
+        MLMemory memoryEmptyTags = MLMemory
+            .builder()
             .sessionId("session-empty-tags")
             .memory("Memory with empty tags")
             .memoryType(MemoryType.FACT)
@@ -214,15 +216,20 @@ public class MLMemoryTest {
             + "\"agent_id\":\"agent-789\","
             + "\"role\":\"user\","
             + "\"tags\":{\"topic\":\"machine learning\",\"priority\":\"high\"},"
-            + "\"created_time\":" + testCreatedTime.toEpochMilli() + ","
-            + "\"last_updated_time\":" + testUpdatedTime.toEpochMilli() + ","
+            + "\"created_time\":"
+            + testCreatedTime.toEpochMilli()
+            + ","
+            + "\"last_updated_time\":"
+            + testUpdatedTime.toEpochMilli()
+            + ","
             + "\"memory_embedding\":{\"values\":[0.1,0.2,0.3]}"
             + "}";
 
-        XContentParser parser = XContentType.JSON.xContent()
+        XContentParser parser = XContentType.JSON
+            .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
-        
+
         MLMemory parsed = MLMemory.parse(parser);
 
         assertEquals("session-123", parsed.getSessionId());
@@ -245,14 +252,18 @@ public class MLMemoryTest {
             + "\"session_id\":\"session-minimal\","
             + "\"memory\":\"Minimal memory\","
             + "\"memory_type\":\"FACT\","
-            + "\"created_time\":" + testCreatedTime.toEpochMilli() + ","
-            + "\"last_updated_time\":" + testUpdatedTime.toEpochMilli()
+            + "\"created_time\":"
+            + testCreatedTime.toEpochMilli()
+            + ","
+            + "\"last_updated_time\":"
+            + testUpdatedTime.toEpochMilli()
             + "}";
 
-        XContentParser parser = XContentType.JSON.xContent()
+        XContentParser parser = XContentType.JSON
+            .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
-        
+
         MLMemory parsed = MLMemory.parse(parser);
 
         assertEquals("session-minimal", parsed.getSessionId());
@@ -274,14 +285,18 @@ public class MLMemoryTest {
             + "\"memory\":\"Test memory\","
             + "\"memory_type\":\"FACT\","
             + "\"unknown_field\":\"should be ignored\","
-            + "\"created_time\":" + testCreatedTime.toEpochMilli() + ","
-            + "\"last_updated_time\":" + testUpdatedTime.toEpochMilli()
+            + "\"created_time\":"
+            + testCreatedTime.toEpochMilli()
+            + ","
+            + "\"last_updated_time\":"
+            + testUpdatedTime.toEpochMilli()
             + "}";
 
-        XContentParser parser = XContentType.JSON.xContent()
+        XContentParser parser = XContentType.JSON
+            .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
-        
+
         MLMemory parsed = MLMemory.parse(parser);
 
         assertEquals("session-123", parsed.getSessionId());
@@ -314,7 +329,7 @@ public class MLMemoryTest {
         assertEquals("FACT", indexMap.get("memory_type"));
         assertEquals(testCreatedTime.toEpochMilli(), indexMap.get("created_time"));
         assertEquals(testUpdatedTime.toEpochMilli(), indexMap.get("last_updated_time"));
-        
+
         // Optional fields should not be in the map
         assertTrue(!indexMap.containsKey("user_id"));
         assertTrue(!indexMap.containsKey("agent_id"));
@@ -325,7 +340,8 @@ public class MLMemoryTest {
 
     @Test
     public void testSettersWork() {
-        MLMemory memory = MLMemory.builder()
+        MLMemory memory = MLMemory
+            .builder()
             .sessionId("initial-session")
             .memory("initial memory")
             .memoryType(MemoryType.FACT)
@@ -356,7 +372,8 @@ public class MLMemoryTest {
     @Test
     public void testXContentRoundTrip() throws IOException {
         // Use memory without embedding for round trip test since embedding parsing is complex
-        MLMemory memoryNoEmbedding = MLMemory.builder()
+        MLMemory memoryNoEmbedding = MLMemory
+            .builder()
             .sessionId("session-123")
             .memory("This is a test memory content")
             .memoryType(MemoryType.RAW_MESSAGE)
@@ -374,7 +391,8 @@ public class MLMemoryTest {
         String jsonString = TestHelper.xContentBuilderToString(builder);
 
         // Parse back
-        XContentParser parser = XContentType.JSON.xContent()
+        XContentParser parser = XContentType.JSON
+            .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
         MLMemory parsed = MLMemory.parse(parser);
@@ -397,7 +415,8 @@ public class MLMemoryTest {
         specialTags.put("key with spaces", "value with\nnewlines");
         specialTags.put("unicode_key_🔥", "unicode_value_✨");
 
-        MLMemory specialMemory = MLMemory.builder()
+        MLMemory specialMemory = MLMemory
+            .builder()
             .sessionId("session-with-special-chars-🚀")
             .memory("Memory with\n\ttabs and\nnewlines and \"quotes\"")
             .memoryType(MemoryType.FACT)
@@ -412,7 +431,8 @@ public class MLMemoryTest {
         specialMemory.toXContent(builder, EMPTY_PARAMS);
         String jsonString = TestHelper.xContentBuilderToString(builder);
 
-        XContentParser parser = XContentType.JSON.xContent()
+        XContentParser parser = XContentType.JSON
+            .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
         MLMemory parsed = MLMemory.parse(parser);

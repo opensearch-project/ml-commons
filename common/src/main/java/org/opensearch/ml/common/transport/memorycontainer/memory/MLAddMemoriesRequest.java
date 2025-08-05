@@ -5,6 +5,8 @@
 
 package org.opensearch.ml.common.transport.memorycontainer.memory;
 
+import static org.opensearch.action.ValidateActions.addValidationError;
+
 import java.io.IOException;
 
 import org.opensearch.action.ActionRequest;
@@ -45,8 +47,7 @@ public class MLAddMemoriesRequest extends ActionRequest {
     public ActionRequestValidationException validate() {
         ActionRequestValidationException exception = null;
         if (mlAddMemoryInput == null) {
-            exception = new ActionRequestValidationException();
-            exception.addValidationError("ML add memory input can't be null");
+            exception = addValidationError("ML add memory input can't be null", exception);
         }
         return exception;
     }

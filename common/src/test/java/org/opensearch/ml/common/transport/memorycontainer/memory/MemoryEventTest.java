@@ -56,37 +56,25 @@ public class MemoryEventTest {
 
     @Test
     public void testFromString_Null() {
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> MemoryEvent.fromString(null)
-        );
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> MemoryEvent.fromString(null));
         assertEquals("Memory event value cannot be null", exception.getMessage());
     }
 
     @Test
     public void testFromString_InvalidValue() {
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> MemoryEvent.fromString("INVALID_EVENT")
-        );
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> MemoryEvent.fromString("INVALID_EVENT"));
         assertEquals("Unknown memory event: INVALID_EVENT", exception.getMessage());
     }
 
     @Test
     public void testFromString_EmptyString() {
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> MemoryEvent.fromString("")
-        );
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> MemoryEvent.fromString(""));
         assertEquals("Unknown memory event: ", exception.getMessage());
     }
 
     @Test
     public void testFromString_Whitespace() {
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> MemoryEvent.fromString("   ")
-        );
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> MemoryEvent.fromString("   "));
         assertEquals("Unknown memory event:    ", exception.getMessage());
     }
 
@@ -103,7 +91,7 @@ public class MemoryEventTest {
     @Test
     public void testAllEventsHandled() {
         // Ensure all events are properly handled in fromString
-        String[] expectedEvents = {"ADD", "UPDATE", "DELETE", "NONE"};
+        String[] expectedEvents = { "ADD", "UPDATE", "DELETE", "NONE" };
         for (String eventStr : expectedEvents) {
             MemoryEvent event = MemoryEvent.fromString(eventStr);
             assertNotNull("Event should not be null for: " + eventStr, event);

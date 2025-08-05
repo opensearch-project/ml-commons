@@ -53,28 +53,19 @@ public class MemoryTypeTest {
 
     @Test
     public void testFromString_InvalidValue() {
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> MemoryType.fromString("INVALID_TYPE")
-        );
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> MemoryType.fromString("INVALID_TYPE"));
         assertEquals("Invalid memory type: INVALID_TYPE. Must be either RAW_MESSAGE or FACT", exception.getMessage());
     }
 
     @Test
     public void testFromString_EmptyString() {
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> MemoryType.fromString("")
-        );
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> MemoryType.fromString(""));
         assertEquals("Invalid memory type: . Must be either RAW_MESSAGE or FACT", exception.getMessage());
     }
 
     @Test
     public void testFromString_Whitespace() {
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> MemoryType.fromString("   ")
-        );
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> MemoryType.fromString("   "));
         assertEquals("Invalid memory type:    . Must be either RAW_MESSAGE or FACT", exception.getMessage());
     }
 

@@ -37,7 +37,8 @@ public class MemoryDecisionTest {
     @Before
     public void setUp() {
         // UPDATE decision with all fields
-        decisionWithAllFields = MemoryDecision.builder()
+        decisionWithAllFields = MemoryDecision
+            .builder()
             .id("memory-123")
             .text("Updated memory text")
             .event(MemoryEvent.UPDATE)
@@ -45,30 +46,14 @@ public class MemoryDecisionTest {
             .build();
 
         // Minimal decision (no oldMemory)
-        decisionMinimal = MemoryDecision.builder()
-            .id("memory-456")
-            .text("New memory text")
-            .event(MemoryEvent.ADD)
-            .build();
+        decisionMinimal = MemoryDecision.builder().id("memory-456").text("New memory text").event(MemoryEvent.ADD).build();
 
         // Different event types
-        addDecision = MemoryDecision.builder()
-            .id("add-memory-789")
-            .text("Adding new memory")
-            .event(MemoryEvent.ADD)
-            .build();
+        addDecision = MemoryDecision.builder().id("add-memory-789").text("Adding new memory").event(MemoryEvent.ADD).build();
 
-        deleteDecision = MemoryDecision.builder()
-            .id("delete-memory-101")
-            .text("Memory to delete")
-            .event(MemoryEvent.DELETE)
-            .build();
+        deleteDecision = MemoryDecision.builder().id("delete-memory-101").text("Memory to delete").event(MemoryEvent.DELETE).build();
 
-        noneDecision = MemoryDecision.builder()
-            .id("none-memory-202")
-            .text("No change needed")
-            .event(MemoryEvent.NONE)
-            .build();
+        noneDecision = MemoryDecision.builder().id("none-memory-202").text("No change needed").event(MemoryEvent.NONE).build();
     }
 
     @Test
@@ -138,8 +123,8 @@ public class MemoryDecisionTest {
     @Test
     public void testStreamInputOutputAllEventTypes() throws IOException {
         // Test all event types
-        MemoryDecision[] decisions = {addDecision, deleteDecision, noneDecision, decisionWithAllFields};
-        
+        MemoryDecision[] decisions = { addDecision, deleteDecision, noneDecision, decisionWithAllFields };
+
         for (MemoryDecision original : decisions) {
             BytesStreamOutput out = new BytesStreamOutput();
             original.writeTo(out);
@@ -186,10 +171,11 @@ public class MemoryDecisionTest {
             + "\"old_memory\":\"Original memory text\""
             + "}";
 
-        XContentParser parser = XContentType.JSON.xContent()
+        XContentParser parser = XContentType.JSON
+            .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
-        
+
         MemoryDecision parsed = MemoryDecision.parse(parser);
 
         assertEquals("memory-123", parsed.getId());
@@ -200,16 +186,13 @@ public class MemoryDecisionTest {
 
     @Test
     public void testParseMinimal() throws IOException {
-        String jsonString = "{"
-            + "\"memory_id\":\"memory-456\","
-            + "\"text\":\"New memory text\","
-            + "\"event\":\"ADD\""
-            + "}";
+        String jsonString = "{" + "\"memory_id\":\"memory-456\"," + "\"text\":\"New memory text\"," + "\"event\":\"ADD\"" + "}";
 
-        XContentParser parser = XContentType.JSON.xContent()
+        XContentParser parser = XContentType.JSON
+            .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
-        
+
         MemoryDecision parsed = MemoryDecision.parse(parser);
 
         assertEquals("memory-456", parsed.getId());
@@ -221,16 +204,13 @@ public class MemoryDecisionTest {
     @Test
     public void testParseWithAlternativeIdField() throws IOException {
         // Test parsing with "id" field instead of "memory_id"
-        String jsonString = "{"
-            + "\"id\":\"memory-789\","
-            + "\"text\":\"Test memory\","
-            + "\"event\":\"DELETE\""
-            + "}";
+        String jsonString = "{" + "\"id\":\"memory-789\"," + "\"text\":\"Test memory\"," + "\"event\":\"DELETE\"" + "}";
 
-        XContentParser parser = XContentType.JSON.xContent()
+        XContentParser parser = XContentType.JSON
+            .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
-        
+
         MemoryDecision parsed = MemoryDecision.parse(parser);
 
         assertEquals("memory-789", parsed.getId());
@@ -248,10 +228,11 @@ public class MemoryDecisionTest {
             + "\"another_unknown\":123"
             + "}";
 
-        XContentParser parser = XContentType.JSON.xContent()
+        XContentParser parser = XContentType.JSON
+            .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
-        
+
         MemoryDecision parsed = MemoryDecision.parse(parser);
 
         assertEquals("memory-123", parsed.getId());
@@ -267,7 +248,8 @@ public class MemoryDecisionTest {
         String jsonString = TestHelper.xContentBuilderToString(builder);
 
         // Parse back
-        XContentParser parser = XContentType.JSON.xContent()
+        XContentParser parser = XContentType.JSON
+            .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
         MemoryDecision parsed = MemoryDecision.parse(parser);
@@ -282,17 +264,9 @@ public class MemoryDecisionTest {
     @Test
     public void testDataAnnotationMethods() {
         // Test @Data generated methods
-        MemoryDecision decision1 = MemoryDecision.builder()
-            .id("id-1")
-            .text("text-1")
-            .event(MemoryEvent.ADD)
-            .build();
+        MemoryDecision decision1 = MemoryDecision.builder().id("id-1").text("text-1").event(MemoryEvent.ADD).build();
 
-        MemoryDecision decision2 = MemoryDecision.builder()
-            .id("id-1")
-            .text("text-1")
-            .event(MemoryEvent.ADD)
-            .build();
+        MemoryDecision decision2 = MemoryDecision.builder().id("id-1").text("text-1").event(MemoryEvent.ADD).build();
 
         // Test equals
         assertEquals(decision1, decision2);
@@ -319,7 +293,8 @@ public class MemoryDecisionTest {
 
     @Test
     public void testSpecialCharactersInFields() throws IOException {
-        MemoryDecision specialDecision = MemoryDecision.builder()
+        MemoryDecision specialDecision = MemoryDecision
+            .builder()
             .id("id-with-special-chars-🚀")
             .text("Text with\n\ttabs and\nnewlines and \"quotes\"")
             .event(MemoryEvent.UPDATE)
@@ -331,7 +306,8 @@ public class MemoryDecisionTest {
         specialDecision.toXContent(builder, EMPTY_PARAMS);
         String jsonString = TestHelper.xContentBuilderToString(builder);
 
-        XContentParser parser = XContentType.JSON.xContent()
+        XContentParser parser = XContentType.JSON
+            .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
         MemoryDecision parsed = MemoryDecision.parse(parser);

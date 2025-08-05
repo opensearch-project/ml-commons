@@ -32,13 +32,9 @@ public class MLUpdateMemoryInputTest {
 
     @Before
     public void setUp() {
-        inputNormal = MLUpdateMemoryInput.builder()
-            .text("Updated memory content")
-            .build();
+        inputNormal = MLUpdateMemoryInput.builder().text("Updated memory content").build();
 
-        inputWithWhitespace = MLUpdateMemoryInput.builder()
-            .text("  Text with surrounding spaces  ")
-            .build();
+        inputWithWhitespace = MLUpdateMemoryInput.builder().text("  Text with surrounding spaces  ").build();
     }
 
     @Test
@@ -68,28 +64,19 @@ public class MLUpdateMemoryInputTest {
 
     @Test
     public void testConstructorWithNullText() {
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> new MLUpdateMemoryInput((String) null)
-        );
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> new MLUpdateMemoryInput((String) null));
         assertEquals("Text cannot be null or empty", exception.getMessage());
     }
 
     @Test
     public void testConstructorWithEmptyText() {
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> new MLUpdateMemoryInput("")
-        );
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> new MLUpdateMemoryInput(""));
         assertEquals("Text cannot be null or empty", exception.getMessage());
     }
 
     @Test
     public void testConstructorWithWhitespaceOnlyText() {
-        IllegalArgumentException exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> new MLUpdateMemoryInput("   ")
-        );
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> new MLUpdateMemoryInput("   "));
         assertEquals("Text cannot be null or empty", exception.getMessage());
     }
 
@@ -116,10 +103,11 @@ public class MLUpdateMemoryInputTest {
     public void testParse() throws IOException {
         String jsonString = "{\"text\":\"Parsed memory text\"}";
 
-        XContentParser parser = XContentType.JSON.xContent()
+        XContentParser parser = XContentType.JSON
+            .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
-        
+
         MLUpdateMemoryInput parsed = MLUpdateMemoryInput.parse(parser);
 
         assertEquals("Parsed memory text", parsed.getText());
@@ -129,10 +117,11 @@ public class MLUpdateMemoryInputTest {
     public void testParseWithUnknownFields() throws IOException {
         String jsonString = "{\"text\":\"Valid text\",\"unknown_field\":\"ignored\",\"another\":123}";
 
-        XContentParser parser = XContentType.JSON.xContent()
+        XContentParser parser = XContentType.JSON
+            .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
-        
+
         MLUpdateMemoryInput parsed = MLUpdateMemoryInput.parse(parser);
 
         assertEquals("Valid text", parsed.getText());
@@ -163,7 +152,7 @@ public class MLUpdateMemoryInputTest {
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         specialInput.toXContent(builder, EMPTY_PARAMS);
         String jsonString = TestHelper.xContentBuilderToString(builder);
-        
+
         assertTrue(jsonString.contains("Text with"));
         assertTrue(jsonString.contains("tabs"));
         assertTrue(jsonString.contains("quotes"));
@@ -176,15 +165,15 @@ public class MLUpdateMemoryInputTest {
         for (int i = 0; i < 1000; i++) {
             longText.append("This is sentence ").append(i).append(". ");
         }
-        
+
         MLUpdateMemoryInput longInput = new MLUpdateMemoryInput(longText.toString().trim());
-        
+
         // Test serialization
         BytesStreamOutput out = new BytesStreamOutput();
         longInput.writeTo(out);
         StreamInput in = out.bytes().streamInput();
         MLUpdateMemoryInput deserialized = new MLUpdateMemoryInput(in);
-        
+
         assertEquals(longInput.getText(), deserialized.getText());
     }
 
@@ -196,7 +185,8 @@ public class MLUpdateMemoryInputTest {
         String jsonString = TestHelper.xContentBuilderToString(builder);
 
         // Parse back
-        XContentParser parser = XContentType.JSON.xContent()
+        XContentParser parser = XContentType.JSON
+            .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
         MLUpdateMemoryInput parsed = MLUpdateMemoryInput.parse(parser);
@@ -209,20 +199,21 @@ public class MLUpdateMemoryInputTest {
     public void testMultilineText() throws IOException {
         String multilineText = "Line 1\nLine 2\nLine 3\nWith multiple lines";
         MLUpdateMemoryInput multilineInput = new MLUpdateMemoryInput(multilineText);
-        
+
         assertEquals(multilineText, multilineInput.getText());
-        
+
         // Test XContent handling
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         multilineInput.toXContent(builder, EMPTY_PARAMS);
         String jsonString = TestHelper.xContentBuilderToString(builder);
-        
+
         // Parse back
-        XContentParser parser = XContentType.JSON.xContent()
+        XContentParser parser = XContentType.JSON
+            .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
         MLUpdateMemoryInput parsed = MLUpdateMemoryInput.parse(parser);
-        
+
         assertEquals(multilineText, parsed.getText());
     }
 
@@ -244,14 +235,12 @@ public class MLUpdateMemoryInputTest {
         // Parse with missing text field should throw exception when building
         String jsonString = "{\"other_field\":\"value\"}";
 
-        XContentParser parser = XContentType.JSON.xContent()
+        XContentParser parser = XContentType.JSON
+            .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
-        
-        assertThrows(
-            IllegalArgumentException.class,
-            () -> MLUpdateMemoryInput.parse(parser)
-        );
+
+        assertThrows(IllegalArgumentException.class, () -> MLUpdateMemoryInput.parse(parser));
     }
 
     @Test
@@ -260,7 +249,7 @@ public class MLUpdateMemoryInputTest {
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         inputNormal.toXContent(builder, EMPTY_PARAMS);
         String jsonString = TestHelper.xContentBuilderToString(builder);
-        
+
         // Should be a simple object with just one field
         assertTrue(jsonString.startsWith("{\"text\":"));
         assertTrue(jsonString.endsWith("\"}"));
