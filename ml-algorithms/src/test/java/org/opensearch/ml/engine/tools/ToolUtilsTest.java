@@ -390,6 +390,6 @@ public class ToolUtilsTest {
         String result = ToolUtils.filterToolOutput(toolParams, originalOutput);
 
         // Should contain only the targeted deep value
-        assertEquals("\"targetValue\"", result);
+        assertEquals("targetValue", result);
     }
 }

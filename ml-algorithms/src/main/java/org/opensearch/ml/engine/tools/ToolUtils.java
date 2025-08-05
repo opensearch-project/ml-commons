@@ -18,7 +18,6 @@ import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.utils.StringUtils;
 
 import com.jayway.jsonpath.JsonPath;
-import com.jayway.jsonpath.PathNotFoundException;
 
 import lombok.extern.log4j.Log4j2;
 
@@ -94,7 +93,7 @@ public class ToolUtils {
             try {
                 Object filteredOutput = JsonPath.read(output, toolParams.get(TOOL_OUTPUT_FILTERS_FIELD));
                 output = StringUtils.toJson(filteredOutput);
-            } catch (PathNotFoundException e) {
+            } catch (Exception e) {
                 log.error("Failed to read tool response from path [{}]", toolParams.get(TOOL_OUTPUT_FILTERS_FIELD), e);
             }
         }
