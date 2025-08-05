@@ -97,26 +97,64 @@ public class RestMLDeleteMemoryContainerActionTests extends OpenSearchTestCase {
         assertEquals("/_plugins/_ml/memory_containers/{memory_container_id}", route.getPath());
     }
 
+    public void testRoutePathConstant() {
+        List<RestHandler.Route> routes = restMLDeleteMemoryContainerAction.routes();
+        RestHandler.Route route = routes.get(0);
+
+        // Verify the route path matches the expected pattern
+        assertTrue(route.getPath().contains("/_plugins/_ml/memory_containers/"));
+        assertTrue(route.getPath().contains("{memory_container_id}"));
+        assertEquals(RestRequest.Method.DELETE, route.getMethod());
+    }
+
     public void test_PrepareRequest() throws Exception {
         RestRequest request = getRestRequest("memory_container_id", null);
         restMLDeleteMemoryContainerAction.handleRequest(request, channel, client);
 
         ArgumentCaptor<MLMemoryContainerDeleteRequest> argumentCaptor = ArgumentCaptor.forClass(MLMemoryContainerDeleteRequest.class);
         verify(client, times(1)).execute(eq(MLMemoryContainerDeleteAction.INSTANCE), argumentCaptor.capture(), any());
-        String memoryContainerId = argumentCaptor.getValue().getMemoryContainerId();
-        assertEquals(memoryContainerId, "memory_container_id");
+        MLMemoryContainerDeleteRequest mlMemoryContainerDeleteRequest = argumentCaptor.getValue();
+        assertNotNull(mlMemoryContainerDeleteRequest);
+        assertEquals("memory_container_id", mlMemoryContainerDeleteRequest.getMemoryContainerId());
+        assertNull(mlMemoryContainerDeleteRequest.getTenantId());
     }
 
     public void testPrepareRequest_MultiTenancyEnabled() throws Exception {
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
-        RestRequest request = getRestRequest("memory_container_id", "_tenant_id");
+        RestRequest request = getRestRequest("memory_container_id", "tenant_id");
         restMLDeleteMemoryContainerAction.handleRequest(request, channel, client);
 
         ArgumentCaptor<MLMemoryContainerDeleteRequest> argumentCaptor = ArgumentCaptor.forClass(MLMemoryContainerDeleteRequest.class);
         verify(client, times(1)).execute(eq(MLMemoryContainerDeleteAction.INSTANCE), argumentCaptor.capture(), any());
         MLMemoryContainerDeleteRequest mlMemoryContainerDeleteRequest = argumentCaptor.getValue();
+        assertNotNull(mlMemoryContainerDeleteRequest);
         assertEquals("memory_container_id", mlMemoryContainerDeleteRequest.getMemoryContainerId());
-        assertEquals("_tenant_id", mlMemoryContainerDeleteRequest.getTenantId());
+        assertEquals("tenant_id", mlMemoryContainerDeleteRequest.getTenantId());
+    }
+
+    public void testPrepareRequest_MultiTenancyDisabled() throws Exception {
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
+        RestRequest request = getRestRequest("memory_container_id", "tenant_id");
+        restMLDeleteMemoryContainerAction.handleRequest(request, channel, client);
+
+        ArgumentCaptor<MLMemoryContainerDeleteRequest> argumentCaptor = ArgumentCaptor.forClass(MLMemoryContainerDeleteRequest.class);
+        verify(client, times(1)).execute(eq(MLMemoryContainerDeleteAction.INSTANCE), argumentCaptor.capture(), any());
+        MLMemoryContainerDeleteRequest mlMemoryContainerDeleteRequest = argumentCaptor.getValue();
+        assertNotNull(mlMemoryContainerDeleteRequest);
+        assertEquals("memory_container_id", mlMemoryContainerDeleteRequest.getMemoryContainerId());
+        assertNull(mlMemoryContainerDeleteRequest.getTenantId());
+    }
+
+    public void testActionNameConstant() {
+        // Test that the action name constant is correctly defined
+        assertEquals("ml_delete_memory_container_action", restMLDeleteMemoryContainerAction.getName());
+    }
+
+    private RestRequest createRestRequestWithoutId() {
+        return new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
+            .withMethod(RestRequest.Method.DELETE)
+            .withPath("/_plugins/_ml/memory_containers/")
+            .build();
     }
 
     private RestRequest getRestRequest(String memoryContainerId, String tenantId) {

@@ -7,9 +7,11 @@ package org.opensearch.ml.action.memorycontainer;
 
 import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
@@ -29,13 +31,16 @@ import org.opensearch.action.support.ActionFilters;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
+import org.opensearch.commons.ConfigConstants;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.index.shard.ShardId;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerDeleteRequest;
 import org.opensearch.ml.helper.MemoryAccessControlHelper;
 import org.opensearch.remote.metadata.client.DeleteDataObjectResponse;
+import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.test.OpenSearchTestCase;
@@ -46,6 +51,7 @@ import org.opensearch.transport.client.Client;
 public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCase {
 
     private static final String MEMORY_CONTAINER_ID = "memory_container_id";
+    private static final String TENANT_ID = "tenant_id";
     DeleteResponse deleteResponse = new DeleteResponse(
         new ShardId(ML_MEMORY_CONTAINER_INDEX, "_na_", 0),
         MEMORY_CONTAINER_ID,
@@ -155,7 +161,7 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
     }
 
     @Test
-    public void test_UserHasNoAccessException() throws IOException {
+    public void testUserHasNoAccessException() throws IOException {
         CompletableFuture<GetDataObjectResponse> getFuture = CompletableFuture.completedFuture(getDataObjectResponse);
         when(sdkClient.getDataObjectAsync(any())).thenReturn(getFuture);
 
@@ -190,6 +196,32 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
         assertEquals("Failed to find memory container", argumentCaptor.getValue().getMessage());
     }
 
+    public void testDeleteMemoryContainer_MultiTenancyEnabled_ValidTenantId() {
+        // Enable multi-tenancy
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
+
+        // Create request with tenant ID
+        MLMemoryContainerDeleteRequest requestWithTenant = MLMemoryContainerDeleteRequest.builder()
+                .memoryContainerId(MEMORY_CONTAINER_ID)
+                .tenantId(TENANT_ID)
+                .build();
+
+        CompletableFuture<GetDataObjectResponse> getFuture = CompletableFuture.completedFuture(getDataObjectResponse);
+        when(sdkClient.getDataObjectAsync(any())).thenReturn(getFuture);
+        when(memoryAccessControlHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
+
+        CompletableFuture<DeleteDataObjectResponse> deleteFuture = CompletableFuture.completedFuture(deleteDataObjectResponse);
+        when(sdkClient.deleteDataObjectAsync(any())).thenReturn(deleteFuture);
+
+        transportDeleteMemoryContainerAction.doExecute(null, requestWithTenant, actionListener);
+
+        ArgumentCaptor<DeleteResponse> captor = forClass(DeleteResponse.class);
+        verify(actionListener).onResponse(captor.capture());
+
+        DeleteResponse actualResponse = captor.getValue();
+        assertEquals(deleteResponse.getId(), actualResponse.getId());
+    }
+
     public void testDeleteMemoryContainer_MultiTenancyEnabled_NoTenantId() throws InterruptedException {
         // Enable multi-tenancy
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
@@ -202,5 +234,35 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
         ArgumentCaptor<Exception> argumentCaptor = forClass(OpenSearchStatusException.class);
         verify(actionListener).onFailure(argumentCaptor.capture());
         assertEquals("You don't have permission to access this resource", argumentCaptor.getValue().getMessage());
+    }
+
+    public void testDeleteMemoryContainer_UnauthorizedUser() {
+        // Create request
+        MLMemoryContainerDeleteRequest request = MLMemoryContainerDeleteRequest.builder().memoryContainerId(MEMORY_CONTAINER_ID).build();
+
+        CompletableFuture<GetDataObjectResponse> future = new CompletableFuture<>();
+        future.complete(getDataObjectResponse);
+        when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenReturn(future);
+
+        // Setup unauthorized user context
+        when(client.threadPool()).thenReturn(threadPool);
+        when(threadPool.getThreadContext()).thenReturn(threadContext);
+        threadContext.putTransient(ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, "unauthorized-user||");
+
+        // Disable multi-tenancy
+        when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
+
+        // Execute
+        transportDeleteMemoryContainerAction.doExecute(null, request, actionListener);
+
+        // Verify failure response with FORBIDDEN status (unauthorized user should be denied access)
+        verify(actionListener, timeout(1000))
+            .onFailure(
+                argThat(
+                    exception -> exception instanceof OpenSearchStatusException
+                        && ((OpenSearchStatusException) exception).status() == RestStatus.FORBIDDEN
+                        && exception.getMessage().contains("User doesn't have permissions to delete this memory container")
+                )
+            );
     }
 }
