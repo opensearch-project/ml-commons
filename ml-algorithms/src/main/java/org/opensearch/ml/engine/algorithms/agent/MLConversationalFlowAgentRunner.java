@@ -12,12 +12,12 @@ import static org.opensearch.ml.common.conversation.ActionConstants.PARENT_INTER
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DISABLE_TRACE;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMessageHistoryLimit;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
-import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getToolName;
 import static org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor.QUESTION;
 import static org.opensearch.ml.engine.tools.ToolUtils.TOOL_OUTPUT_FILTERS_FIELD;
 import static org.opensearch.ml.engine.tools.ToolUtils.filterToolOutput;
+import static org.opensearch.ml.engine.tools.ToolUtils.getToolName;
+import static org.opensearch.ml.engine.tools.ToolUtils.parseResponse;
 
-import java.io.IOException;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
@@ -31,7 +31,6 @@ import org.opensearch.action.StepListener;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
-import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
@@ -42,7 +41,6 @@ import org.opensearch.ml.common.conversation.ActionConstants;
 import org.opensearch.ml.common.conversation.Interaction;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
-import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.memory.Message;
 import org.opensearch.ml.common.spi.tools.Tool;
@@ -258,12 +256,11 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
         Object output,
         String tenantId,
         StepListener<Object> nextStepListener
-    ) throws IOException,
-        PrivilegedActionException {
+    ) throws PrivilegedActionException {
         String toolName = getToolName(previousToolSpec);
         String outputKey = toolName + ".output";
         Map<String, String> toolParameters = ToolUtils.buildToolParameters(params, previousToolSpec, tenantId);
-        String filteredOutput = filterToolOutput(toolParameters, parseResponse(output));
+        String filteredOutput = parseResponse(filterToolOutput(toolParameters, output));
         params.put(outputKey, StringUtils.escapeString(filteredOutput));
         boolean traceDisabled = params.containsKey(DISABLE_TRACE) && Boolean.parseBoolean(params.get(DISABLE_TRACE));
 
@@ -407,24 +404,6 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
                         e -> log.error("Failed create memory from id: " + memoryId, e)
                     )
             );
-    }
-
-    @VisibleForTesting
-    String parseResponse(Object output) throws IOException {
-        if (output instanceof List && !((List) output).isEmpty() && ((List) output).get(0) instanceof ModelTensors) {
-            ModelTensors tensors = (ModelTensors) ((List) output).get(0);
-            return tensors.toXContent(JsonXContent.contentBuilder(), null).toString();
-        } else if (output instanceof ModelTensor) {
-            return ((ModelTensor) output).toXContent(JsonXContent.contentBuilder(), null).toString();
-        } else if (output instanceof ModelTensorOutput) {
-            return ((ModelTensorOutput) output).toXContent(JsonXContent.contentBuilder(), null).toString();
-        } else {
-            if (output instanceof String) {
-                return (String) output;
-            } else {
-                return StringUtils.toJson(output);
-            }
-        }
     }
 
 }

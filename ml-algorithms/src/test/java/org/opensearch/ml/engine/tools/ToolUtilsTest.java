@@ -13,6 +13,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.engine.tools.ToolUtils.TOOL_REQUIRED_PARAMS;
+import static org.opensearch.ml.engine.tools.ToolUtils.filterToolOutput;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -129,7 +130,7 @@ public class ToolUtilsTest {
         assertEquals(3, result.size());
         assertEquals("value1", result.get("param1"));
         assertEquals("value2", result.get("param2"));
-        assertEquals("Use value1 and value2", result.get("input"));
+        assertEquals("Use ${parameters.param1} and ${parameters.param2}", result.get("input"));
     }
 
     @Test
@@ -142,7 +143,7 @@ public class ToolUtilsTest {
 
         Map<String, String> result = ToolUtils.extractRequiredParameters(parameters, attributes);
 
-        assertEquals("Use value1 and ${parameters.param2}", result.get("input"));
+        assertEquals("Use ${parameters.param1} and ${parameters.param2}", result.get("input"));
     }
 
     @Test
@@ -185,10 +186,9 @@ public class ToolUtilsTest {
 
         Map<String, String> result = ToolUtils.buildToolParameters(parameters, toolSpec, "test_tenant");
 
-        assertEquals(5, result.size());
+        assertEquals(4, result.size());
         assertEquals("value1", result.get("param1"));
         assertEquals("value2", result.get("param2"));
-        assertEquals("value2", result.get("TestTool.param2"));
         assertEquals("value3", result.get("OtherTool.param3"));
         assertEquals("test_tenant", result.get(TENANT_ID_FIELD));
     }
@@ -289,7 +289,7 @@ public class ToolUtilsTest {
         Map<String, String> originalOutput = Map.of("key1", "value1", "key2", "value2");
         Map<String, String> toolParams = new HashMap<>();
 
-        String result = ToolUtils.filterToolOutput(toolParams, originalOutput);
+        String result = ToolUtils.parseResponse(filterToolOutput(toolParams, originalOutput));
 
         // The result should contain all the original data
         assertTrue(result.contains("key1"));
@@ -308,7 +308,7 @@ public class ToolUtilsTest {
         Map<String, String> toolParams = new HashMap<>();
         toolParams.put(ToolUtils.TOOL_OUTPUT_FILTERS_FIELD, "$.nested");
 
-        String result = ToolUtils.filterToolOutput(toolParams, originalOutput);
+        String result = ToolUtils.parseResponse(filterToolOutput(toolParams, originalOutput));
 
         // The result should contain only the filtered data
         assertTrue(result.contains("innerKey"));
@@ -329,7 +329,7 @@ public class ToolUtilsTest {
         Map<String, String> toolParams = new HashMap<>();
         toolParams.put(ToolUtils.TOOL_OUTPUT_FILTERS_FIELD, "$.items[1]");
 
-        String result = ToolUtils.filterToolOutput(toolParams, originalOutput);
+        String result = ToolUtils.parseResponse(filterToolOutput(toolParams, originalOutput));
 
         // Should contain second but not first
         assertTrue(result.contains("second"));
@@ -344,7 +344,7 @@ public class ToolUtilsTest {
         Map<String, String> toolParams = new HashMap<>();
         toolParams.put(ToolUtils.TOOL_OUTPUT_FILTERS_FIELD, "$.nonexistent");
 
-        String result = ToolUtils.filterToolOutput(toolParams, originalOutput);
+        String result = ToolUtils.parseResponse(filterToolOutput(toolParams, originalOutput));
 
         // Original data should be preserved when path not found
         assertTrue(result.contains("key1"));
@@ -355,7 +355,7 @@ public class ToolUtilsTest {
     public void testFilterToolOutput_NullParams() {
         Map<String, String> originalOutput = Map.of("key1", "value1");
 
-        String result = ToolUtils.filterToolOutput(null, originalOutput);
+        String result = ToolUtils.parseResponse(filterToolOutput(null, originalOutput));
 
         assertTrue(result.contains("key1"));
         assertTrue(result.contains("value1"));
@@ -366,7 +366,7 @@ public class ToolUtilsTest {
         Map<String, String> toolParams = new HashMap<>();
         toolParams.put(ToolUtils.TOOL_OUTPUT_FILTERS_FIELD, "$.field");
 
-        String result = ToolUtils.filterToolOutput(toolParams, null);
+        String result = ToolUtils.parseResponse(filterToolOutput(toolParams, null));
 
         assertEquals("null", result);
     }
@@ -387,7 +387,7 @@ public class ToolUtilsTest {
         Map<String, String> toolParams = new HashMap<>();
         toolParams.put(ToolUtils.TOOL_OUTPUT_FILTERS_FIELD, "$.level1.level2.targetField");
 
-        String result = ToolUtils.filterToolOutput(toolParams, originalOutput);
+        String result = ToolUtils.parseResponse(filterToolOutput(toolParams, originalOutput));
 
         // Should contain only the targeted deep value
         assertEquals("targetValue", result);

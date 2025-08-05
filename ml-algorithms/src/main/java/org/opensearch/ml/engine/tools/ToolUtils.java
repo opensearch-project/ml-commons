@@ -7,14 +7,18 @@ package org.opensearch.ml.engine.tools;
 
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.common.utils.StringUtils.gson;
-import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.*;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.text.StringSubstitutor;
+import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.ml.common.agent.MLToolSpec;
+import org.opensearch.ml.common.output.model.ModelTensor;
+import org.opensearch.ml.common.output.model.ModelTensorOutput;
+import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.utils.StringUtils;
 
@@ -31,6 +35,9 @@ public class ToolUtils {
 
     public static Map<String, String> extractRequiredParameters(Map<String, String> parameters, Map<String, ?> attributes) {
         Map<String, String> extractedParameters = new HashMap<>();
+        if (parameters == null) {
+            return extractedParameters;
+        }
         if (attributes != null && attributes.containsKey(TOOL_REQUIRED_PARAMS)) {
             List<String> requiredParameters = StringUtils.parseStringArrayToList((String) attributes.get(TOOL_REQUIRED_PARAMS));
             if (requiredParameters != null) {
@@ -46,7 +53,7 @@ public class ToolUtils {
 
     public static Map<String, String> extractInputParameters(Map<String, String> parameters, Map<String, ?> attributes) {
         Map<String, String> extractedParameters = ToolUtils.extractRequiredParameters(parameters, attributes);
-        if (parameters.containsKey("input")) {
+        if (extractedParameters.containsKey("input")) {
             try {
                 StringSubstitutor stringSubstitutor = new StringSubstitutor(parameters, "${parameters.", "}");
                 String input = stringSubstitutor.replace(parameters.get("input"));
@@ -66,13 +73,19 @@ public class ToolUtils {
         if (toolSpec.getParameters() != null) {
             executeParams.putAll(toolSpec.getParameters());
         }
+        executeParams.putAll(parameters);
 
         for (String key : parameters.keySet()) {
-            String toolNamePrefix = getToolName(toolSpec) + ".";
-            if (key.startsWith(toolNamePrefix)) {
+            String toolName = getToolName(toolSpec);
+            String toolNamePrefix = toolName + ".";
+            String toolDescription = toolName + ".description";
+            String toolTypePrefix = toolSpec.getType() + ".";
+            if (key.startsWith(toolNamePrefix) && !toolDescription.equals(key)) {
+                // Don't remove toolName from key, for example SearchIIndexTool.description should keep as is.
                 executeParams.put(key.replace(toolNamePrefix, ""), parameters.get(key));
-            } else {
-                executeParams.put(key, parameters.get(key));
+                executeParams.remove(key);
+            } else if (key.startsWith(toolTypePrefix)) {
+                executeParams.remove(key);
             }
         }
         // Override all parameters in tool config to tool execution parameters as the config contains the static parameters.
@@ -108,17 +121,46 @@ public class ToolUtils {
         return tool;
     }
 
-    public static String filterToolOutput(Map<String, String> toolParams, Object originalOutput) {
-        String output = StringUtils.toJson(originalOutput);
+    public static Object filterToolOutput(Map<String, String> toolParams, Object response) {
         if (toolParams != null && toolParams.containsKey(TOOL_OUTPUT_FILTERS_FIELD)) {
             try {
+                String output = parseResponse(response);
                 Object filteredOutput = JsonPath.read(output, toolParams.get(TOOL_OUTPUT_FILTERS_FIELD));
-                output = StringUtils.toJson(filteredOutput);
+                return StringUtils.toJson(filteredOutput);
             } catch (Exception e) {
                 log.error("Failed to read tool response from path [{}]", toolParams.get(TOOL_OUTPUT_FILTERS_FIELD), e);
             }
         }
-        return output;
+        return response;
     }
 
+    public static String parseResponse(Object output) {
+        try {
+            if (output instanceof List && !((List) output).isEmpty() && ((List) output).get(0) instanceof ModelTensors) {
+                ModelTensors tensors = (ModelTensors) ((List) output).get(0);
+                return tensors.toXContent(JsonXContent.contentBuilder(), null).toString();
+            } else if (output instanceof ModelTensor) {
+                return ((ModelTensor) output).toXContent(JsonXContent.contentBuilder(), null).toString();
+            } else if (output instanceof ModelTensorOutput) {
+                return ((ModelTensorOutput) output).toXContent(JsonXContent.contentBuilder(), null).toString();
+            } else {
+                return StringUtils.toJson(output);
+            }
+        } catch (Exception e) {
+            return StringUtils.toJson(output);
+        }
+    }
+
+    public static List<String> getToolNames(Map<String, Tool> tools) {
+        final List<String> inputTools = new ArrayList<>();
+        for (Map.Entry<String, Tool> entry : tools.entrySet()) {
+            String toolName = entry.getValue().getName();
+            inputTools.add(toolName);
+        }
+        return inputTools;
+    }
+
+    public static String getToolName(MLToolSpec toolSpec) {
+        return toolSpec.getName() != null ? toolSpec.getName() : toolSpec.getType();
+    }
 }

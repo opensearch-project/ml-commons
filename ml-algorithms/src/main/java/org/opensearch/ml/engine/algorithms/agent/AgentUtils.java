@@ -28,6 +28,7 @@ import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.TOOL_D
 import static org.opensearch.ml.engine.algorithms.agent.MLChatAgentRunner.TOOL_NAMES;
 import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.RESPONSE_FIELD;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.LAST_N_INTERACTIONS;
+import static org.opensearch.ml.engine.tools.ToolUtils.getToolName;
 
 import java.io.IOException;
 import java.lang.reflect.Type;
@@ -646,10 +647,6 @@ public class AgentUtils {
         return messageHistoryLimitStr != null ? Integer.parseInt(messageHistoryLimitStr) : LAST_N_INTERACTIONS;
     }
 
-    public static String getToolName(MLToolSpec toolSpec) {
-        return toolSpec.getName() != null ? toolSpec.getName() : toolSpec.getType();
-    }
-
     public static List<MLToolSpec> getMlToolSpecs(MLAgent mlAgent, Map<String, String> params) {
         String selectedToolsStr = params.get(SELECTED_TOOLS);
         List<MLToolSpec> toolSpecs = new ArrayList<>();
@@ -857,15 +854,6 @@ public class AgentUtils {
         }
     }
 
-    public static List<String> getToolNames(Map<String, Tool> tools) {
-        final List<String> inputTools = new ArrayList<>();
-        for (Map.Entry<String, Tool> entry : tools.entrySet()) {
-            String toolName = entry.getValue().getName();
-            inputTools.add(toolName);
-        }
-        return inputTools;
-    }
-
     public static Map<String, String> constructToolParams(
         Map<String, Tool> tools,
         Map<String, MLToolSpec> toolSpecMap,
@@ -877,8 +865,15 @@ public class AgentUtils {
         Map<String, String> toolParams = new HashMap<>();
         Map<String, String> toolSpecParams = toolSpecMap.get(action).getParameters();
         Map<String, String> toolSpecConfigMap = toolSpecMap.get(action).getConfigMap();
+        MLToolSpec toolSpec = toolSpecMap.get(action);
         if (toolSpecParams != null) {
             toolParams.putAll(toolSpecParams);
+            for (String key : toolSpecParams.keySet()) {
+                String toolNamePrefix = getToolName(toolSpec) + ".";
+                if (key.startsWith(toolNamePrefix)) {
+                    toolParams.put(key.replace(toolNamePrefix, ""), toolSpecParams.get(key));
+                }
+            }
         }
         if (toolSpecConfigMap != null) {
             toolParams.putAll(toolSpecConfigMap);

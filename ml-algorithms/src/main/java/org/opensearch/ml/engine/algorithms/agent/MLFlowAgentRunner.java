@@ -6,11 +6,11 @@
 package org.opensearch.ml.engine.algorithms.agent;
 
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
-import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getToolName;
 import static org.opensearch.ml.engine.tools.ToolUtils.TOOL_OUTPUT_FILTERS_FIELD;
 import static org.opensearch.ml.engine.tools.ToolUtils.filterToolOutput;
+import static org.opensearch.ml.engine.tools.ToolUtils.getToolName;
+import static org.opensearch.ml.engine.tools.ToolUtils.parseResponse;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -20,7 +20,6 @@ import org.opensearch.action.StepListener;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
-import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.agent.MLAgent;
@@ -29,7 +28,6 @@ import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.conversation.ActionConstants;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
-import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.utils.StringUtils;
@@ -114,7 +112,7 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                     String toolName = getToolName(previousToolSpec);
                     String outputKey = toolName + ".output";
                     Map<String, String> toolParameters = ToolUtils.buildToolParameters(params, previousToolSpec, mlAgent.getTenantId());
-                    String filteredOutput = filterToolOutput(toolParameters, parseResponse(output));
+                    String filteredOutput = parseResponse(filterToolOutput(toolParameters, output));
                     params.put(outputKey, StringUtils.escapeString(filteredOutput));
                     if (previousToolSpec.isIncludeOutputInAgentResponse() || finalI == toolSpecs.size()) {
                         if (toolParameters.containsKey(TOOL_OUTPUT_FILTERS_FIELD)) {
@@ -122,7 +120,7 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                         } else if (output instanceof ModelTensorOutput) {
                             flowAgentOutput.addAll(((ModelTensorOutput) output).getMlModelOutputs().get(0).getMlModelTensors());
                         } else {
-                            ModelTensor stepOutput = ModelTensor.builder().name(outputKey).result(StringUtils.toJson(output)).build();
+                            ModelTensor stepOutput = ModelTensor.builder().name(toolName).result(StringUtils.toJson(output)).build();
                             flowAgentOutput.add(stepOutput);
                         }
 
@@ -231,24 +229,6 @@ public class MLFlowAgentRunner implements MLAgentRunner {
         memory
             .getMemoryManager()
             .updateInteraction(interactionId, ImmutableMap.of(ActionConstants.ADDITIONAL_INFO_FIELD, additionalInfo), listener);
-    }
-
-    @VisibleForTesting
-    String parseResponse(Object output) throws IOException {
-        if (output instanceof List && !((List<?>) output).isEmpty() && ((List<?>) output).get(0) instanceof ModelTensors) {
-            ModelTensors tensors = (ModelTensors) ((List<?>) output).get(0);
-            return tensors.toXContent(JsonXContent.contentBuilder(), null).toString();
-        } else if (output instanceof ModelTensor) {
-            return ((ModelTensor) output).toXContent(JsonXContent.contentBuilder(), null).toString();
-        } else if (output instanceof ModelTensorOutput) {
-            return ((ModelTensorOutput) output).toXContent(JsonXContent.contentBuilder(), null).toString();
-        } else {
-            if (output instanceof String) {
-                return (String) output;
-            } else {
-                return StringUtils.toJson(output);
-            }
-        }
     }
 
 }
