@@ -28,15 +28,9 @@ public class MLDeleteMemoryRequestTest {
 
     @Before
     public void setUp() {
-        requestNormal = MLDeleteMemoryRequest.builder()
-            .memoryContainerId("container-123")
-            .memoryId("memory-456")
-            .build();
+        requestNormal = MLDeleteMemoryRequest.builder().memoryContainerId("container-123").memoryId("memory-456").build();
 
-        requestEmpty = MLDeleteMemoryRequest.builder()
-            .memoryContainerId(null)
-            .memoryId(null)
-            .build();
+        requestEmpty = MLDeleteMemoryRequest.builder().memoryContainerId(null).memoryId(null).build();
     }
 
     @Test
@@ -72,10 +66,7 @@ public class MLDeleteMemoryRequestTest {
 
     @Test
     public void testValidateWithNullContainerId() {
-        MLDeleteMemoryRequest request = MLDeleteMemoryRequest.builder()
-            .memoryContainerId(null)
-            .memoryId("memory-123")
-            .build();
+        MLDeleteMemoryRequest request = MLDeleteMemoryRequest.builder().memoryContainerId(null).memoryId("memory-123").build();
 
         ActionRequestValidationException exception = request.validate();
         assertNotNull(exception);
@@ -85,10 +76,7 @@ public class MLDeleteMemoryRequestTest {
 
     @Test
     public void testValidateWithNullMemoryId() {
-        MLDeleteMemoryRequest request = MLDeleteMemoryRequest.builder()
-            .memoryContainerId("container-123")
-            .memoryId(null)
-            .build();
+        MLDeleteMemoryRequest request = MLDeleteMemoryRequest.builder().memoryContainerId("container-123").memoryId(null).build();
 
         ActionRequestValidationException exception = request.validate();
         assertNotNull(exception);
@@ -154,7 +142,8 @@ public class MLDeleteMemoryRequestTest {
 
     @Test
     public void testSpecialCharacters() throws IOException {
-        MLDeleteMemoryRequest specialRequest = MLDeleteMemoryRequest.builder()
+        MLDeleteMemoryRequest specialRequest = MLDeleteMemoryRequest
+            .builder()
             .memoryContainerId("container-with-special-chars-🚀")
             .memoryId("memory-with-\n\ttabs-and-\"quotes\"")
             .build();
@@ -171,10 +160,7 @@ public class MLDeleteMemoryRequestTest {
 
     @Test
     public void testEmptyStrings() {
-        MLDeleteMemoryRequest emptyStringRequest = MLDeleteMemoryRequest.builder()
-            .memoryContainerId("")
-            .memoryId("")
-            .build();
+        MLDeleteMemoryRequest emptyStringRequest = MLDeleteMemoryRequest.builder().memoryContainerId("").memoryId("").build();
 
         assertNotNull(emptyStringRequest);
         assertEquals("", emptyStringRequest.getMemoryContainerId());
@@ -193,7 +179,8 @@ public class MLDeleteMemoryRequestTest {
             longId.append("a");
         }
 
-        MLDeleteMemoryRequest longRequest = MLDeleteMemoryRequest.builder()
+        MLDeleteMemoryRequest longRequest = MLDeleteMemoryRequest
+            .builder()
             .memoryContainerId(longId.toString())
             .memoryId(longId.toString() + "-memory")
             .build();

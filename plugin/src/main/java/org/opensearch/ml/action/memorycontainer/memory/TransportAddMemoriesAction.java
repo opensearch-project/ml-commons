@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import org.apache.commons.lang3.StringUtils;
 import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.DocWriteRequest;
@@ -182,7 +183,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
 
         String memoryContainerId = input.getMemoryContainerId();
 
-        if (memoryContainerId == null || memoryContainerId.isEmpty()) {
+        if (StringUtils.isBlank(memoryContainerId)) {
             actionListener.onFailure(new IllegalArgumentException("Memory container ID is required"));
             return;
         }

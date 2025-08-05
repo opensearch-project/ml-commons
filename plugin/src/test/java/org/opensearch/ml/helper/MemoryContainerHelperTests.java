@@ -10,19 +10,12 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
 
-import java.io.IOException;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.concurrent.CompletableFuture;
 
 import org.junit.Before;
@@ -30,8 +23,8 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchStatusException;
+import org.opensearch.action.get.GetResponse;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.commons.authuser.User;
@@ -41,7 +34,6 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
-import org.opensearch.action.get.GetResponse;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.GetDataObjectResponse;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -72,14 +64,14 @@ public class MemoryContainerHelperTests {
     @Before
     public void setUp() {
         MockitoAnnotations.openMocks(this);
-        
+
         // Create real ThreadContext since it's final and can't be mocked
         Settings settings = Settings.builder().build();
         threadContext = new ThreadContext(settings);
-        
+
         when(client.threadPool()).thenReturn(threadPool);
         when(threadPool.getThreadContext()).thenReturn(threadContext);
-        
+
         helper = new MemoryContainerHelper(client, sdkClient, xContentRegistry);
     }
 
@@ -101,7 +93,7 @@ public class MemoryContainerHelperTests {
         // Create CompletableFuture with proper typed response
         CompletableFuture<GetDataObjectResponse> future = new CompletableFuture<>();
         when(sdkClient.getDataObjectAsync(any(GetDataObjectRequest.class))).thenReturn(future);
-        
+
         helper.getMemoryContainer(memoryContainerId, listener);
 
         // Complete the future with the mock response
@@ -177,7 +169,9 @@ public class MemoryContainerHelperTests {
         helper.getMemoryContainer(memoryContainerId, listener);
 
         // Need to wait a bit for async completion
-        try { Thread.sleep(100); } catch (InterruptedException e) {}
+        try {
+            Thread.sleep(100);
+        } catch (InterruptedException e) {}
 
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exceptionCaptor.capture());
@@ -199,7 +193,9 @@ public class MemoryContainerHelperTests {
         helper.getMemoryContainer(memoryContainerId, listener);
 
         // Need to wait a bit for async completion
-        try { Thread.sleep(100); } catch (InterruptedException e) {}
+        try {
+            Thread.sleep(100);
+        } catch (InterruptedException e) {}
 
         ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
         verify(listener).onFailure(exceptionCaptor.capture());
@@ -210,9 +206,7 @@ public class MemoryContainerHelperTests {
 
     @Test
     public void testCheckMemoryContainerAccessWithNullUser() {
-        MLMemoryContainer container = MLMemoryContainer.builder()
-            .name("test-container")
-            .build();
+        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").build();
 
         assertTrue(helper.checkMemoryContainerAccess(null, container));
     }
@@ -222,9 +216,7 @@ public class MemoryContainerHelperTests {
         // User constructor: name, backend_roles, roles, custom_attributes
         // The "all_access" should be in roles (third parameter), not backend_roles
         User adminUser = new User("admin", Arrays.asList("backend-role"), Arrays.asList("all_access"), null);
-        MLMemoryContainer container = MLMemoryContainer.builder()
-            .name("test-container")
-            .build();
+        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").build();
 
         assertTrue(helper.checkMemoryContainerAccess(adminUser, container));
     }
@@ -235,10 +227,7 @@ public class MemoryContainerHelperTests {
         User owner = new User("owner-user", Arrays.asList("backend-role1"), Arrays.asList("role1"), null);
         User accessingUser = new User("owner-user", Arrays.asList("backend-role2"), Arrays.asList("role2"), null);
 
-        MLMemoryContainer container = MLMemoryContainer.builder()
-            .name("test-container")
-            .owner(owner)
-            .build();
+        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").owner(owner).build();
 
         assertTrue(helper.checkMemoryContainerAccess(accessingUser, container));
     }
@@ -249,10 +238,7 @@ public class MemoryContainerHelperTests {
         User owner = new User("owner-user", Arrays.asList("backend-role1", "backend-role2"), Arrays.asList("role1"), null);
         User accessingUser = new User("different-user", Arrays.asList("backend-role2", "backend-role3"), Arrays.asList("role2"), null);
 
-        MLMemoryContainer container = MLMemoryContainer.builder()
-            .name("test-container")
-            .owner(owner)
-            .build();
+        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").owner(owner).build();
 
         assertTrue(helper.checkMemoryContainerAccess(accessingUser, container));
     }
@@ -263,10 +249,7 @@ public class MemoryContainerHelperTests {
         User owner = new User("owner-user", Arrays.asList("backend-role1"), Arrays.asList("role1"), null);
         User accessingUser = new User("different-user", Arrays.asList("backend-role2"), Arrays.asList("role2"), null);
 
-        MLMemoryContainer container = MLMemoryContainer.builder()
-            .name("test-container")
-            .owner(owner)
-            .build();
+        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").owner(owner).build();
 
         assertFalse(helper.checkMemoryContainerAccess(accessingUser, container));
     }
@@ -276,62 +259,41 @@ public class MemoryContainerHelperTests {
         // User constructor: name, backend_roles, roles, custom_attributes
         User accessingUser = new User("some-user", Arrays.asList("backend-role1"), Arrays.asList("role1"), null);
 
-        MLMemoryContainer container = MLMemoryContainer.builder()
-            .name("test-container")
-            .owner(null)
-            .build();
+        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").owner(null).build();
 
         assertFalse(helper.checkMemoryContainerAccess(accessingUser, container));
     }
 
     @Test
     public void testGetMemoryIndexNameWithConfig() {
-        MemoryStorageConfig config = MemoryStorageConfig.builder()
-            .memoryIndexName("custom-memory-index")
-            .build();
+        MemoryStorageConfig config = MemoryStorageConfig.builder().memoryIndexName("custom-memory-index").build();
 
-        MLMemoryContainer container = MLMemoryContainer.builder()
-            .name("test-container")
-            .memoryStorageConfig(config)
-            .build();
+        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").memoryStorageConfig(config).build();
 
         assertEquals("custom-memory-index", helper.getMemoryIndexName(container));
     }
 
     @Test
     public void testGetMemoryIndexNameWithoutConfig() {
-        MLMemoryContainer container = MLMemoryContainer.builder()
-            .name("test-container")
-            .memoryStorageConfig(null)
-            .build();
+        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").memoryStorageConfig(null).build();
 
         assertNull(helper.getMemoryIndexName(container));
     }
 
     @Test
     public void testGetMemoryIndexNameWithEmptyConfig() {
-        MemoryStorageConfig config = MemoryStorageConfig.builder()
-            .memoryIndexName(null)
-            .build();
+        MemoryStorageConfig config = MemoryStorageConfig.builder().memoryIndexName(null).build();
 
-        MLMemoryContainer container = MLMemoryContainer.builder()
-            .name("test-container")
-            .memoryStorageConfig(config)
-            .build();
+        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").memoryStorageConfig(config).build();
 
         assertNull(helper.getMemoryIndexName(container));
     }
 
     @Test
     public void testValidateMemoryIndexExistsSuccess() {
-        MemoryStorageConfig config = MemoryStorageConfig.builder()
-            .memoryIndexName("valid-index")
-            .build();
+        MemoryStorageConfig config = MemoryStorageConfig.builder().memoryIndexName("valid-index").build();
 
-        MLMemoryContainer container = MLMemoryContainer.builder()
-            .name("test-container")
-            .memoryStorageConfig(config)
-            .build();
+        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").memoryStorageConfig(config).build();
 
         ActionListener<String> mockListener = mock(ActionListener.class);
         boolean result = helper.validateMemoryIndexExists(container, "test-action", mockListener);
@@ -342,10 +304,7 @@ public class MemoryContainerHelperTests {
 
     @Test
     public void testValidateMemoryIndexExistsFailureNoIndex() {
-        MLMemoryContainer container = MLMemoryContainer.builder()
-            .name("test-container")
-            .memoryStorageConfig(null)
-            .build();
+        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").memoryStorageConfig(null).build();
 
         ActionListener<String> mockListener = mock(ActionListener.class);
         boolean result = helper.validateMemoryIndexExists(container, "test-action", mockListener);
@@ -361,14 +320,9 @@ public class MemoryContainerHelperTests {
 
     @Test
     public void testValidateMemoryIndexExistsFailureEmptyIndex() {
-        MemoryStorageConfig config = MemoryStorageConfig.builder()
-            .memoryIndexName("")
-            .build();
+        MemoryStorageConfig config = MemoryStorageConfig.builder().memoryIndexName("").build();
 
-        MLMemoryContainer container = MLMemoryContainer.builder()
-            .name("test-container")
-            .memoryStorageConfig(config)
-            .build();
+        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").memoryStorageConfig(config).build();
 
         ActionListener<String> mockListener = mock(ActionListener.class);
         boolean result = helper.validateMemoryIndexExists(container, "another-action", mockListener);
@@ -387,10 +341,7 @@ public class MemoryContainerHelperTests {
         User owner = new User("owner-user", null, Arrays.asList("role1"), null);
         User accessingUser = new User("different-user", Arrays.asList("backend-role1"), Arrays.asList("role2"), null);
 
-        MLMemoryContainer container = MLMemoryContainer.builder()
-            .name("test-container")
-            .owner(owner)
-            .build();
+        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").owner(owner).build();
 
         assertFalse(helper.checkMemoryContainerAccess(accessingUser, container));
     }
@@ -401,10 +352,7 @@ public class MemoryContainerHelperTests {
         User owner = new User("owner-user", null, Arrays.asList("role1"), null);
         User accessingUser = new User("different-user", null, Arrays.asList("role2"), null);
 
-        MLMemoryContainer container = MLMemoryContainer.builder()
-            .name("test-container")
-            .owner(owner)
-            .build();
+        MLMemoryContainer container = MLMemoryContainer.builder().name("test-container").owner(owner).build();
 
         assertFalse(helper.checkMemoryContainerAccess(accessingUser, container));
     }

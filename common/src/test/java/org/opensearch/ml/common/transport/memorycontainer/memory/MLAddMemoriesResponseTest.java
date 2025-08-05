@@ -33,41 +33,27 @@ public class MLAddMemoriesResponseTest {
 
     @Before
     public void setUp() {
-        testResults = Arrays.asList(
-            MemoryResult.builder()
-                .memoryId("mem-1")
-                .memory("User's name is John")
-                .event(MemoryEvent.ADD)
-                .build(),
-            MemoryResult.builder()
-                .memoryId("mem-2")
-                .memory("Lives in San Francisco")
-                .event(MemoryEvent.UPDATE)
-                .oldMemory("Lives in Boston")
-                .build(),
-            MemoryResult.builder()
-                .memoryId("mem-3")
-                .memory("Works at TechCorp")
-                .event(MemoryEvent.NONE)
-                .build()
-        );
+        testResults = Arrays
+            .asList(
+                MemoryResult.builder().memoryId("mem-1").memory("User's name is John").event(MemoryEvent.ADD).build(),
+                MemoryResult
+                    .builder()
+                    .memoryId("mem-2")
+                    .memory("Lives in San Francisco")
+                    .event(MemoryEvent.UPDATE)
+                    .oldMemory("Lives in Boston")
+                    .build(),
+                MemoryResult.builder().memoryId("mem-3").memory("Works at TechCorp").event(MemoryEvent.NONE).build()
+            );
 
         // Response with results
-        responseWithResults = MLAddMemoriesResponse.builder()
-            .results(testResults)
-            .sessionId("session-123")
-            .build();
+        responseWithResults = MLAddMemoriesResponse.builder().results(testResults).sessionId("session-123").build();
 
         // Empty response
-        responseEmpty = MLAddMemoriesResponse.builder()
-            .results(new ArrayList<>())
-            .sessionId("session-empty")
-            .build();
+        responseEmpty = MLAddMemoriesResponse.builder().results(new ArrayList<>()).sessionId("session-empty").build();
 
         // Minimal response (null results defaults to empty list)
-        responseMinimal = MLAddMemoriesResponse.builder()
-            .sessionId("session-minimal")
-            .build();
+        responseMinimal = MLAddMemoriesResponse.builder().sessionId("session-minimal").build();
     }
 
     @Test
@@ -161,17 +147,15 @@ public class MLAddMemoriesResponseTest {
 
     @Test
     public void testDifferentEventTypes() throws IOException {
-        List<MemoryResult> mixedResults = Arrays.asList(
-            new MemoryResult("add-1", "New fact", MemoryEvent.ADD, null),
-            new MemoryResult("update-1", "Updated fact", MemoryEvent.UPDATE, "Old fact"),
-            new MemoryResult("delete-1", "Deleted fact", MemoryEvent.DELETE, null),
-            new MemoryResult("none-1", "Unchanged fact", MemoryEvent.NONE, null)
-        );
+        List<MemoryResult> mixedResults = Arrays
+            .asList(
+                new MemoryResult("add-1", "New fact", MemoryEvent.ADD, null),
+                new MemoryResult("update-1", "Updated fact", MemoryEvent.UPDATE, "Old fact"),
+                new MemoryResult("delete-1", "Deleted fact", MemoryEvent.DELETE, null),
+                new MemoryResult("none-1", "Unchanged fact", MemoryEvent.NONE, null)
+            );
 
-        MLAddMemoriesResponse mixedResponse = MLAddMemoriesResponse.builder()
-            .results(mixedResults)
-            .sessionId("session-mixed")
-            .build();
+        MLAddMemoriesResponse mixedResponse = MLAddMemoriesResponse.builder().results(mixedResults).sessionId("session-mixed").build();
 
         // Test serialization
         BytesStreamOutput out = new BytesStreamOutput();
@@ -191,18 +175,19 @@ public class MLAddMemoriesResponseTest {
         // Test with many results
         List<MemoryResult> manyResults = new ArrayList<>();
         for (int i = 0; i < 100; i++) {
-            manyResults.add(MemoryResult.builder()
-                .memoryId("mem-" + i)
-                .memory("Memory content " + i)
-                .event(i % 2 == 0 ? MemoryEvent.ADD : MemoryEvent.UPDATE)
-                .oldMemory(i % 2 == 0 ? null : "Old memory " + i)
-                .build());
+            manyResults
+                .add(
+                    MemoryResult
+                        .builder()
+                        .memoryId("mem-" + i)
+                        .memory("Memory content " + i)
+                        .event(i % 2 == 0 ? MemoryEvent.ADD : MemoryEvent.UPDATE)
+                        .oldMemory(i % 2 == 0 ? null : "Old memory " + i)
+                        .build()
+                );
         }
 
-        MLAddMemoriesResponse largeResponse = MLAddMemoriesResponse.builder()
-            .results(manyResults)
-            .sessionId("session-large")
-            .build();
+        MLAddMemoriesResponse largeResponse = MLAddMemoriesResponse.builder().results(manyResults).sessionId("session-large").build();
 
         // Test serialization
         BytesStreamOutput out = new BytesStreamOutput();
@@ -216,21 +201,25 @@ public class MLAddMemoriesResponseTest {
 
     @Test
     public void testSpecialCharactersInResponse() throws IOException {
-        List<MemoryResult> specialResults = Arrays.asList(
-            MemoryResult.builder()
-                .memoryId("mem-special-🚀")
-                .memory("Memory with\n\ttabs and \"quotes\"")
-                .event(MemoryEvent.ADD)
-                .build(),
-            MemoryResult.builder()
-                .memoryId("mem-unicode-✨")
-                .memory("Memory with unicode characters")
-                .event(MemoryEvent.UPDATE)
-                .oldMemory("Old memory with 'single quotes'")
-                .build()
-        );
+        List<MemoryResult> specialResults = Arrays
+            .asList(
+                MemoryResult
+                    .builder()
+                    .memoryId("mem-special-🚀")
+                    .memory("Memory with\n\ttabs and \"quotes\"")
+                    .event(MemoryEvent.ADD)
+                    .build(),
+                MemoryResult
+                    .builder()
+                    .memoryId("mem-unicode-✨")
+                    .memory("Memory with unicode characters")
+                    .event(MemoryEvent.UPDATE)
+                    .oldMemory("Old memory with 'single quotes'")
+                    .build()
+            );
 
-        MLAddMemoriesResponse specialResponse = MLAddMemoriesResponse.builder()
+        MLAddMemoriesResponse specialResponse = MLAddMemoriesResponse
+            .builder()
             .results(specialResults)
             .sessionId("session-special-chars")
             .build();
@@ -263,10 +252,7 @@ public class MLAddMemoriesResponseTest {
         MLAddMemoriesResponse deserialized = new MLAddMemoriesResponse(in);
 
         for (int i = 0; i < testResults.size(); i++) {
-            assertEquals(
-                testResults.get(i).getMemoryId(),
-                deserialized.getResults().get(i).getMemoryId()
-            );
+            assertEquals(testResults.get(i).getMemoryId(), deserialized.getResults().get(i).getMemoryId());
         }
     }
 }

@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.commons.lang3.StringUtils;
 import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.search.SearchRequest;
@@ -85,7 +86,7 @@ public class TransportSearchMemoriesAction extends HandledTransportAction<MLSear
             return;
         }
 
-        if (input.getMemoryContainerId() == null || input.getMemoryContainerId().trim().isEmpty()) {
+        if (StringUtils.isBlank(input.getMemoryContainerId())) {
             actionListener.onFailure(new IllegalArgumentException("Memory container ID is required"));
             return;
         }

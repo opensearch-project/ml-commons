@@ -28,7 +28,8 @@ public class MLAddMemoriesRequestTest {
     @Before
     public void setUp() {
         MessageInput message = new MessageInput("user", "Test message content");
-        testInput = MLAddMemoriesInput.builder()
+        testInput = MLAddMemoriesInput
+            .builder()
             .messages(Arrays.asList(message))
             .memoryContainerId("container-123")
             .sessionId("session-456")
@@ -36,9 +37,7 @@ public class MLAddMemoriesRequestTest {
             .infer(true)
             .build();
 
-        request = MLAddMemoriesRequest.builder()
-            .mlAddMemoryInput(testInput)
-            .build();
+        request = MLAddMemoriesRequest.builder().mlAddMemoryInput(testInput).build();
     }
 
     @Test
@@ -58,16 +57,11 @@ public class MLAddMemoriesRequestTest {
         MLAddMemoriesRequest deserialized = new MLAddMemoriesRequest(in);
 
         assertNotNull(deserialized.getMlAddMemoryInput());
-        assertEquals(request.getMlAddMemoryInput().getMemoryContainerId(), 
-                     deserialized.getMlAddMemoryInput().getMemoryContainerId());
-        assertEquals(request.getMlAddMemoryInput().getSessionId(), 
-                     deserialized.getMlAddMemoryInput().getSessionId());
-        assertEquals(request.getMlAddMemoryInput().getAgentId(), 
-                     deserialized.getMlAddMemoryInput().getAgentId());
-        assertEquals(request.getMlAddMemoryInput().getInfer(), 
-                     deserialized.getMlAddMemoryInput().getInfer());
-        assertEquals(request.getMlAddMemoryInput().getMessages().size(), 
-                     deserialized.getMlAddMemoryInput().getMessages().size());
+        assertEquals(request.getMlAddMemoryInput().getMemoryContainerId(), deserialized.getMlAddMemoryInput().getMemoryContainerId());
+        assertEquals(request.getMlAddMemoryInput().getSessionId(), deserialized.getMlAddMemoryInput().getSessionId());
+        assertEquals(request.getMlAddMemoryInput().getAgentId(), deserialized.getMlAddMemoryInput().getAgentId());
+        assertEquals(request.getMlAddMemoryInput().getInfer(), deserialized.getMlAddMemoryInput().getInfer());
+        assertEquals(request.getMlAddMemoryInput().getMessages().size(), deserialized.getMlAddMemoryInput().getMessages().size());
     }
 
     @Test
@@ -78,9 +72,7 @@ public class MLAddMemoriesRequestTest {
 
     @Test
     public void testValidateWithNullInput() {
-        MLAddMemoriesRequest invalidRequest = MLAddMemoriesRequest.builder()
-            .mlAddMemoryInput(null)
-            .build();
+        MLAddMemoriesRequest invalidRequest = MLAddMemoriesRequest.builder().mlAddMemoryInput(null).build();
 
         ActionRequestValidationException exception = invalidRequest.validate();
         assertNotNull(exception);
@@ -99,10 +91,7 @@ public class MLAddMemoriesRequestTest {
     @Test(expected = IllegalArgumentException.class)
     public void testWithEmptyMessages() {
         // Empty messages list is not allowed - should throw exception
-        MLAddMemoriesInput.builder()
-            .messages(Collections.emptyList())
-            .memoryContainerId("container-empty")
-            .build();
+        MLAddMemoriesInput.builder().messages(Collections.emptyList()).memoryContainerId("container-empty").build();
     }
 
     @Test
@@ -111,15 +100,14 @@ public class MLAddMemoriesRequestTest {
         MessageInput msg2 = new MessageInput("assistant", "Second message");
         MessageInput msg3 = new MessageInput("user", "Third message");
 
-        MLAddMemoriesInput multiInput = MLAddMemoriesInput.builder()
+        MLAddMemoriesInput multiInput = MLAddMemoriesInput
+            .builder()
             .messages(Arrays.asList(msg1, msg2, msg3))
             .memoryContainerId("container-multi")
             .sessionId("session-multi")
             .build();
 
-        MLAddMemoriesRequest multiRequest = MLAddMemoriesRequest.builder()
-            .mlAddMemoryInput(multiInput)
-            .build();
+        MLAddMemoriesRequest multiRequest = MLAddMemoriesRequest.builder().mlAddMemoryInput(multiInput).build();
 
         // Test serialization
         BytesStreamOutput out = new BytesStreamOutput();
@@ -137,14 +125,13 @@ public class MLAddMemoriesRequestTest {
     @Test
     public void testWithMinimalInput() throws IOException {
         MessageInput message = new MessageInput(null, "Minimal message");
-        MLAddMemoriesInput minimalInput = MLAddMemoriesInput.builder()
+        MLAddMemoriesInput minimalInput = MLAddMemoriesInput
+            .builder()
             .messages(Arrays.asList(message))
             .memoryContainerId("container-minimal")
             .build();
 
-        MLAddMemoriesRequest minimalRequest = MLAddMemoriesRequest.builder()
-            .mlAddMemoryInput(minimalInput)
-            .build();
+        MLAddMemoriesRequest minimalRequest = MLAddMemoriesRequest.builder().mlAddMemoryInput(minimalInput).build();
 
         assertNull(minimalRequest.validate());
 
@@ -164,22 +151,17 @@ public class MLAddMemoriesRequestTest {
     @Test
     public void testWithComplexTags() throws IOException {
         MessageInput message = new MessageInput("user", "Tagged message");
-        MLAddMemoriesInput taggedInput = MLAddMemoriesInput.builder()
+        MLAddMemoriesInput taggedInput = MLAddMemoriesInput
+            .builder()
             .messages(Arrays.asList(message))
             .memoryContainerId("container-tags")
             .sessionId("session-tags")
             .agentId("agent-tags")
-            .tags(java.util.Map.of(
-                "category", "technical",
-                "priority", "high",
-                "timestamp", "2024-01-01"
-            ))
+            .tags(java.util.Map.of("category", "technical", "priority", "high", "timestamp", "2024-01-01"))
             .infer(false)
             .build();
 
-        MLAddMemoriesRequest taggedRequest = MLAddMemoriesRequest.builder()
-            .mlAddMemoryInput(taggedInput)
-            .build();
+        MLAddMemoriesRequest taggedRequest = MLAddMemoriesRequest.builder().mlAddMemoryInput(taggedInput).build();
 
         // Test serialization
         BytesStreamOutput out = new BytesStreamOutput();

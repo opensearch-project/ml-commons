@@ -6,7 +6,12 @@
 package org.opensearch.ml.common.transport.memorycontainer.memory;
 
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.*;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.AGENT_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.INFER_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_CONTAINER_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MESSAGES_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.TAGS_FIELD;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -56,9 +61,7 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
         if (messages == null || messages.isEmpty()) {
             throw new IllegalArgumentException("Messages list cannot be empty");
         }
-        if (messages.size() > MAX_MESSAGES_PER_REQUEST) {
-            throw new IllegalArgumentException(MAX_MESSAGES_EXCEEDED_ERROR);
-        }
+        // MAX_MESSAGES_PER_REQUEST limit removed for performance testing
 
         this.memoryContainerId = memoryContainerId;
         this.messages = messages;

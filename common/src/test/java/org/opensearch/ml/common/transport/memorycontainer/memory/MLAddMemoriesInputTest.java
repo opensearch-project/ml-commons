@@ -30,7 +30,6 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.TestHelper;
-import org.opensearch.ml.common.memorycontainer.MemoryContainerConstants;
 
 public class MLAddMemoriesInputTest {
 
@@ -42,18 +41,20 @@ public class MLAddMemoriesInputTest {
 
     @Before
     public void setUp() {
-        testMessages = Arrays.asList(
-            new MessageInput("user", "Hello, how are you?"),
-            new MessageInput("assistant", "I'm doing well, thank you!"),
-            new MessageInput("user", "What can you help me with?")
-        );
+        testMessages = Arrays
+            .asList(
+                new MessageInput("user", "Hello, how are you?"),
+                new MessageInput("assistant", "I'm doing well, thank you!"),
+                new MessageInput("user", "What can you help me with?")
+            );
 
         testTags = new HashMap<>();
         testTags.put("topic", "greeting");
         testTags.put("priority", "low");
 
         // Input with all fields
-        inputWithAllFields = MLAddMemoriesInput.builder()
+        inputWithAllFields = MLAddMemoriesInput
+            .builder()
             .memoryContainerId("container-123")
             .messages(testMessages)
             .sessionId("session-456")
@@ -63,9 +64,7 @@ public class MLAddMemoriesInputTest {
             .build();
 
         // Minimal input (only required fields)
-        inputMinimal = MLAddMemoriesInput.builder()
-            .messages(Arrays.asList(new MessageInput(null, "Single message")))
-            .build();
+        inputMinimal = MLAddMemoriesInput.builder().messages(Arrays.asList(new MessageInput(null, "Single message"))).build();
 
         // Input without optional fields
         inputNoOptionals = new MLAddMemoriesInput(
@@ -117,16 +116,15 @@ public class MLAddMemoriesInputTest {
         );
         assertEquals("Messages list cannot be empty", exception.getMessage());
 
-        // Test too many messages
-        List<MessageInput> tooManyMessages = new ArrayList<>();
-        for (int i = 0; i < MemoryContainerConstants.MAX_MESSAGES_PER_REQUEST + 1; i++) {
-            tooManyMessages.add(new MessageInput("user", "Message " + i));
+        // Test that limit is removed - should be able to create with many messages
+        List<MessageInput> manyMessages = new ArrayList<>();
+        for (int i = 0; i < 100; i++) { // Test with 100 messages
+            manyMessages.add(new MessageInput("user", "Message " + i));
         }
-        exception = assertThrows(
-            IllegalArgumentException.class,
-            () -> new MLAddMemoriesInput("container-1", tooManyMessages, null, null, null, null)
-        );
-        assertEquals(MemoryContainerConstants.MAX_MESSAGES_EXCEEDED_ERROR, exception.getMessage());
+        // Should not throw exception anymore
+        MLAddMemoriesInput inputWithManyMessages = new MLAddMemoriesInput("container-1", manyMessages, null, null, null, null);
+        assertNotNull(inputWithManyMessages);
+        assertEquals(100, inputWithManyMessages.getMessages().size());
     }
 
     @Test
@@ -170,7 +168,8 @@ public class MLAddMemoriesInputTest {
     @Test
     public void testStreamInputOutputEmptyTags() throws IOException {
         // Test with empty tags
-        MLAddMemoriesInput inputEmptyTags = MLAddMemoriesInput.builder()
+        MLAddMemoriesInput inputEmptyTags = MLAddMemoriesInput
+            .builder()
             .messages(Arrays.asList(new MessageInput("user", "Test")))
             .tags(new HashMap<>())
             .build();
@@ -228,10 +227,11 @@ public class MLAddMemoriesInputTest {
             + "\"tags\":{\"key\":\"value\"}"
             + "}";
 
-        XContentParser parser = XContentType.JSON.xContent()
+        XContentParser parser = XContentType.JSON
+            .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
-        
+
         MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser);
 
         assertEquals("container-123", parsed.getMemoryContainerId());
@@ -247,16 +247,13 @@ public class MLAddMemoriesInputTest {
 
     @Test
     public void testParseMinimal() throws IOException {
-        String jsonString = "{"
-            + "\"messages\":["
-            + "{\"content\":\"Minimal message\"}"
-            + "]"
-            + "}";
+        String jsonString = "{" + "\"messages\":[" + "{\"content\":\"Minimal message\"}" + "]" + "}";
 
-        XContentParser parser = XContentType.JSON.xContent()
+        XContentParser parser = XContentType.JSON
+            .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
-        
+
         MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser);
 
         assertNull(parsed.getMemoryContainerId());
@@ -273,10 +270,11 @@ public class MLAddMemoriesInputTest {
             + "\"another_unknown\":123"
             + "}";
 
-        XContentParser parser = XContentType.JSON.xContent()
+        XContentParser parser = XContentType.JSON
+            .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
-        
+
         MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser);
 
         assertEquals(1, parsed.getMessages().size());
@@ -285,9 +283,7 @@ public class MLAddMemoriesInputTest {
 
     @Test
     public void testSetters() {
-        MLAddMemoriesInput input = MLAddMemoriesInput.builder()
-            .messages(Arrays.asList(new MessageInput("user", "Initial")))
-            .build();
+        MLAddMemoriesInput input = MLAddMemoriesInput.builder().messages(Arrays.asList(new MessageInput("user", "Initial"))).build();
 
         input.setMemoryContainerId("new-container");
         input.setSessionId("new-session");
@@ -303,22 +299,16 @@ public class MLAddMemoriesInputTest {
     }
 
     @Test
-    public void testMaxMessagesLimit() {
-        List<MessageInput> maxMessages = new ArrayList<>();
-        for (int i = 0; i < MemoryContainerConstants.MAX_MESSAGES_PER_REQUEST; i++) {
-            maxMessages.add(new MessageInput("user", "Message " + i));
+    public void testLargeNumberOfMessages() {
+        // Test that we can handle a large number of messages now that limit is removed
+        List<MessageInput> manyMessages = new ArrayList<>();
+        for (int i = 0; i < 1000; i++) { // Test with 1000 messages
+            manyMessages.add(new MessageInput("user", "Message " + i));
         }
 
-        // Should succeed with exactly MAX_MESSAGES_PER_REQUEST
-        MLAddMemoriesInput input = new MLAddMemoriesInput(
-            "container-1", 
-            maxMessages, 
-            null, 
-            null, 
-            null, 
-            null
-        );
-        assertEquals(MemoryContainerConstants.MAX_MESSAGES_PER_REQUEST, input.getMessages().size());
+        // Should succeed with large number of messages
+        MLAddMemoriesInput input = new MLAddMemoriesInput("container-1", manyMessages, null, null, null, null);
+        assertEquals(1000, input.getMessages().size());
     }
 
     @Test
@@ -326,12 +316,14 @@ public class MLAddMemoriesInputTest {
         Map<String, String> specialTags = new HashMap<>();
         specialTags.put("key with spaces", "value with\nnewlines");
 
-        List<MessageInput> specialMessages = Arrays.asList(
-            new MessageInput("user", "Message with\n\ttabs and \"quotes\""),
-            new MessageInput("assistant", "Response with unicode 🚀✨")
-        );
+        List<MessageInput> specialMessages = Arrays
+            .asList(
+                new MessageInput("user", "Message with\n\ttabs and \"quotes\""),
+                new MessageInput("assistant", "Response with unicode 🚀✨")
+            );
 
-        MLAddMemoriesInput specialInput = MLAddMemoriesInput.builder()
+        MLAddMemoriesInput specialInput = MLAddMemoriesInput
+            .builder()
             .memoryContainerId("container-with-special-chars")
             .messages(specialMessages)
             .sessionId("session-🔥")
@@ -357,7 +349,8 @@ public class MLAddMemoriesInputTest {
         String jsonString = TestHelper.xContentBuilderToString(builder);
 
         // Parse back
-        XContentParser parser = XContentType.JSON.xContent()
+        XContentParser parser = XContentType.JSON
+            .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
         MLAddMemoriesInput parsed = MLAddMemoriesInput.parse(parser);

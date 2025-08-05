@@ -33,14 +33,13 @@ public class MLSearchMemoriesInputTest {
 
     @Before
     public void setUp() {
-        inputWithContainerId = MLSearchMemoriesInput.builder()
+        inputWithContainerId = MLSearchMemoriesInput
+            .builder()
             .memoryContainerId("container-123")
             .query("machine learning concepts")
             .build();
 
-        inputWithoutContainerId = MLSearchMemoriesInput.builder()
-            .query("search without container id")
-            .build();
+        inputWithoutContainerId = MLSearchMemoriesInput.builder().query("search without container id").build();
     }
 
     @Test
@@ -152,10 +151,11 @@ public class MLSearchMemoriesInputTest {
     public void testParse() throws IOException {
         String jsonString = "{\"memory_container_id\":\"container-789\",\"query\":\"neural networks\"}";
 
-        XContentParser parser = XContentType.JSON.xContent()
+        XContentParser parser = XContentType.JSON
+            .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
-        
+
         MLSearchMemoriesInput parsed = MLSearchMemoriesInput.parse(parser);
 
         assertEquals("container-789", parsed.getMemoryContainerId());
@@ -166,10 +166,11 @@ public class MLSearchMemoriesInputTest {
     public void testParseWithoutContainerId() throws IOException {
         String jsonString = "{\"query\":\"deep learning\"}";
 
-        XContentParser parser = XContentType.JSON.xContent()
+        XContentParser parser = XContentType.JSON
+            .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
-        
+
         MLSearchMemoriesInput parsed = MLSearchMemoriesInput.parse(parser);
 
         assertNull(parsed.getMemoryContainerId());
@@ -180,10 +181,11 @@ public class MLSearchMemoriesInputTest {
     public void testParseWithUnknownFields() throws IOException {
         String jsonString = "{\"query\":\"test query\",\"unknown_field\":\"ignored\",\"another\":123}";
 
-        XContentParser parser = XContentType.JSON.xContent()
+        XContentParser parser = XContentType.JSON
+            .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
-        
+
         MLSearchMemoriesInput parsed = MLSearchMemoriesInput.parse(parser);
 
         assertEquals("test query", parsed.getQuery());
@@ -192,7 +194,7 @@ public class MLSearchMemoriesInputTest {
     @Test
     public void testSetters() {
         MLSearchMemoriesInput input = new MLSearchMemoriesInput(null, "initial query");
-        
+
         input.setMemoryContainerId("new-container");
         input.setQuery("updated query");
 
@@ -220,7 +222,7 @@ public class MLSearchMemoriesInputTest {
         XContentBuilder builder = MediaTypeRegistry.contentBuilder(XContentType.JSON);
         specialInput.toXContent(builder, EMPTY_PARAMS);
         String jsonString = TestHelper.xContentBuilderToString(builder);
-        
+
         assertTrue(jsonString.contains("Query with"));
         assertTrue(jsonString.contains("tabs"));
         assertTrue(jsonString.contains("quotes"));
@@ -233,15 +235,15 @@ public class MLSearchMemoriesInputTest {
         for (int i = 0; i < 1000; i++) {
             longQuery.append("word").append(i).append(" ");
         }
-        
+
         MLSearchMemoriesInput longInput = new MLSearchMemoriesInput("container-1", longQuery.toString().trim());
-        
+
         // Test serialization
         BytesStreamOutput out = new BytesStreamOutput();
         longInput.writeTo(out);
         StreamInput in = out.bytes().streamInput();
         MLSearchMemoriesInput deserialized = new MLSearchMemoriesInput(in);
-        
+
         assertEquals(longInput.getQuery(), deserialized.getQuery());
     }
 
@@ -253,7 +255,8 @@ public class MLSearchMemoriesInputTest {
         String jsonString = TestHelper.xContentBuilderToString(builder);
 
         // Parse back
-        XContentParser parser = XContentType.JSON.xContent()
+        XContentParser parser = XContentType.JSON
+            .xContent()
             .createParser(NamedXContentRegistry.EMPTY, LoggingDeprecationHandler.INSTANCE, jsonString);
         parser.nextToken();
         MLSearchMemoriesInput parsed = MLSearchMemoriesInput.parse(parser);
@@ -272,9 +275,8 @@ public class MLSearchMemoriesInputTest {
             "wildcard* search?",
             "field:value AND (nested OR query)",
             "fuzzy~2 search",
-            "+required -excluded"
-        };
-        
+            "+required -excluded" };
+
         for (String query : queries) {
             MLSearchMemoriesInput input = new MLSearchMemoriesInput("container-1", query);
             assertEquals(query, input.getQuery());

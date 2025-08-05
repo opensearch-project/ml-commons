@@ -28,15 +28,9 @@ public class MLSearchMemoriesRequestTest {
 
     @Before
     public void setUp() {
-        testInput = MLSearchMemoriesInput.builder()
-            .memoryContainerId("container-123")
-            .query("machine learning concepts")
-            .build();
+        testInput = MLSearchMemoriesInput.builder().memoryContainerId("container-123").query("machine learning concepts").build();
 
-        request = MLSearchMemoriesRequest.builder()
-            .mlSearchMemoriesInput(testInput)
-            .tenantId("tenant-456")
-            .build();
+        request = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(testInput).tenantId("tenant-456").build();
     }
 
     @Test
@@ -64,19 +58,17 @@ public class MLSearchMemoriesRequestTest {
         MLSearchMemoriesRequest deserialized = new MLSearchMemoriesRequest(in);
 
         assertNotNull(deserialized.getMlSearchMemoriesInput());
-        assertEquals(request.getMlSearchMemoriesInput().getMemoryContainerId(), 
-                     deserialized.getMlSearchMemoriesInput().getMemoryContainerId());
-        assertEquals(request.getMlSearchMemoriesInput().getQuery(), 
-                     deserialized.getMlSearchMemoriesInput().getQuery());
+        assertEquals(
+            request.getMlSearchMemoriesInput().getMemoryContainerId(),
+            deserialized.getMlSearchMemoriesInput().getMemoryContainerId()
+        );
+        assertEquals(request.getMlSearchMemoriesInput().getQuery(), deserialized.getMlSearchMemoriesInput().getQuery());
         assertEquals(request.getTenantId(), deserialized.getTenantId());
     }
 
     @Test
     public void testStreamInputOutputWithNullTenant() throws IOException {
-        MLSearchMemoriesRequest requestNoTenant = MLSearchMemoriesRequest.builder()
-            .mlSearchMemoriesInput(testInput)
-            .tenantId(null)
-            .build();
+        MLSearchMemoriesRequest requestNoTenant = MLSearchMemoriesRequest.builder().mlSearchMemoriesInput(testInput).tenantId(null).build();
 
         BytesStreamOutput out = new BytesStreamOutput();
         requestNoTenant.writeTo(out);
@@ -96,7 +88,8 @@ public class MLSearchMemoriesRequestTest {
 
     @Test
     public void testValidateWithNullInput() {
-        MLSearchMemoriesRequest invalidRequest = MLSearchMemoriesRequest.builder()
+        MLSearchMemoriesRequest invalidRequest = MLSearchMemoriesRequest
+            .builder()
             .mlSearchMemoriesInput(null)
             .tenantId("tenant-123")
             .build();
@@ -160,10 +153,7 @@ public class MLSearchMemoriesRequestTest {
         MLSearchMemoriesRequest mutableRequest = new MLSearchMemoriesRequest(testInput, "initial-tenant");
 
         // Test setMlSearchMemoriesInput
-        MLSearchMemoriesInput newInput = MLSearchMemoriesInput.builder()
-            .memoryContainerId("new-container")
-            .query("new query")
-            .build();
+        MLSearchMemoriesInput newInput = MLSearchMemoriesInput.builder().memoryContainerId("new-container").query("new query").build();
         mutableRequest.setMlSearchMemoriesInput(newInput);
         assertEquals(newInput, mutableRequest.getMlSearchMemoriesInput());
 
@@ -175,20 +165,19 @@ public class MLSearchMemoriesRequestTest {
     @Test(expected = IllegalArgumentException.class)
     public void testWithEmptyQuery() {
         // Empty query is not allowed - should throw exception
-        MLSearchMemoriesInput.builder()
-            .memoryContainerId("container-empty")
-            .query("")
-            .build();
+        MLSearchMemoriesInput.builder().memoryContainerId("container-empty").query("").build();
     }
 
     @Test
     public void testWithSpecialCharacters() throws IOException {
-        MLSearchMemoriesInput specialInput = MLSearchMemoriesInput.builder()
+        MLSearchMemoriesInput specialInput = MLSearchMemoriesInput
+            .builder()
             .memoryContainerId("container-with-special-chars-🚀")
             .query("Query with \"quotes\" and\n\ttabs and unicode 🔥")
             .build();
 
-        MLSearchMemoriesRequest specialRequest = MLSearchMemoriesRequest.builder()
+        MLSearchMemoriesRequest specialRequest = MLSearchMemoriesRequest
+            .builder()
             .mlSearchMemoriesInput(specialInput)
             .tenantId("tenant-特殊文字")
             .build();
@@ -200,8 +189,7 @@ public class MLSearchMemoriesRequestTest {
         StreamInput in = out.bytes().streamInput();
         MLSearchMemoriesRequest deserialized = new MLSearchMemoriesRequest(in);
 
-        assertEquals("container-with-special-chars-🚀", 
-                     deserialized.getMlSearchMemoriesInput().getMemoryContainerId());
+        assertEquals("container-with-special-chars-🚀", deserialized.getMlSearchMemoriesInput().getMemoryContainerId());
         assertTrue(deserialized.getMlSearchMemoriesInput().getQuery().contains("quotes"));
         assertTrue(deserialized.getMlSearchMemoriesInput().getQuery().contains("tabs"));
         assertEquals("tenant-特殊文字", deserialized.getTenantId());
@@ -214,12 +202,14 @@ public class MLSearchMemoriesRequestTest {
             longQuery.append("word").append(i).append(" ");
         }
 
-        MLSearchMemoriesInput longInput = MLSearchMemoriesInput.builder()
+        MLSearchMemoriesInput longInput = MLSearchMemoriesInput
+            .builder()
             .memoryContainerId("container-long")
             .query(longQuery.toString().trim())
             .build();
 
-        MLSearchMemoriesRequest longRequest = MLSearchMemoriesRequest.builder()
+        MLSearchMemoriesRequest longRequest = MLSearchMemoriesRequest
+            .builder()
             .mlSearchMemoriesInput(longInput)
             .tenantId("tenant-long")
             .build();
