@@ -49,7 +49,8 @@ public class RestMLSearchMemoriesAction extends BaseRestHandler {
 
     @Override
     public List<Route> routes() {
-        return ImmutableList.of(new Route(RestRequest.Method.POST, SEARCH_MEMORIES_PATH));
+        return ImmutableList
+            .of(new Route(RestRequest.Method.POST, SEARCH_MEMORIES_PATH), new Route(RestRequest.Method.GET, SEARCH_MEMORIES_PATH));
     }
 
     @Override

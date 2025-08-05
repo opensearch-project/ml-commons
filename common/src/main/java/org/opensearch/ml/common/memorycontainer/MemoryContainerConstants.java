@@ -30,6 +30,7 @@ public class MemoryContainerConstants {
 
     // Default values
     public static final int MAX_INFER_SIZE_DEFAULT_VALUE = 5;
+    public static final int MAX_RECENT_MESSAGES_FETCH = 6;
 
     // Memory index type prefixes
     public static final String STATIC_MEMORY_INDEX_PREFIX = "ml-static-memory-";
@@ -95,6 +96,10 @@ public class MemoryContainerConstants {
     public static final String EMBEDDING_MODEL_NOT_FOUND_ERROR = "Embedding model with ID %s not found";
     public static final String EMBEDDING_MODEL_TYPE_MISMATCH_ERROR = "Embedding model must be of type %s or REMOTE, found: %s";                                                                                                          // instead
     public static final String INFER_REQUIRES_LLM_MODEL_ERROR = "infer=true requires llm_model_id to be configured in memory storage";
+
+    // Memory API limits
+    public static final int MAX_MESSAGES_PER_REQUEST = 10;
+    public static final String MAX_MESSAGES_EXCEEDED_ERROR = "Cannot process more than 10 messages in a single request";
 
     // LLM System Prompts
     public static final String PERSONAL_INFORMATION_ORGANIZER_PROMPT =

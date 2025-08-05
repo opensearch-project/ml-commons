@@ -9,7 +9,13 @@ import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
 import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.INFER_REQUIRES_LLM_MODEL_ERROR;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LAST_UPDATED_TIME_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MAX_RECENT_MESSAGES_FETCH;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.MEMORY_TYPE_FIELD;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PERSONAL_INFORMATION_ORGANIZER_PROMPT;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.ROLE_FIELD;
+import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.SESSION_ID_FIELD;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -23,6 +29,7 @@ import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.index.IndexRequest;
+import org.opensearch.action.search.SearchRequest;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.HandledTransportAction;
 import org.opensearch.action.support.WriteRequest;
@@ -38,6 +45,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
 import org.opensearch.ml.common.dataset.TextDocsInputDataSet;
@@ -64,10 +72,13 @@ import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
 import org.opensearch.ml.model.MLModelManager;
+import org.opensearch.ml.utils.MemorySearchQueryBuilder;
 import org.opensearch.ml.utils.RestActionUtils;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
 import org.opensearch.remote.metadata.common.SdkClientUtils;
+import org.opensearch.search.SearchHit;
+import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
@@ -93,6 +104,31 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
             this.content = content;
             this.type = type;
             this.includeInResponse = includeInResponse;
+        }
+    }
+
+    // Helper class to store fact search results
+    private static class FactSearchResult {
+        final String id;
+        final String text;
+        final float score;
+
+        FactSearchResult(String id, String text, float score) {
+            this.id = id;
+            this.text = text;
+            this.score = score;
+        }
+
+        String getId() {
+            return id;
+        }
+
+        String getText() {
+            return text;
+        }
+
+        float getScore() {
+            return score;
         }
     }
 
@@ -173,15 +209,19 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
         ActionListener<MLAddMemoriesResponse> actionListener
     ) {
         try {
-            // Get the first message (currently limited to 1)
-            MessageInput message = input.getMessages().get(0);
+            List<MessageInput> messages = input.getMessages();
+
+            // Check if session ID was provided by user
+            boolean userProvidedSessionId = input.getSessionId() != null && !input.getSessionId().isEmpty();
 
             // Generate session ID if not provided
             final String sessionId;
-            if (input.getSessionId() == null || input.getSessionId().isEmpty()) {
+            if (!userProvidedSessionId) {
                 sessionId = "sess_" + UUID.randomUUID().toString();
+                log.debug("Auto-generated session ID: {}", sessionId);
             } else {
                 sessionId = input.getSessionId();
+                log.debug("User provided session ID: {}", sessionId);
             }
 
             // Determine memory type (currently only RAW_MESSAGE)
@@ -202,84 +242,333 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                 infer = hasLlmModel;
             }
 
-            // Validate role when infer=false
-            if (!infer && message.getRole() == null) {
-                actionListener.onFailure(new IllegalArgumentException("Role is required when infer=false"));
-                return;
+            // Validate all messages have roles when infer=false
+            if (!infer) {
+                for (MessageInput message : messages) {
+                    if (message.getRole() == null) {
+                        actionListener.onFailure(new IllegalArgumentException("Role is required for all messages when infer=false"));
+                        return;
+                    }
+                }
             }
 
-            // Process the message based on infer flag
+            // Process messages based on infer flag
             if (infer) {
-                // Extract facts using LLM before saving
-                extractFactsWithLLM(message, storageConfig, ActionListener.wrap(facts -> {
-                    // Save memories with facts
-                    saveMemoriesWithFacts(input, container, indexName, message, sessionId, user, facts, storageConfig, actionListener);
-                }, e -> {
-                    log.error("Failed to extract facts with LLM, saving raw message only", e);
-                    // Fall back to saving raw message only
-                    boolean needsEmbedding = storageConfig != null && storageConfig.isSemanticStorageEnabled();
-                    if (needsEmbedding) {
-                        generateEmbedding(message.getContent(), storageConfig, ActionListener.wrap(embedding -> {
-                            saveMemoryWithEmbedding(
-                                input,
-                                container,
-                                indexName,
-                                message,
-                                sessionId,
-                                user,
-                                memoryType,
-                                embedding,
-                                actionListener
-                            );
-                        }, error -> {
-                            log.error("Failed to generate embedding, saving memory without embedding", error);
-                            saveMemoryWithEmbedding(
-                                input,
-                                container,
-                                indexName,
-                                message,
-                                sessionId,
-                                user,
-                                memoryType,
-                                null,
-                                actionListener
-                            );
-                        }));
-                    } else {
-                        saveMemoryWithEmbedding(input, container, indexName, message, sessionId, user, memoryType, null, actionListener);
-                    }
-                }));
+                // Process all messages with LLM for fact extraction
+                processMessagesWithLLM(input, container, indexName, sessionId, userProvidedSessionId, user, storageConfig, actionListener);
             } else {
-                // No LLM processing needed, check for embedding
-                boolean needsEmbedding = storageConfig != null && storageConfig.isSemanticStorageEnabled();
-
-                if (needsEmbedding) {
-                    // Generate embedding first, then save memory
-                    generateEmbedding(message.getContent(), storageConfig, ActionListener.wrap(embedding -> {
-                        saveMemoryWithEmbedding(
-                            input,
-                            container,
-                            indexName,
-                            message,
-                            sessionId,
-                            user,
-                            memoryType,
-                            embedding,
-                            actionListener
-                        );
-                    }, e -> {
-                        log.error("Failed to generate embedding for memory", e);
-                        // For infer=false, propagate the error
-                        actionListener.onFailure(new OpenSearchException("Failed to generate embedding: " + e.getMessage(), e));
-                    }));
-                } else {
-                    // No embedding needed, save directly
-                    saveMemoryWithEmbedding(input, container, indexName, message, sessionId, user, memoryType, null, actionListener);
-                }
+                // Process messages without LLM
+                processMessagesWithoutLLM(input, container, indexName, sessionId, user, storageConfig, actionListener);
             }
         } catch (Exception e) {
             log.error("Failed to add memory", e);
             actionListener.onFailure(e);
+        }
+    }
+
+    private void processMessagesWithLLM(
+        MLAddMemoriesInput input,
+        MLMemoryContainer container,
+        String indexName,
+        String sessionId,
+        boolean userProvidedSessionId,
+        User user,
+        MemoryStorageConfig storageConfig,
+        ActionListener<MLAddMemoriesResponse> actionListener
+    ) {
+        List<MessageInput> messages = input.getMessages();
+
+        // Fetch historical messages if sessionId is provided
+        if (sessionId != null && !sessionId.isEmpty()) {
+            fetchRecentMessagesFromSession(sessionId, indexName, ActionListener.wrap(historicalMessages -> {
+                // Combine historical messages with new messages
+                List<MessageInput> allMessages = new ArrayList<>();
+                allMessages.addAll(historicalMessages);
+                allMessages.addAll(messages);
+
+                log
+                    .info(
+                        "Processing {} total messages ({} historical + {} new) for fact extraction",
+                        allMessages.size(),
+                        historicalMessages.size(),
+                        messages.size()
+                    );
+
+                // Extract facts from entire conversation with single LLM call
+                extractFactsFromConversation(allMessages, storageConfig, ActionListener.wrap(facts -> {
+                    // Store raw messages and facts (only new messages, not historical)
+                    storeMessagesAndFacts(
+                        input,
+                        container,
+                        indexName,
+                        messages,  // Only store the new messages
+                        sessionId,
+                        userProvidedSessionId,
+                        user,
+                        facts,
+                        storageConfig,
+                        actionListener
+                    );
+                }, e -> {
+                    log.error("Failed to extract facts with LLM", e);
+                    actionListener.onFailure(new OpenSearchException("Failed to extract facts: " + e.getMessage(), e));
+                }));
+            }, e -> {
+                log.warn("Failed to fetch historical messages, proceeding with new messages only", e);
+                // Continue without historical messages
+                extractFactsFromConversation(messages, storageConfig, ActionListener.wrap(facts -> {
+                    storeMessagesAndFacts(
+                        input,
+                        container,
+                        indexName,
+                        messages,
+                        sessionId,
+                        userProvidedSessionId,
+                        user,
+                        facts,
+                        storageConfig,
+                        actionListener
+                    );
+                }, factError -> {
+                    log.error("Failed to extract facts with LLM", factError);
+                    actionListener.onFailure(new OpenSearchException("Failed to extract facts: " + factError.getMessage(), factError));
+                }));
+            }));
+        } else {
+            // No sessionId, process without historical messages
+            extractFactsFromConversation(messages, storageConfig, ActionListener.wrap(facts -> {
+                storeMessagesAndFacts(
+                    input,
+                    container,
+                    indexName,
+                    messages,
+                    sessionId,
+                    userProvidedSessionId,
+                    user,
+                    facts,
+                    storageConfig,
+                    actionListener
+                );
+            }, e -> {
+                log.error("Failed to extract facts with LLM", e);
+                actionListener.onFailure(new OpenSearchException("Failed to extract facts: " + e.getMessage(), e));
+            }));
+        }
+    }
+
+    private void storeMessagesAndFacts(
+        MLAddMemoriesInput input,
+        MLMemoryContainer container,
+        String indexName,
+        List<MessageInput> messages,
+        String sessionId,
+        boolean userProvidedSessionId,
+        User user,
+        List<String> facts,
+        MemoryStorageConfig storageConfig,
+        ActionListener<MLAddMemoriesResponse> actionListener
+    ) {
+        Instant now = Instant.now();
+        List<IndexRequest> indexRequests = new ArrayList<>();
+        List<MemoryInfo> memoryInfos = new ArrayList<>();
+
+        // 1. Create RAW_MESSAGE entries for each message
+        for (MessageInput message : messages) {
+            MLMemory rawMemory = MLMemory
+                .builder()
+                .sessionId(sessionId)
+                .memory(message.getContent())
+                .memoryType(MemoryType.RAW_MESSAGE)
+                .userId(user != null ? user.getName() : null)
+                .agentId(input.getAgentId())
+                .role(message.getRole() != null ? message.getRole() : "user")
+                .tags(input.getTags())
+                .createdTime(now)
+                .lastUpdatedTime(now)
+                .build();
+
+            IndexRequest request = new IndexRequest(indexName)
+                .source(rawMemory.toIndexMap())
+                .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+            indexRequests.add(request);
+
+            // RAW_MESSAGE not included in response when infer=true
+            memoryInfos.add(new MemoryInfo(null, rawMemory.getMemory(), rawMemory.getMemoryType(), false));
+        }
+
+        // 2. Search for similar facts if needed
+        if (userProvidedSessionId && storageConfig != null && storageConfig.getMaxInferSize() != null) {
+            log.info("Searching for similar facts in session {} (user provided)", sessionId);
+            searchSimilarFactsForSession(facts, sessionId, indexName, storageConfig, ActionListener.wrap(similarFacts -> {
+                // Log the search results
+                for (Map.Entry<String, List<FactSearchResult>> entry : similarFacts.entrySet()) {
+                    log.info("Fact '{}' has {} similar facts in session {}", entry.getKey(), entry.getValue().size(), sessionId);
+                    for (FactSearchResult similar : entry.getValue()) {
+                        log.debug("  Similar fact: id={}, text='{}', score={}", similar.getId(), similar.getText(), similar.getScore());
+                    }
+                }
+
+                // Continue with creating fact memories
+                createFactMemoriesFromList(facts, input, indexName, sessionId, user, now, indexRequests, memoryInfos);
+
+                // Generate embeddings and index
+                processEmbeddingsAndIndex(messages, facts, storageConfig, indexRequests, memoryInfos, sessionId, indexName, actionListener);
+            }, e -> {
+                log.error("Failed to search similar facts, continuing", e);
+                createFactMemoriesFromList(facts, input, indexName, sessionId, user, now, indexRequests, memoryInfos);
+                processEmbeddingsAndIndex(messages, facts, storageConfig, indexRequests, memoryInfos, sessionId, indexName, actionListener);
+            }));
+        } else {
+            // No fact search needed
+            if (!userProvidedSessionId) {
+                log.info("Skipping fact search - session ID was auto-generated");
+            } else if (storageConfig == null || storageConfig.getMaxInferSize() == null) {
+                log.info("Skipping fact search - maxInferSize not configured");
+            }
+            createFactMemoriesFromList(facts, input, indexName, sessionId, user, now, indexRequests, memoryInfos);
+            processEmbeddingsAndIndex(messages, facts, storageConfig, indexRequests, memoryInfos, sessionId, indexName, actionListener);
+        }
+    }
+
+    private void createFactMemoriesFromList(
+        List<String> facts,
+        MLAddMemoriesInput input,
+        String indexName,
+        String sessionId,
+        User user,
+        Instant now,
+        List<IndexRequest> indexRequests,
+        List<MemoryInfo> memoryInfos
+    ) {
+        for (String fact : facts) {
+            MLMemory factMemory = MLMemory
+                .builder()
+                .sessionId(sessionId)
+                .memory(fact)
+                .memoryType(MemoryType.FACT)
+                .userId(user != null ? user.getName() : null)
+                .agentId(input.getAgentId())
+                .role("assistant")
+                .tags(input.getTags())
+                .createdTime(now)
+                .lastUpdatedTime(now)
+                .build();
+
+            IndexRequest request = new IndexRequest(indexName)
+                .source(factMemory.toIndexMap())
+                .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+            indexRequests.add(request);
+
+            // FACT memories ARE included in response
+            memoryInfos.add(new MemoryInfo(null, factMemory.getMemory(), factMemory.getMemoryType(), true));
+        }
+    }
+
+    private void processEmbeddingsAndIndex(
+        List<MessageInput> messages,
+        List<String> facts,
+        MemoryStorageConfig storageConfig,
+        List<IndexRequest> indexRequests,
+        List<MemoryInfo> memoryInfos,
+        String sessionId,
+        String indexName,
+        ActionListener<MLAddMemoriesResponse> actionListener
+    ) {
+        // If semantic storage is enabled, generate embeddings for all memories
+        boolean needsEmbedding = storageConfig != null && storageConfig.isSemanticStorageEnabled();
+
+        if (needsEmbedding) {
+            // Generate embeddings for all memories
+            List<String> textsToEmbed = new ArrayList<>();
+            for (MessageInput message : messages) {
+                textsToEmbed.add(message.getContent());
+            }
+            textsToEmbed.addAll(facts);
+
+            generateEmbeddingsForMultipleTexts(textsToEmbed, storageConfig, ActionListener.wrap(embeddings -> {
+                // Update index requests with embeddings
+                if (embeddings != null && embeddings.size() == indexRequests.size()) {
+                    for (int i = 0; i < indexRequests.size(); i++) {
+                        Map<String, Object> sourceMap = indexRequests.get(i).sourceAsMap();
+                        sourceMap.put("memory_embedding", embeddings.get(i));
+                        indexRequests.get(i).source(sourceMap);
+                    }
+                }
+
+                // Execute bulk index with memory infos
+                bulkIndexMemoriesWithResults(indexRequests, memoryInfos, sessionId, indexName, actionListener);
+            }, e -> {
+                log.error("Failed to generate embeddings for memories", e);
+                // Propagate the error for infer=true
+                actionListener.onFailure(new OpenSearchException("Failed to generate embeddings for memories: " + e.getMessage(), e));
+            }));
+        } else {
+            // No embeddings needed, execute bulk index directly
+            bulkIndexMemoriesWithResults(indexRequests, memoryInfos, sessionId, indexName, actionListener);
+        }
+    }
+
+    private void processMessagesWithoutLLM(
+        MLAddMemoriesInput input,
+        MLMemoryContainer container,
+        String indexName,
+        String sessionId,
+        User user,
+        MemoryStorageConfig storageConfig,
+        ActionListener<MLAddMemoriesResponse> actionListener
+    ) {
+        List<MessageInput> messages = input.getMessages();
+        Instant now = Instant.now();
+        List<IndexRequest> indexRequests = new ArrayList<>();
+        List<MemoryInfo> memoryInfos = new ArrayList<>();
+
+        // Create RAW_MESSAGE for each message
+        for (MessageInput message : messages) {
+            MLMemory memory = MLMemory
+                .builder()
+                .sessionId(sessionId)
+                .memory(message.getContent())
+                .memoryType(MemoryType.RAW_MESSAGE)
+                .userId(user != null ? user.getName() : null)
+                .agentId(input.getAgentId())
+                .role(message.getRole())
+                .tags(input.getTags())
+                .createdTime(now)
+                .lastUpdatedTime(now)
+                .build();
+
+            IndexRequest request = new IndexRequest(indexName)
+                .source(memory.toIndexMap())
+                .setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+            indexRequests.add(request);
+
+            // All messages included in response when infer=false
+            memoryInfos.add(new MemoryInfo(null, memory.getMemory(), memory.getMemoryType(), true));
+        }
+
+        // Handle embeddings if needed
+        if (storageConfig != null && storageConfig.isSemanticStorageEnabled()) {
+            List<String> texts = new ArrayList<>();
+            for (MessageInput message : messages) {
+                texts.add(message.getContent());
+            }
+
+            generateEmbeddingsForMultipleTexts(texts, storageConfig, ActionListener.wrap(embeddings -> {
+                // Update requests with embeddings
+                if (embeddings != null && embeddings.size() == indexRequests.size()) {
+                    for (int i = 0; i < indexRequests.size(); i++) {
+                        Map<String, Object> sourceMap = indexRequests.get(i).sourceAsMap();
+                        sourceMap.put("memory_embedding", embeddings.get(i));
+                        indexRequests.get(i).source(sourceMap);
+                    }
+                }
+                bulkIndexMemoriesWithResults(indexRequests, memoryInfos, sessionId, indexName, actionListener);
+            }, e -> {
+                log.error("Failed to generate embeddings, storing without", e);
+                bulkIndexMemoriesWithResults(indexRequests, memoryInfos, sessionId, indexName, actionListener);
+            }));
+        } else {
+            bulkIndexMemoriesWithResults(indexRequests, memoryInfos, sessionId, indexName, actionListener);
         }
     }
 
@@ -328,7 +617,11 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
         }, actionListener::onFailure));
     }
 
-    private void extractFactsWithLLM(MessageInput message, MemoryStorageConfig storageConfig, ActionListener<List<String>> listener) {
+    private void extractFactsFromConversation(
+        List<MessageInput> messages,
+        MemoryStorageConfig storageConfig,
+        ActionListener<List<String>> listener
+    ) {
         if (storageConfig == null || storageConfig.getLlmModelId() == null) {
             listener.onResponse(new ArrayList<>());
             return;
@@ -344,20 +637,26 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
         try {
             XContentBuilder messagesBuilder = jsonXContent.contentBuilder();
             messagesBuilder.startArray();
-            messagesBuilder.startObject();
-            messagesBuilder.field("role", message.getRole() != null ? message.getRole() : "user");
-            messagesBuilder.startArray("content");
-            messagesBuilder.startObject();
-            messagesBuilder.field("type", "text");
-            messagesBuilder.field("text", message.getContent());
-            messagesBuilder.endObject();
-            messagesBuilder.endArray();
-            messagesBuilder.endObject();
+
+            // Build array with all messages
+            for (MessageInput message : messages) {
+                messagesBuilder.startObject();
+                messagesBuilder.field("role", message.getRole() != null ? message.getRole() : "user");
+                messagesBuilder.startArray("content");
+                messagesBuilder.startObject();
+                messagesBuilder.field("type", "text");
+                messagesBuilder.field("text", message.getContent());
+                messagesBuilder.endObject();
+                messagesBuilder.endArray();
+                messagesBuilder.endObject();
+            }
+
             messagesBuilder.endArray();
 
             String messagesJson = messagesBuilder.toString();
             stringParameters.put("messages", messagesJson);
 
+            log.info("LLM request - processing {} messages", messages.size());
             log.info("LLM request - system_prompt length: {}", PERSONAL_INFORMATION_ORGANIZER_PROMPT.length());
             log.info("LLM request - messages JSON: {}", messagesJson);
             log.info("LLM request - full parameters: {}", stringParameters);
@@ -507,6 +806,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
         String indexName,
         MessageInput message,
         String sessionId,
+        boolean userProvidedSessionId,
         User user,
         List<String> facts,
         MemoryStorageConfig storageConfig,
@@ -537,6 +837,89 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
         // RAW_MESSAGE is not included in response when infer=true
         memoryInfos.add(new MemoryInfo(null, rawMemory.getMemory(), rawMemory.getMemoryType(), false));
 
+        // Search for similar facts only if user provided session ID and maxInferSize is configured
+        if (userProvidedSessionId && storageConfig != null && storageConfig.getMaxInferSize() != null) {
+            log.info("Searching for similar facts in session {} (user provided)", sessionId);
+            searchSimilarFactsForSession(facts, sessionId, indexName, storageConfig, ActionListener.wrap(similarFacts -> {
+                // Log the search results
+                for (Map.Entry<String, List<FactSearchResult>> entry : similarFacts.entrySet()) {
+                    log.info("Fact '{}' has {} similar facts in session {}", entry.getKey(), entry.getValue().size(), sessionId);
+                    for (FactSearchResult similar : entry.getValue()) {
+                        log.debug("  Similar fact: id={}, text='{}', score={}", similar.getId(), similar.getText(), similar.getScore());
+                    }
+                }
+
+                // Continue with creating FACT memories
+                createFactMemoriesAndIndex(
+                    input,
+                    container,
+                    indexName,
+                    message,
+                    sessionId,
+                    user,
+                    facts,
+                    storageConfig,
+                    indexRequests,
+                    memoryInfos,
+                    now,
+                    actionListener
+                );
+            }, e -> {
+                log.error("Failed to search for similar facts, continuing with indexing", e);
+                // Continue even if search fails
+                createFactMemoriesAndIndex(
+                    input,
+                    container,
+                    indexName,
+                    message,
+                    sessionId,
+                    user,
+                    facts,
+                    storageConfig,
+                    indexRequests,
+                    memoryInfos,
+                    now,
+                    actionListener
+                );
+            }));
+        } else {
+            // Skip search if no session ID or maxInferSize not configured
+            if (!userProvidedSessionId) {
+                log.info("Skipping fact search - session ID was auto-generated");
+            } else if (storageConfig == null || storageConfig.getMaxInferSize() == null) {
+                log.info("Skipping fact search - maxInferSize not configured");
+            }
+            createFactMemoriesAndIndex(
+                input,
+                container,
+                indexName,
+                message,
+                sessionId,
+                user,
+                facts,
+                storageConfig,
+                indexRequests,
+                memoryInfos,
+                now,
+                actionListener
+            );
+        }
+    }
+
+    private void createFactMemoriesAndIndex(
+        MLAddMemoriesInput input,
+        MLMemoryContainer container,
+        String indexName,
+        MessageInput message,
+        String sessionId,
+        User user,
+        List<String> facts,
+        MemoryStorageConfig storageConfig,
+        List<IndexRequest> indexRequests,
+        List<MemoryInfo> memoryInfos,
+        Instant now,
+        ActionListener<MLAddMemoriesResponse> actionListener
+    ) {
         // Create FACT memories for each extracted fact
         for (String fact : facts) {
             MLMemory factMemory = MLMemory
@@ -991,5 +1374,151 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
         }
 
         return false;
+    }
+
+    private void searchSimilarFactsForSession(
+        List<String> facts,
+        String sessionId,
+        String indexName,
+        MemoryStorageConfig storageConfig,
+        ActionListener<Map<String, List<FactSearchResult>>> listener
+    ) {
+        // Skip search if no session ID provided
+        if (sessionId == null || facts.isEmpty()) {
+            log.info("Skipping fact search: sessionId={}, facts count={}", sessionId, facts.size());
+            listener.onResponse(new HashMap<>());
+            return;
+        }
+
+        Map<String, List<FactSearchResult>> results = new HashMap<>();
+        int maxInferSize = storageConfig != null && storageConfig.getMaxInferSize() != null ? storageConfig.getMaxInferSize() : 5;
+
+        // Search for each fact
+        searchFactsSequentially(facts, 0, sessionId, indexName, storageConfig, maxInferSize, results, listener);
+    }
+
+    private void searchFactsSequentially(
+        List<String> facts,
+        int currentIndex,
+        String sessionId,
+        String indexName,
+        MemoryStorageConfig storageConfig,
+        int maxInferSize,
+        Map<String, List<FactSearchResult>> results,
+        ActionListener<Map<String, List<FactSearchResult>>> listener
+    ) {
+        if (currentIndex >= facts.size()) {
+            listener.onResponse(results);
+            return;
+        }
+
+        String fact = facts.get(currentIndex);
+
+        try {
+            // Build the search query using the utility class
+            XContentBuilder queryBuilder = MemorySearchQueryBuilder.buildFactSearchQuery(fact, sessionId, storageConfig);
+            String queryJson = queryBuilder.toString();
+
+            // Log the query for debugging
+            log.debug("Searching for similar facts with query: {}", queryJson);
+
+            // Build search request
+            SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+            searchSourceBuilder.query(QueryBuilders.wrapperQuery(queryJson));
+            searchSourceBuilder.size(maxInferSize);
+            searchSourceBuilder.fetchSource(new String[] { MEMORY_FIELD }, null);
+
+            SearchRequest searchRequest = new SearchRequest().indices(indexName).source(searchSourceBuilder);
+
+            // Execute search
+            client.search(searchRequest, ActionListener.wrap(response -> {
+                List<FactSearchResult> factResults = new ArrayList<>();
+
+                for (SearchHit hit : response.getHits().getHits()) {
+                    Map<String, Object> sourceMap = hit.getSourceAsMap();
+                    String memory = (String) sourceMap.get(MEMORY_FIELD);
+                    if (memory != null) {
+                        factResults.add(new FactSearchResult(hit.getId(), memory, hit.getScore()));
+                    }
+                }
+
+                results.put(fact, factResults);
+
+                // Continue with next fact
+                searchFactsSequentially(facts, currentIndex + 1, sessionId, indexName, storageConfig, maxInferSize, results, listener);
+            }, e -> {
+                log.error("Failed to search for similar facts for: {}", fact, e);
+                // Continue with next fact even if this one fails
+                results.put(fact, new ArrayList<>());
+                searchFactsSequentially(facts, currentIndex + 1, sessionId, indexName, storageConfig, maxInferSize, results, listener);
+            }));
+        } catch (Exception e) {
+            log.error("Failed to build search query for fact: {}", fact, e);
+            results.put(fact, new ArrayList<>());
+            searchFactsSequentially(facts, currentIndex + 1, sessionId, indexName, storageConfig, maxInferSize, results, listener);
+        }
+    }
+
+    private void fetchRecentMessagesFromSession(String sessionId, String indexName, ActionListener<List<MessageInput>> listener) {
+        if (sessionId == null || sessionId.isEmpty()) {
+            listener.onResponse(new ArrayList<>());
+            return;
+        }
+
+        try {
+            // Build search query
+            SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+            searchSourceBuilder.size(MAX_RECENT_MESSAGES_FETCH);
+            searchSourceBuilder.fetchSource(new String[] { ROLE_FIELD, MEMORY_FIELD }, null);
+
+            // Build bool query with filters
+            searchSourceBuilder
+                .query(
+                    QueryBuilders
+                        .boolQuery()
+                        .filter(
+                            QueryBuilders
+                                .boolQuery()
+                                .must(QueryBuilders.termQuery(SESSION_ID_FIELD, sessionId))
+                                .must(QueryBuilders.termQuery(MEMORY_TYPE_FIELD, MemoryType.RAW_MESSAGE.toString()))
+                        )
+                );
+
+            // Sort by last_updated_time descending
+            searchSourceBuilder.sort(LAST_UPDATED_TIME_FIELD, org.opensearch.search.sort.SortOrder.DESC);
+
+            SearchRequest searchRequest = new SearchRequest(indexName).source(searchSourceBuilder);
+
+            client.search(searchRequest, ActionListener.wrap(searchResponse -> {
+                List<MessageInput> messages = new ArrayList<>();
+
+                for (SearchHit hit : searchResponse.getHits().getHits()) {
+                    Map<String, Object> sourceMap = hit.getSourceAsMap();
+                    String role = (String) sourceMap.get(ROLE_FIELD);
+                    String memory = (String) sourceMap.get(MEMORY_FIELD);
+
+                    if (memory != null) {
+                        messages.add(MessageInput.builder().role(role != null ? role : "user").content(memory).build());
+                    }
+                }
+
+                // Reverse to get chronological order (oldest to newest)
+                java.util.Collections.reverse(messages);
+
+                log.info("Fetched {} historical messages from session {}", messages.size(), sessionId);
+                listener.onResponse(messages);
+            }, e -> {
+                if (e instanceof IndexNotFoundException) {
+                    log.debug("Memory index not found for session {}, returning empty list", sessionId);
+                    listener.onResponse(new ArrayList<>());
+                } else {
+                    log.error("Failed to fetch recent messages from session {}", sessionId, e);
+                    listener.onFailure(e);
+                }
+            }));
+        } catch (Exception e) {
+            log.error("Error building search query for session {}", sessionId, e);
+            listener.onFailure(e);
+        }
     }
 }

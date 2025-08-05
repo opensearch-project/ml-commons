@@ -12,7 +12,7 @@ public enum MemoryEvent {
     ADD("ADD"),
     UPDATE("UPDATE"),
     DELETE("DELETE"),
-    NOOP("NOOP");
+    NONE("NONE");
 
     private final String value;
 

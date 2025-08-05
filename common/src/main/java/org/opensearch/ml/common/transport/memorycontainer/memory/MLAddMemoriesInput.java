@@ -56,8 +56,8 @@ public class MLAddMemoriesInput implements ToXContentObject, Writeable {
         if (messages == null || messages.isEmpty()) {
             throw new IllegalArgumentException("Messages list cannot be empty");
         }
-        if (messages.size() > 1) {
-            throw new IllegalArgumentException("Currently only one message per request is supported");
+        if (messages.size() > MAX_MESSAGES_PER_REQUEST) {
+            throw new IllegalArgumentException(MAX_MESSAGES_EXCEEDED_ERROR);
         }
 
         this.memoryContainerId = memoryContainerId;
