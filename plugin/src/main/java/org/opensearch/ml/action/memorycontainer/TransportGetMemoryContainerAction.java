@@ -43,6 +43,8 @@ import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
 
+import com.google.common.annotations.VisibleForTesting;
+
 import lombok.AccessLevel;
 import lombok.experimental.FieldDefaults;
 import lombok.extern.log4j.Log4j2;
@@ -203,7 +205,8 @@ public class TransportGetMemoryContainerAction extends HandledTransportAction<Ac
         }
     }
 
-    private boolean checkMemoryContainerAccess(User user, MLMemoryContainer mlMemoryContainer) {
+    @VisibleForTesting
+    boolean checkMemoryContainerAccess(User user, MLMemoryContainer mlMemoryContainer) {
         // If security is disabled (user is null), allow access
         if (user == null) {
             return true;

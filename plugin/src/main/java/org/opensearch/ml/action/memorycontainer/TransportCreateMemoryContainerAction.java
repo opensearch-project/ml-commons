@@ -279,7 +279,7 @@ public class TransportCreateMemoryContainerAction extends
                             log.info("Memory data index already exists: {}", indexName);
                             listener.onResponse(true);
                         } else {
-                            log.error("Error creating memory data index: " + indexName, e);
+                            log.error("Error creating memory data index: {}", indexName, e);
                             listener.onFailure(e);
                         }
                     })
@@ -344,6 +344,7 @@ public class TransportCreateMemoryContainerAction extends
                     } else {
                         try {
                             IndexResponse indexResponse = r.indexResponse();
+                            assert indexResponse != null;
                             if (indexResponse.getResult() == DocWriteResponse.Result.CREATED) {
                                 String generatedId = indexResponse.getId();
                                 log.info("Successfully created memory container with ID: {}", generatedId);
@@ -380,7 +381,7 @@ public class TransportCreateMemoryContainerAction extends
                     // LLM model is valid, now validate embedding model
                     validateEmbeddingModel(config, listener);
                 }, e -> {
-                    log.error("Failed to get LLM model: " + config.getLlmModelId(), e);
+                    log.error("Failed to get LLM model: {}", config.getLlmModelId(), e);
                     listener.onFailure(new IllegalArgumentException(String.format(LLM_MODEL_NOT_FOUND_ERROR, config.getLlmModelId())));
                 }), context::restore);
 
@@ -413,7 +414,7 @@ public class TransportCreateMemoryContainerAction extends
                     // Both models are valid
                     listener.onResponse(true);
                 }, e -> {
-                    log.error("Failed to get embedding model: " + config.getEmbeddingModelId(), e);
+                    log.error("Failed to get embedding model: {}", config.getEmbeddingModelId(), e);
                     listener
                         .onFailure(
                             new IllegalArgumentException(String.format(EMBEDDING_MODEL_NOT_FOUND_ERROR, config.getEmbeddingModelId()))
