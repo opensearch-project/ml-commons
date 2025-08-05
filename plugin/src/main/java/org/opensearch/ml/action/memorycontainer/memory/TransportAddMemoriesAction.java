@@ -7,7 +7,6 @@ package org.opensearch.ml.action.memorycontainer.memory;
 
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
-import static org.opensearch.ml.common.CommonValue.ML_MEMORY_CONTAINER_INDEX;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.DEFAULT_UPDATE_MEMORY_PROMPT;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.INFER_REQUIRES_LLM_MODEL_ERROR;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.LAST_UPDATED_TIME_FIELD;
@@ -24,7 +23,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchException;
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.DocWriteRequest;
@@ -43,12 +41,10 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.commons.authuser.User;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.core.common.Strings;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
-import org.opensearch.index.IndexNotFoundException;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.MLModel;
@@ -78,15 +74,14 @@ import org.opensearch.ml.common.transport.memorycontainer.memory.MessageInput;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.helper.ConnectorAccessControlHelper;
+import org.opensearch.ml.helper.MemoryContainerHelper;
+import org.opensearch.ml.helper.MemoryEmbeddingHelper;
 import org.opensearch.ml.model.MLModelManager;
 import org.opensearch.ml.utils.MemorySearchQueryBuilder;
 import org.opensearch.ml.utils.RestActionUtils;
-import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.SdkClient;
-import org.opensearch.remote.metadata.common.SdkClientUtils;
 import org.opensearch.search.SearchHit;
 import org.opensearch.search.builder.SearchSourceBuilder;
-import org.opensearch.search.fetch.subphase.FetchSourceContext;
 import org.opensearch.tasks.Task;
 import org.opensearch.transport.TransportService;
 import org.opensearch.transport.client.Client;
@@ -146,6 +141,8 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
     final ConnectorAccessControlHelper connectorAccessControlHelper;
     final MLFeatureEnabledSetting mlFeatureEnabledSetting;
     final MLModelManager mlModelManager;
+    final MemoryContainerHelper memoryContainerHelper;
+    final MemoryEmbeddingHelper memoryEmbeddingHelper;
 
     @Inject
     public TransportAddMemoriesAction(
@@ -157,7 +154,9 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
         ClusterService clusterService,
         ConnectorAccessControlHelper connectorAccessControlHelper,
         MLFeatureEnabledSetting mlFeatureEnabledSetting,
-        MLModelManager mlModelManager
+        MLModelManager mlModelManager,
+        MemoryContainerHelper memoryContainerHelper,
+        MemoryEmbeddingHelper memoryEmbeddingHelper
     ) {
         super(MLAddMemoriesAction.NAME, transportService, actionFilters, MLAddMemoriesRequest::new);
         this.client = client;
@@ -167,6 +166,8 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
         this.connectorAccessControlHelper = connectorAccessControlHelper;
         this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
         this.mlModelManager = mlModelManager;
+        this.memoryContainerHelper = memoryContainerHelper;
+        this.memoryEmbeddingHelper = memoryEmbeddingHelper;
     }
 
     @Override
@@ -187,9 +188,9 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
         }
 
         // Get memory container
-        getMemoryContainer(memoryContainerId, ActionListener.wrap(container -> {
+        memoryContainerHelper.getMemoryContainer(memoryContainerId, ActionListener.wrap(container -> {
             // Check access
-            if (!checkMemoryContainerAccess(user, container)) {
+            if (!memoryContainerHelper.checkMemoryContainerAccess(user, container)) {
                 actionListener
                     .onFailure(
                         new OpenSearchStatusException("User doesn't have permissions to add memory to this container", RestStatus.FORBIDDEN)
@@ -198,7 +199,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
             }
 
             // Get memory index name
-            String indexName = getIndexName(container);
+            String indexName = memoryContainerHelper.getMemoryIndexName(container);
             if (indexName == null) {
                 actionListener.onFailure(new IllegalStateException("Memory index not created for this container"));
                 return;
@@ -455,7 +456,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
             }
             textsToEmbed.addAll(facts);
 
-            generateEmbeddingsForMultipleTexts(textsToEmbed, storageConfig, ActionListener.wrap(embeddings -> {
+            memoryEmbeddingHelper.generateEmbeddingsForMultipleTexts(textsToEmbed, storageConfig, ActionListener.wrap(embeddings -> {
                 // Update index requests with embeddings
                 if (embeddings != null && embeddings.size() == indexRequests.size()) {
                     for (int i = 0; i < indexRequests.size(); i++) {
@@ -521,7 +522,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                 texts.add(message.getContent());
             }
 
-            generateEmbeddingsForMultipleTexts(texts, storageConfig, ActionListener.wrap(embeddings -> {
+            memoryEmbeddingHelper.generateEmbeddingsForMultipleTexts(texts, storageConfig, ActionListener.wrap(embeddings -> {
                 // Update requests with embeddings
                 if (embeddings != null && embeddings.size() == indexRequests.size()) {
                     for (int i = 0; i < indexRequests.size(); i++) {
@@ -914,7 +915,7 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
             textsToEmbed.add(message.getContent()); // Raw message
             textsToEmbed.addAll(facts); // All facts
 
-            generateEmbeddingsForMultipleTexts(textsToEmbed, storageConfig, ActionListener.wrap(embeddings -> {
+            memoryEmbeddingHelper.generateEmbeddingsForMultipleTexts(textsToEmbed, storageConfig, ActionListener.wrap(embeddings -> {
                 // Update index requests with embeddings
                 if (embeddings != null && embeddings.size() == indexRequests.size()) {
                     for (int i = 0; i < indexRequests.size(); i++) {
@@ -935,112 +936,6 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
             // No embeddings needed, execute bulk index directly
             bulkIndexMemoriesWithResults(indexRequests, memoryInfos, sessionId, indexName, actionListener);
         }
-    }
-
-    private void generateEmbeddingsForMultipleTexts(
-        List<String> texts,
-        MemoryStorageConfig storageConfig,
-        ActionListener<List<Object>> listener
-    ) {
-        if (texts.isEmpty()) {
-            listener.onResponse(new ArrayList<>());
-            return;
-        }
-
-        String embeddingModelId = storageConfig.getEmbeddingModelId();
-        FunctionName embeddingModelType = storageConfig.getEmbeddingModelType();
-
-        // Validate model state before generating embeddings
-        validateEmbeddingModelState(embeddingModelId, embeddingModelType, ActionListener.wrap(isValid -> {
-            // Create MLInput for text embedding with multiple documents
-            MLInput mlInput = MLInput
-                .builder()
-                .algorithm(embeddingModelType)
-                .inputDataset(TextDocsInputDataSet.builder().docs(texts).build())
-                .build();
-
-            // Create prediction request
-            MLPredictionTaskRequest predictionRequest = MLPredictionTaskRequest
-                .builder()
-                .modelId(embeddingModelId)
-                .mlInput(mlInput)
-                .build();
-
-            // Execute prediction
-            client.execute(MLPredictionTaskAction.INSTANCE, predictionRequest, ActionListener.wrap(response -> {
-                try {
-                    MLOutput mlOutput = response.getOutput();
-                    if (mlOutput instanceof ModelTensorOutput) {
-                        ModelTensorOutput tensorOutput = (ModelTensorOutput) mlOutput;
-                        List<Object> embeddings = new ArrayList<>();
-
-                        if (tensorOutput.getMlModelOutputs() != null) {
-                            for (ModelTensors modelTensors : tensorOutput.getMlModelOutputs()) {
-                                Object embedding = null;
-                                if (embeddingModelType == FunctionName.TEXT_EMBEDDING) {
-                                    embedding = extractDenseEmbeddingFromModelTensors(modelTensors);
-                                } else if (embeddingModelType == FunctionName.SPARSE_ENCODING) {
-                                    embedding = extractSparseEmbeddingFromModelTensors(modelTensors);
-                                }
-                                embeddings.add(embedding);
-                            }
-                        }
-
-                        listener.onResponse(embeddings);
-                    } else {
-                        log.error("Unexpected ML output type: {}", mlOutput.getClass().getName());
-                        listener.onFailure(new IllegalStateException("Unexpected ML output type: " + mlOutput.getClass().getName()));
-                    }
-                } catch (Exception e) {
-                    log.error("Failed to extract embeddings from ML output", e);
-                    listener.onFailure(new IllegalStateException("Failed to extract embeddings from ML output", e));
-                }
-            }, e -> {
-                log.error("Failed to generate embeddings", e);
-                listener.onFailure(new OpenSearchException("Failed to generate embeddings: " + e.getMessage(), e));
-            }));
-        }, e -> {
-            log.error("Failed to validate embedding model state", e);
-            listener.onFailure(e);
-        }));
-    }
-
-    private Object extractDenseEmbeddingFromModelTensors(ModelTensors modelTensors) {
-        if (modelTensors.getMlModelTensors() == null || modelTensors.getMlModelTensors().isEmpty()) {
-            return null;
-        }
-
-        for (ModelTensor tensor : modelTensors.getMlModelTensors()) {
-            if ("sentence_embedding".equals(tensor.getName()) && tensor.getData() != null) {
-                Number[] data = tensor.getData();
-                float[] floatData = new float[data.length];
-                for (int i = 0; i < data.length; i++) {
-                    floatData[i] = data[i].floatValue();
-                }
-                return floatData;
-            }
-        }
-        return null;
-    }
-
-    private Object extractSparseEmbeddingFromModelTensors(ModelTensors modelTensors) {
-        if (modelTensors.getMlModelTensors() == null || modelTensors.getMlModelTensors().isEmpty()) {
-            return null;
-        }
-
-        for (ModelTensor tensor : modelTensors.getMlModelTensors()) {
-            Map<String, ?> dataMap = tensor.getDataAsMap();
-            if (dataMap != null) {
-                if (dataMap.containsKey("response") && dataMap.get("response") instanceof List) {
-                    List<?> responseList = (List<?>) dataMap.get("response");
-                    if (!responseList.isEmpty() && responseList.get(0) instanceof Map) {
-                        return responseList.get(0);
-                    }
-                }
-                return dataMap;
-            }
-        }
-        return null;
     }
 
     private void bulkIndexMemoriesWithResults(
@@ -1261,81 +1156,6 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
 
         log.error("No sparse embedding data found");
         return null;
-    }
-
-    private void getMemoryContainer(String memoryContainerId, ActionListener<MLMemoryContainer> listener) {
-        FetchSourceContext fetchSourceContext = new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);
-        GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
-            .builder()
-            .index(ML_MEMORY_CONTAINER_INDEX)
-            .id(memoryContainerId)
-            .fetchSourceContext(fetchSourceContext)
-            .build();
-
-        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-            ActionListener<MLMemoryContainer> wrappedListener = ActionListener.runBefore(listener, context::restore);
-
-            sdkClient.getDataObjectAsync(getDataObjectRequest).whenComplete((r, throwable) -> {
-                if (throwable != null) {
-                    Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
-                    if (ExceptionsHelper.unwrap(cause, IndexNotFoundException.class) != null) {
-                        wrappedListener.onFailure(new OpenSearchStatusException("Memory container not found", RestStatus.NOT_FOUND));
-                    } else {
-                        wrappedListener.onFailure(cause);
-                    }
-                } else {
-                    try {
-                        if (r.getResponse() != null && r.getResponse().isExists()) {
-                            try (
-                                XContentParser parser = jsonXContent
-                                    .createParser(xContentRegistry, LoggingDeprecationHandler.INSTANCE, r.getResponse().getSourceAsString())
-                            ) {
-                                ensureExpectedToken(XContentParser.Token.START_OBJECT, parser.nextToken(), parser);
-                                MLMemoryContainer container = MLMemoryContainer.parse(parser);
-                                wrappedListener.onResponse(container);
-                            }
-                        } else {
-                            wrappedListener.onFailure(new OpenSearchStatusException("Memory container not found", RestStatus.NOT_FOUND));
-                        }
-                    } catch (Exception e) {
-                        wrappedListener.onFailure(e);
-                    }
-                }
-            });
-        }
-    }
-
-    private String getIndexName(MLMemoryContainer container) {
-        MemoryStorageConfig config = container.getMemoryStorageConfig();
-        if (config != null && config.getMemoryIndexName() != null) {
-            return config.getMemoryIndexName();
-        }
-        return null;
-    }
-
-    private boolean checkMemoryContainerAccess(User user, MLMemoryContainer mlMemoryContainer) {
-        // If security is disabled (user is null), allow access
-        if (user == null) {
-            return true;
-        }
-
-        // If user is admin (has all_access role), allow access
-        if (user.getRoles() != null && user.getRoles().contains("all_access")) {
-            return true;
-        }
-
-        // Check if user is the owner
-        User owner = mlMemoryContainer.getOwner();
-        if (owner != null && owner.getName() != null && owner.getName().equals(user.getName())) {
-            return true;
-        }
-
-        // Check if user has matching backend roles
-        if (owner != null && owner.getBackendRoles() != null && user.getBackendRoles() != null) {
-            return owner.getBackendRoles().stream().anyMatch(role -> user.getBackendRoles().contains(role));
-        }
-
-        return false;
     }
 
     private void searchSimilarFactsForSession(
@@ -1738,39 +1558,40 @@ public class TransportAddMemoriesAction extends HandledTransportAction<MLAddMemo
                 }
 
                 if (!textsToEmbed.isEmpty()) {
-                    generateEmbeddingsForMultipleTexts(textsToEmbed, storageConfig, ActionListener.wrap(embeddings -> {
-                        // Update memories with embeddings
-                        List<UpdateRequest> embeddingUpdates = new ArrayList<>();
-                        for (int i = 0; i < memoryIdsToUpdate.size() && i < embeddings.size(); i++) {
-                            Map<String, Object> embeddingUpdate = new HashMap<>();
-                            embeddingUpdate.put(MEMORY_EMBEDDING_FIELD, embeddings.get(i));
+                    memoryEmbeddingHelper
+                        .generateEmbeddingsForMultipleTexts(textsToEmbed, storageConfig, ActionListener.wrap(embeddings -> {
+                            // Update memories with embeddings
+                            List<UpdateRequest> embeddingUpdates = new ArrayList<>();
+                            for (int i = 0; i < memoryIdsToUpdate.size() && i < embeddings.size(); i++) {
+                                Map<String, Object> embeddingUpdate = new HashMap<>();
+                                embeddingUpdate.put(MEMORY_EMBEDDING_FIELD, embeddings.get(i));
 
-                            UpdateRequest updateRequest = new UpdateRequest(indexName, memoryIdsToUpdate.get(i)).doc(embeddingUpdate);
-                            embeddingUpdates.add(updateRequest);
-                        }
-
-                        if (!embeddingUpdates.isEmpty()) {
-                            BulkRequest embeddingBulk = new BulkRequest().setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
-                            for (UpdateRequest request : embeddingUpdates) {
-                                embeddingBulk.add(request);
+                                UpdateRequest updateRequest = new UpdateRequest(indexName, memoryIdsToUpdate.get(i)).doc(embeddingUpdate);
+                                embeddingUpdates.add(updateRequest);
                             }
 
-                            client.bulk(embeddingBulk, ActionListener.wrap(embeddingResponse -> {
-                                if (embeddingResponse.hasFailures()) {
-                                    log.error("Failed to update embeddings: {}", embeddingResponse.buildFailureMessage());
+                            if (!embeddingUpdates.isEmpty()) {
+                                BulkRequest embeddingBulk = new BulkRequest().setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE);
+                                for (UpdateRequest request : embeddingUpdates) {
+                                    embeddingBulk.add(request);
                                 }
+
+                                client.bulk(embeddingBulk, ActionListener.wrap(embeddingResponse -> {
+                                    if (embeddingResponse.hasFailures()) {
+                                        log.error("Failed to update embeddings: {}", embeddingResponse.buildFailureMessage());
+                                    }
+                                    listener.onResponse(results);
+                                }, e -> {
+                                    log.error("Failed to update embeddings", e);
+                                    listener.onResponse(results);
+                                }));
+                            } else {
                                 listener.onResponse(results);
-                            }, e -> {
-                                log.error("Failed to update embeddings", e);
-                                listener.onResponse(results);
-                            }));
-                        } else {
+                            }
+                        }, e -> {
+                            log.error("Failed to generate embeddings for memory operations", e);
                             listener.onResponse(results);
-                        }
-                    }, e -> {
-                        log.error("Failed to generate embeddings for memory operations", e);
-                        listener.onResponse(results);
-                    }));
+                        }));
                 } else {
                     listener.onResponse(results);
                 }
