@@ -60,7 +60,6 @@ public class MLAgentTracer extends MLTracer {
     public static final String ATTR_PHASE = "gen_ai.agent.phase";
     public static final String ATTR_AGENT_ID = "gen_ai.agent.id";
     public static final String ATTR_MODEL_ID = "gen_ai.model.id";
-    public static final String ATTR_CONNECTOR_ID = "gen_ai.connector.id";
     public static final String ATTR_STEP_NUMBER = "gen_ai.agent.step.number";
     public static final String ATTR_NAME = "gen_ai.agent.name";
     public static final String ATTR_LATENCY = "gen_ai.agent.latency";

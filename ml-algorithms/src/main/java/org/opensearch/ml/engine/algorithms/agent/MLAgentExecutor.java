@@ -99,7 +99,6 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     public static final String MESSAGE_HISTORY_LIMIT = "message_history_limit";
     public static final String ERROR_MESSAGE = "error_message";
     public static final String AGENT_ID = "agent_id";
-    public static final String CONNECTOR_ID = "connector_id";
 
     private Client client;
     private SdkClient sdkClient;

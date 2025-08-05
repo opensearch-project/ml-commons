@@ -138,7 +138,6 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     public static final String REFLECT_PROMPT_TEMPLATE_FIELD = "reflect_prompt_template";
     public static final String PLANNER_WITH_HISTORY_TEMPLATE_FIELD = "planner_with_history_template";
     public static final String EXECUTOR_MAX_ITERATIONS_FIELD = "executor_max_iterations";
-    public static final String CONNECTOR_ID = "connector_id";
 
     public MLPlanExecuteAndReflectAgentRunner(
         Client client,
