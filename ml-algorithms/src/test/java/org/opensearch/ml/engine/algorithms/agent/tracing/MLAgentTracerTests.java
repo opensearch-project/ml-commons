@@ -151,9 +151,11 @@ public class MLAgentTracerTests {
      */
     @Test
     public void testCreateAgentTaskAttributes() {
-        Map<String, String> attrs = MLAgentTracer.createAgentTaskAttributes("agent1", "task1");
+        Map<String, String> attrs = MLAgentTracer.createAgentTaskAttributes("agent1", "task1", "agent1", "model1");
         assertEquals("agent1", attrs.get(MLAgentTracer.ATTR_NAME));
         assertEquals("task1", attrs.get(MLAgentTracer.ATTR_TASK));
+        assertEquals("agent1", attrs.get(MLAgentTracer.ATTR_AGENT_ID));
+        assertEquals("model1", attrs.get(MLAgentTracer.ATTR_MODEL_ID));
         assertEquals("create_agent", attrs.get(MLAgentTracer.ATTR_OPERATION_NAME));
     }
 

@@ -58,6 +58,9 @@ public class MLAgentTracer extends MLTracer {
     public static final String ATTR_RESULT = "gen_ai.agent.result";
     public static final String ATTR_TASK = "gen_ai.agent.task";
     public static final String ATTR_PHASE = "gen_ai.agent.phase";
+    public static final String ATTR_AGENT_ID = "gen_ai.agent.id";
+    public static final String ATTR_MODEL_ID = "gen_ai.model.id";
+    public static final String ATTR_CONNECTOR_ID = "gen_ai.connector.id";
     public static final String ATTR_STEP_NUMBER = "gen_ai.agent.step.number";
     public static final String ATTR_NAME = "gen_ai.agent.name";
     public static final String ATTR_LATENCY = "gen_ai.agent.latency";
@@ -204,7 +207,7 @@ public class MLAgentTracer extends MLTracer {
      * @param userTask The user task or question.
      * @return A map of attributes for the agent task span.
      */
-    public static Map<String, String> createAgentTaskAttributes(String agentName, String userTask) {
+    public static Map<String, String> createAgentTaskAttributes(String agentName, String userTask, String agentId, String modelId) {
         Map<String, String> attributes = new HashMap<>();
         attributes.put(ATTR_SERVICE_TYPE, SERVICE_TYPE_TRACER);
         if (agentName != null && !agentName.isEmpty()) {
@@ -212,6 +215,12 @@ public class MLAgentTracer extends MLTracer {
         }
         if (userTask != null && !userTask.isEmpty()) {
             attributes.put(ATTR_TASK, userTask);
+        }
+        if (agentId != null && !agentId.isEmpty()) {
+            attributes.put(ATTR_AGENT_ID, agentId);
+        }
+        if (modelId != null && !modelId.isEmpty()) {
+            attributes.put(ATTR_MODEL_ID, modelId);
         }
         attributes.put(ATTR_OPERATION_NAME, OperationType.CREATE_AGENT.getValue());
         return attributes;
@@ -673,8 +682,8 @@ public class MLAgentTracer extends MLTracer {
      * @param userTask The user task or question.
      * @return The started Span.
      */
-    public Span startAgentTaskSpan(String agentName, String userTask) {
-        return startSpan(AGENT_TASK_PER_SPAN, createAgentTaskAttributes(agentName, userTask));
+    public Span startAgentTaskSpan(String agentName, String userTask, String agentId, String modelId) {
+        return startSpan(AGENT_TASK_PER_SPAN, createAgentTaskAttributes(agentName, userTask, agentId, modelId));
     }
 
     /**

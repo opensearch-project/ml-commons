@@ -98,6 +98,8 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
     public static final String REGENERATE_INTERACTION_ID = "regenerate_interaction_id";
     public static final String MESSAGE_HISTORY_LIMIT = "message_history_limit";
     public static final String ERROR_MESSAGE = "error_message";
+    public static final String AGENT_ID = "agent_id";
+    public static final String CONNECTOR_ID = "connector_id";
 
     private Client client;
     private SdkClient sdkClient;
@@ -254,6 +256,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                                     inputDataSet
                                                                         .getParameters()
                                                                         .putIfAbsent(QUESTION, interactionRes.getInteraction().getInput());
+                                                                    inputDataSet.getParameters().put(AGENT_ID, agentId);
                                                                     saveRootInteractionAndExecute(
                                                                         listener,
                                                                         memory,
@@ -270,6 +273,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                                 })
                                                             );
                                                     } else {
+                                                        inputDataSet.getParameters().put(AGENT_ID, agentId);
                                                         saveRootInteractionAndExecute(
                                                             listener,
                                                             memory,
@@ -286,6 +290,7 @@ public class MLAgentExecutor implements Executable, SettingsChangeListener {
                                                     listener.onFailure(ex);
                                                 }));
                                         } else {
+                                            inputDataSet.getParameters().put(AGENT_ID, agentId);
                                             executeAgent(inputDataSet, mlTask, isAsync, memoryId, mlAgent, outputs, modelTensors, listener);
                                         }
                                     } catch (Exception e) {

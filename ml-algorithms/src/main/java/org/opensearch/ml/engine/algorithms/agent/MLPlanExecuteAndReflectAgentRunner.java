@@ -138,6 +138,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
     public static final String REFLECT_PROMPT_TEMPLATE_FIELD = "reflect_prompt_template";
     public static final String PLANNER_WITH_HISTORY_TEMPLATE_FIELD = "planner_with_history_template";
     public static final String EXECUTOR_MAX_ITERATIONS_FIELD = "executor_max_iterations";
+    public static final String CONNECTOR_ID = "connector_id";
 
     public MLPlanExecuteAndReflectAgentRunner(
         Client client,
@@ -242,7 +243,14 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
     @Override
     public void run(MLAgent mlAgent, Map<String, String> apiParams, ActionListener<Object> listener) {
-        Span agentTaskSpan = MLAgentTracer.getInstance().startAgentTaskSpan(mlAgent.getName(), apiParams.get(QUESTION_FIELD));
+        Span agentTaskSpan = MLAgentTracer
+            .getInstance()
+            .startAgentTaskSpan(
+                mlAgent.getName(),
+                apiParams.get(QUESTION_FIELD),
+                apiParams.get(MLAgentExecutor.AGENT_ID),
+                mlAgent.getLlm().getModelId()
+            );
 
         try {
             Map<String, String> allParams = new HashMap<>();
