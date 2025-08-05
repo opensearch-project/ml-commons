@@ -331,21 +331,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         AtomicReference<String> lastAction = new AtomicReference<>();
         AtomicReference<String> lastActionInput = new AtomicReference<>();
         AtomicReference<String> lastToolSelectionResponse = new AtomicReference<>();
-        AtomicReference<String> lastToolOutput = new AtomicReference<>();
         Map<String, Object> additionalInfo = new ConcurrentHashMap<>();
-
-        StepListener firstListener = new StepListener<MLTaskResponse>();
-        StepListener<MLTaskResponse> lastStepListener = firstListener;
-
-        StringBuilder scratchpadBuilder = new StringBuilder();
-        List<String> interactions = new CopyOnWriteArrayList<>();
-
-        StringSubstitutor tmpSubstitutor = new StringSubstitutor(Map.of(SCRATCHPAD, scratchpadBuilder.toString()), "${parameters.", "}");
-        AtomicReference<String> newPrompt = new AtomicReference<>(tmpSubstitutor.replace(prompt));
-        tmpParameters.put(PROMPT, newPrompt.get());
-
-        List<ModelTensors> traceTensors = createModelTensors(sessionId, parentInteractionId);
-        int maxIterations = Integer.parseInt(tmpParameters.getOrDefault(MAX_ITERATION, DEFAULT_MAX_ITERATIONS));
 
         Span llmCallSpan = MLAgentTracer
             .getInstance()
@@ -356,9 +342,20 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 tmpParameters.get("_llm_interface"),
                 agentTaskSpan
             );
+        StepListener firstListener = new StepListener<MLTaskResponse>();
         MLAgentTracer.ListenerWithSpan firstListenerWithSpan = new MLAgentTracer.ListenerWithSpan(firstListener, llmCallSpan);
         lastLlmListenerWithSpan.set(firstListenerWithSpan);
+        StepListener<?> lastStepListener = firstListener;
 
+        StringBuilder scratchpadBuilder = new StringBuilder();
+        List<String> interactions = new CopyOnWriteArrayList<>();
+
+        StringSubstitutor tmpSubstitutor = new StringSubstitutor(Map.of(SCRATCHPAD, scratchpadBuilder.toString()), "${parameters.", "}");
+        AtomicReference<String> newPrompt = new AtomicReference<>(tmpSubstitutor.replace(prompt));
+        tmpParameters.put(PROMPT, newPrompt.get());
+
+        List<ModelTensors> traceTensors = createModelTensors(sessionId, parentInteractionId);
+        int maxIterations = Integer.parseInt(tmpParameters.getOrDefault(MAX_ITERATION, DEFAULT_MAX_ITERATIONS));
         for (int i = 0; i < maxIterations; i++) {
             int finalI = i;
             int currentLlmCallIndex = context.getLlmCallIndex().get();
@@ -417,7 +414,6 @@ public class MLChatAgentRunner implements MLAgentRunner {
                     lastAction.set(action);
                     lastActionInput.set(actionInput);
                     lastToolSelectionResponse.set(thoughtResponse);
-                    lastToolOutput.set(thoughtResponse);
 
                     traceTensors
                         .add(
