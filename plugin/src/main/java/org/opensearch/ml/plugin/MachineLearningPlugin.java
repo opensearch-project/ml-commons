@@ -933,10 +933,6 @@ public class MachineLearningPlugin extends Plugin
         RestMLDeleteMemoryContainerAction restMLDeleteMemoryContainerAction = new RestMLDeleteMemoryContainerAction(
             mlFeatureEnabledSetting
         );
-        RestMLAddMemoriesAction restMLAddMemoriesAction = new RestMLAddMemoriesAction();
-        RestMLSearchMemoriesAction restMLSearchMemoriesAction = new RestMLSearchMemoriesAction(mlFeatureEnabledSetting);
-        RestMLDeleteMemoryAction restMLDeleteMemoryAction = new RestMLDeleteMemoryAction();
-        RestMLUpdateMemoryAction restMLUpdateMemoryAction = new RestMLUpdateMemoryAction();
         RestMemorySearchConversationsAction restSearchConversationsAction = new RestMemorySearchConversationsAction(
             mlFeatureEnabledSetting
         );
@@ -1009,10 +1005,6 @@ public class MachineLearningPlugin extends Plugin
                 restMLCreateMemoryContainerAction,
                 restMLGetMemoryContainerAction,
                 restMLDeleteMemoryContainerAction,
-                restMLAddMemoriesAction,
-                restMLSearchMemoriesAction,
-                restMLDeleteMemoryAction,
-                restMLUpdateMemoryAction,
                 restSearchConversationsAction,
                 restSearchInteractionsAction,
                 restGetConversationAction,
