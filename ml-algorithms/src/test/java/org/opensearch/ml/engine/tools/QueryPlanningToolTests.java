@@ -269,8 +269,6 @@ public class QueryPlanningToolTests {
         assertEquals("Invalid generation type: invalid. The current supported types are llmGenerated.", exception.getMessage());
     }
 
-
-
     @Test
     public void testAllParameterProcessing() {
         QueryPlanningTool tool = new QueryPlanningTool("llmGenerated", queryGenerationTool);
@@ -279,29 +277,29 @@ public class QueryPlanningToolTests {
         parameters.put("index_mapping", "{\"properties\":{\"title\":{\"type\":\"text\"}}}");
         parameters.put("query_fields", "[\"title\", \"content\"]");
         // No system_prompt - should use default
-        
+
         @SuppressWarnings("unchecked")
         ActionListener<String> listener = mock(ActionListener.class);
-        
+
         doAnswer(invocation -> {
             ActionListener<String> modelListener = invocation.getArgument(1);
             modelListener.onResponse("{\"query\":{\"match\":{\"title\":\"test\"}}}");
             return null;
         }).when(queryGenerationTool).run(any(), any());
-        
+
         tool.run(parameters, listener);
-        
+
         ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
         verify(queryGenerationTool).run(captor.capture(), any());
-        
+
         Map<String, String> capturedParams = captor.getValue();
-        
+
         // All parameters should be processed
         assertTrue(capturedParams.containsKey("query_text"));
         assertTrue(capturedParams.containsKey("index_mapping"));
         assertTrue(capturedParams.containsKey("query_fields"));
         assertTrue(capturedParams.containsKey(SYSTEM_PROMPT_FIELD));
-        
+
         // Processed parameters should be JSON strings
         assertTrue(capturedParams.get("index_mapping").startsWith("\""));
         assertTrue(capturedParams.get("query_fields").startsWith("\""));
