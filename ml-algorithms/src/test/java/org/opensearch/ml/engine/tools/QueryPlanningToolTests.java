@@ -16,7 +16,9 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.DEFAULT_DESCRIPTION;
+import static org.opensearch.ml.engine.tools.QueryPlanningTool.INDEX_MAPPING_FIELD;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.MODEL_ID_FIELD;
+import static org.opensearch.ml.engine.tools.QueryPlanningTool.QUERY_FIELDS_FIELD;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.SYSTEM_PROMPT_FIELD;
 
 import java.util.Collections;
@@ -59,7 +61,7 @@ public class QueryPlanningToolTests {
         MLModelTool.Factory.getInstance().init(client);
         factory = new QueryPlanningTool.Factory();
         validParams = new HashMap<>();
-        validParams.put("prompt", "test prompt");
+        validParams.put(SYSTEM_PROMPT_FIELD, "test prompt");
         emptyParams = Collections.emptyMap();
     }
 
@@ -85,7 +87,7 @@ public class QueryPlanningToolTests {
         ActionListener<String> listener = ActionListener.wrap(future::complete, future::completeExceptionally);
         // test try to update the prompt
         validParams
-            .put("prompt", "You are a query generation agent. Generate a dsl query for the following question: ${parameters.query_text}");
+            .put(SYSTEM_PROMPT_FIELD, "You are a query generation agent. Generate a dsl query for the following question: ${parameters.query_text}");
         validParams.put("query_text", "help me find some books related to wind");
         tool.run(validParams, listener);
 
@@ -203,7 +205,7 @@ public class QueryPlanningToolTests {
         ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
         doAnswer(invocation -> {
             Map<String, String> params = invocation.getArgument(0);
-            assertNotNull(params.get("prompt"));
+            assertNotNull(params.get(SYSTEM_PROMPT_FIELD));
             return null;
         }).when(queryGenerationTool).run(captor.capture(), any());
     }
@@ -274,8 +276,8 @@ public class QueryPlanningToolTests {
         QueryPlanningTool tool = new QueryPlanningTool("llmGenerated", queryGenerationTool);
         Map<String, String> parameters = new HashMap<>();
         parameters.put("query_text", "test query");
-        parameters.put("index_mapping", "{\"properties\":{\"title\":{\"type\":\"text\"}}}");
-        parameters.put("query_fields", "[\"title\", \"content\"]");
+        parameters.put(INDEX_MAPPING_FIELD, "{\"properties\":{\"title\":{\"type\":\"text\"}}}");
+        parameters.put(QUERY_FIELDS_FIELD, "[\"title\", \"content\"]");
         // No system_prompt - should use default
 
         @SuppressWarnings("unchecked")
@@ -296,12 +298,12 @@ public class QueryPlanningToolTests {
 
         // All parameters should be processed
         assertTrue(capturedParams.containsKey("query_text"));
-        assertTrue(capturedParams.containsKey("index_mapping"));
-        assertTrue(capturedParams.containsKey("query_fields"));
+        assertTrue(capturedParams.containsKey(INDEX_MAPPING_FIELD));
+        assertTrue(capturedParams.containsKey(QUERY_FIELDS_FIELD));
         assertTrue(capturedParams.containsKey(SYSTEM_PROMPT_FIELD));
 
         // Processed parameters should be JSON strings
-        assertTrue(capturedParams.get("index_mapping").startsWith("\""));
-        assertTrue(capturedParams.get("query_fields").startsWith("\""));
+        assertTrue(capturedParams.get(INDEX_MAPPING_FIELD).startsWith("\""));
+        assertTrue(capturedParams.get(QUERY_FIELDS_FIELD).startsWith("\""));
     }
 }

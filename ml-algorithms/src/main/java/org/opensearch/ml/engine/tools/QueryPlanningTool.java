@@ -35,6 +35,8 @@ public class QueryPlanningTool implements WithModelTool {
     public static final String MODEL_ID_FIELD = "model_id";
     private final MLModelTool queryGenerationTool;
     public static final String SYSTEM_PROMPT_FIELD = "system_prompt";
+    public static final String INDEX_MAPPING_FIELD = "index_mapping";
+    public static final String QUERY_FIELDS_FIELD = "query_fields";
     private static final String GENERATION_TYPE_FIELD = "generation_type";
     private static final String LLM_GENERATED_TYPE_FIELD = "llmGenerated";
     @Getter
@@ -66,11 +68,11 @@ public class QueryPlanningTool implements WithModelTool {
         if (!parameters.containsKey(SYSTEM_PROMPT_FIELD)) {
             parameters.put(SYSTEM_PROMPT_FIELD, DEFAULT_SYSTEM_PROMPT);
         }
-        if (parameters.containsKey("index_mapping")) {
-            parameters.put("index_mapping", gson.toJson(parameters.get("index_mapping")));
+        if (parameters.containsKey(INDEX_MAPPING_FIELD)) {
+            parameters.put(INDEX_MAPPING_FIELD, gson.toJson(parameters.get(INDEX_MAPPING_FIELD)));
         }
-        if (parameters.containsKey("query_fields")) {
-            parameters.put("query_fields", gson.toJson(parameters.get("query_fields")));
+        if (parameters.containsKey(QUERY_FIELDS_FIELD)) {
+            parameters.put(QUERY_FIELDS_FIELD, gson.toJson(parameters.get(QUERY_FIELDS_FIELD)));
         }
         ActionListener<T> modelListener = ActionListener.wrap(r -> {
             try {
