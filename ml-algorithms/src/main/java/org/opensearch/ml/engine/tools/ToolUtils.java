@@ -6,6 +6,7 @@
 package org.opensearch.ml.engine.tools;
 
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.*;
 
 import java.util.HashMap;
@@ -17,6 +18,7 @@ import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.utils.StringUtils;
 
+import com.google.gson.reflect.TypeToken;
 import com.jayway.jsonpath.JsonPath;
 
 import lombok.extern.log4j.Log4j2;
@@ -39,27 +41,46 @@ public class ToolUtils {
         } else {
             extractedParameters.putAll(parameters);
         }
+        return extractedParameters;
+    }
+
+    public static Map<String, String> extractInputParameters(Map<String, String> parameters, Map<String, ?> attributes) {
+        Map<String, String> extractedParameters = ToolUtils.extractRequiredParameters(parameters, attributes);
         if (parameters.containsKey("input")) {
-            String input = parameters.get("input");
-            StringSubstitutor stringSubstitutor = new StringSubstitutor(extractedParameters, "${parameters.", "}");
-            input = stringSubstitutor.replace(input);
-            extractedParameters.put("input", input);
+            try {
+                StringSubstitutor stringSubstitutor = new StringSubstitutor(parameters, "${parameters.", "}");
+                String input = stringSubstitutor.replace(parameters.get("input"));
+                extractedParameters.put("input", input);
+                Map<String, String> inputParameters = gson
+                    .fromJson(input, TypeToken.getParameterized(Map.class, String.class, String.class).getType());
+                extractedParameters.putAll(inputParameters);
+            } catch (Exception exception) {
+                log.info("fail extract parameters from key 'input' due to" + exception.getMessage());
+            }
         }
         return extractedParameters;
     }
 
     public static Map<String, String> buildToolParameters(Map<String, String> parameters, MLToolSpec toolSpec, String tenantId) {
-        Map<String, String> executeParams = extractRequiredParameters(parameters, toolSpec.getAttributes());
+        Map<String, String> executeParams = new HashMap<>();
         if (toolSpec.getParameters() != null) {
             executeParams.putAll(toolSpec.getParameters());
         }
-        executeParams.put(TENANT_ID_FIELD, tenantId);
+
         for (String key : parameters.keySet()) {
             String toolNamePrefix = getToolName(toolSpec) + ".";
             if (key.startsWith(toolNamePrefix)) {
                 executeParams.put(key.replace(toolNamePrefix, ""), parameters.get(key));
+            } else {
+                executeParams.put(key, parameters.get(key));
             }
         }
+        // Override all parameters in tool config to tool execution parameters as the config contains the static parameters.
+        if (toolSpec.getConfigMap() != null && !toolSpec.getConfigMap().isEmpty()) {
+            executeParams.putAll(toolSpec.getConfigMap());
+        }
+        // Place tenant_id last to prevent unintended overriding of the tenant identifier
+        executeParams.put(TENANT_ID_FIELD, tenantId);
         return executeParams;
     }
 

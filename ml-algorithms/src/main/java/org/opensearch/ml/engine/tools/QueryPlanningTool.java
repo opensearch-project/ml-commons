@@ -57,8 +57,8 @@ public class QueryPlanningTool implements WithModelTool {
     }
 
     @Override
-    public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
-
+    public <T> void run(Map<String, String> originalParameters, ActionListener<T> listener) {
+        Map<String, String> parameters = ToolUtils.extractInputParameters(originalParameters, attributes);
         if (!validate(parameters)) {
             listener.onFailure(new IllegalArgumentException("Empty parameters for QueryPlanningTool: " + parameters));
             return;

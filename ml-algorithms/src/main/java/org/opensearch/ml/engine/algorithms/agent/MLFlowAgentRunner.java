@@ -5,21 +5,17 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
-import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getToolName;
+import static org.opensearch.ml.engine.tools.ToolUtils.TOOL_OUTPUT_FILTERS_FIELD;
 import static org.opensearch.ml.engine.tools.ToolUtils.filterToolOutput;
 
 import java.io.IOException;
-import java.security.AccessController;
-import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.action.StepListener;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.cluster.service.ClusterService;
@@ -105,36 +101,32 @@ public class MLFlowAgentRunner implements MLAgentRunner {
         for (int i = 0; i <= toolSpecs.size(); i++) {
             if (i == 0) {
                 MLToolSpec toolSpec = toolSpecs.get(i);
-                Map<String, String> executeParams = ToolUtils.buildToolParameters(params, toolSpec, mlAgent.getTenantId());
-                Tool tool = ToolUtils.createTool(toolFactories, executeParams, toolSpec);
+                firstToolExecuteParams = ToolUtils.buildToolParameters(params, toolSpec, mlAgent.getTenantId());
+                Tool tool = ToolUtils.createTool(toolFactories, firstToolExecuteParams, toolSpec);
                 firstStepListener = new StepListener<>();
                 previousStepListener = firstStepListener;
                 firstTool = tool;
-                firstToolExecuteParams = getToolExecuteParams(toolSpec, params, mlAgent.getTenantId());
             } else {
                 MLToolSpec previousToolSpec = toolSpecs.get(i - 1);
                 StepListener<Object> nextStepListener = new StepListener<>();
                 int finalI = i;
                 previousStepListener.whenComplete(output -> {
-                    String key = getToolName(previousToolSpec);
-                    String outputKey = key + ".output";
-
-                    String outputResponse = parseResponse(output);
-                    outputResponse = filterToolOutput(previousToolSpec.getParameters(), outputResponse);
-                    params.put(outputKey, StringUtils.escapeString(outputResponse));
+                    String toolName = getToolName(previousToolSpec);
+                    String outputKey = toolName + ".output";
+                    Map<String, String> toolParameters = ToolUtils.buildToolParameters(params, previousToolSpec, mlAgent.getTenantId());
+                    String filteredOutput = filterToolOutput(toolParameters, parseResponse(output));
+                    params.put(outputKey, StringUtils.escapeString(filteredOutput));
                     if (previousToolSpec.isIncludeOutputInAgentResponse() || finalI == toolSpecs.size()) {
-                        if (output instanceof ModelTensorOutput) {
+                        if (toolParameters.containsKey(TOOL_OUTPUT_FILTERS_FIELD)) {
+                            flowAgentOutput.add(ModelTensor.builder().name(outputKey).result(filteredOutput).build());
+                        } else if (output instanceof ModelTensorOutput) {
                             flowAgentOutput.addAll(((ModelTensorOutput) output).getMlModelOutputs().get(0).getMlModelTensors());
                         } else {
-                            String result = output instanceof String
-                                ? (String) output
-                                : AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> StringUtils.toJson(output));
-
-                            ModelTensor stepOutput = ModelTensor.builder().name(key).result(result).build();
+                            ModelTensor stepOutput = ModelTensor.builder().name(outputKey).result(StringUtils.toJson(output)).build();
                             flowAgentOutput.add(stepOutput);
                         }
 
-                        additionalInfo.put(outputKey, outputResponse);
+                        additionalInfo.put(outputKey, filteredOutput);
                     }
 
                     if (finalI == toolSpecs.size()) {
@@ -157,7 +149,7 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                     Map<String, String> executeParams = ToolUtils.buildToolParameters(params, toolSpec, mlAgent.getTenantId());
                     Tool tool = ToolUtils.createTool(toolFactories, executeParams, toolSpec);
                     if (finalI < toolSpecs.size()) {
-                        tool.run(getToolExecuteParams(toolSpec, executeParams, mlAgent.getTenantId()), nextStepListener);
+                        tool.run(executeParams, nextStepListener);
                     }
 
                 }, e -> {
@@ -259,40 +251,4 @@ public class MLFlowAgentRunner implements MLAgentRunner {
         }
     }
 
-    @VisibleForTesting
-    Map<String, String> getToolExecuteParams(MLToolSpec toolSpec, Map<String, String> params, String tenantId) {
-        Map<String, String> executeParams = new HashMap<>();
-        if (toolSpec.getParameters() != null) {
-            executeParams.putAll(toolSpec.getParameters());
-        }
-        for (String key : params.keySet()) {
-            String toBeReplaced = null;
-            if (key.startsWith(toolSpec.getType() + ".")) {
-                toBeReplaced = toolSpec.getType() + ".";
-            }
-            if (toolSpec.getName() != null && key.startsWith(toolSpec.getName() + ".")) {
-                toBeReplaced = toolSpec.getName() + ".";
-            }
-            if (toBeReplaced != null) {
-                executeParams.put(key.replace(toBeReplaced, ""), params.get(key));
-            } else {
-                executeParams.put(key, params.get(key));
-            }
-        }
-        // Override all parameters in tool config to tool execution parameters as the config contains the static parameters.
-        if (toolSpec.getConfigMap() != null && !toolSpec.getConfigMap().isEmpty()) {
-            executeParams.putAll(toolSpec.getConfigMap());
-        }
-
-        executeParams.put(TENANT_ID_FIELD, tenantId);
-
-        if (executeParams.containsKey("input")) {
-            String input = executeParams.get("input");
-            StringSubstitutor substitutor = new StringSubstitutor(executeParams, "${parameters.", "}");
-            input = substitutor.replace(input);
-            executeParams.put("input", input);
-        }
-
-        return executeParams;
-    }
 }

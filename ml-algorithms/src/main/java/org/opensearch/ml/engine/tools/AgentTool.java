@@ -6,7 +6,6 @@
 package org.opensearch.ml.engine.tools;
 
 import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
-import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.util.Map;
 
@@ -58,7 +57,7 @@ public class AgentTool implements Tool {
 
     @Override
     public <T> void run(Map<String, String> parameters, ActionListener<T> listener) {
-        Map<String, String> extractedParameters = extractInputParameters(parameters);
+        Map<String, String> extractedParameters = ToolUtils.extractInputParameters(parameters, attributes);
         String tenantId = parameters.get(TENANT_ID_FIELD);
         AgentMLInput agentMLInput = AgentMLInput
             .AgentMLInputBuilder()
@@ -144,18 +143,5 @@ public class AgentTool implements Tool {
         public String getDefaultVersion() {
             return null;
         }
-    }
-
-    private Map<String, String> extractInputParameters(Map<String, String> parameters) {
-        Map<String, String> extractedParameters = ToolUtils.extractRequiredParameters(parameters, attributes);
-        if (parameters.containsKey("input")) {
-            try {
-                Map<String, String> chatParameters = gson.fromJson(parameters.get("input"), Map.class);
-                extractedParameters.putAll(chatParameters);
-            } catch (Exception exception) {
-                log.info("fail extract parameters from key 'input' due to" + exception.getMessage());
-            }
-        }
-        return extractedParameters;
     }
 }

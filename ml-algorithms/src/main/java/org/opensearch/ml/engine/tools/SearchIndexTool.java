@@ -155,7 +155,7 @@ public class SearchIndexTool implements Tool {
     @Override
     public <T> void run(Map<String, String> originalParameters, ActionListener<T> listener) {
         try {
-            Map<String, String> parameters = ToolUtils.extractRequiredParameters(originalParameters, attributes);
+            Map<String, String> parameters = ToolUtils.extractInputParameters(originalParameters, attributes);
             String input = parameters.get(INPUT_FIELD);
             String index = null;
             String query = null;
