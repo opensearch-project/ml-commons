@@ -842,17 +842,17 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         usage.put("totalTokens", 8.0);
         MLAgentTracer.ToolCallExtractionResult planResultInfo = new MLAgentTracer.ToolCallExtractionResult();
         planResultInfo.usage = usage;
-        AtomicReference<Double> phaseInputTokens = new AtomicReference<>(0.0);
-        AtomicReference<Double> phaseOutputTokens = new AtomicReference<>(0.0);
-        AtomicReference<Double> phaseTotalTokens = new AtomicReference<>(0.0);
-        Double inputTokens = planResultInfo.usage != null && planResultInfo.usage.get("inputTokens") instanceof Number
-            ? ((Number) planResultInfo.usage.get("inputTokens")).doubleValue()
+        AtomicReference<Integer> phaseInputTokens = new AtomicReference<>(0);
+        AtomicReference<Integer> phaseOutputTokens = new AtomicReference<>(0);
+        AtomicReference<Integer> phaseTotalTokens = new AtomicReference<>(0);
+        Integer inputTokens = planResultInfo.usage != null && planResultInfo.usage.get("inputTokens") instanceof Number
+            ? ((Number) planResultInfo.usage.get("inputTokens")).intValue()
             : null;
-        Double outputTokens = planResultInfo.usage != null && planResultInfo.usage.get("outputTokens") instanceof Number
-            ? ((Number) planResultInfo.usage.get("outputTokens")).doubleValue()
+        Integer outputTokens = planResultInfo.usage != null && planResultInfo.usage.get("outputTokens") instanceof Number
+            ? ((Number) planResultInfo.usage.get("outputTokens")).intValue()
             : null;
-        Double totalTokens = planResultInfo.usage != null && planResultInfo.usage.get("totalTokens") instanceof Number
-            ? ((Number) planResultInfo.usage.get("totalTokens")).doubleValue()
+        Integer totalTokens = planResultInfo.usage != null && planResultInfo.usage.get("totalTokens") instanceof Number
+            ? ((Number) planResultInfo.usage.get("totalTokens")).intValue()
             : null;
         if (inputTokens != null)
             phaseInputTokens.set(phaseInputTokens.get() + inputTokens);
@@ -860,9 +860,9 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
             phaseOutputTokens.set(phaseOutputTokens.get() + outputTokens);
         if (totalTokens != null)
             phaseTotalTokens.set(phaseTotalTokens.get() + totalTokens);
-        assertEquals(5.0, phaseInputTokens.get(), 0.01);
-        assertEquals(3.0, phaseOutputTokens.get(), 0.01);
-        assertEquals(8.0, phaseTotalTokens.get(), 0.01);
+        assertEquals(Integer.valueOf(5), phaseInputTokens.get());
+        assertEquals(Integer.valueOf(3), phaseOutputTokens.get());
+        assertEquals(Integer.valueOf(8), phaseTotalTokens.get());
     }
 
     @Test
