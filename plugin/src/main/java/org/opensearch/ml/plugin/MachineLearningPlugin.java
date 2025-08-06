@@ -302,6 +302,7 @@ import org.opensearch.ml.rest.RestMLCreateMemoryContainerAction;
 import org.opensearch.ml.rest.RestMLDeleteAgentAction;
 import org.opensearch.ml.rest.RestMLDeleteConnectorAction;
 import org.opensearch.ml.rest.RestMLDeleteControllerAction;
+import org.opensearch.ml.rest.RestMLDeleteMemoryAction;
 import org.opensearch.ml.rest.RestMLDeleteMemoryContainerAction;
 import org.opensearch.ml.rest.RestMLDeleteModelAction;
 import org.opensearch.ml.rest.RestMLDeleteModelGroupAction;
@@ -932,6 +933,10 @@ public class MachineLearningPlugin extends Plugin
         RestMLDeleteMemoryContainerAction restMLDeleteMemoryContainerAction = new RestMLDeleteMemoryContainerAction(
             mlFeatureEnabledSetting
         );
+        RestMLAddMemoriesAction restMLAddMemoriesAction = new RestMLAddMemoriesAction();
+        RestMLSearchMemoriesAction restMLSearchMemoriesAction = new RestMLSearchMemoriesAction(mlFeatureEnabledSetting);
+        RestMLDeleteMemoryAction restMLDeleteMemoryAction = new RestMLDeleteMemoryAction();
+        RestMLUpdateMemoryAction restMLUpdateMemoryAction = new RestMLUpdateMemoryAction();
         RestMemorySearchConversationsAction restSearchConversationsAction = new RestMemorySearchConversationsAction(
             mlFeatureEnabledSetting
         );
@@ -1004,6 +1009,10 @@ public class MachineLearningPlugin extends Plugin
                 restMLCreateMemoryContainerAction,
                 restMLGetMemoryContainerAction,
                 restMLDeleteMemoryContainerAction,
+                restMLAddMemoriesAction,
+                restMLSearchMemoriesAction,
+                restMLDeleteMemoryAction,
+                restMLUpdateMemoryAction,
                 restSearchConversationsAction,
                 restSearchInteractionsAction,
                 restGetConversationAction,

@@ -36,9 +36,12 @@ import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.index.IndexNotFoundException;
+import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.MLMemoryContainerDeleteRequest;
-import org.opensearch.ml.helper.MemoryAccessControlHelper;
+import org.opensearch.ml.helper.ConnectorAccessControlHelper;
+import org.opensearch.ml.helper.MemoryContainerHelper;
 import org.opensearch.remote.metadata.client.DeleteDataObjectResponse;
 import org.opensearch.remote.metadata.client.GetDataObjectRequest;
 import org.opensearch.remote.metadata.client.GetDataObjectResponse;
@@ -89,7 +92,10 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
     private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Mock
-    private MemoryAccessControlHelper memoryAccessControlHelper;
+    private ConnectorAccessControlHelper connectorAccessControlHelper;
+
+    @Mock
+    private MemoryContainerHelper memoryContainerHelper;
 
     TransportDeleteMemoryContainerAction transportDeleteMemoryContainerAction;
     MLMemoryContainerDeleteRequest mlMemoryContainerDeleteRequest;
@@ -127,10 +133,18 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
                 sdkClient,
                 xContentRegistry,
                 clusterService,
-                memoryAccessControlHelper,
+                connectorAccessControlHelper,
+                memoryContainerHelper,
                 mlFeatureEnabledSetting
             )
         );
+
+        MLMemoryContainer mockContainer = mock(MLMemoryContainer.class);
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            listener.onResponse(mockContainer);
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(any(), any());
 
         threadContext = new ThreadContext(settings);
         when(client.threadPool()).thenReturn(threadPool);
@@ -141,7 +155,7 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
     public void testDeleteMemoryContainer_Success() throws InterruptedException {
         CompletableFuture<GetDataObjectResponse> getFuture = CompletableFuture.completedFuture(getDataObjectResponse);
         when(sdkClient.getDataObjectAsync(any())).thenReturn(getFuture);
-        when(memoryAccessControlHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
+        when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
 
         CompletableFuture<DeleteDataObjectResponse> deleteFuture = CompletableFuture.completedFuture(deleteDataObjectResponse);
         when(sdkClient.deleteDataObjectAsync(any())).thenReturn(deleteFuture);
@@ -166,7 +180,7 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
         when(sdkClient.getDataObjectAsync(any())).thenReturn(getFuture);
 
         // Mock access control to return false
-        when(memoryAccessControlHelper.checkMemoryContainerAccess(any(), any())).thenReturn(false);
+        when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(false);
 
         transportDeleteMemoryContainerAction.doExecute(null, mlMemoryContainerDeleteRequest, actionListener);
         ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
@@ -177,7 +191,7 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
     public void testDeleteMemoryContainer_Failure() {
         CompletableFuture<GetDataObjectResponse> getFuture = CompletableFuture.completedFuture(getDataObjectResponse);
         when(sdkClient.getDataObjectAsync(any())).thenReturn(getFuture);
-        when(memoryAccessControlHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
+        when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
 
         CompletableFuture<DeleteDataObjectResponse> deleteFuture = new CompletableFuture<>();
         deleteFuture.completeExceptionally(new Exception("errorMessage"));
@@ -196,6 +210,24 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
         assertEquals("Failed to find memory container", argumentCaptor.getValue().getMessage());
     }
 
+    public void testDeleteMemoryContainer_IndexNotFoundException() {
+        // Setup getMemoryContainer to throw IndexNotFoundException
+        doAnswer(invocation -> {
+            ActionListener<MLMemoryContainer> listener = invocation.getArgument(1);
+            listener.onFailure(new IndexNotFoundException("Memory container index not found"));
+            return null;
+        }).when(memoryContainerHelper).getMemoryContainer(any(), any());
+
+        transportDeleteMemoryContainerAction.doExecute(null, mlMemoryContainerDeleteRequest, actionListener);
+
+        ArgumentCaptor<Exception> argumentCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(actionListener).onFailure(argumentCaptor.capture());
+
+        Exception exception = argumentCaptor.getValue();
+        assertTrue(exception instanceof IndexNotFoundException);
+        assertTrue(exception.getMessage().contains("Memory container index not found"));
+    }
+
     public void testDeleteMemoryContainer_MultiTenancyEnabled_ValidTenantId() {
         // Enable multi-tenancy
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
@@ -208,7 +240,7 @@ public class TransportDeleteMemoryContainerActionTests extends OpenSearchTestCas
 
         CompletableFuture<GetDataObjectResponse> getFuture = CompletableFuture.completedFuture(getDataObjectResponse);
         when(sdkClient.getDataObjectAsync(any())).thenReturn(getFuture);
-        when(memoryAccessControlHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
+        when(memoryContainerHelper.checkMemoryContainerAccess(any(), any())).thenReturn(true);
 
         CompletableFuture<DeleteDataObjectResponse> deleteFuture = CompletableFuture.completedFuture(deleteDataObjectResponse);
         when(sdkClient.deleteDataObjectAsync(any())).thenReturn(deleteFuture);
