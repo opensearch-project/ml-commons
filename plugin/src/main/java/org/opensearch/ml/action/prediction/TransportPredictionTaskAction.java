@@ -111,164 +111,172 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         String modelName = null;
         Span predictSpan = MLConnectorTracer.startModelPredictSpan(modelId, modelName);
         serializeInputForTracing(mlPredictionTaskRequest, predictSpan);
-        try {
-            String tenantId = mlPredictionTaskRequest.getTenantId();
-            if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, listener)) {
-                return;
-            }
-            User user = mlPredictionTaskRequest.getUser();
-            if (user == null) {
-                user = RestActionUtils.getUserContext(client);
-                mlPredictionTaskRequest.setUser(user);
-            }
-            final User userInfo = user;
+        String tenantId = mlPredictionTaskRequest.getTenantId();
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, listener)) {
+            return;
+        }
+        User user = mlPredictionTaskRequest.getUser();
+        if (user == null) {
+            user = RestActionUtils.getUserContext(client);
+            mlPredictionTaskRequest.setUser(user);
+        }
+        final User userInfo = user;
 
-            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                ActionListener<MLTaskResponse> spanWrappedListener = ActionListener.wrap(response -> {
-                    MLConnectorTracer.endSpanAndRespond(predictSpan, response, listener);
-                }, exception -> {
-                    // Re-throw IllegalStateException to maintain synchronous behavior for tests
-                    if (exception instanceof IllegalStateException) {
-                        MLConnectorTracer.getInstance().endSpan(predictSpan);
-                        throw (IllegalStateException) exception;
-                    }
-                    MLConnectorTracer.handleSpanError(predictSpan, "Error in model.predict span", exception, listener);
-                });
-                ActionListener<MLTaskResponse> wrappedListener = ActionListener.runBefore(spanWrappedListener, context::restore);
-                MLModel cachedMlModel = modelCacheHelper.getModelInfo(modelId);
-
-                // Check for local model disabled synchronously before async call
-                if (cachedMlModel != null) {
-                    FunctionName functionName = cachedMlModel.getAlgorithm();
-                    if (FunctionName.isDLModel(functionName) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
-                        MLConnectorTracer.getInstance().endSpan(predictSpan);
-                        throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
-                    }
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            ActionListener<MLTaskResponse> spanWrappedListener = ActionListener.wrap(response -> {
+                MLConnectorTracer.getInstance().endSpan(predictSpan);
+                listener.onResponse(response);
+            }, exception -> {
+                // Re-throw IllegalStateException to maintain synchronous behavior for tests
+                if (exception instanceof IllegalStateException) {
+                    MLConnectorTracer.getInstance().endSpan(predictSpan);
+                    throw (IllegalStateException) exception;
                 }
+                MLConnectorTracer.handleSpanError(predictSpan, "Error in model.predict span", exception);
+                listener.onFailure(exception);
+            });
+            ActionListener<MLTaskResponse> wrappedListener = ActionListener.runBefore(spanWrappedListener, context::restore);
+            MLModel cachedMlModel = modelCacheHelper.getModelInfo(modelId);
 
-                ActionListener<MLModel> modelActionListener = new ActionListener<>() {
-                    @Override
-                    public void onResponse(MLModel mlModel) {
-                        context.restore();
-                        modelCacheHelper.setModelInfo(modelId, mlModel);
-                        String actualModelName = mlModel.getName();
-                        FunctionName functionName = mlModel.getAlgorithm();
-                        mlPredictionTaskRequest.getMlInput().setAlgorithm(functionName);
-                        modelAccessControlHelper
-                            .validateModelGroupAccess(
-                                userInfo,
-                                mlFeatureEnabledSetting,
-                                tenantId,
-                                mlModel.getModelGroupId(),
-                                client,
-                                sdkClient,
-                                ActionListener.wrap(access -> {
-                                    if (!access) {
+            // Check for local model disabled synchronously before async call
+            if (cachedMlModel != null) {
+                FunctionName functionName = cachedMlModel.getAlgorithm();
+                if (FunctionName.isDLModel(functionName) && !mlFeatureEnabledSetting.isLocalModelEnabled()) {
+                    MLConnectorTracer.getInstance().endSpan(predictSpan);
+                    throw new IllegalStateException(LOCAL_MODEL_DISABLED_ERR_MSG);
+                }
+            }
+
+            ActionListener<MLModel> modelActionListener = new ActionListener<>() {
+                @Override
+                public void onResponse(MLModel mlModel) {
+                    context.restore();
+                    modelCacheHelper.setModelInfo(modelId, mlModel);
+                    String actualModelName = mlModel.getName();
+                    FunctionName functionName = mlModel.getAlgorithm();
+                    mlPredictionTaskRequest.getMlInput().setAlgorithm(functionName);
+                    modelAccessControlHelper
+                        .validateModelGroupAccess(
+                            userInfo,
+                            mlFeatureEnabledSetting,
+                            tenantId,
+                            mlModel.getModelGroupId(),
+                            client,
+                            sdkClient,
+                            ActionListener.wrap(access -> {
+                                if (!access) {
+                                    wrappedListener
+                                        .onFailure(
+                                            new OpenSearchStatusException(
+                                                "User Doesn't have privilege to perform this operation on this model",
+                                                RestStatus.FORBIDDEN
+                                            )
+                                        );
+                                } else {
+                                    if (modelCacheHelper.getIsModelEnabled(modelId) != null
+                                        && !modelCacheHelper.getIsModelEnabled(modelId)) {
                                         wrappedListener
-                                            .onFailure(
-                                                new OpenSearchStatusException(
-                                                    "User Doesn't have privilege to perform this operation on this model",
-                                                    RestStatus.FORBIDDEN
-                                                )
-                                            );
+                                            .onFailure(new OpenSearchStatusException("Model is disabled.", RestStatus.FORBIDDEN));
                                     } else {
-                                        if (modelCacheHelper.getIsModelEnabled(modelId) != null
-                                            && !modelCacheHelper.getIsModelEnabled(modelId)) {
-                                            wrappedListener
-                                                .onFailure(new OpenSearchStatusException("Model is disabled.", RestStatus.FORBIDDEN));
-                                        } else {
-                                            if (FunctionName.isDLModel(functionName)) {
-                                                if (modelCacheHelper.getRateLimiter(modelId) != null
-                                                    && !modelCacheHelper.getRateLimiter(modelId).request()) {
-                                                    MLConnectorTracer
-                                                        .handleSpanError(
-                                                            predictSpan,
+                                        if (FunctionName.isDLModel(functionName)) {
+                                            if (modelCacheHelper.getRateLimiter(modelId) != null
+                                                && !modelCacheHelper.getRateLimiter(modelId).request()) {
+                                                MLConnectorTracer
+                                                    .handleSpanError(
+                                                        predictSpan,
+                                                        "Request is throttled at model level.",
+                                                        new OpenSearchStatusException(
                                                             "Request is throttled at model level.",
-                                                            new OpenSearchStatusException(
-                                                                "Request is throttled at model level.",
-                                                                RestStatus.TOO_MANY_REQUESTS
-                                                            ),
-                                                            wrappedListener
-                                                        );
-                                                } else if (userInfo != null
-                                                    && modelCacheHelper.getUserRateLimiter(modelId, userInfo.getName()) != null
-                                                    && !modelCacheHelper.getUserRateLimiter(modelId, userInfo.getName()).request()) {
-                                                    MLConnectorTracer
-                                                        .handleSpanError(
-                                                            predictSpan,
-                                                            "Request is throttled at user level.",
-                                                            new OpenSearchStatusException(
-                                                                "Request is throttled at user level. If you think there's an issue, please contact your cluster admin.",
-                                                                RestStatus.TOO_MANY_REQUESTS
-                                                            ),
-                                                            wrappedListener
-                                                        );
-                                                } else {
-                                                    validateInputSchema(modelId, mlPredictionTaskRequest.getMlInput());
-                                                    executePredict(mlPredictionTaskRequest, wrappedListener, modelId, actualModelName);
-                                                }
+                                                            RestStatus.TOO_MANY_REQUESTS
+                                                        )
+                                                    );
+                                                wrappedListener
+                                                    .onFailure(
+                                                        new OpenSearchStatusException(
+                                                            "Request is throttled at model level.",
+                                                            RestStatus.TOO_MANY_REQUESTS
+                                                        )
+                                                    );
+                                            } else if (userInfo != null
+                                                && modelCacheHelper.getUserRateLimiter(modelId, userInfo.getName()) != null
+                                                && !modelCacheHelper.getUserRateLimiter(modelId, userInfo.getName()).request()) {
+                                                MLConnectorTracer
+                                                    .handleSpanError(
+                                                        predictSpan,
+                                                        "Request is throttled at user level.",
+                                                        new OpenSearchStatusException(
+                                                            "Request is throttled at user level. If you think there's an issue, please contact your cluster admin.",
+                                                            RestStatus.TOO_MANY_REQUESTS
+                                                        )
+                                                    );
+                                                wrappedListener
+                                                    .onFailure(
+                                                        new OpenSearchStatusException(
+                                                            "Request is throttled at user level. If you think there's an issue, please contact your cluster admin.",
+                                                            RestStatus.TOO_MANY_REQUESTS
+                                                        )
+                                                    );
                                             } else {
                                                 validateInputSchema(modelId, mlPredictionTaskRequest.getMlInput());
                                                 executePredict(mlPredictionTaskRequest, wrappedListener, modelId, actualModelName);
                                             }
+                                        } else {
+                                            validateInputSchema(modelId, mlPredictionTaskRequest.getMlInput());
+                                            executePredict(mlPredictionTaskRequest, wrappedListener, modelId, actualModelName);
                                         }
                                     }
-                                }, e -> {
-                                    log.error("Failed to Validate Access for ModelId {}", modelId, e);
-                                    if (e instanceof OpenSearchStatusException) {
-                                        wrappedListener
-                                            .onFailure(
-                                                new OpenSearchStatusException(
-                                                    e.getMessage(),
-                                                    RestStatus.fromCode(((OpenSearchStatusException) e).status().getStatus())
-                                                )
-                                            );
-                                        predictSpan.setError(e);
-                                    } else if (e instanceof MLResourceNotFoundException) {
-                                        wrappedListener.onFailure(new OpenSearchStatusException(e.getMessage(), RestStatus.NOT_FOUND));
-                                        predictSpan.setError(e);
-                                    } else if (e instanceof CircuitBreakingException) {
-                                        wrappedListener.onFailure(e);
-                                        predictSpan.setError(e);
-                                    } else {
-                                        wrappedListener
-                                            .onFailure(
-                                                new OpenSearchStatusException(
-                                                    "Failed to Validate Access for ModelId " + modelId,
-                                                    RestStatus.FORBIDDEN
-                                                )
-                                            );
-                                        predictSpan.setError(e);
-                                    }
-                                    MLConnectorTracer.getInstance().endSpan(predictSpan);
-                                })
-                            );
-                    }
-
-                    @Override
-                    public void onFailure(Exception e) {
-                        MLConnectorTracer.handleSpanError(predictSpan, "Failed to find model " + modelId, e, wrappedListener);
-                    }
-                };
-
-                if (cachedMlModel != null) {
-                    modelActionListener.onResponse(cachedMlModel);
-                } else {
-                    mlModelManager.getModel(modelId, tenantId, modelActionListener);
+                                }
+                            }, e -> {
+                                log.error("Failed to Validate Access for ModelId {}", modelId, e);
+                                if (e instanceof OpenSearchStatusException) {
+                                    wrappedListener
+                                        .onFailure(
+                                            new OpenSearchStatusException(
+                                                e.getMessage(),
+                                                RestStatus.fromCode(((OpenSearchStatusException) e).status().getStatus())
+                                            )
+                                        );
+                                    predictSpan.setError(e);
+                                } else if (e instanceof MLResourceNotFoundException) {
+                                    wrappedListener.onFailure(new OpenSearchStatusException(e.getMessage(), RestStatus.NOT_FOUND));
+                                    predictSpan.setError(e);
+                                } else if (e instanceof CircuitBreakingException) {
+                                    wrappedListener.onFailure(e);
+                                    predictSpan.setError(e);
+                                } else {
+                                    wrappedListener
+                                        .onFailure(
+                                            new OpenSearchStatusException(
+                                                "Failed to Validate Access for ModelId " + modelId,
+                                                RestStatus.FORBIDDEN
+                                            )
+                                        );
+                                    predictSpan.setError(e);
+                                }
+                                MLConnectorTracer.getInstance().endSpan(predictSpan);
+                            })
+                        );
                 }
-            } catch (Exception e) {
-                if (e instanceof IllegalStateException) {
-                    MLConnectorTracer.getInstance().endSpan(predictSpan);
-                    throw (IllegalStateException) e;
+
+                @Override
+                public void onFailure(Exception e) {
+                    MLConnectorTracer.handleSpanError(predictSpan, "Failed to find model " + modelId, e);
+                    wrappedListener.onFailure(e);
                 }
-                MLConnectorTracer.handleSpanError(predictSpan, "Failed to find model " + modelId, e, listener);
+            };
+
+            if (cachedMlModel != null) {
+                modelActionListener.onResponse(cachedMlModel);
+            } else {
+                mlModelManager.getModel(modelId, tenantId, modelActionListener);
             }
         } catch (Exception e) {
             if (e instanceof IllegalStateException) {
                 MLConnectorTracer.getInstance().endSpan(predictSpan);
                 throw (IllegalStateException) e;
             }
-            MLConnectorTracer.handleSpanError(predictSpan, "Error in model.predict span", e, listener);
+            MLConnectorTracer.handleSpanError(predictSpan, "Failed to find model " + modelId, e);
+            listener.onFailure(e);
         }
     }
 
@@ -288,8 +296,12 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                 .getOptionalFunctionName(modelId)
                 .orElse(mlPredictionTaskRequest.getMlInput().getAlgorithm());
             ActionListener<MLTaskResponse> spanWrappedListener = ActionListener.wrap(response -> {
-                MLConnectorTracer.endSpanAndRespond(executeSpan, response, wrappedListener);
-            }, exception -> { MLConnectorTracer.handleSpanError(executeSpan, "Error in model.execute span", exception, wrappedListener); });
+                MLConnectorTracer.getInstance().endSpan(executeSpan);
+                wrappedListener.onResponse(response);
+            }, exception -> {
+                MLConnectorTracer.handleSpanError(executeSpan, "Error in model.execute span", exception);
+                wrappedListener.onFailure(exception);
+            });
 
             mlPredictTaskRunner
                 .run(functionName, mlPredictionTaskRequest, transportService, ActionListener.runAfter(spanWrappedListener, () -> {
@@ -300,7 +312,8 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                     log.debug("completed predict request {} for model {}", requestId, modelId);
                 }));
         } catch (Exception e) {
-            MLConnectorTracer.handleSpanError(executeSpan, "Error in model.execute span", e, wrappedListener);
+            MLConnectorTracer.handleSpanError(executeSpan, "Error in model.execute span", e);
+            wrappedListener.onFailure(e);
             throw e;
         }
     }

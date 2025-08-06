@@ -106,50 +106,47 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
         MLCreateConnectorInput mlCreateConnectorInput = mlCreateConnectorRequest.getMlCreateConnectorInput();
         String connectorName = mlCreateConnectorInput.getName();
         Span createSpan = MLConnectorTracer.startConnectorCreateSpan(connectorName);
+        if (mlCreateConnectorInput.getProtocol() != null
+            && mlCreateConnectorInput.getProtocol().equals(ConnectorProtocols.MCP_SSE)
+            && !this.mcpConnectorIsEnabled) {
+            // MCP connector provided but MCP feature is disabled, so abort.
+            listener.onFailure(new OpenSearchException(ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE));
+            return;
+        }
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, mlCreateConnectorInput.getTenantId(), listener)) {
+            return;
+        }
+        if (mlCreateConnectorInput.isDryRun()) {
+            MLCreateConnectorResponse response = new MLCreateConnectorResponse(MLCreateConnectorInput.DRY_RUN_CONNECTOR_NAME);
+            listener.onResponse(response);
+            return;
+        }
+        String connectorNameLocal = mlCreateConnectorInput.getName();
         try {
-            if (mlCreateConnectorInput.getProtocol() != null
-                && mlCreateConnectorInput.getProtocol().equals(ConnectorProtocols.MCP_SSE)
-                && !this.mcpConnectorIsEnabled) {
-                // MCP connector provided but MCP feature is disabled, so abort.
-                listener.onFailure(new OpenSearchException(ML_COMMONS_MCP_CONNECTOR_DISABLED_MESSAGE));
-                return;
-            }
-            if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, mlCreateConnectorInput.getTenantId(), listener)) {
-                return;
-            }
-            if (mlCreateConnectorInput.isDryRun()) {
-                MLCreateConnectorResponse response = new MLCreateConnectorResponse(MLCreateConnectorInput.DRY_RUN_CONNECTOR_NAME);
-                listener.onResponse(response);
-                return;
-            }
-            String connectorNameLocal = mlCreateConnectorInput.getName();
-            try {
-                XContentBuilder builder = XContentFactory.jsonBuilder();
-                mlCreateConnectorInput.toXContent(builder, ToXContent.EMPTY_PARAMS);
-                Connector connector = Connector.createConnector(builder, mlCreateConnectorInput.getProtocol());
-                connector.validateConnectorURL(trustedConnectorEndpointsRegex);
-                User user = RestActionUtils.getUserContext(client);
-                if (connectorAccessControlHelper.accessControlNotEnabled(user)) {
-                    validateSecurityDisabledOrConnectorAccessControlDisabled(mlCreateConnectorInput);
-                    indexConnector(connector, listener, createSpan);
-                } else {
-                    validateRequest4AccessControl(mlCreateConnectorInput, user);
-                    if (Boolean.TRUE.equals(mlCreateConnectorInput.getAddAllBackendRoles())) {
-                        mlCreateConnectorInput.setBackendRoles(user.getBackendRoles());
-                    }
-                    connector.setBackendRoles(mlCreateConnectorInput.getBackendRoles());
-                    connector.setOwner(user);
-                    connector.setAccess(mlCreateConnectorInput.getAccess());
-                    indexConnector(connector, listener, createSpan);
+            XContentBuilder builder = XContentFactory.jsonBuilder();
+            mlCreateConnectorInput.toXContent(builder, ToXContent.EMPTY_PARAMS);
+            Connector connector = Connector.createConnector(builder, mlCreateConnectorInput.getProtocol());
+            connector.validateConnectorURL(trustedConnectorEndpointsRegex);
+            User user = RestActionUtils.getUserContext(client);
+            if (connectorAccessControlHelper.accessControlNotEnabled(user)) {
+                validateSecurityDisabledOrConnectorAccessControlDisabled(mlCreateConnectorInput);
+                indexConnector(connector, listener, createSpan);
+            } else {
+                validateRequest4AccessControl(mlCreateConnectorInput, user);
+                if (Boolean.TRUE.equals(mlCreateConnectorInput.getAddAllBackendRoles())) {
+                    mlCreateConnectorInput.setBackendRoles(user.getBackendRoles());
                 }
-            } catch (MetaDataException e) {
-                MLConnectorTracer
-                    .handleSpanError(createSpan, "The masterKey for credential encryption is missing in connector creation", e, listener);
-            } catch (Exception e) {
-                MLConnectorTracer.handleSpanError(createSpan, "Failed to create connector " + connectorNameLocal, e, listener);
+                connector.setBackendRoles(mlCreateConnectorInput.getBackendRoles());
+                connector.setOwner(user);
+                connector.setAccess(mlCreateConnectorInput.getAccess());
+                indexConnector(connector, listener, createSpan);
             }
+        } catch (MetaDataException e) {
+            MLConnectorTracer.handleSpanError(createSpan, "The masterKey for credential encryption is missing in connector creation", e);
+            listener.onFailure(e);
         } catch (Exception e) {
-            MLConnectorTracer.handleSpanError(createSpan, "Failed to create connector " + connectorName, e, listener);
+            MLConnectorTracer.handleSpanError(createSpan, "Failed to create connector " + connectorNameLocal, e);
+            listener.onFailure(e);
         }
     }
 
@@ -162,9 +159,9 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                     .handleSpanError(
                         createSpan,
                         "No response to create ML Connector index",
-                        new RuntimeException("No response to create ML Connector index"),
-                        listener
+                        new RuntimeException("No response to create ML Connector index")
                     );
+                listener.onFailure(new RuntimeException("No response to create ML Connector index"));
                 return;
             }
             try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
@@ -183,13 +180,10 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                     .whenComplete((r, throwable) -> {
                         context.restore();
                         if (throwable != null) {
-                            MLConnectorTracer
-                                .handleSpanError(
-                                    createSpan,
-                                    "Failed to create ML connector",
-                                    SdkClientUtils.unwrapAndConvertToException(throwable),
-                                    listener
-                                );
+                            Exception cause = SdkClientUtils.unwrapAndConvertToException(throwable);
+                            log.error("Failed to create ML connector", cause);
+                            MLConnectorTracer.handleSpanError(createSpan, "Failed to create ML connector", cause);
+                            listener.onFailure(cause);
                         } else {
                             try {
                                 IndexResponse indexResponse = r.indexResponse();
@@ -199,20 +193,25 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                                         indexResponse.getResult(),
                                         indexResponse.getId()
                                     );
-                                if (indexResponse.getId() != null) {
-                                    createSpan.addAttribute(MLConnectorTracer.ML_CONNECTOR_ID, indexResponse.getId());
-                                }
-                                MLConnectorTracer
-                                    .endSpanAndRespond(createSpan, new MLCreateConnectorResponse(indexResponse.getId()), listener);
+                                MLConnectorTracer.setConnectorIdAttribute(createSpan, indexResponse.getId());
+                                MLConnectorTracer.getInstance().endSpan(createSpan);
+                                listener.onResponse(new MLCreateConnectorResponse(indexResponse.getId()));
                             } catch (Exception e) {
-                                MLConnectorTracer.handleSpanError(createSpan, "Failed to create ML connector", e, listener);
+                                MLConnectorTracer.handleSpanError(createSpan, "Failed to create ML connector", e);
+                                listener.onFailure(e);
                             }
                         }
                     });
             } catch (Exception e) {
-                MLConnectorTracer.handleSpanError(createSpan, "Failed to save ML connector", e, listener);
+                log.error("Failed to save ML connector", e);
+                MLConnectorTracer.handleSpanError(createSpan, "Failed to save ML connector", e);
+                listener.onFailure(e);
             }
-        }, e -> { MLConnectorTracer.handleSpanError(createSpan, "Failed to init ML connector index", e, listener); }));
+        }, e -> {
+            log.error("Failed to init ML connector index", e);
+            MLConnectorTracer.handleSpanError(createSpan, "Failed to init ML connector index", e);
+            listener.onFailure(e);
+        }));
     }
 
     private void validateRequest4AccessControl(MLCreateConnectorInput input, User user) {

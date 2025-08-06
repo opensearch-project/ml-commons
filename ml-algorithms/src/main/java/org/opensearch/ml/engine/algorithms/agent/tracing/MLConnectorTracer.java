@@ -4,7 +4,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.opensearch.cluster.service.ClusterService;
-import org.opensearch.core.action.ActionListener;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
@@ -49,6 +48,8 @@ public class MLConnectorTracer extends MLTracer {
     public static final String CONNECTOR_DELETE_SPAN = "connector.delete";
     public static final String MODEL_PREDICT_SPAN = "model.predict";
     public static final String MODEL_EXECUTE_SPAN = "model.execute";
+
+    public static final String SERVICE_TYPE_TRACER = "tracer";
 
     private static MLConnectorTracer instance;
 
@@ -174,32 +175,15 @@ public class MLConnectorTracer extends MLTracer {
     }
 
     /**
-     * Handles span error by logging, setting error on span, ending span, and failing listener.
-     * @param span The span to handle error for.
+     * Handles span errors by logging, setting span error, and ending the span.
+     * @param span The span to handle the error for.
      * @param errorMessage The error message to log.
      * @param e The exception that occurred.
-     * @param listener The action listener to fail.
      */
-    public static void handleSpanError(Span span, String errorMessage, Exception e, ActionListener<?> listener) {
+    public static void handleSpanError(Span span, String errorMessage, Exception e) {
         log.error(errorMessage, e);
         span.setError(e);
         getInstance().endSpan(span);
-        if (listener != null) {
-            listener.onFailure(e);
-        }
-    }
-
-    /**
-     * Ends the span and responds to the listener with the result.
-     * @param span The span to end.
-     * @param result The result to send to the listener.
-     * @param listener The action listener to respond to.
-     */
-    public static <T> void endSpanAndRespond(Span span, T result, ActionListener<T> listener) {
-        getInstance().endSpan(span);
-        if (listener != null) {
-            listener.onResponse(result);
-        }
     }
 
     /**
@@ -210,7 +194,7 @@ public class MLConnectorTracer extends MLTracer {
      */
     public static Map<String, String> createConnectorAttributes(String connectorId, String connectorName) {
         Map<String, String> attributes = new HashMap<>();
-        attributes.put(SERVICE_TYPE, "tracer");
+        attributes.put(SERVICE_TYPE, SERVICE_TYPE_TRACER);
         if (connectorId != null)
             attributes.put(ML_CONNECTOR_ID, connectorId);
         if (connectorName != null)
@@ -226,12 +210,23 @@ public class MLConnectorTracer extends MLTracer {
      */
     public static Map<String, String> createModelAttributes(String modelId, String modelName) {
         Map<String, String> attributes = new HashMap<>();
-        attributes.put(SERVICE_TYPE, "tracer");
+        attributes.put(SERVICE_TYPE, SERVICE_TYPE_TRACER);
         if (modelId != null)
             attributes.put(ML_MODEL_ID, modelId);
         if (modelName != null)
             attributes.put(ML_MODEL_NAME, modelName);
         return attributes;
+    }
+
+    /**
+     * Sets the connector ID attribute on a span if the ID is not null.
+     * @param span The span to add the attribute to.
+     * @param connectorId The connector ID to set as an attribute.
+     */
+    public static void setConnectorIdAttribute(Span span, String connectorId) {
+        if (connectorId != null) {
+            span.addAttribute(ML_CONNECTOR_ID, connectorId);
+        }
     }
 
     /**

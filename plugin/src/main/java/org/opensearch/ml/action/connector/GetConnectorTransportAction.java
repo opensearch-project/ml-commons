@@ -70,37 +70,37 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
         MLConnectorGetRequest mlConnectorGetRequest = MLConnectorGetRequest.fromActionRequest(request);
         String connectorId = mlConnectorGetRequest.getConnectorId();
         Span readSpan = MLConnectorTracer.startConnectorReadSpan(connectorId);
-        try {
-            String tenantId = mlConnectorGetRequest.getTenantId();
-            if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
-                return;
-            }
-            FetchSourceContext fetchSourceContext = getFetchSourceContext(mlConnectorGetRequest.isReturnContent());
-            GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
-                .builder()
-                .index(ML_CONNECTOR_INDEX)
-                .id(connectorId)
-                .tenantId(tenantId)
-                .fetchSourceContext(fetchSourceContext)
-                .build();
-            User user = RestActionUtils.getUserContext(client);
-            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                connectorAccessControlHelper
-                    .getConnector(
-                        sdkClient,
-                        client,
-                        context,
-                        getDataObjectRequest,
-                        connectorId,
-                        ActionListener
-                            .wrap(
-                                connector -> handleConnectorAccessValidation(user, tenantId, connector, actionListener, readSpan),
-                                e -> handleConnectorAccessValidationFailure(connectorId, e, actionListener, readSpan)
-                            )
-                    );
-            }
+        String tenantId = mlConnectorGetRequest.getTenantId();
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, actionListener)) {
+            return;
+        }
+        FetchSourceContext fetchSourceContext = getFetchSourceContext(mlConnectorGetRequest.isReturnContent());
+        GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
+            .builder()
+            .index(ML_CONNECTOR_INDEX)
+            .id(connectorId)
+            .tenantId(tenantId)
+            .fetchSourceContext(fetchSourceContext)
+            .build();
+        User user = RestActionUtils.getUserContext(client);
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            connectorAccessControlHelper
+                .getConnector(
+                    sdkClient,
+                    client,
+                    context,
+                    getDataObjectRequest,
+                    connectorId,
+                    ActionListener
+                        .wrap(
+                            connector -> handleConnectorAccessValidation(user, tenantId, connector, actionListener, readSpan),
+                            e -> handleConnectorAccessValidationFailure(connectorId, e, actionListener, readSpan)
+                        )
+                );
         } catch (Exception e) {
-            MLConnectorTracer.handleSpanError(readSpan, "Failed to get ML connector " + connectorId, e, actionListener);
+            log.error("Failed to get ML connector {}", connectorId, e);
+            MLConnectorTracer.handleSpanError(readSpan, "Failed to get ML connector " + connectorId, e);
+            actionListener.onFailure(e);
         }
     }
 
@@ -113,16 +113,17 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
     ) {
         if (TenantAwareHelper.validateTenantResource(mlFeatureEnabledSetting, tenantId, mlConnector.getTenantId(), actionListener)) {
             if (connectorAccessControlHelper.hasPermission(user, mlConnector)) {
-                MLConnectorTracer
-                    .endSpanAndRespond(readSpan, MLConnectorGetResponse.builder().mlConnector(mlConnector).build(), actionListener);
+                MLConnectorTracer.getInstance().endSpan(readSpan);
+                actionListener.onResponse(MLConnectorGetResponse.builder().mlConnector(mlConnector).build());
             } else {
                 MLConnectorTracer
                     .handleSpanError(
                         readSpan,
                         "You don't have permission to access this connector",
-                        new OpenSearchStatusException("You don't have permission to access this connector", RestStatus.FORBIDDEN),
-                        actionListener
+                        new OpenSearchStatusException("You don't have permission to access this connector", RestStatus.FORBIDDEN)
                     );
+                actionListener
+                    .onFailure(new OpenSearchStatusException("You don't have permission to access this connector", RestStatus.FORBIDDEN));
             }
         }
     }
@@ -133,6 +134,8 @@ public class GetConnectorTransportAction extends HandledTransportAction<ActionRe
         ActionListener<MLConnectorGetResponse> actionListener,
         Span readSpan
     ) {
-        MLConnectorTracer.handleSpanError(readSpan, "Failed to get ML connector " + connectorId, e, actionListener);
+        log.error("Failed to get ML connector: {}", connectorId, e);
+        MLConnectorTracer.handleSpanError(readSpan, "Failed to get ML connector " + connectorId, e);
+        actionListener.onFailure(e);
     }
 }

@@ -102,83 +102,73 @@ public class UpdateConnectorTransportAction extends HandledTransportAction<Actio
     protected void doExecute(Task task, ActionRequest request, ActionListener<UpdateResponse> listener) {
         MLUpdateConnectorRequest mlUpdateConnectorAction = MLUpdateConnectorRequest.fromActionRequest(request);
         MLCreateConnectorInput mlCreateConnectorInput = mlUpdateConnectorAction.getUpdateContent();
+        if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, mlCreateConnectorInput.getTenantId(), listener)) {
+            return;
+        }
         String connectorId = mlUpdateConnectorAction.getConnectorId();
         Span updateSpan = MLConnectorTracer.startConnectorUpdateSpan(connectorId);
-        try {
-            if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, mlCreateConnectorInput.getTenantId(), listener)) {
-                return;
-            }
-            String tenantId = mlCreateConnectorInput.getTenantId();
-            FetchSourceContext fetchSourceContext = new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);
-            GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
-                .builder()
-                .index(ML_CONNECTOR_INDEX)
-                .id(connectorId)
-                .tenantId(tenantId)
-                .fetchSourceContext(fetchSourceContext)
-                .build();
-            try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
-                connectorAccessControlHelper
-                    .getConnector(sdkClient, client, context, getDataObjectRequest, connectorId, ActionListener.wrap(connector -> {
-                        // context is already restored here
-                        if (TenantAwareHelper
-                            .validateTenantResource(mlFeatureEnabledSetting, tenantId, connector.getTenantId(), listener)) {
-                            boolean hasPermission = connectorAccessControlHelper.validateConnectorAccess(client, connector);
-                            if (hasPermission) {
-                                connector.update(mlUpdateConnectorAction.getUpdateContent(), mlEngine::encrypt);
-                                connector.validateConnectorURL(trustedConnectorEndpointsRegex);
-                                connector.setLastUpdateTime(Instant.now());
-                                UpdateDataObjectRequest updateDataObjectRequest = UpdateDataObjectRequest
-                                    .builder()
-                                    .index(ML_CONNECTOR_INDEX)
-                                    .id(connectorId)
-                                    .tenantId(tenantId)
-                                    .dataObject(connector)
-                                    .build();
-                                ActionListener<UpdateResponse> spanWrappedListener = ActionListener.wrap(response -> {
-                                    MLConnectorTracer.endSpanAndRespond(updateSpan, response, listener);
-                                },
-                                    exception -> {
-                                        MLConnectorTracer
-                                            .handleSpanError(
-                                                updateSpan,
-                                                "Failed to update ML connector " + connectorId,
-                                                exception,
-                                                listener
-                                            );
-                                    }
+        String tenantId = mlCreateConnectorInput.getTenantId();
+        FetchSourceContext fetchSourceContext = new FetchSourceContext(true, Strings.EMPTY_ARRAY, Strings.EMPTY_ARRAY);
+        GetDataObjectRequest getDataObjectRequest = GetDataObjectRequest
+            .builder()
+            .index(ML_CONNECTOR_INDEX)
+            .id(connectorId)
+            .tenantId(tenantId)
+            .fetchSourceContext(fetchSourceContext)
+            .build();
+        try (ThreadContext.StoredContext context = client.threadPool().getThreadContext().stashContext()) {
+            connectorAccessControlHelper
+                .getConnector(sdkClient, client, context, getDataObjectRequest, connectorId, ActionListener.wrap(connector -> {
+                    // context is already restored here
+                    if (TenantAwareHelper.validateTenantResource(mlFeatureEnabledSetting, tenantId, connector.getTenantId(), listener)) {
+                        boolean hasPermission = connectorAccessControlHelper.validateConnectorAccess(client, connector);
+                        if (hasPermission) {
+                            connector.update(mlUpdateConnectorAction.getUpdateContent(), mlEngine::encrypt);
+                            connector.validateConnectorURL(trustedConnectorEndpointsRegex);
+                            connector.setLastUpdateTime(Instant.now());
+                            UpdateDataObjectRequest updateDataObjectRequest = UpdateDataObjectRequest
+                                .builder()
+                                .index(ML_CONNECTOR_INDEX)
+                                .id(connectorId)
+                                .tenantId(tenantId)
+                                .dataObject(connector)
+                                .build();
+                            ActionListener<UpdateResponse> spanWrappedListener = ActionListener.wrap(response -> {
+                                MLConnectorTracer.getInstance().endSpan(updateSpan);
+                                listener.onResponse(response);
+                            }, exception -> {
+                                MLConnectorTracer.handleSpanError(updateSpan, "Failed to update ML connector " + connectorId, exception);
+                                listener.onFailure(exception);
+                            });
+                            try (ThreadContext.StoredContext innerContext = client.threadPool().getThreadContext().stashContext()) {
+                                updateUndeployedConnector(
+                                    connectorId,
+                                    updateDataObjectRequest,
+                                    ActionListener.runBefore(spanWrappedListener, innerContext::restore)
                                 );
-                                try (ThreadContext.StoredContext innerContext = client.threadPool().getThreadContext().stashContext()) {
-                                    updateUndeployedConnector(
-                                        connectorId,
-                                        updateDataObjectRequest,
-                                        ActionListener.runBefore(spanWrappedListener, innerContext::restore)
-                                    );
-                                }
-                            } else {
-                                MLConnectorTracer
-                                    .handleSpanError(
-                                        updateSpan,
-                                        "Permission denied: Unable to update the connector with ID " + connectorId,
-                                        new IllegalArgumentException(
-                                            "You don't have permission to update the connector, connector id: " + connectorId
-                                        ),
-                                        listener
-                                    );
                             }
+                        } else {
+                            MLConnectorTracer
+                                .handleSpanError(
+                                    updateSpan,
+                                    "Permission denied: Unable to update the connector with ID " + connectorId,
+                                    new IllegalArgumentException(
+                                        "You don't have permission to update the connector, connector id: " + connectorId
+                                    )
+                                );
+                            listener
+                                .onFailure(
+                                    new IllegalArgumentException(
+                                        "You don't have permission to update the connector, connector id: " + connectorId
+                                    )
+                                );
                         }
-                    }, exception -> {
-                        MLConnectorTracer
-                            .handleSpanError(
-                                updateSpan,
-                                "Permission denied: Unable to update the connector with ID " + connectorId,
-                                exception,
-                                listener
-                            );
-                    }));
-            }
-        } catch (Exception e) {
-            MLConnectorTracer.handleSpanError(updateSpan, "Failed to update ML connector for connector id " + connectorId, e, listener);
+                    }
+                }, exception -> {
+                    MLConnectorTracer
+                        .handleSpanError(updateSpan, "Permission denied: Unable to update the connector with ID " + connectorId, exception);
+                    listener.onFailure(exception);
+                }));
         }
     }
 
