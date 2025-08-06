@@ -21,6 +21,7 @@ import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -898,5 +899,420 @@ public class MemoryEmbeddingHelperTests {
         when(output.getMlModelOutputs()).thenReturn(modelTensorsList);
 
         return output;
+    }
+
+    // Additional tests for extractSparseEmbeddingFromModelTensors branch coverage
+
+    @Test
+    public void testSparseEmbeddingWithEmptyResponseList() {
+        // Test when response list exists but is empty
+        String text = "test text";
+        storageConfig = MemoryStorageConfig
+            .builder()
+            .embeddingModelId("sparse-model")
+            .embeddingModelType(FunctionName.SPARSE_ENCODING)
+            .semanticStorageEnabled(true)
+            .build();
+
+        setupMockMLModel(MLModelState.DEPLOYED);
+
+        // Create tensor with empty response list
+        ModelTensor tensor = mock(ModelTensor.class);
+        Map<String, Object> dataMap = new HashMap<>();
+        dataMap.put("response", new ArrayList<>());  // Empty list
+        doReturn(dataMap).when(tensor).getDataAsMap();
+
+        ModelTensors tensors = mock(ModelTensors.class);
+        when(tensors.getMlModelTensors()).thenReturn(Arrays.asList(tensor));
+
+        ModelTensorOutput output = mock(ModelTensorOutput.class);
+        when(output.getMlModelOutputs()).thenReturn(Arrays.asList(tensors));
+
+        setupMockPredictionResponse(output);
+
+        helper.generateEmbedding(text, storageConfig, objectListener);
+
+        ArgumentCaptor<Object> responseCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(objectListener).onResponse(responseCaptor.capture());
+
+        // When response list is empty, should return the dataMap itself
+        Map<String, Object> result = (Map<String, Object>) responseCaptor.getValue();
+        assertNotNull(result);
+        assertTrue(result.containsKey("response"));
+    }
+
+    @Test
+    public void testSparseEmbeddingWithNonMapResponseListElement() {
+        // Test when response list contains non-Map elements
+        String text = "test text";
+        storageConfig = MemoryStorageConfig
+            .builder()
+            .embeddingModelId("sparse-model")
+            .embeddingModelType(FunctionName.SPARSE_ENCODING)
+            .semanticStorageEnabled(true)
+            .build();
+
+        setupMockMLModel(MLModelState.DEPLOYED);
+
+        // Create tensor with response list containing String instead of Map
+        ModelTensor tensor = mock(ModelTensor.class);
+        Map<String, Object> dataMap = new HashMap<>();
+        dataMap.put("response", Arrays.asList("not a map"));  // String instead of Map
+        doReturn(dataMap).when(tensor).getDataAsMap();
+
+        ModelTensors tensors = mock(ModelTensors.class);
+        when(tensors.getMlModelTensors()).thenReturn(Arrays.asList(tensor));
+
+        ModelTensorOutput output = mock(ModelTensorOutput.class);
+        when(output.getMlModelOutputs()).thenReturn(Arrays.asList(tensors));
+
+        setupMockPredictionResponse(output);
+
+        helper.generateEmbedding(text, storageConfig, objectListener);
+
+        ArgumentCaptor<Object> responseCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(objectListener).onResponse(responseCaptor.capture());
+
+        // When response list element is not a Map, should return the dataMap itself
+        Map<String, Object> result = (Map<String, Object>) responseCaptor.getValue();
+        assertNotNull(result);
+        assertTrue(result.containsKey("response"));
+    }
+
+    @Test
+    public void testSparseEmbeddingWithNonListResponseValue() {
+        // Test when response value is not a List
+        String text = "test text";
+        storageConfig = MemoryStorageConfig
+            .builder()
+            .embeddingModelId("sparse-model")
+            .embeddingModelType(FunctionName.SPARSE_ENCODING)
+            .semanticStorageEnabled(true)
+            .build();
+
+        setupMockMLModel(MLModelState.DEPLOYED);
+
+        // Create tensor with response as String instead of List
+        ModelTensor tensor = mock(ModelTensor.class);
+        Map<String, Object> dataMap = new HashMap<>();
+        dataMap.put("response", "not a list");  // String instead of List
+        dataMap.put("other_data", "value");
+        doReturn(dataMap).when(tensor).getDataAsMap();
+
+        ModelTensors tensors = mock(ModelTensors.class);
+        when(tensors.getMlModelTensors()).thenReturn(Arrays.asList(tensor));
+
+        ModelTensorOutput output = mock(ModelTensorOutput.class);
+        when(output.getMlModelOutputs()).thenReturn(Arrays.asList(tensors));
+
+        setupMockPredictionResponse(output);
+
+        helper.generateEmbedding(text, storageConfig, objectListener);
+
+        ArgumentCaptor<Object> responseCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(objectListener).onResponse(responseCaptor.capture());
+
+        // When response is not a List, should return the dataMap itself
+        Map<String, Object> result = (Map<String, Object>) responseCaptor.getValue();
+        assertNotNull(result);
+        assertEquals("not a list", result.get("response"));
+        assertEquals("value", result.get("other_data"));
+    }
+
+    @Test
+    public void testSparseEmbeddingWithMultipleTensorsFirstNull() {
+        // Test multiple tensors where first has null dataMap
+        String text = "test text";
+        storageConfig = MemoryStorageConfig
+            .builder()
+            .embeddingModelId("sparse-model")
+            .embeddingModelType(FunctionName.SPARSE_ENCODING)
+            .semanticStorageEnabled(true)
+            .build();
+
+        setupMockMLModel(MLModelState.DEPLOYED);
+
+        // First tensor with null dataMap
+        ModelTensor tensor1 = mock(ModelTensor.class);
+        when(tensor1.getDataAsMap()).thenReturn(null);
+
+        // Second tensor with valid dataMap
+        ModelTensor tensor2 = mock(ModelTensor.class);
+        Map<String, Object> dataMap = new HashMap<>();
+        dataMap.put("key1", 1.0f);
+        dataMap.put("key2", 2.0f);
+        doReturn(dataMap).when(tensor2).getDataAsMap();
+
+        ModelTensors tensors = mock(ModelTensors.class);
+        when(tensors.getMlModelTensors()).thenReturn(Arrays.asList(tensor1, tensor2));
+
+        ModelTensorOutput output = mock(ModelTensorOutput.class);
+        when(output.getMlModelOutputs()).thenReturn(Arrays.asList(tensors));
+
+        setupMockPredictionResponse(output);
+
+        helper.generateEmbedding(text, storageConfig, objectListener);
+
+        ArgumentCaptor<Object> responseCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(objectListener).onResponse(responseCaptor.capture());
+
+        // Should skip first tensor and return second tensor's dataMap
+        Map<String, Object> result = (Map<String, Object>) responseCaptor.getValue();
+        assertNotNull(result);
+        assertEquals(1.0f, result.get("key1"));
+        assertEquals(2.0f, result.get("key2"));
+    }
+
+    @Test
+    public void testSparseEmbeddingAllTensorsHaveNullDataMap() {
+        // Test when all tensors have null dataMap
+        String text = "test text";
+        storageConfig = MemoryStorageConfig
+            .builder()
+            .embeddingModelId("sparse-model")
+            .embeddingModelType(FunctionName.SPARSE_ENCODING)
+            .semanticStorageEnabled(true)
+            .build();
+
+        setupMockMLModel(MLModelState.DEPLOYED);
+
+        // Create multiple tensors all with null dataMap
+        ModelTensor tensor1 = mock(ModelTensor.class);
+        when(tensor1.getDataAsMap()).thenReturn(null);
+
+        ModelTensor tensor2 = mock(ModelTensor.class);
+        when(tensor2.getDataAsMap()).thenReturn(null);
+
+        ModelTensors tensors = mock(ModelTensors.class);
+        when(tensors.getMlModelTensors()).thenReturn(Arrays.asList(tensor1, tensor2));
+
+        ModelTensorOutput output = mock(ModelTensorOutput.class);
+        when(output.getMlModelOutputs()).thenReturn(Arrays.asList(tensors));
+
+        setupMockPredictionResponse(output);
+
+        helper.generateEmbedding(text, storageConfig, objectListener);
+
+        ArgumentCaptor<Object> responseCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(objectListener).onResponse(responseCaptor.capture());
+
+        // Should return null when no valid tensor found
+        Object result = responseCaptor.getValue();
+        assertNull(result);
+    }
+
+    @Test
+    public void testSparseEmbeddingWithValidNestedResponse() {
+        // Test successful nested response extraction
+        String text = "test text";
+        storageConfig = MemoryStorageConfig
+            .builder()
+            .embeddingModelId("sparse-model")
+            .embeddingModelType(FunctionName.SPARSE_ENCODING)
+            .semanticStorageEnabled(true)
+            .build();
+
+        setupMockMLModel(MLModelState.DEPLOYED);
+
+        // Create tensor with valid nested response
+        ModelTensor tensor = mock(ModelTensor.class);
+        Map<String, Object> dataMap = new HashMap<>();
+        Map<String, Float> sparseData = new HashMap<>();
+        sparseData.put("term1", 1.5f);
+        sparseData.put("term2", 2.5f);
+        dataMap.put("response", Arrays.asList(sparseData));
+        doReturn(dataMap).when(tensor).getDataAsMap();
+
+        ModelTensors tensors = mock(ModelTensors.class);
+        when(tensors.getMlModelTensors()).thenReturn(Arrays.asList(tensor));
+
+        ModelTensorOutput output = mock(ModelTensorOutput.class);
+        when(output.getMlModelOutputs()).thenReturn(Arrays.asList(tensors));
+
+        setupMockPredictionResponse(output);
+
+        helper.generateEmbedding(text, storageConfig, objectListener);
+
+        ArgumentCaptor<Object> responseCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(objectListener).onResponse(responseCaptor.capture());
+
+        // Should extract the first element from response list
+        Map<String, Float> result = (Map<String, Float>) responseCaptor.getValue();
+        assertNotNull(result);
+        assertEquals(Float.valueOf(1.5f), result.get("term1"));
+        assertEquals(Float.valueOf(2.5f), result.get("term2"));
+    }
+
+    @Test
+    public void testSparseEmbeddingWithMultipleElementsInResponseList() {
+        // Test when response list has multiple elements - should return first
+        String text = "test text";
+        storageConfig = MemoryStorageConfig
+            .builder()
+            .embeddingModelId("sparse-model")
+            .embeddingModelType(FunctionName.SPARSE_ENCODING)
+            .semanticStorageEnabled(true)
+            .build();
+
+        setupMockMLModel(MLModelState.DEPLOYED);
+
+        // Create tensor with response list containing multiple Maps
+        ModelTensor tensor = mock(ModelTensor.class);
+        Map<String, Object> dataMap = new HashMap<>();
+
+        Map<String, Float> firstData = new HashMap<>();
+        firstData.put("first", 1.0f);
+
+        Map<String, Float> secondData = new HashMap<>();
+        secondData.put("second", 2.0f);
+
+        dataMap.put("response", Arrays.asList(firstData, secondData));
+        doReturn(dataMap).when(tensor).getDataAsMap();
+
+        ModelTensors tensors = mock(ModelTensors.class);
+        when(tensors.getMlModelTensors()).thenReturn(Arrays.asList(tensor));
+
+        ModelTensorOutput output = mock(ModelTensorOutput.class);
+        when(output.getMlModelOutputs()).thenReturn(Arrays.asList(tensors));
+
+        setupMockPredictionResponse(output);
+
+        helper.generateEmbedding(text, storageConfig, objectListener);
+
+        ArgumentCaptor<Object> responseCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(objectListener).onResponse(responseCaptor.capture());
+
+        // Should return the first element only
+        Map<String, Float> result = (Map<String, Float>) responseCaptor.getValue();
+        assertNotNull(result);
+        assertEquals(Float.valueOf(1.0f), result.get("first"));
+        assertNull(result.get("second")); // Second element should not be included
+    }
+
+    @Test
+    public void testSparseEmbeddingWithNullFirstElementInResponseList() {
+        // Test when first element in response list is null
+        String text = "test text";
+        storageConfig = MemoryStorageConfig
+            .builder()
+            .embeddingModelId("sparse-model")
+            .embeddingModelType(FunctionName.SPARSE_ENCODING)
+            .semanticStorageEnabled(true)
+            .build();
+
+        setupMockMLModel(MLModelState.DEPLOYED);
+
+        // Create tensor with response list where first element is null
+        ModelTensor tensor = mock(ModelTensor.class);
+        Map<String, Object> dataMap = new HashMap<>();
+        dataMap.put("response", Arrays.asList((Object) null));
+        dataMap.put("fallback", "data");
+        doReturn(dataMap).when(tensor).getDataAsMap();
+
+        ModelTensors tensors = mock(ModelTensors.class);
+        when(tensors.getMlModelTensors()).thenReturn(Arrays.asList(tensor));
+
+        ModelTensorOutput output = mock(ModelTensorOutput.class);
+        when(output.getMlModelOutputs()).thenReturn(Arrays.asList(tensors));
+
+        setupMockPredictionResponse(output);
+
+        helper.generateEmbedding(text, storageConfig, objectListener);
+
+        ArgumentCaptor<Object> responseCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(objectListener).onResponse(responseCaptor.capture());
+
+        // Should return the dataMap itself when first element is null
+        Map<String, Object> result = (Map<String, Object>) responseCaptor.getValue();
+        assertNotNull(result);
+        assertEquals("data", result.get("fallback"));
+        assertTrue(result.containsKey("response"));
+    }
+
+    @Test
+    public void testSparseEmbeddingWithMixedTypeResponseList() {
+        // Test when response list has mixed types (Map and non-Map)
+        String text = "test text";
+        storageConfig = MemoryStorageConfig
+            .builder()
+            .embeddingModelId("sparse-model")
+            .embeddingModelType(FunctionName.SPARSE_ENCODING)
+            .semanticStorageEnabled(true)
+            .build();
+
+        setupMockMLModel(MLModelState.DEPLOYED);
+
+        // Create tensor with response list containing mixed types
+        ModelTensor tensor = mock(ModelTensor.class);
+        Map<String, Object> dataMap = new HashMap<>();
+
+        Map<String, Float> mapData = new HashMap<>();
+        mapData.put("key", 3.0f);
+
+        // First element is String, second is Map
+        dataMap.put("response", Arrays.asList("string_value", mapData));
+        dataMap.put("other", "value");
+        doReturn(dataMap).when(tensor).getDataAsMap();
+
+        ModelTensors tensors = mock(ModelTensors.class);
+        when(tensors.getMlModelTensors()).thenReturn(Arrays.asList(tensor));
+
+        ModelTensorOutput output = mock(ModelTensorOutput.class);
+        when(output.getMlModelOutputs()).thenReturn(Arrays.asList(tensors));
+
+        setupMockPredictionResponse(output);
+
+        helper.generateEmbedding(text, storageConfig, objectListener);
+
+        ArgumentCaptor<Object> responseCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(objectListener).onResponse(responseCaptor.capture());
+
+        // Should return dataMap since first element is not a Map
+        Map<String, Object> result = (Map<String, Object>) responseCaptor.getValue();
+        assertNotNull(result);
+        assertEquals("value", result.get("other"));
+        assertTrue(result.containsKey("response"));
+    }
+
+    @Test
+    public void testSparseEmbeddingWithSingletonListContainingMap() {
+        // Test edge case of single-element list with Map
+        String text = "test text";
+        storageConfig = MemoryStorageConfig
+            .builder()
+            .embeddingModelId("sparse-model")
+            .embeddingModelType(FunctionName.SPARSE_ENCODING)
+            .semanticStorageEnabled(true)
+            .build();
+
+        setupMockMLModel(MLModelState.DEPLOYED);
+
+        // Create tensor with singleton list containing a Map
+        ModelTensor tensor = mock(ModelTensor.class);
+        Map<String, Object> dataMap = new HashMap<>();
+
+        Map<String, Double> singleMap = new HashMap<>();
+        singleMap.put("singleton", 5.0);
+
+        dataMap.put("response", Collections.singletonList(singleMap));
+        doReturn(dataMap).when(tensor).getDataAsMap();
+
+        ModelTensors tensors = mock(ModelTensors.class);
+        when(tensors.getMlModelTensors()).thenReturn(Arrays.asList(tensor));
+
+        ModelTensorOutput output = mock(ModelTensorOutput.class);
+        when(output.getMlModelOutputs()).thenReturn(Arrays.asList(tensors));
+
+        setupMockPredictionResponse(output);
+
+        helper.generateEmbedding(text, storageConfig, objectListener);
+
+        ArgumentCaptor<Object> responseCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(objectListener).onResponse(responseCaptor.capture());
+
+        // Should extract the single Map element
+        Map<String, Double> result = (Map<String, Double>) responseCaptor.getValue();
+        assertNotNull(result);
+        assertEquals(Double.valueOf(5.0), result.get("singleton"));
     }
 }
