@@ -9,10 +9,9 @@ import java.util.List;
 import java.util.Map;
 
 import org.opensearch.action.search.SearchRequest;
-import org.opensearch.action.search.SearchResponse;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.index.query.MatchAllQueryBuilder;
 import org.opensearch.ml.common.FunctionName;
 import org.opensearch.ml.common.dataset.remote.RemoteInferenceInputDataSet;
 import org.opensearch.ml.common.input.MLInput;
@@ -46,7 +45,7 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
     private final ClusterService clusterService;
     private IndexInsightTaskStatus status = IndexInsightTaskStatus.GENERATING;
 
-    // Parsed results
+    private String sampleDocSting;
     private boolean isLogIndex;
     private String logMessageField;
     private String traceIdField;
@@ -105,18 +104,12 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
             }
 
             // Fetch 3 sample docs
-            SearchRequest sr = new SearchRequest(indexName)
-                    .source(new SearchSourceBuilder().query(QueryBuilders.matchAllQuery()).size(3));
-            SearchResponse resp = client.search(sr).actionGet();
-            List<Map<String, Object>> samples = Arrays.stream(resp.getHits().getHits())
-                    .map(SearchHit::getSourceAsMap)
-                    .toList();
-            String samplesJson = MAPPER.writeValueAsString(samples);
+            collectSampleDocString();
 
             // Build prompt
             String prompt = RCA_TEMPLATE
                     .replace("{indexName}", indexName)
-                    .replace("{samples}", samplesJson);
+                    .replace("{samples}", sampleDocSting);
 
             // Call LLM
             RemoteInferenceInputDataSet input = RemoteInferenceInputDataSet.builder()
@@ -157,6 +150,34 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
             saveFailedStatus();
         }
     }
+    // Standard IndexInsightTask interface methods
+    @Override public MLIndexInsightType getTaskType()    { return taskType; }
+    @Override public String getTargetIndex()             { return indexName; }
+    @Override public IndexInsightTaskStatus getStatus() { return status; }
+    @Override public void setStatus(IndexInsightTaskStatus s) { status = s; }
+    @Override public List<MLIndexInsightType> getPrerequisites() { return Collections.emptyList(); }
+    @Override public Client getClient()                 { return client; }
+
+    public String getSampleDocString() {
+        return sampleDocSting;
+    }
+
+    private void collectSampleDocString(){
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        searchSourceBuilder.size(3).query(new MatchAllQueryBuilder());
+        SearchRequest searchRequest = new SearchRequest(new String[] { indexName }, searchSourceBuilder);
+
+        client.search(searchRequest, ActionListener.wrap(searchResponse -> {
+            List<Map<String, Object>> samples = Arrays.stream(searchResponse.getHits().getHits())
+                    .map(SearchHit::getSourceAsMap)
+                    .toList();
+            sampleDocSting = MAPPER.writeValueAsString(samples);
+            log.info("Collected sample documents for index: {}", indexName);
+        }, e -> {
+            log.error("Failed to collect sample documents for index: {}", indexName, e);
+            saveFailedStatus();
+        }));
+    }
 
     private String extractModelResponse(Map<String,Object> data) {
         if (data.containsKey("choices")) {
@@ -167,7 +188,6 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
         }
         return JsonPath.read(data, "$.response");
     }
-
 
     private Map<String,Object> parseCheckResponse(String resp) {
         try {
@@ -183,12 +203,4 @@ public class LogRelatedIndexCheckTask implements IndexInsightTask {
             return def;
         }
     }
-
-    // Standard IndexInsightTask interface methods...
-    @Override public MLIndexInsightType getTaskType()    { return taskType; }
-    @Override public String getTargetIndex()             { return indexName; }
-    @Override public IndexInsightTaskStatus getStatus() { return status; }
-    @Override public void setStatus(IndexInsightTaskStatus s) { status = s; }
-    @Override public List<MLIndexInsightType> getPrerequisites() { return Collections.emptyList(); }
-    @Override public Client getClient()                 { return client; }
 }
