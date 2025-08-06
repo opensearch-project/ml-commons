@@ -6,6 +6,7 @@ public enum MLIndexInsightType {
     STATISTICAL_DATA,
     FIELD_DESCRIPTION,
     INDEX_DESCRIPTION,
+    LOG_RELATED_INDEX_CHECK,
     LOG_JUDGEMENT;
 
     public static MLIndexInsightType fromString(String type) {
