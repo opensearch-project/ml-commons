@@ -7,6 +7,7 @@ package org.opensearch.ml.action.memorycontainer.memory;
 
 import static org.opensearch.common.xcontent.json.JsonXContent.jsonXContent;
 import static org.opensearch.core.xcontent.XContentParserUtils.ensureExpectedToken;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE;
 
 import org.opensearch.OpenSearchStatusException;
 import org.opensearch.action.ActionRequest;
@@ -23,6 +24,7 @@ import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.ml.common.memorycontainer.MLMemory;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLGetMemoryAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLGetMemoryRequest;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLGetMemoryResponse;
@@ -43,6 +45,7 @@ public class TransportGetMemoryAction extends HandledTransportAction<ActionReque
     final Client client;
     final NamedXContentRegistry xContentRegistry;
     final MemoryContainerHelper memoryContainerHelper;
+    final MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Inject
     public TransportGetMemoryAction(
@@ -50,16 +53,22 @@ public class TransportGetMemoryAction extends HandledTransportAction<ActionReque
         ActionFilters actionFilters,
         Client client,
         NamedXContentRegistry xContentRegistry,
-        MemoryContainerHelper memoryContainerHelper
+        MemoryContainerHelper memoryContainerHelper,
+        MLFeatureEnabledSetting mlFeatureEnabledSetting
     ) {
         super(MLGetMemoryAction.NAME, transportService, actionFilters, MLGetMemoryRequest::new);
         this.client = client;
         this.xContentRegistry = xContentRegistry;
         this.memoryContainerHelper = memoryContainerHelper;
+        this.mlFeatureEnabledSetting = mlFeatureEnabledSetting;
     }
 
     @Override
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLGetMemoryResponse> actionListener) {
+        if (!mlFeatureEnabledSetting.isAgenticMemoryEnabled()) {
+            actionListener.onFailure(new OpenSearchStatusException(ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE, RestStatus.FORBIDDEN));
+            return;
+        }
         MLGetMemoryRequest getRequest = MLGetMemoryRequest.fromActionRequest(request);
         String memoryContainerId = getRequest.getMemoryContainerId();
         String memoryId = getRequest.getMemoryId();

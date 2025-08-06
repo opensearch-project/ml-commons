@@ -57,7 +57,7 @@ public class MLGetMemoryRequest extends ActionRequest {
         ActionRequestValidationException exception = null;
 
         if (this.memoryContainerId == null || this.memoryId == null) {
-            exception = addValidationError("memoryContainerId  and memoryId id can not be null", exception);
+            exception = addValidationError("memoryContainerId and memoryId id can not be null", exception);
         }
 
         return exception;

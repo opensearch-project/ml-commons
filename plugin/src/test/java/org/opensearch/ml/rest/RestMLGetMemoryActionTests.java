@@ -10,6 +10,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_CONTAINER_ID;
 import static org.opensearch.ml.common.memorycontainer.MemoryContainerConstants.PARAMETER_MEMORY_ID;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE;
 
 import java.util.HashMap;
 import java.util.List;
@@ -20,10 +21,13 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.OpenSearchStatusException;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
+import org.opensearch.core.rest.RestStatus;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLGetMemoryAction;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLGetMemoryRequest;
 import org.opensearch.rest.RestChannel;
@@ -45,10 +49,14 @@ public class RestMLGetMemoryActionTests extends OpenSearchTestCase {
     @Mock
     RestChannel channel;
 
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
+
     @Before
     public void setup() {
         MockitoAnnotations.openMocks(this);
-        restMLGetMemoryAction = new RestMLGetMemoryAction();
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true); // Enable by default for tests
+        restMLGetMemoryAction = new RestMLGetMemoryAction(mlFeatureEnabledSetting);
 
         threadPool = new TestThreadPool(this.getClass().getSimpleName() + "ThreadPool");
         client = spy(new NodeClient(Settings.EMPTY, threadPool));
@@ -68,7 +76,7 @@ public class RestMLGetMemoryActionTests extends OpenSearchTestCase {
 
     @Test
     public void testConstructor() {
-        RestMLGetMemoryAction mlGetMemoryAction = new RestMLGetMemoryAction();
+        RestMLGetMemoryAction mlGetMemoryAction = new RestMLGetMemoryAction(mlFeatureEnabledSetting);
         assertNotNull(mlGetMemoryAction);
     }
 
@@ -135,5 +143,26 @@ public class RestMLGetMemoryActionTests extends OpenSearchTestCase {
             .withPath("/_plugins/_ml/memory_containers/" + memoryContainerId + "/memory/" + memoryId)
             .withParams(params)
             .build();
+    }
+
+    @Test
+    public void testPrepareRequestWithFeatureDisabled() throws Exception {
+        // Setup feature flag to be disabled
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(false);
+        restMLGetMemoryAction = new RestMLGetMemoryAction(mlFeatureEnabledSetting);
+        
+        RestRequest request = getRestRequest("memory_container_id", "memory_id");
+        
+        // Expect OpenSearchStatusException to be thrown
+        OpenSearchStatusException exception = expectThrows(
+            OpenSearchStatusException.class, 
+            () -> restMLGetMemoryAction.handleRequest(request, channel, client)
+        );
+        
+        assertEquals(ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE, exception.getMessage());
+        assertEquals(RestStatus.FORBIDDEN, exception.status());
+        
+        // Verify that client.execute was never called
+        verify(client, never()).execute(any(), any(), any());
     }
 }

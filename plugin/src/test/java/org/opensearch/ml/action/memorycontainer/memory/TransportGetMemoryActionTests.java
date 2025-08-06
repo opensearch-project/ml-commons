@@ -9,8 +9,10 @@ import static org.mockito.ArgumentCaptor.forClass;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE;
 
 import java.time.Instant;
 
@@ -32,6 +34,7 @@ import org.opensearch.ml.common.memorycontainer.MLMemory;
 import org.opensearch.ml.common.memorycontainer.MLMemoryContainer;
 import org.opensearch.ml.common.memorycontainer.MemoryStorageConfig;
 import org.opensearch.ml.common.memorycontainer.MemoryType;
+import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLGetMemoryRequest;
 import org.opensearch.ml.common.transport.memorycontainer.memory.MLGetMemoryResponse;
 import org.opensearch.ml.helper.MemoryContainerHelper;
@@ -65,6 +68,8 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
     private Task task;
     @Mock
     private ThreadPool threadPool;
+    @Mock
+    private MLFeatureEnabledSetting mlFeatureEnabledSetting;
 
     @Mock
     private ActionListener<MLGetMemoryResponse> actionListener;
@@ -125,7 +130,17 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
             .build();
 
         // Create action
-        action = new TransportGetMemoryAction(transportService, actionFilters, client, xContentRegistry, memoryContainerHelper);
+        action = new TransportGetMemoryAction(
+            transportService,
+            actionFilters,
+            client,
+            xContentRegistry,
+            memoryContainerHelper,
+            mlFeatureEnabledSetting
+        );
+
+        // Setup feature flag to be enabled by default for tests
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(true);
 
         // Setup user context
         threadContext.putTransient(org.opensearch.commons.ConfigConstants.OPENSEARCH_SECURITY_USER_INFO_THREAD_CONTEXT, OWNER_NAME + "||");
@@ -420,5 +435,30 @@ public class TransportGetMemoryActionTests extends OpenSearchTestCase {
             + "\"last_updated_time\":"
             + currentTimeEpoch
             + "}";
+    }
+
+    @Test
+    public void testDoExecuteWithFeatureDisabled() {
+        // Setup feature flag to be disabled
+        when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(false);
+        
+        // Setup request
+        MLGetMemoryRequest getRequest = new MLGetMemoryRequest(MEMORY_CONTAINER_ID, MEMORY_ID);
+        
+        // Execute
+        action.doExecute(task, getRequest, actionListener);
+        
+        // Verify that the action listener received a failure with the expected message
+        ArgumentCaptor<Exception> exceptionCaptor = forClass(Exception.class);
+        verify(actionListener).onFailure(exceptionCaptor.capture());
+        
+        Exception capturedException = exceptionCaptor.getValue();
+        assertTrue(capturedException instanceof OpenSearchStatusException);
+        OpenSearchStatusException statusException = (OpenSearchStatusException) capturedException;
+        assertEquals(ML_COMMONS_AGENTIC_MEMORY_DISABLED_MESSAGE, statusException.getMessage());
+        assertEquals(RestStatus.FORBIDDEN, statusException.status());
+        
+        // Verify that no other operations were attempted
+        verify(memoryContainerHelper, never()).getMemoryContainer(any(String.class), any(ActionListener.class));
     }
 }

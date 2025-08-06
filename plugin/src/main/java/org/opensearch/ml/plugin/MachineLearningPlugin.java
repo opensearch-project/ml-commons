@@ -944,7 +944,7 @@ public class MachineLearningPlugin extends Plugin
         RestMemorySearchConversationsAction restSearchConversationsAction = new RestMemorySearchConversationsAction(
             mlFeatureEnabledSetting
         );
-        RestMLGetMemoryAction restMLGetMemoryAction = new RestMLGetMemoryAction();
+        RestMLGetMemoryAction restMLGetMemoryAction = new RestMLGetMemoryAction(mlFeatureEnabledSetting);
         RestMemorySearchInteractionsAction restSearchInteractionsAction = new RestMemorySearchInteractionsAction();
         RestMemoryGetConversationAction restGetConversationAction = new RestMemoryGetConversationAction();
         RestMemoryGetInteractionAction restGetInteractionAction = new RestMemoryGetInteractionAction();

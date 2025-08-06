@@ -62,7 +62,7 @@ public class MLGetMemoryRequestTest {
         ActionRequestValidationException exception = requestWithNulls.validate();
         assertNotNull(exception);
         assertEquals(1, exception.validationErrors().size());
-        assertTrue(exception.validationErrors().get(0).contains("memoryContainerId  and memoryId id can not be null"));
+        assertTrue(exception.validationErrors().get(0).contains("memoryContainerId and memoryId id can not be null"));
     }
 
     @Test
