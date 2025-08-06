@@ -26,12 +26,11 @@ import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getCurrentDat
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMcpToolSpecs;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMessageHistoryLimit;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
-import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getToolName;
-import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getToolNames;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.outputToOutputString;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.parseLLMOutput;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.substitute;
 import static org.opensearch.ml.engine.algorithms.agent.PromptTemplate.CHAT_HISTORY_PREFIX;
+import static org.opensearch.ml.engine.tools.ToolUtils.*;
 
 import java.security.PrivilegedActionException;
 import java.util.ArrayList;
@@ -78,6 +77,7 @@ import org.opensearch.ml.engine.function_calling.LLMMessage;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.ConversationIndexMessage;
 import org.opensearch.ml.engine.tools.MLModelTool;
+import org.opensearch.ml.engine.tools.ToolUtils;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.ml.repackage.com.google.common.collect.Lists;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -312,6 +312,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         AtomicReference<String> lastActionInput = new AtomicReference<>();
         AtomicReference<String> lastToolSelectionResponse = new AtomicReference<>();
         Map<String, Object> additionalInfo = new ConcurrentHashMap<>();
+        Map<String, String> lastToolParams = new ConcurrentHashMap<>();
 
         StepListener firstListener = new StepListener<MLTaskResponse>();
         lastLlmListener.set(firstListener);
@@ -425,6 +426,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             action,
                             actionInput
                         );
+                        lastToolParams.clear();
+                        lastToolParams.putAll(toolParams);
                         runTool(
                             tools,
                             toolSpecMap,
@@ -449,14 +452,15 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         ((ActionListener<Object>) nextStepListener).onResponse(res);
                     }
                 } else {
-                    addToolOutputToAddtionalInfo(toolSpecMap, lastAction, additionalInfo, output);
+                    Object filteredOutput = filterToolOutput(lastToolParams, output);
+                    addToolOutputToAddtionalInfo(toolSpecMap, lastAction, additionalInfo, filteredOutput);
 
                     String toolResponse = constructToolResponse(
                         tmpParameters,
                         lastAction,
                         lastActionInput,
                         lastToolSelectionResponse,
-                        output
+                        filteredOutput
                     );
                     scratchpadBuilder.append(toolResponse).append("\n\n");
 
@@ -464,7 +468,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         conversationIndexMemory,
                         "ReAct",
                         lastActionInput.get(),
-                        outputToOutputString(output),
+                        outputToOutputString(filteredOutput),
                         sessionId,
                         traceDisabled,
                         parentInteractionId,
@@ -479,7 +483,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         tmpParameters.put(INTERACTIONS, ", " + String.join(", ", interactions));
                     }
 
-                    sessionMsgAnswerBuilder.append(outputToOutputString(output));
+                    sessionMsgAnswerBuilder.append(outputToOutputString(filteredOutput));
                     traceTensors
                         .add(
                             ModelTensors
@@ -615,7 +619,9 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 String finalAction = action;
                 ActionListener<Object> toolListener = ActionListener.wrap(r -> {
                     if (functionCalling != null) {
-                        List<Map<String, Object>> toolResults = List.of(Map.of(TOOL_CALL_ID, toolCallId, TOOL_RESULT, Map.of("text", r)));
+                        String outputResponse = parseResponse(filterToolOutput(toolParams, r));
+                        List<Map<String, Object>> toolResults = List
+                            .of(Map.of(TOOL_CALL_ID, toolCallId, TOOL_RESULT, Map.of("text", outputResponse)));
                         List<LLMMessage> llmMessages = functionCalling.supply(toolResults);
                         // TODO: support multiple tool calls at the same time so that multiple LLMMessages can be generated here
                         interactions.add(llmMessages.getFirst().getResponse());
@@ -773,7 +779,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         StringSubstitutor promptSubstitutor = new StringSubstitutor(tmpParameters, "${parameters.", "}");
         prompt = promptSubstitutor.replace(prompt);
         prompt = AgentUtils.addPrefixSuffixToPrompt(tmpParameters, prompt);
-        prompt = AgentUtils.addToolsToPrompt(tools, tmpParameters, getToolNames(tools), prompt);
+        prompt = AgentUtils.addToolsToPrompt(tools, tmpParameters, ToolUtils.getToolNames(tools), prompt);
         prompt = AgentUtils.addIndicesToPrompt(tmpParameters, prompt);
         prompt = AgentUtils.addExamplesToPrompt(tmpParameters, prompt);
         prompt = AgentUtils.addChatHistoryToPrompt(tmpParameters, prompt);

@@ -746,7 +746,7 @@ public class MachineLearningPlugin extends Plugin
         SearchIndexTool.Factory.getInstance().init(client, xContentRegistry);
         VisualizationsTool.Factory.getInstance().init(client);
         ConnectorTool.Factory.getInstance().init(client);
-        QueryPlanningTool.Factory.getInstance().init(client);
+        QueryPlanningTool.Factory.getInstance().init(client, mlFeatureEnabledSetting);
 
         toolFactories.put(MLModelTool.TYPE, MLModelTool.Factory.getInstance());
         toolFactories.put(McpSseTool.TYPE, McpSseTool.Factory.getInstance());
@@ -779,7 +779,7 @@ public class MachineLearningPlugin extends Plugin
             xContentRegistry,
             toolFactories,
             memoryFactoryMap,
-            mlFeatureEnabledSetting.isMultiTenancyEnabled(),
+            mlFeatureEnabledSetting,
             encryptor
         );
         MLEngineClassLoader.register(FunctionName.LOCAL_SAMPLE_CALCULATOR, localSampleCalculator);
@@ -1204,7 +1204,8 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED,
                 MLCommonsSettings.ML_COMMONS_METRIC_COLLECTION_ENABLED,
                 MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED,
-                MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_ENABLED
+                MLCommonsSettings.ML_COMMONS_EXECUTE_TOOL_ENABLED,
+                MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_ENABLED
             );
         return settings;
     }

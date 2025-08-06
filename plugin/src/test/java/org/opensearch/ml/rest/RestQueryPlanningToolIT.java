@@ -5,6 +5,7 @@
 
 package org.opensearch.ml.rest;
 
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_AGENTIC_SEARCH_ENABLED;
 import static org.opensearch.ml.engine.tools.QueryPlanningTool.MODEL_ID_FIELD;
 
 import java.io.IOException;
@@ -72,6 +73,8 @@ public class RestQueryPlanningToolIT extends MLCommonsRestTestCase {
         if (AWS_ACCESS_KEY_ID == null) {
             return;
         }
+        // enable agentic search
+        updateClusterSettings(ML_COMMONS_AGENTIC_SEARCH_ENABLED.getKey(), true);
         queryPlanningModelId = registerQueryPlanningModel();
     }
 

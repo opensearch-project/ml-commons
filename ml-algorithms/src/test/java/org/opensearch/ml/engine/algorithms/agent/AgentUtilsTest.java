@@ -9,14 +9,12 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTORS_FIELD;
 import static org.opensearch.ml.common.CommonValue.MCP_CONNECTOR_ID_FIELD;
-import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.DEFAULT_DATETIME_PREFIX;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_PATH;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.LLM_FINISH_REASON_TOOL_USE;
@@ -1623,49 +1621,6 @@ public class AgentUtilsTest extends MLStaticMockBase {
         String result = AgentUtils.substitute(template, params, prefix);
 
         Assert.assertEquals("Hello AI! Welcome to OpenSearch.", result);
-    }
-
-    @Test
-    public void testCreateTool_Success() {
-        Map<String, Tool.Factory> toolFactories = new HashMap<>();
-        Tool.Factory factory = mock(Tool.Factory.class);
-        Tool mockTool = mock(Tool.class);
-        when(factory.create(any())).thenReturn(mockTool);
-        toolFactories.put("test_tool", factory);
-
-        MLToolSpec toolSpec = MLToolSpec
-            .builder()
-            .type("test_tool")
-            .name("TestTool")
-            .description("Original description")
-            .parameters(Map.of("param1", "value1"))
-            .runtimeResources(Map.of("resource1", "value2"))
-            .build();
-
-        Map<String, String> params = new HashMap<>();
-        params.put("TestTool.param2", "value3");
-        params.put("TestTool.description", "Custom description");
-
-        AgentUtils.createTool(toolFactories, params, toolSpec, "test_tenant");
-
-        verify(factory).create(argThat(toolParamsMap -> {
-            Map<String, Object> toolParams = (Map<String, Object>) toolParamsMap;
-            return toolParams.get("param1").equals("value1")
-                && toolParams.get("param2").equals("value3")
-                && toolParams.get("resource1").equals("value2")
-                && toolParams.get(TENANT_ID_FIELD).equals("test_tenant");
-        }));
-
-        verify(mockTool).setName("TestTool");
-        verify(mockTool).setDescription("Custom description");
-    }
-
-    @Test
-    public void testCreateTool_ToolNotFound() {
-        Map<String, Tool.Factory> toolFactories = new HashMap<>();
-        MLToolSpec toolSpec = MLToolSpec.builder().type("non_existent_tool").name("TestTool").build();
-
-        assertThrows(IllegalArgumentException.class, () -> AgentUtils.createTool(toolFactories, new HashMap<>(), toolSpec, "test_tenant"));
     }
 
     @Test

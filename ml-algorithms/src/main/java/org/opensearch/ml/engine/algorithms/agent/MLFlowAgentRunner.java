@@ -5,26 +5,21 @@
 
 package org.opensearch.ml.engine.algorithms.agent;
 
-import static org.apache.commons.text.StringEscapeUtils.escapeJson;
-import static org.opensearch.ml.common.CommonValue.TENANT_ID_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getMlToolSpecs;
-import static org.opensearch.ml.engine.algorithms.agent.AgentUtils.getToolName;
+import static org.opensearch.ml.engine.tools.ToolUtils.TOOL_OUTPUT_FILTERS_FIELD;
+import static org.opensearch.ml.engine.tools.ToolUtils.filterToolOutput;
+import static org.opensearch.ml.engine.tools.ToolUtils.getToolName;
+import static org.opensearch.ml.engine.tools.ToolUtils.parseResponse;
 
-import java.io.IOException;
-import java.security.AccessController;
-import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.apache.commons.text.StringSubstitutor;
 import org.opensearch.action.StepListener;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.settings.Settings;
-import org.opensearch.common.xcontent.json.JsonXContent;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.agent.MLAgent;
@@ -33,12 +28,12 @@ import org.opensearch.ml.common.agent.MLToolSpec;
 import org.opensearch.ml.common.conversation.ActionConstants;
 import org.opensearch.ml.common.output.model.ModelTensor;
 import org.opensearch.ml.common.output.model.ModelTensorOutput;
-import org.opensearch.ml.common.output.model.ModelTensors;
 import org.opensearch.ml.common.spi.memory.Memory;
 import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.common.utils.StringUtils;
 import org.opensearch.ml.engine.encryptor.Encryptor;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
+import org.opensearch.ml.engine.tools.ToolUtils;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.ml.repackage.com.google.common.collect.ImmutableMap;
 import org.opensearch.remote.metadata.client.SdkClient;
@@ -104,35 +99,32 @@ public class MLFlowAgentRunner implements MLAgentRunner {
         for (int i = 0; i <= toolSpecs.size(); i++) {
             if (i == 0) {
                 MLToolSpec toolSpec = toolSpecs.get(i);
-                Tool tool = createTool(toolSpec, mlAgent.getTenantId());
+                firstToolExecuteParams = ToolUtils.buildToolParameters(params, toolSpec, mlAgent.getTenantId());
+                Tool tool = ToolUtils.createTool(toolFactories, firstToolExecuteParams, toolSpec);
                 firstStepListener = new StepListener<>();
                 previousStepListener = firstStepListener;
                 firstTool = tool;
-                firstToolExecuteParams = getToolExecuteParams(toolSpec, params, mlAgent.getTenantId());
             } else {
                 MLToolSpec previousToolSpec = toolSpecs.get(i - 1);
                 StepListener<Object> nextStepListener = new StepListener<>();
                 int finalI = i;
                 previousStepListener.whenComplete(output -> {
-                    String key = getToolName(previousToolSpec);
-                    String outputKey = key + ".output";
-
-                    String outputResponse = parseResponse(output);
-                    params.put(outputKey, escapeJson(outputResponse));
-
+                    String toolName = getToolName(previousToolSpec);
+                    String outputKey = toolName + ".output";
+                    Map<String, String> toolParameters = ToolUtils.buildToolParameters(params, previousToolSpec, mlAgent.getTenantId());
+                    String filteredOutput = parseResponse(filterToolOutput(toolParameters, output));
+                    params.put(outputKey, StringUtils.prepareJsonValue(filteredOutput));
                     if (previousToolSpec.isIncludeOutputInAgentResponse() || finalI == toolSpecs.size()) {
-                        if (output instanceof ModelTensorOutput) {
+                        if (toolParameters.containsKey(TOOL_OUTPUT_FILTERS_FIELD)) {
+                            flowAgentOutput.add(ModelTensor.builder().name(outputKey).result(filteredOutput).build());
+                        } else if (output instanceof ModelTensorOutput) {
                             flowAgentOutput.addAll(((ModelTensorOutput) output).getMlModelOutputs().get(0).getMlModelTensors());
                         } else {
-                            String result = output instanceof String
-                                ? (String) output
-                                : AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> StringUtils.toJson(output));
-
-                            ModelTensor stepOutput = ModelTensor.builder().name(key).result(result).build();
+                            ModelTensor stepOutput = ModelTensor.builder().name(toolName).result(StringUtils.toJson(output)).build();
                             flowAgentOutput.add(stepOutput);
                         }
 
-                        additionalInfo.put(outputKey, outputResponse);
+                        additionalInfo.put(outputKey, filteredOutput);
                     }
 
                     if (finalI == toolSpecs.size()) {
@@ -152,9 +144,10 @@ public class MLFlowAgentRunner implements MLAgentRunner {
                     }
 
                     MLToolSpec toolSpec = toolSpecs.get(finalI);
-                    Tool tool = createTool(toolSpec, mlAgent.getTenantId());
+                    Map<String, String> executeParams = ToolUtils.buildToolParameters(params, toolSpec, mlAgent.getTenantId());
+                    Tool tool = ToolUtils.createTool(toolFactories, executeParams, toolSpec);
                     if (finalI < toolSpecs.size()) {
-                        tool.run(getToolExecuteParams(toolSpec, params, mlAgent.getTenantId()), nextStepListener);
+                        tool.run(executeParams, nextStepListener);
                     }
 
                 }, e -> {
@@ -238,79 +231,4 @@ public class MLFlowAgentRunner implements MLAgentRunner {
             .updateInteraction(interactionId, ImmutableMap.of(ActionConstants.ADDITIONAL_INFO_FIELD, additionalInfo), listener);
     }
 
-    @VisibleForTesting
-    String parseResponse(Object output) throws IOException {
-        if (output instanceof List && !((List<?>) output).isEmpty() && ((List<?>) output).get(0) instanceof ModelTensors) {
-            ModelTensors tensors = (ModelTensors) ((List<?>) output).get(0);
-            return tensors.toXContent(JsonXContent.contentBuilder(), null).toString();
-        } else if (output instanceof ModelTensor) {
-            return ((ModelTensor) output).toXContent(JsonXContent.contentBuilder(), null).toString();
-        } else if (output instanceof ModelTensorOutput) {
-            return ((ModelTensorOutput) output).toXContent(JsonXContent.contentBuilder(), null).toString();
-        } else {
-            if (output instanceof String) {
-                return (String) output;
-            } else {
-                return StringUtils.toJson(output);
-            }
-        }
-    }
-
-    @VisibleForTesting
-    Tool createTool(MLToolSpec toolSpec, String tenantId) {
-        Map<String, String> toolParams = new HashMap<>();
-        if (toolSpec.getParameters() != null) {
-            toolParams.putAll(toolSpec.getParameters());
-        }
-        toolParams.put(TENANT_ID_FIELD, tenantId);
-        if (!toolFactories.containsKey(toolSpec.getType())) {
-            throw new IllegalArgumentException("Tool not found: " + toolSpec.getType());
-        }
-        Tool tool = toolFactories.get(toolSpec.getType()).create(toolParams);
-        if (toolSpec.getName() != null) {
-            tool.setName(toolSpec.getName());
-        }
-
-        if (toolSpec.getDescription() != null) {
-            tool.setDescription(toolSpec.getDescription());
-        }
-        return tool;
-    }
-
-    @VisibleForTesting
-    Map<String, String> getToolExecuteParams(MLToolSpec toolSpec, Map<String, String> params, String tenantId) {
-        Map<String, String> executeParams = new HashMap<>();
-        if (toolSpec.getParameters() != null) {
-            executeParams.putAll(toolSpec.getParameters());
-        }
-        for (String key : params.keySet()) {
-            String toBeReplaced = null;
-            if (key.startsWith(toolSpec.getType() + ".")) {
-                toBeReplaced = toolSpec.getType() + ".";
-            }
-            if (toolSpec.getName() != null && key.startsWith(toolSpec.getName() + ".")) {
-                toBeReplaced = toolSpec.getName() + ".";
-            }
-            if (toBeReplaced != null) {
-                executeParams.put(key.replace(toBeReplaced, ""), params.get(key));
-            } else {
-                executeParams.put(key, params.get(key));
-            }
-        }
-        // Override all parameters in tool config to tool execution parameters as the config contains the static parameters.
-        if (toolSpec.getConfigMap() != null && !toolSpec.getConfigMap().isEmpty()) {
-            executeParams.putAll(toolSpec.getConfigMap());
-        }
-
-        executeParams.put(TENANT_ID_FIELD, tenantId);
-
-        if (executeParams.containsKey("input")) {
-            String input = executeParams.get("input");
-            StringSubstitutor substitutor = new StringSubstitutor(executeParams, "${parameters.", "}");
-            input = substitutor.replace(input);
-            executeParams.put("input", input);
-        }
-
-        return executeParams;
-    }
 }

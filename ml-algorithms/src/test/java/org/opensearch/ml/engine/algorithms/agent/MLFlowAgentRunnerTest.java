@@ -21,6 +21,7 @@ import static org.mockito.Mockito.when;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.APP_TYPE;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_ID;
 import static org.opensearch.ml.engine.memory.ConversationIndexMemory.MEMORY_NAME;
+import static org.opensearch.ml.engine.tools.ToolUtils.buildToolParameters;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -57,6 +58,7 @@ import org.opensearch.ml.common.spi.tools.Tool;
 import org.opensearch.ml.engine.indices.MLIndicesHandler;
 import org.opensearch.ml.engine.memory.ConversationIndexMemory;
 import org.opensearch.ml.engine.memory.MLMemoryManager;
+import org.opensearch.ml.engine.tools.ToolUtils;
 import org.opensearch.transport.client.Client;
 
 import software.amazon.awssdk.utils.ImmutableMap;
@@ -292,7 +294,7 @@ public class MLFlowAgentRunnerTest {
 
         Map<String, String> params = Map.of("toolType.param2", "value2", "toolName.param3", "value3", "param4", "value4");
 
-        Map<String, String> result = mlFlowAgentRunner.getToolExecuteParams(toolSpec, params, null);
+        Map<String, String> result = buildToolParameters(params, toolSpec, null);
 
         assertEquals("value1", result.get("param1"));
         assertEquals("value3", result.get("param3"));
@@ -311,7 +313,7 @@ public class MLFlowAgentRunnerTest {
         Map<String, String> params = Map
             .of("toolType.param2", "value2", "toolName.param3", "value3", "param4", "value4", "toolName.tool_key", "dynamic value");
 
-        Map<String, String> result = mlFlowAgentRunner.getToolExecuteParams(toolSpec, params, null);
+        Map<String, String> result = buildToolParameters(params, toolSpec, null);
 
         assertEquals("value1", result.get("param1"));
         assertEquals("value3", result.get("param3"));
@@ -342,7 +344,7 @@ public class MLFlowAgentRunnerTest {
             );
 
         // Execute the method
-        Map<String, String> result = mlFlowAgentRunner.getToolExecuteParams(toolSpec, params, null);
+        Map<String, String> result = ToolUtils.extractInputParameters(buildToolParameters(params, toolSpec, null), null);
 
         // Assertions
         assertEquals("value1", result.get("param1"));
@@ -356,20 +358,10 @@ public class MLFlowAgentRunnerTest {
     }
 
     @Test
-    public void testCreateTool() {
-        MLToolSpec firstToolSpec = MLToolSpec.builder().name(FIRST_TOOL).description("description").type(FIRST_TOOL).build();
-        Tool result = mlFlowAgentRunner.createTool(firstToolSpec, null);
-
-        assertNotNull(result);
-        assertEquals(FIRST_TOOL, result.getName());
-        assertEquals(FIRST_TOOL_DESC, result.getDescription());
-    }
-
-    @Test
     public void testParseResponse() throws IOException {
 
         String outputString = "testOutput";
-        assertEquals(outputString, mlFlowAgentRunner.parseResponse(outputString));
+        assertEquals(outputString, ToolUtils.parseResponse(outputString));
 
         ModelTensor modelTensor = ModelTensor.builder().name(FIRST_TOOL).dataAsMap(Map.of("index", "index response")).build();
         ModelTensors modelTensors = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
@@ -377,11 +369,11 @@ public class MLFlowAgentRunnerTest {
 
         String expectedJson = "{\"name\":\"firstTool\",\"dataAsMap\":{\"index\":\"index response\"}}"; // the JSON representation of the
                                                                                                        // model tensor
-        assertEquals(expectedJson, mlFlowAgentRunner.parseResponse(modelTensor));
+        assertEquals(expectedJson, ToolUtils.parseResponse(modelTensor));
 
         String expectedTensorOuput =
             "{\"inference_results\":[{\"output\":[{\"name\":\"firstTool\",\"dataAsMap\":{\"index\":\"index response\"}}]}]}";
-        assertEquals(expectedTensorOuput, mlFlowAgentRunner.parseResponse(mlModelTensorOutput));
+        assertEquals(expectedTensorOuput, ToolUtils.parseResponse(mlModelTensorOutput));
 
         // Test for List containing ModelTensors
         ModelTensors tensorsInList = ModelTensors.builder().mlModelTensors(Arrays.asList(modelTensor)).build();
@@ -389,12 +381,12 @@ public class MLFlowAgentRunnerTest {
         String expectedListJson = "{\"output\":[{\"name\":\"firstTool\",\"dataAsMap\":{\"index\":\"index response\"}}]}"; // Replace with
                                                                                                                           // the actual JSON
                                                                                                                           // representation
-        assertEquals(expectedListJson, mlFlowAgentRunner.parseResponse(tensorList));
+        assertEquals(expectedListJson, ToolUtils.parseResponse(tensorList));
 
         // Test for a non-string, non-model object
         Map<String, Object> nonModelObject = Map.of("key", "value");
         String expectedNonModelJson = "{\"key\":\"value\"}"; // Replace with the actual JSON representation from StringUtils.toJson
-        assertEquals(expectedNonModelJson, mlFlowAgentRunner.parseResponse(nonModelObject));
+        assertEquals(expectedNonModelJson, ToolUtils.parseResponse(nonModelObject));
     }
 
     @Test
