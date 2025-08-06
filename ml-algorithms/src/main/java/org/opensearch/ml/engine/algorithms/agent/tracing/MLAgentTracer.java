@@ -1322,6 +1322,51 @@ public class MLAgentTracer extends MLTracer {
     }
 
     /**
+     * Updates the span with the tool call result.
+     * @param toolCallSpan The span to update.
+     * @param output The output of the tool call.
+     * @param question The question that prompted the tool call.
+     */
+    public static void updateSpanWithTool(Span toolCallSpan, Object output, String question) {
+        try {
+            String outputResponse = parseResponse(output);
+            toolCallSpan.addAttribute(ATTR_TASK, question);
+            toolCallSpan.addAttribute(ATTR_RESULT, outputResponse);
+            getInstance().endSpan(toolCallSpan);
+        } catch (Exception e) {
+            toolCallSpan.setError(e);
+            getInstance().endSpan(toolCallSpan);
+        }
+    }
+
+    /**
+     * Parses the response object to extract the output string.
+     * @param output The output object to parse.
+     * @return The parsed response string.
+     */
+    private static String parseResponse(Object output) {
+        if (output == null) {
+            return "";
+        }
+        if (output instanceof String) {
+            return (String) output;
+        }
+        if (output instanceof Map) {
+            Map<?, ?> outputMap = (Map<?, ?>) output;
+            Object response = outputMap.get(RESPONSE_FIELD);
+            if (response != null) {
+                return response.toString();
+            }
+            Object result = outputMap.get(OUTPUT_FIELD);
+            if (result != null) {
+                return result.toString();
+            }
+            return outputMap.toString();
+        }
+        return output.toString();
+    }
+
+    /**
      * Encapsulates a listener with its associated span for tracking.
      */
     public record ListenerWithSpan(StepListener<MLTaskResponse> listener, Span span) {

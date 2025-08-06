@@ -88,174 +88,150 @@ public class MLFlowAgentRunner implements MLAgentRunner {
     @Override
     public void run(MLAgent mlAgent, Map<String, String> params, ActionListener<Object> listener) {
         Span agentTaskSpan = MLAgentTracer.getInstance().startFlowAgentTaskSpan(mlAgent.getName(), params.get(MLAgentExecutor.QUESTION));
+        List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, params);
+        StepListener<Object> firstStepListener = null;
+        Tool firstTool = null;
+        List<ModelTensor> flowAgentOutput = new ArrayList<>();
+        Map<String, String> firstToolExecuteParams = null;
+        StepListener<Object> previousStepListener = null;
+        Map<String, Object> additionalInfo = new ConcurrentHashMap<>();
+        if (toolSpecs == null || toolSpecs.isEmpty()) {
+            MLAgentTracer.handleSpanError(agentTaskSpan, "no tool configured", new IllegalArgumentException("no tool configured"));
+            listener.onFailure(new IllegalArgumentException("no tool configured"));
+            return;
+        }
 
-        try {
-            List<MLToolSpec> toolSpecs = getMlToolSpecs(mlAgent, params);
-            StepListener<Object> firstStepListener = null;
-            Tool firstTool = null;
-            List<ModelTensor> flowAgentOutput = new ArrayList<>();
-            Map<String, String> firstToolExecuteParams = null;
-            StepListener<Object> previousStepListener = null;
-            Map<String, Object> additionalInfo = new ConcurrentHashMap<>();
-            if (toolSpecs == null || toolSpecs.isEmpty()) {
-                MLAgentTracer.handleSpanError(agentTaskSpan, "no tool configured", new IllegalArgumentException("no tool configured"));
-                listener.onFailure(new IllegalArgumentException("no tool configured"));
-                return;
-            }
+        MLMemorySpec memorySpec = mlAgent.getMemory();
+        String memoryId = params.get(MLAgentExecutor.MEMORY_ID);
+        String parentInteractionId = params.get(MLAgentExecutor.PARENT_INTERACTION_ID);
 
-            MLMemorySpec memorySpec = mlAgent.getMemory();
-            String memoryId = params.get(MLAgentExecutor.MEMORY_ID);
-            String parentInteractionId = params.get(MLAgentExecutor.PARENT_INTERACTION_ID);
+        for (int i = 0; i <= toolSpecs.size(); i++) {
+            if (i == 0) {
+                MLToolSpec toolSpec = toolSpecs.get(i);
+                Tool tool = createTool(toolSpec, mlAgent.getTenantId());
+                firstStepListener = new StepListener<>();
+                previousStepListener = firstStepListener;
+                firstTool = tool;
+                firstToolExecuteParams = getToolExecuteParams(toolSpec, params, mlAgent.getTenantId());
+            } else {
+                MLToolSpec previousToolSpec = toolSpecs.get(i - 1);
+                StepListener<Object> nextStepListener = new StepListener<>();
+                int finalI = i;
+                previousStepListener.whenComplete(output -> {
+                    String key = getToolName(previousToolSpec);
+                    String outputKey = key + ".output";
 
-            for (int i = 0; i <= toolSpecs.size(); i++) {
-                if (i == 0) {
-                    MLToolSpec toolSpec = toolSpecs.get(i);
-                    Tool tool = createTool(toolSpec, mlAgent.getTenantId());
-                    firstStepListener = new StepListener<>();
-                    previousStepListener = firstStepListener;
-                    firstTool = tool;
-                    firstToolExecuteParams = getToolExecuteParams(toolSpec, params, mlAgent.getTenantId());
-                } else {
-                    MLToolSpec previousToolSpec = toolSpecs.get(i - 1);
-                    StepListener<Object> nextStepListener = new StepListener<>();
-                    int finalI = i;
-                    previousStepListener.whenComplete(output -> {
-                        String key = getToolName(previousToolSpec);
-                        String outputKey = key + ".output";
+                    String outputResponse = parseResponse(output);
+                    params.put(outputKey, escapeJson(outputResponse));
 
-                        String outputResponse = parseResponse(output);
-                        params.put(outputKey, escapeJson(outputResponse));
+                    if (previousToolSpec.isIncludeOutputInAgentResponse() || finalI == toolSpecs.size()) {
+                        if (output instanceof ModelTensorOutput) {
+                            flowAgentOutput.addAll(((ModelTensorOutput) output).getMlModelOutputs().get(0).getMlModelTensors());
+                        } else {
+                            String result = output instanceof String
+                                ? (String) output
+                                : AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> StringUtils.toJson(output));
 
-                        if (previousToolSpec.isIncludeOutputInAgentResponse() || finalI == toolSpecs.size()) {
-                            if (output instanceof ModelTensorOutput) {
-                                flowAgentOutput.addAll(((ModelTensorOutput) output).getMlModelOutputs().get(0).getMlModelTensors());
-                            } else {
-                                String result = output instanceof String
-                                    ? (String) output
-                                    : AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> StringUtils.toJson(output));
-
-                                ModelTensor stepOutput = ModelTensor.builder().name(key).result(result).build();
-                                flowAgentOutput.add(stepOutput);
-                            }
-
-                            additionalInfo.put(outputKey, outputResponse);
+                            ModelTensor stepOutput = ModelTensor.builder().name(key).result(result).build();
+                            flowAgentOutput.add(stepOutput);
                         }
 
-                        if (finalI == toolSpecs.size()) {
-                            agentTaskSpan.addAttribute(MLAgentTracer.ATTR_RESULT, outputResponse);
-                            if (memoryId == null || parentInteractionId == null || memorySpec == null || memorySpec.getType() == null) {
+                        additionalInfo.put(outputKey, outputResponse);
+                    }
+
+                    if (finalI == toolSpecs.size()) {
+                        agentTaskSpan.addAttribute(MLAgentTracer.ATTR_RESULT, outputResponse);
+                        if (memoryId == null || parentInteractionId == null || memorySpec == null || memorySpec.getType() == null) {
+                            MLAgentTracer.getInstance().endSpan(agentTaskSpan);
+                            listener.onResponse(flowAgentOutput);
+                        } else {
+                            ActionListener<UpdateResponse> updateListener = ActionListener.wrap(updateResponse -> {
+                                log.info("Updated additional info for interaction ID: {} in the flow agent.", updateResponse.getId());
                                 MLAgentTracer.getInstance().endSpan(agentTaskSpan);
                                 listener.onResponse(flowAgentOutput);
-                            } else {
-                                ActionListener<UpdateResponse> updateListener = ActionListener.wrap(updateResponse -> {
-                                    log.info("Updated additional info for interaction ID: {} in the flow agent.", updateResponse.getId());
-                                    MLAgentTracer.getInstance().endSpan(agentTaskSpan);
-                                    listener.onResponse(flowAgentOutput);
-                                }, e -> {
-                                    log.error("Failed to update root interaction", e);
-                                    MLAgentTracer.getInstance().endSpan(agentTaskSpan);
-                                    listener.onResponse(flowAgentOutput);
-                                });
-                                updateMemoryWithListener(additionalInfo, memorySpec, memoryId, parentInteractionId, updateListener);
-                            }
-                            return;
+                            }, e -> {
+                                log.error("Failed to update root interaction", e);
+                                MLAgentTracer.getInstance().endSpan(agentTaskSpan);
+                                listener.onResponse(flowAgentOutput);
+                            });
+                            updateMemoryWithListener(additionalInfo, memorySpec, memoryId, parentInteractionId, updateListener);
                         }
+                        return;
+                    }
 
-                        MLToolSpec toolSpec = toolSpecs.get(finalI);
-                        Tool tool = createTool(toolSpec, mlAgent.getTenantId());
-                        if (finalI < toolSpecs.size()) {
-                            Span toolCallSpan = MLAgentTracer
-                                .getInstance()
-                                .startConversationalToolCallSpan(
-                                    params.get(MLAgentExecutor.QUESTION),
-                                    finalI,
-                                    toolSpec.getType(),
-                                    toolSpec.getDescription() != null ? toolSpec.getDescription() : toolSpec.getName(),
-                                    agentTaskSpan
-                                );
+                    MLToolSpec toolSpec = toolSpecs.get(finalI);
+                    Tool tool = createTool(toolSpec, mlAgent.getTenantId());
+                    if (finalI < toolSpecs.size()) {
+                        Span toolCallSpan = MLAgentTracer
+                            .getInstance()
+                            .startConversationalToolCallSpan(
+                                params.get(MLAgentExecutor.QUESTION),
+                                finalI,
+                                toolSpec.getType(),
+                                toolSpec.getDescription() != null ? toolSpec.getDescription() : toolSpec.getName(),
+                                agentTaskSpan
+                            );
 
-                            tool.run(getToolExecuteParams(toolSpec, params, mlAgent.getTenantId()), ActionListener.wrap(toolOutput -> {
-                                updateSpanWithTool(toolCallSpan, toolOutput, params.get(MLAgentExecutor.QUESTION));
-                                nextStepListener.onResponse(toolOutput);
-                            },
-                                e -> {
-                                    MLAgentTracer
-                                        .handleSpanError(toolCallSpan, "Failed to run next step", e);
-                                    nextStepListener.onFailure(e);
-                                }
-                            ));
-                        }
+                        tool.run(getToolExecuteParams(toolSpec, params, mlAgent.getTenantId()), ActionListener.wrap(toolOutput -> {
+                            MLAgentTracer.updateSpanWithTool(toolCallSpan, toolOutput, params.get(MLAgentExecutor.QUESTION));
+                            nextStepListener.onResponse(toolOutput);
+                        }, e -> {
+                            MLAgentTracer.handleSpanError(toolCallSpan, "Failed to run next step", e);
+                            nextStepListener.onFailure(e);
+                        }));
+                    }
 
-                    }, e -> { MLAgentTracer.handleSpanError(agentTaskSpan, "Failed to run flow agent", e); listener.onFailure(e); });
-                    previousStepListener = nextStepListener;
-                }
-            }
-            if (toolSpecs.size() == 1) {
-                MLToolSpec toolSpec = toolSpecs.get(0);
-                Span toolCallSpan = MLAgentTracer
-                    .getInstance()
-                    .startConversationalToolCallSpan(
-                        params.get(MLAgentExecutor.QUESTION),
-                        0,
-                        toolSpec.getType(),
-                        toolSpec.getDescription() != null ? toolSpec.getDescription() : toolSpec.getName(),
-                        agentTaskSpan
-                    );
-
-                firstTool.run(firstToolExecuteParams, ActionListener.wrap(firstToolOutput -> {
-                    updateSpanWithTool(toolCallSpan, firstToolOutput, params.get(MLAgentExecutor.QUESTION));
-                    MLAgentTracer.getInstance().endSpan(agentTaskSpan);
-                    listener.onResponse(firstToolOutput);
                 }, e -> {
-                    toolCallSpan.setError(e);
-                    MLAgentTracer.getInstance().endSpan(toolCallSpan);
-                    MLAgentTracer.handleSpanError(agentTaskSpan, "Failed to run first tool", e);
+                    MLAgentTracer.handleSpanError(agentTaskSpan, "Failed to run flow agent", e);
                     listener.onFailure(e);
-                }));
-            } else {
-                MLToolSpec toolSpec = toolSpecs.get(0);
-                Span toolCallSpan = MLAgentTracer
-                    .getInstance()
-                    .startConversationalToolCallSpan(
-                        params.get(MLAgentExecutor.QUESTION),
-                        0,
-                        toolSpec.getType(),
-                        toolSpec.getDescription() != null ? toolSpec.getDescription() : toolSpec.getName(),
-                        agentTaskSpan
-                    );
-
-                final StepListener<Object> finalFirstStepListener = firstStepListener;
-                firstTool.run(firstToolExecuteParams, ActionListener.wrap(firstToolOutput -> {
-                    updateSpanWithTool(toolCallSpan, firstToolOutput, params.get(MLAgentExecutor.QUESTION));
-                    finalFirstStepListener.onResponse(firstToolOutput);
-                }, e -> {
-                    toolCallSpan.setError(e);
-                    MLAgentTracer.getInstance().endSpan(toolCallSpan);
-                    MLAgentTracer.handleSpanError(agentTaskSpan, "Failed to run first tool", e);
-                    finalFirstStepListener.onFailure(e);
-                }));
+                });
+                previousStepListener = nextStepListener;
             }
-        } catch (Exception e) {
-            MLAgentTracer.handleSpanError(agentTaskSpan, "Error in MLFlowAgentRunner", e);
-            listener.onFailure(e);
         }
-    }
+        if (toolSpecs.size() == 1) {
+            MLToolSpec toolSpec = toolSpecs.get(0);
+            Span toolCallSpan = MLAgentTracer
+                .getInstance()
+                .startConversationalToolCallSpan(
+                    params.get(MLAgentExecutor.QUESTION),
+                    0,
+                    toolSpec.getType(),
+                    toolSpec.getDescription() != null ? toolSpec.getDescription() : toolSpec.getName(),
+                    agentTaskSpan
+                );
 
-    /**
-     * Updates the span with the tool call result.
-     * @param toolCallSpan The span to update.
-     * @param output The output of the tool call.
-     * @param question The question that prompted the tool call.
-     */
-    public void updateSpanWithTool(Span toolCallSpan, Object output, String question) {
-        try {
-            String outputResponse = parseResponse(output);
-            toolCallSpan.addAttribute(MLAgentTracer.ATTR_TASK, question);
-            toolCallSpan.addAttribute(MLAgentTracer.ATTR_RESULT, outputResponse);
-            MLAgentTracer.getInstance().endSpan(toolCallSpan);
-        } catch (Exception e) {
-            toolCallSpan.setError(e);
-            MLAgentTracer.getInstance().endSpan(toolCallSpan);
+            firstTool.run(firstToolExecuteParams, ActionListener.wrap(firstToolOutput -> {
+                MLAgentTracer.updateSpanWithTool(toolCallSpan, firstToolOutput, params.get(MLAgentExecutor.QUESTION));
+                MLAgentTracer.getInstance().endSpan(agentTaskSpan);
+                listener.onResponse(firstToolOutput);
+            }, e -> {
+                toolCallSpan.setError(e);
+                MLAgentTracer.getInstance().endSpan(toolCallSpan);
+                MLAgentTracer.handleSpanError(agentTaskSpan, "Failed to run first tool", e);
+                listener.onFailure(e);
+            }));
+        } else {
+            MLToolSpec toolSpec = toolSpecs.get(0);
+            Span toolCallSpan = MLAgentTracer
+                .getInstance()
+                .startConversationalToolCallSpan(
+                    params.get(MLAgentExecutor.QUESTION),
+                    0,
+                    toolSpec.getType(),
+                    toolSpec.getDescription() != null ? toolSpec.getDescription() : toolSpec.getName(),
+                    agentTaskSpan
+                );
+
+            final StepListener<Object> finalFirstStepListener = firstStepListener;
+            firstTool.run(firstToolExecuteParams, ActionListener.wrap(firstToolOutput -> {
+                MLAgentTracer.updateSpanWithTool(toolCallSpan, firstToolOutput, params.get(MLAgentExecutor.QUESTION));
+                finalFirstStepListener.onResponse(firstToolOutput);
+            }, e -> {
+                toolCallSpan.setError(e);
+                MLAgentTracer.getInstance().endSpan(toolCallSpan);
+                MLAgentTracer.handleSpanError(agentTaskSpan, "Failed to run first tool", e);
+                finalFirstStepListener.onFailure(e);
+            }));
         }
     }
 
