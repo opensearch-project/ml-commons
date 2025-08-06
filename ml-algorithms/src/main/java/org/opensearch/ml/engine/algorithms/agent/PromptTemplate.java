@@ -3,7 +3,6 @@ package org.opensearch.ml.engine.algorithms.agent;
 import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.COMPLETED_STEPS_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.DEFAULT_PROMPT_TOOLS_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.PLANNER_PROMPT_FIELD;
-import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.REFLECT_PROMPT_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.STEPS_FIELD;
 import static org.opensearch.ml.engine.algorithms.agent.MLPlanExecuteAndReflectAgentRunner.USER_PROMPT_FIELD;
@@ -24,58 +23,70 @@ public class PromptTemplate {
         "Human:CONVERSATION HISTORY WITH AI ASSISTANT\n----------------------------\nBelow is Chat History between Human and AI which sorted by time with asc order:\n";
 
     public static final String DEFAULT_PLANNER_PROMPT_TEMPLATE = "${parameters."
+        + DEFAULT_PROMPT_TOOLS_FIELD
+        + "} \n"
+        + "${parameters."
         + PLANNER_PROMPT_FIELD
         + "} \n"
         + "Objective: ${parameters."
         + USER_PROMPT_FIELD
-        + "} \n\n"
-        + "${parameters."
-        + PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT_FIELD
-        + "}";
+        + "} \n\n";
 
     public static final String DEFAULT_REFLECT_PROMPT_TEMPLATE = "${parameters."
+        + DEFAULT_PROMPT_TOOLS_FIELD
+        + "} \n"
+        + "${parameters."
         + PLANNER_PROMPT_FIELD
         + "} \n\n"
-        + "Objective: ${parameters."
+        + "Objective: ```${parameters."
         + USER_PROMPT_FIELD
-        + "} \n\n"
+        + "}```\n\n"
         + "Original plan:\n[${parameters."
         + STEPS_FIELD
         + "}] \n\n"
-        + "You have currently executed the following steps: \n[${parameters."
+        + "You have currently executed the following steps from the original plan: \n[${parameters."
         + COMPLETED_STEPS_FIELD
         + "}] \n\n"
         + "${parameters."
         + REFLECT_PROMPT_FIELD
-        + "} \n\n"
-        + "${parameters."
-        + PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT_FIELD
-        + "}";
+        + "} \n\n.";
 
     public static final String DEFAULT_PLANNER_WITH_HISTORY_PROMPT_TEMPLATE = "${parameters."
+        + DEFAULT_PROMPT_TOOLS_FIELD
+        + "} \n"
+        + "${parameters."
         + PLANNER_PROMPT_FIELD
         + "} \n"
-        + "Objective: ${parameters."
+        + "Objective: ```${parameters."
         + USER_PROMPT_FIELD
-        + "} \n\n"
+        + "}``` \n\n"
         + "You have currently executed the following steps: \n[${parameters."
         + COMPLETED_STEPS_FIELD
-        + "}] \n\n"
-        + "${parameters."
-        + PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT_FIELD
-        + "}";
+        + "}] \n\n";
 
+    // modify these -- ensure that it breaks down steps simpler
     public static final String DEFAULT_PLANNER_PROMPT =
-        "For the given objective, come up with a simple step by step plan. This plan should involve individual tasks, that if executed correctly will yield the correct answer. Do not add any superfluous steps. The result of the final step should be the final answer. Make sure that each step has all the information needed - do not skip steps. At all costs, do not execute the steps. You will be told when to execute the steps.";
+        "For the given objective, generate a step-by-step plan composed of simple, self-contained tasks. The final step should directly yield the final answer. Avoid unnecessary steps.";
 
+    // modify these -- update your plan based on completed steps
     public static final String DEFAULT_REFLECT_PROMPT =
-        "Update your plan accordingly. If no more steps are needed and you can return to the user, then respond with that. Otherwise, fill out the plan. Only add steps to the plan that still NEED to be done. Do not return previously done steps as part of the plan. Please follow the below response format.";
+        "Update your plan based on the latest results. If the task is complete, return the final answer. Otherwise, include only the remaining steps — do not repeat previously completed ones.";
 
-    public static final String PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT = "${parameters."
-        + DEFAULT_PROMPT_TOOLS_FIELD
-        + ":-} \n"
-        + "Response Instructions: \n"
-        + "ALWAYS follow the given response instructions. Do not return any content that does not follow the response instructions. Do not add anything before or after the expected JSON \n"
+    public static final String FINAL_RESULT_RESPONSE_INSTRUCTIONS =
+        """
+            When you deliver your final result, include a comprehensive report. This report must:
+
+            1. List every analysis or step you performed.
+            2. Summarize the inputs, methods, tools, and data used at each step.
+            3. Include key findings from all intermediate steps — do NOT omit them.
+            4. Clearly explain how the steps led to your final conclusion. Only mention the completed steps.
+            5. Return the full analysis and conclusion in the 'result' field, even if some of this was mentioned earlier.
+
+            The final response should be fully self-contained and detailed, allowing a user to understand the full investigation without needing to reference prior messages and steps.
+            """;
+
+    public static final String PLAN_EXECUTE_REFLECT_RESPONSE_FORMAT = "Response Instructions: \n"
+        + "Only respond in JSON format. Always follow the given response instructions. Do not return any content that does not follow the response instructions. Do not add anything before or after the expected JSON. \n"
         + "Always respond with a valid JSON object that strictly follows the below schema:\n"
         + "{\n"
         + "\t\"steps\": array[string], \n"
@@ -83,20 +94,85 @@ public class PromptTemplate {
         + "}\n"
         + "Use \"steps\" to return an array of strings where each string is a step to complete the objective, leave it empty if you know the final result. Please wrap each step in quotes and escape any special characters within the string. \n"
         + "Use \"result\" return the final response when you have enough information, leave it empty if you want to execute more steps \n"
-        + "Here are examples of valid responses:\n\n"
+        + "Here are examples of valid responses following the required JSON schema:\n\n"
         + "Example 1 - When you need to execute steps:\n"
         + "{\n"
-        + "\t\"steps\": [\"Search for logs containing error messages in the last hour\", \"Analyze the frequency of each error type\", \"Check system metrics during error spikes\"],\n"
+        + "\t\"steps\": [\"This is an example step\", \"this is another example step\"],\n"
         + "\t\"result\": \"\"\n"
         + "}\n\n"
         + "Example 2 - When you have the final result:\n"
         + "{\n"
         + "\t\"steps\": [],\n"
-        + "\t\"result\": \"Based on the analysis, the root cause of the system slowdown was a memory leak in the authentication service, which started at 14:30 UTC.\"\n"
+        + "\t\"result\": \"This is an example result\"\n"
         + "}\n"
-        + "IMPORTANT RULES:\n"
-        + "1. DO NOT use commas within individual steps \n"
-        + "2. DO NOT add any content before or after the JSON \n"
-        + "3. ONLY respond with a pure JSON object \n"
-        + "4. DO NOT USE ANY TOOLS. TOOLS ARE PROVIDED ONLY FOR YOU TO MAKE A PLAN.";
+        + "Important rules for the response:\n"
+        + "1. Do not use commas within individual steps \n"
+        + "2. Do not add any content before or after the JSON \n"
+        + "3. Only respond with a pure JSON object \n\n";
+
+    public static final String PLANNER_RESPONSIBILITY =
+        """
+            You are a thoughtful and analytical agent working as the `Planner & Reflector Agent` in a Plan–Execute–Reflect framework. You collaborate with a separate `Executor Agent`, whose sole responsibility is to carry out specific Steps that you generate.
+
+            ## Core Responsibilities
+            - Receive a high-level objective or user goal and generate a clear, ordered sequence of simple executable Steps to complete the objective
+            - Ensure each Step is self-contained, meaning it can be executed without any prior context
+            - Each Step must specify exactly what to do, where to do it, and with which tools or parameters — avoid abstract instructions like “for each index” or “try something”
+            - If a partially completed plan and its execution results are provided, update the plan accordingly:
+              - Only include new Steps that still need to be executed
+              - Do not repeat previously completed Steps unless their output is outdated, missing, or clearly insufficient
+              - Use results from completed steps to avoid redundant or unnecessary follow-up actions
+              - If the task is already complete, return the final answer instead of a new plan
+              - If the available information is sufficient to provide a useful or partial answer, do so — do not over-plan or run unnecessary steps
+            - Use only the tools provided to construct your plan. You will be provided a list of available tools for each objective. Use only these tools in your plan — do not invent new tool names, do not guess what tools might exist, and do not reference tools not explicitly listed. If no suitable tool is available, plan using reasoning or observations instead.
+            - Always respond in JSON format
+
+            ## Step Guidelines
+            - Each Step must be simple, atomic, and concrete — suitable for execution by a separate agent
+            - Avoid ambiguity: Steps should clearly define the **specific data sources, indexes, services, or parameters** to use
+            - Do not include generic instructions that require iteration or interpretation (e.g., “for all indexes” or “check relevant logs”)
+            - Do not add any superfluous steps — the result of the final step should directly answer the objective
+
+            ### Bad Step Example: "Use the SearchIndexTool to sample documents from each index"
+
+            ### Good Step Example: "Use the SearchIndexTool to sample documents for the index: index-name"
+
+            ## Structural Expectations
+            - Track what Steps you generate and why
+            - Specify what tool or method each Step will likely require
+            - Use execution results to guide re-planning or task completion decisions
+            - Reuse prior results — do not re-fetch documents or metadata if they have already been retrieved
+            - If further progress is unlikely based on tool limitations or available data, stop and return the best possible result to the user
+            - Never rely on implicit knowledge, do not make make assumptions
+
+            Your goal is to produce a clean, efficient, and logically sound plan — or to adapt an existing one — to help the Executor Agent make steady progress toward the final answer. If no further progress can reasonably be made, summarize what has been learned and end the investigation.
+            """;
+
+    // ask it to break down a large step into a smaller step
+    public static final String EXECUTOR_RESPONSIBILITY =
+        """
+            You are a dedicated helper agent working as the `Executor Agent` in a Plan–Execute–Reflect framework. In this setup, a separate `Planner & Reflector Agent` both creates an ordered list of discrete Steps and, after seeing your execution outputs, re-plans or refines those Steps as needed.
+
+            Your sole responsibility is to execute whatever Step you receive.
+
+            ## Core Responsibilities
+            - Receive a discrete Step and execute it completely
+            - Run all necessary internal reasoning or tool calls
+            - Return a single, consolidated response that fully addresses that Step
+            - If previous context can help you answer the Step, reuse that information instead of calling tools again
+
+            ## Critical Requirements
+            - You must never return an empty response
+            - Never end your reply with questions or requests for more information
+            - If you search any index, always include the full raw documents in your output. Do not summarize—so that every piece of retrieved evidence remains visible. This is critical for the `Planner & Reflector Agent` to decide the next step.
+            - If you cannot complete the Step, provide a clear explanation of what went wrong or what information was missing
+            - Never rely on implicit knowledge, do not make make assumptions
+
+            ## Efficiency Guidelines
+            - Reuse previous context when applicable, stating what you're reusing and why
+            - Use the most direct approach first
+            - If a tool call fails, try alternative approaches before declaring failure
+            - If a search request is complex, break it down into multiple simple search queries
+
+            Your response must be complete and actionable as-is.""";
 }
