@@ -575,7 +575,10 @@ public class MLPlanExecuteAndReflectAgentRunnerTest extends MLStaticMockBase {
         mlPlanExecuteAndReflectAgentRunner.addToolsToPrompt(tools, testParams);
 
         assertEquals(
-            "In this environment, you have access to the below tools: \n- tool1: description1\n\n",
+            "In this environment, the executor agent only has access to the below tools. You must choose from only the following tools — no other tools are available. Do not use tools not listed here. \n"
+                + "Tool 1 - tool1: description1\n"
+                + "\n"
+                + "No other tools are available. Do not invent tools.\n\n",
             testParams.get(MLPlanExecuteAndReflectAgentRunner.DEFAULT_PROMPT_TOOLS_FIELD)
         );
     }
