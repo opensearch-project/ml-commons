@@ -7,6 +7,8 @@ package org.opensearch.ml.helper;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -386,6 +388,413 @@ public class MemoryEmbeddingHelperTests {
         verify(objectListener).onResponse(null);
     }
 
+    @Test
+    public void testGenerateEmbeddingsForMultipleTextsWithNullStorageConfig() {
+        try {
+            helper.generateEmbeddingsForMultipleTexts(Arrays.asList("text1", "text2"), null, listListener);
+        } catch (NullPointerException e) {
+            // Expected - storageConfig is null
+            return;
+        }
+        // If we reach here, the test should fail
+        assertTrue("Expected NullPointerException", false);
+    }
+
+    @Test
+    public void testGenerateEmbeddingsForMultipleTextsWithSemanticStorageDisabled() {
+        // When semantic storage is disabled, embedding config should be null
+        storageConfig = MemoryStorageConfig.builder().semanticStorageEnabled(false).embeddingModelId(null).embeddingModelType(null).build();
+
+        // When embeddingModelId is null but method tries to validate model, it passes null to validateEmbeddingModelState
+        // which should handle the null case gracefully
+        setupMockMLModel(MLModelState.DEPLOYED);
+        doAnswer(invocation -> {
+            ActionListener<MLModel> listener = invocation.getArgument(1);
+            listener.onFailure(new IllegalArgumentException("Model ID is null"));
+            return null;
+        }).when(mlModelManager).getModel(eq(null), any());
+
+        helper.generateEmbeddingsForMultipleTexts(Arrays.asList("text1", "text2"), storageConfig, listListener);
+
+        // Should fail due to null model ID
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listListener).onFailure(exceptionCaptor.capture());
+        Exception exception = exceptionCaptor.getValue();
+        assertNotNull(exception);
+    }
+
+    @Test
+    public void testGenerateEmbeddingsForMultipleTextsValidationFailure() {
+        setupMockMLModel(MLModelState.REGISTERED);
+
+        helper.generateEmbeddingsForMultipleTexts(Arrays.asList("text1", "text2"), storageConfig, listListener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listListener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue() instanceof IllegalStateException);
+    }
+
+    @Test
+    public void testGenerateEmbeddingsForMultipleTextsPredictionFailure() {
+        setupMockMLModel(MLModelState.DEPLOYED);
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
+            listener.onFailure(new RuntimeException("Prediction failed"));
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
+
+        helper.generateEmbeddingsForMultipleTexts(Arrays.asList("text1", "text2"), storageConfig, listListener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listListener).onFailure(exceptionCaptor.capture());
+        assertEquals("Prediction failed", exceptionCaptor.getValue().getMessage());
+    }
+
+    @Test
+    public void testGenerateEmbeddingsForMultipleTextsWithSparseEncoding() {
+        Map<String, Float> sparseData1 = new HashMap<>();
+        sparseData1.put("token1", 0.5f);
+        Map<String, Float> sparseData2 = new HashMap<>();
+        sparseData2.put("token2", 0.8f);
+
+        storageConfig = MemoryStorageConfig
+            .builder()
+            .embeddingModelId("sparse-model")
+            .embeddingModelType(FunctionName.SPARSE_ENCODING)
+            .semanticStorageEnabled(true)
+            .build();
+
+        setupMockMLModel(MLModelState.DEPLOYED);
+
+        // Create a response with multiple sparse embeddings
+        ModelTensorOutput output = createMultipleSparseEmbeddingOutput(Arrays.asList(sparseData1, sparseData2));
+        setupMockPredictionResponse(output);
+
+        helper.generateEmbeddingsForMultipleTexts(Arrays.asList("text1", "text2"), storageConfig, listListener);
+
+        ArgumentCaptor<List<Object>> responseCaptor = ArgumentCaptor.forClass(List.class);
+        verify(listListener).onResponse(responseCaptor.capture());
+
+        List<Object> embeddings = responseCaptor.getValue();
+        assertEquals(2, embeddings.size());
+        Map<String, ?> emb1 = (Map<String, ?>) embeddings.get(0);
+        assertEquals(0.5f, emb1.get("token1"));
+        Map<String, ?> emb2 = (Map<String, ?>) embeddings.get(1);
+        assertEquals(0.8f, emb2.get("token2"));
+    }
+
+    @Test
+    public void testGenerateEmbeddingsForMultipleTextsUnexpectedOutputType() {
+        setupMockMLModel(MLModelState.DEPLOYED);
+
+        MLOutput unexpectedOutput = mock(MLOutput.class);
+        when(predictionResponse.getOutput()).thenReturn(unexpectedOutput);
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
+            listener.onResponse(predictionResponse);
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
+
+        helper.generateEmbeddingsForMultipleTexts(Arrays.asList("text1", "text2"), storageConfig, listListener);
+
+        ArgumentCaptor<Exception> exceptionCaptor = ArgumentCaptor.forClass(Exception.class);
+        verify(listListener).onFailure(exceptionCaptor.capture());
+        assertTrue(exceptionCaptor.getValue() instanceof IllegalStateException);
+        assertTrue(exceptionCaptor.getValue().getMessage().contains("Unexpected ML output type"));
+    }
+
+    @Test
+    public void testGenerateEmbeddingsForMultipleTextsWithNullMlModelOutputs() {
+        setupMockMLModel(MLModelState.DEPLOYED);
+
+        ModelTensorOutput tensorOutput = mock(ModelTensorOutput.class);
+        when(tensorOutput.getMlModelOutputs()).thenReturn(null);
+        when(predictionResponse.getOutput()).thenReturn(tensorOutput);
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
+            listener.onResponse(predictionResponse);
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
+
+        helper.generateEmbeddingsForMultipleTexts(Arrays.asList("text1", "text2"), storageConfig, listListener);
+
+        ArgumentCaptor<List<Object>> responseCaptor = ArgumentCaptor.forClass(List.class);
+        verify(listListener).onResponse(responseCaptor.capture());
+        assertTrue(responseCaptor.getValue().isEmpty());
+    }
+
+    @Test
+    public void testGenerateEmbeddingWithEmptyModelTensors() {
+        setupMockMLModel(MLModelState.DEPLOYED);
+
+        ModelTensors modelTensors = mock(ModelTensors.class);
+        when(modelTensors.getMlModelTensors()).thenReturn(new ArrayList<>());
+
+        ModelTensorOutput tensorOutput = mock(ModelTensorOutput.class);
+        when(tensorOutput.getMlModelOutputs()).thenReturn(Arrays.asList(modelTensors));
+
+        when(predictionResponse.getOutput()).thenReturn(tensorOutput);
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
+            listener.onResponse(predictionResponse);
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
+
+        helper.generateEmbedding("test text", storageConfig, objectListener);
+
+        verify(objectListener).onResponse(null);
+    }
+
+    @Test
+    public void testGenerateEmbeddingWithExceptionDuringExtraction() {
+        setupMockMLModel(MLModelState.DEPLOYED);
+
+        ModelTensor tensor = mock(ModelTensor.class);
+        when(tensor.getName()).thenReturn("sentence_embedding");
+        // This will cause a NullPointerException during extraction
+        when(tensor.getData()).thenReturn(null);
+
+        ModelTensors modelTensors = mock(ModelTensors.class);
+        when(modelTensors.getMlModelTensors()).thenReturn(Arrays.asList(tensor));
+
+        ModelTensorOutput tensorOutput = mock(ModelTensorOutput.class);
+        when(tensorOutput.getMlModelOutputs()).thenReturn(Arrays.asList(modelTensors));
+
+        when(predictionResponse.getOutput()).thenReturn(tensorOutput);
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
+            listener.onResponse(predictionResponse);
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
+
+        helper.generateEmbedding("test text", storageConfig, objectListener);
+
+        verify(objectListener).onResponse(null);
+    }
+
+    @Test
+    public void testGenerateEmbeddingWithSparseEncodingEmptyDataMap() {
+        storageConfig = MemoryStorageConfig
+            .builder()
+            .embeddingModelId("sparse-model")
+            .embeddingModelType(FunctionName.SPARSE_ENCODING)
+            .semanticStorageEnabled(true)
+            .build();
+
+        setupMockMLModel(MLModelState.DEPLOYED);
+
+        ModelTensor tensor = mock(ModelTensor.class);
+        when(tensor.getDataAsMap()).thenReturn(new HashMap<>());
+
+        ModelTensors modelTensors = mock(ModelTensors.class);
+        when(modelTensors.getMlModelTensors()).thenReturn(Arrays.asList(tensor));
+
+        ModelTensorOutput tensorOutput = mock(ModelTensorOutput.class);
+        when(tensorOutput.getMlModelOutputs()).thenReturn(Arrays.asList(modelTensors));
+
+        when(predictionResponse.getOutput()).thenReturn(tensorOutput);
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
+            listener.onResponse(predictionResponse);
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
+
+        helper.generateEmbedding("test text", storageConfig, objectListener);
+
+        ArgumentCaptor<Object> responseCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(objectListener).onResponse(responseCaptor.capture());
+        assertTrue(responseCaptor.getValue() instanceof Map);
+        assertTrue(((Map) responseCaptor.getValue()).isEmpty());
+    }
+
+    @Test
+    public void testGenerateEmbeddingWithSparseEncodingInvalidNestedResponse() {
+        storageConfig = MemoryStorageConfig
+            .builder()
+            .embeddingModelId("sparse-model")
+            .embeddingModelType(FunctionName.SPARSE_ENCODING)
+            .semanticStorageEnabled(true)
+            .build();
+
+        setupMockMLModel(MLModelState.DEPLOYED);
+
+        Map<String, Object> nestedData = new HashMap<>();
+        nestedData.put("response", "not a list"); // Invalid type for response
+
+        ModelTensor tensor = mock(ModelTensor.class);
+        doReturn(nestedData).when(tensor).getDataAsMap();
+
+        ModelTensors modelTensors = mock(ModelTensors.class);
+        when(modelTensors.getMlModelTensors()).thenReturn(Arrays.asList(tensor));
+
+        ModelTensorOutput tensorOutput = mock(ModelTensorOutput.class);
+        when(tensorOutput.getMlModelOutputs()).thenReturn(Arrays.asList(modelTensors));
+
+        when(predictionResponse.getOutput()).thenReturn(tensorOutput);
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
+            listener.onResponse(predictionResponse);
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
+
+        helper.generateEmbedding("test text", storageConfig, objectListener);
+
+        ArgumentCaptor<Object> responseCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(objectListener).onResponse(responseCaptor.capture());
+        assertEquals(nestedData, responseCaptor.getValue());
+    }
+
+    @Test
+    public void testGenerateEmbeddingWithSparseEncodingEmptyResponseList() {
+        storageConfig = MemoryStorageConfig
+            .builder()
+            .embeddingModelId("sparse-model")
+            .embeddingModelType(FunctionName.SPARSE_ENCODING)
+            .semanticStorageEnabled(true)
+            .build();
+
+        setupMockMLModel(MLModelState.DEPLOYED);
+
+        Map<String, Object> nestedData = new HashMap<>();
+        nestedData.put("response", new ArrayList<>()); // Empty list
+
+        ModelTensor tensor = mock(ModelTensor.class);
+        doReturn(nestedData).when(tensor).getDataAsMap();
+
+        ModelTensors modelTensors = mock(ModelTensors.class);
+        when(modelTensors.getMlModelTensors()).thenReturn(Arrays.asList(tensor));
+
+        ModelTensorOutput tensorOutput = mock(ModelTensorOutput.class);
+        when(tensorOutput.getMlModelOutputs()).thenReturn(Arrays.asList(modelTensors));
+
+        when(predictionResponse.getOutput()).thenReturn(tensorOutput);
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
+            listener.onResponse(predictionResponse);
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
+
+        helper.generateEmbedding("test text", storageConfig, objectListener);
+
+        ArgumentCaptor<Object> responseCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(objectListener).onResponse(responseCaptor.capture());
+        assertEquals(nestedData, responseCaptor.getValue());
+    }
+
+    @Test
+    public void testGenerateEmbeddingWithSparseEncodingInvalidListItem() {
+        storageConfig = MemoryStorageConfig
+            .builder()
+            .embeddingModelId("sparse-model")
+            .embeddingModelType(FunctionName.SPARSE_ENCODING)
+            .semanticStorageEnabled(true)
+            .build();
+
+        setupMockMLModel(MLModelState.DEPLOYED);
+
+        Map<String, Object> nestedData = new HashMap<>();
+        nestedData.put("response", Arrays.asList("not a map")); // Invalid type in list
+
+        ModelTensor tensor = mock(ModelTensor.class);
+        doReturn(nestedData).when(tensor).getDataAsMap();
+
+        ModelTensors modelTensors = mock(ModelTensors.class);
+        when(modelTensors.getMlModelTensors()).thenReturn(Arrays.asList(tensor));
+
+        ModelTensorOutput tensorOutput = mock(ModelTensorOutput.class);
+        when(tensorOutput.getMlModelOutputs()).thenReturn(Arrays.asList(modelTensors));
+
+        when(predictionResponse.getOutput()).thenReturn(tensorOutput);
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
+            listener.onResponse(predictionResponse);
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
+
+        helper.generateEmbedding("test text", storageConfig, objectListener);
+
+        ArgumentCaptor<Object> responseCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(objectListener).onResponse(responseCaptor.capture());
+        assertEquals(nestedData, responseCaptor.getValue());
+    }
+
+    @Test
+    public void testGenerateEmbeddingsWithUnsupportedModelType() {
+        // Test case where generateEmbeddingsForMultipleTexts is called with an unsupported embedding type
+        // First create a valid storage config with TEXT_EMBEDDING to pass validation
+        storageConfig = MemoryStorageConfig
+            .builder()
+            .embeddingModelId("test-model")
+            .embeddingModelType(FunctionName.TEXT_EMBEDDING)
+            .semanticStorageEnabled(true)
+            .dimension(768)
+            .build();
+
+        // Now manually override the type to an unsupported one (this simulates a future case)
+        // Since we can't change the type after building, we'll test the extractDenseEmbedding method behavior
+        // when the if/else conditions don't match
+        setupMockMLModel(MLModelState.DEPLOYED);
+
+        // Create a mock response that looks like neither dense nor sparse
+        ModelTensorOutput output = mock(ModelTensorOutput.class);
+        ModelTensors modelTensors = mock(ModelTensors.class);
+        ModelTensor tensor = mock(ModelTensor.class);
+
+        when(tensor.getName()).thenReturn("unknown_tensor");
+        when(tensor.getData()).thenReturn(null);
+        when(tensor.getDataAsMap()).thenReturn(null);
+
+        when(modelTensors.getMlModelTensors()).thenReturn(Arrays.asList(tensor));
+        when(output.getMlModelOutputs()).thenReturn(Arrays.asList(modelTensors));
+
+        setupMockPredictionResponse(output);
+
+        helper.generateEmbeddingsForMultipleTexts(Arrays.asList("text1"), storageConfig, listListener);
+
+        ArgumentCaptor<List<Object>> responseCaptor = ArgumentCaptor.forClass(List.class);
+        verify(listListener).onResponse(responseCaptor.capture());
+
+        List<Object> embeddings = responseCaptor.getValue();
+        assertEquals(1, embeddings.size());
+        assertNull(embeddings.get(0)); // Should be null when extraction fails
+    }
+
+    @Test
+    public void testGenerateEmbeddingWithDenseEmbeddingNoSentenceEmbeddingTensor() {
+        setupMockMLModel(MLModelState.DEPLOYED);
+
+        ModelTensor tensor = mock(ModelTensor.class);
+        when(tensor.getName()).thenReturn("some_other_tensor"); // Not "sentence_embedding"
+        when(tensor.getData()).thenReturn(new Number[] { 0.1f, 0.2f });
+
+        ModelTensors modelTensors = mock(ModelTensors.class);
+        when(modelTensors.getMlModelTensors()).thenReturn(Arrays.asList(tensor));
+
+        ModelTensorOutput tensorOutput = mock(ModelTensorOutput.class);
+        when(tensorOutput.getMlModelOutputs()).thenReturn(Arrays.asList(modelTensors));
+
+        when(predictionResponse.getOutput()).thenReturn(tensorOutput);
+
+        doAnswer(invocation -> {
+            ActionListener<MLTaskResponse> listener = invocation.getArgument(2);
+            listener.onResponse(predictionResponse);
+            return null;
+        }).when(client).execute(eq(MLPredictionTaskAction.INSTANCE), any(), any());
+
+        helper.generateEmbedding("test text", storageConfig, objectListener);
+
+        verify(objectListener).onResponse(null);
+    }
+
     // Helper methods to create mock responses
     private void setupMockMLModel(MLModelState state) {
         when(mlModel.getModelState()).thenReturn(state);
@@ -459,6 +868,25 @@ public class MemoryEmbeddingHelperTests {
             ModelTensor tensor = mock(ModelTensor.class);
             when(tensor.getName()).thenReturn("sentence_embedding");
             when(tensor.getData()).thenReturn(data);
+
+            ModelTensors modelTensors = mock(ModelTensors.class);
+            when(modelTensors.getMlModelTensors()).thenReturn(Arrays.asList(tensor));
+
+            modelTensorsList.add(modelTensors);
+        }
+
+        ModelTensorOutput output = mock(ModelTensorOutput.class);
+        when(output.getMlModelOutputs()).thenReturn(modelTensorsList);
+
+        return output;
+    }
+
+    private ModelTensorOutput createMultipleSparseEmbeddingOutput(List<Map<String, Float>> embeddings) {
+        List<ModelTensors> modelTensorsList = new ArrayList<>();
+
+        for (Map<String, Float> data : embeddings) {
+            ModelTensor tensor = mock(ModelTensor.class);
+            doReturn(data).when(tensor).getDataAsMap();
 
             ModelTensors modelTensors = mock(ModelTensors.class);
             when(modelTensors.getMlModelTensors()).thenReturn(Arrays.asList(tensor));
