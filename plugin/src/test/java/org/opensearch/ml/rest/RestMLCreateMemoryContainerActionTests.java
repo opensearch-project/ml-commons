@@ -152,14 +152,14 @@ public class RestMLCreateMemoryContainerActionTests extends OpenSearchTestCase {
 
     public void testGetRequestWithMultiTenancyEnabled() throws IOException {
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
-        
+
         String requestBody = "{\n" +
-            "  \"name\": \"tenant-container\"\n" +
-            "}";
+                "  \"name\": \"tenant-container\"\n" +
+                "}";
 
         Map<String, String> headers = new HashMap<>();
         headers.put(Constants.TENANT_ID_HEADER, "test-tenant");
-        
+
         RestRequest request = createRestRequestWithHeaders(requestBody, headers);
         MLCreateMemoryContainerRequest mlCreateMemoryContainerRequest = restMLCreateMemoryContainerAction.getRequest(request);
 
@@ -301,14 +301,14 @@ public class RestMLCreateMemoryContainerActionTests extends OpenSearchTestCase {
 
     public void testMultiTenancyDisabledTenantIdIsNull() throws IOException {
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
-        
+
         String requestBody = "{\n" +
-            "  \"name\": \"no-tenant-container\"\n" +
-            "}";
+                "  \"name\": \"no-tenant-container\"\n" +
+                "}";
 
         Map<String, String> headers = new HashMap<>();
         headers.put(Constants.TENANT_ID_HEADER, "should-be-ignored");
-        
+
         RestRequest request = createRestRequestWithHeaders(requestBody, headers);
         MLCreateMemoryContainerRequest mlCreateMemoryContainerRequest = restMLCreateMemoryContainerAction.getRequest(request);
 
@@ -369,9 +369,9 @@ public class RestMLCreateMemoryContainerActionTests extends OpenSearchTestCase {
         when(mlFeatureEnabledSetting.isAgenticMemoryEnabled()).thenReturn(false);
 
         String requestContent = "{\n"
-            + "  \"name\": \"test-memory-container\",\n"
-            + "  \"description\": \"Test memory container description\"\n"
-            + "}";
+                + "  \"name\": \"test-memory-container\",\n"
+                + "  \"description\": \"Test memory container description\"\n"
+                + "}";
 
         RestRequest request = createRestRequest(requestContent);
 

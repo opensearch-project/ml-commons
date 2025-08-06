@@ -141,11 +141,11 @@ public class RestMLGetMemoryContainerActionTests extends OpenSearchTestCase {
 
     public void testGetRequestWithMultiTenancyEnabled() throws IOException {
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
-        
+
         String memoryContainerId = "tenant-container-123";
         Map<String, String> headers = new HashMap<>();
         headers.put(Constants.TENANT_ID_HEADER, "test-tenant");
-        
+
         RestRequest request = createRestRequestWithHeaders(memoryContainerId, headers);
         MLMemoryContainerGetRequest mlMemoryContainerGetRequest = restMLGetMemoryContainerAction.getRequest(request);
 
@@ -156,11 +156,11 @@ public class RestMLGetMemoryContainerActionTests extends OpenSearchTestCase {
 
     public void testGetRequestWithMultiTenancyDisabled() throws IOException {
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(false);
-        
+
         String memoryContainerId = "no-tenant-container-123";
         Map<String, String> headers = new HashMap<>();
         headers.put(Constants.TENANT_ID_HEADER, "should-be-ignored");
-        
+
         RestRequest request = createRestRequestWithHeaders(memoryContainerId, headers);
         MLMemoryContainerGetRequest mlMemoryContainerGetRequest = restMLGetMemoryContainerAction.getRequest(request);
 
@@ -216,17 +216,17 @@ public class RestMLGetMemoryContainerActionTests extends OpenSearchTestCase {
 
     public void testPrepareRequestWithTenant() throws Exception {
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
-        
+
         String memoryContainerId = "tenant-container-789";
         Map<String, String> headers = new HashMap<>();
         headers.put(Constants.TENANT_ID_HEADER, "prepare-test-tenant");
-        
+
         RestRequest request = createRestRequestWithHeaders(memoryContainerId, headers);
         restMLGetMemoryContainerAction.handleRequest(request, channel, client);
 
         ArgumentCaptor<MLMemoryContainerGetRequest> argumentCaptor = ArgumentCaptor.forClass(MLMemoryContainerGetRequest.class);
         verify(client, times(1)).execute(eq(MLMemoryContainerGetAction.INSTANCE), argumentCaptor.capture(), any());
-        
+
         MLMemoryContainerGetRequest capturedRequest = argumentCaptor.getValue();
         assertNotNull(capturedRequest);
         assertEquals(memoryContainerId, capturedRequest.getMemoryContainerId());
@@ -289,18 +289,18 @@ public class RestMLGetMemoryContainerActionTests extends OpenSearchTestCase {
 
     public void testMultipleTenantHeaders() throws IOException {
         when(mlFeatureEnabledSetting.isMultiTenancyEnabled()).thenReturn(true);
-        
+
         String memoryContainerId = "multi-tenant-container";
         Map<String, List<String>> headers = new HashMap<>();
         headers.put(Constants.TENANT_ID_HEADER, Collections.singletonList("first-tenant"));
-        
+
         RestRequest request = new FakeRestRequest.Builder(NamedXContentRegistry.EMPTY)
-            .withMethod(RestRequest.Method.GET)
-            .withPath("/_plugins/_ml/memory_containers/" + memoryContainerId)
-            .withParams(createParamsMap(memoryContainerId))
-            .withHeaders(headers)
-            .build();
-        
+                .withMethod(RestRequest.Method.GET)
+                .withPath("/_plugins/_ml/memory_containers/" + memoryContainerId)
+                .withParams(createParamsMap(memoryContainerId))
+                .withHeaders(headers)
+                .build();
+
         MLMemoryContainerGetRequest mlMemoryContainerGetRequest = restMLGetMemoryContainerAction.getRequest(request);
 
         assertNotNull(mlMemoryContainerGetRequest);
