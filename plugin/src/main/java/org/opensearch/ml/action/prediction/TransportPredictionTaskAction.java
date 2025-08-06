@@ -32,6 +32,7 @@ import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskAction;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.engine.algorithms.agent.tracing.MLConnectorTracer;
+import org.opensearch.ml.engine.algorithms.agent.tracing.MLModelTracer;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
@@ -108,8 +109,8 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
     protected void doExecute(Task task, ActionRequest request, ActionListener<MLTaskResponse> listener) {
         MLPredictionTaskRequest mlPredictionTaskRequest = MLPredictionTaskRequest.fromActionRequest(request);
         String modelId = mlPredictionTaskRequest.getModelId();
-        Span predictSpan = MLConnectorTracer.startModelPredictSpan(modelId, null);
-        MLConnectorTracer.serializeInputForTracing(mlPredictionTaskRequest, predictSpan);
+        Span predictSpan = MLModelTracer.startModelPredictSpan(modelId, null);
+        MLModelTracer.serializeInputForTracing(mlPredictionTaskRequest, predictSpan);
         String tenantId = mlPredictionTaskRequest.getTenantId();
         if (!TenantAwareHelper.validateTenantId(mlFeatureEnabledSetting, tenantId, listener)) {
             return;
@@ -210,6 +211,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                             }, e -> {
                                 log.error("Failed to Validate Access for ModelId {}", modelId, e);
                                 if (e instanceof OpenSearchStatusException) {
+                                    predictSpan.setError(e);
                                     wrappedListener
                                         .onFailure(
                                             new OpenSearchStatusException(
@@ -217,14 +219,14 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                                                 RestStatus.fromCode(((OpenSearchStatusException) e).status().getStatus())
                                             )
                                         );
-                                    predictSpan.setError(e);
                                 } else if (e instanceof MLResourceNotFoundException) {
+                                    predictSpan.setError(e);
                                     wrappedListener.onFailure(new OpenSearchStatusException(e.getMessage(), RestStatus.NOT_FOUND));
-                                    predictSpan.setError(e);
                                 } else if (e instanceof CircuitBreakingException) {
-                                    wrappedListener.onFailure(e);
                                     predictSpan.setError(e);
+                                    wrappedListener.onFailure(e);
                                 } else {
+                                    predictSpan.setError(e);
                                     wrappedListener
                                         .onFailure(
                                             new OpenSearchStatusException(
@@ -232,7 +234,6 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                                                 RestStatus.FORBIDDEN
                                             )
                                         );
-                                    predictSpan.setError(e);
                                 }
                                 MLConnectorTracer.getInstance().endSpan(predictSpan);
                             })
@@ -242,7 +243,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                 @Override
                 public void onFailure(Exception e) {
                     log.error("Failed to find model {}", modelId, e);
-                    MLConnectorTracer.handleSpanError(predictSpan, "Failed to find model " + modelId, e);
+                    MLModelTracer.handleSpanError(predictSpan, "Failed to find model " + modelId, e);
                     wrappedListener.onFailure(e);
                 }
             };
@@ -254,7 +255,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                 mlModelManager.getModel(modelId, tenantId, modelActionListener);
             }
         } catch (Exception e) {
-            MLConnectorTracer.handleSpanError(predictSpan, "Failed to find model " + modelId, e);
+            MLModelTracer.handleSpanError(predictSpan, "Failed to find model " + modelId, e);
             listener.onFailure(e);
         }
     }
@@ -265,8 +266,8 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
         String modelId,
         String modelName
     ) {
-        Span executeSpan = MLConnectorTracer.startModelExecuteSpan(modelId, modelName);
-        MLConnectorTracer.serializeInputForTracing(mlPredictionTaskRequest, executeSpan);
+        Span executeSpan = MLModelTracer.startModelExecuteSpan(modelId, modelName);
+        MLModelTracer.serializeInputForTracing(mlPredictionTaskRequest, executeSpan);
         try {
             String requestId = mlPredictionTaskRequest.getRequestID();
             log.debug("receive predict request {} for model {}", requestId, mlPredictionTaskRequest.getModelId());
@@ -278,10 +279,10 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                 .getOptionalFunctionName(modelId)
                 .orElse(mlPredictionTaskRequest.getMlInput().getAlgorithm());
             ActionListener<MLTaskResponse> spanWrappedListener = ActionListener.wrap(response -> {
-                MLConnectorTracer.getInstance().endSpan(executeSpan);
+                MLModelTracer.getInstance().endSpan(executeSpan);
                 wrappedListener.onResponse(response);
             }, exception -> {
-                MLConnectorTracer.handleSpanError(executeSpan, "Error in model.execute span", exception);
+                MLModelTracer.handleSpanError(executeSpan, "Error in model.execute span", exception);
                 wrappedListener.onFailure(exception);
             });
 
@@ -300,7 +301,7 @@ public class TransportPredictionTaskAction extends HandledTransportAction<Action
                     })
                 );
         } catch (Exception e) {
-            MLConnectorTracer.handleSpanError(executeSpan, "Error in model.execute span", e);
+            MLModelTracer.handleSpanError(executeSpan, "Error in model.execute span", e);
             wrappedListener.onFailure(e);
             throw e;
         }

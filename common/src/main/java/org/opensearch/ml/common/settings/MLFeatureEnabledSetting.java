@@ -15,6 +15,7 @@ import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_CON
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_LOCAL_MODEL_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MCP_SERVER_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_METRIC_COLLECTION_ENABLED;
+import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MODEL_TRACING_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_MULTI_TENANCY_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_OFFLINE_BATCH_INFERENCE_ENABLED;
 import static org.opensearch.ml.common.settings.MLCommonsSettings.ML_COMMONS_OFFLINE_BATCH_INGESTION_ENABLED;
@@ -57,6 +58,7 @@ public class MLFeatureEnabledSetting {
     private volatile Boolean isTracingEnabled;
     private volatile Boolean isAgentTracingEnabled;
     private volatile Boolean isConnectorTracingEnabled;
+    private volatile Boolean isModelTracingEnabled;
 
     private final List<SettingsChangeListener> listeners = new ArrayList<>();
 
@@ -76,6 +78,7 @@ public class MLFeatureEnabledSetting {
         isTracingEnabled = ML_COMMONS_TRACING_ENABLED.get(settings);
         isAgentTracingEnabled = ML_COMMONS_AGENT_TRACING_ENABLED.get(settings);
         isConnectorTracingEnabled = ML_COMMONS_CONNECTOR_TRACING_ENABLED.get(settings);
+        isModelTracingEnabled = ML_COMMONS_MODEL_TRACING_ENABLED.get(settings);
 
         clusterService
             .getClusterSettings()
@@ -104,6 +107,9 @@ public class MLFeatureEnabledSetting {
         clusterService
             .getClusterSettings()
             .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_CONNECTOR_TRACING_ENABLED, it -> isConnectorTracingEnabled = it);
+        clusterService
+            .getClusterSettings()
+            .addSettingsUpdateConsumer(MLCommonsSettings.ML_COMMONS_MODEL_TRACING_ENABLED, it -> isModelTracingEnabled = it);
     }
 
     /**
@@ -204,6 +210,10 @@ public class MLFeatureEnabledSetting {
 
     public boolean isConnectorTracingEnabled() {
         return isConnectorTracingEnabled;
+    }
+
+    public boolean isModelTracingEnabled() {
+        return isModelTracingEnabled;
     }
 
     @VisibleForTesting

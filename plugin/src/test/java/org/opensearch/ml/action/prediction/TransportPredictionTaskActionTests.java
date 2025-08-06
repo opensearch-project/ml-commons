@@ -54,7 +54,7 @@ import org.opensearch.ml.common.input.parameter.clustering.KMeansParams;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
 import org.opensearch.ml.common.transport.MLTaskResponse;
 import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
-import org.opensearch.ml.engine.algorithms.agent.tracing.MLConnectorTracer;
+import org.opensearch.ml.engine.algorithms.agent.tracing.MLModelTracer;
 import org.opensearch.ml.helper.ModelAccessControlHelper;
 import org.opensearch.ml.model.MLModelCacheHelper;
 import org.opensearch.ml.model.MLModelManager;
@@ -122,8 +122,8 @@ public class TransportPredictionTaskActionTests extends OpenSearchTestCase {
     public void setup() {
         MockitoAnnotations.openMocks(this);
 
-        MLConnectorTracer.resetForTest();
-        MLConnectorTracer.initialize(NoopTracer.INSTANCE, mlFeatureEnabledSetting);
+        MLModelTracer.resetForTest();
+        MLModelTracer.initialize(NoopTracer.INSTANCE, mlFeatureEnabledSetting);
 
         User user = User.parse("admin|role-1|all_access");
 

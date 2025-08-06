@@ -220,6 +220,7 @@ import org.opensearch.ml.engine.ModelHelper;
 import org.opensearch.ml.engine.algorithms.agent.MLAgentExecutor;
 import org.opensearch.ml.engine.algorithms.agent.tracing.MLAgentTracer;
 import org.opensearch.ml.engine.algorithms.agent.tracing.MLConnectorTracer;
+import org.opensearch.ml.engine.algorithms.agent.tracing.MLModelTracer;
 import org.opensearch.ml.engine.algorithms.anomalylocalization.AnomalyLocalizerImpl;
 import org.opensearch.ml.engine.algorithms.metrics_correlation.MetricsCorrelation;
 import org.opensearch.ml.engine.algorithms.sample.LocalSampleCalculator;
@@ -809,6 +810,7 @@ public class MachineLearningPlugin extends Plugin
 
         MLAgentTracer.initialize(tracer, mlFeatureEnabledSetting, clusterService);
         MLConnectorTracer.initialize(tracer, mlFeatureEnabledSetting, clusterService);
+        MLModelTracer.initialize(tracer, mlFeatureEnabledSetting, clusterService);
 
         return ImmutableList
             .of(
@@ -1164,7 +1166,8 @@ public class MachineLearningPlugin extends Plugin
                 MLCommonsSettings.ML_COMMONS_STATIC_METRIC_COLLECTION_ENABLED,
                 MLCommonsSettings.ML_COMMONS_TRACING_ENABLED,
                 MLCommonsSettings.ML_COMMONS_AGENT_TRACING_ENABLED,
-                MLCommonsSettings.ML_COMMONS_CONNECTOR_TRACING_ENABLED
+                MLCommonsSettings.ML_COMMONS_CONNECTOR_TRACING_ENABLED,
+                MLCommonsSettings.ML_COMMONS_MODEL_TRACING_ENABLED
             );
         return settings;
     }

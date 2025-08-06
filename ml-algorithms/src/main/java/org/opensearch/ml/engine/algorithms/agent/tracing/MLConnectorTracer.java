@@ -4,12 +4,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.opensearch.cluster.service.ClusterService;
-import org.opensearch.common.xcontent.XContentFactory;
 import org.opensearch.core.action.ActionListener;
-import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.ml.common.settings.MLCommonsSettings;
 import org.opensearch.ml.common.settings.MLFeatureEnabledSetting;
-import org.opensearch.ml.common.transport.prediction.MLPredictionTaskRequest;
 import org.opensearch.ml.repackage.com.google.common.annotations.VisibleForTesting;
 import org.opensearch.telemetry.tracing.Span;
 import org.opensearch.telemetry.tracing.Tracer;
@@ -42,16 +39,10 @@ public class MLConnectorTracer extends MLTracer {
     public static final String SERVICE_TYPE = "service.type";
     public static final String ML_CONNECTOR_ID = "ml.connector.id";
     public static final String ML_CONNECTOR_NAME = "ml.connector.name";
-    public static final String ML_MODEL_ID = "ml.model.id";
-    public static final String ML_MODEL_NAME = "ml.model.name";
-    public static final String ML_MODEL_REQUEST_BODY = "ml.model.request_body";
-
     public static final String CONNECTOR_CREATE_SPAN = "connector.create";
     public static final String CONNECTOR_READ_SPAN = "connector.read";
     public static final String CONNECTOR_UPDATE_SPAN = "connector.update";
     public static final String CONNECTOR_DELETE_SPAN = "connector.delete";
-    public static final String MODEL_PREDICT_SPAN = "model.predict";
-    public static final String MODEL_EXECUTE_SPAN = "model.execute";
 
     public static final String SERVICE_TYPE_TRACER = "tracer";
 
@@ -159,26 +150,6 @@ public class MLConnectorTracer extends MLTracer {
     }
 
     /**
-     * Starts a span for model predict operations.
-     * @param modelId The ID of the model being used for prediction.
-     * @param modelName The name of the model being used for prediction.
-     * @return A Span object representing the model predict span.
-     */
-    public static Span startModelPredictSpan(String modelId, String modelName) {
-        return getInstance().startSpan(MODEL_PREDICT_SPAN, createModelAttributes(modelId, modelName));
-    }
-
-    /**
-     * Starts a span for model execute operations.
-     * @param modelId The ID of the model being executed.
-     * @param modelName The name of the model being executed.
-     * @return A Span object representing the model execute span.
-     */
-    public static Span startModelExecuteSpan(String modelId, String modelName) {
-        return getInstance().startSpan(MODEL_EXECUTE_SPAN, createModelAttributes(modelId, modelName));
-    }
-
-    /**
      * Handles span errors by logging, setting span error, and ending the span.
      * @param span The span to handle the error for.
      * @param errorMessage The error message to log.
@@ -203,22 +174,6 @@ public class MLConnectorTracer extends MLTracer {
             attributes.put(ML_CONNECTOR_ID, connectorId);
         if (connectorName != null)
             attributes.put(ML_CONNECTOR_NAME, connectorName);
-        return attributes;
-    }
-
-    /**
-     * Creates attributes for model spans.
-     * @param modelId The ID of the model.
-     * @param modelName The name of the model.
-     * @return A map of attributes for the model span.
-     */
-    public static Map<String, String> createModelAttributes(String modelId, String modelName) {
-        Map<String, String> attributes = new HashMap<>();
-        attributes.put(SERVICE_TYPE, SERVICE_TYPE_TRACER);
-        if (modelId != null)
-            attributes.put(ML_MODEL_ID, modelId);
-        if (modelName != null)
-            attributes.put(ML_MODEL_NAME, modelName);
         return attributes;
     }
 
@@ -252,20 +207,6 @@ public class MLConnectorTracer extends MLTracer {
             handleSpanError(span, "Error in span", exception);
             originalListener.onFailure(exception);
         });
-    }
-
-    public static void serializeInputForTracing(MLPredictionTaskRequest mlPredictionTaskRequest, Span predictSpan) {
-        if (mlPredictionTaskRequest.getMlInput() != null) {
-            try {
-                String inputBody = mlPredictionTaskRequest
-                    .getMlInput()
-                    .toXContent(XContentFactory.jsonBuilder(), ToXContent.EMPTY_PARAMS)
-                    .toString();
-                predictSpan.addAttribute(MLConnectorTracer.ML_MODEL_REQUEST_BODY, inputBody);
-            } catch (Exception e) {
-                log.warn("Failed to serialize model input for tracing", e);
-            }
-        }
     }
 
     /**
