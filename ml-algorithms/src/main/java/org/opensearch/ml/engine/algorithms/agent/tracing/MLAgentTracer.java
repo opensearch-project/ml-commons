@@ -214,6 +214,18 @@ public class MLAgentTracer extends MLTracer {
      * @param userTask The user task or question.
      * @return A map of attributes for the agent task span.
      */
+    public static Map<String, String> createAgentTaskAttributes(String agentName, String userTask) {
+        return createAgentTaskAttributes(agentName, userTask, null, null);
+    }
+
+    /**
+     * Creates attributes for an agent task span.
+     * @param agentName The name of the agent.
+     * @param userTask The user task or question.
+     * @param agentId The agent id.
+     * @param modelId The model id.
+     * @return A map of attributes for the agent task span.
+     */
     public static Map<String, String> createAgentTaskAttributes(String agentName, String userTask, String agentId, String modelId) {
         Map<String, String> attributes = new HashMap<>();
         attributes.put(ATTR_SERVICE_TYPE, SERVICE_TYPE_TRACER);
@@ -982,7 +994,7 @@ public class MLAgentTracer extends MLTracer {
      * @return The started Span.
      */
     public Span startConversationalFlowAgentTaskSpan(String agentName, String userTask) {
-        return startSpan(AGENT_TASK_CONV_FLOW_SPAN, createAgentTaskAttributes(agentName, userTask, null, null));
+        return startSpan(AGENT_TASK_CONV_FLOW_SPAN, createAgentTaskAttributes(agentName, userTask));
     }
 
     /**

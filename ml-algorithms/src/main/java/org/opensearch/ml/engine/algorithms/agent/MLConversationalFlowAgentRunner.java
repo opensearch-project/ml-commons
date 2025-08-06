@@ -238,7 +238,7 @@ public class MLConversationalFlowAgentRunner implements MLAgentRunner {
             }
         }
 
-        MLToolSpec toolSpec = toolSpecs.get(0);
+        MLToolSpec toolSpec = toolSpecs.getFirst();
         Span toolCallSpan = MLAgentTracer
             .getInstance()
             .startConversationalToolCallSpan(

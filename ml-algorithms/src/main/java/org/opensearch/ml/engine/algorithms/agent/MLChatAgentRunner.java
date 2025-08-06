@@ -346,7 +346,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                 question,
                 context.getLlmCallIndex().get(),
                 tmpParameters.get(MLAgentTracer.PARAM_SYSTEM_PROMPT),
-                tmpParameters.get(MLAgentTracer.PARAM_LLM_INTERFACE),
+                tmpParameters.get(LLM_INTERFACE),
                 agentTaskSpan
             );
         StepListener firstListener = new StepListener<MLTaskResponse>();
@@ -575,7 +575,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             question,
                             currentLlmCallIndex,
                             tmpParameters.get(MLAgentTracer.PARAM_SYSTEM_PROMPT),
-                            tmpParameters.get(MLAgentTracer.PARAM_LLM_INTERFACE),
+                            tmpParameters.get(LLM_INTERFACE),
                             agentTaskSpan
                         );
 
