@@ -89,9 +89,7 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
          * The following logic implements this behavior.
          */
         for (DiscoveryNode node : state.nodes()) {
-            // Fixed version check: previously incorrectly used Version.V_3_1_0.onOrAfter(node.getVersion()) instead of
-            // node.getVersion().onOrAfter(Version.V_3_1_0)
-            if (node.isDataNode() && node.getVersion().onOrAfter(Version.V_3_1_0)) {
+            if (node.isDataNode() && Version.V_3_1_0.onOrAfter(node.getVersion())) {
                 if (mlFeatureEnabledSetting.isMetricCollectionEnabled() && mlFeatureEnabledSetting.isStaticMetricCollectionEnabled()) {
                     mlTaskManager.startStatsCollectorJob();
                 }
@@ -99,8 +97,7 @@ public class MLCommonsClusterEventListener implements ClusterStateListener {
                 if (clusterService.state().getMetadata().hasIndex(TASK_POLLING_JOB_INDEX)) {
                     mlTaskManager.startTaskPollingJob();
                 }
-                // TODO: Add index insight trigger conditions
-                mlTaskManager.startIndexInsightJob();
+
                 break;
             }
         }
