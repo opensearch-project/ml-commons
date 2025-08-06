@@ -54,6 +54,7 @@ dependencies {
     }
     // Multi-tenant SDK Client
     implementation "org.opensearch:opensearch-remote-metadata-sdk:${opensearch_build}"
+    implementation 'commons-beanutils:commons-beanutils:1.11.0'
 
     def os = DefaultNativePlatform.currentOperatingSystem
     //arm/macos doesn't support GPU
