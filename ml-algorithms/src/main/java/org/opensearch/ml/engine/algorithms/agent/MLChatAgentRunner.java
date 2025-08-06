@@ -154,7 +154,14 @@ public class MLChatAgentRunner implements MLAgentRunner {
 
     @Override
     public void run(MLAgent mlAgent, Map<String, String> inputParams, ActionListener<Object> listener) {
-        Span agentTaskSpan = MLAgentTracer.getInstance().startConversationalAgentTaskSpanLogic(mlAgent.getName(), inputParams);
+        Span agentTaskSpan = MLAgentTracer
+            .getInstance()
+            .startConversationalAgentTaskSpanLogic(
+                mlAgent.getName(),
+                inputParams,
+                inputParams.get(MLAgentExecutor.AGENT_ID),
+                mlAgent.getLlm().getModelId()
+            );
 
         Map<String, String> params = new HashMap<>();
         if (mlAgent.getParameters() != null) {
@@ -474,8 +481,8 @@ public class MLChatAgentRunner implements MLAgentRunner {
                             actionInput
                         );
 
-                        this.runTool(tools, toolSpecMap, tmpParameters, ActionListener.wrap(result -> {
-                            nextStepListener.onResponse(new MLTaskResponse(MLAgentTracer.createModelTensorOutput(result.toString())));
+                        runTool(tools, toolSpecMap, tmpParameters, ActionListener.wrap(result -> {
+                            nextStepListener.onResponse(new MLTaskResponse(MLAgentTracer.createMLTaskOutput(result.toString())));
                         }, e -> nextStepListener.onFailure(e)),
                             action,
                             actionInput,
@@ -496,8 +503,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
                         );
                         newPrompt.set(substitutor.replace(finalPrompt));
                         tmpParameters.put(PROMPT, newPrompt.get());
-
-                        nextStepListener.onResponse(new MLTaskResponse(MLAgentTracer.createModelTensorOutput(res)));
+                        nextStepListener.onResponse(new MLTaskResponse(MLAgentTracer.createMLTaskOutput(res)));
                     }
                 } else {
                     addToolOutputToAddtionalInfo(toolSpecMap, lastAction, additionalInfo, output);
@@ -596,6 +602,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
             if (nextStepListener != null) {
                 lastStepListener = nextStepListener;
             }
+            // Increment index at the end of each iteration becuase of async listener
             MLAgentTracer.incrementIndexForIteration(context, finalI);
         }
 
@@ -664,7 +671,7 @@ public class MLChatAgentRunner implements MLAgentRunner {
         }
     }
 
-    private void runTool(
+    private static void runTool(
         Map<String, Tool> tools,
         Map<String, MLToolSpec> toolSpecMap,
         Map<String, String> tmpParameters,

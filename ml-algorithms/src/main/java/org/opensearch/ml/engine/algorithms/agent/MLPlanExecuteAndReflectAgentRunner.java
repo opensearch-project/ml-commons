@@ -242,7 +242,14 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
 
     @Override
     public void run(MLAgent mlAgent, Map<String, String> apiParams, ActionListener<Object> listener) {
-        Span agentTaskSpan = MLAgentTracer.getInstance().startAgentTaskSpan(mlAgent.getName(), apiParams.get(QUESTION_FIELD));
+        Span agentTaskSpan = MLAgentTracer
+            .getInstance()
+            .startAgentTaskSpan(
+                mlAgent.getName(),
+                apiParams.get(QUESTION_FIELD),
+                apiParams.get(MLAgentExecutor.AGENT_ID),
+                mlAgent.getLlm().getModelId()
+            );
 
         try {
             Map<String, String> allParams = new HashMap<>();
@@ -436,7 +443,7 @@ public class MLPlanExecuteAndReflectAgentRunner implements MLAgentRunner {
                     ModelTensorOutput modelTensorOutput = (ModelTensorOutput) llmOutput.getOutput();
                     long llmLatency = System.currentTimeMillis() - llmStartTime;
 
-                    Map<String, Double> extractedTokens = MLAgentTracer.extractTokensFromModelOutput(modelTensorOutput, allParams);
+                    Map<String, Integer> extractedTokens = MLAgentTracer.extractTokensFromModelOutput(modelTensorOutput, allParams);
                     MLAgentTracer.initPhaseTokensWithExtractedValues(context, extractedTokens);
 
                     Map<String, String> parseLLMOutput = parseLLMOutput(allParams, modelTensorOutput);
